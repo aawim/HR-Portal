@@ -7,5 +7,9 @@ namespace HRM.WorkPlanning.Abstractions
         Task<GeneratedWorkPlanResult> GenerateAsync(
         GenerateWorkPlanRequest request,
         CancellationToken cancellationToken = default);
+
+        Task<BulkAssignmentResult> AssignDepartmentAsync(
+          BulkDepartmentAssignmentRequest request,
+          CancellationToken cancellationToken = default);
     }
 }

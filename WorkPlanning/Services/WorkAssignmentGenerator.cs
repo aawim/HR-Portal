@@ -1,7 +1,9 @@
-﻿using HRM.DTOs.WorkPlanning;
+﻿using HRM.Components.Shared;
+using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Models.WorkPlanning;
+using HRM.Services.Interfaces;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -12,13 +14,14 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
 {
     private readonly IDbContextFactory<HrmTeContext> _dbFactory;
     private readonly ILogger<WorkAssignmentGenerator> _logger;
-
+    private readonly IOperationLogService _operationLogService;
     public WorkAssignmentGenerator(
         IDbContextFactory<HrmTeContext> dbFactory,
-        ILogger<WorkAssignmentGenerator> logger)
+        ILogger<WorkAssignmentGenerator> logger, IOperationLogService operationLogService)
     {
         _dbFactory = dbFactory;
         _logger = logger;
+        _operationLogService = operationLogService;
     }
 
     public async Task<GeneratedWorkPlanResult> GenerateAsync(
@@ -551,69 +554,7 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             .FirstOrDefaultAsync(cancellationToken);
     }
 
-    //private static DateTimeCalculationResult
-    //    CalculateAssignmentPeriod(
-    //        DateOnly workDate,
-    //        IReadOnlyCollection<WorkTemplateSegment> segments)
-    //{
-    //    if (segments.Count == 0)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            "No template segments were provided.");
-    //    }
-
-    //    DateTime? earliestStart = null;
-    //    DateTime? latestEnd = null;
-
-    //    foreach (var segment in segments)
-    //    {
-    //        var segmentPeriod =
-    //            CalculateSegmentPeriod(
-    //                workDate,
-    //                segment);
-
-    //        if (!segmentPeriod.Success)
-    //        {
-    //            return DateTimeCalculationResult.Fail(
-    //                $"Segment '{segment.Name}' is invalid. " +
-    //                segmentPeriod.Message);
-    //        }
-
-    //        if (!earliestStart.HasValue ||
-    //            segmentPeriod.StartDateTime <
-    //            earliestStart.Value)
-    //        {
-    //            earliestStart =
-    //                segmentPeriod.StartDateTime;
-    //        }
-
-    //        if (!latestEnd.HasValue ||
-    //            segmentPeriod.EndDateTime >
-    //            latestEnd.Value)
-    //        {
-    //            latestEnd =
-    //                segmentPeriod.EndDateTime;
-    //        }
-    //    }
-
-    //    if (!earliestStart.HasValue ||
-    //     !latestEnd.HasValue)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            "The assignment period could not be calculated.");
-    //    }
-
-    //    if (latestEnd.Value < earliestStart.Value)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            "The assignment end date and time cannot be before its start date and time.");
-    //    }
-
-    //    return DateTimeCalculationResult.Ok(
-    //        earliestStart.Value,
-    //        latestEnd.Value);
-    //}
-
+     
     private static DateTimeCalculationResult CalculateAssignmentPeriod(
     DateOnly workDate,
     TimeOnly scheduledStartTime,
@@ -678,47 +619,7 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
     }
 
 
-
-    //private static DateTimeCalculationResult CalculateSegmentPeriod(
-    //DateTime assignmentStartDateTime,
-    //DateTime assignmentEndDateTime,
-    //WorkTemplateSegment segment)
-    //{
-    //    var startDateTime =
-    //        assignmentStartDateTime.AddMinutes(segment.OffsetMinutes);
-
-    //    /*
-    //     * Duration can be null for point-in-time segments such as:
-    //     * - Check In
-    //     * - Check Out
-    //     */
-    //    if (!segment.DurationMinutes.HasValue)
-    //    {
-    //        return DateTimeCalculationResult.Ok(
-    //            startDateTime,
-    //            startDateTime);
-    //    }
-
-    //    if (segment.DurationMinutes.Value < 0)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            $"Segment '{segment.Name}' cannot have a negative duration.");
-    //    }
-
-    //    var endDateTime =
-    //        startDateTime.AddMinutes(segment.DurationMinutes.Value);
-
-    //    if (endDateTime > assignmentEndDateTime)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            $"Segment '{segment.Name}' ends after the assignment ends.");
-    //    }
-
-    //    return DateTimeCalculationResult.Ok(
-    //        startDateTime,
-    //        endDateTime);
-    //}
-
+ 
     private static DateTimeCalculationResult CalculateSegmentPeriod(
     DateTime assignmentBaseDateTime,
     WorkTemplateSegment segment)
@@ -757,37 +658,7 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             segmentEndDateTime);
     }
 
-    //private static DateTimeCalculationResult CalculateSegmentPeriod(
-    //DateOnly workDate,
-    //WorkTemplateSegment segment)
-    //{
-    //    var date =
-    //        workDate.ToDateTime(TimeOnly.MinValue);
-
-    //    var startDateTime =
-    //        date.AddMinutes(segment.OffsetMinutes);
-
-    //    /*
-    //     * DurationMinutes can be null or zero for point-in-time
-    //     * segments such as Check In and Check Out.
-    //     */
-    //    var durationMinutes =
-    //        segment.DurationMinutes ?? 0;
-
-    //    if (durationMinutes < 0)
-    //    {
-    //        return DateTimeCalculationResult.Fail(
-    //            $"Segment '{segment.Name}' cannot have a negative duration.");
-    //    }
-
-    //    var endDateTime =
-    //        startDateTime.AddMinutes(durationMinutes);
-
-    //    return DateTimeCalculationResult.Ok(
-    //        startDateTime,
-    //        endDateTime);
-    //}
-
+    
     private static GeneratedWorkPlanResult Failure(
         string message,
         long? workPlanId = null)
@@ -833,4 +704,176 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             };
         }
     }
+
+
+    public async Task<BulkAssignmentResult> AssignDepartmentAsync(
+        BulkDepartmentAssignmentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        await using var db =
+            await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        await using var transaction =
+            await db.Database.BeginTransactionAsync(cancellationToken);
+
+        var result = new BulkAssignmentResult();
+
+        try
+        {
+            var staff = await db.Jobs
+                .Where(x =>
+                    x.OrganisationStructureId ==
+                        request.OrganisationStructureId &&
+                    x.JobStateId ==
+                        SharedConfig.JobStates.APPROVED &&
+                    x.TerminatedDate == null)
+                .Select(x => new
+                {
+                    IndividualId = x.IndividualID,
+                    JobId = x.JobId,
+                    EmployeeName =
+                        x.Individual.Individual.FirstNameEnglish + " " +
+                        x.Individual.Individual.LastNameEnglish
+                })
+                .ToListAsync(cancellationToken);
+
+            if (request.SelectedIndividualIds.Any())
+            {
+                staff = staff
+                    .Where(x =>
+                        request.SelectedIndividualIds.Contains(
+                            x.IndividualId))
+                    .ToList();
+            }
+
+            result.TotalSelected = staff.Count;
+
+            foreach (var employee in staff)
+            {
+                var duplicateExists =
+                    await db.WorkAssignments.AnyAsync(x =>
+                        x.WorkAssignmentStateId == request.WorkPlanId &&
+                        x.StartDateTime == request.ScheduledStart && 
+                        x.EndDateTime == request.ScheduledEnd &&
+                        x.WorkAssignmentOwners.Any(o =>
+                            o.IndividualId ==
+                                employee.IndividualId &&
+                            o.IsCurrentOwner &&
+                            o.IsValid),
+                        cancellationToken);
+
+                if (duplicateExists)
+                {
+                    result.SkippedCount++;
+
+                    result.Items.Add(
+                        new BulkAssignmentItemResult
+                        {
+                            IndividualId =
+                                employee.IndividualId,
+
+                            EmployeeName =
+                                employee.EmployeeName,
+
+                            Success = false,
+
+                            Message =
+                                "The employee already has this assignment."
+                        });
+
+                    continue;
+                }
+ 
+                var operationLog = await _operationLogService.CreateAsync(
+                         db,
+                         actionId: SharedConfig.OperationLogActionTypes.LEAVE_CREATE,
+                         remarks: "This need to be changed, this line is comming from WorkAssignmentGenerator line 790");
+
+                var assignment = new WorkAssignment
+                {
+                    WorkPlanId = (int) request.WorkPlanId,
+
+                    WorkAssignmentId = (int)request.WorkPlanId,
+
+                    StartDateTime = request.ScheduledStart,
+
+                    EndDateTime = request.ScheduledEnd,
+
+                    OperationLogId = operationLog.OperationLogId,
+
+                    IsValid = true
+                };
+
+                db.WorkAssignments.Add(assignment);
+
+                await db.SaveChangesAsync(cancellationToken);
+
+                var owner = new WorkAssignmentOwner
+                {
+                    WorkAssignmentId =
+                        assignment.WorkAssignmentId,
+
+                    IndividualId =
+                        employee.IndividualId,
+
+                    JobId =
+                        employee.JobId,
+
+                    EffectiveFrom =
+                        DateTime.Now,
+
+                    OwnershipType = WorkOwnershipType.Original,
+
+                    IsCurrentOwner = true,
+
+                    IsValid = true,
+
+                    OperationLogId = operationLog.OperationLogId
+                };
+
+                db.WorkAssignmentOwners.Add(owner);
+
+                await db.SaveChangesAsync(cancellationToken);
+
+                result.AssignedCount++;
+
+                result.Items.Add(
+                    new BulkAssignmentItemResult
+                    {
+                        IndividualId =
+                            employee.IndividualId,
+
+                        EmployeeName =
+                            employee.EmployeeName,
+
+                        WorkAssignmentId =
+                            assignment.WorkAssignmentId,
+
+                        Success = true
+                    });
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+
+            result.Success = result.AssignedCount > 0;
+
+            result.Message =
+                $"{result.AssignedCount} staff assigned. " +
+                $"{result.SkippedCount} skipped.";
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            await transaction.RollbackAsync(cancellationToken);
+
+            result.Success = false;
+            result.Message = ex.Message;
+
+            return result;
+        }
+    }
+
+
+
 }

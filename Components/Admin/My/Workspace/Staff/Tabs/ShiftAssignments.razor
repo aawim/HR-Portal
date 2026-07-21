@@ -1,0 +1,1452 @@
+﻿@page "/admin/work-planning/assignments"
+
+@using HRM.WorkPlanning.Abstractions
+@using HRM.Services.Interfaces
+@using HRM.DTOs.WorkPlanning
+
+@inject IWorkAssignmentManagementService AssignmentManagementService
+
+<PageTitle>Work Assignments</PageTitle>
+
+<div class="min-h-screen bg-slate-50 p-4 md:p-6">
+
+    <div class="mx-auto max-w-7xl">
+
+        <!-- Page Header -->
+        <div class="mb-6 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900">
+                    Work Assignments
+                </h1>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    View and assign work plans to department employees.
+                </p>
+            </div>
+
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                    disabled="@IsLoadingLookups"
+                    @onclick="OpenBulkAssignmentModal">
+
+                <span class="text-lg leading-none">+</span>
+                Assign Employees
+            </button>
+
+        </div>
+
+        <!-- Messages -->
+        @if (!string.IsNullOrWhiteSpace(SuccessMessage))
+        {
+            <div class="mb-4 flex items-start justify-between rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+
+                <span>@SuccessMessage</span>
+
+                <button type="button"
+                        class="ml-4 font-semibold"
+                        @onclick="ClearMessages">
+                    ×
+                </button>
+
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+        {
+            <div class="mb-4 flex items-start justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+
+                <span>@ErrorMessage</span>
+
+                <button type="button"
+                        class="ml-4 font-semibold"
+                        @onclick="ClearMessages">
+                    ×
+                </button>
+
+            </div>
+        }
+
+        <!-- Summary Cards -->
+        <div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-sm font-medium text-slate-500">
+                    Assignment Groups
+                </p>
+
+                <p class="mt-2 text-3xl font-bold text-slate-900">
+                    @AssignmentGroups.Count
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-sm font-medium text-slate-500">
+                    Total Assignments
+                </p>
+
+                <p class="mt-2 text-3xl font-bold text-slate-900">
+                    @TotalAssignments
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-sm font-medium text-slate-500">
+                    Assigned
+                </p>
+
+                <p class="mt-2 text-3xl font-bold text-emerald-600">
+                    @TotalAssigned
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <p class="text-sm font-medium text-slate-500">
+                    Not Assigned
+                </p>
+
+                <p class="mt-2 text-3xl font-bold text-amber-600">
+                    @TotalUnassigned
+                </p>
+            </div>
+
+        </div>
+
+        <!-- Filters -->
+        <div class="mb-6 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-base font-semibold text-slate-900">
+                    Filters
+                </h2>
+
+                <button type="button"
+                        class="text-sm font-medium text-slate-500 hover:text-slate-800"
+                        @onclick="ResetFiltersAsync">
+                    Reset
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                        From date
+                    </label>
+
+                    <InputDate @bind-Value="Filter.FromDate"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                        To date
+                    </label>
+
+                    <InputDate @bind-Value="Filter.ToDate"
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                        Department
+                    </label>
+
+                    <InputSelect @bind-Value="Filter.OrganisationStructureId"
+                                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+
+                        <option value="">All departments</option>
+
+                        @foreach (var department in Departments)
+                        {
+                            <option value="@department.OrganisationStructureId">
+                                @department.DepartmentName
+                            </option>
+                        }
+
+                    </InputSelect>
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                        Work plan
+                    </label>
+
+                    <InputSelect @bind-Value="Filter.WorkPlanId"
+                                 class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+
+                        <option value="">All work plans</option>
+
+                        @foreach (var workPlan in WorkPlans)
+                        {
+                            <option value="@workPlan.WorkPlanId">
+                                @GetWorkPlanDisplayText(workPlan)
+                            </option>
+                        }
+
+                    </InputSelect>
+                </div>
+
+                <div>
+                    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                        Search
+                    </label>
+
+                    <InputText @bind-Value="Filter.SearchText"
+                               placeholder="Assignment or department..."
+                               class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100" />
+                </div>
+
+            </div>
+
+            <div class="mt-4 flex justify-end">
+
+                <button type="button"
+                        disabled="@IsLoadingAssignments"
+                        class="inline-flex min-w-28 items-center justify-center rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        @onclick="LoadAssignmentsAsync">
+
+                    @if (IsLoadingAssignments)
+                    {
+                        <span>Loading...</span>
+                    }
+                    else
+                    {
+                        <span>Apply Filters</span>
+                    }
+
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- Assignment Table -->
+        <div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+            <div class="border-b border-slate-200 px-5 py-4">
+                <h2 class="text-base font-semibold text-slate-900">
+                    Assignment Schedule
+                </h2>
+            </div>
+
+            @if (IsLoadingAssignments)
+            {
+                <div class="flex min-h-64 items-center justify-center">
+
+                    <div class="text-center">
+                        <div class="mx-auto h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600"></div>
+
+                        <p class="mt-3 text-sm text-slate-500">
+                            Loading assignments...
+                        </p>
+                    </div>
+
+                </div>
+            }
+            else if (AssignmentGroups.Count == 0)
+            {
+                <div class="flex min-h-64 items-center justify-center px-6">
+
+                    <div class="text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-xl">
+                            📋
+                        </div>
+
+                        <h3 class="mt-3 font-semibold text-slate-900">
+                            No work assignments found
+                        </h3>
+
+                        <p class="mt-1 text-sm text-slate-500">
+                            Change the filters or assign employees to a work plan.
+                        </p>
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto">
+
+                    <table class="min-w-full divide-y divide-slate-200">
+
+                        <thead class="bg-slate-50">
+                            <tr>
+                                <th class="w-12 px-4 py-3"></th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Date
+                                </th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Assignment
+                                </th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Department
+                                </th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Time
+                                </th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Assigned
+                                </th>
+
+                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Status
+                                </th>
+
+                                <th class="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                    Actions
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-slate-100 bg-white">
+
+                            @foreach (var group in AssignmentGroups)
+                            {
+                                <tr class="hover:bg-slate-50">
+
+                                    <td class="px-4 py-4">
+
+                                        <button type="button"
+                                                title="View assigned employees"
+                                                class="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition hover:bg-slate-100"
+                                                @onclick="() => ToggleGroupAsync(group)">
+
+                                            @if (IsExpanded(group))
+                                            {
+                                                <span>−</span>
+                                            }
+                                            else
+                                            {
+                                                <span>+</span>
+                                            }
+
+                                        </button>
+
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-4 py-4 text-sm text-slate-700">
+                                        @group.ScheduledStart.ToString("dd MMM yyyy")
+                                    </td>
+
+                                    <td class="px-4 py-4">
+
+                                        <p class="text-sm font-semibold text-slate-900">
+                                            @group.AssignmentName
+                                        </p>
+
+                                        @if (group.WorkPlanId == 1)
+                                        {
+                                            <p class="mt-0.5 text-xs text-slate-500">
+                                                Plan ID: @group.WorkPlanId
+                                            </p>
+                                        }
+
+                                    </td>
+
+                                    <td class="px-4 py-4 text-sm text-slate-700">
+                                        @group.DepartmentName
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-4 py-4 text-sm text-slate-700">
+
+                                        <div>
+                                            @group.ScheduledStart.ToString("HH:mm")
+                                            -
+                                            @group.ScheduledEnd.ToString("HH:mm")
+                                        </div>
+
+                                        @if (group.ScheduledStart.Date != group.ScheduledEnd.Date)
+                                        {
+                                            <div class="mt-0.5 text-xs text-slate-500">
+                                                Ends @group.ScheduledEnd.ToString("dd MMM")
+                                            </div>
+                                        }
+
+                                    </td>
+
+                                    <td class="px-4 py-4">
+
+                                        <div class="min-w-32">
+
+                                            <div class="mb-1 flex items-center justify-between text-xs">
+                                                <span class="font-medium text-slate-700">
+                                                    @group.AssignedStaffCount /
+                                                    @group.RequiredStaffCount
+                                                </span>
+
+                                                <span class="text-slate-500">
+                                                    @GetAssignmentPercentage(group)%
+                                                </span>
+                                            </div>
+
+                                            <div class="h-2 overflow-hidden rounded-full bg-slate-100">
+
+                                                <div class="h-full rounded-full bg-blue-600"
+                                                     style="@($"width: {GetAssignmentPercentage(group)}%;")">
+                                                </div>
+
+                                            </div>
+
+                                        </div>
+
+                                    </td>
+
+                                    <td class="px-4 py-4">
+                                        <span class="@GetStatusCss(group.AssignmentStatus)">
+                                            @group.AssignmentStatus
+                                        </span>
+                                    </td>
+
+                                    <td class="px-4 py-4 text-right">
+
+                                        <button type="button"
+                                                class="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+                                                @onclick="() => OpenAddEmployeesModalAsync(group)">
+                                            Add Staff
+                                        </button>
+
+                                    </td>
+
+                                </tr>
+
+                                @if (IsExpanded(group))
+                                {
+                                    <tr>
+                                        <td colspan="8"
+                                            class="bg-slate-50 px-6 py-5">
+
+                                            @if (LoadingGroupId == group.GroupId)
+                                            {
+                                                <div class="py-6 text-center text-sm text-slate-500">
+                                                    Loading employees...
+                                                </div>
+                                            }
+                                            else if (group.Employees == null ||
+                                            group.Employees.Count == 0)
+                                            {
+                                                <div class="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
+
+                                                    <p class="text-sm font-medium text-slate-700">
+                                                        No assigned employees
+                                                    </p>
+
+                                                    <p class="mt-1 text-xs text-slate-500">
+                                                        Use Add Staff to assign employees.
+                                                    </p>
+
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <div class="overflow-hidden rounded-lg border border-slate-200 bg-white">
+
+                                                    <table class="min-w-full divide-y divide-slate-200">
+
+                                                        <thead class="bg-slate-50">
+                                                            <tr>
+                                                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                                                                    Employee
+                                                                </th>
+
+                                                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                                                                    Position
+                                                                </th>
+
+                                                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                                                                    Ownership
+                                                                </th>
+
+                                                                <th class="px-4 py-3 text-left text-xs font-semibold uppercase text-slate-500">
+                                                                    Assignment status
+                                                                </th>
+                                                            </tr>
+                                                        </thead>
+
+                                                        <tbody class="divide-y divide-slate-100">
+
+                                                            @foreach (var employee in group.Employees)
+                                                            {
+                                                                <tr>
+                                                                    <td class="px-4 py-3">
+
+                                                                        <p class="text-sm font-semibold text-slate-900">
+                                                                            @employee.EmployeeName
+                                                                        </p>
+
+                                                                        <p class="text-xs text-slate-500">
+                                                                            Individual ID:
+                                                                            @employee.IndividualId
+                                                                        </p>
+
+                                                                    </td>
+
+                                                                    <td class="px-4 py-3 text-sm text-slate-700">
+                                                                        @employee.JobTitle
+                                                                    </td>
+
+                                                                    <td class="px-4 py-3">
+
+                                                                        @if (employee.HasCurrentOwner)
+                                                                        {
+                                                                            <span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                                                                Current owner
+                                                                            </span>
+                                                                        }
+                                                                        else
+                                                                        {
+                                                                            <span class="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                                                                                Not assigned
+                                                                            </span>
+                                                                        }
+
+                                                                    </td>
+
+                                                                    <td class="px-4 py-3 text-sm text-slate-700">
+                                                                        @employee.AssignmentState
+                                                                    </td>
+                                                                </tr>
+                                                            }
+
+                                                        </tbody>
+
+                                                    </table>
+
+                                                </div>
+                                            }
+
+                                        </td>
+                                    </tr>
+                                }
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Bulk Assignment Modal -->
+@if (ShowBulkAssignmentModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4">
+
+        <div class="max-h-[92vh] w-full max-w-4xl overflow-hidden rounded-2xl bg-white shadow-2xl">
+
+            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900">
+                        Assign Employees
+                    </h2>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        Create one work assignment for each selected employee.
+                    </p>
+                </div>
+
+                <button type="button"
+                        disabled="@IsSavingAssignment"
+                        class="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-slate-500 hover:bg-slate-100"
+                        @onclick="CloseBulkAssignmentModal">
+                    ×
+                </button>
+
+            </div>
+
+            <div class="max-h-[calc(92vh-145px)] overflow-y-auto p-6">
+
+                @if (!string.IsNullOrWhiteSpace(ModalErrorMessage))
+                {
+                    <div class="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        @ModalErrorMessage
+                    </div>
+                }
+
+                <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            Department <span class="text-red-500">*</span>
+                        </label>
+
+                        <InputSelect @bind-Value="BulkRequest.OrganisationStructureId"
+                                     @bind-Value:after="OnDepartmentChangedAsync"
+                                     disabled="@IsSavingAssignment"
+                                     class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm">
+
+                            <option value="0">
+                                Select department
+                            </option>
+
+                            @foreach (var department in Departments)
+                            {
+                                <option value="@department.OrganisationStructureId">
+                                    @department.DepartmentName
+                                </option>
+                            }
+
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            Work plan
+                        </label>
+
+                        <InputSelect @bind-Value="BulkRequest.WorkPlanId"
+                                     disabled="@IsSavingAssignment"
+                                     class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm">
+
+                            <option value="">
+                                Select work plan
+                            </option>
+
+                            @foreach (var workPlan in WorkPlans)
+                            {
+                                <option value="@workPlan.WorkPlanId">
+                                    @GetWorkPlanDisplayText(workPlan)
+                                </option>
+                            }
+
+                        </InputSelect>
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            Assignment name <span class="text-red-500">*</span>
+                        </label>
+
+                        <InputText @bind-Value="BulkRequest.AssignmentName"
+                                   disabled="@IsSavingAssignment"
+                                   placeholder="For example: Morning Reception Duty"
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            Start date and time <span class="text-red-500">*</span>
+                        </label>
+
+                        <input type="datetime-local"
+                               value="@ToDateTimeLocalValue(BulkRequest.ScheduledStart)"
+                               @onchange="OnBulkStartChanged"
+                               disabled="@IsSavingAssignment"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            End date and time <span class="text-red-500">*</span>
+                        </label>
+
+                        <input type="datetime-local"
+                               value="@ToDateTimeLocalValue(BulkRequest.ScheduledEnd)"
+                               @onchange="OnBulkEndChanged"
+                               disabled="@IsSavingAssignment"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                            Remarks
+                        </label>
+
+                        <InputTextArea @bind-Value="BulkRequest.Remarks"
+                                       disabled="@IsSavingAssignment"
+                                       rows="3"
+                                       placeholder="Optional remarks..."
+                                       class="w-full resize-none rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                    </div>
+
+                </div>
+
+                <!-- Employee Selection -->
+                <div class="mt-6">
+
+                    <div class="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+
+                        <div>
+                            <h3 class="font-semibold text-slate-900">
+                                Department Employees
+                            </h3>
+
+                            <p class="mt-0.5 text-sm text-slate-500">
+                                @SelectedEmployeeCount employee(s) selected
+                            </p>
+                        </div>
+
+                        @if (DepartmentStaff.Count > 0)
+                        {
+                            <div class="flex gap-2">
+
+                                <button type="button"
+                                        disabled="@IsSavingAssignment"
+                                        class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        @onclick="SelectAllEmployees">
+                                    Select all
+                                </button>
+
+                                <button type="button"
+                                        disabled="@IsSavingAssignment"
+                                        class="rounded-lg border border-slate-300 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        @onclick="ClearEmployeeSelection">
+                                    Clear
+                                </button>
+
+                            </div>
+                        }
+
+                    </div>
+
+                    @if (IsLoadingDepartmentStaff)
+                    {
+                        <div class="rounded-lg border border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+                            Loading department employees...
+                        </div>
+                    }
+                    else if (BulkRequest.OrganisationStructureId <= 0)
+                    {
+                        <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                            Select a department to load employees.
+                        </div>
+                    }
+                    else if (DepartmentStaff.Count == 0)
+                    {
+                        <div class="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-8 text-center text-sm text-slate-500">
+                            No active employees were found in this department.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mb-3">
+                            <input type="text"
+                                   @bind="EmployeeSearchText"
+                                   @bind:event="oninput"
+                                   placeholder="Search employees..."
+                                   class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm" />
+                        </div>
+
+                        <div class="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
+
+                            @foreach (var employee in FilteredDepartmentStaff)
+                            {
+                                <label class="flex cursor-pointer items-center gap-3 border-b border-slate-100 px-4 py-3 last:border-b-0 hover:bg-slate-50">
+
+                                    <input type="checkbox"
+                                           checked="@employee.IsSelected"
+                                           disabled="@IsSavingAssignment"
+                                           @onchange="eventArgs => ChangeEmployeeSelection(employee, eventArgs)"
+                                           class="h-4 w-4 rounded border-slate-300 text-blue-600" />
+
+                                    <div class="min-w-0 flex-1">
+
+                                        <p class="truncate text-sm font-semibold text-slate-900">
+                                            @employee.EmployeeName
+                                        </p>
+
+                                        <p class="truncate text-xs text-slate-500">
+                                            @employee.JobTitle
+                                        </p>
+
+                                    </div>
+
+                                    <span class="text-xs text-slate-400">
+                                        Job @employee.JobId
+                                    </span>
+
+                                </label>
+                            }
+
+                        </div>
+                    }
+
+                </div>
+
+            </div>
+
+            <div class="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+
+                <button type="button"
+                        disabled="@IsSavingAssignment"
+                        class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        @onclick="CloseBulkAssignmentModal">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        disabled="@IsSavingAssignment"
+                        class="min-w-36 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+                        @onclick="SaveBulkAssignmentAsync">
+
+                    @if (IsSavingAssignment)
+                    {
+                        <span>Assigning...</span>
+                    }
+                    else
+                    {
+                        <span>Assign Employees</span>
+                    }
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+@code {
+
+    [Parameter]
+    public int StaffId { get; set; }
+        /*
+         * These use your actual DTO types.
+         *
+         * There is no LookupDto and no WorkDefinitions collection.
+         */
+    private List<WorkAssignmentDepartmentDto> Departments { get; set; } =
+        new();
+
+    private List<WorkPlanLookupDto> WorkPlans { get; set; } =
+        new();
+
+    private List<WorkAssignmentGroupDto> AssignmentGroups { get; set; } =
+        new();
+
+    private List<EligibleAssignmentStaffDto> DepartmentStaff { get; set; } =
+        new();
+
+    private WorkAssignmentFilterDto Filter { get; set; } =
+        CreateDefaultFilter();
+
+    private BulkDepartmentAssignmentRequest BulkRequest { get; set; } =
+        CreateDefaultBulkRequest();
+
+    private readonly HashSet<long> ExpandedGroupIds =
+        new();
+
+    private bool IsLoadingLookups { get; set; }
+
+    private bool IsLoadingAssignments { get; set; }
+
+    private bool IsLoadingDepartmentStaff { get; set; }
+
+    private bool IsSavingAssignment { get; set; }
+
+    private bool ShowBulkAssignmentModal { get; set; }
+
+    private long? LoadingGroupId { get; set; }
+
+    private string EmployeeSearchText { get; set; } =
+        string.Empty;
+
+    private string SuccessMessage { get; set; } =
+        string.Empty;
+
+    private string ErrorMessage { get; set; } =
+        string.Empty;
+
+    private string ModalErrorMessage { get; set; } =
+        string.Empty;
+
+    private int TotalAssignments =>
+        AssignmentGroups.Sum(x => x.RequiredStaffCount);
+
+    private int TotalAssigned =>
+        AssignmentGroups.Sum(x => x.AssignedStaffCount);
+
+    private int TotalUnassigned =>
+        Math.Max(0, TotalAssignments - TotalAssigned);
+
+    private int SelectedEmployeeCount =>
+        DepartmentStaff.Count(x => x.IsSelected);
+
+    private IEnumerable<EligibleAssignmentStaffDto>
+        FilteredDepartmentStaff
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(EmployeeSearchText))
+                return DepartmentStaff;
+
+            var search =
+                EmployeeSearchText.Trim();
+
+            /*
+            * This is an in-memory search, so using
+                 * StringComparison is valid here.
+                 *
+                 * Do not use StringComparison inside an EF query.
+                 */
+            return DepartmentStaff.Where(x =>
+                (!string.IsNullOrWhiteSpace(x.EmployeeName) &&
+                 x.EmployeeName.Contains(
+                     search,
+                     StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrWhiteSpace(x.JobTitle) &&
+                 x.JobTitle.Contains(
+                     search,
+                     StringComparison.OrdinalIgnoreCase)));
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLookupsAsync();
+        await LoadAssignmentsAsync();
+    }
+
+    private async Task LoadLookupsAsync()
+    {
+        IsLoadingLookups = true;
+        ClearMessages();
+
+        try
+        {
+            var departmentTask =
+                AssignmentManagementService
+                    .GetDepartmentsAsync();
+
+            var workPlanTask =
+                AssignmentManagementService
+                    .GetWorkPlansAsync();
+
+            await Task.WhenAll(
+                departmentTask,
+                workPlanTask);
+
+            Departments =
+                await departmentTask;
+
+            WorkPlans =
+                await workPlanTask;
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Unable to load assignment lookups: " +
+                $"{exception.GetBaseException().Message}";
+        }
+        finally
+        {
+            IsLoadingLookups = false;
+        }
+    }
+
+    private async Task LoadAssignmentsAsync()
+    {
+        ClearMessages();
+
+        if (Filter.ToDate.Date < Filter.FromDate.Date)
+        {
+            ErrorMessage =
+                "The to date cannot be before the from date.";
+
+            return;
+        }
+
+        IsLoadingAssignments = true;
+
+        try
+        {
+            AssignmentGroups =
+                await AssignmentManagementService
+                    .GetAssignmentsAsync(Filter);
+
+            ExpandedGroupIds.Clear();
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Unable to load assignments: " +
+                $"{exception.GetBaseException().Message}";
+        }
+        finally
+        {
+            IsLoadingAssignments = false;
+        }
+    }
+
+    private async Task ToggleGroupAsync(
+        WorkAssignmentGroupDto group)
+    {
+        if (ExpandedGroupIds.Contains(group.GroupId))
+        {
+            ExpandedGroupIds.Remove(group.GroupId);
+            return;
+        }
+
+        ExpandedGroupIds.Add(group.GroupId);
+
+        if (group.Employees != null &&
+            group.Employees.Count > 0)
+        {
+            return;
+        }
+
+        LoadingGroupId =
+            group.GroupId;
+
+        try
+        {
+            group.Employees =
+                await AssignmentManagementService
+                    .GetAssignmentEmployeesAsync(
+                        group.OrganisationStructureId,
+                        group.WorkPlanId,
+                        group.AssignmentName,
+                        group.ScheduledStart,
+                        group.ScheduledEnd);
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                $"Unable to load assigned employees: " +
+                $"{exception.GetBaseException().Message}";
+        }
+        finally
+        {
+            LoadingGroupId = null;
+        }
+    }
+
+    private bool IsExpanded(
+        WorkAssignmentGroupDto group)
+    {
+        return ExpandedGroupIds.Contains(
+            group.GroupId);
+    }
+
+    private void OpenBulkAssignmentModal()
+    {
+        ClearMessages();
+
+        ModalErrorMessage =
+            string.Empty;
+
+        EmployeeSearchText =
+            string.Empty;
+
+        DepartmentStaff.Clear();
+
+        BulkRequest =
+            CreateDefaultBulkRequest();
+
+        ShowBulkAssignmentModal =
+            true;
+    }
+
+    private async Task OpenAddEmployeesModalAsync(
+        WorkAssignmentGroupDto group)
+    {
+        ClearMessages();
+
+        ModalErrorMessage =
+            string.Empty;
+
+        EmployeeSearchText =
+            string.Empty;
+
+        BulkRequest =
+            new BulkDepartmentAssignmentRequest
+                {
+                    OrganisationStructureId =
+                        group.OrganisationStructureId,
+
+                    WorkPlanId =
+                        group.WorkPlanId,
+
+                    AssignmentName =
+                        group.AssignmentName,
+
+                    ScheduledStart =
+                        group.ScheduledStart,
+
+                    ScheduledEnd =
+                        group.ScheduledEnd,
+
+                    SelectedIndividualIds =
+                        new List<int>()
+                };
+
+        ShowBulkAssignmentModal =
+            true;
+
+        await LoadDepartmentStaffAsync();
+    }
+
+    private void CloseBulkAssignmentModal()
+    {
+        if (IsSavingAssignment)
+            return;
+
+        ShowBulkAssignmentModal =
+            false;
+
+        ModalErrorMessage =
+            string.Empty;
+
+        EmployeeSearchText =
+            string.Empty;
+
+        DepartmentStaff.Clear();
+    }
+
+    private async Task OnDepartmentChangedAsync()
+    {
+        BulkRequest.SelectedIndividualIds.Clear();
+
+        EmployeeSearchText =
+            string.Empty;
+
+        DepartmentStaff.Clear();
+
+        if (BulkRequest.OrganisationStructureId <= 0)
+            return;
+
+        await LoadDepartmentStaffAsync();
+    }
+
+    private async Task LoadDepartmentStaffAsync()
+    {
+        if (BulkRequest.OrganisationStructureId <= 0)
+            return;
+
+        IsLoadingDepartmentStaff = true;
+        ModalErrorMessage = string.Empty;
+
+        try
+        {
+            DepartmentStaff =
+                await AssignmentManagementService
+                    .GetDepartmentStaffAsync(
+                        BulkRequest.OrganisationStructureId);
+
+            foreach (var employee in DepartmentStaff)
+            {
+                employee.IsSelected = false;
+            }
+        }
+        catch (Exception exception)
+        {
+            ModalErrorMessage =
+                $"Unable to load department employees: " +
+                $"{exception.GetBaseException().Message}";
+        }
+        finally
+        {
+            IsLoadingDepartmentStaff = false;
+        }
+    }
+
+    private void ChangeEmployeeSelection(
+        EligibleAssignmentStaffDto employee,
+        ChangeEventArgs eventArgs)
+    {
+        employee.IsSelected =
+            eventArgs.Value is bool value && value;
+    }
+
+    private void SelectAllEmployees()
+    {
+        foreach (var employee in FilteredDepartmentStaff)
+        {
+            employee.IsSelected = true;
+        }
+    }
+
+    private void ClearEmployeeSelection()
+    {
+        foreach (var employee in DepartmentStaff)
+        {
+            employee.IsSelected = false;
+        }
+    }
+
+    private async Task SaveBulkAssignmentAsync()
+    {
+        ModalErrorMessage =
+            string.Empty;
+
+        BulkRequest.SelectedIndividualIds =
+            DepartmentStaff
+                .Where(x => x.IsSelected)
+                .Select(x => x.IndividualId)
+                .Distinct()
+                .ToList();
+
+        var validationMessage =
+            ValidateBulkRequest();
+
+        if (!string.IsNullOrWhiteSpace(validationMessage))
+        {
+            ModalErrorMessage =
+                validationMessage;
+
+            return;
+        }
+
+        IsSavingAssignment = true;
+
+        try
+        {
+            /*
+            * AssignedByUserId is intentionally not set here.
+                 *
+                 * WorkAssignmentManagementService should obtain the
+                 * authenticated user using IUserAccessService.
+                 */
+            var result =
+                await AssignmentManagementService
+                    .AssignDepartmentAsync(BulkRequest);
+
+            if (!result.Success)
+            {
+                ModalErrorMessage =
+                    result.Message;
+
+                if (result.Warnings.Count > 0)
+                {
+                    ModalErrorMessage +=
+                        " " +
+                        string.Join(
+                            " ",
+                            result.Warnings);
+                }
+
+                return;
+            }
+
+            ShowBulkAssignmentModal =
+                false;
+
+            SuccessMessage =
+                result.Message;
+
+            if (result.Warnings.Count > 0)
+            {
+                SuccessMessage +=
+                    " " +
+                    string.Join(
+                        " ",
+                        result.Warnings);
+            }
+
+            await LoadAssignmentsAsync();
+        }
+        catch (Exception exception)
+        {
+            ModalErrorMessage =
+                $"Unable to assign employees: " +
+                $"{exception.GetBaseException().Message}";
+        }
+        finally
+        {
+            IsSavingAssignment = false;
+        }
+    }
+
+    private string? ValidateBulkRequest()
+    {
+        if (BulkRequest.OrganisationStructureId <= 0)
+            return "Select a department.";
+
+        if (BulkRequest.WorkPlanId is null ||
+            BulkRequest.WorkPlanId <= 0)
+        {
+            return "Select a work plan.";
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                BulkRequest.AssignmentName))
+        {
+            return "Enter an assignment name.";
+        }
+
+        if (BulkRequest.ScheduledStart == default)
+            return "Enter the scheduled start date and time.";
+
+        if (BulkRequest.ScheduledEnd == default)
+            return "Enter the scheduled end date and time.";
+
+        if (BulkRequest.ScheduledEnd <=
+            BulkRequest.ScheduledStart)
+        {
+            return "The scheduled end must be after the scheduled start.";
+        }
+
+        if (BulkRequest.SelectedIndividualIds.Count == 0)
+            return "Select at least one employee.";
+
+        return null;
+    }
+
+    private async Task ResetFiltersAsync()
+    {
+        Filter =
+            CreateDefaultFilter();
+
+        await LoadAssignmentsAsync();
+    }
+
+    private void ClearMessages()
+    {
+        SuccessMessage =
+            string.Empty;
+
+        ErrorMessage =
+            string.Empty;
+    }
+
+    private static int GetAssignmentPercentage(
+        WorkAssignmentGroupDto group)
+    {
+        if (group.RequiredStaffCount <= 0)
+            return 0;
+
+        var percentage =
+            (int)Math.Round(
+                group.AssignedStaffCount * 100d /
+                group.RequiredStaffCount);
+
+        return Math.Clamp(
+            percentage,
+            0,
+            100);
+    }
+
+    private static string GetStatusCss(
+        string? status)
+    {
+        return status switch
+        {
+            "Fully Assigned" =>
+                "inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-700",
+
+            "Partially Assigned" =>
+                "inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700",
+
+            "Unassigned" =>
+                "inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700",
+
+            _ =>
+                "inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-700"
+        };
+    }
+
+    private static string GetWorkPlanDisplayText(
+        WorkPlanLookupDto workPlan)
+    {
+        /*
+        * Change DisplayName below to the actual descriptive
+             * property in your WorkPlanLookupDto.
+             *
+             * Your WorkPlan entity has no Name property, so the service
+             * must project whichever field identifies the plan into
+             * this DTO property.
+             */
+        return workPlan.DisplayName;
+    }
+
+    private static string ToDateTimeLocalValue(
+        DateTime value)
+    {
+        if (value == default)
+            return string.Empty;
+
+        return value.ToString(
+            "yyyy-MM-ddTHH:mm");
+    }
+
+    private void OnBulkStartChanged(
+        ChangeEventArgs eventArgs)
+    {
+        if (DateTime.TryParse(
+                eventArgs.Value?.ToString(),
+                out var value))
+        {
+            BulkRequest.ScheduledStart =
+                value;
+        }
+    }
+
+    private void OnBulkEndChanged(
+        ChangeEventArgs eventArgs)
+    {
+        if (DateTime.TryParse(
+                eventArgs.Value?.ToString(),
+                out var value))
+        {
+            BulkRequest.ScheduledEnd =
+                value;
+        }
+    }
+
+    private static WorkAssignmentFilterDto CreateDefaultFilter()
+    {
+        return new WorkAssignmentFilterDto
+            {
+             @*    FromDate =
+                    DateTime.Today,
+
+                ToDate =
+                    DateTime.Today.AddDays(7) *@
+
+                FromDate = DateTime.Today.AddDays(-30),
+                ToDate = DateTime.Today.AddDays(30),
+                OrganisationStructureId = null,
+                WorkPlanId = null,
+                AssignmentStatus = null,
+                SearchText = string.Empty
+            };
+    }
+
+    private async Task ClearFiltersAsync()
+{
+    Filter = new WorkAssignmentFilterDto
+    {
+        FromDate = DateTime.Today.AddDays(-30),
+        ToDate = DateTime.Today.AddDays(30),
+        OrganisationStructureId = null,
+        WorkPlanId = null,
+        AssignmentStatus = null,
+        SearchText = string.Empty
+    };
+
+    await LoadAssignmentsAsync();
+}
+
+
+    private static BulkDepartmentAssignmentRequest
+        CreateDefaultBulkRequest()
+    {
+        var start =
+            DateTime.Today.AddDays(1).AddHours(8);
+
+        return new BulkDepartmentAssignmentRequest
+            {
+                ScheduledStart =
+                    start,
+
+                ScheduledEnd =
+                    start.AddHours(8),
+
+                SelectedIndividualIds =
+                    new List<int>()
+            };
+    }
+}

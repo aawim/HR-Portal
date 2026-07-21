@@ -53,8 +53,11 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+ 
+builder.Services.AddScoped<IWorkAssignmentManagementService,WorkAssignmentManagementService>();
 
 builder.Services.AddScoped<IWorkAssignmentOwnershipService,WorkAssignmentOwnershipService>();
+
 
 builder.Services.AddScoped<IAttendanceDuplicateValidator,AttendanceDuplicateValidator>();
 

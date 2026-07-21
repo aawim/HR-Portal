@@ -35,7 +35,10 @@ namespace HRM.Enum
         Position,
 
         [Display(Name = "Leave Type")]
-        LeaveType
+        LeaveType,
+
+        [Display(Name = "Shift/Work")]
+         ShiftWork,
 
     }
 }

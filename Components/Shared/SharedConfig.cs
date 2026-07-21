@@ -676,6 +676,27 @@ namespace HRM.Components.Shared
 
         #endregion Leave States
 
+        #region "Work Planing Types"
+
+        public static class WorkPlaningTypes
+        {
+            public const int WORK_PLAN_CREATE = 1;
+            public const int WORK_PLAN_UPDATE = 2;
+            public const int WORK_PLAN_DELETE = 3;
+
+            public const int WORK_ASSIGNMENT_CREATE = 4;
+            public const int WORK_ASSIGNMENT_UPDATE = 5;
+            public const int WORK_ASSIGNMENT_CANCEL = 6;
+
+            public const int WORK_ASSIGNMENT_TRANSFER = 7;
+            public const int WORK_ASSIGNMENT_RELIEVE = 8;
+
+            public const int WORK_ASSIGNMENT_CHECKIN = 9;
+            public const int WORK_ASSIGNMENT_CHECKOUT = 10;
+        }
+
+        #endregion "Work Planing Types"
+
     }
 }
 
