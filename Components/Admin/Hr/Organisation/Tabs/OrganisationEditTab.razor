@@ -1,0 +1,29 @@
+﻿@using HRM.DTOs
+@using HRM.DTOs.Organisation
+
+<div class="space-y-8 animate-in fade-in duration-300">
+    <div>
+        <h5 class="text-sm font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Core Information</h5>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 md:col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Organisation Name</label>
+                <div class="flex flex-col items-start gap-1.5">
+                    <span class="text-slate-800 font-bold text-lg leading-none">@Org.OrganisationName</span>
+                    @if (!string.IsNullOrEmpty(Org.OrganisationNameDhivehi))
+                    {
+                        <span class="text-sm text-slate-500 font-dhivehi" dir="rtl">@Org.OrganisationNameDhivehi</span>
+                    }
+                </div>
+            </div>
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Registration Number</label>
+                <span class="text-slate-800 font-bold">@(string.IsNullOrEmpty(Org.RegistrationNumber) ? "-" : Org.RegistrationNumber)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public OrganisationResultDto Org { get; set; } = null!;
+}

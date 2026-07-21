@@ -1,0 +1,260 @@
+﻿@using HRM.Components.Cards
+@using HRM.DTOs
+@using HRM.Enum
+@using HRM.Services
+
+@inject AttendanceLogService AttendanceLogService
+ 
+
+<BaseCard Title="Team Attendance">
+
+    <!-- Summary -->
+    <!-- Summary Tabs -->
+    <div class="grid grid-cols-6 divide-x divide-slate-100 border-b border-slate-100">
+
+        <button class="@TabClass(AttendanceFilter.Present)"
+                @onclick="() => SelectedFilter = AttendanceFilter.Present">
+
+            <div class="text-xl font-semibold text-green-600">
+                @PresentCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                Present
+            </div>
+
+        </button>
+
+
+        <button class="@TabClass(AttendanceFilter.Late)"
+                @onclick="() => SelectedFilter = AttendanceFilter.Late">
+
+            <div class="text-xl font-semibold text-amber-600">
+                @LateCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                Late
+            </div>
+
+        </button>
+
+
+        <button class="@TabClass(AttendanceFilter.Absent)"
+                @onclick="() => SelectedFilter = AttendanceFilter.Absent">
+
+            <div class="text-xl font-semibold text-red-600">
+                @AbsentCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                Absent
+            </div>
+
+        </button>
+
+
+        <button class="@TabClass(AttendanceFilter.NoCheckout)"
+                @onclick="() => SelectedFilter = AttendanceFilter.NoCheckout">
+
+            <div class="text-xl font-semibold text-blue-600">
+                @NoCheckoutCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                No Check-out
+            </div>
+
+        </button>
+
+
+        <button class="@TabClass(AttendanceFilter.SickLeave)"
+                @onclick="() => SelectedFilter = AttendanceFilter.SickLeave">
+
+            <div class="text-xl font-semibold text-purple-600">
+                @SickLeaveCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                Sick Leave
+            </div>
+
+        </button>
+
+
+        <button class="@TabClass(AttendanceFilter.FamilyLeave)"
+                @onclick="() => SelectedFilter = AttendanceFilter.FamilyLeave">
+
+            <div class="text-xl font-semibold text-pink-600">
+                @FamilyLeaveCount
+            </div>
+
+            <div class="text-xs text-slate-500">
+                Family Leave
+            </div>
+
+        </button>
+
+    </div>
+
+    <!-- Staff List -->
+    <div class="divide-y divide-slate-100">
+
+        @if (!FilteredAttendance.Any())
+        {
+            <div class="px-4 py-6 text-center text-sm text-slate-500">
+                No records found.
+            </div>
+        }
+        else
+        {
+            @foreach (var staff in FilteredAttendance)
+            {
+                <button class="w-full text-left px-4 py-3 hover:bg-slate-50">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="@GetStatusColor(staff.Status) h-2.5 w-2.5 rounded-full">
+                        </div>
+
+                        <div class="flex-1">
+
+                            <div class="flex justify-between">
+
+                                <span class="text-sm font-medium text-slate-800">
+                                    @staff.Name
+                                </span>
+
+                                <span class="text-xs text-slate-500">
+                                    @staff.Status
+                                </span>
+
+                            </div>
+
+
+                            <div class="text-xs text-slate-500 mt-1">
+
+                                In:
+                                @(staff.CheckIn?.ToString("hh:mm tt") ?? "--")
+
+                                |
+
+                                Out:
+                                @(staff.CheckOut?.ToString("hh:mm tt") ?? "--")
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </button>
+            }
+        }
+
+    </div>
+
+</BaseCard>
+
+@code {
+
+    private List<TeamAttendanceDto> Attendance = new();
+
+    private int PresentCount =>
+       Attendance.Count(x =>
+           x.Status == AttendanceStatus.Present);
+
+
+    private int LateCount =>
+        Attendance.Count(x =>
+            x.Status == AttendanceStatus.Late);
+
+
+    private int AbsentCount =>
+        Attendance.Count(x =>
+            x.Status == AttendanceStatus.Absent);
+
+
+    private int NoCheckoutCount =>
+        Attendance.Count(x =>
+            x.Status == AttendanceStatus.MissingCheckout);
+
+
+    private int SickLeaveCount =>
+        Attendance.Count(x =>
+            x.Status == AttendanceStatus.SickLeave);
+
+
+    private int FamilyLeaveCount =>
+        Attendance.Count(x =>
+            x.Status == AttendanceStatus.FamilyLeave);
+
+
+
+
+
+
+    private AttendanceFilter SelectedFilter = AttendanceFilter.Present;
+
+
+    private IEnumerable<TeamAttendanceDto> FilteredAttendance =>
+        SelectedFilter switch
+        {
+            AttendanceFilter.Present =>
+                Attendance.Where(x => x.Status == AttendanceStatus.Present),
+
+            AttendanceFilter.Late =>
+                Attendance.Where(x => x.Status == AttendanceStatus.Late),
+
+            AttendanceFilter.Absent =>
+                Attendance.Where(x => x.Status == AttendanceStatus.Absent),
+
+            AttendanceFilter.NoCheckout =>
+                Attendance.Where(x => x.Status == AttendanceStatus.MissingCheckout),
+
+            AttendanceFilter.SickLeave =>
+                Attendance.Where(x => x.Status == AttendanceStatus.SickLeave),
+
+            AttendanceFilter.FamilyLeave =>
+                Attendance.Where(x => x.Status == AttendanceStatus.FamilyLeave),
+
+            _ => Attendance
+        };
+
+  
+    private string TabClass(AttendanceFilter tab)
+    {
+        return SelectedFilter == tab
+            ? "bg-slate-50"
+            : "hover:bg-slate-50";
+    }
+
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+ 
+        Attendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync();
+    }
+
+    private string GetStatusColor(AttendanceStatus status)
+    {
+        return status switch
+        {
+            AttendanceStatus.Present => "bg-green-500",
+
+            AttendanceStatus.Late => "bg-amber-500",
+
+            AttendanceStatus.MissingCheckout => "bg-blue-500",
+
+            AttendanceStatus.Absent => "bg-red-500",
+
+            AttendanceStatus.SickLeave => "bg-purple-500",
+
+            AttendanceStatus.FamilyLeave => "bg-pink-500",
+
+            _ => "bg-slate-400"
+        };
+    }
+}

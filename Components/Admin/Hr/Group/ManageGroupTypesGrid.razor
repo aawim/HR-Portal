@@ -1,0 +1,387 @@
+﻿@page "/admin/hr/manage-group-types"
+
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@using HRM.Components.Shared
+
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+
+<div class="relative w-full h-full mx-auto py-6">
+
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4 mt-1">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-800">Manage Group Types</h2>
+            <p class="text-sm text-slate-500 mt-1 text-left">Define organisation-specific categories for operational groups.</p>
+        </div>
+        <button @onclick="OpenAddPanel" class="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Group Type
+        </button>
+    </div>
+
+    <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row items-end gap-3">
+
+        <div class="w-full md:w-1/3">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Select Organisation <span class="text-rose-500">*</span></label>
+            <select @bind="selectedOrgId" class="w-full h-11 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all cursor-pointer">
+                <option value="0">-- Select an Organisation --</option>
+                @foreach (var org in organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+        </div>
+
+        <div class="flex-1 w-full">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Search Types</label>
+            <input type="text" @bind="searchModel.SearchTerm" @bind:event="oninput" @onkeydown="HandleKeyDown"
+                   placeholder="Search by type name..."
+                   class="w-full h-11 px-4 text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none placeholder:text-slate-400" />
+        </div>
+
+        <button @onclick="ExecuteSearch" disabled="@(selectedOrgId == 0 || isLoading)"
+                class="h-11 px-8 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 min-w-[120px]">
+            @if (isLoading)
+            {
+                <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            }
+            else
+            {
+                <span>Load Types</span>
+            }
+        </button>
+    </div>
+
+    @if (hasSearched)
+    {
+        if (!groupTypes.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+                <span class="text-4xl mb-3">🏷️</span>
+                <h3 class="text-lg font-bold text-slate-700">No group types found</h3>
+                <p class="text-sm text-slate-500 mt-1">This organisation doesn't have any custom group types registered yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Type Name</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @for (int i = 0; i < groupTypes.Count; i++)
+                            {
+                                var gt = groupTypes[i];
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                    <td class="py-3 px-4 font-bold text-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                                            </div>
+                                            @gt.Name
+                                        </div>
+                                    </td>
+                                    <td class="py-3 px-4 text-center">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button title="Edit Type" class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors border border-blue-100 shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                            </button>
+                                            <button title="Delete Type" class="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-2 rounded-lg transition-colors border border-rose-100 shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (isPanelOpen)
+{
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" @onclick="ClosePanel"></div>
+}
+
+<div class="fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-500 ease-in-out w-full sm:w-[450px] @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+        <div>
+            <h3 class="text-lg font-bold text-slate-800 leading-tight">Add Group Type</h3>
+            <p class="text-xs text-slate-500 font-medium mt-0.5">Create a new classification category</p>
+        </div>
+        <button @onclick="ClosePanel" title="Close" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+
+        @if (selectedOrgId == 0 && newGroupType.OrganisationId == 0)
+        {
+            <div class="bg-amber-50 border border-amber-200 text-amber-700 p-3 rounded-lg text-sm mb-6 flex gap-2">
+                <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                <span>Please select an Organisation to link this Group Type to.</span>
+            </div>
+        }
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Organisation <span class="text-rose-500">*</span></label>
+                <select @bind="newGroupType.OrganisationId" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white cursor-pointer">
+                    <option value="0">-- Select Organisation --</option>
+                    @foreach (var org in organisations)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Type Name <span class="text-rose-500">*</span></label>
+                <input type="text" @bind="newGroupType.Name" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" placeholder="e.g. Committee, Task Force" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Description (Optional)</label>
+                <textarea @bind="newGroupType.Description" rows="3" class="w-full p-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none resize-none" placeholder="Brief description of this type..."></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+        <button @onclick="ClosePanel" class="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">
+            Cancel
+        </button>
+        <button @onclick="SaveGroupType" disabled="@(!IsFormValid() || isSaving)" class="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 shadow-sm transition-all flex items-center gap-2">
+            @if (isSaving)
+            {
+                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span>Saving...</span>
+            }
+            else
+            {
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                <span>Save Type</span>
+            }
+        </button>
+    </div>
+</div>
+
+<div class="fixed top-6 right-6 z-[100] flex flex-col gap-2 pointer-events-none">
+    @if (isToastVisible)
+    {
+        <div class="bg-white border border-emerald-200 shadow-2xl rounded-xl p-4 flex items-center gap-3 transform transition-all duration-300 animate-in fade-in slide-in-from-top-4 pointer-events-auto w-80">
+            <div class="shrink-0 w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-500">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <div class="flex-1">
+                <h4 class="text-sm font-bold text-slate-800">Success</h4>
+                <p class="text-xs text-slate-500 mt-0.5 leading-tight">@toastMessage</p>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // --- State Variables ---
+    private int selectedOrgId = 0;
+    private SearchModel searchModel = new();
+    private bool isLoading = false;
+    private bool hasSearched = false;
+    private bool isPanelOpen = false;
+    private bool isSaving = false;
+
+    // --- Data Lists ---
+    private List<DropdownItem> organisations = new();
+    private List<GroupTypeDto> groupTypes = new();
+
+    // --- Form Model ---
+    private NewGroupTypeModel newGroupType = new();
+
+    // --- Toast State ---
+    private bool isToastVisible = false;
+    private string toastMessage = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrganisations();
+    }
+
+    private async Task LoadOrganisations()
+    {
+        try
+        {
+            organisations = await DbContext.Organisations
+                .Select(o => new DropdownItem { Id = o.BusinessEntityID, Name = o.OrganisationName ?? "Unknown" })
+                .OrderBy(o => o.Name)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading organisations: {ex.Message}");
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && selectedOrgId > 0)
+        {
+            await ExecuteSearch();
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (selectedOrgId == 0) return;
+
+        isLoading = true;
+        hasSearched = false;
+        groupTypes.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // NEW FILTER: By OrganisationBusinessEntityId
+            var query = DbContext.GroupTypes
+                .Where(gt => gt.OrganisationBusinessEntityId == selectedOrgId)
+                .AsQueryable();
+
+            string term = searchModel.SearchTerm.Trim();
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                query = query.Where(gt => gt.Name != null && gt.Name.Contains(term));
+            }
+
+            groupTypes = await query
+                .Take(50)
+                .Select(gt => new GroupTypeDto
+                    {
+                        GroupTypeId = gt.GroupTypeId,
+                        Name = gt.Name ?? "Unnamed Type"
+                    })
+                .OrderBy(gt => gt.Name)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading group types: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            hasSearched = true;
+        }
+    }
+
+    // --- Panel Controls ---
+    private void OpenAddPanel()
+    {
+        newGroupType = new NewGroupTypeModel();
+
+        // UX feature: If an org is already selected on the main screen, pre-fill it!
+        if (selectedOrgId > 0)
+        {
+            newGroupType.OrganisationId = selectedOrgId;
+        }
+
+        isPanelOpen = true;
+    }
+
+    private void ClosePanel()
+    {
+        isPanelOpen = false;
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(newGroupType.Name) && newGroupType.OrganisationId > 0;
+    }
+
+    private async Task SaveGroupType()
+    {
+        if (!IsFormValid()) return;
+
+        isSaving = true;
+        StateHasChanged();
+
+        try
+        {
+            // TODO: Map to actual entity and save to DbContext
+            // var entity = new GroupType {
+            //     Name = newGroupType.Name,
+            //     OrganisationBusinessEntityId = newGroupType.OrganisationId
+            // };
+            // DbContext.GroupTypes.Add(entity);
+            // await DbContext.SaveChangesAsync();
+
+            Console.WriteLine($"Saving new group type: {newGroupType.Name} for Org ID {newGroupType.OrganisationId}");
+
+            // Simulate network delay
+            await Task.Delay(500);
+
+            toastMessage = $"Group Type '{newGroupType.Name}' created successfully!";
+            isToastVisible = true;
+
+            ClosePanel();
+
+            // If the user saved a type for the currently viewed organisation, refresh the grid!
+            if (selectedOrgId == newGroupType.OrganisationId)
+            {
+                await ExecuteSearch();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error saving group type: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+            StateHasChanged();
+
+            if (isToastVisible)
+            {
+                await Task.Delay(3000);
+                isToastVisible = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+    // --- DTOs & Models ---
+    public class DropdownItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class SearchModel
+    {
+        public string SearchTerm { get; set; } = string.Empty;
+    }
+
+    public class GroupTypeDto
+    {
+        public int GroupTypeId { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class NewGroupTypeModel
+    {
+        public int OrganisationId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+}

@@ -1,0 +1,442 @@
+﻿@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject UserService UserService
+@inject IUserAccessService _access
+
+
+<!-- Inject your UserService if you need it to fetch the user's specific Org ID -->
+@* @inject UserService UserService *@
+
+<div class="bg-white relative">
+    <!-- Header & Action Bar -->
+    <div class="flex justify-between items-end border-b border-slate-100 pb-2 mb-4 mt-[-30px]">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Manage Leave Types</h2>
+            <p class="text-sm text-slate-500 mt-1">Configure leave policies, durations, and payment rules.</p>
+        </div>
+
+        <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add New
+        </button>
+    </div>
+
+    <!-- Data Grid -->
+    @if (leaveTypes == null)
+    {
+        <!-- Loading State -->
+        <div class="flex justify-center items-center p-12 min-h-[300px]">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+    }
+    else if (!leaveTypes.Any())
+    {
+        <!-- Empty State -->
+        <div class="bg-slate-50 border border-slate-100 rounded-xl p-12 text-center text-slate-500 min-h-[300px] flex flex-col items-center justify-center">
+            <div class="text-4xl mb-3">🌴</div>
+            <p class="font-medium text-slate-700 text-lg">No leave types found.</p>
+            <p class="text-sm mt-1">Click "Add New" to create your first leave policy.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Data Table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                        <th class="p-4 font-bold">Leave Name</th>
+                        <th class="p-4 font-bold">Organisation</th>
+                        <th class="p-4 font-bold">Duration</th>
+                        <th class="p-4 font-bold">Pay Rules</th>
+                        <th class="p-4 font-bold">Is Global</th>
+                        <th class="p-4 font-bold text-center">Conditions</th>
+                        <th class="p-4 font-bold text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (var leave in leaveTypes)
+                    {
+                        <tr class="hover:bg-slate-50 transition-colors duration-150">
+                            <!-- Names -->
+                            <td class="p-4">
+                                <div class="font-bold text-slate-800 text-sm">@leave.Name</div>
+                                @if (!string.IsNullOrWhiteSpace(leave.NameDhivehi))
+                                {
+                                    <div class="text-xs text-slate-500 font-medium mt-0.5" dir="rtl">
+                                        @leave.NameDhivehi
+                                    </div>
+                                }
+                            </td>
+
+                            <!-- Organisation -->
+                            <td class="p-4">
+                                <div class="font-bold text-slate-800 text-sm">@leave.Organisation?.OrganisationName</div>
+                            </td>
+
+                            <!-- Duration -->
+                            <td class="p-4 text-sm text-slate-700 font-medium">
+                                @leave.Duration <span class="text-slate-400 font-normal">Days</span>
+                            </td>
+
+                            <!-- Pay Status -->
+                            <td class="p-4 text-sm">
+                                @if (leave.IncludePay)
+                                {
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-green-50 text-green-700 text-xs font-bold border border-green-100">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                        @leave.PayPercentage% Pay
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200">
+                                        Unpaid
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- Is Global -->
+                            <td class="p-4 text-sm">
+                                @if (leave.IsGlobal)
+                                {
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                                        True
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-500 text-xs font-bold border border-slate-200">
+                                        False
+                                    </span>
+                                }
+                            </td>
+
+                            <!-- Boolean Conditions (Tags) -->
+                            <td class="p-4 text-center">
+                                <div class="flex flex-wrap gap-1.5 justify-center">
+                                    @if (leave.IncludeHolidays)
+                                    {
+                                        <span class="px-2 py-0.5 bg-blue-50 text-blue-600 text-[10px] uppercase tracking-wide font-bold rounded border border-blue-100">Inc. Holidays</span>
+                                    }
+                                    @if (leave.IsStaffWideAvailable)
+                                    {
+                                        <span class="px-2 py-0.5 bg-purple-50 text-purple-600 text-[10px] uppercase tracking-wide font-bold rounded border border-purple-100">Staff Wide</span>
+                                    }
+                                </div>
+                            </td>
+
+                            <!-- Actions -->
+                            <td class="p-4 text-right">
+                                <div class="flex justify-end gap-1">
+                                    <!-- Edit Button -->
+                                    <button @onclick="() => OpenEditPanel(leave)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    </button>
+                                    <!-- Delete Button -->
+                                    <button @onclick="() => OpenDeleteModal(leave)" class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- ========================================== -->
+<!-- DELETE CONFIRMATION MODAL -->
+<!-- ========================================== -->
+@if (isDeleteModalOpen)
+{
+    <div class="fixed inset-0 z-[60] flex items-center justify-center overflow-hidden">
+        <!-- Dark Backdrop for Modal -->
+        <div class="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" @onclick="CloseDeleteModal"></div>
+
+        <!-- Modal Content -->
+        <div class="relative bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all">
+            <div class="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mb-4 mx-auto">
+                <svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+            </div>
+            <h3 class="text-lg font-bold text-slate-800 text-center mb-2">Delete Leave Type?</h3>
+            <p class="text-sm text-slate-500 text-center mb-6">
+                Are you sure you want to delete <strong class="text-slate-800">@leaveToDelete?.Name</strong>? This action cannot be undone.
+            </p>
+            <div class="flex justify-center gap-3">
+                <button @onclick="CloseDeleteModal" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors w-full">
+                    Cancel
+                </button>
+                <button @onclick="ConfirmDelete" class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 transition-colors w-full shadow-sm">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ========================================== -->
+<!-- SLIDE-OUT PANEL OVERLAY (ADD/EDIT) -->
+<!-- ========================================== -->
+<div class="fixed inset-0 z-50 overflow-hidden @(isPanelOpen ? "" : "pointer-events-none")">
+
+    <!-- Dark Backdrop -->
+    <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity duration-300 ease-in-out @(isPanelOpen ? "opacity-100" : "opacity-0")"
+         @onclick="ClosePanel">
+    </div>
+
+    <!-- Slide Panel -->
+    <div class="absolute inset-y-0 right-0 max-w-md w-full bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+        <!-- Panel Header -->
+        <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+            <h2 class="text-lg font-bold text-slate-800">
+                @(isEditing ? "Edit Leave Type" : "Add New Leave Type")
+            </h2>
+            <button @onclick="ClosePanel" class="text-slate-400 hover:text-slate-600 hover:bg-slate-200 p-2 rounded-full transition-colors">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <!-- Panel Body (Scrollable Form) -->
+        <div class="p-6 flex-1 overflow-y-auto">
+            @if (currentLeave != null)
+            {
+                <div class="space-y-5">
+
+                    <!-- Organisation Dropdown -->
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Organisation</label>
+                        <select @bind="currentLeave.OrganisationId" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm bg-white">
+                            <option value="">-- Select Organisation --</option>
+                            @if (organisations != null)
+                            {
+                                @foreach (var org in organisations)
+                                {
+                                    <option value="@org.BusinessEntityID">@org.OrganisationName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Leave Name (English)</label>
+                        <input type="text" @bind="currentLeave.Name" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" placeholder="e.g. Annual Leave" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">Leave Name (Dhivehi)</label>
+                        <input type="text" @bind="currentLeave.NameDhivehi" dir="rtl" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Duration (Days)</label>
+                            <input type="number" @bind="currentLeave.Duration" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" />
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">Pay Percentage %</label>
+                            <input type="number" @bind="currentLeave.PayPercentage" class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm" />
+                        </div>
+                    </div>
+
+                    <div class="pt-2">
+                        <h4 class="text-sm font-bold text-slate-800 mb-3 border-b border-slate-100 pb-2">Conditions</h4>
+
+                        <label class="flex items-center gap-3 mb-3 cursor-pointer">
+                            <input type="checkbox" @bind="currentLeave.IncludePay" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                            <span class="text-sm text-slate-700 font-medium">Includes Pay</span>
+                        </label>
+
+                        <label class="flex items-center gap-3 mb-3 cursor-pointer">
+                            <input type="checkbox" @bind="currentLeave.IncludeHolidays" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                            <span class="text-sm text-slate-700 font-medium">Include Holidays in calculation</span>
+                        </label>
+
+                        <label class="flex items-center gap-3 mb-3 cursor-pointer">
+                            <input type="checkbox" @bind="currentLeave.IsGlobal" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                            <span class="text-sm text-slate-700 font-medium">Is Global</span>
+                        </label>
+
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" @bind="currentLeave.IsStaffWideAvailable" class="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500" />
+                            <span class="text-sm text-slate-700 font-medium">Staff Wide Available</span>
+                        </label>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- Panel Footer -->
+        <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+            <button @onclick="ClosePanel" class="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                Cancel
+            </button>
+            <button @onclick="SaveLeaveType" class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 shadow-sm transition-colors">
+                Save Leave Type
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<LeaveType>? leaveTypes;
+    private List<Organisation>? organisations;
+    private int? loggedInUserOrgId;
+
+    // --- Slide Panel State ---
+    private bool isPanelOpen = false;
+    private bool isEditing = false;
+    private LeaveType? currentLeave = new();
+
+    // --- Delete Modal State ---
+    private bool isDeleteModalOpen = false;
+    private LeaveType? leaveToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Fetch user state to determine default organization
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            var user = state.User;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                // Retrieve the Organization ID for the logged in user here.
+                // Assuming you have an "orgId" claim, or you can fetch it via your UserService.
+                var orgClaim = user.FindFirst("orgId");
+                if (orgClaim != null && int.TryParse(orgClaim.Value, out int orgId))
+                {
+                    loggedInUserOrgId = orgId;
+                }
+            }
+        }
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        // Fetch Organisations for the dropdown
+        organisations = await DbContext.Organisations
+            .OrderBy(o => o.OrganisationName)
+            .ToListAsync();
+
+        // Fetch Leave Types for the Grid
+        leaveTypes = await DbContext.LeaveTypes
+            .Include(jlt => jlt.Organisation)
+            .OrderBy(l => l.Name)
+            .ToListAsync();
+    }
+
+    // --- Add/Edit Panel Actions ---
+    private async void OpenAddPanel()
+    {
+        isEditing = false;
+
+        // Create a fresh model and set the default organization to the logged-in user's org
+        currentLeave = new LeaveType
+            {
+                OrganisationId = await _access.GetCurrentOrganisationIdAsync()
+            };
+
+        isPanelOpen = true;
+    }
+
+    private void OpenEditPanel(LeaveType leave)
+    {
+        isEditing = true;
+
+        currentLeave = new LeaveType
+            {
+                LeaveTypeId = leave.LeaveTypeId,
+                Name = leave.Name,
+                NameDhivehi = leave.NameDhivehi,
+                Duration = leave.Duration,
+                PayPercentage = leave.PayPercentage,
+                IncludePay = leave.IncludePay,
+                IncludeHolidays = leave.IncludeHolidays,
+                IsGlobal = leave.IsGlobal,
+                IsStaffWideAvailable = leave.IsStaffWideAvailable,
+                OrganisationId = leave.OrganisationId
+            };
+
+        isPanelOpen = true;
+    }
+
+    private void ClosePanel()
+    {
+        isPanelOpen = false;
+    }
+
+    private async Task SaveLeaveType()
+    {
+        if (currentLeave == null) return;
+
+        if (isEditing)
+        {
+            var existing = await DbContext.LeaveTypes.FindAsync(currentLeave.LeaveTypeId);
+            if (existing != null)
+            {
+                existing.Name = currentLeave.Name;
+                existing.NameDhivehi = currentLeave.NameDhivehi;
+                existing.Duration = currentLeave.Duration;
+                existing.PayPercentage = currentLeave.PayPercentage;
+                existing.IncludePay = currentLeave.IncludePay;
+                existing.IncludeHolidays = currentLeave.IncludeHolidays;
+                existing.IsGlobal = currentLeave.IsGlobal;
+                existing.IsStaffWideAvailable = currentLeave.IsStaffWideAvailable;
+                existing.OrganisationId = currentLeave.OrganisationId;
+            }
+        }
+        else
+        {
+            DbContext.LeaveTypes.Add(currentLeave);
+        }
+
+        await DbContext.SaveChangesAsync();
+        await LoadData();
+        ClosePanel();
+    }
+
+    // --- Delete Modal Actions ---
+    private void OpenDeleteModal(LeaveType leave)
+    {
+        leaveToDelete = leave;
+        isDeleteModalOpen = true;
+    }
+
+    private void CloseDeleteModal()
+    {
+        isDeleteModalOpen = false;
+        leaveToDelete = null;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (leaveToDelete != null)
+        {
+            var entity = await DbContext.LeaveTypes.FindAsync(leaveToDelete.LeaveTypeId);
+            if (entity != null)
+            {
+                DbContext.LeaveTypes.Remove(entity);
+                await DbContext.SaveChangesAsync();
+                await LoadData(); // Refresh the grid
+            }
+        }
+        CloseDeleteModal();
+    }
+}

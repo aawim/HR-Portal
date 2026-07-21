@@ -1,0 +1,143 @@
+﻿@page "/admin/attendance/manage-attendance/former-staff"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject UserService UserService
+
+
+<!-- Header & Action Bar -->
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Former Staff</h2>
+        <p class="text-sm text-slate-500 mt-1">Configure global leave policies, durations, and system rules.</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden p-0">
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-slate-200">
+        <!--
+            Added overflow-x-auto so it scrolls nicely on mobile.
+            You can add custom CSS to hide the scrollbar if desired.
+        -->
+        <nav class="flex overflow-x-auto" aria-label="Tabs">
+            @foreach (var tab in Tabs)
+            {
+                <button @onclick="() => SetActiveTab(tab)"
+                        class="whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm transition-all duration-200 outline-none
+                               @(activeTab == tab
+                                   ? "border-blue-600 text-blue-600 bg-blue-50/30"
+                                   : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 hover:bg-slate-50")">
+                    @tab
+                </button>
+            }
+        </nav>
+    </div>
+
+    <!-- Tab Content Area -->
+    <div class="p-2 min-h-[400px]">
+
+        <!-- Quick fade-in animation container -->
+        <div class="animate-in fade-in duration-300">
+            @switch (activeTab)
+            {
+                case "Attendance":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Daily Attendance</h3>
+                        <p class="text-slate-500 text-sm mb-6">View and manage the standard daily attendance logs.</p>
+
+                        <!-- Drop your Attendance Grid Component here -->
+                        <div class="p-8 border-2 border-dashed border-slate-200 rounded-xl text-center text-slate-400">
+                            Attendance Grid Content Goes Here
+                        </div>
+                    </div>
+                    break;
+
+                case "Summary":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Attendance Summary</h3>
+                        <p class="text-slate-500 text-sm mb-6">Overview of total hours worked, days present, and overall metrics.</p>
+                    </div>
+                    break;
+
+                case "Late":
+                    <div>
+                        <h3 class="text-lg font-bold text-rose-800 mb-2">Late Arrivals</h3>
+                        <p class="text-slate-500 text-sm mb-6">Track employees who clocked in after their scheduled start time.</p>
+                    </div>
+                    break;
+
+                case "Break Late":
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-800 mb-2">Late from Break</h3>
+                        <p class="text-slate-500 text-sm mb-6">Records of extended break durations and delayed returns.</p>
+                    </div>
+                    break;
+
+                case "Absent":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Absenteeism</h3>
+                        <p class="text-slate-500 text-sm mb-6">Log of unexcused absences and no-shows.</p>
+                    </div>
+                    break;
+
+                case "Out Of Office":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Out of Office</h3>
+                        <p class="text-slate-500 text-sm mb-6">Approved off-site work, meetings, and official trips.</p>
+                    </div>
+                    break;
+
+                case "Over-time":
+                    <div>
+                        <h3 class="text-lg font-bold text-emerald-800 mb-2">Over-time Tracking</h3>
+                        <p class="text-slate-500 text-sm mb-6">Review and approve extra hours worked beyond the standard shift.</p>
+                    </div>
+                    break;
+
+                case "Help":
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-blue-900 mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Help & Guidelines
+                        </h3>
+                        <p class="text-blue-800 text-sm">
+                            Need assistance understanding attendance policies? Review the company rulebook or contact HR for support.
+                        </p>
+                    </div>
+                    break;
+            }
+        </div>
+    </div>
+</div>
+ 
+ 
+@code {
+    // Set the default tab that opens when the page loads
+    private string activeTab = "Attendance";
+
+    // Define all available tabs
+    private readonly string[] Tabs = new[]
+    {
+        "Attendance",
+        "Summary",
+        "Late",
+        "Break Late",
+        "Absent",
+        "Out Of Office",
+        "Over-time",
+        "Help"
+    };
+
+    // Method to switch tabs
+    private void SetActiveTab(string tabName)
+    {
+        activeTab = tabName;
+    }
+}

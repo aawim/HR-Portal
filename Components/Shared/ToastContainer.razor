@@ -1,0 +1,76 @@
+﻿@implements IDisposable
+@using HRM.Services
+@inject ToastService ToastService
+
+
+@if (toast != null)
+{
+    <div class="fixed top-5 right-5 z-50">
+
+        <div class="@CssClass
+                    rounded-lg shadow-lg
+                    px-5 py-4 text-white">
+
+            @toast.Message
+
+        </div>
+
+    </div>
+}
+
+
+@code {
+
+    private ToastMessage? toast;
+
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += ShowToast;
+    }
+
+
+    private async void ShowToast(ToastMessage message)
+    {
+        toast = message;
+
+        await InvokeAsync(StateHasChanged);
+
+        await HideToast();
+    }
+
+
+    private async Task HideToast()
+    {
+        await Task.Delay(3000);
+
+        toast = null;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+
+    private string CssClass =>
+        toast?.Type switch
+        {
+            ToastType.Success =>
+                "bg-green-600",
+
+            ToastType.Error =>
+                "bg-red-600",
+
+            ToastType.Warning =>
+                "bg-orange-500",
+
+            _ =>
+                "bg-blue-600"
+        };
+
+
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= ShowToast;
+    }
+}

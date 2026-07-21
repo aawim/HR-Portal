@@ -1,0 +1,218 @@
+﻿@using HRM.Components.Tools
+@using HRM.DTOs.Attendance
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@inject IUserAccessService UserAccessService
+@* @inject IAttendance AttendanceLogService *@
+@inject IAttendanceService AttendanceService
+
+@inject AttendanceLogService AttendanceLogService
+
+
+<div class="bg-white rounded-xl shadow-sm border p-6">
+
+    <h3 class="text-lg font-semibold mb-5">
+        Time Clock
+    </h3>
+
+
+    <AnalogClock />
+
+
+    @if (TodayCheckIn == null)
+    {
+        <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+            <div class="font-semibold text-amber-700">
+                Not Clocked In
+            </div>
+
+            <div class="text-sm text-slate-500">
+                Please check in to begin your workday.
+            </div>
+        </div>
+    }
+    else if (TodayCheckOut == null)
+    {
+        <div class="mb-5 rounded-lg border border-green-200 bg-green-50 p-4">
+            <div class="font-semibold text-green-700">
+                Currently Clocked In
+            </div>
+
+            <div class="text-sm text-slate-500">
+                Checked in at @TodayCheckIn.Date.ToString("hh:mm tt")
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="mb-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div class="font-semibold text-slate-700">
+                Checked Out
+            </div>
+
+            <div class="text-sm text-slate-500 mt-1">
+                Check In : @TodayCheckIn.Date.ToString("hh:mm tt")
+                <br />
+                Check Out : @TodayCheckOut.Date.ToString("hh:mm tt")
+            </div>
+        </div>
+    }
+
+    <div class="flex gap-3">
+
+        <button class="flex-1 rounded-lg bg-green-600 px-5 py-3 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        @onclick="HandleCheckIn"
+        disabled="@DisableCheckIn">
+
+            @if (ProcessingCheckIn)
+            {
+                <span class="flex items-center justify-center gap-2">
+
+                    <svg class="animate-spin h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24">
+
+                        <circle class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4">
+                        </circle>
+
+                        <path class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4A10 10 0 002 12h2z">
+                        </path>
+
+                    </svg>
+
+                    Checking In...
+
+                </span>
+            }
+            else
+            {
+                <span>Check In</span>
+            }
+
+        </button>
+
+        <button class="flex-1 rounded-lg bg-red-600 px-5 py-3 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+        @onclick="HandleCheckOut"
+        disabled="@DisableCheckOut">
+
+            @if (ProcessingCheckOut)
+            {
+                <span class="flex items-center justify-center gap-2">
+
+                    <svg class="animate-spin h-5 w-5"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24">
+
+                        <circle class="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        stroke-width="4">
+                        </circle>
+
+                        <path class="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4A10 10 0 002 12h2z">
+                        </path>
+
+                    </svg>
+
+                    Checking Out...
+
+                </span>
+            }
+            else
+            {
+                <span>Check Out</span>
+            }
+
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+
+    [Parameter]
+    public AttendanceLogDto? TodayCheckIn { get; set; }
+
+    [Parameter]
+    public AttendanceLogDto? TodayCheckOut { get; set; }
+
+    [Parameter]
+    public EventCallback OnClockIn { get; set; }
+
+    [Parameter]
+    public EventCallback OnClockOut { get; set; }
+
+
+    private bool DisableCheckIn => ProcessingCheckIn || ProcessingCheckOut;
+
+    private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
+
+
+    private bool ProcessingCheckIn;
+    private bool ProcessingCheckOut;
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        var context = await UserAccessService.RequireContextAsync();
+        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
+
+        TodayCheckIn = result.checkIn;
+        TodayCheckOut = result.checkOut;
+    }
+
+
+
+
+    private async Task HandleCheckIn()
+    {
+        ProcessingCheckIn = true;
+        var context = await UserAccessService.RequireContextAsync();
+        try
+        {
+            await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId,1);
+        
+
+            if (OnClockIn.HasDelegate)
+                await OnClockIn.InvokeAsync();
+        }
+        finally
+        {
+            ProcessingCheckIn = false;
+        }
+    }
+
+    private async Task HandleCheckOut()
+    {
+        ProcessingCheckOut = true;
+        var context = await UserAccessService.RequireContextAsync();
+        try
+        {
+            await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId, 2);
+
+            if (OnClockOut.HasDelegate)
+                await OnClockOut.InvokeAsync();
+        }
+        finally
+        {
+            ProcessingCheckOut = false;
+        }
+    }
+
+}

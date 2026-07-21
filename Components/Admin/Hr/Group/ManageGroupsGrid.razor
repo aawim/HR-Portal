@@ -1,0 +1,364 @@
+﻿@page "/admin/hr/manage-groups"
+
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@using HRM.Services
+@using HRM.Components.Shared
+
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+
+<div class="relative w-full h-full mx-auto py-6">
+
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end mb-6 gap-4 mt-1">
+        <div>
+            <h2 class="text-2xl font-bold text-slate-800">Manage Groups</h2>
+            <p class="text-sm text-slate-500 mt-1 text-left">View and manage operational groups, committees, and teams.</p>
+        </div>
+        <button @onclick="OpenAddPanel" class="h-11 px-5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2 shadow-sm">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add New Group
+        </button>
+    </div>
+
+    <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col md:flex-row items-end gap-3">
+        <div class="flex-1 w-full">
+            <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5 ml-1">Select Organisation <span class="text-rose-500">*</span></label>
+            <select @bind="selectedOrgId" class="w-full h-11 px-4 text-sm font-medium text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all cursor-pointer">
+                <option value="0">-- Select an Organisation --</option>
+                @foreach (var org in organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+        </div>
+
+        <button @onclick="ExecuteSearch" disabled="@(selectedOrgId == 0 || isLoading)"
+                class="h-11 px-8 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 min-w-[120px]">
+            @if (isLoading)
+            {
+                <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            }
+            else
+            {
+                <span>Load Groups</span>
+            }
+        </button>
+    </div>
+
+    @if (hasSearched)
+    {
+        if (!groups.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-16 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-white">
+                <span class="text-4xl mb-3">📁</span>
+                <h3 class="text-lg font-bold text-slate-700">No groups found</h3>
+                <p class="text-sm text-slate-500 mt-1">This organisation doesn't have any groups registered yet.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Group Name</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Group Type</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Division / Unit</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @for (int i = 0; i < groups.Count; i++)
+                            {
+                                var g = groups[i];
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                    <td class="py-3 px-4 font-bold text-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                                            </div>
+                                            @g.Name
+                                        </div>
+                                    </td>
+                                    <td class="py-3 px-4">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-800 border border-slate-200">
+                                            @g.GroupType
+                                        </span>
+                                    </td>
+                                    <td class="py-3 px-4 text-slate-600">@g.Division</td>
+                                    <td class="py-3 px-4 text-center">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button title="Edit Group" class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors border border-blue-100 shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                            </button>
+                                            <button title="Delete Group" class="text-rose-500 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 p-2 rounded-lg transition-colors border border-rose-100 shadow-sm">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (isPanelOpen)
+{
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" @onclick="ClosePanel"></div>
+}
+
+<div class="fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-500 ease-in-out w-full sm:w-[450px] @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+        <div>
+            <h3 class="text-lg font-bold text-slate-800 leading-tight">Add New Group</h3>
+            <p class="text-xs text-slate-500 font-medium mt-0.5">Register a new team or committee</p>
+        </div>
+        <button @onclick="ClosePanel" title="Close" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+
+        <div class="space-y-5">
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Name <span class="text-rose-500">*</span></label>
+                <input type="text" @bind="newGroup.Name" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" placeholder="e.g. Disciplinary Committee" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Organisation <span class="text-rose-500">*</span></label>
+                <select value="@newGroup.OrganisationId" @onchange="OnPanelOrgChanged" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white cursor-pointer">
+                    <option value="0">-- Select Organisation --</option>
+                    @foreach (var org in organisations)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Division / Unit <span class="text-rose-500">*</span></label>
+                <select @bind="newGroup.StructureId" disabled="@(newGroup.OrganisationId == 0)" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white cursor-pointer disabled:bg-slate-50 disabled:text-slate-400 disabled:cursor-not-allowed">
+                    <option value="0">
+                        @(newGroup.OrganisationId == 0 ? "Select an organisation first..." : "-- Select Division / Unit --")
+                    </option>
+                    @foreach (var div in panelDivisions)
+                    {
+                        <option value="@div.Id">@div.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-600 mb-1">Group Type <span class="text-rose-500">*</span></label>
+                <select @bind="newGroup.GroupTypeId" class="w-full h-11 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white cursor-pointer">
+                    <option value="0">-- Select Group Type --</option>
+                    @foreach (var type in groupTypes)
+                    {
+                        <option value="@type.Id">@type.Name</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+        <button @onclick="ClosePanel" class="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">
+            Cancel
+        </button>
+        <button @onclick="SaveGroup" disabled="@(!IsFormValid())" class="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 shadow-sm transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            Save Group
+        </button>
+    </div>
+</div>
+
+@code {
+    // --- State Variables ---
+    private int selectedOrgId = 0;
+    private bool isLoading = false;
+    private bool hasSearched = false;
+    private bool isPanelOpen = false;
+
+    // --- Data Lists ---
+    private List<DropdownItem> organisations = new();
+    private List<DropdownItem> groupTypes = new();
+    private List<DropdownItem> panelDivisions = new(); // Divisions for the Panel
+    private List<GroupResultDto> groups = new();
+
+    // --- Form Model ---
+    private NewGroupModel newGroup = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDropdowns();
+    }
+
+    private async Task LoadDropdowns()
+    {
+        try
+        {
+            organisations = await DbContext.Organisations
+                .Select(o => new DropdownItem { Id = o.BusinessEntityID, Name = o.OrganisationName ?? "Unknown" })
+                .OrderBy(o => o.Name)
+                .ToListAsync();
+
+            groupTypes = await DbContext.GroupTypes
+                .Select(gt => new DropdownItem { Id = gt.GroupTypeId, Name = gt.Name ?? "Unknown" })
+                .OrderBy(gt => gt.Name)
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dropdowns: {ex.Message}");
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (selectedOrgId == 0) return;
+
+        isLoading = true;
+        hasSearched = false;
+        groups.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var query = from g in DbContext.Groups
+                        where g.BusinessEntityOrganisationId == selectedOrgId
+                        join gt in DbContext.GroupTypes on g.GroupTypeId equals gt.GroupTypeId into gtGroup
+                        from groupType in gtGroup.DefaultIfEmpty()
+                        join os in DbContext.OrganisationStructures on g.OrganisationStructureId equals os.OrganisationStructureId into osGroup
+                        from structure in osGroup.DefaultIfEmpty()
+                        select new { g, groupType, structure };
+
+            var results = await query.ToListAsync();
+
+            groups = results.Select(x => new GroupResultDto
+                {
+                    GroupId = x.g.GroupId,
+                    Name = x.g.Name ?? "Unnamed Group",
+                    GroupType = x.groupType != null ? x.groupType.Name : "-",
+                    Division = x.structure != null ? x.structure.Name : "-"
+                })
+            .OrderBy(x => x.Name)
+            .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading groups: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            hasSearched = true;
+        }
+    }
+
+    // --- Panel Controls ---
+    private async Task OpenAddPanel()
+    {
+        newGroup = new NewGroupModel();
+
+        // UX feature: If they already selected an Org in the search bar, pre-fill it!
+        if (selectedOrgId > 0)
+        {
+            await OnPanelOrgChanged(new ChangeEventArgs { Value = selectedOrgId.ToString() });
+        }
+        else
+        {
+            panelDivisions.Clear();
+        }
+
+        isPanelOpen = true;
+    }
+
+    private void ClosePanel()
+    {
+        isPanelOpen = false;
+    }
+
+    // Cascading dropdown logic inside the panel
+    private async Task OnPanelOrgChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int orgId))
+        {
+            newGroup.OrganisationId = orgId;
+            newGroup.StructureId = 0; // Reset division
+            panelDivisions.Clear();
+
+            if (orgId > 0)
+            {
+                try
+                {
+                    panelDivisions = await DbContext.OrganisationStructures
+                        .Where(os => os.OrganisationBusinessEntityID == orgId)
+                        .Select(os => new DropdownItem { Id = os.OrganisationStructureId, Name = os.Name ?? "Unknown" })
+                        .OrderBy(os => os.Name)
+                        .ToListAsync();
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error loading divisions: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private bool IsFormValid()
+    {
+        return !string.IsNullOrWhiteSpace(newGroup.Name) &&
+               newGroup.OrganisationId > 0 &&
+               newGroup.GroupTypeId > 0 &&
+               newGroup.StructureId > 0;
+    }
+
+    private async Task SaveGroup()
+    {
+        if (!IsFormValid()) return;
+
+        Console.WriteLine($"Saving new group: {newGroup.Name} for Org ID {newGroup.OrganisationId}");
+
+        ClosePanel();
+
+        // If they saved a group for the currently searched organisation, refresh the grid!
+        if (selectedOrgId == newGroup.OrganisationId)
+        {
+            await ExecuteSearch();
+        }
+    }
+
+    // --- DTOs & Models ---
+    public class DropdownItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    public class GroupResultDto
+    {
+        public int GroupId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string GroupType { get; set; } = string.Empty;
+        public string Division { get; set; } = string.Empty;
+    }
+
+    public class NewGroupModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public int OrganisationId { get; set; }
+        public int GroupTypeId { get; set; }
+        public int StructureId { get; set; }
+    }
+}

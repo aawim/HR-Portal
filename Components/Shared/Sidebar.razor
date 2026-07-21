@@ -1,0 +1,136 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Services
+@using HRM.Components.Shared
+@using HRM.Services.Interfaces
+
+
+@inject NavigationManager Navigation
+@inject PortalContext PortalContext
+@inject IUserContext UserContext
+
+
+
+<aside class="w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col shadow-xl">
+    <!-- Logo Area (Always Visible) -->
+    <div class="h-16 flex items-center px-6 border-b border-slate-800">
+        <div class="flex items-center gap-2 text-white font-bold text-xl">
+            <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+            <span>HR Portal</span>
+        </div>
+    </div>
+
+    <AuthorizeView>
+        <Authorized>
+            <!-- Active Navigation Links -->
+            <nav class="flex-1 overflow-y-auto py-4">
+                <ul class="space-y-1 px-3">
+                    @if (IsAdminPortal)
+                    {
+                        <!-- Admin Menu-->
+
+                        <NavItem Href="/admin/my/workspace" Icon="briefcase" Text="Home" IsActive="true" />
+                        <NavItem Href="/admin" Icon="home" Text="Dashboard"  />
+                        <NavItem Href="admin/hr" Icon="users" Text="HR" />
+                        <NavItem Href="admin/attendance" Icon="clock" Text="Attendance" />
+                        <NavItem Href="admin/payroll" Icon="currency-dollar" Text="Payroll" />
+                        <NavItem Href="admin/performance" Icon="trending-up" Text="Performance" />
+                        <NavItem Href="admin/budget" Icon="briefcase" Text="Budget" />
+                        <NavItem Href="admin/settings" Icon="cog" Text="Settings" />
+                        <hr />
+                        <NavItem Href="admin/recruitment" Icon="user-plus" Text="Recruitment" />
+                    }
+                    else
+                    {
+                        <!-- User Menu-->
+                        <NavItem Href="/online" Icon="home" Text="Home" IsActive="true" />
+
+                        <NavItem Href="/online/attendance" Icon="clock" Text="Attendance" />
+
+                        <NavItem Href="/online/break-time-request" Icon="currency-dollar" Text="Break Time Request" />
+
+                        <NavItem Href="/online/ot" Icon="trending-up" Text="Overtime" />
+
+                        <NavItem Href="/online/leaves" Icon="calendar" Text="Leaves" />
+                    }
+                </ul>
+            </nav>
+
+
+            <PortalSwitcher @rendermode="RenderMode.InteractiveServer" />
+
+
+            <!-- Logout Form -->
+            <div class="p-4 border-t border-slate-800">
+                <form action="/Online/Auth/Logout" method="post" class="m-0">
+                    <AntiforgeryToken />
+                    <button type="submit" class="flex items-center gap-3 text-slate-400 hover:text-rose-400 transition-colors w-full px-3 py-2 rounded-lg hover:bg-slate-800">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        <span>Logout</span>
+                    </button>
+                </form>
+            </div>
+        </Authorized>
+
+        <NotAuthorized>
+            <!-- Disabled Navigation State -->
+            <nav class="flex-1 overflow-y-auto py-4 opacity-50 pointer-events-none select-none">
+                <ul class="space-y-1 px-3">
+                    <NavItem Href="javascript:void(0)" Icon="home" Text="Home" />
+                    <NavItem Href="javascript:void(0)" Icon="clock" Text="Attendance" />
+                    <NavItem Href="javascript:void(0)" Icon="currency-dollar" Text="Break Time Request" />
+                    <NavItem Href="javascript:void(0)" Icon="trending-up" Text="Overtime" />
+                    <NavItem Href="javascript:void(0)" Icon="briefcase" Text="Jobs" />
+                    <NavItem Href="javascript:void(0)" Icon="calendar" Text="Leaves" />
+
+                </ul>
+            </nav>
+
+            @*        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg> *@
+
+            <!-- Locked Indicator instead of Logout -->
+            <div class="p-4 border-t border-slate-800">
+                <div class="flex items-center gap-3 text-slate-500 px-3 py-2 text-sm">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                    <span>Login required</span>
+                </div>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</aside>
+@code {
+ 
+
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private bool IsAdminPortal =>
+        new Uri(Navigation.Uri).AbsolutePath
+            .StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrentUserOrganisation();
+    }
+
+
+    private async Task LoadCurrentUserOrganisation()
+    {
+        var session = await UserContext.GetSessionAsync();
+
+        if (session == null)
+            return;
+
+        PortalContext.Initialize(
+            session.OrganisationId,
+            session.OrganisationName,
+            session.CanAccessAdminPortal);
+    }
+
+
+ 
+
+ 
+}

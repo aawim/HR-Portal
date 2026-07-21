@@ -1,0 +1,88 @@
+﻿/* OrganisationStructureTab.razor.css */
+
+::deep .org-tree * {
+    margin: 0;
+    padding: 0;
+}
+
+::deep .org-tree ul {
+    padding-top: 15px;
+    position: relative;
+    display: flex;
+    justify-content: center;
+}
+
+::deep .org-tree li {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    list-style-type: none;
+    position: relative;
+    padding: 15px 1px 0 1px;
+}
+
+    /* The horizontal connecting lines */
+    ::deep .org-tree li::before,
+    ::deep .org-tree li::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        right: 50%;
+        border-top: 2px solid #cbd5e1;
+        width: 50%;
+        height: 15px;
+        z-index: 0;
+    }
+
+    ::deep .org-tree li::after {
+        right: auto;
+        left: 50%;
+        border-left: 2px solid #cbd5e1;
+    }
+
+    /* Remove connectors for single children */
+    ::deep .org-tree li:only-child::after,
+    ::deep .org-tree li:only-child::before {
+        display: none;
+    }
+
+    ::deep .org-tree li:only-child {
+        padding-top: 0;
+    }
+
+    /* Remove left connector from first child and right connector from last child */
+    ::deep .org-tree li:first-child::before,
+    ::deep .org-tree li:last-child::after {
+        border: 0 none;
+    }
+
+    /* Curve the corners for the first and last connecting lines */
+    ::deep .org-tree li:last-child::before {
+        border-right: 2px solid #cbd5e1;
+        border-radius: 0 8px 0 0;
+    }
+
+    ::deep .org-tree li:first-child::after {
+        border-radius: 8px 0 0 0;
+    }
+
+/* The downward vertical line from the parent node */
+::deep .org-tree ul ul::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    border-left: 2px solid #cbd5e1;
+    width: 0;
+    height: 15px;
+    margin-left: -1px;
+    z-index: 0;
+}
+
+/* Ensure the component card stays above the lines */
+::deep .org-tree-card-wrapper {
+    position: relative;
+    z-index: 10;
+    margin-bottom: 5px;
+}

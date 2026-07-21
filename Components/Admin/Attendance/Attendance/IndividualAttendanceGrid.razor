@@ -1,0 +1,452 @@
+﻿@page "/admin/attendance/manage-attendance/individual-attendance"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+@using HRM.DTOs
+@using HRM.DTOs.Staff
+
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject IOrganisationService OrganisationService
+@inject AttendanceLogService AttendanceLogService
+
+<!-- Header & Action Bar -->
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Individual Attendance</h2>
+        <p class="text-sm text-slate-500 mt-1">View and filter attendance records for specific individuals.</p>
+    </div>
+</div>
+
+<div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
+    <h2 class="text-slate-800 font-bold mb-4">Filter Attendance Records</h2>
+
+    <!-- Top Row: Hierarchical Filters -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+
+        <!-- 1. Organisation -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation</label>
+            <select value="@selectedOrgId" @onchange="OnOrganisationChanged" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500">
+                <option value="0">-- Select Organisation --</option>
+                @foreach (var org in organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- 2. Filter Toggle (Division vs Team) -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter By</label>
+            <select value="@filterMode" @onchange="OnFilterModeChanged" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                <option value="Division">Divisions / Units</option>
+                <option value="Team">Teams</option>
+            </select>
+        </div>
+
+        <!-- 3. Dynamic Dropdown (Shows Divisions OR Teams based on toggle) -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">
+                @(filterMode == "Division" ? "Division / Unit" : "Team")
+            </label>
+
+            @if (filterMode == "Division")
+            {
+                <select value="@selectedDivisionId" @onchange="OnDivisionChanged" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                    <option value="0">-- All Divisions --</option>
+                    @foreach (var div in divisions)
+                    {
+                        <option value="@div.TeamId">@div.Name</option>
+                    }
+                </select>
+            }
+            else
+            {
+                @*   <select value="@selectedTeamId" @onchange="OnTeamChanged" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                    <option value="0">-- All Teams --</option>
+                    @foreach (var team in teams)
+                    {
+                        <option value="@team.TeamId">@team.Name</option>
+                    }
+                </select> *@
+            }
+        </div>
+
+        <!-- 4. Staff / Individual -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Staff Member</label>
+            <select @bind="selectedStaffId" disabled="@(staffList.Count == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                <option value="0">-- Select Staff --</option>
+                @foreach (var staff in staffList)
+                {
+                    <option value="@staff.Id">@staff.FullName</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <!-- Bottom Row: Dates & Actions -->
+    <div class="flex flex-wrap items-end gap-3 pt-4 border-t border-slate-100">
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">From</label>
+            <input type="date" @bind="startDate" class="px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">To</label>
+            <input type="date" @bind="endDate" class="px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500" />
+        </div>
+
+        <button @onclick="ExecuteSearch" disabled="@(selectedStaffId == 0)" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2 ml-auto">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search
+        </button>
+
+        <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+            Reset
+        </button>
+    </div>
+</div>
+
+<!-- Results Table -->
+@if (showLogs)
+{
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mt-6">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200">
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Clock In</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Break Out</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Break In</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider text-center">Clock Out</th>
+                        <th class="py-4 px-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Details</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (!dailyRecords.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="py-8 text-center text-slate-500 italic">No attendance records found for this period.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var record in dailyRecords)
+                        {
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-5">
+                                    <div class="font-bold text-slate-800">@record.Date.ToString("dd MMM yyyy")</div>
+                                    <div class="text-xs text-slate-500">@record.Date.ToString("dddd")</div>
+                                </td>
+                                <td class="py-3 px-5">
+                                    @if (record.Status == "Present")
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">Present</span>
+                                    }
+                                    else if (record.Status == "Absent")
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-rose-100 text-rose-800">Absent</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Weekend</span>
+                                    }
+                                </td>
+                                <td class="py-3 px-5 text-center font-medium @(record.ClockIn == "--:--" ? "text-slate-300" : "text-slate-700")">@record.ClockIn</td>
+                                <td class="py-3 px-5 text-center font-medium @(record.BreakOut == "--:--" ? "text-slate-300" : "text-slate-700")">@record.BreakOut</td>
+                                <td class="py-3 px-5 text-center font-medium @(record.BreakIn == "--:--" ? "text-slate-300" : "text-slate-700")">@record.BreakIn</td>
+                                <td class="py-3 px-5 text-center font-medium @(record.ClockOut == "--:--" ? "text-slate-300" : "text-slate-700")">@record.ClockOut</td>
+                                <td class="py-3 px-5">
+                                    @if (!string.IsNullOrEmpty(record.Details))
+                                    {
+                                        <div class="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-1 rounded inline-block">@record.Details</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-slate-300">-</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    // UI State Variables
+    private int selectedOrgId = 0;
+    private int selectedDivisionId = 0;
+    private int selectedTeamId = 0;
+    private int selectedStaffId = 0;
+    private string filterMode = "Division"; // Default toggle
+    private bool showLogs = false;
+    private bool isLoading = false;
+
+    // Date Variables
+    private DateTime startDate;
+    private DateTime endDate;
+
+    // Dropdown Data Collections
+    private List<DropdownItem> organisations = new();
+    private List<TeamDropdownDto> divisions = new();
+    private List<Individual> Individual = new();
+    private List<StaffDto> staffList = new();
+
+    // Data Result Collections
+    private List<AttendanceLog>? rawLogs;
+    private List<DailyAttendanceRow> dailyRecords = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+
+    }
+
+    // --- CASCADING DROPDOWN EVENT HANDLERS ---
+
+    private async Task OnOrganisationChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int orgId))
+        {
+            selectedOrgId = orgId;
+            selectedDivisionId = 0;
+            selectedTeamId = 0;
+            selectedStaffId = 0;
+            staffList.Clear();
+            showLogs = false;
+
+
+            if (selectedOrgId > 0)
+            {
+                // divisions = await DbContext.Teams.Where(x => x.OrganisationId == selectedOrgId).ToListAsync();
+                divisions = await DbContext.Teams
+                .AsNoTracking()
+                .Where(x => x.OrganisationId == selectedOrgId)
+                .Select(x => new TeamDropdownDto
+                    {
+                        TeamId = x.TeamId,
+                        Name = x.Name
+                    })
+                .ToListAsync();
+            }
+            else
+            {
+                divisions.Clear();
+            }
+        }
+    }
+
+    private void OnFilterModeChanged(ChangeEventArgs e)
+    {
+        filterMode = e.Value?.ToString() ?? "Division";
+        selectedStaffId = 0;
+        staffList.Clear();
+        showLogs = false;
+        StateHasChanged();
+    }
+
+    private async Task OnDivisionChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int teamId))
+        {
+            selectedTeamId = teamId;
+            selectedStaffId = 0;
+
+            if (selectedTeamId > 0)
+            {
+                staffList = await (
+                    from ts in DbContext.TeamStaffs
+                    join individual in DbContext.Individuals
+                        on ts.StaffId equals individual.BusinessEntityId
+                    where ts.TeamId == selectedTeamId
+                    select new StaffDto
+                        {
+                            Id = individual.BusinessEntityId,
+                            FullName = individual.FirstNameEnglish + " " + individual.MiddleNameEnglish + " " + individual.LastNameEnglish
+                        }
+                )
+                .Distinct()
+                .OrderBy(x => x.FullName)
+                .ToListAsync();
+            }
+            else
+            {
+                staffList.Clear();
+            }
+        }
+    }
+
+    private async Task OnTeamChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int teamId))
+        {
+            selectedTeamId = teamId;
+            selectedStaffId = 0;
+
+            if (selectedTeamId > 0)
+            {
+                var department = await DbContext.OrganisationStructures
+                    .FirstOrDefaultAsync(x => x.OrganisationBusinessEntityID == selectedTeamId);
+
+                if (department != null)
+                {
+                    int organisationId = department.OrganisationBusinessEntityID;
+
+                    staffList = await (
+                        from job in DbContext.Jobs
+                        join individual in DbContext.Individuals
+                            on job.IndividualID equals individual.BusinessEntityId
+                        where job.OrganisationID == organisationId
+                              && (job.TerminatedDate == null || job.TerminatedDate > DateTime.Today)
+                        select new StaffDto
+                            {
+                                Id = individual.BusinessEntityId,
+                                FullName = individual.FirstNameEnglish + " " + individual.MiddleNameEnglish + " " + individual.LastNameEnglish
+                            }
+                    )
+                    .Distinct()
+                    .OrderBy(x => x.FullName)
+                    .ToListAsync();
+                }
+            }
+            else
+            {
+                staffList.Clear();
+            }
+        }
+    }
+
+    // --- SEARCH & RESET ACTIONS ---
+
+    private async Task ExecuteSearch()
+    {
+        if (selectedStaffId == 0) return; // Prevent searching if no staff is selected
+
+
+
+        isLoading = true;
+    StateHasChanged(); // Tell the UI you are busy
+
+    try 
+    {
+
+            showLogs = true;
+            dailyRecords.Clear();
+
+            rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(selectedStaffId, startDate, endDate);
+
+            var shiftStart = new TimeSpan(8, 30, 0);
+            var allowedBreakDuration = TimeSpan.FromMinutes(60);
+
+            for (var day = startDate; day <= endDate; day = day.AddDays(1))
+            {
+                var dayLogs = rawLogs.Where(l => l.Date.Date == day.Date).ToList();
+
+                var row = new DailyAttendanceRow
+                    {
+                        Date = day,
+                        Status = (day.DayOfWeek == System.DayOfWeek.Friday || day.DayOfWeek == System.DayOfWeek.Saturday) ? "Weekend" : "Absent",
+                        Details = ""
+                    };
+
+                if (dayLogs.Any())
+                {
+                    row.Status = "Present";
+
+                    var clockIn = dayLogs.LastOrDefault(l => l.InOutModeId == 1);
+                    var clockOut = dayLogs.LastOrDefault(l => l.InOutModeId == 2);
+                    var breakOut = dayLogs.LastOrDefault(l => l.InOutModeId == 3);
+                    var breakIn = dayLogs.LastOrDefault(l => l.InOutModeId == 4);
+
+                    row.ClockIn = clockIn != null ? clockIn.Date.ToString("HH:mm") : "--:--";
+                    row.ClockOut = clockOut != null ? clockOut.Date.ToString("HH:mm") : "--:--";
+                    row.BreakOut = breakOut != null ? breakOut.Date.ToString("HH:mm") : "--:--";
+                    row.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
+
+                    // Late Arrival Calculation
+                    if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                    {
+                        row.Details += $"Late: {(int)(clockIn.Date.TimeOfDay - shiftStart).TotalMinutes}m ";
+                    }
+
+                    // Break Overtime Calculation
+                    if (breakOut != null && breakIn != null)
+                    {
+                        TimeSpan actualBreak = breakIn.Date - breakOut.Date;
+                        if (actualBreak > allowedBreakDuration)
+                        {
+                            row.Details += $"Break Overtime: {(int)(actualBreak - allowedBreakDuration).TotalMinutes}m";
+                        }
+                    }
+                }
+                dailyRecords.Add(row);
+            }
+    }
+    catch (Exception ex)
+    {
+        // Log the error
+    }
+    finally 
+    {
+        isLoading = false;
+        StateHasChanged(); // Tell the UI to render the results
+    }
+
+
+
+    }
+
+    private void ResetFilters()
+    {
+        selectedOrgId = 0;
+        selectedDivisionId = 0;
+        selectedTeamId = 0;
+        selectedStaffId = 0;
+        filterMode = "Division";
+        showLogs = false;
+
+        divisions.Clear();
+        staffList.Clear();
+
+        SetCurrentSalaryPeriod();
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    // --- DTO & Helper Classes ---
+
+    public class StaffDto
+    {
+        public int Id { get; set; }
+        public string FullName { get; set; } = string.Empty;
+    }
+
+    public class DailyAttendanceRow
+    {
+        public DateTime Date { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string ClockIn { get; set; } = string.Empty;
+        public string BreakOut { get; set; } = string.Empty;
+        public string BreakIn { get; set; } = string.Empty;
+        public string ClockOut { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+    }
+}

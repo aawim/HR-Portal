@@ -1,0 +1,268 @@
+﻿@page "/admin/attendance/manage-attendance/bulk-upload"
+@using Microsoft.AspNetCore.Components.Forms
+@using System.IO
+
+@rendermode RenderMode.InteractiveServer
+
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Bulk Document Upload</h2>
+        <p class="text-sm text-slate-500 mt-1">Upload attendance logs, leave adjustments, and other batch records.</p>
+    </div>
+</div>
+
+<div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="mb-4 p-3 bg-rose-50 text-rose-700 border border-rose-200 rounded text-sm font-bold">
+            @errorMessage
+        </div>
+    }
+
+    @if (showSuccessMessage)
+    {
+        <div class="mb-4 p-3 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-sm font-bold flex items-center gap-2 transition-all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+            Document uploaded successfully!
+        </div>
+    }
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mb-5">
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Document Type <span class="text-rose-500">*</span></label>
+            <select @bind="selectedDocType" class="w-full px-3 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 focus:bg-white transition-colors">
+                <option value="">-- Select Type --</option>
+                @foreach (var type in documentTypes)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Document Date <span class="text-rose-500">*</span></label>
+            <input type="date" @bind="documentDate" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 focus:bg-white transition-colors" />
+        </div>
+
+        <div class="lg:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Description / Comments</label>
+            <input type="text" @bind="description" placeholder="Optional notes about this upload..." class="w-full px-3 py-2.5 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 focus:bg-white transition-colors" />
+        </div>
+
+        <div class="md:col-span-2 lg:col-span-4">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Select File <span class="text-rose-500">*</span></label>
+            <div class="flex items-center gap-4 p-4 border-2 border-dashed border-slate-300 rounded-lg bg-slate-50 hover:bg-slate-100 transition-colors">
+                <InputFile OnChange="HandleFileSelected" class="text-sm text-slate-600 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-bold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer" accept=".csv, .xlsx, .pdf" />
+
+                @if (selectedFile != null)
+                {
+                    <span class="text-sm font-bold text-emerald-600 flex items-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                        Ready
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-400 mt-2">Accepted formats: .csv, .xlsx, .pdf (Max size: 10MB)</p>
+        </div>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-100">
+
+        <button @onclick="DownloadTemplate" class="text-blue-600 hover:text-blue-800 font-bold text-sm bg-blue-50 hover:bg-blue-100 px-4 py-2.5 rounded-md transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+            Download Attendance Template
+        </button>
+
+        <div class="flex items-center gap-3">
+            <button @onclick="ResetForm" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2.5 rounded-md text-sm font-bold transition-colors border border-slate-200">
+                Clear
+            </button>
+            <button @onclick="UploadDocumentAsync" disabled="@isUploading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-8 py-2.5 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+                @if (isUploading)
+                {
+                    <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span>Uploading...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                    <span>Upload File</span>
+                }
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (uploadedDocuments.Any())
+{
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+        <div class="px-5 py-4 border-b border-slate-100 bg-slate-50">
+            <h3 class="font-bold text-slate-800">Recent Uploads</h3>
+        </div>
+        <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+                <tr>
+                    <th class="py-3 px-5 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                    <th class="py-3 px-5 font-bold text-slate-500 uppercase tracking-wider">Document Type</th>
+                    <th class="py-3 px-5 font-bold text-slate-500 uppercase tracking-wider">Document Date</th>
+                    <th class="py-3 px-5 font-bold text-slate-500 uppercase tracking-wider">Comments</th>
+                    <th class="py-3 px-5 font-bold text-slate-500 uppercase tracking-wider">Document</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @for (int i = 0; i < uploadedDocuments.Count; i++)
+                {
+                    var doc = uploadedDocuments[i];
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="py-3 px-5 text-slate-400">@(i + 1)</td>
+                        <td class="py-3 px-5 font-bold text-slate-800">@doc.DocumentType</td>
+                        <td class="py-3 px-5 text-slate-600">@doc.DocumentDate.ToString("dd MMM yyyy")</td>
+                        <td class="py-3 px-5 text-slate-500 max-w-xs truncate" title="@doc.Comments">
+                            @(string.IsNullOrEmpty(doc.Comments) ? "-" : doc.Comments)
+                        </td>
+                        <td class="py-3 px-5">
+                            <a href="#" class="inline-flex items-center gap-2 text-blue-600 hover:text-blue-800 font-bold transition-colors bg-blue-50 px-3 py-1 rounded border border-blue-100">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                                @doc.FileName
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    // Form Bindings
+    private string selectedDocType = "";
+    private DateTime documentDate = DateTime.Today;
+    private string description = "";
+    private IBrowserFile? selectedFile;
+
+    // UI State
+    private string errorMessage = "";
+    private bool showSuccessMessage = false;
+    private bool isUploading = false;
+
+    // Dropdown Data
+    private List<string> documentTypes = new()
+    {
+        "Attendance Log",
+        "Leave Adjustments",
+        "Bonus Records",
+        "Deduction Batch"
+    };
+
+    // Table Data
+    private List<UploadedDocument> uploadedDocuments = new();
+
+    private void HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        errorMessage = "";
+        showSuccessMessage = false;
+
+        // Blazor Server default limit is 512KB.
+        // Using 10MB (10240000 bytes) requires setting limits in Program.cs/Hub options in production
+        long maxFileSize = 1024 * 1024 * 10;
+
+        var file = e.File;
+        if (file.Size > maxFileSize)
+        {
+            errorMessage = "File is too large. Maximum size is 10MB.";
+            selectedFile = null;
+            return;
+        }
+
+        selectedFile = file;
+    }
+
+    private async Task UploadDocumentAsync()
+    {
+        // Validation
+        errorMessage = "";
+        showSuccessMessage = false;
+
+        if (string.IsNullOrEmpty(selectedDocType))
+        {
+            errorMessage = "Please select a Document Type.";
+            return;
+        }
+
+        if (selectedFile == null)
+        {
+            errorMessage = "Please select a file to upload.";
+            return;
+        }
+
+        isUploading = true;
+        StateHasChanged(); // Force UI update to show spinner
+
+        try
+        {
+            // --- SIMULATED UPLOAD LOGIC ---
+            // In a real scenario, you would copy the file to a stream and save it to the server/Azure Blob:
+            // var path = Path.Combine("wwwroot/uploads", selectedFile.Name);
+            // await using FileStream fs = new(path, FileMode.Create);
+            // await selectedFile.OpenReadStream(1024 * 1024 * 10).CopyToAsync(fs);
+
+            await Task.Delay(1500); // Simulate network delay
+
+            // Add to our history table
+            uploadedDocuments.Insert(0, new UploadedDocument
+                {
+                    DocumentType = selectedDocType,
+                    DocumentDate = documentDate,
+                    Comments = description,
+                    FileName = selectedFile.Name,
+                    FileSize = selectedFile.Size
+                });
+
+            // Reset Form on Success
+            ResetForm();
+            showSuccessMessage = true;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Upload failed: {ex.Message}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private void ResetForm()
+    {
+        selectedDocType = "";
+        documentDate = DateTime.Today;
+        description = "";
+        selectedFile = null;
+        errorMessage = "";
+    }
+
+    private void DownloadTemplate()
+    {
+        // In a real application, you would trigger a JS Interop call to download the file
+        // e.g., await JS.InvokeVoidAsync("downloadFile", "files/Attendance_Log_Template.csv");
+
+        // For now, clear any previous messages
+        errorMessage = "";
+        showSuccessMessage = false;
+    }
+
+    // DTO for the table
+    public class UploadedDocument
+    {
+        public string DocumentType { get; set; } = string.Empty;
+        public DateTime DocumentDate { get; set; }
+        public string Comments { get; set; } = string.Empty;
+        public string FileName { get; set; } = string.Empty;
+        public long FileSize { get; set; }
+    }
+}

@@ -1,0 +1,257 @@
+﻿@using HRM.DTOs
+@using HRM.Models
+@using HRM.Models.Archives
+
+<div class="space-y-5">
+
+    <!-- Location Type -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Address Usage
+        </label>
+
+        <InputSelect @bind-Value="Model.BusinessEntityLocationTypeId"
+                     class="w-full rounded-lg border border-slate-300 px-3 py-2">
+
+            <option value="0">Select...</option>
+
+            @foreach (var item in LocationTypes)
+            {
+                <option value="@item.BusinessEntityLocationTypeId">
+                    @item.TypeName
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+
+    <!-- Address Type -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Address Type
+        </label>
+
+        <InputSelect @bind-Value="Model.AddressInstanceTypeId"
+                     class="w-full rounded-lg border border-slate-300 px-3 py-2">
+
+            <option value="0">Select...</option>
+
+            @foreach (var item in AddressTypes)
+            {
+                <option value="@item.AddressInstanceTypeId">
+                    @item.TypeName
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+    <!-- Address Type -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Address Base Type
+        </label>
+
+        <InputSelect class="w-full rounded-lg border px-3 py-2"
+                     @bind-Value="Model.AddressBaseTypeId">
+
+            <option value="0">
+                Select Address Type
+            </option>
+
+            @foreach (var item in AddressBaseTypes)
+            {
+                <option value="@item.AddressBaseTypeId">
+                    @item.TypeName
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+    <!-- Country -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Country
+        </label>
+
+        <InputSelect @bind-Value="Model.CountryId"
+                     class="w-full rounded-lg border border-slate-300 px-3 py-2">
+
+            <option value="0">Select Country</option>
+
+            @foreach (var item in Countries)
+            {
+                <option value="@item.CountryId">
+                    @item.NameEnglish
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+
+    <!-- Atoll -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Atoll
+        </label>
+
+        <InputSelect class="w-full rounded-lg border px-3 py-2"
+                     Value="SelectedAtollId"
+                     ValueChanged="@(async (int value) => await AtollChanged(value))"
+                     ValueExpression="@(() => SelectedAtollId)">
+
+            <option value="0">Select Atoll</option>
+
+            @foreach (var item in Atolls)
+            {
+                <option value="@item.AtollId">
+                    @item.NameEnglish
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+
+    <!-- Island -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Island
+        </label>
+
+        <InputSelect class="w-full rounded-lg border px-3 py-2"
+                     @bind-Value="Model.IslandId">
+
+            <option value="">Select Island</option>
+
+            @foreach (var item in Islands)
+            {
+                <option value="@item.IslandId">
+                    @item.NameEnglish
+                </option>
+            }
+
+        </InputSelect>
+    </div>
+
+
+    <!-- Building -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Building / House Name
+        </label>
+
+        <InputText @bind-Value="Model.Name"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+    </div>
+
+
+    <!-- Floor -->
+    <div>
+        <label class="block text-sm font-medium text-slate-700 mb-1">
+            Floor
+        </label>
+
+        <InputText @bind-Value="Model.Floor"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2" />
+    </div>
+
+
+    <!-- Current -->
+    <div class="flex items-center gap-3">
+
+        <InputCheckbox @bind-Value="Model.IsCurrent" />
+
+        <span class="text-sm text-slate-700">
+            Current Address
+        </span>
+
+    </div>
+
+    <div class="flex justify-end gap-3 pt-6 border-t">
+
+        <button type="button"
+                class="px-4 py-2 rounded-lg border border-slate-300
+                   hover:bg-slate-50">
+
+            Cancel
+
+        </button>
+
+        <button type="button"
+                @onclick="Save"
+                class="px-5 py-2 rounded-lg
+                   bg-blue-600 text-white
+                   hover:bg-blue-700">
+
+            <i class="fas fa-save mr-2"></i>
+
+            Save Address
+
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+
+    [Parameter]
+    public AddressCreateDto Model { get; set; } = new();
+
+    [Parameter]
+    public List<Country> Countries { get; set; } = new();
+
+    [Parameter]
+    public List<Atoll> Atolls { get; set; } = new();
+
+    [Parameter]
+    public List<Island> Islands { get; set; } = new();
+
+    [Parameter]
+    public List<AddressInstanceType> AddressTypes { get; set; } = new();
+
+    [Parameter]
+    public List<AddressBaseType> AddressBaseTypes { get; set; } = new();
+
+   
+    [Parameter]
+    public List<BusinessEntityLocationType> LocationTypes { get; set; } = new();
+
+    [Parameter]
+    public EventCallback<int> OnAtollChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    private int SelectedAtollId;
+
+
+
+    private async Task Save()
+    {
+        await OnSave.InvokeAsync();
+    }
+    private async Task AtollChanged(int atollId)
+    {
+        SelectedAtollId = atollId;
+        Model.IslandId = null;
+
+        await OnAtollChanged.InvokeAsync(atollId);
+    }
+
+
+    private async Task LoadIslands(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var atollId))
+        {
+            SelectedAtollId = atollId;
+
+            await OnAtollChanged.InvokeAsync(atollId);
+        }
+    }
+
+}

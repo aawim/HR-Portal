@@ -1,0 +1,431 @@
+﻿@page "/admin/work-planning/assignment-resolver"
+
+@using HRM.DTOs.WorkPlanning
+@using HRM.WorkPlanning.Abstractions
+@using HRM.WorkPlanning.Services
+@using HRM.Services.Attendance.Abstraction
+@using HRM.Services.Attendance.Processing
+@inject IWorkAssignmentResolver WorkAssignmentResolver
+@inject IAttendanceLogProcessor AttendanceLogProcessor
+
+
+<PageTitle>Work Assignment Resolver</PageTitle>
+
+<div class="max-w-5xl mx-auto p-4 sm:p-6">
+
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-900">
+            Work Assignment Resolver
+        </h1>
+
+        <p class="mt-1 text-sm text-slate-500">
+            Find the work assignment and segment that match an employee's attendance time.
+        </p>
+    </div>
+
+    <!-- Search Form -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 mb-6">
+
+        <EditForm Model="Form" OnValidSubmit="ResolveAssignmentAsync">
+            <DataAnnotationsValidator />
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                <!-- Individual ID -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Individual ID
+                    </label>
+
+                    <InputNumber @bind-Value="Form.IndividualId"
+                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+                                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                 placeholder="Enter individual ID" />
+
+                    <ValidationMessage For="@(() => Form.IndividualId)"
+                                       class="text-xs text-red-600 mt-1" />
+                </div>
+
+                <!-- Attendance Date and Time -->
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Attendance Date and Time
+                    </label>
+
+                    <InputDate @bind-Value="Form.AttendanceDateTime"
+                               Type="InputDateType.DateTimeLocal"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+                                      focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+
+                    <ValidationMessage For="@(() => Form.AttendanceDateTime)"
+                                       class="text-xs text-red-600 mt-1" />
+                </div>
+
+            </div>
+
+            <div class="mt-5 flex items-center gap-3">
+
+                <button type="submit"
+                        disabled="@IsLoading"
+                        class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-4 py-2
+                               text-sm font-medium text-white hover:bg-blue-700
+                               disabled:opacity-50 disabled:cursor-not-allowed">
+
+                    @if (IsLoading)
+                    {
+                        <span class="mr-2 h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin">
+                        </span>
+
+                        <span>Resolving...</span>
+                    }
+                    else
+                    {
+                        <span>Resolve Assignment</span>
+                    }
+
+                </button>
+
+                <button type="button"
+                        @onclick="UseCurrentTime"
+                        disabled="@IsLoading"
+                        class="rounded-lg border border-slate-300 bg-white px-4 py-2
+                               text-sm font-medium text-slate-700 hover:bg-slate-50
+                               disabled:opacity-50">
+                    Use Current Time
+                </button>
+
+                <button type="button"
+                        @onclick="ClearResult"
+                        disabled="@IsLoading"
+                        class="rounded-lg border border-slate-300 bg-white px-4 py-2
+                               text-sm font-medium text-slate-700 hover:bg-slate-50
+                               disabled:opacity-50">
+                    Clear
+                </button>
+
+            </div>
+
+
+            <InputNumber @bind-Value="Form.AttendanceLogId"
+                                 class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+                                        focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                 placeholder="Enter individual ID" />
+
+
+        </EditForm>
+
+
+        <button class="px-4 py-2 rounded-lg bg-blue-600 text-white"
+                @onclick="ProcessAttendance">
+            Process Attendance
+        </button>
+        @if (!string.IsNullOrWhiteSpace(Message))
+        {
+            <div class="mt-3 p-3 border rounded-lg">
+                @Message
+            </div>
+        }
+
+
+    </div>
+
+    <!-- Error -->
+    @if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
+            <div class="flex items-start gap-3">
+
+                <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-100">
+                    <i class="fas fa-exclamation-triangle text-red-600"></i>
+                </div>
+
+                <div>
+                    <h3 class="text-sm font-semibold text-red-800">
+                        Resolver Error
+                    </h3>
+
+                    <p class="mt-1 text-sm text-red-700">
+                        @ErrorMessage
+                    </p>
+                </div>
+
+            </div>
+        </div>
+    }
+
+    <!-- Result -->
+    @if (Result is not null)
+    {
+        @if (Result.Success)
+        {
+            <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+
+                <!-- Success Header -->
+                <div class="bg-emerald-50 border-b border-emerald-200 px-5 py-4">
+
+                    <div class="flex items-start gap-3">
+
+                        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100">
+                            <i class="fas fa-check text-emerald-600"></i>
+                        </div>
+
+                        <div>
+                            <h2 class="text-lg font-semibold text-emerald-900">
+                                Assignment Resolved
+                            </h2>
+
+                            <p class="mt-1 text-sm text-emerald-700">
+                                @Result.Message
+                            </p>
+                        </div>
+
+                    </div>
+
+                </div>
+
+                <!-- Result Details -->
+                <div class="p-5">
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                        <!-- Assignment -->
+                        <div class="rounded-xl border border-slate-200 p-4">
+
+                            <h3 class="text-sm font-semibold text-slate-900 mb-4">
+                                Assignment Details
+                            </h3>
+
+                            <div class="space-y-3">
+
+                                <DetailRow Label="Work Plan ID"
+                                           Value="@Result.WorkPlanId?.ToString()" />
+
+                                <DetailRow Label="Work Assignment ID"
+                                           Value="@Result.WorkAssignmentId?.ToString()" />
+
+                                <DetailRow Label="Assignment Name"
+                                           Value="@Result.AssignmentName" />
+
+                                <DetailRow Label="Individual ID"
+                                           Value="@Result.IndividualId?.ToString()" />
+
+                                <DetailRow Label="Job ID"
+                                           Value="@Result.JobId?.ToString()" />
+
+                                <DetailRow Label="Start"
+                                           Value="@FormatDateTime(Result.AssignmentStartDateTime)" />
+
+                                <DetailRow Label="End"
+                                           Value="@FormatDateTime(Result.AssignmentEndDateTime)" />
+
+                                <DetailRow Label="Requires Check Out"
+                                           Value="@FormatBoolean(Result.RequiresCheckOut)" />
+
+                            </div>
+                        </div>
+
+                        <!-- Segment -->
+                        <div class="rounded-xl border border-slate-200 p-4">
+
+                            <h3 class="text-sm font-semibold text-slate-900 mb-4">
+                                Segment Details
+                            </h3>
+
+                            <div class="space-y-3">
+
+                                <DetailRow Label="Segment ID"
+                                           Value="@Result.WorkAssignmentSegmentId?.ToString()" />
+
+                                <DetailRow Label="Segment Name"
+                                           Value="@Result.SegmentName" />
+
+                                <DetailRow Label="Start"
+                                           Value="@FormatDateTime(Result.SegmentStartDateTime)" />
+
+                                <DetailRow Label="End"
+                                           Value="@FormatDateTime(Result.SegmentEndDateTime)" />
+
+                                <DetailRow Label="Grace Before"
+                                           Value="@($"{Result.GraceBeforeMinutes} minutes")" />
+
+                                <DetailRow Label="Grace After"
+                                           Value="@($"{Result.GraceAfterMinutes} minutes")" />
+
+                                <DetailRow Label="Requires Attendance"
+                                           Value="@FormatBoolean(Result.RequiresAttendance)" />
+
+                                <DetailRow Label="Location Validation"
+                                           Value="@FormatBoolean(Result.RequiresLocationValidation)" />
+
+                                <DetailRow Label="Device Validation"
+                                           Value="@FormatBoolean(Result.RequiresDeviceValidation)" />
+
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Match Status -->
+                    <div class="mt-6 rounded-xl border border-slate-200 p-4">
+
+                        <h3 class="text-sm font-semibold text-slate-900 mb-3">
+                            Match Status
+                        </h3>
+
+                        <div class="flex flex-wrap gap-3">
+
+                            <span class="@GetStatusBadgeClass(Result.IsInsideScheduledPeriod)">
+                                Inside scheduled period:
+                                @FormatBoolean(Result.IsInsideScheduledPeriod)
+                            </span>
+
+                            <span class="@GetStatusBadgeClass(Result.IsInsideGracePeriod)">
+                                Inside grace period:
+                                @FormatBoolean(Result.IsInsideGracePeriod)
+                            </span>
+
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+
+                <div class="flex items-start gap-3">
+
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                        <i class="fas fa-info-circle text-amber-600"></i>
+                    </div>
+
+                    <div>
+                        <h2 class="text-lg font-semibold text-amber-900">
+                            No Matching Assignment
+                        </h2>
+
+                        <p class="mt-1 text-sm text-amber-700">
+                            @Result.Message
+                        </p>
+                    </div>
+
+                </div>
+
+            </div>
+        }
+    }
+
+</div>
+
+@code {
+    private ResolverFormModel Form { get; set; } = new();
+
+    private WorkAssignmentResolutionResult? Result { get; set; }
+
+    private AttendanceProcessingResult? Result2 { get; set; }
+
+    private bool IsLoading { get; set; }
+
+    private string? ErrorMessage { get; set; }
+
+    protected override void OnInitialized()
+    {
+        Form.AttendanceDateTime = DateTime.Now;
+    }
+
+     private string Message = string.Empty;
+
+    private async Task ProcessAttendance()
+    {
+        // const int attendanceLogId = Form.AttendanceLogId;
+
+        var Result2 =
+            await AttendanceLogProcessor.ProcessAsync(Form.AttendanceLogId);
+
+        Message = Result2.Message;
+    }
+
+
+
+    private async Task ResolveAssignmentAsync()
+    {
+        if (IsLoading)
+            return;
+
+        Result = null;
+        ErrorMessage = null;
+        IsLoading = true;
+
+        try
+        {
+            Result = await WorkAssignmentResolver.ResolveAsync(
+                Form.IndividualId,
+                Form.AttendanceDateTime);
+        }
+        catch (Exception ex)
+        {
+            var baseException = ex.GetBaseException();
+
+            ErrorMessage =
+                $"{baseException.GetType().Name}: {baseException.Message}";
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void UseCurrentTime()
+    {
+        Form.AttendanceDateTime = DateTime.Now;
+        Result = null;
+        ErrorMessage = null;
+    }
+
+    private void ClearResult()
+    {
+        Result = null;
+        ErrorMessage = null;
+    }
+
+    private static string FormatDateTime(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("dd MMM yyyy, hh:mm tt")
+            : "-";
+    }
+
+    private static string FormatBoolean(bool value)
+    {
+        return value ? "Yes" : "No";
+    }
+
+    private static string GetStatusBadgeClass(bool value)
+    {
+        var baseClass =
+            "inline-flex items-center rounded-full px-3 py-1 text-xs font-medium";
+
+        return value
+            ? $"{baseClass} bg-emerald-100 text-emerald-700"
+            : $"{baseClass} bg-slate-100 text-slate-600";
+    }
+
+
+
+
+    private sealed class ResolverFormModel
+    {
+        [System.ComponentModel.DataAnnotations.Range(1,int.MaxValue,ErrorMessage = "Please enter a valid individual ID.")]
+        public int IndividualId { get; set; }
+
+
+        [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Please enter a valid Log ID.")]
+        public int AttendanceLogId { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(
+            ErrorMessage = "Attendance date and time are required.")]
+        public DateTime AttendanceDateTime { get; set; }
+    }
+}

@@ -1,0 +1,417 @@
+﻿@page "/online/attendance/attendance-request"
+@using HRM.Components.Shared
+@using HRM.DTOs
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using Microsoft.EntityFrameworkCore
+
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+@inject IOrganisationService OrganisationService
+@inject UserService UserService
+@inject IIndividual _individual
+
+
+<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+
+<div class="px-2 sm:px-4 md:px-6 lg:px-6">
+
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 mb-2 mt-[-10px] gap-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
+            <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
+        </div>
+        <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add Request
+        </button>
+    </div>
+
+    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
+        @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
+        {
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Summary of the Search</label>
+            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-auto-fit gap-4 mb-6">
+            </div>
+            <hr class="border-slate-100 mb-6" />
+        }
+
+        <div class="grid grid-cols-12 gap-4 mb-4">
+
+            <div class="col-span-12 md:col-span-5 lg:col-span-5">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Organisation</label>
+                <select @bind="selectedOrgId" disabled class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
+                    <option value="0">-- All Organisations --</option>
+                    @foreach (var org in organisations)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-span-12 md:col-span-3 lg:col-span-3">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Request Status</label>
+                <select @bind="selectedStatusId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
+                    <option value="0">-- All Statuses --</option>
+                    @foreach (var state in requestStates)
+                    {
+                        <option value="@state.RequestStateId">@state.StateName</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-span-6 md:col-span-2 lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From</label>
+                <input type="date" @bind="startDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+            </div>
+
+            <div class="col-span-6 md:col-span-2 lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To</label>
+                <input type="date" @bind="endDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-[-20px]">
+            <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+                Reset
+            </button>
+            <button @onclick="ExecuteSearch" disabled="@isLoading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+                @if (isLoading)
+                {
+                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>Searching...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <span>Search</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    @if (isDataLoaded)
+    {
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
+            @if (requestsList.Any())
+            {
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-left text-slate-600">
+                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th scope="col" class="px-6 py-3">Ref No</th>
+                                <th scope="col" class="px-6 py-3">Staff</th>
+                                <th scope="col" class="px-6 py-3">Date & Time</th>
+                                <th scope="col" class="px-6 py-3">Mode</th>
+                                <th scope="col" class="px-6 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var req in requestsList)
+                            {
+                                <tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                    <td class="px-6 py-4 font-medium text-slate-900">@req.ReferenceNo</td>
+                                    <td class="px-6 py-4">@req.StaffName</td>
+                                    <td class="px-6 py-4">
+                                        <div class="font-medium text-slate-700">@req.LogDate.ToString("dd MMM yyyy")</div>
+                                        <div class="text-xs text-slate-500">@req.LogTime</div>
+                                    </td>
+                                    <td class="px-6 py-4 font-medium">@req.Mode</td>
+                                    <td class="px-6 py-4">
+                                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(req.RequestState)">
+                                            @req.RequestState
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="p-10 text-center flex flex-col items-center justify-center">
+                    <svg class="w-12 h-12 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <h3 class="text-lg font-medium text-slate-900">No requests found</h3>
+                    <p class="text-sm text-slate-500 mt-1">Try adjusting your filters or date range.</p>
+                </div>
+            }
+        </div>
+    }
+
+</div> 
+
+
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+            @onclick="CloseAddPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddPanel ? "translate-x-0" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">New Attendance Request</h3>
+        <button @onclick="CloseAddPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Staff Member <span class="text-rose-500">*</span></label>
+            <select @bind="newRequest.StaffId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                <option value="0">-- Select Staff --</option>
+                <option value="1">Myself</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">In/Out Mode <span class="text-rose-500">*</span></label>
+            <select @bind="newRequest.InOutModeId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                <option value="0">-- Select Mode --</option>
+                <option value="1">Clock In</option>
+                <option value="2">Clock Out</option>
+                <option value="3">Break Out</option>
+                <option value="4">Break In</option>
+            </select>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
+                <input type="date" @bind="newRequest.Date" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Time <span class="text-rose-500">*</span></label>
+                <input type="time" @bind="newRequest.Time" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+            </div>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Comments / Reason</label>
+            <textarea @bind="newRequest.Comments" rows="4" placeholder="Briefly explain why this manual adjustment is needed..." class="w-full p-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 resize-none"></textarea>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAddPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+            Cancel
+        </button>
+        <button @onclick="SubmitNewRequest" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm">
+            Add Request
+        </button>
+    </div>
+</div>
+
+@code {
+    // Filter Bindings
+    private int selectedOrgId = 0;
+    private int selectedStatusId = 0;
+    private DateTime startDate;
+    private DateTime endDate;
+
+    // UI State
+    private bool isDataLoaded = false;
+    private bool isLoading = false;
+
+    // Data Collections
+    private List<DropdownItem> organisations = new();
+    private List<AttendanceRequestDto> requestsList = new();
+    private List<RequestState> requestStates = new();
+    private Dictionary<string, int> stateStatistics = new();
+    private string activeCardFilter = string.Empty;
+
+    // --- Panel State ---
+    private bool showAddPanel = false;
+    private AddRequestModel newRequest = new();
+
+    // --- Panel Methods ---
+    private void OpenAddPanel()
+    {
+        newRequest = new AddRequestModel();
+        showAddPanel = true;
+    }
+
+    private void CloseAddPanel()
+    {
+        showAddPanel = false;
+    }
+
+    private async Task SubmitNewRequest()
+    {
+        // Add your logic here to save the request
+        showAddPanel = false;
+        await ExecuteSearch();
+    }
+
+    // --- Panel Data Model ---
+    public class AddRequestModel
+    {
+        public int StaffId { get; set; }
+        public int InOutModeId { get; set; }
+        public DateOnly Date { get; set; }
+        public TimeOnly Time { get; set; }
+        public string Comments { get; set; } = string.Empty;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        activeCardFilter = string.Empty;
+
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+        requestStates = await DbContext.RequestStates.ToListAsync();
+
+        await SetDefaultOrganisationAsync();
+    }
+
+    private void FilterByCard(string status)
+    {
+        activeCardFilter = status;
+    }
+
+    private async Task SetDefaultOrganisationAsync()
+    {
+        try
+        {
+            int currentIndividualId = await _individual.GetIndividualID();
+
+            var userJob = await DbContext.Jobs
+                .Where(j => j.IndividualID == currentIndividualId
+                         && (j.TerminatedDate == null || j.TerminatedDate > DateTime.Today))
+                .FirstOrDefaultAsync();
+
+            if (userJob != null)
+            {
+                selectedOrgId = userJob.OrganisationID;
+            }
+        }
+        catch
+        {
+            selectedOrgId = 0;
+        }
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task ExecuteSearch()
+    {
+        isLoading = true;
+        isDataLoaded = false;
+        requestsList.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // USING LEFT JOINS to prevent missing data from hiding records
+            var query = from req in DbContext.AttendanceLogRequests
+                        join r in DbContext.Requests on req.RequestId equals r.RequestId
+                        join log in DbContext.AttendanceLogs on req.AttendanceLogId equals log.AttendanceLogId
+
+                        join rs in DbContext.RequestStates on r.RequestStateId equals rs.RequestStateId into rsGroup
+                        from rs in rsGroup.DefaultIfEmpty()
+
+                        join ind in DbContext.Individuals on log.IndividualId equals ind.BusinessEntityId into indGroup
+                        from ind in indGroup.DefaultIfEmpty()
+
+                        join org in DbContext.Organisations on log.OrganisationId equals org.BusinessEntityID into orgGroup
+                        from org in orgGroup.DefaultIfEmpty()
+
+                        where log.Date >= startDate && log.Date <= endDate
+                              && r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_REQUEST
+                        select new { req, r, rs, log, ind, org };
+
+            // Apply Filters
+            if (selectedOrgId > 0)
+            {
+                query = query.Where(q => q.log.OrganisationId == selectedOrgId);
+            }
+
+            if (selectedStatusId > 0)
+            {
+                query = query.Where(q => q.r.RequestStateId == selectedStatusId);
+            }
+
+            requestsList = await query
+                .OrderByDescending(q => q.log.Date)
+                .Select(q => new AttendanceRequestDto
+                    {
+                        RequestId = q.req.RequestId,
+                        ReferenceNo = q.r.ReferenceNumber ?? "N/A",
+                        LogDate = q.log.Date,
+                        LogTime = q.log.Date.ToString("HH:mm"),
+
+                    // Added null checks to safely handle the left joins
+                        OrganisationName = q.org != null ? q.org.OrganisationName : "Unknown",
+                        StaffName = q.ind != null ? (q.ind.FirstNameEnglish + " " + q.ind.MiddleNameEnglish + " " + q.ind.LastNameEnglish).Trim() : "Unknown Staff",
+
+                        Mode = q.log.InOutModeId == 1 ? "In" :
+                                   q.log.InOutModeId == 2 ? "Out" :
+                                   q.log.InOutModeId == 3 ? "Break Out" :
+                                   q.log.InOutModeId == 4 ? "Break In" : q.log.InOutModeId.ToString(),
+                        Comments = q.req.Comments,
+                        RequestState = q.rs != null ? q.rs.StateName : "Unknown"
+                    })
+                .ToListAsync();
+
+            stateStatistics = requestsList
+                .GroupBy(r => r.RequestState)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            isDataLoaded = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResetFilters()
+    {
+        selectedStatusId = 0;
+        SetCurrentSalaryPeriod();
+        isDataLoaded = false;
+        requestsList.Clear();
+        stateStatistics.Clear();
+
+        await SetDefaultOrganisationAsync();
+    }
+
+    // --- DTO for Table Rows ---
+    public class AttendanceRequestDto
+    {
+        public int RequestId { get; set; }
+        public string ReferenceNo { get; set; } = string.Empty;
+        public DateTime LogDate { get; set; }
+        public string LogTime { get; set; } = string.Empty;
+        public string OrganisationName { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string Mode { get; set; } = string.Empty;
+        public string? Comments { get; set; }
+        public string RequestState { get; set; } = string.Empty;
+    }
+
+    // Helpers
+    private string GetStateColorClass(string state)
+    {
+        if (string.IsNullOrEmpty(state)) return "bg-slate-100 text-slate-600";
+
+        return state.Trim().ToLower() switch
+        {
+            "approved" => "bg-emerald-100 text-emerald-800",
+            "rejected" => "bg-rose-100 text-rose-800",
+            "pending verification" => "bg-amber-100 text-amber-800",
+            "pending approval" => "bg-blue-100 text-blue-800",
+            "incomplete" => "bg-orange-100 text-orange-800",
+            "pending" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-600"
+        };
+    }
+}

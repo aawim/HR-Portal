@@ -1,0 +1,721 @@
+﻿@* @page "/admin/attendance/manage-attendance/my-attendance" *@
+@page "/online/attendance/my-attendance"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Shared
+@inject NavigationManager Navigation
+
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject UserService UserService
+@inject AttendanceLogService AttendanceLogService
+@inject IIndividual _individual
+
+
+<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+
+<!-- Header & Action Bar -->
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">My Attendance</h2>
+        <p class="text-sm text-slate-500 mt-1">Review your personal attendance logs, history, and metrics.</p>
+    </div>
+</div>
+
+<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden p-0">
+
+    <!-- Tab Navigation -->
+    <div class="border-b border-slate-200 bg-slate-50/50">
+        <nav class="flex overflow-x-auto" aria-label="Tabs">
+            @foreach (var tab in Tabs)
+            {
+                <button @onclick="() => SetActiveTab(tab)"
+                class="whitespace-nowrap py-4 px-6 border-b-2 font-medium text-sm transition-all duration-200 outline-none
+                               @(activeTab == tab
+                                   ? "border-blue-600 text-blue-600 bg-white"
+                                   : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 hover:bg-slate-100")">
+                    @tab
+                </button>
+
+            }
+        </nav>
+    </div>
+
+    <!-- Tab Content Area -->
+    <div class="p-6 min-h-[800px]">
+
+        <!-- Quick fade-in animation container -->
+        <div class="animate-in fade-in duration-300">
+            @switch (activeTab)
+            {
+                case "Attendance":
+                    <div>
+
+                        <!-- TOP: Date Range Search & Toggle Controls -->
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-8 pb-4 border-b border-slate-100 gap-4">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800">Attendance Overview</h3>
+                                <p class="text-sm text-slate-500">Reviewing metrics for the selected salary period.</p>
+                            </div>
+
+                            <div class="flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                <div class="flex items-center bg-white border border-slate-200 rounded-md overflow-hidden">
+                                    <input type="date" @bind="startDate" class="px-3 py-1.5 text-sm text-slate-700 focus:outline-none" />
+                                    <span class="text-slate-400 px-2 text-sm font-medium">to</span>
+                                    <input type="date" @bind="endDate" class="px-3 py-1.5 text-sm text-slate-700 focus:outline-none" />
+                                </div>
+                                <button @onclick="() => SearchCustomPeriod()" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    Search
+                                </button>
+                                <!-- NEW Reset Button -->
+                                <button @onclick="ResetToCurrentPeriod" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-4 py-1.5 rounded-md text-sm font-medium transition-colors border border-slate-200">
+                                    Reset
+                                </button>
+
+                            </div>
+                        </div>
+
+                        <!-- DYNAMIC CONTENT AREA -->
+                        <div class="max-w-5xl mx-auto w-full transition-all duration-300">
+
+
+                            <!-- ========================================== -->
+                            <!-- STATE 1: BAR GRAPH (DEFAULT)               -->
+                            <!-- ========================================== -->
+                            <div class="relative h-12 w-full flex items-end justify-center gap-4 sm:gap-8 md:gap-12 mt-8 pb-8 animate-in fade-in duration-500">
+
+                                <!-- Background Grid Lines -->
+                                <div class="absolute inset-0 flex flex-col justify-between pb-8 pointer-events-none border-b border-slate-200">
+                                    <div class="border-t border-slate-100 w-full"></div>
+                                    <div class="border-t border-slate-100 w-full"></div>
+                                    <div class="border-t border-slate-100 w-full"></div>
+                                    <div class="border-t border-slate-100 w-full"></div>
+                                </div>
+
+                                <!-- BARS -->
+                                @foreach (var stat in attendanceStats)
+                                {
+                                    int heightPercentage = maxDays > 0 ? (int)Math.Round((double)stat.Days / maxDays * 100) : 0;
+
+                                    <div class="relative flex flex-col items-center group z-10 w-12 sm:w-16">
+                                        <div class="absolute -top-10 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-800 text-white text-xs py-1 px-2 rounded whitespace-nowrap pointer-events-none z-20">
+                                            @stat.Days Days (@stat.Percentage%)
+                                        </div>
+
+                                        <div class="w-full @stat.ColorClass rounded-t-md transition-all duration-700 ease-out shadow-sm flex items-start justify-center pt-2 min-h-[4px]"
+                                        style="height: @(heightPercentage)%">
+                                            @if (heightPercentage > 10)
+                                            {
+                                                <span class="text-[10px] font-bold text-white/90">@stat.Days</span>
+                                            }
+                                        </div>
+
+                                        <div class="absolute -bottom-8 text-center w-24">
+                                            <span class="text-xs font-semibold text-slate-600">@stat.Label</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                        <div>
+                            <!-- ========================================== -->
+                            <!-- STATE 2: ATTENDANCE LOGS TABLE             -->
+                            <!-- ========================================== -->
+                            <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm animate-in mt-6 slide-in-from-bottom-4 fade-in duration-500">
+                                <table class="w-full text-left border-collapse whitespace-nowrap">
+                                    <thead>
+                                        <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-[11px] uppercase tracking-wider font-bold">
+                                            <th class="px-4 py-3 text-center">#</th>
+                                            <th class="px-4 py-3">Date</th>
+                                            <th class="px-4 py-3">Day</th>
+                                            <th class="px-4 py-3">Clock In</th>
+                                            <th class="px-4 py-3">Break Out</th>
+                                            <th class="px-4 py-3">Break In</th>
+                                            <th class="px-4 py-3">Clock Out</th>
+                                            <th class="px-4 py-3">Status</th>
+                                            <th class="px-4 py-3">Details</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @if (isLoading)
+                                        {
+                                            @for (int i = 0; i < 5; i++)
+                                            {
+                                                <tr class="animate-pulse hover:bg-slate-50 transition-colors duration-150">
+                                                    <td class="px-4 py-4 text-center"><div class="h-3 bg-slate-200 rounded w-4 mx-auto"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-24"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-16"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-12"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-5 bg-slate-200 rounded w-16"></div></td>
+                                                    <td class="px-4 py-4"><div class="h-3 bg-slate-200 rounded w-full max-w-[100px]"></div></td>
+                                                </tr>
+                                            }
+                                        }
+                                        else if (dailyRecords != null && dailyRecords.Any())
+                                        {
+                                            int index = 1;
+                                            @foreach (var record in dailyRecords)
+                                            {
+                                                <tr class="hover:bg-slate-50 transition-colors duration-150 text-sm text-slate-700">
+                                                    <td class="px-4 py-3 text-center text-slate-400 text-xs">@index</td>
+                                                    <td class="px-4 py-3 font-medium">@record.Date.ToString("dd MMM yyyy")</td>
+                                                    <td class="px-4 py-3 text-slate-500">@record.Date.ToString("dddd")</td>
+
+                                                    <td class="px-4 py-3 font-semibold @(record.ClockIn == "--:--" ? "text-slate-300" : "text-emerald-600")">@record.ClockIn</td>
+                                                    <td class="px-4 py-3 text-amber-600">@record.BreakOut</td>
+                                                    <td class="px-4 py-3 text-amber-600">@record.BreakIn</td>
+                                                    <td class="px-4 py-3 font-semibold @(record.ClockOut == "--:--" ? "text-slate-300" : "text-rose-600")">@record.ClockOut</td>
+
+                                                    <td class="px-4 py-3">
+                                                        @{
+                                                            string statusBg = record.Status == "Present" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                                            record.Status == "Absent" ? "bg-rose-50 text-rose-700 border-rose-100" :
+                                                            record.Status == "Weekend" ? "bg-slate-100 text-slate-500 border-slate-200" :
+                                                            "bg-blue-50 text-blue-700 border-blue-100";
+                                                        }
+                                                        <span class="inline-flex px-2 py-0.5 rounded text-[10px] font-bold border uppercase tracking-wider @statusBg">
+                                                            @record.Status
+                                                        </span>
+                                                    </td>
+
+                                                    <td class="px-4 py-3 text-xs text-slate-500 truncate max-w-[150px]">
+                                                        @(string.IsNullOrEmpty(record.Details) ? "-" : record.Details)
+                                                    </td>
+                                                </tr>
+                                                index++;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="9" class="px-4 py-8 text-center text-slate-500">
+                                                    No attendance records found for this period.
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                        </div>
+                    </div>
+                    break;
+
+                case "Summary":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-4">Attendance Summary</h3>
+
+                        @if (lateRecords.Any())
+                        {
+
+                            int totalMinutes = lateRecords.Sum(x => x.MinutesLate);
+                            int hours = totalMinutes / 60;
+                            int remainingMinutes = totalMinutes % 60;
+
+                            <!-- Added Summary Stats Bar -->
+                        @*     <div class="flex gap-4 mb-6">
+                                <div class="bg-rose-50 border border-rose-100 rounded-lg p-4 flex-1">
+                                    <p class="text-rose-600 text-xs font-bold uppercase">Total Late Occurrences</p>
+                                    <p class="text-2xl font-black text-rose-900">@lateRecords.Count</p>
+                                </div>
+                                <div class="bg-amber-50 border border-amber-100 rounded-lg p-4 flex-1">
+                                    <p class="text-amber-600 text-xs font-bold uppercase">Total Minutes Lost</p>
+                                    <p class="text-2xl font-black text-amber-900">@lateRecords.Sum(x => x.MinutesLate)</p>
+                                </div>
+                            </div> *@
+                            <div class="flex gap-4 mb-6">
+                                <div class="bg-rose-50 border border-rose-100 rounded-lg p-4 flex-1">
+                                    <p class="text-rose-600 text-xs font-bold uppercase">Total Late Occurrences</p>
+                                    <p class="text-2xl font-black text-rose-900">@lateRecords.Count</p>
+                                </div>
+                                <div class="bg-amber-50 border border-amber-100 rounded-lg p-4 flex-1">
+                                    <p class="text-amber-600 text-xs font-bold uppercase">Total Time Lost</p>
+                                    <p class="text-2xl font-black text-amber-900">
+                                        @if (hours > 0)
+                                        {
+                                            <span>@hours hr </span>
+                                        }
+                                        @remainingMinutes min
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Existing Late Records Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+
+                                @foreach (var late in lateRecords)
+                                {
+                                    <div class="bg-white p-4 rounded-xl border border-rose-100 shadow-sm hover:shadow-md transition-shadow">
+                                        <div class="flex justify-between items-start mb-3">
+                                            <div>
+                                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">@late.Date.ToString("dd MMM, dddd")</p>
+                                                <p class="text-lg font-bold text-slate-800">@late.ActualTime.ToString(@"hh\:mm")</p>
+                                            </div>
+                                            <span class="bg-rose-100 text-rose-700 px-2 py-1 rounded-md text-xs font-bold">
+                                                @late.MinutesLate min
+                                            </span>
+                                        </div>
+                                        <div class="bg-slate-50 p-2 rounded-lg text-xs text-slate-500">
+                                            Scheduled: <span class="font-bold text-slate-700">@late.ScheduledTime.ToString(@"hh\:mm")</span>
+                                        </div>
+                                    </div>
+                                
+                                }
+
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="bg-emerald-50 border border-emerald-100 text-emerald-700 p-6 rounded-xl text-center font-medium italic">
+                                No late records found. Great job maintaining your schedule!
+                            </div>
+                        }
+                    </div>
+                    break;
+
+                case "Break Late":
+                    <div>
+                        <h3 class="text-lg font-bold text-amber-800 mb-2">Late from Break</h3>
+                        <p class="text-slate-500 text-sm mb-6">Records of extended break durations and delayed returns.</p>
+
+                        @if (breakLateRecords.Any())
+                        {
+                            <!-- Break Summary Stats Bar -->
+                            <div class="flex gap-4 mb-6">
+                                <div class="bg-amber-50 border border-amber-100 rounded-lg p-4 flex-1">
+                                    <p class="text-amber-600 text-xs font-bold uppercase">Extended Breaks</p>
+                                    <p class="text-2xl font-black text-amber-900">@breakLateRecords.Count</p>
+                                </div>
+                                <div class="bg-orange-50 border border-orange-100 rounded-lg p-4 flex-1">
+                                    <p class="text-orange-600 text-xs font-bold uppercase">Total Extra Minutes</p>
+                                    <p class="text-2xl font-black text-orange-900">@breakLateRecords.Sum(x => x.OvertimeMinutes)</p>
+                                </div>
+                            </div>
+
+                            <!-- Break Late Cards Grid -->
+                            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                @foreach (var record in breakLateRecords)
+                                {
+                                    <div class="bg-white p-4 rounded-xl border border-amber-200 shadow-sm hover:shadow-md transition-shadow">
+                                        <div class="flex justify-between items-start mb-3">
+                                            <div>
+                                                <p class="text-xs font-bold text-slate-400 uppercase tracking-wider">@record.Date.ToString("dd MMM, dddd")</p>
+                                                <p class="text-lg font-bold text-slate-800">
+                                                    @record.BreakOutTime.ToString(@"hh\:mm") - @record.BreakInTime.ToString(@"hh\:mm")
+                                                </p>
+                                            </div>
+                                            <span class="bg-amber-100 text-amber-700 px-2 py-1 rounded-md text-xs font-bold">
+                                                +@record.OvertimeMinutes min
+                                            </span>
+                                        </div>
+
+                                        <div class="bg-slate-50 p-2 rounded-lg text-xs flex justify-between text-slate-500">
+                                            <span>Allowed: @allowedBreakDuration.TotalMinutes min</span>
+                                            <span class="font-bold text-slate-700">Actual: @(record.OvertimeMinutes + allowedBreakDuration.TotalMinutes) min</span>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="bg-emerald-50 border border-emerald-100 text-emerald-700 p-6 rounded-xl text-center font-medium italic">
+                                No extended breaks recorded during this period.
+                            </div>
+                        }
+                    </div>
+                    break;
+
+                case "Absent":
+                    <div>
+                        <h3 class="text-lg font-bold text-slate-800 mb-2">Absenteeism</h3>
+                        <div class="mt-6">
+                            <h3 class="text-lg font-bold text-slate-800 mb-4">Absence Overview</h3>
+
+                            <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 flex items-center justify-between">
+                                <div>
+                                    <p class="text-slate-600 text-xs font-bold uppercase">Total Days Absent</p>
+                                    <p class="text-3xl font-black text-slate-900">@TotalAbsentDays</p>
+                                </div>
+                                <div class="text-slate-400">
+                                    <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                                    </svg>
+                                </div>
+                            </div>
+
+                            @if (AbsentRecords.Any())
+                            {
+                                <div class="mt-4 grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    @foreach (var absent in AbsentRecords)
+                                    {
+                                        <div class="bg-white border border-slate-100 p-2 rounded text-center">
+                                            <p class="text-[10px] text-slate-400 uppercase font-bold">@absent.Date.ToString("MMM dd")</p>
+                                            <p class="text-xs font-semibold text-slate-700">@absent.Date.ToString("ddd")</p>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    break;
+
+                case "Overtime":
+                    <div>
+                        <h3 class="text-lg font-bold text-emerald-800 mb-2">Over-time Tracking</h3>
+                        <p class="text-slate-500 text-sm mb-6">Review and approve extra hours worked beyond the standard shift.</p>
+                    </div>
+                    break;
+
+                case "Help":
+                    <div class="bg-blue-50 border border-blue-100 rounded-xl p-6">
+                        <h3 class="text-lg font-bold text-blue-900 mb-2 flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            Help & Guidelines
+                        </h3>
+                        <p class="text-blue-800 text-sm">
+                            Need assistance understanding attendance policies? Review the company rulebook or contact HR for support.
+                        </p>
+                    </div>
+                    break;
+            }
+        </div>
+    </div>
+ 
+ 
+</div>
+
+
+@code {
+
+    private bool isLoading = true;
+
+
+    // --- Tab Navigation State ---
+    // private string activeTab = "Attendance";
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? QueryTab { get; set; }
+
+    public string? activeTab { get; set; } = "Attendance";
+    private List<LateRecord> lateRecords = new();
+
+
+    private readonly string[] Tabs = new[]
+    {
+        "Attendance",
+        "Summary",
+        "Break Late",
+        "Absent",
+        "Overtime",
+        "Help"
+    };
+
+    // --- Search & UI State ---
+    private DateTime startDate;
+    private DateTime endDate;
+    private bool showLogs = false;
+    private int maxDays = 30;
+
+    private TimeSpan shiftStart = new TimeSpan(8, 30, 0);
+    private TimeSpan allowedBreakDuration = TimeSpan.FromMinutes(60);
+
+    // --- Data Models ---
+    private List<ChartStat> attendanceStats = new();
+    private List<DailyAttendanceRow> dailyRecords = new();
+    private List<AttendanceLog>? rawLogs;
+    private List<BreakLateRecord> breakLateRecords = new();
+
+
+    // This will give you the total count of absent days
+    private int TotalAbsentDays => dailyRecords.Count(r => r.Status == "Absent");
+
+    // If you need a list of the specific days to show in a UI
+    private List<DailyAttendanceRow> AbsentRecords => dailyRecords.Where(r => r.Status == "Absent").ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(QueryTab))
+        {
+            // Use FirstOrDefault to ensure the casing matches your Tabs array exactly
+            activeTab = Tabs.FirstOrDefault(t => t.Equals(QueryTab, StringComparison.OrdinalIgnoreCase)) ?? "Attendance";
+        }
+        else
+        {
+            activeTab = "Attendance";
+        }
+
+        await SearchDefaultPeriod();
+        LoadChartData();
+        CalculateLateRecords();
+    }
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Calculate the current salary period
+        DateTime today = DateTime.Today;
+
+        if (today.Day >= 15)
+        {
+            // If today is the 15th or later, the period started THIS month
+            startDate = new DateTime(today.Year, today.Month, 15);
+        }
+        else
+        {
+            // If today is before the 15th, the period started LAST month
+            startDate = new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        }
+
+        // Set the end date to the 16th of the following month
+        endDate = startDate.AddMonths(1).AddDays(1);
+
+
+
+        await SearchDefaultPeriod();
+        LoadChartData();
+        CalculateLateRecords();
+
+    }
+
+    private async Task ResetToCurrentPeriod()
+    {
+        DateTime today = DateTime.Today;
+
+        if (today.Day >= 15)
+        {
+            startDate = new DateTime(today.Year, today.Month, 15);
+        }
+        else
+        {
+            startDate = new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        }
+
+        endDate = startDate.AddMonths(1).AddDays(1);
+
+        // Auto-fetch the data so the user doesn't have to click "Search" after resetting
+        await FetchAttendanceData(startDate, endDate);
+    }
+
+
+    private void CalculateLateRecords()
+    {
+        // Assuming rawLogs is already fetched
+        // Example threshold: 08:30:00
+ 
+
+
+        var shiftStart = new TimeSpan(8, 30, 0); 
+        
+        lateRecords = rawLogs
+            .Where(l => l.InOutModeId == 1 && l.Date.TimeOfDay > shiftStart)
+            .Select(l => new LateRecord {
+                Date = l.Date,
+                ActualTime = l.Date.TimeOfDay,
+                ScheduledTime = shiftStart,
+                MinutesLate = (int)(l.Date.TimeOfDay - shiftStart).TotalMinutes
+            })
+            .ToList();
+    }
+
+    private void SetActiveTab(string tabName)
+    {
+        activeTab = tabName;
+
+        string urlTabName = tabName.Replace(" ", "-");
+        // 2. Generate the new URL with the query parameter
+        var newUrl = Navigation.GetUriWithQueryParameter("tab", urlTabName);
+
+        // 3. Update the browser URL bar silently (replace: true prevents bloating the browser back-button history)
+        Navigation.NavigateTo(newUrl, forceLoad: false, replace: true);
+    }
+
+    // private void SetDefaultSalaryPeriod()
+    // {
+    //     // 15th of the previous month to the 16th of the current month
+    //     DateTime today = DateTime.Today;
+    //     DateTime startMonthTarget = today.Day <= 15 ? today.AddMonths(-2) : today.AddMonths(-1);
+
+    //     startDate = new DateTime(startMonthTarget.Year, startMonthTarget.Month, 15);
+    //     endDate = startDate.AddMonths(1).AddDays(1); // One month + 1 day = 16th
+    // }
+
+    private void LoadChartData()
+    {
+        attendanceStats = new List<ChartStat>
+        {
+            new ChartStat { Label = "To Attend", Days = 30, Percentage = 100, ColorClass = "bg-slate-400" },
+            new ChartStat { Label = "Absent", Days = 30, Percentage = 100, ColorClass = "bg-rose-500" },
+            new ChartStat { Label = "Late", Days = 0, Percentage = 0, ColorClass = "bg-amber-400" },
+            new ChartStat { Label = "Perfect", Days = 0, Percentage = 0, ColorClass = "bg-emerald-400" },
+            new ChartStat { Label = "Attended", Days = 0, Percentage = 0, ColorClass = "bg-blue-500" },
+            new ChartStat { Label = "Leaves", Days = 0, Percentage = 0, ColorClass = "bg-purple-400" }
+        };
+    }
+  
+    // Status = (day.DayOfWeek == System.DayOfWeek.Friday || day.DayOfWeek == System.DayOfWeek.Saturday) ? "Weekend" : "Absent",
+
+ private async Task FetchAttendanceData(DateTime start, DateTime end)
+    {
+
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+        showLogs = true;
+        dailyRecords.Clear();
+        lateRecords.Clear();
+        breakLateRecords.Clear(); // Clears correctly
+
+            int individualID = await _individual.GetIndividualID();
+        rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
+
+        // Define rules
+        // var shiftStart = new TimeSpan(8, 30, 0);
+        // var allowedBreakDuration = TimeSpan.FromMinutes(60);
+
+        for (var day = start; day <= end; day = day.AddDays(1))
+        {
+            var dayLogs = rawLogs.Where(l => l.Date.Date == day.Date).ToList();
+
+            var row = new DailyAttendanceRow
+                {
+                    Date = day,
+                    Status = (day.DayOfWeek == System.DayOfWeek.Friday || day.DayOfWeek == System.DayOfWeek.Saturday) ? "Weekend" : "Absent",
+                    Details = ""
+                };
+
+            if (dayLogs.Any())
+            {
+                row.Status = "Present";
+
+                // Clock In/Out
+                var clockIn = dayLogs.LastOrDefault(l => l.InOutModeId == 1);
+                var clockOut = dayLogs.LastOrDefault(l => l.InOutModeId == 2);
+                var breakOut = dayLogs.LastOrDefault(l => l.InOutModeId == 3);
+                var breakIn = dayLogs.LastOrDefault(l => l.InOutModeId == 4);
+
+                row.ClockIn = clockIn != null ? clockIn.Date.ToString("HH:mm") : "--:--";
+                row.ClockOut = clockOut != null ? clockOut.Date.ToString("HH:mm") : "--:--";
+                row.BreakOut = breakOut != null ? breakOut.Date.ToString("HH:mm") : "--:--";
+                row.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
+
+                // 1. Calculate Late Arrival
+                if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                {
+                    lateRecords.Add(new LateRecord
+                        {
+                            Date = day,
+                            ActualTime = clockIn.Date.TimeOfDay,
+                            ScheduledTime = shiftStart,
+                            MinutesLate = (int)(clockIn.Date.TimeOfDay - shiftStart).TotalMinutes
+                        });
+                }
+
+                // 2. Calculate Break Overtime
+                if (breakOut != null && breakIn != null)
+                {
+                    TimeSpan actualBreak = breakIn.Date - breakOut.Date;
+                    if (actualBreak > allowedBreakDuration)
+                    {
+                        int overtime = (int)(actualBreak - allowedBreakDuration).TotalMinutes;
+
+                        // Updates the string for the main table
+                        row.Details += $"Overtime: {overtime}m";
+
+                        // MISSING LOGIC ADDED HERE: Populates the Break Late tab
+                        breakLateRecords.Add(new BreakLateRecord
+                            {
+                                Date = day,
+                                BreakOutTime = breakOut.Date.TimeOfDay,
+                                BreakInTime = breakIn.Date.TimeOfDay,
+                                OvertimeMinutes = overtime
+                            });
+                    }
+                }
+            }
+            dailyRecords.Add(row);
+        }
+        StateHasChanged(); // Refresh the UI
+
+        }
+        finally
+        {
+            // 3. Turn off the loading animation even if there was an error
+            isLoading = false;
+            StateHasChanged(); // Refresh UI to show the real data (or empty state)
+        }
+
+
+
+    }
+    // 2. Default: Called on page load
+    public async Task SearchDefaultPeriod()
+    {
+        DateTime today = DateTime.Today;
+        DateTime start = new DateTime(today.Year, today.Month, 15);
+        DateTime end = start.AddMonths(1); // Ends on the 15th of the next month
+
+        await FetchAttendanceData(start, end);
+    }
+
+    // Existing search button method
+    public async Task SearchCustomPeriod()
+    {
+        await FetchAttendanceData(startDate, endDate);
+    }
+
+
+
+    private void ResetView()
+    {
+        showLogs = false;
+    }
+
+    // --- Helper Classes ---
+    private class ChartStat
+    {
+        public string Label { get; set; } = "";
+        public int Days { get; set; }
+        public int Percentage { get; set; }
+        public string ColorClass { get; set; } = "";
+    }
+
+    private class DailyAttendanceRow
+    {
+        public DateTime Date { get; set; }
+        public string ClockIn { get; set; } = "--:--";
+        public string BreakOut { get; set; } = "--:--";
+        public string BreakIn { get; set; } = "--:--";
+        public string ClockOut { get; set; } = "--:--";
+        public string Status { get; set; } = "";
+        public string Details { get; set; } = "";
+    }
+
+
+
+    private class LateRecord
+    {
+        public DateTime Date { get; set; }
+        public TimeSpan ActualTime { get; set; }
+        public TimeSpan ScheduledTime { get; set; }
+        public int MinutesLate { get; set; }
+    }
+
+    public class BreakLateRecord
+    {
+        public DateTime Date { get; set; }
+        public TimeSpan BreakOutTime { get; set; }
+        public TimeSpan BreakInTime { get; set; }
+        public int OvertimeMinutes { get; set; }
+    }
+}

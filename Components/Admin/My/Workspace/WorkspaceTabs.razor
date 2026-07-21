@@ -1,0 +1,183 @@
+﻿@using HRM.Enum
+
+
+<div class="border-b border-slate-200">
+
+    <nav class="flex gap-6">
+
+        @foreach (var tab in AvailableTabs)
+        {
+            <button class="@TabClass(tab)"
+                    @onclick="() => ChangeTab(tab)">
+
+                <span class="flex items-center gap-2 whitespace-nowrap">
+
+                    @GetTabIcon(tab)
+
+                    @GetTabText(tab)
+
+                </span>
+
+            </button>
+        }
+
+
+    </nav>
+
+</div>
+
+
+@code {
+
+    [Parameter]
+    public WorkspaceEntityType EntityType { get; set; }
+
+    [Parameter]
+    public WorkspaceTab ActiveTab { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkspaceTab> ActiveTabChanged { get; set; }
+
+    private IEnumerable<WorkspaceTab> AvailableTabs
+    {
+        get
+        {
+            switch (EntityType)
+            {
+                case WorkspaceEntityType.Workspace:
+
+                    return new[]
+                    {
+ 
+                    WorkspaceTab.Calendar,
+                    WorkspaceTab.OrgDaily,
+ 
+                    };
+
+                case WorkspaceEntityType.Staff:
+
+                    return new[]
+                    {
+                        WorkspaceTab.Overview,
+                        WorkspaceTab.Leave,
+                        WorkspaceTab.OT,
+                        WorkspaceTab.Attendance,
+                        WorkspaceTab.Documents,
+                        WorkspaceTab.Position,
+                        WorkspaceTab.LeaveType
+                    };
+
+                case WorkspaceEntityType.Individual:
+
+                    return new[]
+                    {
+                        WorkspaceTab.Overview,
+                        WorkspaceTab.Documents
+                    };
+
+
+                case WorkspaceEntityType.Organisation:
+
+                    return new[]
+                    {
+                        WorkspaceTab.Overview,
+                        WorkspaceTab.Staff
+                    };
+ 
+                    
+                default:
+                      return Array.Empty<WorkspaceTab>();
+
+            }
+        }
+    }
+
+
+
+
+    private async Task ChangeTab(WorkspaceTab tab)
+    {
+        await ActiveTabChanged.InvokeAsync(tab);
+    }
+
+    private string TabClass(WorkspaceTab tab)
+    {
+        return ActiveTab == tab
+
+            ? "px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-medium"
+
+            : "px-4 py-2 text-slate-500 hover:text-slate-700";
+    }
+
+     private string GetTabText(WorkspaceTab tab)
+    {
+        return tab switch
+        {
+            WorkspaceTab.Overview => "Overview",
+
+            WorkspaceTab.Leave => "Leave",
+
+            WorkspaceTab.OT => "OT",
+
+            WorkspaceTab.Attendance => "Attendance",
+
+            WorkspaceTab.Documents => "Documents",
+
+            WorkspaceTab.Staff => "Staff",
+
+            WorkspaceTab.Calendar => "Calendar",
+
+            _ => tab.ToString()
+        };
+    }
+
+
+
+
+    private MarkupString GetTabIcon(WorkspaceTab tab)
+    {
+        return tab switch
+        {
+
+            WorkspaceTab.Overview =>
+                (MarkupString)"""<span>🏠</span>""",
+
+
+            WorkspaceTab.Leave =>
+                (MarkupString)"""<span>📅</span>""",
+
+
+            WorkspaceTab.OT =>
+                (MarkupString)"""<span>⏱</span>""",
+
+
+            WorkspaceTab.Attendance =>
+                (MarkupString)"""<span>✔</span>""",
+
+
+            WorkspaceTab.Documents =>
+                (MarkupString)"""<span>📄</span>""",
+
+
+            WorkspaceTab.Staff =>
+                (MarkupString)"""<span>👥</span>""",
+
+
+            WorkspaceTab.Calendar =>
+                (MarkupString)"""<span>🗓</span>""",
+
+            WorkspaceTab.Position =>
+                (MarkupString)"""<span>🗓</span>""",
+
+
+            WorkspaceTab.LeaveType =>
+                (MarkupString)"""<span>🗓</span>""",
+
+
+            _ =>
+                (MarkupString)"""<span>•</span"""
+        };
+
+    }
+
+}

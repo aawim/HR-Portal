@@ -1,0 +1,67 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+<div class="top-row ps-3 navbar navbar-dark">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="">HRM</a>
+    </div>
+</div>
+
+<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+
+<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
+    <nav class="flex-column">
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
+                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+            </NavLink>
+        </div>
+
+        @* Everything inside <Authorized> only shows for logged-in users *@
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="counter">
+                        <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+                    </NavLink>
+                </div>
+
+                <div class="nav-item px-3">
+                    <NavLink class="nav-link" href="weather">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+                    </NavLink>
+                </div>
+
+                <div class="alert text-light mb-0 m-3 fixed-bottom ">
+                    <!-- 2. Use your clean C# variable here -->
+                    Logged in as: <strong>@UserName</strong>!
+                </div>
+
+
+            </Authorized>
+        </AuthorizeView>
+    </nav>
+</div>
+
+
+@code {
+    // 1. Grab the global authentication state
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string UserName = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            var user = state.User;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                // Because you updated Program.cs earlier, this will
+                // automatically contain their "full_name" from eFaas!
+                UserName = user.Identity.Name ?? "User";
+            }
+        }
+    }
+}

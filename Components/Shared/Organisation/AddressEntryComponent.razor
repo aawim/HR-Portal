@@ -1,0 +1,412 @@
+﻿@using HRM.DTOs.Organisation.Address
+@using HRM.Models
+@using HRM.Models.Archives
+@using Microsoft.EntityFrameworkCore
+@inject HrmTeContext DbContext
+
+<EditForm Model="@model" OnValidSubmit="SaveAddressDetails" Context="addressContext">
+    <div class="space-y-6 animate-in fade-in duration-300 pb-24">
+
+        <div class="flex gap-4 p-1 bg-slate-100 rounded-lg w-fit">
+            <button type="button" @onclick="() => SetAddressMode(false)"
+                    class="px-4 py-2 text-sm font-bold rounded-md transition-all @(!model.CreateNewRegisteredAddress ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")">
+                Search Existing Address
+            </button>
+            <button type="button" @onclick="() => SetAddressMode(true)"
+                    class="px-4 py-2 text-sm font-bold rounded-md transition-all @(model.CreateNewRegisteredAddress ? "bg-white text-blue-600 shadow-sm" : "text-slate-500 hover:text-slate-700")">
+                + Create New Address
+            </button>
+        </div>
+
+        @if (!model.CreateNewRegisteredAddress)
+        {
+            <div class="p-4 bg-slate-50 rounded-lg border border-slate-200 animate-in fade-in">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Search Registered Address</label>
+
+                @if (model.RegisteredAddressId > 0 && selectedRegisteredAddress != null)
+                {
+                    <div class="p-3 bg-white border border-emerald-300 rounded-lg flex justify-between items-center shadow-sm">
+                        <div>
+                            <p class="text-sm font-bold text-slate-800">@selectedRegisteredAddress.HouseBuilding, @selectedRegisteredAddress.Address</p>
+                            <p class="text-[10px] text-slate-500 font-bold uppercase mt-0.5">Type: @selectedRegisteredAddress.AddressType</p>
+                        </div>
+                        <button type="button" @onclick="ClearRegisteredAddress" class="text-xs font-bold px-3 py-1.5 bg-rose-50 text-rose-600 rounded hover:bg-rose-100 transition-colors">
+                            Change
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <input type="text" @bind="addressSearchQuery" @bind:event="oninput" @onkeyup="PerformAddressSearch"
+                           placeholder="Search by address, street, or postcode..."
+                           class="w-full p-2.5 border border-slate-300 rounded-lg text-sm mb-2" />
+
+                    @if (isSearchingAddresses)
+                    {
+                        <p class="text-xs text-blue-500 font-bold mt-2 animate-pulse">Searching database...</p>
+                    }
+                    else if (addressSearchQuery.Length >= 2 && !addressSearchResults.Any())
+                    {
+                        <div class="mt-4 p-6 bg-slate-50 border border-dashed border-slate-300 rounded-lg text-center animate-in fade-in">
+                            <p class="text-sm text-slate-500 mb-3">No matching addresses found for "<span class="font-bold">@addressSearchQuery</span>".</p>
+                            <button type="button" @onclick="() => SetAddressMode(true)" class="px-4 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm">
+                                + Add Address Manually
+                            </button>
+                        </div>
+                    }
+                    else if (addressSearchResults.Any())
+                    {
+                        <div class="mt-3 bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm animate-in fade-in">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-100 text-slate-600 border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2 font-bold">Address Type</th>
+                                        <th class="p-2 font-bold">Address</th>
+                                        <th class="p-2 font-bold text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var addr in addressSearchResults)
+                                    {
+                                        <tr class="border-b border-slate-100 hover:bg-slate-50 transition-colors">
+                                            <td class="p-2 text-slate-600">@addr.AddressType</td>
+                                            <td class="p-2 font-medium text-slate-800">@addr.HouseBuilding, @addr.Address</td>
+                                            <td class="p-2 text-center">
+                                                <button type="button" @onclick="() => SelectAddress(addr)" class="px-3 py-1 bg-blue-100 text-blue-700 rounded font-bold hover:bg-blue-200 transition-colors">
+                                                    Select
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                            <div class="p-3 bg-slate-50 border-t border-slate-200 text-center">
+                                <p class="text-xs text-slate-500 inline-block mr-2">Didn't find it?</p>
+                                <button type="button" @onclick="() => SetAddressMode(true)" class="text-xs font-bold text-blue-600 hover:underline">Add it manually</button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+        }
+        else
+        {
+            <div class="p-5 bg-blue-50/50 rounded-lg border border-blue-100 animate-in fade-in">
+                <h3 class="text-sm font-bold text-blue-800 mb-4 pb-2 border-b border-blue-100">New Address Details</h3>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Address Type <span class="text-rose-500">*</span></label>
+                        <InputSelect @bind-Value="model.NewAddressInstanceTypeID" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">-- Select Type --</option>
+                            @foreach (var addrType in addressInstanceTypes)
+                            {
+                                <option value="@addrType.Id">@addrType.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Location Type</label>
+                        <InputSelect @bind-Value="model.NewLocationTypeID" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">-- Select Type --</option>
+                            @foreach (var addrType in addressLocationTypes)
+                            {
+                                <option value="@addrType.Id">@addrType.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Address Line 1 <span class="text-rose-500">*</span></label>
+                        <InputText @bind-Value="model.NewAddressLine1" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">House / Building Name</label>
+                        <InputText @bind-Value="model.NewAddressName" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Floor / Suite</label>
+                        <InputText @bind-Value="model.NewAddressFloor" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Road / Street Name</label>
+                        <InputText @bind-Value="model.NewRoad" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Country</label>
+                        <InputSelect @bind-Value="model.NewCountryID" class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            <option value="">-- Select Country --</option>
+                            @foreach (var c in countries)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Atoll</label>
+                        <InputSelect Value="model.NewAtollID"
+                                     ValueChanged="@((int? val) => OnAtollChanged(val))"
+                                     ValueExpression="@(() => model.NewAtollID)"
+                                     class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500">
+                            <option value="">-- Select Atoll --</option>
+                            @foreach (var atoll in atolls)
+                            {
+                                <option value="@atoll.AtollId">@atoll.NameEnglish</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Island</label>
+                        <InputSelect Value="model.NewIslandID"
+                                     ValueChanged="@((int? val) => OnIslandChanged(val))"
+                                     ValueExpression="@(() => model.NewIslandID)"
+                                     disabled="@(model.NewAtollID == null)"
+                                     class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400">
+                            <option value="">-- Select Island --</option>
+                            @foreach (var island in islands)
+                            {
+                                <option value="@island.IslandId">@island.NameEnglish</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Ward <span class="text-rose-500">*</span></label>
+                        <InputSelect @bind-Value="model.NewWardID"
+                                     disabled="@(model.NewIslandID == null)"
+                                     class="w-full p-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-400">
+                            <option value="">-- Select Ward --</option>
+                            @foreach (var ward in wards)
+                            {
+                                <option value="@ward.WardId">@ward.NameEnglish</option>
+                            }
+                        </InputSelect>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Post Code</label>
+                        <InputText @bind-Value="model.NewPostCode" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">Municipality No.</label>
+                        <InputText @bind-Value="model.NewMunicipalityNumber" class="w-full p-2 border border-slate-300 rounded-lg text-sm" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="absolute bottom-0 left-0 right-0 px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center rounded-b-xl z-10">
+        <div class="text-rose-500 text-xs font-bold max-w-md">
+            @if (!string.IsNullOrEmpty(addressErrorMessage))
+            {
+                <p>@addressErrorMessage</p>
+            }
+        </div>
+        <button type="submit" disabled="@isSubmitting" class="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 flex items-center gap-2">
+            @(isSubmitting ? "Saving..." : "Save Address & Continue")
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+        </button>
+    </div>
+
+    @* Component Local Toast *@
+    @if (isToastVisible)
+    {
+        <div class="fixed top-4 right-4 z-50 animate-in slide-in-from-top-5 fade-in duration-300 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border @(toastType == "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800")">
+            <span class="text-sm font-bold">@toastMessage</span>
+        </div>
+    }
+</EditForm>
+
+@code {
+    [Parameter] public int BusinessEntityId { get; set; }
+    [Parameter] public EventCallback OnAddressSaved { get; set; }
+
+    private AddressEntryDto model = new();
+    private bool isSubmitting = false;
+    private string addressErrorMessage = "";
+
+    private string addressSearchQuery = "";
+    private bool isSearchingAddresses = false;
+    private List<AddressSearchResultDto> addressSearchResults = new();
+    private AddressSearchResultDto? selectedRegisteredAddress = null;
+
+    private List<DropdownItem> countries = new();
+    private List<Atoll> atolls = new();
+    private List<Island> islands = new();
+    private List<Ward> wards = new();
+    private List<DropdownItem> addressLocationTypes = new();
+    private List<DropdownItem> addressInstanceTypes = new();
+
+    private bool isToastVisible = false;
+    private string toastMessage = "";
+    private string toastType = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        countries = await DbContext.Countries.Select(c => new DropdownItem { Id = c.CountryId, Name = c.NameEnglish }).ToListAsync();
+        atolls = await DbContext.Atolls.Select(c => new Atoll { AtollId = c.AtollId, NameEnglish = c.NameEnglish }).ToListAsync();
+
+        addressLocationTypes = await DbContext.AddressBaseTypes
+            .Select(t => new DropdownItem { Id = t.AddressBaseTypeId, Name = t.TypeName })
+            .OrderBy(t => t.Name).ToListAsync();
+
+        addressInstanceTypes = await DbContext.AddressInstanceTypes
+          .Select(t => new DropdownItem { Id = t.AddressInstanceTypeId, Name = t.TypeName })
+          .OrderBy(t => t.Name).ToListAsync();
+
+        var defaultCountry = countries.FirstOrDefault(c => c.Name.Equals("Maldives"));
+        if (defaultCountry != null) model.NewCountryID = defaultCountry.Id;
+    }
+
+    private async Task ShowToast(string message, string type = "success")
+    {
+        toastMessage = message; toastType = type; isToastVisible = true; StateHasChanged();
+        await Task.Delay(4000); isToastVisible = false; StateHasChanged();
+    }
+
+    private async Task OnAtollChanged(int? selectedAtollId)
+    {
+        model.NewAtollID = selectedAtollId; model.NewIslandID = null; islands.Clear();
+        if (selectedAtollId.HasValue && selectedAtollId.Value > 0)
+        {
+            islands = await DbContext.Islands.Where(i => i.AtollId == selectedAtollId.Value).OrderBy(i => i.NameEnglish).ToListAsync();
+        }
+        StateHasChanged();
+    }
+
+    private async Task OnIslandChanged(int? selectedIslandId)
+    {
+        model.NewIslandID = selectedIslandId; model.NewWardID = null; wards.Clear();
+        if (selectedIslandId.HasValue && selectedIslandId.Value > 0)
+        {
+            wards = await DbContext.Wards.Where(w => w.IslandId == selectedIslandId.Value).OrderBy(w => w.NameEnglish).ToListAsync();
+        }
+        StateHasChanged();
+    }
+
+    private void SetAddressMode(bool isCreateNew)
+    {
+        model.CreateNewRegisteredAddress = isCreateNew;
+        if (isCreateNew) { addressSearchQuery = ""; addressSearchResults.Clear(); }
+        StateHasChanged();
+    }
+
+    private async Task PerformAddressSearch()
+    {
+        if (string.IsNullOrWhiteSpace(addressSearchQuery) || addressSearchQuery.Length < 2) { addressSearchResults.Clear(); return; }
+        isSearchingAddresses = true;
+
+        addressSearchResults = await (from a in DbContext.AddressBases
+                                      where a.AddressLine1.Contains(addressSearchQuery) || a.AddressLine2.Contains(addressSearchQuery) || a.StreetNameEnglish.Contains(addressSearchQuery) || a.PostCode.Contains(addressSearchQuery)
+                                      join t in DbContext.AddressBaseTypes on a.AddressBaseTypeId equals t.AddressBaseTypeId into tJoin
+                                      from t in tJoin.DefaultIfEmpty()
+                                      select new AddressSearchResultDto
+                                          {
+                                              AddressBaseID = a.AddressBaseId,
+                                              AddressType = t != null ? t.TypeName : "Unknown",
+                                              Address = a.AddressLine1 + " " + a.StreetNameEnglish,
+                                              HouseBuilding = a.HomeNameDhivehi ?? a.AddressLine2 ?? "",
+                                              LocationType = "-"
+                                          }).Take(15).ToListAsync();
+        isSearchingAddresses = false;
+    }
+
+    private void SelectAddress(AddressSearchResultDto addr)
+    {
+        model.RegisteredAddressId = addr.AddressBaseID; selectedRegisteredAddress = addr;
+        addressSearchResults.Clear(); addressSearchQuery = "";
+    }
+
+    private void ClearRegisteredAddress()
+    {
+        model.RegisteredAddressId = null; selectedRegisteredAddress = null;
+    }
+
+    private async Task SaveAddressDetails()
+    {
+        if (BusinessEntityId == 0) return;
+        addressErrorMessage = ""; isSubmitting = true;
+
+        try
+        {
+            int finalLocationId = 0;
+
+            if (model.CreateNewRegisteredAddress)
+            {
+                if (model.NewAddressInstanceTypeID == null || string.IsNullOrWhiteSpace(model.NewAddressLine1) || model.NewWardID == null)
+                {
+                    await ShowToast("Please fill in Address Base Type, Address Line 1, and Ward.", "error");
+                    isSubmitting = false; return;
+                }
+
+                var newAddressBase = new AddressBasis
+                    {
+                        AddressLine1 = model.NewAddressLine1,
+                        HomeNameDhivehi = model.NewAddressName,
+                        AddressLine2 = model.NewAddressLine2,
+                        StreetNameEnglish = model.NewRoad,
+                        IsCurrent = true,
+                        MunicipalityNumber = model.NewMunicipalityNumber,
+                        PostCode = model.NewPostCode,
+                        AddressBaseTypeId = model.NewAddressInstanceTypeID ?? 1,
+                        WardId = model.NewWardID,
+                    };
+                DbContext.AddressBases.Add(newAddressBase);
+                await DbContext.SaveChangesAsync();
+
+                var newLocation = new Location { LocationTypeId = model.NewLocationTypeID ?? 1, CountryId = model.NewCountryID ?? 1 };
+                DbContext.Locations.Add(newLocation);
+                await DbContext.SaveChangesAsync();
+                finalLocationId = newLocation.LocationId;
+
+                var newGeoAddress = new Address { LocationId = finalLocationId, IslandId = model.NewIslandID };
+                DbContext.Addresses.Add(newGeoAddress);
+
+                var newInstance = new AddressInstance { LocationId = finalLocationId, AddressBaseId = newAddressBase.AddressBaseId, Name = model.NewAddressName, Floor = model.NewAddressFloor };
+                DbContext.AddressInstances.Add(newInstance);
+
+                await DbContext.SaveChangesAsync();
+            }
+            else
+            {
+                if (model.RegisteredAddressId == null || model.RegisteredAddressId == 0) { await ShowToast("Please search and select an address.", "error"); isSubmitting = false; return; }
+                finalLocationId = model.RegisteredAddressId.Value;
+            }
+
+            if (finalLocationId > 0)
+            {
+                var existingLink = await DbContext.BusinessEntityLocations.FirstOrDefaultAsync(bel => bel.BusinessEntityId == BusinessEntityId && bel.LocationId == finalLocationId);
+
+                if (existingLink != null) { await ShowToast("This location is already linked.", "warning"); }
+                else
+                {
+                    var link = new BusinessEntityLocation { BusinessEntityId = BusinessEntityId, LocationId = finalLocationId, BusinessEntityLocationTypeId = 1, IsValid = true };
+                    DbContext.BusinessEntityLocations.Add(link);
+                    await DbContext.SaveChangesAsync();
+                    await ShowToast("Address successfully linked!", "success");
+                }
+            }
+
+            // Tell the parent page we are done!
+            await OnAddressSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"DB Error: {ex.Message}");
+            await ShowToast("An error occurred.", "error");
+        }
+        finally { isSubmitting = false; }
+    }
+
+    public class DropdownItem { public int Id { get; set; } public string Name { get; set; } = string.Empty; }
+}

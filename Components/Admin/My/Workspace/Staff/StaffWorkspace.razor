@@ -1,0 +1,144 @@
+﻿@* 
+@page "/admin/my/workspace/staff" *@
+@using HRM.Components.Admin.My.Workspace.Staff.Tabs
+@using HRM.Enum
+@using HRM.Models
+@using Microsoft.EntityFrameworkCore
+@inject HrmTeContext Db
+
+<div class="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
+
+    @if (Loading)
+    {
+        <div class="p-6">
+            Loading staff information...
+        </div>
+    }
+    else if (Staff == null)
+    {
+        <div class="p-6 text-red-500">
+            Staff not found.
+        </div>
+    }
+    else
+    {
+        <div class="p-6">
+
+            <div class="flex justify-between">
+
+                <div>
+                    <h2 class="text-xl font-semibold text-slate-800">
+                        @Staff.Name
+                    </h2>
+
+                    <p class="text-sm text-slate-500">
+                        @Staff.Position
+                    </p>
+                </div>
+
+
+                <span class="px-3 py-1 rounded-full bg-blue-50 text-blue-600 text-sm">
+                    @Staff.Status
+                </span>
+
+            </div>
+
+
+            <div class="">
+
+                    @if (ActiveTab == WorkspaceTab.Overview)
+                    {
+                            <StaffOverview StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Leave)
+                    {
+                    <p>Leave</p> <StaffLeave StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.OT)
+                    {
+                    <p>OT</p> <StaffOvertime StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Attendance)
+                    {
+                    <p>Attendance</p> <StaffAttendance StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Documents)
+                    {
+                    <p>Documents</p> <StaffDocuments StaffId="StaffId" />
+                    }
+
+                    else if (ActiveTab == WorkspaceTab.LeaveType)
+                    {
+                    <p>Manage Staff Leave Assignments </p> <LeaveAssignmentManager StaffId="StaffId" />
+                    }
+
+            </div>
+
+        </div>
+ 
+            }
+
+</div>
+
+
+@code {
+    private bool Loading;
+
+    private StaffInfo? Staff;
+     
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public WorkspaceTab ActiveTab { get; set; }
+
+     protected override async Task OnParametersSetAsync()
+    {
+        Loading = true;
+
+
+        Staff = await Db.Individuals
+
+            .Where(x => x.BusinessEntityId == StaffId)
+
+            .Select(x => new StaffInfo
+                {
+
+                    Name =
+                        x.FirstNameEnglish + " " +
+                        x.LastNameEnglish,
+
+
+                    // Position =
+                    //     x.Jobs
+                    //      .Where(j => j.TerminationDate == null)
+                    //      .Select(j => j.OrganisationStructure.Name)
+                    //      .FirstOrDefault(),
+
+
+                    // Status =
+                    //     x.Jobs.Any(j => j.TerminationDate == null)
+                    //     ? "Staff"
+                    //     : "Terminated"
+
+
+                })
+
+            .FirstOrDefaultAsync();
+
+
+        Loading = false;
+    }
+
+
+
+    public class StaffInfo
+    {
+        public string Name { get; set; } = "";
+
+        public string? Position { get; set; }
+
+        public string Status { get; set; } = "";
+    }
+
+}

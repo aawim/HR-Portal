@@ -1,0 +1,101 @@
+﻿@using HRM.Components.Shared.Calendar
+@using HRM.Enum
+
+<StatCard Title="Calendar">
+
+    <div class="w-full">
+
+        <Calendar Events="Events"
+                  OnDateSelected="DateSelected" />
+
+    </div>
+
+</StatCard>
+
+
+@code {
+
+    private List<CalendarEvent> Events = new();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        LoadCalendar();
+    }
+
+
+
+    private void LoadCalendar()
+    {
+        // Temporary data
+        // Replace this later with:
+        // LeaveService.GetMyTeamCalendar()
+
+        Events = new()
+        {
+            new CalendarEvent
+            {
+                Date = DateOnly.FromDateTime(
+                    DateTime.Today.AddDays(1)),
+
+                Title = "Ahmed - Annual Leave",
+
+                Description =
+                    "Annual Leave (3 Days)",
+
+                Type = CalendarEventType.Leave
+            },
+
+
+            new CalendarEvent
+            {
+                Date = DateOnly.FromDateTime(
+                    DateTime.Today.AddDays(3)),
+
+                Title = "Team Meeting",
+
+                Description =
+                    "HR Weekly Meeting",
+
+                Type = CalendarEventType.Meeting
+            },
+
+
+            new CalendarEvent
+            {
+                Date = DateOnly.FromDateTime(
+                    DateTime.Today.AddDays(7)),
+
+                Title = "Public Holiday",
+
+                Description =
+                    "National Holiday",
+
+                Type = CalendarEventType.Holiday
+            },
+
+
+            new CalendarEvent
+            {
+                Date = DateOnly.FromDateTime(
+                    DateTime.Today.AddDays(10)),
+
+                Title = "Training",
+
+                Description =
+                    "System Training",
+
+                Type = CalendarEventType.Training
+            }
+        };
+    }
+
+
+
+    private void DateSelected(DateTime date)
+    {
+        Console.WriteLine(
+            $"Selected date: {date:dd MMM yyyy}");
+    }
+
+}

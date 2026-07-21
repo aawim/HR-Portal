@@ -1,0 +1,297 @@
+﻿@using HRM.Components.Shared.Forms
+@using HRM.DTOs
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Services.State
+
+@inject IAddress AddressService
+@inject ToastService ToastService
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+        <div>
+            <h3 class="text-sm font-semibold text-slate-800">
+                Leave Addresses
+            </h3>
+
+            <p class="text-xs text-slate-500">
+                Saved contact locations
+            </p>
+        </div>
+        <button class="w-9 h-9 rounded-lg
+                   bg-blue-600 text-white
+                   hover:bg-blue-700
+                   transition"
+                @onclick="OpenDrawer">
+
+            <i class="fas fa-plus"></i>
+
+        </button>
+
+        <i class="fas fa-map-marker-alt text-blue-500"></i>
+    </div>
+
+    <div class="p-3">
+
+        @if (isLoading)
+        {
+            <div class="text-center py-6 text-slate-500">
+                Loading addresses...
+            </div>
+        }
+        else if (!Addresses.Any())
+        {
+            <div class="text-center py-6 text-slate-500">
+                No addresses found.
+            </div>
+        }
+        else
+        {
+            <div class="space-y-3">
+
+                @foreach (var address in Addresses)
+                {
+                    <div class="rounded-xl border border-slate-200 bg-white
+                                p-4 hover:border-blue-300 hover:shadow-md
+                                transition-all duration-200">
+
+                        <!-- Header -->
+                        <div class="flex items-start justify-between">
+
+                            <div class="flex items-center gap-3">
+
+                                <div class="w-10 h-10 rounded-lg bg-blue-50
+                                            flex items-center justify-center">
+
+                                    <i class="fas fa-home text-blue-600"></i>
+
+                                </div>
+
+                                <div>
+
+                                    <h4 class="text-sm font-semibold text-slate-800">
+                                        @address.Address
+                                    </h4>
+
+                                    <p class="text-xs text-slate-500">
+                                        @address.LocationType
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                            <div class="flex gap-1">
+
+                                @if (address.IsCurrent)
+                                {
+                                    <span class="px-2 py-1 rounded-full
+                                                 bg-green-100 text-green-700
+                                                 text-[11px]">
+                                        Current
+                                    </span>
+                                }
+
+                            </div>
+
+                        </div>
+
+                        <div class="border-t border-slate-100 my-3"></div>
+
+                        <div class="space-y-2 text-sm">
+
+                            <div class="flex gap-2">
+                                <i class="fas fa-map-marker-alt text-slate-400 w-4 mt-1"></i>
+
+                                <span>
+                                    @address.Address
+                                </span>
+                            </div>
+
+                            @if (!string.IsNullOrWhiteSpace(address.Floor))
+                            {
+                                <div class="flex gap-2">
+                                    <i class="fas fa-building text-slate-400 w-4"></i>
+
+                                    <span>
+                                        Floor @address.Floor
+                                    </span>
+                                </div>
+                            }
+
+                            <div class="flex gap-2">
+                                <i class="fas fa-location-arrow text-slate-400 w-4"></i>
+
+                                <span>
+                                    @address.Island,
+                                    @address.Atoll
+                                </span>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <i class="fas fa-globe text-slate-400 w-4"></i>
+
+                                <span>
+                                    @address.Country
+                                </span>
+                            </div>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+
+
+@if (ShowDrawer)
+{
+    <div class="fixed inset-0 z-50">
+
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/30"
+             @onclick="CloseDrawer">
+        </div>
+
+        <!-- Drawer -->
+        <div class="absolute right-0 top-0 h-full
+                    w-full sm:w-[420px]
+                    bg-white shadow-2xl
+                    flex flex-col">
+
+            <div class="flex items-center justify-between
+                        px-6 py-4 border-b">
+
+                <div>
+
+                    <h2 class="font-semibold text-lg">
+                        New Address
+                    </h2>
+
+                    <p class="text-sm text-slate-500">
+                        Add a new leave address
+                    </p>
+
+                </div>
+
+                <button @onclick="CloseDrawer">
+
+                    <i class="fas fa-times"></i>
+
+                </button>
+
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6">
+
+                <EditForm Model="Model"
+                          OnValidSubmit="SaveAddress">
+
+                    <DataAnnotationsValidator />
+
+                   <AddressForm Model="Model"
+                        Countries="Countries"
+                        Atolls="Atolls"
+                        Islands="Islands"
+                        AddressTypes="AddressTypes"
+                        AddressBaseTypes="AddressBaseTypes"
+                        LocationTypes="LocationTypes"
+                        OnAtollChanged="LoadIslands"
+
+                                 OnSave="SaveAddress" />
+
+                </EditForm>
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+
+
+@code {
+       
+
+        private List<Country> Countries = new();
+        private List<Atoll> Atolls = new();
+        private List<Island> Islands = new();
+        private List<AddressInstanceType> AddressTypes = new();
+    private List<AddressBaseType> AddressBaseTypes = new();
+        private List<BusinessEntityLocationType> LocationTypes = new();
+
+    
+
+    [Parameter]
+    public LeaveApplicationState LeaveState { get; set; } = default!;
+
+    private List<AddressCardDto> Addresses = new();
+
+    private bool isLoading = true;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        Countries = await AddressService.GetCountriesAsync();
+        Atolls = await AddressService.GetAtollsAsync();
+        AddressTypes = await AddressService.GetAddressInstanceTypesAsync();
+        LocationTypes = await AddressService.GetBusinessEntityLocationTypesAsync();
+
+        AddressBaseTypes = await AddressService.GetAddressBaseTypesAsync();
+
+        Addresses = await AddressService.GetLeaveAddressesAsync();
+
+        isLoading = false;
+    }
+    
+
+    private async Task LoadIslands(int atollId)
+    {
+        Islands = await AddressService.GetIslandsAsync(atollId);
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private bool ShowDrawer;
+
+    private AddressCreateDto Model = new();
+
+    private void OpenDrawer()
+    {
+        Model = new AddressCreateDto();
+        ShowDrawer = true;
+    }
+
+    private void CloseDrawer()
+    {
+        ShowDrawer = false;
+    }
+
+    private async Task SaveAddress()
+    {
+        var result = await AddressService.CreateAddressAsync(Model);
+
+        if (!result.Success)
+        {
+            ToastService.Warning(result.Message);
+            return;
+        }
+
+        ToastService.Success("Address added successfully.");
+
+        Addresses = await AddressService.GetLeaveAddressesAsync();
+
+        ShowDrawer = false;
+    }
+}

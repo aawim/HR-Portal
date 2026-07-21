@@ -1,0 +1,750 @@
+﻿@page "/online/attendance/out-of-office-request"
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Shared
+
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject UserService UserService
+@inject IOrganisationService OrganisationService
+@inject IIndividual _individual
+
+<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+
+
+<div class="relative w-full h-full">
+    <div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px] pb-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Out of Office Requests</h2>
+            <p class="text-sm text-slate-500 mt-1">Manage field work, client visits, and temporary off-site duties.</p>
+        </div>
+        <button @onclick="OpenCreatePanel" class="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-all shadow-md hover:shadow-lg flex items-center gap-2 transform hover:-translate-y-0.5">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Create Request
+        </button>
+    </div>
+
+    @if (isDataLoaded && requestsList.Count > 0 && formModel.TeamId != 0)
+    {
+        <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Summary of the Search</label>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-auto-fit gap-4 mb-6">
+            <button @onclick="() => FilterByCard(string.Empty)"
+            class="flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 transform hover:-translate-y-1
+                           @(string.IsNullOrEmpty(activeCardFilter) ? "ring-2 ring-blue-500 shadow-md bg-white border-blue-200" : "bg-slate-50 border-slate-200 hover:shadow-md")">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 text-center">Total Records</span>
+                <span class="text-2xl font-black text-slate-800 text-center">@requestsList.Count</span>
+            </button>
+
+            @foreach (var stat in stateStatistics)
+            {
+                <button @onclick="() => FilterByCard(stat.Key)"
+                class="flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 transform hover:-translate-y-1 @GetStateColorClass(stat.Key)
+                               @(activeCardFilter == stat.Key ? "ring-2 ring-current shadow-md scale-105" : "opacity-80 hover:opacity-100 hover:shadow-md")">
+                    <span class="text-xs font-bold uppercase tracking-wider mb-1 text-center opacity-80">@stat.Key</span>
+                    <span class="text-2xl font-black text-center">@stat.Value</span>
+                </button>
+            }
+        </div>
+        <hr class="border-slate-100 mb-6" />
+    }
+
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+        <div class="grid grid-cols-12 gap-4 mb-4">
+            <div class="col-span-12 md:col-span-5 lg:col-span-5">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Team / Structure</label>
+                <select @bind="formModel.TeamId"
+                @bind:event="onchange"
+                @bind:after="async () => await OnTeamChanged()"
+
+
+                class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
+                    <option value="0">-- All Teams --</option>
+                    @foreach (var team in teams)
+                    {
+                        <option value="@team.Id">@team.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-span-12 md:col-span-3 lg:col-span-3">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Status</label>
+                <select @bind="selectedStatusId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
+                    <option value="0">-- All Statuses --</option>
+                    @foreach (var state in requestStates)
+                    {
+                        <option value="@state.Id">@state.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="col-span-6 md:col-span-2 lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">From</label>
+                <input type="date" @bind="startDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+            </div>
+
+            <div class="col-span-6 md:col-span-2 lg:col-span-2">
+                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">To</label>
+                <input type="date" @bind="endDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+            </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+            <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+                Reset
+            </button>
+            <button @onclick="ExecuteSearch" disabled="@(formModel.TeamId == 0 || isLoading)" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+                @if (isLoading)
+                {
+                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    <span>Searching...</span>
+                }
+                else
+                {
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    <span>Search</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    @if (isDataLoaded)
+    {
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Ref No.</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        @* <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Supervisor</th> *@
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Expected</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Actual</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Remarks</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">State</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @{
+                        var displayedList = string.IsNullOrEmpty(activeCardFilter)
+                        ? requestsList
+                        : requestsList.Where(r => r.RequestState == activeCardFilter).ToList();
+                    }
+
+                    @if (!displayedList.Any())
+                    {
+                        <tr>
+                            <td colspan="9" class="py-8 text-center text-slate-500 italic">No out of office requests found.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < displayedList.Count; i++)
+                        {
+                            var req = displayedList[i];
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                <td class="py-3 px-4 font-medium text-slate-700">@req.ReferenceNo</td>
+                                <td class="py-3 px-4 font-bold text-slate-800">@req.StaffName</td>
+                                @* <td class="py-3 px-4 font-bold text-slate-800">@req.SupervisorName</td> *@
+                                <td class="py-3 px-4 text-slate-600">@req.Date.ToString("dd MMM yyyy")</td>
+                                <td class="py-3 px-4 text-slate-600 bg-slate-50/50">@req.ExpectedTime</td>
+                                <td class="py-3 px-4 font-bold text-slate-700 bg-slate-50/50">@req.ActualTime</td>
+                                <td class="py-3 px-4 text-slate-500 truncate max-w-[200px]" title="@req.Remarks">
+                                    @(string.IsNullOrEmpty(req.Remarks) ? "-" : req.Remarks)
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="@GetStateColorClass(req.RequestState) px-2.5 py-0.5 rounded-full text-xs font-bold">
+                                        @req.RequestState
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button @onclick="() => OpenEditPanel(req.RequestId)" class="text-amber-600 hover:text-amber-800 font-bold text-xs bg-amber-50 px-2 py-1 rounded transition-colors border border-amber-100">
+                                            Edit
+                                        </button>
+                                        <button class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100">
+                                            Detail
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="relative z-50">
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm transition-opacity duration-300 ease-in-out
+                @(isPanelOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+    @onclick="ClosePanel">
+    </div>
+
+        <div class="fixed inset-y-0 right-0 w-full max-w-md bg-white shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+            <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
+                <h3 class="text-lg font-bold text-slate-800">@(isEditing ? "Edit Request" : "Create New Request")</h3>
+                <button @onclick="ClosePanel" class="text-slate-400 hover:text-slate-600 p-2 rounded-full hover:bg-slate-200 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto p-6">
+                <div class="flex flex-col gap-3">
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation <span class="text-rose-500">*</span></label>
+                        <select class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                            <option value="0">-- Select Organisation --</option>
+                            @foreach (var org in organisations)
+                            {
+                                <option value="@org.Id" selected="@(org.Id == formModel.OrganisationId)">@org.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Team</label>
+                        <select @bind="formModel.TeamId" @bind:after="OnTeamChanged" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                            <option value="0">-- Select Team --</option>
+                            @foreach (var team in teams)
+                            {
+                                <option value="@team.Id" selected="@(team.Id == formModel.TeamId)">@team.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4 border-t border-slate-100 mt-2">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Staff Member <span class="text-rose-500">*</span></label>
+                            <select @bind="formModel.StaffId" disabled="@(formModel.TeamId == 0)" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                <option value="0">-- Select Staff --</option>
+                                @foreach (var staff in staffMembers)
+                                {
+                                    <option value="@staff.Id" selected="@(staff.Id == formModel.StaffId)">@staff.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Supervisor</label>
+                            <select @bind="formModel.SupervisorId" disabled="@(formModel.TeamId == 0)" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                                <option value="0">-- Auto or Select --</option>
+                                @foreach (var sup in supervisors)
+                                {
+                                    <option value="@sup.Id" selected="@(sup.Id == formModel.SupervisorId)">@sup.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Request Type <span class="text-rose-500">*</span></label>
+                        <select @bind="formModel.OutOfficeRequestTypeId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer">
+                            <option value="0">-- Select Type --</option>
+                            @foreach (var type in requestTypes)
+                            {
+                                <option value="@type.Id" selected="@(type.Id == formModel.OutOfficeRequestTypeId)">@type.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Date <span class="text-rose-500">*</span></label>
+                        <input type="date" @bind="formModel.Date" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Expected Out</label>
+                            <input type="time" @bind="formModel.ExpectedOut" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Expected In</label>
+                            <input type="time" @bind="formModel.ExpectedIn" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Remarks / Location</label>
+                        <textarea @bind="formModel.Remarks" rows="3" placeholder="Nature of field work, meeting details..." class="w-full p-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 border-t border-slate-100 bg-white flex justify-end gap-3">
+                <button @onclick="ClosePanel" class="px-6 py-2.5 rounded-md text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors border border-transparent">
+                    Cancel
+                </button>
+                <button class="px-6 py-2.5 rounded-md text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Save Request
+                </button>
+            </div>
+        </div>
+</div>
+
+@code {
+    // Filters & UI State
+    private int selectedStatusId = 0;
+    private int currentUserOrganisationId = 0;
+    private DateTime startDate;
+    private DateTime endDate;
+    private string activeCardFilter = string.Empty;
+    private bool isDataLoaded = false;
+    private bool isLoading = false;
+    private int activeEditingRequestId = 0;
+
+    // Slide-over Panel State
+    private bool isPanelOpen = false;
+    private bool isEditing = false;
+    private FormModel formModel = new();
+
+    // Data Collections
+    private List<DynamicDropdownDto> organisations = new();
+    private List<DynamicDropdownDto> teams = new();
+    private List<DynamicDropdownDto> requestStates = new();
+    private List<DynamicDropdownDto> requestTypes = new();
+    private List<DynamicDropdownDto> supervisors = new();
+    private List<DynamicDropdownDto> staffMembers = new();
+
+
+    private List<OutOfOfficeRequestDto> requestsList = new();
+    private Dictionary<string, int> stateStatistics = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+
+        int currentIndividualId = await _individual.GetIndividualID();
+
+        currentUserOrganisationId = await DbContext.Jobs
+            .Where(j =>
+                j.IndividualID == currentIndividualId &&
+                (j.TerminatedDate == null ||
+                 j.TerminatedDate > DateTime.Today))
+            .Select(j => j.OrganisationID)
+            .FirstOrDefaultAsync();
+
+        await LoadTeams();
+        await LoadStatus();
+        await LoadRequestTypes();
+        await LoadOrganisations();
+
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task OnTeamChanged()
+    {
+        if (formModel.TeamId <= 0)
+        {
+            staffMembers.Clear();
+            supervisors.Clear();
+            formModel.StaffId = 0;
+            formModel.SupervisorId = 0;
+            return;
+        }
+
+        await LoadStaffAndSupervisors(formModel.TeamId);
+
+        // auto-assign supervisor if only one
+        if (supervisors.Count == 1)
+        {
+            formModel.SupervisorId = supervisors.First().Id;
+        }
+
+        // reset staff when team changes
+        formModel.StaffId = 0;
+    }
+
+    private async Task LoadOrganisations()
+    {
+        organisations = await DbContext.Organisations
+               .Where(x => new List<int> { 4, 6 }.Contains(x.OrganisationTypeId))
+               .Select(x => new DynamicDropdownDto
+                                {
+                                    Id = x.BusinessEntityID,
+                                    Name = x.OrganisationName
+                                })
+               .ToListAsync();
+    }
+    private async Task LoadStatus()
+    {
+        requestStates = await DbContext.RequestStates
+               .Where(x => new List<int> { 1, 2, 3, 4, 5, 6 }.Contains(x.RequestStateId))
+               .Select(x => new DynamicDropdownDto
+                   {
+                       Id = x.RequestStateId,
+                       Name = x.StateName
+                   })
+               .ToListAsync();
+    }
+    private async Task LoadTeams()
+    {
+        teams.Clear();
+        if (currentUserOrganisationId <= 0)
+            return;
+        teams = await DbContext.Teams
+            .Where(x => x.OrganisationId == currentUserOrganisationId)
+            .Select(x => new DynamicDropdownDto
+                    {
+                        Id = x.TeamId,
+                        Name = x.Name
+                    })
+            .OrderBy(x => x.Name)
+            .ToListAsync();
+    }
+
+   
+
+    private async Task LoadRequestTypes()
+    {
+        requestTypes.Clear();
+        if (currentUserOrganisationId <= 0)
+            return;
+        requestTypes = await DbContext.OutOfficeRequestTypes
+               .Select(x => new DynamicDropdownDto
+                {
+                    Id = x.OutOfOfficeRequestTypeId,
+                    Name = x.TypeName
+                })
+            .ToListAsync();
+    }
+    private async Task LoadStaffAndSupervisors(int structId)
+    {
+        // if (formModel.FilterBy == "Team")
+        // {
+        var teamQuery = from ts in DbContext.TeamStaffs
+                        join i in DbContext.Individuals on ts.StaffId equals i.BusinessEntityId
+                        where ts.TeamId == structId
+                              && ts.IsValid == true
+                              && (ts.EndDate == null || ts.EndDate > DateTime.Today)
+                        select new
+                        {
+                            Id = i.BusinessEntityId,
+                            Name = (i.FirstNameEnglish + " " + i.LastNameEnglish).Trim(),
+                            IsSuperVisor = ts.IsSuperVisor
+                        };
+
+        var teamData = await teamQuery.ToListAsync();
+
+        staffMembers = teamData
+            .Select(x => new DynamicDropdownDto { Id = x.Id, Name = x.Name })
+            .OrderBy(x => x.Name).ToList();
+
+        supervisors = teamData
+            .Where(x => x.IsSuperVisor == true)
+            .Select(x => new DynamicDropdownDto { Id = x.Id, Name = x.Name })
+            .OrderBy(x => x.Name).ToList();
+        // }
+        // else if (formModel.FilterBy == "Division")
+        // {
+        //     // Add your division logic here later!
+        // }
+    }
+    private async Task ExecuteSearch()
+    {
+        isLoading = true;
+        isDataLoaded = false;
+        activeCardFilter = string.Empty;
+        requestsList.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var query =
+                 from req in DbContext.Requests
+
+                 join oor in DbContext.OutOfOfficeRequests
+                     on req.RequestId equals oor.RequestId
+
+                 join rs in DbContext.RequestStates
+                     on req.RequestStateId equals rs.RequestStateId
+
+                 join ind in DbContext.Individuals
+                    on oor.StaffId equals ind.BusinessEntityId
+
+                 join supInd in DbContext.Individuals
+                         on oor.SupervisorStaffId equals supInd.BusinessEntityId into supGrp
+                 from supervisor in supGrp.DefaultIfEmpty()
+
+
+                 join ts in DbContext.TeamStaffs
+                     on oor.StaffId equals ts.StaffId
+
+                 // Left Join Clock In
+                 join logIn in DbContext.AttendanceLogs
+                     on oor.ClockInAttendanceLogId equals logIn.AttendanceLogId into loginGrp
+                 from actualIn in loginGrp.DefaultIfEmpty()
+
+                     // Left Join Clock Out
+                 join logOut in DbContext.AttendanceLogs
+                     on oor.ClockOutAttendanceLogId equals logOut.AttendanceLogId into logoutGrp
+                 from actualOut in logoutGrp.DefaultIfEmpty()
+
+                 where
+                     ts.TeamId == formModel.TeamId
+                     && ts.IsValid == true
+                     && (ts.EndDate == null || ts.EndDate > DateTime.Today)
+                     && oor.Date >= startDate
+                     && oor.Date <= endDate
+
+                 select new
+                 {
+                     req,
+                     oor,
+                     rs,
+                     ind,
+                     supervisor,
+                     actualIn,
+                     actualOut
+                 };
+
+            if (selectedStatusId > 0)
+            {
+                query = query.Where(q => q.req.RequestStateId == selectedStatusId);
+            }
+
+            requestsList = await query
+                .OrderByDescending(q => q.oor.Date)
+                .Select(q => new OutOfOfficeRequestDto
+                    {
+                        RequestId = q.req.RequestId,
+                        ReferenceNo = q.req.ReferenceNumber ?? "N/A",
+                        StaffName = (q.ind.FirstNameEnglish + " " + q.ind.LastNameEnglish).Trim(),
+                        SupervisorName = q.supervisor != null
+                        ? (q.supervisor.FirstNameEnglish + " " + q.supervisor.LastNameEnglish).Trim()
+                        : "-",
+                        Date = q.oor.Date,
+
+                        ExpectedTime = (q.oor.ExpectedClockInTime != null ? q.oor.ExpectedClockInTime.ToString() : "--") + " - " +
+                                           (q.oor.ExpectedClockOutTime != null ? q.oor.ExpectedClockOutTime.ToString() : "--"),
+
+                        ActualTime = (q.actualIn != null ? q.actualIn.Date.ToString("HH:mm") : "--") + " - " +
+                        (q.actualOut != null ? q.actualOut.Date.ToString("HH:mm") : "--"),
+
+                        Remarks = q.oor.Remarks,
+                        RequestState = q.rs.StateName ?? "Unknown"
+                    })
+                .ToListAsync();
+
+            stateStatistics = requestsList
+                .GroupBy(r => r.RequestState)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            isDataLoaded = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void FilterByCard(string status) => activeCardFilter = status;
+
+    private void ResetFilters()
+    {
+        selectedStatusId = 0;
+        activeCardFilter = string.Empty;
+        SetCurrentSalaryPeriod();
+        isDataLoaded = false;
+        requestsList.Clear();
+        stateStatistics.Clear();
+    }
+
+    private void OpenCreatePanel()
+    {
+        isEditing = false;
+        formModel = new FormModel { Date = DateTime.Today };
+        isPanelOpen = true;
+    }
+
+    // THE FIX: Changed 'async void' to 'async Task' so Blazor properly awaits rendering!
+    private async Task OpenEditPanel(int requestId)
+    {
+        isEditing = true;
+        activeEditingRequestId = requestId;
+
+        // Reset UI state first (VERY IMPORTANT)
+        formModel = new FormModel();
+        staffMembers.Clear();
+        supervisors.Clear();
+
+        var rawRecord = await DbContext.OutOfOfficeRequests
+            .FirstOrDefaultAsync(x => x.RequestId == requestId);
+
+        if (rawRecord == null)
+            return;
+
+        // STEP 1: load base form data
+   
+        formModel.OrganisationId = rawRecord.OrganisationBusinessEntityID;
+        formModel.Date = rawRecord.Date;
+        formModel.Remarks = rawRecord.Remarks;
+        formModel.ExpectedIn = rawRecord.ExpectedClockInTime;
+        formModel.ExpectedOut = rawRecord.ExpectedClockOutTime;
+        formModel.OutOfficeRequestTypeId = rawRecord.OutOfOfficeRequestTypeId;
+
+        // STEP 2: load teams FIRST
+        await LoadTeams();
+
+        // STEP 3: set selected team AFTER teams exist
+        // formModel.TeamId = rawRecord.OrganisationStructureId ?? 0;
+
+        formModel.TeamId = await DbContext.TeamStaffs
+            .Where(x =>
+                x.StaffId == rawRecord.StaffId &&
+                x.IsValid == true &&
+                (x.EndDate == null || x.EndDate > DateTime.Today))
+            .Select(x => x.TeamId)
+            .FirstOrDefaultAsync();
+
+
+
+        // STEP 4: load staff/supervisors based on team
+        if (formModel.TeamId > 0)
+        {
+            await LoadStaffAndSupervisors(formModel.TeamId);
+        }
+
+        // STEP 5: assign selected values LAST
+        formModel.StaffId = rawRecord.StaffId;
+        formModel.SupervisorId = rawRecord.SupervisorStaffId;
+
+        isPanelOpen = true;
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ClosePanel() => isPanelOpen = false;
+
+    // private async Task SaveRequestAsync()
+    // {
+    //     if (formModel.StaffId == 0 || formModel.OutOfficeRequestTypeId == 0) return;
+
+    //     try
+    //     {
+    //         if (isEditing)
+    //         {
+    //             var existingRecord = await DbContext.OutOfOfficeRequests
+    //                 .Include(oor => oor.Request)
+    //                 .FirstOrDefaultAsync(oor => oor.RequestId == activeEditingRequestId);
+
+    //             if (existingRecord != null)
+    //             {
+    //                 existingRecord.StaffId = formModel.StaffId;
+    //                 existingRecord.OrganisationStructureId = formModel.StructureOrTeamId;
+    //                 existingRecord.SupervisorStaffId = formModel.SupervisorId;
+    //                 existingRecord.Date = formModel.Date;
+    //                 existingRecord.ExpectedClockInTime = formModel.ExpectedIn.Value;
+    //                 // ExpectedOut was previously mapped; ensuring naming matches
+    //                 existingRecord.ExpectedClockOutTime = formModel.ExpectedOut.Value;
+    //                 existingRecord.Remarks = formModel.Remarks;
+    //                 existingRecord.OutOfOfficeRequestTypeId = formModel.OutOfficeRequestTypeId;
+
+    //                 if (existingRecord.Request != null)
+    //                 {
+    //                     existingRecord.Request.RequestTypeId = formModel.OutOfficeRequestTypeId;
+    //                 }
+    //             }
+    //         }
+    //         else
+    //         {
+    //             var newRequest = new Request
+    //                 {
+    //                     RequestTypeId = formModel.OutOfficeRequestTypeId,
+    //                     RequestStateId = 1,
+    //                     ApplicationDate = DateTime.Now,
+    //                     ReferenceNumber = $"OOF-{DateTime.Now:yyyyMMdd}-{new Random().Next(100, 999)}"
+    //                 };
+
+    //             DbContext.Requests.Add(newRequest);
+    //             await DbContext.SaveChangesAsync();
+
+    //             var newOutOfOffice = new OutOfOfficeRequest
+    //                 {
+    //                     RequestId = newRequest.RequestId,
+    //                     OrganisationBusinessEntityID = formModel.OrganisationId,
+    //                     OrganisationStructureId = formModel.StructureOrTeamId,
+    //                     StaffId = formModel.StaffId,
+    //                     SupervisorStaffId = formModel.SupervisorId,
+    //                     Date = formModel.Date,
+    //                     ExpectedClockInTime = formModel.ExpectedIn.Value,
+    //                     ExpectedClockOutTime = formModel.ExpectedOut.Value,
+    //                     Remarks = formModel.Remarks,
+    //                     OutOfOfficeRequestTypeId = formModel.OutOfficeRequestTypeId
+    //                 };
+
+    //             DbContext.OutOfOfficeRequests.Add(newOutOfOffice);
+    //         }
+
+    //         await DbContext.SaveChangesAsync();
+    //         ClosePanel();
+    //         await ExecuteSearch();
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine($"Error saving request: {ex.Message}");
+    //     }
+    // }
+
+    private string GetStateColorClass(string state)
+    {
+        if (string.IsNullOrEmpty(state)) return "bg-slate-100 text-slate-600";
+        return state.Trim().ToLower() switch
+        {
+            "approved" => "bg-emerald-100 text-emerald-800",
+            "rejected" => "bg-rose-100 text-rose-800",
+            "pending" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-600"
+        };
+    }
+
+    public class OutOfOfficeRequestDto
+    {
+        public int RequestId { get; set; }
+        public string ReferenceNo { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string SupervisorName { get; set; } = string.Empty;
+        public DateTime Date { get; set; }
+        public string ExpectedTime { get; set; } = string.Empty;
+        public string ActualTime { get; set; } = string.Empty;
+        public string? Remarks { get; set; }
+        public string RequestState { get; set; } = string.Empty;
+    }
+
+    public class FormModel
+    {
+        public int OrganisationId { get; set; }
+        public string FilterBy { get; set; } = "Team";
+        public int TeamId { get; set; }
+        public int StaffId { get; set; }
+        public int SupervisorId { get; set; }
+        public int OutOfficeRequestTypeId { get; set; }
+        public DateTime Date { get; set; }
+        public TimeOnly? ExpectedOut { get; set; }
+        public TimeOnly? ExpectedIn { get; set; }
+        public string? Remarks { get; set; }
+    }
+
+    public class DynamicDropdownDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}

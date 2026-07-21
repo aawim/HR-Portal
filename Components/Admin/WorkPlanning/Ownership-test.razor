@@ -1,0 +1,529 @@
+﻿@page "/admin/work-planning/ownership-test"
+
+@using HRM.DTOs.WorkPlanning
+@using HRM.WorkPlanning.Abstractions
+
+@inject IWorkAssignmentOwnershipService OwnershipService
+
+<PageTitle>Work Assignment Ownership Test</PageTitle>
+
+<div class="max-w-5xl mx-auto p-6 space-y-6">
+
+    <div>
+        <h1 class="text-2xl font-bold text-slate-800">
+            Work Assignment Ownership Test
+        </h1>
+
+        <p class="text-sm text-slate-500 mt-1">
+            Test assigning, transferring, relieving and taking over work assignments.
+        </p>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <div class="@MessageCssClass">
+            @Message
+        </div>
+    }
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        <!-- Assign -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                Assign Work Assignment
+            </h2>
+
+            <div class="space-y-4">
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Work Assignment ID
+                    </label>
+
+                    <InputNumber @bind-Value="AssignRequest.WorkAssignmentId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Individual ID
+                    </label>
+
+                    <InputNumber @bind-Value="AssignRequest.IndividualId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Job ID
+                    </label>
+
+                    <InputNumber @bind-Value="AssignRequest.JobId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Effective From
+                    </label>
+
+                    <InputDate @bind-Value="AssignRequest.EffectiveFrom"
+                               Type="InputDateType.DateTimeLocal"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Operation Log ID
+                    </label>
+
+                    <InputNumber @bind-Value="AssignRequest.OperationLogId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <button type="button"
+                        disabled="@IsBusy"
+                        @onclick="AssignAsync"
+                        class="w-full bg-blue-600 text-white rounded-lg px-4 py-2
+                               hover:bg-blue-700 disabled:opacity-50">
+                    @(IsBusy ? "Processing..." : "Assign")
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- Transfer -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                Transfer Work Assignment
+            </h2>
+
+            <div class="space-y-4">
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Work Assignment ID
+                    </label>
+
+                    <InputNumber @bind-Value="TransferRequest.WorkAssignmentId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            From Individual
+                        </label>
+
+                        <InputNumber @bind-Value="TransferRequest.FromIndividualId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            From Job
+                        </label>
+
+                        <InputNumber @bind-Value="TransferRequest.FromJobId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            To Individual
+                        </label>
+
+                        <InputNumber @bind-Value="TransferRequest.ToIndividualId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            To Job
+                        </label>
+
+                        <InputNumber @bind-Value="TransferRequest.ToJobId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Transfer Date and Time
+                    </label>
+
+                    <InputDate @bind-Value="TransferRequest.TransferDateTime"
+                               Type="InputDateType.DateTimeLocal"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Operation Log ID
+                    </label>
+
+                    <InputNumber @bind-Value="TransferRequest.OperationLogId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Reason
+                    </label>
+
+                    <InputTextArea @bind-Value="TransferRequest.Reason"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <button type="button"
+                        disabled="@IsBusy"
+                        @onclick="TransferAsync"
+                        class="w-full bg-amber-600 text-white rounded-lg px-4 py-2
+                               hover:bg-amber-700 disabled:opacity-50">
+                    @(IsBusy ? "Processing..." : "Transfer")
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- Relieve -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                Relieve Current Owner
+            </h2>
+
+            <div class="space-y-4">
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Work Assignment ID
+                    </label>
+
+                    <InputNumber @bind-Value="RelieveRequest.WorkAssignmentId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            Individual ID
+                        </label>
+
+                        <InputNumber @bind-Value="RelieveRequest.IndividualId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            Job ID
+                        </label>
+
+                        <InputNumber @bind-Value="RelieveRequest.JobId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Relieved Date and Time
+                    </label>
+
+                    <InputDate @bind-Value="RelieveRequest.RelievedDateTime"
+                               Type="InputDateType.DateTimeLocal"
+                               class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Operation Log ID
+                    </label>
+
+                    <InputNumber @bind-Value="RelieveRequest.OperationLogId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Reason
+                    </label>
+
+                    <InputTextArea @bind-Value="RelieveRequest.Reason"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <button type="button"
+                        disabled="@IsBusy"
+                        @onclick="RelieveAsync"
+                        class="w-full bg-red-600 text-white rounded-lg px-4 py-2
+                               hover:bg-red-700 disabled:opacity-50">
+                    @(IsBusy ? "Processing..." : "Relieve")
+                </button>
+
+            </div>
+
+        </div>
+
+        <!-- Take Over -->
+        <div class="bg-white border border-slate-200 rounded-xl shadow-sm p-5">
+
+            <h2 class="text-lg font-semibold text-slate-800 mb-4">
+                Take Over Work Assignment
+            </h2>
+
+            <div class="space-y-4">
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Work Assignment ID
+                    </label>
+
+                    <InputNumber @bind-Value="TakeOverRequest.WorkAssignmentId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            New Individual ID
+                        </label>
+
+                        <InputNumber @bind-Value="TakeOverRequest.ToIndividualId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">
+                            New Job ID
+                        </label>
+
+                        <InputNumber @bind-Value="TakeOverRequest.ToJobId"
+                                     class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                    </div>
+
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Operation Log ID
+                    </label>
+
+                    <InputNumber @bind-Value="TakeOverRequest.OperationLogId"
+                                 class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">
+                        Reason
+                    </label>
+
+                    <InputTextArea @bind-Value="TakeOverRequest.Reason"
+                                   class="w-full border border-slate-300 rounded-lg px-3 py-2" />
+                </div>
+
+                <button type="button"
+                        disabled="@IsBusy"
+                        @onclick="TakeOverAsync"
+                        class="w-full bg-purple-600 text-white rounded-lg px-4 py-2
+                               hover:bg-purple-700 disabled:opacity-50">
+                    @(IsBusy ? "Processing..." : "Take Over")
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    @if (LastResult is not null)
+    {
+        <div class="bg-slate-900 text-slate-100 rounded-xl p-5">
+
+            <h2 class="text-lg font-semibold mb-4">
+                Last Operation Result
+            </h2>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+
+                <div>
+                    <span class="text-slate-400">Success:</span>
+                    @LastResult.Success
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Assignment ID:</span>
+                    @LastResult.WorkAssignmentId
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Owner ID:</span>
+                    @LastResult.WorkAssignmentOwnerId
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Previous Owner ID:</span>
+                    @(LastResult.PreviousWorkAssignmentOwnerId.ToString() ?? "-")
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Individual ID:</span>
+                    @LastResult.IndividualId
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Job ID:</span>
+                    @LastResult.JobId
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Effective From:</span>
+                    @(LastResult.EffectiveFrom?.ToString("dd MMM yyyy HH:mm") ?? "-")
+                </div>
+
+                <div>
+                    <span class="text-slate-400">Effective To:</span>
+                    @(LastResult.EffectiveTo?.ToString("dd MMM yyyy HH:mm") ?? "-")
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+@code {
+    private bool IsBusy;
+
+    private string? Message;
+
+    private string MessageCssClass =
+        "rounded-lg border px-4 py-3 text-sm";
+
+    private WorkAssignmentOwnershipResult? LastResult;
+
+    private AssignWorkAssignmentRequest AssignRequest =
+        new()
+            {
+                EffectiveFrom = DateTime.Now,
+                OperationLogId = 1
+            };
+
+    private TransferWorkAssignmentRequest TransferRequest =
+        new()
+            {
+                TransferDateTime = DateTime.Now,
+                OperationLogId = 1
+            };
+
+    private RelieveWorkAssignmentRequest RelieveRequest =
+        new()
+            {
+                RelievedDateTime = DateTime.Now,
+                OperationLogId = 1
+            };
+
+    private TakeOverWorkAssignmentRequest TakeOverRequest =
+        new()
+            {
+                OperationLogId = 1
+            };
+
+    private async Task AssignAsync()
+    {
+        await ExecuteAsync(
+            () => OwnershipService.AssignAsync(
+                AssignRequest));
+    }
+
+    private async Task TransferAsync()
+    {
+        await ExecuteAsync(
+            () => OwnershipService.TransferAsync(
+                TransferRequest));
+
+
+        if (LastResult?.Success == true)
+        {
+            await LoadTransferStateAsync(
+                TransferRequest.WorkAssignmentId);
+        }
+    }
+
+    private async Task RelieveAsync()
+    {
+        await ExecuteAsync(
+            () => OwnershipService.RelieveAsync(
+                RelieveRequest));
+    }
+
+    private async Task TakeOverAsync()
+    {
+        await ExecuteAsync(
+            () => OwnershipService.TakeOverAsync(
+                TakeOverRequest));
+    }
+
+
+    private WorkAssignmentTransferStateDto? TransferState;
+
+    private async Task LoadTransferStateAsync(long workAssignmentId)
+    {
+        TransferState =
+            await OwnershipService.GetTransferStateAsync(
+                workAssignmentId);
+    }
+
+
+
+
+    private async Task ExecuteAsync(
+        Func<Task<WorkAssignmentOwnershipResult>> operation)
+    {
+        if (IsBusy)
+        {
+            return;
+        }
+
+        IsBusy = true;
+        Message = null;
+        LastResult = null;
+
+        try
+        {
+            var result = await operation();
+
+            LastResult = result;
+            Message = result.Message;
+
+            MessageCssClass = result.Success
+                ? "rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
+                : "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+        }
+        catch (Exception exception)
+        {
+            Message = exception.GetBaseException().Message;
+
+            MessageCssClass =
+                "rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+}

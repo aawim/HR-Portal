@@ -1,0 +1,184 @@
+﻿@using HRM.Services.State
+@using HRM.Services
+@using HRM.DTOs.Leave
+@using HRM.Models
+@using HRM.Services.Interfaces
+
+@inject ILeaveService LeaveService
+
+
+<div class="w-full">
+
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm max-h-[820px] overflow-y-auto">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+
+            <div>
+                <h3 class="text-sm font-semibold text-slate-800">
+                    Leave Balance
+                </h3>
+
+                <p class="text-xs text-slate-500">
+                    Available days
+                </p>
+            </div>
+
+            <i class="fas fa-calendar-check text-blue-500"></i>
+        </div>
+
+
+
+        <!-- List -->
+        <div class="divide-y divide-slate-100">
+
+
+            @if (jobTypes != null && jobTypes.Any())
+            {
+                @foreach (var leave in jobTypes)
+                {
+                    <div class="flex items-center justify-between
+                                px-4 py-3
+                                hover:bg-slate-50 transition">
+
+                        <!-- Leave Information -->
+                        <div class="flex items-center gap-3 min-w-0">
+
+
+                            <div class="shrink-0 w-9 h-9 rounded-lg
+                                        bg-blue-50
+                                        flex items-center justify-center">
+
+                                <i class="fas fa-plane-departure
+                                          text-blue-600 text-sm">
+                                </i>
+
+                            </div>
+
+
+
+                            <div class="truncate">
+
+
+                                <div class="text-sm font-medium
+                                            text-slate-800 truncate">
+
+                                    @leave.LeaveType.Name
+
+                                </div>
+
+
+
+                                <div class="flex items-center gap-1">
+
+                                    <span class="text-xl font-bold text-slate-900">
+                                        @leave.RemainingDays
+                                    </span>
+
+
+                                    <span class="text-xs text-slate-500">
+                                        days
+                                    </span>
+
+                                </div>
+
+
+                            </div>
+                        </div>
+
+                        <!-- Action -->
+                        @if (leave.RemainingDays > 0 && leave.IsLeaveInfoUpdated == true)
+                        {
+                           <button type="button"
+                                    @onclick="() => ApplyLeaveType(leave)"
+                                    class="shrink-0 inline-flex items-center gap-1
+                                           px-3 py-1.5
+                                           text-xs font-medium
+                                           text-white
+                                           bg-blue-600
+                                           rounded-lg
+                                           hover:bg-blue-700
+                                           transition">
+
+
+                                <i class="fas fa-plus text-xs"></i>
+
+                                Apply
+
+                            </button>
+
+                        }
+                        else
+                        {
+
+                            <span class="shrink-0 px-2 py-1
+                                         text-xs font-medium
+                                         rounded-full
+                                         bg-red-50
+                                         text-red-600">
+
+                                Empty
+
+                            </span>
+
+                        }
+
+
+                    </div>
+
+                }
+
+            }
+            else
+            {
+
+                <div class="p-4 text-center text-sm text-slate-500">
+                    No leave balance found.
+                </div>
+
+            }
+
+
+        </div>
+
+
+    </div>
+
+</div>
+
+
+
+@code {
+    [Parameter]
+    public EventCallback OnLeaveTypeSelected { get; set; }
+
+    [Parameter]
+    public LeaveApplicationState LeaveState { get; set; } = default!;
+    private List<JobLeaveType> jobTypes = new();
+    private List<ProcessingLeaveDto> processingLeaves = new();
+    private bool isLoading = true;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        jobTypes = await LeaveService.GetMyLeaveBalancesAsync();
+        processingLeaves = await LeaveService.GetMyProcessingLeavesAsync();
+
+        isLoading = false;
+    }
+
+    private async Task ApplyLeaveType(JobLeaveType leave)
+    {
+
+        LeaveState.Model.LeaveTypeId = leave.LeaveTypeId;
+        LeaveState.RemainingDays = (int)leave.RemainingDays;
+        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType( leave.LeaveTypeId);
+        LeaveState.Model.LeaveReasonId = 0;
+        LeaveState.ResolveForm(leave.LeaveType.Name);
+       
+        // Notify parent
+        await OnLeaveTypeSelected.InvokeAsync();
+
+    }
+
+}

@@ -1,0 +1,280 @@
+﻿@using HRM.DTOs
+@using HRM.DTOs.Organisation
+@using HRM.Models
+@using Microsoft.EntityFrameworkCore
+
+@inject HrmTeContext DbContext
+
+<div class="space-y-8 animate-in fade-in duration-300">
+    <div>
+        <h5 class="text-sm font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Core Information</h5>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 md:col-span-2">
+                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Organisation Name</label>
+                <div class="flex flex-col items-start gap-1.5">
+                    <span class="text-slate-800 font-bold text-lg leading-none">@Org.OrganisationName</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="animate-in fade-in duration-500 delay-100">
+        <div class="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+            <div>
+                <h5 class="text-sm font-bold text-slate-800">Organisation Groups</h5>
+                <p class="text-xs text-slate-500 mt-0.5">Manage groups and units associated with this organisation.</p>
+            </div>
+            <button @onclick="OpenAddGroupPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Group
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Name</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Group Type</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Division / Unit</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (isLoadingGroups)
+                    {
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-slate-500">
+                                <div class="flex justify-center items-center gap-2">
+                                    <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Loading groups...
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!groups.Any())
+                    {
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-slate-500 italic">No groups found for this organisation.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var group in groups)
+                        {
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-4 font-bold text-slate-700">@group.Name</td>
+                                <td class="py-3 px-4 text-slate-600">
+                                    <span class="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-xs font-semibold">@group.GroupTypeName</span>
+                                </td>
+                                <td class="py-3 px-4 text-slate-600">@group.DivisionName</td>
+                                <td class="py-3 px-4 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <button @onclick="() => OpenGroupDetail(group)" class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100">
+                                            Detail
+                                        </button>
+                                        <button class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 px-2 py-1 rounded transition-colors border border-slate-200">
+                                            Edit
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddGroupPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+     @onclick="CloseAddGroupPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddGroupPanel ? "translate-x-0 shadow-2xl" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">Add New Group</h3>
+        <button @onclick="CloseAddGroupPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Group Name <span class="text-rose-500">*</span></label>
+            <input type="text" @bind="newGroup.Name" placeholder="e.g. Core Development Team" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Organisation</label>
+            <input type="text" value="@Org.OrganisationName" disabled class="w-full h-10 px-3 text-sm text-slate-500 bg-slate-100 border border-slate-200 rounded-md cursor-not-allowed" />
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Division / Unit <span class="text-rose-500">*</span></label>
+            <select @bind="newGroup.OrganisationStructureID" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                <option value="0">-- Select Division/Unit --</option>
+                @foreach (var div in divisions)
+                {
+                    <option value="@div.Id">@div.Name</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Group Type <span class="text-rose-500">*</span></label>
+            <select @bind="newGroup.GroupTypeID" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                <option value="0">-- Select Group Type --</option>
+                @foreach (var type in groupTypes)
+                {
+                    <option value="@type.Id">@type.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAddGroupPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+        <button @onclick="SubmitGroup" disabled="@isSubmitting" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">
+            @(isSubmitting ? "Saving..." : "Add Group")
+        </button>
+    </div>
+</div>
+
+<GroupDetailPanel @bind-IsOpen="isGroupDetailOpen" Group="selectedGroupForDetail" />
+
+
+@code {
+    [Parameter]
+    public OrganisationResultDto Org { get; set; } = null!;
+
+    // --- State: Add Group Panel ---
+    private bool showAddGroupPanel = false;
+    private bool isSubmitting = false;
+
+    // --- State: Detail Panel ---
+    private bool isGroupDetailOpen = false;
+    public GroupDto? selectedGroupForDetail;
+
+    // --- State: Table Data ---
+    private bool isLoadingGroups = true;
+    private List<GroupDto> groups = new();
+    private List<DropdownItem> groupTypes = new();
+    private List<DropdownItem> divisions = new();
+    private NewGroupForm newGroup = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Org != null && Org.BusinessEntityID > 0)
+        {
+            await LoadGroups();
+            await LoadDropdownData();
+        }
+    }
+
+    private async Task LoadGroups()
+    {
+        isLoadingGroups = true;
+        try
+        {
+            var query = from g in DbContext.Groups
+                        where g.BusinessEntityOrganisationId == Org.BusinessEntityID
+                        join gt in DbContext.GroupTypes on g.GroupTypeId equals gt.GroupTypeId into gtJoin
+                        from gt in gtJoin.DefaultIfEmpty()
+                        join os in DbContext.OrganisationStructures on g.OrganisationStructureId equals os.OrganisationStructureId into osJoin
+                        from os in osJoin.DefaultIfEmpty()
+                        select new GroupDto
+                            {
+                                GroupID = g.GroupId,
+                                Name = g.Name,
+                                GroupTypeName = gt != null ? gt.Name : "-",
+                                DivisionName = os != null ? os.Name : "-"
+                            };
+
+            groups = await query.ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoadingGroups = false;
+        }
+    }
+
+    private async Task LoadDropdownData()
+    {
+        groupTypes = await DbContext.GroupTypes
+            .Where(gt => gt.OrganisationBusinessEntityId == Org.BusinessEntityID)
+            .Select(gt => new DropdownItem { Id = gt.GroupTypeId, Name = gt.Name })
+            .ToListAsync();
+
+        divisions = await DbContext.OrganisationStructures
+            .Where(os => os.OrganisationBusinessEntityID == Org.BusinessEntityID)
+            .Select(os => new DropdownItem { Id = os.OrganisationStructureId, Name = os.Name })
+            .ToListAsync();
+    }
+
+    // Controls for Add Panel
+    private void OpenAddGroupPanel()
+    {
+        newGroup = new NewGroupForm { BusinessEntityOrganisationID = Org.BusinessEntityID };
+        showAddGroupPanel = true;
+    }
+    private void CloseAddGroupPanel() => showAddGroupPanel = false;
+
+    // Controls for Detail Panel
+    private void OpenGroupDetail(GroupDto group)
+    {
+        selectedGroupForDetail = group;
+        isGroupDetailOpen = true;
+    }
+
+    private async Task SubmitGroup()
+    {
+        if (string.IsNullOrWhiteSpace(newGroup.Name) || newGroup.GroupTypeID == 0 || newGroup.OrganisationStructureID == 0) return;
+
+        isSubmitting = true;
+        try
+        {
+            var entity = new Group
+                {
+                    Name = newGroup.Name,
+                    GroupTypeId = newGroup.GroupTypeID,
+                    OrganisationStructureId = newGroup.OrganisationStructureID,
+                    BusinessEntityOrganisationId = newGroup.BusinessEntityOrganisationID
+                };
+
+            DbContext.Groups.Add(entity);
+            await DbContext.SaveChangesAsync();
+
+            await LoadGroups();
+            showAddGroupPanel = false;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    // --- DTOs ---
+    public class GroupDto
+    {
+        public int GroupID { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string GroupTypeName { get; set; } = string.Empty;
+        public string DivisionName { get; set; } = string.Empty;
+    }
+
+    public class NewGroupForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public int GroupTypeID { get; set; }
+        public int BusinessEntityOrganisationID { get; set; }
+        public int OrganisationStructureID { get; set; }
+    }
+
+    public class DropdownItem
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+}

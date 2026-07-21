@@ -1,0 +1,97 @@
+﻿@using HRM.DTOs
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Cards
+
+@inject ITeam TeamService
+ 
+@rendermode RenderMode.InteractiveServer
+
+
+<BaseCard Title="My Team">
+
+    @if (!Teams.Any())
+    {
+        <div class="p-4 text-sm text-gray-500">
+            You are not assigned as a supervisor for any team.
+        </div>
+    }
+    else
+    {
+        <div class="space-y-4">
+
+            @foreach (var team in Teams)
+            {
+                <div>
+
+                    <!-- Team Header -->
+                    <div class="px-2 py-2 bg-gray-50 border-b border-gray-200">
+                        <div class="text-sm font-semibold text-gray-800">
+                            @team.Name
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(team.NameDhivehi))
+                        {
+                            <div class="text-xs text-gray-500">
+                                @team.NameDhivehi
+                            </div>
+                        }
+                    </div>
+
+
+               @*      <!-- Team Staff -->
+                    <div class="divide-y divide-gray-100">
+
+                        @foreach (var member in team.Staffs)
+                        {
+                            <div class="flex items-center px-2 py-3">
+
+
+                                <div class="ml-3">
+
+                                    @if (member.IsSuperVisor)
+                                    {
+                                        <div class="text-sm font-medium text-gray-800">
+                                            @member.FullName (Supervisor)
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="text-sm font-medium text-gray-800">
+                                            @member.FullName
+                                        </div>
+                                    }
+
+                                 
+
+                                </div>
+
+                            </div>
+                        }
+
+                    </div> *@
+
+                </div>
+            }
+
+        </div>
+    }
+
+</BaseCard>
+@code {
+    public List<TeamDto> Teams { get; set; } = new();
+    public List<TeamStaffDto> TeamMembers { get; set; } = new();
+    protected override async Task OnInitializedAsync()
+    {
+        await FetchData();
+    }
+
+
+    private async Task FetchData()
+    {
+        Teams = await TeamService.GetMyTeamsAsync();
+    }
+
+}
+
+

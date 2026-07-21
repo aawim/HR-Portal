@@ -1,0 +1,104 @@
+﻿@using HRM.DTOs
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@inject HrmTeContext DbContext
+
+<div class="flex flex-col h-full animate-in fade-in duration-300 bg-slate-50 rounded-xl border border-slate-200 overflow-hidden relative">
+    <div class="bg-white px-6 py-4 border-b border-slate-200 sticky top-0 z-20">
+        <h4 class="text-lg font-bold text-slate-800">Organisation Architecture</h4>
+        <p class="text-xs text-slate-500">Hierarchical structure mapped via relations.</p>
+    </div>
+
+    <div class="flex-1 overflow-auto p-8 custom-scrollbar">
+        @if (isLoading)
+        {
+            <div class="flex flex-col items-center justify-center h-full text-slate-400 gap-3">
+                <svg class="w-8 h-8 animate-spin text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span class="text-sm font-medium">Building architecture tree...</span>
+            </div>
+        }
+        else if (!rootNodes.Any())
+        {
+            <div class="flex justify-center items-center h-full text-slate-400 text-sm">
+                No structural data found.
+            </div>
+        }
+        else
+        {
+            <div class="flex justify-center min-w-max pb-10">
+                <div class="org-tree">
+                    <ul>
+                        @foreach (var root in rootNodes)
+                        {
+                            <OrgTreeNode Node="root" />
+                        }
+                    </ul>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public int OrganisationId { get; set; }
+
+    private List<OrgNodeDto> rootNodes = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrganisationTree();
+    }
+
+    private async Task LoadOrganisationTree()
+    {
+        isLoading = true;
+        try
+        {
+            var structures = await DbContext.OrganisationStructures
+                .Where(o => o.OrganisationBusinessEntityID == OrganisationId && o.OrganisationStructureStateId == 3)
+                .ToListAsync();
+
+            var relations = await DbContext.OrganisationStructureRelations
+                .Where(r => r.IsCurrent)
+                .ToListAsync();
+
+            var allNodes = structures.Select(s => new OrgNodeDto
+                {
+                    StructureId = s.OrganisationStructureId,
+                    Name = s.Name,
+                    TypeId = s.OrganisationStructureTypeId,
+                    ParentId = relations.FirstOrDefault(r => r.OrganisationStructureId == s.OrganisationStructureId)?.ParentOrganisationStructureId
+                }).ToList();
+
+            var lookup = allNodes.ToLookup(node => node.ParentId);
+
+            foreach (var node in allNodes)
+            {
+                node.Children = lookup[node.StructureId].ToList();
+            }
+
+            var actualRoots = allNodes.Where(n => n.ParentId == null || !allNodes.Any(p => p.StructureId == n.ParentId)).ToList();
+
+            var ministryNode = new OrgNodeDto
+                {
+                    StructureId = -1,
+                    ParentId = null,
+                    TypeId = 99,
+                    Name = "The Ministry",
+                    Children = actualRoots
+                };
+
+            rootNodes = new List<OrgNodeDto> { ministryNode };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading tree: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

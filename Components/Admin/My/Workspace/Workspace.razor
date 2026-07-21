@@ -1,0 +1,84 @@
+﻿@page "/admin/my/workspace"
+
+@using HRM.Components.Admin.My.Workspace
+@using HRM.DTOs
+@using HRM.Enum
+@rendermode RenderMode.InteractiveServer
+
+
+<div class="space-y-4">
+
+    <WorkspaceBreadcrumb SelectedItem="SelectedItem" OnReset="ResetWorkspace" />
+  
+    @if (SelectedItem == null)
+    {
+
+        <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-4">
+            <div class="relative w-full max-w-xl">
+                <WorkspaceSearch OnSelected="SelectItem" />
+            </div>
+            <div class="w-full md:w-auto md:flex-shrink-0 l-0 ">
+                <WorkspaceTabs EntityType="WorkspaceEntityType.Workspace"
+                               ActiveTab="ActiveTab"
+                               ActiveTabChanged="OnTabChanged" />
+            </div>
+        </div>
+
+
+        <WorkspaceContentPage ActiveTab="ActiveTab" />
+         
+
+    }
+
+    @if (SelectedItem != null)
+    {
+        <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-4">
+            <div class="relative w-full max-w-xl">
+                <WorkspaceSearch OnSelected="SelectItem" />
+            </div>
+            <div class="w-full md:w-auto md:flex-shrink-0 l-0 ">
+                <WorkspaceTabs EntityType="SelectedItem.EntityType"
+                               ActiveTab="ActiveTab"
+                               ActiveTabChanged="OnTabChanged" />
+            </div>
+        </div>
+
+        <div class="flex-1 w-full">
+            <WorkspaceContent Item="SelectedItem"
+                              ActiveTab="ActiveTab" />
+        </div>
+
+         
+    }
+
+</div>
+
+
+ 
+
+
+
+@code {
+
+    private WorkspaceSearchResult? SelectedItem;
+
+    private WorkspaceTab ActiveTab = WorkspaceTab.Overview;
+
+    private void SelectItem(WorkspaceSearchResult item)
+    {
+        SelectedItem = item;
+        ActiveTab = WorkspaceTab.Overview;
+    }
+
+    private void ResetWorkspace()
+    {
+        SelectedItem = null;
+        ActiveTab = WorkspaceTab.Overview;
+    }
+
+    private void OnTabChanged(WorkspaceTab tab)
+    {
+        ActiveTab = tab;
+    }
+
+}

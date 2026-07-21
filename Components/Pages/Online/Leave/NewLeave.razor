@@ -1,0 +1,212 @@
+﻿@* @page "/online/leave/application" *@
+@* @page "/online/leaves/{Page}" *@
+@using HRM.Components.Shared
+@using HRM.Models
+@using HRM.DTOs.Leave
+@using HRM.Services
+@using HRM.Services.State
+@using HRM.Services.Stores
+@using HRM.Components.Pages.Online.Leave.Forms
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore;
+@using HRM.Services.Interfaces
+@using HRM.Components.Pages.Online.Leave.Cards
+
+@inject IAuditLogger AuditLogger
+@inject HrmTeContext DbContext
+@* @inject IUserService UserService *@
+@inject ILeaveService LeaveService
+@inject LeaveStore LeaveStore
+@inject ToastService ToastService
+
+<div class="border-b px-4 ">
+    <h2 class="text-2xl font-bold text-slate-800">Leave Application</h2>
+    <p class="text-sm text-gray-500">Apply for leave and manage details</p>
+
+</div>
+
+<div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px] gap-2 p-1">
+       <!-- HEADER -->
+   
+    <!-- LEFT COLUMN (Flexible) -->
+    <div class="space-y-4">
+
+        <!-- Top: Equal two columns -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <div class="p-1 rounded">
+                <LeaveCalendarCard />
+            </div>
+
+            <div class="p-1 rounded">
+                <LeaveCalendarCard />
+            </div>
+        </div>
+
+
+        <!-- Bottom: Left bigger than right -->
+        <div class="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+
+            <div >
+                <EditForm Model="LeaveState.Model" OnValidSubmit="Submit" class="w-full">
+                    <DataAnnotationsValidator />
+
+                    @if (activeTab == "LeaveInfo")
+                    {
+                        <DynamicComponent Type="@LeaveState.SelectedFormComponent"
+                                          Parameters="@FormParameters" />
+                    }
+                    else
+                    {
+                        <p>Test</p>
+                    }
+
+                </EditForm>
+            </div>
+
+            <div >
+                <LeaveAddressCard LeaveState="LeaveState" />
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- RIGHT COLUMN (Fixed 350px) -->
+    <div >
+        <LeaveBalanceCard LeaveState="LeaveState"
+                          OnLeaveTypeSelected="LoadLeaveForm" />
+    </div>
+
+</div>
+
+
+ 
+
+
+
+
+
+
+
+
+ 
+@code {
+    [Parameter] 
+    public LeaveApplicationState LeaveState { get; set; } = default!;
+
+     // ===== TAB CONTROL =====
+    private string activeTab = "LeaveInfo";
+    // private int jobId = await UserService.GetJobID();
+
+    private Dictionary<string, object> FormParameters =>
+    new()
+    {
+        ["LeaveState"] = LeaveState
+    };
+
+        protected override async Task OnInitializedAsync()
+    {
+        if (!LeaveStore.JobLeaveTypes.Any())
+        {
+            await LeaveStore.LoadAsync();
+        }
+
+        LeaveState.JobLeaveTypes = LeaveStore.JobLeaveTypes;
+        // LeaveState.Reasons = LeaveStore.;
+    }
+
+
+    private async Task LoadLeaveForm()
+    {
+        var selected = LeaveState.JobLeaveTypes
+            .FirstOrDefault(x =>
+                x.LeaveTypeID == LeaveState.Model.LeaveTypeId);
+
+
+        if (selected == null)
+        {
+            LeaveState.SelectedFormComponent =
+                typeof(DefaultLeaveForm);
+
+            await InvokeAsync(StateHasChanged);
+
+            return;
+        }
+
+        LeaveState.ResolveForm(selected.LeaveTypeName);
+
+        LeaveState.Reasons =
+            await LeaveService.GetReasonsByLeaveType(
+                LeaveState.Model.LeaveTypeId);
+
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+
+    // ===== EVENTS =====
+     private async Task OnLeaveTypeChanged()
+    {
+        var selected = LeaveState.JobLeaveTypes.FirstOrDefault(x => x.LeaveTypeID == LeaveState.Model.LeaveTypeId);
+
+        if (selected != null)
+        {
+            LeaveState.RemainingDays = (int)selected.RemainingDays;
+        }
+
+        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType(LeaveState.Model.LeaveTypeId);
+
+        LeaveState.Model.LeaveReasonId = 0;
+      
+        LoadLeaveForm();
+
+        await InvokeAsync(StateHasChanged);
+   }
+
+
+   private async Task ApplyLeaveType(JobLeaveTypeDto leave)
+   {
+        LeaveState.Model.LeaveTypeId = leave.LeaveTypeID;
+        LeaveState.RemainingDays = (int)leave.RemainingDays;
+        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType(leave.LeaveTypeID);
+        LeaveState.Model.LeaveReasonId = 0;
+        
+         LoadLeaveForm();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+ 
+
+    private async Task Submit()
+    {
+        LeaveState.IsSubmitting = true;
+
+        try
+        {
+            var result = await LeaveService.SubmitLeave(LeaveState.Model);
+
+            if (!result.Success)
+            {
+                ToastService.Warning(result.Message);
+                return;
+            }
+
+            ToastService.Success(result.Message);
+
+            // Optional: reset form after successful submission
+            // LeaveState.Model = new LeaveApplicationDto();
+
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("An unexpected error occurred while submitting leave.");
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            LeaveState.IsSubmitting = false;
+        }
+    }
+}

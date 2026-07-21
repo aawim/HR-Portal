@@ -1,0 +1,42 @@
+﻿@using HRM.DTOs.Leave
+
+<div class="bg-white rounded-lg border border-slate-200 p-6">
+
+    <h3 class="text-lg font-semibold mb-4">
+        No Pay Leave Information
+    </h3>
+
+    <div class="mb-4">
+
+        <label>Reason</label>
+
+        <InputSelect @bind-Value="Model.LeaveReasonId"
+                     class="w-full h-11 px-3 border rounded-md">
+
+            <option value="0">-- Select Reason --</option>
+
+            @foreach (var item in Reasons)
+            {
+                <option value="@item.Id">@item.Name</option>
+            }
+
+        </InputSelect>
+
+    </div>
+
+    <div>
+        <label>Explanation</label>
+
+        <InputTextArea @bind-Value="Model.Explanation"
+                       rows="4"
+                       class="w-full border rounded-md p-3" />
+    </div>
+
+</div>
+
+@code {
+    [Parameter] public LeaveApplicationDto Model { get; set; } = default!;
+    [Parameter] public List<LeaveReasonDto> Reasons { get; set; } = new();
+    [Parameter] public List<JobLeaveTypeDto> LeaveTypes { get; set; } = new();
+    [Parameter] public int RemainingDays { get; set; }
+}

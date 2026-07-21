@@ -1,0 +1,200 @@
+﻿@using HRM.Models
+@using HRM.DTOs.Organisation
+@using HRM.Services.Interfaces
+@using Microsoft.EntityFrameworkCore
+
+@inject IOperationLogService LogService
+@inject HrmTeContext DbContext
+
+<EditForm Model="@model" OnValidSubmit="SaveOrganisationDetails" Context="detailContext">
+    <DataAnnotationsValidator />
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in duration-300 pb-16">
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation Type <span class="text-rose-500">*</span></label>
+            <InputSelect @bind-Value="model.OrganisationTypeID" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white">
+                <option value="">-- Select Type --</option>
+                @foreach (var type in organisationTypes)
+                {
+                    <option value="@type.Id">@type.Name</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => model.OrganisationTypeID)" class="text-xs text-rose-500 mt-1" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Registration Number <span class="text-rose-500">*</span></label>
+            <InputText @bind-Value="model.RegistrationNumber" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+            <ValidationMessage For="@(() => model.RegistrationNumber)" class="text-xs text-rose-500 mt-1" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation Name <span class="text-rose-500">*</span></label>
+            <InputText @bind-Value="model.OrganisationName" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+            <ValidationMessage For="@(() => model.OrganisationName)" class="text-xs text-rose-500 mt-1" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Name In Dhivehi</label>
+            <InputText @bind-Value="model.OrganisationNameDhivehi" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm font-mv-boli text-right" dir="rtl" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Registration Date</label>
+            <InputDate @bind-Value="model.RegistrationDate" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Country <span class="text-rose-500">*</span></label>
+            <InputSelect @bind-Value="model.CountryID" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-white">
+                <option value="">-- Select Country --</option>
+                @foreach (var country in countries)
+                {
+                    <option value="@country.Id">@country.Name</option>
+                }
+            </InputSelect>
+            <ValidationMessage For="@(() => model.CountryID)" class="text-xs text-rose-500 mt-1" />
+        </div>
+
+        <div class="col-span-1 md:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Parent Organisation</label>
+            <input type="text" list="parentOrgs" @bind="parentOrgSearchText" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm" />
+            <datalist id="parentOrgs">
+                @foreach (var org in parentOrganisations)
+                {
+                    <option value="@org.Name">@org.RegistrationNumber</option>
+                }
+            </datalist>
+        </div>
+    </div>
+
+    <div class="absolute bottom-0 left-0 right-0 px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-between items-center rounded-b-xl">
+        <ValidationSummary class="text-rose-500 text-xs font-bold list-none p-0 m-0" />
+        <button type="submit" disabled="@isSubmitting" class="px-6 py-2.5 text-sm font-bold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 ml-auto flex items-center gap-2">
+            @(isSubmitting ? "Saving..." : (BusinessEntityId > 0 ? "Update Details" : "Save & Continue to Address"))
+            @if (BusinessEntityId == 0)
+            {
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+            }
+        </button>
+    </div>
+
+    @* Component Local Toast *@
+    @if (isToastVisible)
+    {
+        <div class="fixed top-4 right-4 z-50 animate-in slide-in-from-top-5 fade-in duration-300 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border @(toastType == "success" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "bg-rose-50 border-rose-200 text-rose-800")">
+            <span class="text-sm font-bold">@toastMessage</span>
+        </div>
+    }
+</EditForm>
+
+@code {
+    [Parameter] public int BusinessEntityId { get; set; }
+
+    // This event passes the generated ID back to the main wizard page!
+    [Parameter] public EventCallback<int> OnDetailsSaved { get; set; }
+
+    private OrganisationDetailDto model = new();
+    private bool isSubmitting = false;
+    private Organisation? activeOrganisationRecord;
+
+    private string parentOrgSearchText = "";
+    private List<DropdownItem> organisationTypes = new();
+    private List<DropdownItem> countries = new();
+    private List<DropdownItem> parentOrganisations = new();
+
+    private bool isToastVisible = false;
+    private string toastMessage = "";
+    private string toastType = "success";
+
+    protected override async Task OnInitializedAsync()
+    {
+        organisationTypes = await DbContext.OrganisationTypes.Select(t => new DropdownItem { Id = t.OrganisationTypeId, Name = t.TypeName }).ToListAsync();
+        countries = await DbContext.Countries.Select(c => new DropdownItem { Id = c.CountryId, Name = c.NameEnglish }).ToListAsync();
+        parentOrganisations = await DbContext.Organisations.Select(o => new DropdownItem { Id = o.BusinessEntityID, Name = o.OrganisationName ?? "", RegistrationNumber = o.RegistrationNumber ?? "" }).ToListAsync();
+
+        var defaultCountry = countries.FirstOrDefault(c => c.Name.Equals("Maldives"));
+        if (defaultCountry != null) model.CountryID = defaultCountry.Id;
+    }
+
+    private async Task ShowToast(string message, string type = "success")
+    {
+        toastMessage = message; toastType = type; isToastVisible = true; StateHasChanged();
+        await Task.Delay(4000); isToastVisible = false; StateHasChanged();
+    }
+
+    private async Task SaveOrganisationDetails()
+    {
+        isSubmitting = true;
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(parentOrgSearchText))
+            {
+                var parent = parentOrganisations.FirstOrDefault(p => p.Name.Equals(parentOrgSearchText, StringComparison.OrdinalIgnoreCase));
+                if (parent != null) model.ParentOrganisationBusinessEntityID = parent.Id;
+            }
+
+            if (BusinessEntityId == 0)
+            {
+                var existingOrg = await DbContext.Organisations.FirstOrDefaultAsync(o => o.RegistrationNumber == model.RegistrationNumber);
+                if (existingOrg != null)
+                {
+                    BusinessEntityId = existingOrg.BusinessEntityID;
+                    activeOrganisationRecord = existingOrg;
+                }
+                else
+                {
+                    int newLogId = await LogService.CreateLogAsync(SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE, $"Created new organisation: {model.OrganisationName}");
+                    var orgType = await DbContext.BusinessEntityTypes.FirstOrDefaultAsync(t => t.TypeName == "Organisation");
+                    if (orgType == null) return;
+
+                    var newBaseEntity = new BusinessEntity { BusinessEntityTypeId = orgType.BusinessEntityTypeId, BusinessEntityStateId = 2, OperationLogId = newLogId, LastStateChangeDate = DateTime.Now };
+                    DbContext.BusinessEntities.Add(newBaseEntity);
+                    await DbContext.SaveChangesAsync();
+
+                    BusinessEntityId = newBaseEntity.BusinessEntityID;
+
+                    activeOrganisationRecord = new Organisation
+                        {
+                            BusinessEntityID = BusinessEntityId,
+                            OrganisationTypeId = (int)model.OrganisationTypeID,
+                            RegistrationNumber = model.RegistrationNumber,
+                            OrganisationName = model.OrganisationName,
+                            OrganisationNameDhivehi = model.OrganisationNameDhivehi,
+                            RegistrationDate = model.RegistrationDate,
+                            CountryId = (int)model.CountryID,
+                            ParentOrganisationBusinessEntityId = model.ParentOrganisationBusinessEntityID
+                        };
+
+                    DbContext.Organisations.Add(activeOrganisationRecord);
+                    await DbContext.SaveChangesAsync();
+                }
+            }
+            else
+            {
+                if (activeOrganisationRecord == null)
+                    activeOrganisationRecord = await DbContext.Organisations.FirstOrDefaultAsync(o => o.BusinessEntityID == BusinessEntityId);
+
+                if (activeOrganisationRecord != null)
+                {
+                    activeOrganisationRecord.OrganisationTypeId = (int)model.OrganisationTypeID; activeOrganisationRecord.RegistrationNumber = model.RegistrationNumber;
+                    activeOrganisationRecord.OrganisationName = model.OrganisationName; activeOrganisationRecord.OrganisationNameDhivehi = model.OrganisationNameDhivehi;
+                    activeOrganisationRecord.RegistrationDate = model.RegistrationDate; activeOrganisationRecord.CountryId = (int)model.CountryID;
+                    activeOrganisationRecord.ParentOrganisationBusinessEntityId = model.ParentOrganisationBusinessEntityID;
+
+                    DbContext.Organisations.Update(activeOrganisationRecord);
+                    await DbContext.SaveChangesAsync();
+                }
+            }
+
+            await ShowToast("Organisation details saved successfully!", "success");
+
+            // Tell the parent page we are done and pass the ID!
+            await OnDetailsSaved.InvokeAsync(BusinessEntityId);
+        }
+        catch (Exception) { await ShowToast("An error occurred.", "error"); }
+        finally { isSubmitting = false; }
+    }
+
+    public class DropdownItem { public int Id { get; set; } public string Name { get; set; } = string.Empty; public string RegistrationNumber { get; set; } = string.Empty; }
+}

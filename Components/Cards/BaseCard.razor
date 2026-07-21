@@ -1,0 +1,68 @@
+﻿<div class="@ContainerClass">
+
+    @if (!string.IsNullOrWhiteSpace(Title) || HeaderContent != null)
+    {
+        <div class="@HeaderClass">
+
+            <div class="flex items-center justify-between">
+
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    <h2 class="text-lg font-semibold text-gray-800">
+                        @Title
+                    </h2>
+                }
+
+
+                @if (HeaderContent != null)
+                {
+                    @HeaderContent
+                }
+
+            </div>
+
+        </div>
+    }
+
+
+    <div class="@BodyClass">
+
+        @ChildContent
+
+    </div>
+
+</div>
+
+
+@code {
+
+    [Parameter]
+    public string? Title { get; set; }
+
+    [Parameter]
+    public string? Icon { get; set; }
+
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+
+    [Parameter]
+    public string ContainerClass { get; set; }
+        = "bg-white rounded-lg shadow overflow-hidden";
+
+
+    [Parameter]
+    public string HeaderClass { get; set; }
+        = "px-6 py-4 border-b border-gray-200";
+
+
+    [Parameter]
+    public string BodyClass { get; set; }
+        = "";
+
+}

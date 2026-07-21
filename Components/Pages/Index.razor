@@ -1,0 +1,394 @@
+﻿@page "/online"
+@page "/"
+@using HRM.DTOs.UserContext
+@using HRM.Models
+@using HRM.DTOs.Attendance
+@using HRM.DTOs
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Components.Pages.Online.Dashboard
+
+
+
+@inject ILeaveService LeaveService
+@inject IAttendanceService AttendanceService
+
+@inject IJobService JobService
+@inject IIndividual _individual
+
+@inject IUserAccessService _access
+
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Dashboard</PageTitle>
+
+<AuthorizeView>
+
+    <Authorized>
+
+        @if (loading)
+        {
+            <div class="flex items-center justify-center ">
+                <div class="text-center">
+
+                    <div class="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+
+                    <p class="mt-4 text-slate-500">
+                        Loading Dashboard...
+                    </p>
+
+                </div>
+            </div>
+        }
+        else
+        {
+
+            <div class="space-y-2 w-full">
+
+                <!-- Header -->
+
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between">
+
+                    <div>
+
+                        <h1 class="text-3xl font-bold text-slate-800">
+                            User Dashboard
+                        </h1>
+
+                        <p class="text-slate-500 mt-1">
+                            Welcome back,
+                            <span class="font-semibold text-slate-700">
+                                @UserName
+                            </span>
+                        </p>
+
+                    </div>
+
+                    @*      <div class="mt-2 lg:mt-0">
+
+                        <button class="rounded-xl bg-blue-600 px-5 py-3 text-white font-medium hover:bg-blue-700 transition"
+                        @onclick="RefreshDashboardAsync">
+
+                            Refresh Dashboard
+
+                        </button>
+
+                    </div> *@
+
+                </div>
+
+                <!-- GRID -->
+
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-2">
+
+                    <!-- LEFT -->
+
+                    <div class="xl:col-span-2 space-y-2">
+
+                        <ProfileCard UserName="UserName" />
+
+                        <TimeClockCard TodayCheckIn="TodayCheckIn"
+                        TodayCheckOut="TodayCheckOut"
+                        OnClockIn="LoadAttendance"
+                        OnClockOut="LoadAttendance" />
+                    </div>
+
+                    <!-- CENTER -->
+
+                    <div class="xl:col-span-7 space-y-2">
+
+                        <AttendanceSummaryCard WeeklyLogs="weeklyLogs" />
+
+                        <ActiveJobCard  />
+
+                        <JobHistoryCard />
+
+                        <RecentLeaveRequestsCard />
+
+
+
+                    </div>
+
+                    @*      <div class="xl:col-span-2 space-y-2">
+
+                    </div> *@
+
+                    <!-- RIGHT -->
+
+                    <div class="xl:col-span-3 space-y-6">
+
+                        <LeaveBalanceCard />
+
+                        <UnevenLogsCard Logs="unevenLogs" />
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        }
+
+    </Authorized>
+
+    <NotAuthorized>
+
+        <div class="flex min-h-screen flex-col lg:flex-row bg-gray-50 text-gray-900">
+
+            <!-- LEFT DIVISION: Current Authentication Status & Context -->
+            <div class="w-full lg:w-5/12 flex flex-col justify-between p-8 lg:p-12 bg-white border-b lg:border-b-0 lg:border-r border-gray-200 shadow-sm">
+                <div class="space-y-8">
+                    <!-- Branding Header -->
+                    <div class="flex items-center gap-3">
+                        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-blue-600 to-teal-500 flex items-center justify-center text-white font-black tracking-wider text-sm shadow-md shadow-blue-200">
+                            HR
+                        </div>
+                        <div>
+                            <h1 class="text-lg font-bold tracking-tight text-gray-900 leading-none">HR Portal</h1>
+                            <span class="text-xs font-semibold text-gray-400 tracking-wider uppercase">Multi-Tenant System</span>
+                        </div>
+                    </div>
+
+                    <!-- Authentication Card -->
+                    <div class="bg-gray-50 rounded-2xl p-6 border border-gray-200 space-y-6">
+                        <div class="space-y-2">
+                            <div class="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                Secure Session
+                            </div>
+                            <h2 class="text-2xl font-extrabold tracking-tight text-gray-950">Please login</h2>
+                            <p class="text-sm text-gray-500">Access your organization's workspace securely via the Maldives National Digital ID platform.</p>
+                        </div>
+
+                        <!-- Primary eFaas Login Button -->
+                        <button class="w-full flex items-center justify-center gap-3 bg-[#00529B] hover:bg-[#003F77] text-white font-semibold py-3 px-4 rounded-xl shadow-md transition-all duration-200 transform active:scale-[0.98]">
+                            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                                <!-- Simulated Digital ID / Key Icon -->
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
+                            </svg>
+                            Sign in with eFaas
+                        </button>
+
+                        <!-- eFaas Context Meta -->
+                        <div class="pt-4 border-t border-gray-200/60 flex items-start gap-3 text-xs text-gray-400">
+                            <svg class="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            <p>By signing in, you consent to verified, secure personal information sharing from authoritative national sources.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer Note -->
+                <div class="mt-8 pt-6 border-t border-gray-100 text-xs text-gray-400 flex items-center justify-between">
+                    <span>Powered by Maldives Digital Service</span>
+                    <span class="font-medium text-gray-500">v2026.1</span>
+                </div>
+            </div>
+
+            <!-- RIGHT DIVISION: eFaas Features Available -->
+            <div class="w-full lg:w-7/12 p-8 lg:p-12 overflow-y-auto flex flex-col justify-center bg-gradient-to-br from-gray-50 to-slate-100">
+                <div class="max-w-2xl mx-auto w-full space-y-8">
+                    <div class="space-y-2">
+                        <h3 class="text-xs font-bold uppercase tracking-widest text-blue-600">Your Trusted Digital ID</h3>
+                        <h2 class="text-3xl font-extrabold text-gray-950 tracking-tight">Unlocking a world of digital possibilities</h2>
+                        <p class="text-base text-gray-500">Once authenticated, your corporate workspace leverages official registrars to instantly sync employee records.</p>
+                    </div>
+
+                    <!-- Features Grid Matrix -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+                        <!-- Feature 1: Profile Sync -->
+                        <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex gap-4 items-start">
+                            <div class="p-2.5 bg-blue-50 text-blue-600 rounded-lg flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                            </div>
+                            <div class="space-y-1">
+                                <h4 class="font-bold text-gray-900 text-sm">Employment Profiles</h4>
+                                <p class="text-xs text-gray-500 leading-relaxed">Instantly fetch authenticated snapshot histories of your workforce records.</p>
+                            </div>
+                        </div>
+
+                        <!-- Feature 2: One-Tap Sign In -->
+                        <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex gap-4 items-start">
+                            <div class="p-2.5 bg-teal-50 text-teal-600 rounded-lg flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                            </div>
+                            <div class="space-y-1">
+                                <h4 class="font-bold text-gray-900 text-sm">Password-less Login</h4>
+                                <p class="text-xs text-gray-500 leading-relaxed">Scan the QR code prompt to verify your identity via biometrics without typing long passwords.</p>
+                            </div>
+                        </div>
+
+                        <!-- Feature 3: Business Overview -->
+                        <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex gap-4 items-start">
+                            <div class="p-2.5 bg-indigo-50 text-indigo-600 rounded-lg flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                            </div>
+                            <div class="space-y-1">
+                                <h4 class="font-bold text-gray-900 text-sm">Business Cross-Check</h4>
+                                <p class="text-xs text-gray-500 leading-relaxed">Direct connection to company registrations for managing precise tenant administrative rights.</p>
+                            </div>
+                        </div>
+
+                        <!-- Feature 4: Verified Multi-Resident Support -->
+                        <div class="bg-white p-5 rounded-xl border border-gray-200/80 shadow-sm flex gap-4 items-start">
+                            <div class="p-2.5 bg-purple-50 text-purple-600 rounded-lg flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 00-2 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 014 0z"></path></svg>
+                            </div>
+                            <div class="space-y-1">
+                                <h4 class="font-bold text-gray-900 text-sm">Expat Onboarding</h4>
+                                <p class="text-xs text-gray-500 leading-relaxed">Foreign Work Permit holders can authenticate using national credentials seamlessly.</p>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <!-- Security Footnote badge -->
+                    <div class="rounded-xl border border-dashed border-gray-300 p-4 flex items-center gap-3 bg-gray-50/50">
+                        <div class="h-2 w-2 rounded-full bg-blue-600"></div>
+                        <p class="text-xs text-gray-500">Safeguarding user security with native biometric multi-factor authentication.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+
+    </NotAuthorized>
+
+</AuthorizeView>
+
+@code{
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+    private AttendanceLogDto? TodayCheckIn;
+    private AttendanceLogDto? TodayCheckOut;
+
+    private bool loading = true;
+
+    private bool isProcessing;
+
+    private string UserName = "";
+
+    private List<JobLeaveType>? leaveBalances;
+
+    private List<AttendanceLogDto>? weeklyLogs;
+
+    private List<AttendanceLogDto>? unevenLogs;
+
+    private List<JobDto>? jobHistory;
+
+    private ActiveJobDto? activeJob;
+
+    private AttendanceLogDto? todayCheckIn;
+
+    private AttendanceLogDto? todayCheckOut;
+
+    private List<Leaf>? leaveRequests;
+
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+
+       var auth = await AuthState!;
+
+        if (!auth.User.Identity?.IsAuthenticated ?? true)
+        {
+            // User isn't authenticated yet.
+            return;
+        }
+        await RefreshDashboardAsync();
+        await LoadAttendance();
+
+        loading = false;
+    }
+
+    // protected override async Task OnAfterRenderAsync(bool firstRender)
+    // {
+    //     if (firstRender)
+    //     {
+    //         var auth = await AuthState!;
+
+    //         Console.WriteLine($"Authenticated: {auth.User.Identity?.IsAuthenticated}");
+
+    //         foreach (var claim in auth.User.Claims)
+    //         {
+    //             Console.WriteLine($"{claim.Type} = {claim.Value}");
+    //         }
+    //     }
+    // }
+
+
+    private async Task RefreshDashboardAsync()
+    {
+        if (AuthState == null)
+            return;
+
+        var auth = await AuthState;
+
+        if (!auth.User.Identity!.IsAuthenticated)
+            return;
+
+        UserName = auth.User.Identity.Name ?? "";
+
+        await Task.WhenAll(
+            LoadAttendance(),
+            LoadLeaveBalances(),
+            LoadUnevenLogs(),
+            LoadJobHistory()
+        );
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadAttendance()
+    {
+        var context = await _access.GetContextAsync();
+         weeklyLogs = await AttendanceService.GetMyWeeklyAttendanceAsync();
+
+        if (weeklyLogs == null)
+            return;
+
+        var today = weeklyLogs
+            .Where(x => x.Date.Date == DateTime.Today)
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
+        todayCheckIn = today.FirstOrDefault(x => x.InOutModeID == 1);
+        todayCheckOut = today.FirstOrDefault(x => x.InOutModeID == 2);
+
+        TodayCheckIn = result.checkIn;
+        TodayCheckOut = result.checkOut;
+
+        StateHasChanged(); // IMPORTANT
+
+    }
+
+    private async Task LoadLeaveBalances()
+    {
+        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+    }
+
+    private async Task LoadUnevenLogs()
+    {
+        unevenLogs = await AttendanceService.GetMyUnevenLogsAsync();
+
+    }
+
+    private async Task LoadJobHistory()
+    {
+
+        jobHistory = await JobService.GetMyJobHistoryAsync();
+    }
+
+    private async Task LoadActiveJob()
+    {
+
+        activeJob = await JobService.GetMyActiveJobAsync();
+    }
+
+}

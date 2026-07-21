@@ -1,0 +1,328 @@
+﻿@page "/staff-search"
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Shared
+@using HRM.Components.Admin.Hr.Staff.Tabs
+@using HRM.DTOs.Staff
+@using HRM.DTOs
+
+@rendermode RenderMode.InteractiveServer
+
+@inject IOrganisationService OrganisationService
+ @inject IStaffService StaffService
+
+<div class="relative w-full h-full mx-auto py-6">
+
+    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-4">
+
+        <div class="flex flex-col items-left justify-center mb-6">
+            <h2 class="text-2xl font-bold text-slate-800">Search Staff</h2>
+            <p class="text-sm text-slate-500 mt-1 text-left">Search the registry by Name, National ID, Passport Number, or Organisation.</p>
+        </div>
+
+        <div class="bg-slate-50 p-2 rounded-2xl border border-slate-200 shadow-inner flex flex-wrap md:flex-nowrap items-center gap-2 transition-shadow focus-within:shadow-md focus-within:border-blue-300">
+
+            <div class="w-full md:w-40 border-r border-slate-200 bg-white rounded-xl md:rounded-r-none md:rounded-l-xl">
+                <select @bind="searchModel.SearchType" class="w-full h-12 pl-4 pr-8 text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 cursor-pointer outline-none">
+                    <option value="Name">Name</option>
+                    <option value="ID">National ID</option>
+                    <option value="Passport">Passport</option>
+                </select>
+            </div>
+
+            <div class="w-full md:w-64 border-r border-slate-200 bg-white rounded-xl md:rounded-none">
+                <select @bind="searchModel.OrganisationId" class="w-full h-12 pl-4 pr-8 text-sm font-semibold text-slate-700 bg-transparent border-none focus:ring-0 cursor-pointer outline-none">
+                    <option value="">-- All Organisations --</option>
+                    @foreach (var org in organisations)
+                    {
+                        <option value="@org.Id">@org.Name</option>
+                    }
+                </select>
+            </div>
+
+            <div class="flex-1 bg-white rounded-xl md:rounded-none">
+                <input type="text" @bind="searchModel.SearchTerm" @bind:event="oninput" @onkeydown="HandleKeyDown"
+                       placeholder="Enter search term..."
+                       class="w-full h-12 px-4 text-slate-700 bg-transparent border-none focus:ring-0 outline-none placeholder:text-slate-400" />
+            </div>
+
+            <button @onclick="ExecuteSearch" disabled="@(string.IsNullOrWhiteSpace(searchModel.SearchTerm) && !searchModel.OrganisationId.HasValue || isLoading)"
+                    class="w-full md:w-auto h-12 px-8 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2">
+                @if (isLoading)
+                {
+                    <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                }
+                else
+                {
+                    <span>Search</span>
+                }
+            </button>
+        </div>
+    </div>
+
+    @if (hasSearched)
+    {
+        if (!searchResults.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                <span class="text-4xl mb-3">📭</span>
+                <h3 class="text-lg font-bold text-slate-700">No individuals found</h3>
+                <p class="text-sm text-slate-500 mt-1">Check your search terms and try again.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Organisation</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">ID Card</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Passport</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @for (int i = 0; i < searchResults.Count; i++)
+                            {
+                                var ind = searchResults[i];
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                    <td class="py-3 px-4 font-bold text-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold">
+                                                @(string.IsNullOrEmpty(ind.FullName) ? "?" : ind.FullName.Substring(0, 1).ToUpper())
+                                            </div>
+                                            @ind.FullName
+                                        </div>
+                                    </td>
+                                    <td class="py-3 px-4 text-slate-600">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                            @(string.IsNullOrEmpty(ind.Organisation) ? "Unassigned" : ind.Organisation)
+                                        </span>
+                                    </td>
+                                    <td class="py-3 px-4 font-medium text-slate-700">@(string.IsNullOrEmpty(ind.IDNumber) ? "-" : ind.IDNumber)</td>
+                                    <td class="py-3 px-4 font-medium text-slate-700">@(string.IsNullOrEmpty(ind.PassportNumber) ? "-" : ind.PassportNumber)</td>
+                                    <td class="py-3 px-4 text-center">
+                                        <div class="flex items-center justify-center gap-2">
+                                            <button @onclick="@(() => OpenDetailsPanel(ind))" title="View Profile" class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors border border-blue-100 shadow-sm flex items-center gap-1.5 text-xs font-bold">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h3m-6 0a3 3 0 003.95.342"></path>
+                                                </svg>
+                                                Details
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (isPanelOpen)
+{
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" @onclick="CloseDetailsPanel"></div>
+}
+
+<div class="fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transform transition-all duration-500 ease-in-out @(isPanelExpanded ? "w-[95vw]" : "w-full max-w-4xl") @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+    @if (selectedIndividual != null)
+    {
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+            <div class="flex items-center gap-4">
+                <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold">
+                    @(string.IsNullOrEmpty(selectedIndividual.FullName) ? "?" : selectedIndividual.FullName.Substring(0, 1).ToUpper())
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-slate-800">@selectedIndividual.FullName</h3>
+                    <p class="text-xs text-slate-500 font-medium">@(string.IsNullOrEmpty(selectedIndividual.Organisation) ? "Unassigned" : selectedIndividual.Organisation) | ID: @(string.IsNullOrEmpty(selectedIndividual.IDNumber) ? "-" : selectedIndividual.IDNumber)</p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1">
+                <button @onclick="ToggleExpand" title="@(isPanelExpanded ? "Collapse Panel" : "Expand Panel")" class="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors">
+                    @if (isPanelExpanded)
+                    {
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" transform="rotate(180 12 12)"></path></svg>
+                    }
+                    else
+                    {
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                    }
+                </button>
+                <button @onclick="CloseDetailsPanel" title="Close" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-1 overflow-hidden">
+            <div class="w-48 bg-slate-50 border-r border-slate-100 overflow-y-auto py-4 shrink-0">
+                <nav class="flex flex-col gap-1 px-3">
+                    @foreach (var tab in panelTabs)
+                    {
+                        <button @onclick="() => SelectTab(tab.Name)" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all @(activeTab == tab.Name ? "bg-white text-blue-700 shadow-sm border border-slate-200" : "text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border border-transparent")">
+                            @((MarkupString)tab.IconSvg)
+                            @tab.Name
+                        </button>
+                    }
+                </nav>
+            </div>
+
+            <div class="flex-1 bg-white overflow-y-auto p-6 custom-scrollbar">
+
+                @if (activeTab == "Summary")
+                {
+                    <StaffSummaryTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Edit")
+                {
+                    <StaffEditTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Contact")
+                {
+                    <StaffContactTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Address")
+                {
+                    <StaffAddressTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Schedules")
+                {
+                    <StaffSchedulesTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Documents")
+                {
+                    <StaffDocumentsTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Profile")
+                {
+                    <StaffProfileTab Individual="selectedIndividual" />
+                }
+               
+                else if (activeTab == "Leave Types")
+                {
+                    <StaffLeaveTypesTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Roles")
+                {
+                    <StaffPermissionsTab Individual="selectedIndividual" />
+                }
+                else if (activeTab == "Requests")
+                {
+                    <StaffRequestsTab Individual="selectedIndividual" />
+                }
+            </div>
+        </div>
+    }
+</div>
+
+
+@code {
+    private SearchModel searchModel = new();
+    private List<IndividualResultDto> searchResults = new();
+    private List<DropdownItem> organisations = new();
+    private bool isLoading = false;
+    private bool hasSearched = false;
+
+    // --- Panel State ---
+    private bool isPanelOpen = false;
+    private bool isPanelExpanded = false;
+    private string activeTab = "Summary";
+    private IndividualResultDto? selectedIndividual;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Fetch dropdown securely via the OrganisationService
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && (!string.IsNullOrWhiteSpace(searchModel.SearchTerm) || searchModel.OrganisationId.HasValue))
+        {
+            await ExecuteSearch();
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchModel.SearchTerm) && !searchModel.OrganisationId.HasValue) return;
+
+        isLoading = true;
+        hasSearched = false;
+        searchResults.Clear();
+        StateHasChanged();
+
+        try
+        {
+            // 2. Beautiful one-line execution via the StaffService
+            searchResults = await StaffService.SearchStaffAsync(searchModel.SearchTerm, searchModel.SearchType, searchModel.OrganisationId);
+        }
+        finally
+        {
+            isLoading = false;
+            hasSearched = true;
+        }
+    }
+
+    // --- Panel Methods ---
+    private void OpenDetailsPanel(IndividualResultDto ind)
+    {
+        selectedIndividual = ind;
+        activeTab = "Summary";
+        isPanelExpanded = false;
+        isPanelOpen = true;
+        StateHasChanged();
+    }
+
+    private void CloseDetailsPanel()
+    {
+        isPanelOpen = false;
+        StateHasChanged();
+    }
+
+    private void ToggleExpand()
+    {
+        isPanelExpanded = !isPanelExpanded;
+        StateHasChanged();
+    }
+
+    private void SelectTab(string tabName)
+    {
+        activeTab = tabName;
+        StateHasChanged();
+    }
+
+    // --- Tabs Configuration ---
+    private record PanelTab(string Name, string IconSvg);
+    private List<PanelTab> panelTabs = new()
+    {
+        new("Summary", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>"""),
+        new("Edit", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>"""),
+        new("Contact", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>"""),
+        new("Address", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>"""),
+        new("Schedules", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>"""),
+        new("Documents", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>"""),
+        new("Profile", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>"""),
+   
+     new("Requests", 
+"""<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"> <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 5a3 3 0 016 0M9 12h6m-6 4h6"></path></svg>"""),
+
+new("Roles", 
+"""<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"d="M17 20h5v-2a4 4 0 00-4-4h-1M9 20H4v-2a4 4 0 014-4h1m4-4a4 4 0 100-8 4 4 0 000 8zm6 0a3 3 0 100-6 3 3 0 000 6"></path></svg>"""),
+
+new("Leave Types", 
+"""<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"d="M8 7V3m8 4V3M5 11h14M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>""")
+
+
+};
+}

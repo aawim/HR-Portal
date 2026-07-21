@@ -1,0 +1,459 @@
+﻿@page "/admin/attendance/manage-attendance/team-attendace"
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+@using HRM.DTOs
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+@inject IOrganisationService OrganisationService
+@inject AttendanceLogService AttendanceLogService
+
+
+<!-- Header & Action Bar -->
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Team Attendance</h2>
+        <p class="text-sm text-slate-500 mt-1">Configure global leave policies, durations, and system rules.</p>
+    </div>
+</div>
+
+<!-- Filters Panel -->
+<div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
+        <!-- Organisation -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation</label>
+            <select value="@selectedOrgId" @onchange="OnOrganisationChanged" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500">
+                <option value="0">-- Select Organisation --</option>
+                @foreach (var org in organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- Team -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Team</label>
+            <select @bind="selectedTeamId" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                <option value="0">-- Select Team --</option>
+                @foreach (var team in teams)
+                {
+                    <option value="@team.TeamId">@team.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- Dates -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">From</label>
+            <input type="date" @bind="startDate" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500" />
+        </div>
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">To</label>
+            <input type="date" @bind="endDate" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500" />
+        </div>
+    </div>
+
+    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+        <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+            Reset
+        </button> 
+        <button @onclick="ExecuteSearch" disabled="@(selectedTeamId == 0)" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search
+        </button>
+    </div>   
+</div>
+
+@if (isDataLoaded)
+{
+    <!-- Visual Summary Chart -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6 flex items-center gap-8">
+        <div class="flex-shrink-0">
+            <h3 class="text-sm font-bold text-slate-500 uppercase mb-1">Team Overview</h3>
+            <p class="text-3xl font-black text-slate-800">@teamReports.Count <span class="text-base font-medium text-slate-500">Staff</span></p>
+        </div>
+        
+        <div class="flex-1">
+            <div class="flex justify-between text-sm font-bold mb-2">
+                <span class="text-emerald-600">Presents: @totalPresents</span>
+                <span class="text-rose-600">Absents: @totalAbsents</span>
+            </div>
+            <!-- Progress Bar Chart -->
+            <div class="w-full bg-rose-100 rounded-full h-4 overflow-hidden flex">
+                <div class="bg-emerald-500 h-4 transition-all duration-500" style="width: @(CalculatePresentPercentage())%"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="border-b border-slate-200 mb-6">
+        <nav class="flex gap-6">
+            @foreach (var tab in new[] { "Summary", "Attendance", "Leaves", "Out of Office", "Other" })
+            {
+                <button @onclick="() => activeTab = tab" class="pb-3 text-sm font-bold transition-colors border-b-2 @(activeTab == tab ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")">
+                    @tab
+                </button>
+            }
+        </nav>
+    </div>
+
+    <!-- Tab Contents (The Data Tables) -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+        <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+                <tr>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                    
+                    @if (activeTab == "Summary")
+                    {
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Employee #</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Late Mins</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Absent</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Work Day OT</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Non-Work Day OT</th>
+                    }
+                    else if (activeTab == "Attendance")
+                    {
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Days to Attend</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Attended Days</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Absent</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Official Trips</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Gov Holidays</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Leaves</th>
+                    }
+                    else if (activeTab == "Leaves")
+                    {
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Sick">Sick</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Family">Fam</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Annual">Ann</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Total Maternity">Tot Mat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Hajj">Hajj</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Total No Pay">Tot NP</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Circumcision">Circ</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Paternity">Pat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="No Pay">NP</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Child Care">CC</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Before Birth Maternity">BB Mat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Maternity">Mat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="After Birth Maternity">AB Mat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Miscarriage Birth Maternity">MB Mat</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center" title="Still Birth Maternity">SB Mat</th>
+                    }
+                    else if (activeTab == "Out of Office")
+                    {
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Personal Mins</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Official Mins</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Unplanned Mins</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Total In-Office Hrs</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Total Official Hrs</th>
+                    }
+                    else if (activeTab == "Other")
+                    {
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Non-Work Attended</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Personal OOO Days</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Official OOO Days</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Unplanned OOO Days</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Total Late Duration</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Late Days</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-right">Pending Leaves</th>
+                    }
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @for (int i = 0; i < teamReports.Count; i++)
+                {
+                    var report = teamReports[i];
+                    <tr class="hover:bg-slate-50 transition-colors">
+                        <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                        
+                        @if (activeTab == "Summary")
+                        {
+                            <td class="py-3 px-4 text-slate-600 font-medium">@report.EmployeeNumber</td>
+                            <td class="py-3 px-4 text-slate-800 font-bold">@report.StaffName</td>
+                            <td class="py-3 px-4 text-right">@report.Summary_LateMins</td>
+                            <td class="py-3 px-4 text-right text-rose-600 font-medium">@report.Summary_Absent</td>
+                            <td class="py-3 px-4 text-right">@report.Summary_WorkDayOT</td>
+                            <td class="py-3 px-4 text-right">@report.Summary_NonWorkDayOT</td>
+                        }
+                        else if (activeTab == "Attendance")
+                        {
+                            <td class="py-3 px-4 text-slate-800 font-bold">@report.StaffName</td>
+                            <td class="py-3 px-4 text-right">@report.Att_DaysToAttend</td>
+                            <td class="py-3 px-4 text-right text-emerald-600 font-medium">@report.Att_AttendedDays</td>
+                            <td class="py-3 px-4 text-right text-rose-600 font-medium">@report.Att_Absent</td>
+                            <td class="py-3 px-4 text-right">@report.Att_OfficialTrips</td>
+                            <td class="py-3 px-4 text-right">@report.Att_GovHolidays</td>
+                            <td class="py-3 px-4 text-right">@report.Att_Leaves</td>
+                        }
+                        else if (activeTab == "Leaves")
+                        {
+                            <td class="py-3 px-4 text-slate-800 font-bold">@report.StaffName</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Sick</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Family</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Annual</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_TotalMaternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Hajj</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_TotalNoPay</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Circumcision</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Paternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_NoPay</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_ChildCare</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_BeforeBirthMaternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_Maternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_AfterBirthMaternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_MiscarriageBirthMaternity</td>
+                            <td class="py-3 px-4 text-center">@report.Lve_StillBirthMaternity</td>
+                        }
+                        else if (activeTab == "Out of Office")
+                        {
+                            <td class="py-3 px-4 text-slate-800 font-bold">@report.StaffName</td>
+                            <td class="py-3 px-4 text-right">@report.Ooo_PersonalMins</td>
+                            <td class="py-3 px-4 text-right">@report.Ooo_OfficialMins</td>
+                            <td class="py-3 px-4 text-right">@report.Ooo_UnplannedMins</td>
+                            <td class="py-3 px-4 text-right">@report.Ooo_TotalInOfficeHours</td>
+                            <td class="py-3 px-4 text-right">@report.Ooo_TotalOfficialHours</td>
+                        }
+                        else if (activeTab == "Other")
+                        {
+                            <td class="py-3 px-4 text-slate-800 font-bold">@report.StaffName</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_NonWorkingAttended</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_PersonalOooDays</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_OfficialOooDays</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_UnplannedOooDays</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_TotalLateDuration</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_LateDays</td>
+                            <td class="py-3 px-4 text-right">@report.Oth_PendingLeaves</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+ 
+@code {
+    // Dropdowns
+    private int selectedOrgId = 0;
+    private int selectedTeamId = 0;
+    
+    // UI State
+    private string activeTab = "Summary";
+    private bool isDataLoaded = false;
+    
+    // Dates
+    private DateTime startDate;
+    private DateTime endDate;
+
+    // Collections
+    private List<DropdownItem> organisations = new();
+    private List<TeamDropdownDto> teams = new();
+    private List<TeamMemberReportDto> teamReports = new();
+
+    // Chart Aggregates
+    private int totalPresents = 0;
+    private int totalAbsents = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15 
+            ? new DateTime(today.Year, today.Month, 15) 
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task OnOrganisationChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int orgId))
+        {
+            selectedOrgId = orgId;
+            selectedTeamId = 0;
+            isDataLoaded = false;
+
+           
+
+
+              if (selectedOrgId > 0)
+            {
+                // divisions = await DbContext.Teams.Where(x => x.OrganisationId == selectedOrgId).ToListAsync();
+                teams = await DbContext.Teams
+                .AsNoTracking()
+                .Where(x => x.OrganisationId == selectedOrgId)
+                .Select(x => new TeamDropdownDto
+                    {
+                        TeamId = x.TeamId,
+                        Name = x.Name
+                    })
+                .ToListAsync();
+            }
+            else
+            {
+                teams.Clear();
+            }
+
+
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (selectedTeamId == 0) return;
+
+        isDataLoaded = false;
+        teamReports.Clear();
+        totalPresents = 0;
+        totalAbsents = 0;
+
+        // 1. Fetch the Team Members matching the requested SQL criteria
+        var staffMembers = await (
+      from ts in DbContext.TeamStaffs
+
+          // Join Individuals for the names
+      join i in DbContext.Individuals on ts.StaffId equals i.BusinessEntityId
+
+      // Join Staffs for the Employee Number
+      join s in DbContext.Staffs on i.BusinessEntityId equals s.IndividualId
+
+      where ts.TeamId == selectedTeamId
+      select new
+      {
+          i.BusinessEntityId,
+          i.FirstNameEnglish,
+          i.MiddleNameEnglish,
+          i.LastNameEnglish,
+          s.EmployeeNumber // Pulled from the Staffs table now
+      }
+      ).Distinct().ToListAsync();
+
+        int totalDaysInPeriod = (int)(endDate - startDate).TotalDays + 1;
+
+        // 2. Aggregate Data per Staff Member
+        foreach (var staff in staffMembers)
+        {
+            var report = new TeamMemberReportDto
+            {
+                StaffId = staff.BusinessEntityId,
+                EmployeeNumber = staff.EmployeeNumber ?? "N/A",
+                StaffName = $"{staff.FirstNameEnglish} {staff.MiddleNameEnglish} {staff.LastNameEnglish}".Trim(),
+                Att_DaysToAttend = totalDaysInPeriod // Adjust this based on your weekend/holiday logic
+            };
+
+            // ---- FETCH DATA FOR THIS STAFF MEMBER HERE ----
+            // Replace these with your actual DbContext / Service calls to aggregate the counts
+
+            // A. ATTENDANCE LOGS
+            var logs = await AttendanceLogService.GetAttendanceLogsAsync(staff.BusinessEntityId, startDate, endDate);
+            
+            // Calculate Presents/Absents based on days with punches
+            var daysPresent = logs.Select(l => l.Date.Date).Distinct().Count();
+            report.Att_AttendedDays = daysPresent;
+            report.Att_Absent = report.Att_DaysToAttend - daysPresent;
+            report.Summary_Absent = report.Att_Absent;
+
+            // Global Chart Tracking
+            totalPresents += daysPresent;
+            totalAbsents += report.Att_Absent;
+
+            // B. OVERTIME & LATE LOGIC (Example Aggregation)
+            // report.Summary_LateMins = [Your Logic];
+            // report.Summary_WorkDayOT = [Your Logic];
+            
+            // C. LEAVES LOGIC (Example Aggregation)
+            // var leaves = await DbContext.Leaves.Where(l => l.StaffId == staff.BusinessEntityId && l.Date >= startDate && l.Date <= endDate).ToListAsync();
+            // report.Lve_Sick = leaves.Count(l => l.LeaveType == "Sick");
+            // report.Lve_Annual = leaves.Count(l => l.LeaveType == "Annual");
+            
+            // D. OUT OF OFFICE LOGIC
+            // report.Ooo_PersonalMins = [Your Logic];
+
+            teamReports.Add(report);
+        }
+
+        isDataLoaded = true;
+    }
+
+    private void ResetFilters()
+    {
+        selectedOrgId = 0;
+        selectedTeamId = 0;
+        teams.Clear();
+        teamReports.Clear();
+        isDataLoaded = false;
+        SetCurrentSalaryPeriod();
+    }
+
+    private decimal CalculatePresentPercentage()
+    {
+        if (totalPresents + totalAbsents == 0) return 0;
+        return ((decimal)totalPresents / (totalPresents + totalAbsents)) * 100;
+    }
+
+    // --- FAT DTO FOR THE REPORT TABS ---
+    public class TeamMemberReportDto
+    {
+        public int StaffId { get; set; }
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+
+        // TAB 1: Summary
+        public int Summary_LateMins { get; set; }
+        public int Summary_Absent { get; set; }
+        public int Summary_WorkDayOT { get; set; }
+        public int Summary_NonWorkDayOT { get; set; }
+
+        // TAB 2: Attendance
+        public int Att_DaysToAttend { get; set; }
+        public int Att_AttendedDays { get; set; }
+        public int Att_Absent { get; set; }
+        public int Att_OfficialTrips { get; set; }
+        public int Att_GovHolidays { get; set; }
+        public int Att_Leaves { get; set; }
+
+        // TAB 3: Leaves
+        public int Lve_Sick { get; set; }
+        public int Lve_Family { get; set; }
+        public int Lve_Annual { get; set; }
+        public int Lve_TotalMaternity { get; set; }
+        public int Lve_Hajj { get; set; }
+        public int Lve_TotalNoPay { get; set; }
+        public int Lve_Circumcision { get; set; }
+        public int Lve_Paternity { get; set; }
+        public int Lve_NoPay { get; set; }
+        public int Lve_ChildCare { get; set; }
+        public int Lve_BeforeBirthMaternity { get; set; }
+        public int Lve_Maternity { get; set; }
+        public int Lve_AfterBirthMaternity { get; set; }
+        public int Lve_MiscarriageBirthMaternity { get; set; }
+        public int Lve_StillBirthMaternity { get; set; }
+
+        // TAB 4: Out of Office
+        public int Ooo_PersonalMins { get; set; }
+        public int Ooo_OfficialMins { get; set; }
+        public int Ooo_UnplannedMins { get; set; }
+        public decimal Ooo_TotalInOfficeHours { get; set; }
+        public decimal Ooo_TotalOfficialHours { get; set; }
+
+        // TAB 5: Other
+        public int Oth_NonWorkingAttended { get; set; }
+        public int Oth_PersonalOooDays { get; set; }
+        public int Oth_OfficialOooDays { get; set; }
+        public int Oth_UnplannedOooDays { get; set; }
+        public int Oth_TotalLateDuration { get; set; }
+        public int Oth_LateDays { get; set; }
+        public int Oth_PendingLeaves { get; set; }
+    }
+}

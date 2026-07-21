@@ -1,0 +1,128 @@
+﻿@using HRM.DTOs.Leave
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@inject ILeaveService LeaveService
+
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+
+        <div>
+            <h2 class="text-base font-semibold text-slate-800">
+                Leave Balance
+            </h2>
+
+            <p class="text-xs text-slate-500">
+                Available Leaves
+            </p>
+        </div>
+
+        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
+            <i class="fas fa-fingerprint text-blue-600"></i>
+        </div>
+
+    </div>
+
+
+    @if (jobTypes == null || !jobTypes.Any())
+    {
+        <div class="py-10 text-center text-slate-500">
+            No attendance logs found.
+        </div>
+    }
+    else
+    {
+        <div class="divide-y divide-slate-100 max-h-[720px] overflow-y-auto">
+            @{
+                var count = 1;
+            }
+            @foreach (var log in jobTypes)
+            {
+                @foreach (var pro in processingLeaves)
+                {
+                @* var time = GetDateTime(log); *@
+                @* px - 5 py - 4 *@
+                <div class="flex items-center justify-between px-4 p-2 hover:bg-slate-50 hover:bg-slate-100 odd:bg-slate-100  transition">
+                    <!-- Left -->
+                    <div class="flex items-center gap-4">
+                        <!-- Icon -->
+                        <div class="w-auto h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                            <div class="w-10 h-10 rounded-lg
+                                bg-slate-100
+                                flex items-center justify-center
+                                text-sm font-semibold text-slate-700">
+                                @count
+                            </div>
+                        </div>  
+                        <!-- Details -->
+                        <div>
+                            
+                                @if (log.LeaveType.LeaveTypeId == pro.LeaveTypeId)
+                                {
+                                <div class="text-sm text-slate-500 mt-0.5">
+                                    <span class="inline-flex px-2 py-1  text-xs bg-amber-100 text-amber-700">
+                                        ⏳ Processing: <br/>
+                                            @pro.FromDate?.ToString("dd MM yyyy")
+                                        -
+                                            @pro.ToDate?.ToString("dd MM yyyy")
+                                        (@pro.StateName)
+                                    </span>
+                                </div>
+                                    
+                                }
+                            
+                            <div class="text-sm font-semibold text-slate-800">
+                                @log.LeaveType.Name (Remaining: @log.RemainingDays )
+                            </div>
+                            <div class="text-sm text-slate-500 mt-0.5">
+                              Last Taken: @(log.LastLeaveTakenDate?.ToString("dd MMMM yyyy") ?? "Never") | 
+                              On: @(log.RenewedDate?.ToString("dd MMMM yyyy") ?? "N/A") 
+                            </div>
+
+                                @if (log.IsLeaveInfoUpdated != true)
+                                {
+                                    <span class="inline-flex px-2 py-1  text-xs bg-amber-100 text-amber-700">
+                                        Leave Information Needs To Be Updated!
+                                    </span>
+                              
+                                }
+                                
+                        </div>
+
+                    </div>
+
+                    <!-- Right -->
+                    <div class="text-right">
+                        <div class="text-xs text-slate-400 mt-2">
+                            @(log.IsValid == true ? "Active" : "In-active")
+                        </div>
+                    </div>
+                </div>
+                count++;
+            }
+            }
+        </div>
+    }
+
+</div>
+@code {
+    // [Parameter]
+    // public List<JobLeaveType>? LeaveBalances { get; set; }
+    private List<JobLeaveType> jobTypes = new();
+    private List<ProcessingLeaveDto> processingLeaves = new();
+
+
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+         jobTypes = await LeaveService.GetMyLeaveBalancesAsync();
+         processingLeaves = await LeaveService.GetMyProcessingLeavesAsync();
+
+        isLoading = false;
+    }
+}

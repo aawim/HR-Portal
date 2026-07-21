@@ -1,0 +1,79 @@
+﻿@implements IDisposable
+
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@inject IUserContext UserContext
+@inject PortalContext PortalContext
+@inject NavigationManager NavManager
+
+<div class="flex justify-center gap-2 mb-4 -mt-4">
+
+    <button class="px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors w-[90px]"
+            @onclick="SwitchToSelf">
+        Self
+    </button>
+
+    @if (PortalContext.CanAccessAdminPortal)
+    {
+        <button class="px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 transition-colors w-[90px]"
+                @onclick="SwitchToOrganisation">
+            Admin
+        </button>
+    }
+
+</div>
+
+@code
+{
+    protected override async Task OnInitializedAsync()
+    {
+        var session = await UserContext.GetSessionAsync();
+
+        if (session != null)
+        {
+            PortalContext.Initialize(
+                session.OrganisationId,
+                session.OrganisationName,
+                session.CanAccessAdminPortal);
+        }
+
+        DetermineContextFromUrl();
+
+        PortalContext.OnChange += Refresh;
+    }
+
+    private void DetermineContextFromUrl()
+    {
+        var path = new Uri(NavManager.Uri).AbsolutePath.ToLower();
+
+        if (path.StartsWith("/admin"))
+            PortalContext.SwitchToAdmin();
+        else
+            PortalContext.SwitchToEmployee();
+    }
+
+    private void SwitchToSelf()
+    {
+        PortalContext.SwitchToEmployee();
+
+        NavManager.NavigateTo("/", forceLoad: true);
+    }
+
+    private void SwitchToOrganisation()
+    {
+        PortalContext.SwitchToAdmin();
+
+        NavManager.NavigateTo("/admin", forceLoad: true);
+    }
+
+    private void Refresh()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        PortalContext.OnChange -= Refresh;
+    }
+}

@@ -1,0 +1,77 @@
+﻿@implements IDisposable
+
+<div class="flex justify-center my-6">
+
+    <div class="clock w-52 h-52 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80">
+
+        <div class="center-dot"></div>
+
+        <div class="hand hour"
+             style="@($"transform: rotate({HourRotation}deg);")">
+        </div>
+
+        <div class="hand minute"
+             style="@($"transform: rotate({MinuteRotation}deg);")">
+        </div>
+
+        <div class="hand second"
+             style="@($"transform: rotate({SecondRotation}deg);")">
+        </div>
+
+        @for (int i = 1; i <= 12; i++)
+        {
+            <div class="number"
+                 style="transform: rotate(@(i * 30)deg);">
+                <span style="transform: rotate(-@(i * 30)deg);">
+                    @i
+                </span>
+            </div>
+        }
+
+    </div>
+
+</div>
+
+<div class="text-center text-base sm:text-lg md:text-xl font-semibold">
+    @CurrentTime.ToString("hh:mm:ss tt")
+</div>
+
+@code {
+
+    private PeriodicTimer? timer;
+    private CancellationTokenSource cts = new();
+
+    private DateTime CurrentTime = DateTime.Now;
+
+    private double HourRotation =>
+        (CurrentTime.Hour % 12) * 30 +
+        CurrentTime.Minute * 0.5;
+
+    private double MinuteRotation =>
+        CurrentTime.Minute * 6 +
+        CurrentTime.Second * 0.1;
+
+    private double SecondRotation =>
+        CurrentTime.Second * 6;
+
+    protected override async Task OnInitializedAsync()
+    {
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+
+        _ = Task.Run(async () =>
+        {
+            while (await timer.WaitForNextTickAsync(cts.Token))
+            {
+                CurrentTime = DateTime.Now;
+                await InvokeAsync(StateHasChanged);
+            }
+        });
+    }
+
+    public void Dispose()
+    {
+        cts.Cancel();
+        timer?.Dispose();
+    }
+
+}

@@ -1,0 +1,44 @@
+﻿@using HRM.DTOs
+@using HRM.Enum
+@using HRM.Components.Admin.My.Workspace.Individual
+@using HRM.Components.Admin.My.Workspace.Staff
+@using HRM.Components.Admin.My.Workspace.Organisation
+    @if (Item == null)
+    {
+        return;
+    }
+
+    @if (Item.EntityType == WorkspaceEntityType.Staff)
+    {
+        <StaffWorkspace
+        StaffId="Item.Id"
+        ActiveTab="ActiveTab" />
+    }
+    else if (Item.EntityType == WorkspaceEntityType.Organisation)
+    {
+        <OrganisationWorkspace
+        OrganisationId="Item.Id"
+        ActiveTab="ActiveTab" />
+    }
+    else if (Item.EntityType == WorkspaceEntityType.Individual)
+    {
+        <IndividualWorkspace
+        IndividualId="Item.Id"
+        ActiveTab="ActiveTab" />
+    }
+    else  
+    {
+
+        <WorkspaceContentPage ActiveTab="ActiveTab" />
+    }
+
+
+@code{
+
+    [Parameter]
+    public WorkspaceSearchResult? Item { get; set; }
+
+    [Parameter]
+    public WorkspaceTab ActiveTab { get; set; }
+
+}

@@ -1,0 +1,88 @@
+﻿@page "/admin/budget"
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services
+ 
+
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Settings - HR Portal</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        
+
+        <div class="max-w-12xl mx-auto py-8 px-">
+            <div class="mb-10">
+                <h1 class="text-3xl font-extrabold text-slate-800">Budget</h1>
+                <p class="text-slate-500 mt-2">Manage your organization's core configuration and operational parameters.</p>
+            </div>
+
+            <!-- Grid: 4 columns on large screens, 2 on medium -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                @foreach (var cat in mainCategories)
+                {
+                    <a href="/budget/@cat.Url"
+                       class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
+
+                        <!-- Left: Icon Container -->
+                        <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
+                            @cat.Icon
+                        </div>
+
+                        <!-- Right: Text Content -->
+                        <div class="flex-grow">
+                            <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
+                            <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
+                        </div>
+
+                        <!-- Right: Arrow (Optional) -->
+                        <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
+                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                        </div>
+                    </a>
+                }
+            </div>
+        </div>
+
+        @code {
+        private record Category(string Title, string Url, string Icon, string Description);
+        private record SubItem(string Title, string Icon, string Description, Type? Component); // Assuming this is your SubItem record
+
+        private List<Category> mainCategories = new() {
+            new("Overview", "overview", "📈", "View a high-level summary of budget allocations, utilization, and remaining funds."),
+            new("Transactions", "transactions", "🧾", "Record, review, and track individual financial transactions and expenses."),
+            new("Import", "import", "📥", "Upload budget data, expense sheets, or financial records from external files."),
+            new("Reports", "reports", "📊", "View, generate, and export financial summaries and budget data."),
+            new("Manage", "manage", "⚙️", "Configure budget categories, fiscal years, and financial approval workflows.")
+        };
+
+        // Your dropdown logic for the Reports sub-items
+        // private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
+        // {
+        //     "reports" => new() {
+        //         new("Approved", "✅", "View records of formally approved budget allocations and expenditures.", null),
+        //         new("Monthly", "📅", "Generate month-by-month financial breakdowns and budget usage.", null)
+        // },
+
+            // ... (Add your other sub-items here if Manage, Import, etc. also have dropdowns)
+
+            //_ => new() // Returns empty list if no sub-items exist
+      //  };
+        }
+      
+    </Authorized>
+
+    <NotAuthorized>
+        <div class="p-6">
+            <p class="text-slate-500">
+                Please log in to view the dashboard.
+            </p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+  
+
+}

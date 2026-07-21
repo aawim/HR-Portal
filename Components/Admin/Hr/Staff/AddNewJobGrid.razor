@@ -1,0 +1,363 @@
+﻿@page "/admin/settings/add-new-job"
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@using HRM.Services
+@using HRM.Components.Shared
+
+@inject HrmTeContext DbContext
+@inject UserService UserService
+
+<div class="relative w-full h-full mx-auto py-6">
+    <div class="flex flex-col items-left justify-left mb-8 mt-1">
+        <h2 class="text-2xl font-bold text-slate-800">Add New Job</h2>
+        <p class="text-sm text-slate-500 mt-1 text-left">Search for an individual to assign a new job role.</p>
+    </div>
+
+    <div class="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm mb-8 flex items-center gap-2 transition-shadow focus-within:shadow-md focus-within:border-blue-300">
+        <div class="w-40 border-r border-slate-100">
+            <select @bind="searchModel.SearchType" class="w-full h-12 pl-4 pr-8 text-sm font-bold text-slate-700 bg-transparent border-none focus:ring-0 cursor-pointer outline-none">
+                <option value="Name">Name</option>
+                <option value="ID">National ID</option>
+                <option value="Passport">Passport</option>
+            </select>
+        </div>
+
+        <div class="flex-1">
+            <input type="text" @bind="searchModel.SearchTerm" @bind:event="oninput" @onkeydown="HandleKeyDown"
+                   placeholder="Enter search term..."
+                   class="w-full h-12 px-4 text-slate-700 bg-transparent border-none focus:ring-0 outline-none placeholder:text-slate-400" />
+        </div>
+
+        <button @onclick="ExecuteSearch" disabled="@(string.IsNullOrWhiteSpace(searchModel.SearchTerm) || isLoading)"
+                class="h-12 px-8 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl text-sm font-bold transition-all flex items-center gap-2">
+            @if (isLoading)
+            {
+                <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            }
+            else
+            {
+                <span>Search</span>
+            }
+        </button>
+    </div>
+
+    @if (hasSearched)
+    {
+        if (!searchResults.Any())
+        {
+            <div class="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50">
+                <span class="text-4xl mb-3">📭</span>
+                <h3 class="text-lg font-bold text-slate-700">No individuals found</h3>
+                <p class="text-sm text-slate-500 mt-1">Check the @searchModel.SearchType and try again.</p>
+            </div>
+        }
+        else
+        {
+            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                        <thead class="bg-slate-50 border-b border-slate-200">
+                            <tr>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Name</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Current Organisation</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">ID Card</th>
+                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @for (int i = 0; i < searchResults.Count; i++)
+                            {
+                                var ind = searchResults[i];
+                                <tr class="hover:bg-slate-50 transition-colors">
+                                    <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                    <td class="py-3 px-4 font-bold text-slate-800">
+                                        <div class="flex items-center gap-2">
+                                            <div class="w-6 h-6 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                                @(string.IsNullOrEmpty(ind.FullName) ? "?" : ind.FullName.Substring(0, 1).ToUpper())
+                                            </div>
+                                            @ind.FullName
+                                        </div>
+                                    </td>
+                                    <td class="py-3 px-4 text-slate-600">@(string.IsNullOrEmpty(ind.Organisation) ? "-" : ind.Organisation)</td>
+                                    <td class="py-3 px-4 font-medium text-slate-700">@(string.IsNullOrEmpty(ind.IDNumber) ? "-" : ind.IDNumber)</td>
+                                    <td class="py-3 px-4 text-center">
+                                        <button @onclick="@(() => OpenJobPanel(ind))" title="Assign Job" class="text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 px-3 py-1.5 rounded-lg transition-colors border border-blue-100 shadow-sm text-xs font-bold flex items-center gap-1 mx-auto">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                                            Add Job
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</div>
+
+@if (isPanelOpen)
+{
+    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" @onclick="ClosePanel"></div>
+}
+
+<div class="fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transform transition-transform duration-500 ease-in-out w-full sm:w-[500px] md:w-[600px] @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
+
+    @if (selectedIndividual != null)
+    {
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg font-bold shadow-inner">
+                    @(string.IsNullOrEmpty(selectedIndividual.FullName) ? "?" : selectedIndividual.FullName.Substring(0, 1).ToUpper())
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-slate-800 leading-tight">Assign Job</h3>
+                    <p class="text-xs text-slate-500 font-medium">@selectedIndividual.FullName (@(string.IsNullOrEmpty(selectedIndividual.IDNumber) ? "No ID" : selectedIndividual.IDNumber))</p>
+                </div>
+            </div>
+
+            <button @onclick="ClosePanel" title="Close" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6 custom-scrollbar bg-white">
+            <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Job Details</h4>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Employee Number</label>
+                    <input type="text" @bind="jobForm.EmployeeNumber" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" placeholder="e.g. EMP-001" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">SAP Number</label>
+                    <input type="text" @bind="jobForm.SapNumber" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" placeholder="e.g. 100456" />
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Organization <span class="text-rose-500">*</span></label>
+                    <select @bind="jobForm.OrganisationId" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white">
+                        <option value="">-- Select Organization --</option>
+                        <option value="1">Ministry of Education</option>
+                        <option value="2">Ministry of Health</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Division/Unit <span class="text-rose-500">*</span></label>
+                    <select @bind="jobForm.DivisionId" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white">
+                        <option value="">-- Select Division --</option>
+                        <option value="1">HR Department</option>
+                        <option value="2">IT Services</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Position <span class="text-rose-500">*</span></label>
+                    <select @bind="jobForm.PositionId" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white">
+                        <option value="">-- Select Position --</option>
+                        <option value="1">Director</option>
+                        <option value="2">Senior Officer</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">From Date <span class="text-rose-500">*</span></label>
+                    <input type="date" @bind="jobForm.FromDate" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Job Type <span class="text-rose-500">*</span></label>
+                    <select @bind="jobForm.JobTypeId" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white">
+                        <option value="">-- Select Job Type --</option>
+                        <option value="1">Permanent</option>
+                        <option value="2">Contract</option>
+                        <option value="3">Temporary</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Joined Date <span class="text-rose-500">*</span></label>
+                    <input type="date" @bind="jobForm.JoinedDate" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Group</label>
+                    <select @bind="jobForm.GroupId" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none bg-white">
+                        <option value="">-- Select Group --</option>
+                        <option value="1">Executive Committee</option>
+                        <option value="2">Tech Team A</option>
+                    </select>
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Staff Enrollment Number</label>
+                    <input type="text" @bind="jobForm.StaffEnrollmentNumber" class="w-full h-10 px-3 text-sm border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-100 focus:border-blue-400 outline-none" placeholder="Enter enrollment number" />
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3 shrink-0">
+            <button @onclick="ClosePanel" class="px-5 py-2.5 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-200 transition-colors">
+                Cancel
+            </button>
+            <button @onclick="SaveJob" class="px-5 py-2.5 rounded-lg text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                Save Job Details
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    // --- State Variables ---
+    private SearchModel searchModel = new();
+    private List<IndividualResultDto> searchResults = new();
+    private bool isLoading = false;
+    private bool hasSearched = false;
+
+    // --- Panel & Form State ---
+    private bool isPanelOpen = false;
+    private IndividualResultDto? selectedIndividual;
+    private JobFormModel jobForm = new();
+
+    // --- Search Logic ---
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(searchModel.SearchTerm))
+        {
+            await ExecuteSearch();
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(searchModel.SearchTerm)) return;
+
+        isLoading = true;
+        hasSearched = false;
+        searchResults.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var today = DateTime.Today;
+
+            var query = from ind in DbContext.Individuals
+                        join id in DbContext.Idcards on ind.BusinessEntityId equals id.BusinessEntityId into idGroup
+                        from idCard in idGroup.DefaultIfEmpty()
+                        join p in DbContext.Passports on ind.BusinessEntityId equals p.BusinessEntityId into pGroup
+                        from passport in pGroup.DefaultIfEmpty()
+                        join j in DbContext.Jobs.Where(x => x.TerminatedDate == null || x.TerminatedDate > today)
+                             on ind.BusinessEntityId equals j.IndividualID into jobGroup
+                        from activeJob in jobGroup.DefaultIfEmpty()
+                        join org in DbContext.Organisations on activeJob.OrganisationID equals org.BusinessEntityID into orgGroup
+                        from organisation in orgGroup.DefaultIfEmpty()
+                        select new { ind, idCard, passport, organisation };
+
+            string term = searchModel.SearchTerm.Trim();
+
+            if (searchModel.SearchType == "ID")
+            {
+                query = query.Where(q => q.idCard.IdcardNumber == term);
+            }
+            else if (searchModel.SearchType == "Passport")
+            {
+                query = query.Where(q => q.passport.PassportNumber == term);
+            }
+            else
+            {
+                // FIX: EF-Core safe translation for Name check
+                query = query.Where(q =>
+                    (q.ind.FirstNameEnglish != null && q.ind.FirstNameEnglish.Contains(term)) ||
+                    (q.ind.MiddleNameEnglish != null && q.ind.MiddleNameEnglish.Contains(term)) ||
+                    (q.ind.LastNameEnglish != null && q.ind.LastNameEnglish.Contains(term)));
+            }
+
+            var results = await query.Take(50).ToListAsync();
+
+            searchResults = results.Select(q => new IndividualResultDto
+                {
+                    BusinessEntityId = q.ind.BusinessEntityId,
+                    FullName = $"{q.ind.FirstNameEnglish} {q.ind.MiddleNameEnglish} {q.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
+                    IDNumber = q.idCard != null ? q.idCard.IdcardNumber : string.Empty,
+                    PassportNumber = q.passport != null ? q.passport.PassportNumber : string.Empty,
+                    Organisation = q.organisation != null ? q.organisation.OrganisationName : string.Empty
+                }).ToList();
+        }
+        finally
+        {
+            isLoading = false;
+            hasSearched = true;
+        }
+    }
+
+    // --- Panel Controls ---
+    private void OpenJobPanel(IndividualResultDto ind)
+    {
+        selectedIndividual = ind;
+
+        // Reset the form when opening a new panel
+        jobForm = new JobFormModel();
+
+        isPanelOpen = true;
+        StateHasChanged();
+    }
+
+    private void ClosePanel()
+    {
+        isPanelOpen = false;
+        selectedIndividual = null;
+    }
+
+    private async Task SaveJob()
+    {
+        // Add your saving logic here using _dbContext or JobService
+        // e.g. await JobService.CreateJobAsync(selectedIndividual.BusinessEntityId, jobForm);
+
+        Console.WriteLine($"Saving job for {selectedIndividual?.FullName} in Org ID {jobForm.OrganisationId}");
+
+        // Close panel after success
+        ClosePanel();
+    }
+
+    // --- Models / DTOs ---
+    public class SearchModel
+    {
+        public string SearchTerm { get; set; } = string.Empty;
+        public string SearchType { get; set; } = "Name";
+    }
+
+    public class IndividualResultDto
+    {
+        public int BusinessEntityId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+        public string Organisation { get; set; } = string.Empty;
+        public string IDNumber { get; set; } = string.Empty;
+        public string PassportNumber { get; set; } = string.Empty;
+    }
+
+    // Form Model for the Slide-Out Panel
+    public class JobFormModel
+    {
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string SapNumber { get; set; } = string.Empty;
+
+        // Required fields (using strings for binding <select> values easily)
+        public string OrganisationId { get; set; } = string.Empty;
+        public string DivisionId { get; set; } = string.Empty;
+        public string PositionId { get; set; } = string.Empty;
+
+        public DateTime? FromDate { get; set; }
+
+        public string JobTypeId { get; set; } = string.Empty;
+
+        public DateTime? JoinedDate { get; set; }
+
+        public string GroupId { get; set; } = string.Empty;
+        public string StaffEnrollmentNumber { get; set; } = string.Empty;
+    }
+}

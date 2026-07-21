@@ -1,0 +1,279 @@
+﻿@using HRM.DTOs
+@using HRM.Enum
+@using HRM.Models
+@using Microsoft.EntityFrameworkCore
+
+@* @inject HrmTeContext Db *@
+
+@inject IDbContextFactory<HrmTeContext> _dbFactory;
+
+@rendermode RenderMode.InteractiveServer
+
+<div class="relative w-full max-w-xl">
+
+    <div class="relative">
+
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+            <svg class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24">
+
+                <path stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </span>
+
+
+        <input class="w-full pl-10 pr-4 py-3
+                      border border-slate-200
+                      rounded-xl text-sm
+                      bg-white shadow-sm
+                      focus:ring-2 focus:ring-blue-500"
+        placeholder="Search staff or organisation..."
+        @bind="SearchText"
+        @bind:event="oninput" />
+
+    </div>
+
+
+    @if (!string.IsNullOrWhiteSpace(SearchText))
+    {
+        <div class="absolute w-full mt-2
+                    bg-white rounded-xl
+                    shadow-lg border
+                    border-slate-200
+                    max-h-96 overflow-auto z-50">
+
+
+            @if (Loading)
+            {
+                <div class="p-4 text-center text-slate-500">
+                    Searching...
+                </div>
+            }
+            else
+            {
+
+                @if (StaffResults.Any())
+                {
+                    <div class="px-4 py-2 text-xs
+                                font-bold uppercase
+                                text-slate-500 border-b">
+
+                        Staff
+                    </div>
+
+                    @foreach (var item in StaffResults)
+                    {
+                        <button class="w-full text-left
+                                       px-4 py-3
+                                       hover:bg-slate-50
+                                       border-b"
+                        @onclick="() => Select(item)">
+
+                            <div class="font-medium text-slate-700">
+                                @item.Name  |  <span> @item.NameDv (@item.IDCard) </span>
+                            </div>
+
+
+                            <div class="text-xs text-slate-500">
+                                @item.Description
+                            </div>
+
+                        </button>
+                    }
+                }
+
+                @if (OrganisationResults.Any())
+                {
+                    <div class="px-4 py-2 text-xs
+                                font-bold uppercase
+                                text-slate-500 border-b">
+
+                        Organisations
+                    </div>
+
+                    @foreach (var item in OrganisationResults)
+                    {
+                        <button class="w-full text-left
+                                       px-4 py-3
+                                       hover:bg-slate-50
+                                       border-b"
+                        @onclick="() => Select(item)">
+
+                            <div class="font-medium text-slate-700">
+                                @item.Name | <span class="dhivehi-font"> @item.NameDv </span>
+                            </div>
+
+                        </button>
+                    }
+                }
+
+                @if (!StaffResults.Any() &&
+         !OrganisationResults.Any())
+                {
+                    <div class="p-5 text-center text-slate-500">
+                        No results found.
+                    </div>
+                }
+
+            }
+
+        </div>
+    }
+
+</div>
+
+
+
+@code {
+
+    [Parameter]
+    public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
+
+    
+    private string _searchText = "";
+
+    private string SearchText
+    {
+        get => _searchText;
+
+        set
+        {
+            if (_searchText == value)
+                return;
+
+
+            _searchText = value;
+
+            _ = SearchAsync();
+        }
+    }
+
+    private bool Loading;
+
+    private List<WorkspaceSearchResult> StaffResults = new();
+
+    private List<WorkspaceSearchResult> OrganisationResults = new();
+    
+    private async Task Select(WorkspaceSearchResult item)
+    {
+        SearchText = "";
+        StaffResults.Clear();
+        OrganisationResults.Clear();
+        await OnSelected.InvokeAsync(item);
+    }
+
+    private async Task SearchAsync()
+    {
+
+        await using var Db = await _dbFactory.CreateDbContextAsync();
+
+        StaffResults.Clear();
+        OrganisationResults.Clear();
+
+        if (string.IsNullOrWhiteSpace(SearchText))
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
+        Loading = true;
+        StaffResults =
+        await
+        (
+            from i in Db.Individuals
+
+            join c in Db.Idcards
+                on i.BusinessEntityId equals c.BusinessEntityId
+                into cards
+
+            from card in cards.DefaultIfEmpty()
+
+            join j in Db.Jobs
+                on i.BusinessEntityId equals j.IndividualID
+                into jobs
+
+            from job in jobs.DefaultIfEmpty()
+
+            join os in Db.OrganisationStructures
+                on job.OrganisationStructureId equals os.OrganisationStructureId
+                into structures
+
+            from organisationStructure in structures.DefaultIfEmpty()
+
+            let fullName =
+                (i.FirstNameEnglish ?? "") + " " +
+                (i.MiddleNameEnglish ?? "") + " " +
+                (i.LastNameEnglish ?? "")
+
+          let fullNameDV = i.FirstNameDhivehi + (i.LastNameDhivehi != null ? " " + i.LastNameDhivehi : "")
+           
+            where
+                EF.Functions.Like(
+                    fullName,
+                    $"%{SearchText}%"
+                )
+
+                ||
+                 (i.FirstNameEnglish != null &&
+                EF.Functions.Like(i.FirstNameEnglish, $"%{SearchText}%"))
+
+            ||
+                (card != null &&
+                 EF.Functions.Like(
+                     card.IdcardNumber,
+                     $"%{SearchText}%"
+                 ))
+
+                ||
+
+                (organisationStructure != null &&
+                 EF.Functions.Like(
+                     organisationStructure.Name,
+                     $"%{SearchText}%"
+                 ))
+
+            select new WorkspaceSearchResult
+            {
+                Id = i.BusinessEntityId,
+                JobId = job.JobId,
+                IndividualId = i.BusinessEntityId,
+                Name = fullName.ToString(),
+                NameDv = fullNameDV.ToString(),
+                IDCard = card != null && card.IdcardNumber != null ? card.IdcardNumber : "",
+                    Description = job == null ? "Individual"  : "Staff" +  (organisationStructure != null ? " | " + organisationStructure.Name : ""),
+                EntityType = job == null ? WorkspaceEntityType.Individual : WorkspaceEntityType.Staff
+                    // $"JobId={job.JobId}, Individual={i.BusinessEntityId}",
+             }
+        )
+        .Distinct()
+        .OrderBy(x => x.Name)
+        .Take(10)
+        .ToListAsync();
+        OrganisationResults =
+            await Db.Organisations
+
+            .Where(x =>
+                EF.Functions.Like(
+                    x.OrganisationName,
+                    $"%{SearchText}%"
+                ))
+
+            .Take(10)
+            .Select(x => new WorkspaceSearchResult
+            {
+                Id = x.BusinessEntityID,
+                Name = x.OrganisationName,
+                EntityType = WorkspaceEntityType.Organisation
+                })
+
+            .ToListAsync();
+        Loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+}

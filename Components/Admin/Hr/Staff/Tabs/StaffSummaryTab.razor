@@ -1,0 +1,25 @@
+﻿@using HRM.DTOs.Staff
+
+<div class="space-y-6 animate-in fade-in duration-300">
+    <h4 class="text-lg font-bold text-slate-800 border-b border-slate-100 pb-2">Staff Summary</h4>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100 md:col-span-2">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Full Name</label>
+            <span class="text-slate-800 font-bold text-lg leading-none">@Individual.FullName</span>
+        </div>
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">ID Card</label>
+            <span class="text-slate-800 font-bold">@(string.IsNullOrEmpty(Individual.IDNumber) ? "-" : Individual.IDNumber)</span>
+        </div>
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Organisation</label>
+            <span class="text-slate-800 font-bold">@(string.IsNullOrEmpty(Individual.Organisation) ? "Unassigned" : Individual.Organisation)</span>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public IndividualResultDto Individual { get; set; } = null!;
+}

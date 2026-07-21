@@ -1,0 +1,148 @@
+﻿@using HRM.DTOs
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@inject IJobService JobService
+ 
+
+<div class="bg-white rounded-xl shadow-sm border p-3">
+
+    <div class="flex justify-between items-center mb-2">
+        <div>
+            <h2 class="text-lg font-semibold">Job History</h2>
+            <p class="text-sm text-gray-500">Previous employment records</p>
+        </div>
+
+        <i class="fas fa-history text-gray-600 text-xl"></i>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="text-center py-6 text-gray-500">
+            Loading job history...
+        </div>
+    }
+    else if (jobs == null || !jobs.Any())
+    {
+        <div class="text-center py-6 text-gray-500">
+            No job history found.
+        </div>
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Job ID
+                        </th>
+
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Organization
+                        </th>
+
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Structure
+                        </th>
+
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Job Type
+                        </th>
+
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Joined
+                        </th>
+
+                        <th class="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">
+                            Terminated
+                        </th>
+
+                       @*  <th class="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">
+                            Salary
+                        </th> *@
+
+                        <th class="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">
+                            Status
+                        </th>
+                    </tr>
+                </thead>
+
+                <tbody class="bg-white divide-y divide-gray-100">
+                    @{
+                        int index = 1;
+                    }
+                    @foreach (var job in jobs)
+                    {
+                        <tr class="hover:bg-gray-50">
+
+                            <td class="px-4 py-3 text-sm font-medium">
+                                @index
+                            </td>
+
+                            <td class="px-4 py-3 text-sm">
+                                @job.OrganisationName
+                            </td>
+
+                            <td class="px-4 py-3 text-sm">
+                                @job.OrganisationStructureName
+                            </td>
+
+                            <td class="px-4 py-3 text-sm">
+                                @job.JobStateName
+                            </td>
+
+                            <td class="px-4 py-3 text-sm">
+                                @job.JoinedDate.ToString("dd MMM yyyy")
+                            </td>
+
+                            <td class="px-4 py-3 text-sm">
+                                @(job.TerminatedDate?.ToString("dd MMM yyyy") ?? "-")
+                            </td>
+
+                           @*  <td class="px-4 py-3 text-sm text-center">
+                                @(job.BasicSalary?.ToString("N2") ?? "-")
+                            </td> *@
+
+                            <td class="px-4 py-3 text-center">
+                                @if (job.TerminatedDate != null)
+                                {
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-700">
+                                        Terminated
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-700">
+                                        Inactive
+                                    </span>
+                                }
+                            </td>
+
+                        </tr>
+                        index++;
+                    }
+
+                </tbody>
+
+            </table>
+        </div>
+    }
+
+</div>
+
+@code {
+
+    private List<JobDto> jobs = new();
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+ 
+       jobs = await JobService.GetMyJobHistoryAsync();
+
+        isLoading = false;
+    }
+
+}

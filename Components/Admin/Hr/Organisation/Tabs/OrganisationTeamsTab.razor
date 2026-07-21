@@ -1,0 +1,248 @@
+﻿@using HRM.DTOs
+@using HRM.DTOs.Organisation
+@using HRM.Models
+@using Microsoft.EntityFrameworkCore
+
+@inject HrmTeContext DbContext
+
+<div class="space-y-8 animate-in fade-in duration-300">
+    <div>
+        <h5 class="text-sm font-bold text-slate-800 mb-4 border-b border-slate-100 pb-2">Core Information</h5>
+        <div class="bg-slate-50 p-4 rounded-xl border border-slate-100">
+            <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Organisation ID: @Org.BusinessEntityID</label>
+            <span class="text-slate-800 font-bold text-lg leading-none">Team Management</span>
+        </div>
+    </div>
+
+    <div class="animate-in fade-in duration-500 delay-100">
+        <div class="flex justify-between items-end border-b border-slate-100 pb-2 mb-4">
+            <div>
+                <h5 class="text-sm font-bold text-slate-800">Organisation Teams</h5>
+                <p class="text-xs text-slate-500 mt-0.5">Manage teams associated with this organisation.</p>
+            </div>
+            <button @onclick="OpenAddTeamPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add Team
+            </button>
+        </div>
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Team Name</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-right">Name (Dhivehi)</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Start Date</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Status</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @if (isLoadingTeams)
+                    {
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-slate-500">
+                                <div class="flex justify-center items-center gap-2">
+                                    <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Loading teams...
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    else if (!teams.Any())
+                    {
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-slate-500 italic">No teams found for this organisation.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var team in teams)
+                        {
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-4 font-bold text-slate-700">@team.Name</td>
+                                <td class="py-3 px-4 text-slate-600 font-mv-boli text-right" dir="rtl">@team.NameDhivehi</td>
+                                <td class="py-3 px-4 text-slate-600">@(team.StartDate?.ToString("dd MMM yyyy") ?? "-")</td>
+                                <td class="py-3 px-4 text-slate-600">
+                                    @if (team.IsValid == true)
+                                    {
+                                        <span class="bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded text-xs font-bold">Active</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-xs font-bold">Inactive</span>
+                                    }
+                                </td>
+                                <td class="py-3 px-4 text-right">
+
+                                    <button @onclick="() => OpenTeamDetail(team)" class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100">
+                                        Detail
+                                    </button>
+                                    <button class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 px-2 py-1 rounded transition-colors border border-slate-200">
+                                        Edit
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddTeamPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+@onclick="CloseAddTeamPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddTeamPanel ? "translate-x-0 shadow-2xl" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">Add New Team</h3>
+        <button @onclick="CloseAddTeamPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Team Name (English) <span class="text-rose-500">*</span></label>
+            <input type="text" @bind="newTeam.Name" placeholder="e.g. Finance Team" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Team Name (Dhivehi)</label>
+            <input type="text" @bind="newTeam.NameDhivehi" dir="rtl" class="w-full h-10 px-3 text-sm font-mv-boli text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 text-right" />
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Start Date</label>
+            <input type="date" @bind="newTeam.StartDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAddTeamPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+        <button @onclick="SubmitTeam" disabled="@isSubmitting" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">
+            @(isSubmitting ? "Saving..." : "Add Team")
+        </button>
+    </div>
+</div>
+
+
+<TeamDetailPanel @bind-IsOpen="isTeamDetailOpen" Team="selectedTeamForDetail" />
+
+
+@code {
+    // Parent passes this ID when they click the tab
+    [Parameter]
+    // public int OrganisationId { get; set; }
+    public OrganisationResultDto Org { get; set; } = null!;
+
+    private bool showAddTeamPanel = false;
+    private bool isSubmitting = false;
+    private bool isLoadingTeams = true;
+
+    private bool isTeamDetailOpen = false;
+    public TeamDto? selectedTeamForDetail;
+
+
+    private List<TeamDto> teams = new();
+    private NewTeamForm newTeam = new();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Org != null && Org.BusinessEntityID > 0)
+        {
+            await LoadTeams();
+        }
+    }
+
+    private async Task LoadTeams()
+    {
+        isLoadingTeams = true;
+        try
+        {
+            teams = await DbContext.Teams
+                .Where(t => t.OrganisationId == Org.BusinessEntityID)
+                .Select(t => new TeamDto
+                    {
+                        TeamID = t.TeamId,
+                        Name = t.Name,
+                        NameDhivehi = t.NameDhivehi,
+                        StartDate = t.StartDate,
+                        IsValid = t.IsValid
+                    })
+                .ToListAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isLoadingTeams = false;
+        }
+    }
+
+    private void OpenAddTeamPanel()
+    {
+        newTeam = new NewTeamForm { StartDate = DateTime.Today };
+        showAddTeamPanel = true;
+    }
+
+    private void CloseAddTeamPanel() => showAddTeamPanel = false;
+
+    private async Task SubmitTeam()
+    {
+        if (string.IsNullOrWhiteSpace(newTeam.Name)) return;
+
+        isSubmitting = true;
+        try
+        {
+            var entity = new Team
+                {
+                    Name = newTeam.Name,
+                    NameDhivehi = newTeam.NameDhivehi,
+                    OrganisationId = Org.BusinessEntityID,
+                    StartDate = (DateTime) newTeam.StartDate,
+                    IsValid = true // Set default active status
+                };
+
+            DbContext.Teams.Add(entity);
+            await DbContext.SaveChangesAsync();
+
+            await LoadTeams();
+            showAddTeamPanel = false;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+
+
+    private void OpenTeamDetail(TeamDto team)
+    {
+        selectedTeamForDetail = team;
+        isTeamDetailOpen = true;
+    }
+
+    // --- Component Local DTOs ---
+    public class TeamDto
+    {
+        public int TeamID { get; set; }
+        public int OrganisationId { get; set; }
+        public string? Name { get; set; }
+        public string? NameDhivehi { get; set; }
+        public DateTime? StartDate { get; set; }
+        public bool? IsValid { get; set; }
+    }
+
+    public class NewTeamForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? NameDhivehi { get; set; }
+        public DateTime? StartDate { get; set; }
+    }
+}

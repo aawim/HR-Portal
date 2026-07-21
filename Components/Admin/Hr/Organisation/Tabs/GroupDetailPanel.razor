@@ -1,0 +1,1043 @@
+﻿@using HRM.Components.Shared
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services.Interfaces
+@using Microsoft.EntityFrameworkCore
+
+@inject IOperationLogService LogService
+@inject HrmTeContext DbContext
+
+
+<div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] transition-opacity duration-300 ease-in-out @(IsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+     @onclick="ClosePanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-[70] bg-white shadow-2xl flex flex-col transition-all duration-500 ease-in-out transform @(IsOpen ? "translate-x-0" : "translate-x-full") @(isExpanded ? "w-[95vw]" : "w-full max-w-5xl")">
+
+    @if (Group != null)
+    {
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
+            <div>
+                <div class="flex items-center gap-3 mb-1">
+                    <div class="w-8 h-8 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    </div>
+                    <h3 class="text-xl font-bold text-slate-800">@Group.Name</h3>
+                </div>
+                <p class="text-xs text-slate-500 font-medium ml-11">
+                    @Group.GroupTypeName • @Group.DivisionName
+                </p>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button @onclick="ToggleExpand" title="@(isExpanded ? "Collapse Panel" : "Expand Panel")" class="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors">
+                    @if (isExpanded)
+                    {
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" transform="rotate(180 12 12)"></path></svg>
+                    }
+                    else
+                    {
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
+                    }
+                </button>
+                <button @onclick="ClosePanel" title="Close Group Details" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex flex-1 overflow-hidden">
+
+            <div class="w-48 bg-slate-50 border-r border-slate-100 overflow-y-auto py-4 shrink-0">
+                <nav class="flex flex-col gap-1 px-3">
+                    @foreach (var tab in panelTabs)
+                    {
+                        <button @onclick="() => SelectTab(tab.Name)" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all @(activeTab == tab.Name ? "bg-white text-blue-700 shadow-sm border border-slate-200" : "text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border border-transparent")">
+                            @((MarkupString)tab.IconSvg)
+                            @tab.Name
+                        </button>
+                    }
+                </nav>
+            </div>
+
+            <div class="flex-1 bg-white overflow-y-auto p-6 custom-scrollbar">
+
+                @if (activeTab == "Summary")
+                {
+                    <div class="space-y-6 animate-in fade-in duration-300">
+                        <h4 class="text-lg font-bold text-slate-800">Group Summary</h4>
+                        <p class="text-sm text-slate-500">Overview metrics and configuration details will go here.</p>
+                    </div>
+                    <div class="space-y-8 animate-in fade-in duration-300 pb-10">
+
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div class="bg-blue-50 p-5 rounded-xl border border-blue-100 flex flex-col justify-center relative overflow-hidden">
+                                <div class="absolute -right-4 -bottom-4 text-blue-500/10">
+                                    <svg class="w-24 h-24" fill="currentColor" viewBox="0 0 24 24"><path d="M12 4a4 4 0 100 8 4 4 0 000-8zM6 8a2 2 0 11-4 0 2 2 0 014 0zM18 8a2 2 0 11-4 0 2 2 0 014 0zM5.304 16.19a.844.844 0 01-.277-.71 5 5 0 019.947 0 .843.843 0 01-.277.71A6.975 6.975 0 0112 18a6.974 6.974 0 01-6.696-1.81zM19.745 15.66a8.964 8.964 0 00-2.023-2.023 5.002 5.002 0 012.277 4.293c.026.524-.265.986-.71 1.22a6.974 6.974 0 01-1.32.548 6.002 6.002 0 002.05-3.805l-.274-.233z"></path></svg>
+                                </div>
+                                <span class="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1 z-10">Currently Active</span>
+                                <span class="text-4xl font-black text-blue-800 z-10">@activeStaffCount</span>
+                            </div>
+
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col justify-center relative overflow-hidden">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 z-10">Former Staff</span>
+                                <span class="text-4xl font-black text-slate-700 z-10">@pastStaffCount</span>
+                            </div>
+
+                            <div class="bg-slate-50 p-5 rounded-xl border border-slate-200 flex flex-col justify-center relative overflow-hidden">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1 z-10">Total Ever Assigned</span>
+                                <span class="text-4xl font-black text-slate-700 z-10">@(activeStaffCount + pastStaffCount)</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+                            <h5 class="text-sm font-bold text-slate-800 mb-6 border-b border-slate-100 pb-2">Staffing History Timeline</h5>
+
+                            @if (isLoadingSummary)
+                            {
+                                <div class="flex justify-center items-center py-8 text-slate-400">
+                                    <svg class="animate-spin h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    Generating timeline...
+                                </div>
+                            }
+                            else if (!timelineEvents.Any())
+                            {
+                                <div class="text-center py-8 text-slate-400 italic text-sm">No historical staffing data available.</div>
+                            }
+                            else
+                            {
+                                <div class="relative border-l-2 border-slate-100 ml-4 space-y-8 pb-4">
+                                    @foreach (var ev in timelineEvents)
+                                    {
+                                        <div class="relative pl-6">
+                                            <div class="absolute -left-[9px] top-1 w-4 h-4 rounded-full bg-white border-[3px] @(ev.ActiveStaffCount > 0 ? "border-blue-500" : "border-slate-300")"></div>
+
+                                            <div class="bg-slate-50 border border-slate-100 rounded-lg p-4 transition-all hover:shadow-sm">
+                                                <div class="flex justify-between items-center mb-3">
+                                                    <span class="font-black text-slate-700">@ev.MonthYear.ToString("MMMM yyyy")</span>
+                                                    <span class="bg-white border border-slate-200 text-slate-700 text-xs font-bold px-3 py-1 rounded-full shadow-sm">
+                                                        @ev.ActiveStaffCount Active Staff
+                                                    </span>
+                                                </div>
+
+                                                <div class="flex gap-4 text-xs font-bold">
+                                                    @if (ev.Joins > 0)
+                                                    {
+                                                        <span class="text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                                            @ev.Joins Joined
+                                                        </span>
+                                                    }
+                                                    @if (ev.Leaves > 0)
+                                                    {
+                                                        <span class="text-rose-600 bg-rose-50 px-2 py-1 rounded flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"></path></svg>
+                                                            @ev.Leaves Left
+                                                        </span>
+                                                    }
+                                                    @if (ev.Joins == 0 && ev.Leaves == 0 && ev == timelineEvents.Last())
+                                                    {
+                                                        <span class="text-slate-500 bg-slate-100 px-2 py-1 rounded">Group Created</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "Staffs")
+                {
+                    <div class="space-y-4 animate-in fade-in duration-300">
+                        <div class="flex justify-between items-end border-b border-slate-100 pb-2">
+                            <div>
+                                <h4 class="text-lg font-bold text-slate-800">Assigned Staff</h4>
+                                <p class="text-xs text-slate-500 mt-1">Manage employees currently assigned to this group.</p>
+                            </div>
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                Assign Staff
+                            </button>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                                <thead class="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs w-12">#</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Name</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Employee No.</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Effective Start Date</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (isLoadingStaff)
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="py-8 text-center text-slate-500">
+                                                <div class="flex justify-center items-center gap-2">
+                                                    <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                    Loading staff members...
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    else if (!groupStaff.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="5" class="py-8 text-center text-slate-500 italic">No staff members assigned to this group yet.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @for (int i = 0; i < groupStaff.Count; i++)
+                                        {
+                                            var staff = groupStaff[i];
+                                            <tr class="hover:bg-slate-50 transition-colors">
+                                                <td class="py-3 px-4 text-slate-400 font-medium">@(i + 1)</td>
+                                                <td class="py-3 px-4">
+                                                    <div class="flex items-center gap-3">
+                                                        <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
+                                                            @(staff.Name.Substring(0, 1).ToUpper())
+                                                        </div>
+                                                        <span class="font-bold text-slate-700">@staff.Name</span>
+                                                    </div>
+                                                </td>
+                                                <td class="py-3 px-4 font-mono text-slate-600">@staff.EmployeeNumber</td>
+                                                <td class="py-3 px-4 text-slate-600">@(staff.EffectiveStartDate.ToString("dd MMM yyyy"))</td>
+                                                <td class="py-3 px-4 text-center">
+                                                    <div class="flex items-center justify-center gap-2">
+                                                        <button  title="View Staff Details" class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 hover:bg-blue-100 px-2 py-1.5 rounded transition-colors border border-blue-100 flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
+                                                            Detail
+                                                        </button>
+                                                        <button title="Edit Assignment" class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded transition-colors border border-slate-200 flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                                            Edit
+                                                        </button>
+                                                        <button title="Remove from Group" class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100 flex items-center gap-1">
+                                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+
+                        <div class="space-y-4 pt-6">
+                            <div class="flex justify-between items-end border-b border-slate-100 pb-2">
+                                <div>
+                                    <h4 class="text-lg font-bold text-slate-800">Former Staff</h4>
+                                    <p class="text-xs text-slate-500 mt-1">Employees previously assigned to this group whose effective end date has passed.</p>
+                                </div>
+                            </div>
+
+                            <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                                <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                                    <thead class="bg-slate-50 border-b border-slate-200">
+                                        <tr>
+                                            <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs w-12">#</th>
+                                            <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Name</th>
+                                            <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Employee No.</th>
+                                            <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Term Dates</th>
+                                            <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 opacity-80">
+                                        @if (isLoadingStaff)
+                                        {
+                                            <tr><td colspan="5" class="py-8 text-center text-slate-400">Loading history...</td></tr>
+                                        }
+                                        else if (!formerStaff.Any())
+                                        {
+                                            <tr><td colspan="5" class="py-8 text-center text-slate-400 italic">No former staff records found.</td></tr>
+                                        }
+                                        else
+                                        {
+                                            @for (int i = 0; i < formerStaff.Count; i++)
+                                            {
+                                                var staff = formerStaff[i];
+                                                <tr class="hover:bg-slate-50 transition-colors grayscale-[50%]">
+                                                    <td class="py-3 px-4 text-slate-400 font-medium">@(i + 1)</td>
+                                                    <td class="py-3 px-4">
+                                                        <div class="flex items-center gap-3">
+                                                            <div class="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 font-bold text-xs shrink-0">
+                                                                @(staff.Name.Substring(0, 1).ToUpper())
+                                                            </div>
+                                                            <span class="font-bold text-slate-600">@staff.Name</span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="py-3 px-4 font-mono text-slate-500">@staff.EmployeeNumber</td>
+                                                    <td class="py-3 px-4 text-slate-500 text-xs">
+                                                        @staff.EffectiveStartDate.ToString("dd MMM yyyy")
+                                                        <span class="mx-1 text-slate-300">→</span>
+                                                        <span class="font-semibold text-rose-600">@(staff.EffectiveEndDate)</span>
+                                                    </td>
+                                                    <td class="py-3 px-4 text-center">
+                                                        <button title="View Staff Details" class="text-slate-500 hover:text-slate-800 font-bold text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded transition-colors border border-slate-200">
+                                                            Detail
+                                                        </button>
+                                                        <button title="Re-assign to Group" class="ml-2 text-emerald-600 hover:text-emerald-800 font-bold text-xs bg-emerald-50 hover:bg-emerald-100 px-3 py-1.5 rounded transition-colors border border-emerald-100">
+                                                            Re-assign
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                }
+                else if (activeTab == "Schedules")
+                {
+                    <div class="space-y-4 animate-in fade-in duration-300 pb-10">
+                        <div class="flex justify-between items-end border-b border-slate-100 pb-2">
+                            <div>
+                                <h4 class="text-lg font-bold text-slate-800">Assigned Schedules</h4>
+                                <p class="text-xs text-slate-500 mt-1">Manage working shifts and schedules applied to this group.</p>
+                            </div>
+                            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                Assign Schedule
+                            </button>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                                <thead class="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs w-12">#</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Schedule Name</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Tags</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Duration</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Status</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (isLoadingSchedules)
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="py-8 text-center text-slate-500">
+                                                <div class="flex justify-center items-center gap-2">
+                                                    <svg class="animate-spin h-5 w-5 text-blue-500" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                    Loading schedules...
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                    else if (!groupSchedules.Any())
+                                    {
+                                        <tr>
+                                            <td colspan="6" class="py-8 text-center text-slate-500 italic">No schedules assigned to this group yet.</td>
+                                        </tr>
+                                    }
+                                    else
+                                    {
+                                        @for (int i = 0; i < groupSchedules.Count; i++)
+                                        {
+                                            var sched = groupSchedules[i];
+                                            <tr class="hover:bg-slate-50 transition-colors @(sched.IsActive ? "" : "opacity-60")">
+                                                <td class="py-3 px-4 text-slate-400 font-medium">@(i + 1)</td>
+                                                <td class="py-3 px-4">
+                                                    <span class="font-bold text-slate-700 block">@sched.Name</span>
+                                                    @if (!string.IsNullOrWhiteSpace(sched.Description))
+                                                    {
+                                                        <span class="text-xs text-slate-500 block truncate max-w-[200px]">@sched.Description</span>
+                                                    }
+                                                </td>
+                                                <td class="py-3 px-4 flex gap-1 items-center h-full pt-4">
+                                                    @if (sched.IsGlobal)
+                                                    {
+                                                        <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Global</span>
+                                                    }
+                                                    @if (sched.IsRamazan)
+                                                    {
+                                                        <span class="bg-amber-50 text-amber-600 border border-amber-100 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">Ramadan</span>
+                                                    }
+                                                </td>
+                                                <td class="py-3 px-4 text-slate-600 text-xs">
+                                                    @if (sched.StartDate.HasValue || sched.EndDate.HasValue)
+                                                    {
+                                                        <span>@(sched.StartDate?.ToString("dd MMM yy") ?? "∞")</span>
+                                                        <span class="mx-1 text-slate-300">→</span>
+                                                        <span>@(sched.EndDate?.ToString("dd MMM yy") ?? "∞")</span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="text-slate-400 italic">No dates set</span>
+                                                    }
+                                                </td>
+                                                <td class="py-3 px-4 text-center">
+                                                    @if (sched.IsActive)
+                                                    {
+                                                        <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-bold flex items-center justify-center gap-1 w-fit mx-auto">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Active
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="bg-slate-100 text-slate-600 border border-slate-200 px-2.5 py-1 rounded-full text-xs font-bold w-fit mx-auto block">
+                                                            Inactive
+                                                        </span>
+                                                    }
+                                                </td>
+                                                <td class="py-3 px-4 text-center">
+                                                    <div class="flex items-center justify-center gap-2">
+                                                        <button title="View Detail" class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded transition-colors border border-slate-200">
+                                                            Detail
+                                                        </button>
+                                                        <button title="Remove" class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100">
+                                                            Remove
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else if (activeTab == "Leave Sets")
+                {
+                    <div class="space-y-4 animate-in fade-in duration-300 pb-10">
+                        <div class="flex justify-between items-end border-b border-slate-100 pb-2">
+                            <div>
+                                <h4 class="text-lg font-bold text-slate-800">Assigned Leave Sets</h4>
+                                <p class="text-xs text-slate-500 mt-1">Manage the leave policies and allowances available to this group.</p>
+                            </div>
+                            <button @onclick="OpenAssignLeaveSetPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                Assign Leave Set
+                            </button>
+                        </div>
+
+                        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
+                            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                                <thead class="bg-slate-50 border-b border-slate-200">
+                                    <tr>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs w-12">#</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Leave Set Name</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs">Included Leave Types</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Status</th>
+                                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-xs text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @if (isLoadingLeaveSets)
+                                    {
+                                        <tr><td colspan="5" class="py-8 text-center text-slate-500">Loading leave sets...</td></tr>
+                                    }
+                                    else if (!groupLeaveSets.Any())
+                                    {
+                                        <tr><td colspan="5" class="py-8 text-center text-slate-500 italic">No leave sets assigned to this group yet.</td></tr>
+                                    }
+                                    else
+                                    {
+                                        @for (int i = 0; i < groupLeaveSets.Count; i++)
+                                        {
+                                            var ls = groupLeaveSets[i];
+                                            <tr class="hover:bg-slate-50 transition-colors @(ls.IsValid ? "" : "opacity-60 grayscale-[50%]")">
+                                                <td class="py-3 px-4 text-slate-400 font-medium align-top">@(i + 1)</td>
+                                                <td class="py-3 px-4 align-top">
+                                                    <span class="font-bold text-slate-700 block">@ls.Name</span>
+                                                    <div class="flex gap-1 mt-1">
+                                                        @if (ls.IsGlobal)
+                                                        {
+                                                            <span class="bg-indigo-50 text-indigo-600 border border-indigo-100 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">Global</span>
+                                                        }
+                                                        @if (ls.IsPublic)
+                                                        {
+                                                            <span class="bg-emerald-50 text-emerald-600 border border-emerald-100 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider">Public</span>
+                                                        }
+                                                    </div>
+                                                </td>
+                                                <td class="py-3 px-4 align-top whitespace-normal">
+                                                    <div class="flex flex-wrap gap-1 max-w-sm">
+                                                        @if (ls.IncludedLeaveTypes.Any())
+                                                        {
+                                                            @foreach (var type in ls.IncludedLeaveTypes)
+                                                            {
+                                                                <span class="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-semibold">@type</span>
+                                                            }
+                                                        }
+                                                        else
+                                                        {
+                                                            <span class="text-slate-400 text-xs italic">No types mapped</span>
+                                                        }
+                                                    </div>
+                                                </td>
+                                                <td class="py-3 px-4 text-center align-top">
+                                                    @if (ls.IsValid)
+                                                    {
+                                                        <span class="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-full text-xs font-bold flex items-center justify-center gap-1 w-fit mx-auto">
+                                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Valid
+                                                        </span>
+                                                    }
+                                                    else
+                                                    {
+                                                        <span class="bg-rose-50 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-full text-xs font-bold w-fit mx-auto block">Invalid</span>
+                                                    }
+                                                </td>
+                                                <td class="py-3 px-4 text-center align-top">
+                                                    <button class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100">Remove</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="flex flex-col items-center justify-center py-16 text-slate-400 animate-in fade-in duration-300">
+                        <svg class="w-12 h-12 mb-3 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
+                        <p class="text-sm font-medium">@activeTab configuration panel goes here.</p>
+                    </div>
+                }
+            </div>
+
+            <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[75] transition-opacity duration-300 ease-in-out @(showAssignLeavePanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")" 
+     @onclick="CloseAssignLeaveSetPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-[80] w-full max-w-sm bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAssignLeavePanel ? "translate-x-0" : "translate-x-full")">
+    
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">Assign Leave Set</h3>
+        <button @onclick="CloseAssignLeaveSetPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Select Leave Set <span class="text-rose-500">*</span></label>
+            <select @bind="selectedNewLeaveSetId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                <option value="0">-- Choose a Leave Set --</option>
+                @foreach (var ls in availableLeaveSets)
+                {
+                    <option value="@ls.LeaveSetId">@ls.Name</option>
+                }
+            </select>
+            @if(!availableLeaveSets.Any() && !isFetchingDropdown)
+            {
+                <p class="text-xs text-rose-500 mt-2">No unassigned leave sets available for this organisation.</p>
+            }
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAssignLeaveSetPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+        <button @onclick="SubmitAssignLeaveSet" disabled="@(isSubmittingLeaveSet || selectedNewLeaveSetId == 0)" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">
+            @(isSubmittingLeaveSet ? "Saving..." : "Assign")
+        </button>
+    </div>
+</div>
+
+
+        </div>
+    }
+
+
+
+
+</div>
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    // --- NEW: Expand State ---
+    private bool isExpanded = false;
+    private void ToggleExpand() => isExpanded = !isExpanded;
+
+
+    // --- NEW: Leave Sets State ---
+    private bool isLoadingLeaveSets = true;
+    private List<GroupLeaveSetDto> groupLeaveSets = new();
+
+    // --- Assign Panel State ---
+    private bool showAssignLeavePanel = false;
+    private bool isSubmittingLeaveSet = false;
+    private bool isFetchingDropdown = false;
+    private int selectedNewLeaveSetId = 0;
+    private List<LeaveSet> availableLeaveSets = new();
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    // Reusing the GroupDto we created earlier
+    [Parameter]
+    public OrganisationGroupsTab.GroupDto? Group { get; set; }
+
+    private string activeTab = "Summary";
+    private bool isLoadingStaff = true;
+    private List<GroupStaffDto> groupStaff = new();
+    private List<GroupStaffDto> formerStaff = new();
+ 
+    // --- NEW: Summary State ---
+    private bool isLoadingSummary = true;
+    private int activeStaffCount = 0;
+    private int pastStaffCount = 0;
+    private List<TimelineEvent> timelineEvents = new();
+    
+
+    // --- State Variables ---
+    private bool isLoadingSchedules = true;
+    private List<GroupScheduleDto> groupSchedules = new();
+
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // When the panel opens, reset tab to Summary. If Staffs is selected, load data.
+        if (IsOpen && Group != null)
+        {
+            if (activeTab != "Summary") activeTab = "Summary";
+            await LoadSummaryData();
+        }
+    }
+    private async Task LoadSummaryData()
+    {
+        isLoadingSummary = true;
+        try
+        {
+            if (Group == null || Group.GroupID == 0) return;
+
+            // 1. Fetch only the dates from the DB (Very fast, safe from EF translation errors)
+            var staffDates = await DbContext.GroupStaffs
+                .Where(gs => gs.GroupId == Group.GroupID)
+                .Select(gs => new { gs.EffectiveStartDate, gs.EffectiveEndDate })
+                .ToListAsync();
+
+            // 2. Calculate Top Metric Cards
+            activeStaffCount = staffDates.Count(s => s.EffectiveEndDate == null || s.EffectiveEndDate > DateTime.Today);
+            pastStaffCount = staffDates.Count(s => s.EffectiveEndDate != null && s.EffectiveEndDate <= DateTime.Today);
+
+            // 3. Generate Timeline History in memory
+            var rawEvents = new List<RawEvent>();
+
+            foreach (var s in staffDates)
+            {
+                rawEvents.Add(new RawEvent
+                    {
+                        Date = s.EffectiveStartDate,
+                        Type = "Join"
+                    });
+
+                if (s.EffectiveEndDate <= DateTime.Today)
+                {
+                    rawEvents.Add(new RawEvent
+                        {
+                            Date = s.EffectiveEndDate.GetValueOrDefault(),
+                            Type = "Leave"
+                        });
+                }
+            }
+
+            // Group the events by Month and Year
+            var groupedByMonth = rawEvents
+                .GroupBy(e => new { e.Date.Year, e.Date.Month })
+                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month);
+
+            int runningTotal = 0;
+            timelineEvents.Clear();
+
+            // Calculate the running total chronologically
+            foreach (var group in groupedByMonth)
+            {
+                int joinsThisMonth = group.Count(e => e.Type == "Join");
+                int leavesThisMonth = group.Count(e => e.Type == "Leave");
+
+                runningTotal += joinsThisMonth;
+                runningTotal -= leavesThisMonth;
+
+                timelineEvents.Add(new TimelineEvent
+                    {
+                        MonthYear = new DateTime(group.Key.Year, group.Key.Month, 1),
+                        Joins = joinsThisMonth,
+                        Leaves = leavesThisMonth,
+                        ActiveStaffCount = runningTotal
+                    });
+            }
+
+            // Reverse the list so the newest dates appear at the top of the UI
+            timelineEvents.Reverse();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading summary: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingSummary = false;
+        }
+    }
+    private async Task SelectTab(string tabName)
+    {
+        activeTab = tabName;
+
+        // Lazy load staff when the tab is clicked
+        if (tabName == "Staffs"){await LoadGroupStaff();}
+        if (tabName == "Schedules") await LoadGroupSchedules(); 
+        if (tabName == "Leave Sets") await LoadGroupLeaveSets();
+    }
+
+    // --- The DB Query Method ---
+    private async Task LoadGroupSchedules()
+    {
+        isLoadingSchedules = true;
+        try
+        {
+            if (Group == null || Group.GroupID == 0) return;
+
+            // 1. Safe query from DB without C# string manipulation
+            var baseQuery = from gs in DbContext.GroupSchedules
+                            where gs.GroupId == Group.GroupID
+                            join s in DbContext.Schedules on gs.ScheduleId equals s.ScheduleId
+                            select new { gs, s };
+
+            var records = await baseQuery.ToListAsync();
+
+            // 2. Map to DTO in memory, ordering by Active first, then by Start Date
+            groupSchedules = records.Select(x => new GroupScheduleDto
+            {
+                GroupScheduleID = x.gs.GroupScheduleId,
+                ScheduleID = x.s.ScheduleId,
+                Name = x.s.Name ?? "Unnamed Schedule",
+                Description = x.s.Description,
+                IsActive = x.gs.IsActive ,
+                IsGlobal = x.s.IsGlobal ,
+                IsRamazan = x.s.IsRamazan ?? false,
+                StartDate = x.s.StartDate,
+                EndDate = x.s.EndDate
+            })
+            .OrderByDescending(s => s.IsActive)
+            .ThenByDescending(s => s.StartDate)
+            .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading schedules: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingSchedules = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private async Task LoadGroupStaff()
+    {
+        isLoadingStaff = true;
+        try
+        {
+            if (Group == null || Group.GroupID == 0) return;
+
+            // 1. Create a base query to handle the JOIN securely in SQL
+            var baseQuery = from gs in DbContext.GroupStaffs
+                            where gs.GroupId == Group.GroupID
+                            join ind in DbContext.Individuals on gs.StaffIndividualId equals ind.BusinessEntityId
+                            select new { gs, ind };
+
+            // 2. Fetch Active Staff securely from the database
+            var activeRecords = await baseQuery
+                .Where(x => x.gs.EffectiveEndDate == null || x.gs.EffectiveEndDate > DateTime.Today)
+                .OrderByDescending(x => x.gs.EffectiveStartDate)
+                .ToListAsync();
+
+            // Safely map Active Staff to C# objects in memory
+            groupStaff = activeRecords.Select(x => new GroupStaffDto
+                {
+                    Id = x.gs.GroupStaffId,
+                    Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
+                    EmployeeNumber = "ID-" + x.ind.BusinessEntityId.ToString(),
+                    EffectiveStartDate = x.gs.EffectiveStartDate,
+                    EffectiveEndDate = x.gs.EffectiveEndDate
+                }).ToList();
+
+
+            // 3. Fetch Former Staff securely from the database
+            var formerRecords = await baseQuery
+                .Where(x => x.gs.EffectiveEndDate != null && x.gs.EffectiveEndDate <= DateTime.Today)
+                .OrderByDescending(x => x.gs.EffectiveEndDate)
+                .ToListAsync();
+
+            // Safely map Former Staff to C# objects in memory
+            formerStaff = formerRecords.Select(x => new GroupStaffDto
+                {
+                    Id = x.gs.GroupStaffId,
+                    Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
+                    EmployeeNumber = "ID-" + x.ind.BusinessEntityId.ToString(),
+                    EffectiveStartDate = x.gs.EffectiveStartDate,
+                    EffectiveEndDate = x.gs.EffectiveEndDate
+                }).ToList();
+
+        }
+        catch (Exception ex)
+        {
+            // If it fails again, this will let you see exactly why in your output/console
+            Console.WriteLine($"Error loading group staff: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingStaff = false;
+            StateHasChanged(); // Force the UI to refresh after loading!
+        }
+    }
+
+    // --- The DB Query Method for Leave Sets ---
+    // --- 1. Load the Table Data (Now includes related Leave Types) ---
+    private async Task LoadGroupLeaveSets()
+    {
+        isLoadingLeaveSets = true;
+        try
+        {
+            if (Group == null || Group.GroupID == 0) return;
+
+            // Step 1: Fetch the base Leave Sets
+            var records = await (from gls in DbContext.GroupLeaveSets
+                                 where gls.GroupId == Group.GroupID
+                                 join ls in DbContext.LeaveSets on gls.LeaveSetId equals ls.LeaveSetId
+                                 select new
+                                 {
+                                     GroupLeaveSetId = gls.GroupLeaveSetId,
+                                     LeaveSetId = ls.LeaveSetId,
+                                     Name = ls.Name,
+                                     IsPublic = ls.IsPublic,
+                                     IsGlobal = ls.IsGlobal,
+                                     IsValid = gls.IsValid
+                                 }).ToListAsync();
+
+            if (!records.Any())
+            {
+                groupLeaveSets = new List<GroupLeaveSetDto>();
+                return;
+            }
+
+            // Step 2: Fetch Leave Types using strict SQL JOINs instead of .Contains(list)!
+            // This forces EF Core to use SQL joins rather than generating buggy parameters.
+            var leaveTypesData = await (from gls in DbContext.GroupLeaveSets
+                                        where gls.GroupId == Group.GroupID
+                                        join lslt in DbContext.LeaveSetLeaveTypes on gls.LeaveSetId equals lslt.LeaveSetId
+                                        where lslt.IsValid == true
+                                        join lt in DbContext.LeaveTypes on lslt.LeaveTypeId equals lt.LeaveTypeId
+                                        select new
+                                        {
+                                            LeaveSetId = lslt.LeaveSetId,
+                                            TypeName = lt.Name
+                                        }).ToListAsync();
+
+            // Group the leave types by their LeaveSetId in memory
+            var leaveTypesLookup = leaveTypesData
+                .GroupBy(x => x.LeaveSetId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.TypeName).ToList());
+
+            // Step 3: Map the raw data to your DTOs
+            groupLeaveSets = records.Select(x => new GroupLeaveSetDto
+                {
+                    GroupLeaveSetID = x.GroupLeaveSetId,
+                    LeaveSetID = x.LeaveSetId,
+                    Name = x.Name ?? "Unnamed Leave Set",
+                    IsPublic = x.IsPublic,
+                    IsGlobal = x.IsGlobal,
+                    IsValid = x.IsValid,
+                    IncludedLeaveTypes = leaveTypesLookup.ContainsKey(x.LeaveSetId)
+                                         ? leaveTypesLookup[x.LeaveSetId]
+                                         : new List<string>()
+                })
+            .OrderByDescending(ls => ls.IsValid)
+            .ThenBy(ls => ls.Name)
+            .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading leave sets: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingLeaveSets = false;
+            StateHasChanged();
+        }
+    }
+
+    // --- 2. Open Panel & Fetch Dropdown ---
+    private async Task OpenAssignLeaveSetPanel()
+    {
+        isFetchingDropdown = true;
+        showAssignLeavePanel = true;
+        selectedNewLeaveSetId = 0;
+        availableLeaveSets.Clear();
+
+        try
+        {
+            if (Group == null || Group.GroupID == 0) return;
+
+            var groupEntity = await DbContext.Groups.FirstOrDefaultAsync(g => g.GroupId == Group.GroupID);
+            if (groupEntity == null) return;
+
+            int orgId = groupEntity.BusinessEntityOrganisationId;
+            if (orgId == 0) return;
+
+            var alreadyAssignedIDs = groupLeaveSets.Select(x => x.LeaveSetID).ToList();
+
+            // STEP 1: Fetch ALL leave sets for this organization (100% safe, no .Contains here)
+            var allOrgLeaveSets = await DbContext.LeaveSets
+                .Where(ls => ls.OrganisationId == orgId)
+                .OrderBy(ls => ls.Name)
+                .ToListAsync(); // <-- SQL Server finishes its job right here.
+
+            // STEP 2: Filter the list in C# memory
+            // Because this happens after .ToListAsync(), it uses C#, not SQL!
+            if (alreadyAssignedIDs.Any())
+            {
+                availableLeaveSets = allOrgLeaveSets
+                    .Where(ls => !alreadyAssignedIDs.Contains(ls.LeaveSetId))
+                    .ToList();
+            }
+            else
+            {
+                availableLeaveSets = allOrgLeaveSets;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dropdown: {ex.Message}");
+        }
+        finally
+        {
+            isFetchingDropdown = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CloseAssignLeaveSetPanel()
+    {
+        showAssignLeavePanel = false;
+    }
+
+    // --- 3. Save Assignment ---
+    private async Task SubmitAssignLeaveSet()
+    {
+        if (selectedNewLeaveSetId == 0 || Group == null) return;
+
+        isSubmittingLeaveSet = true;
+        try
+        {
+            int newLogId = await LogService.CreateLogAsync(SharedConfig.OperationLogActionTypes.GROUP_LEAVE_SET_CREATE, "Assigned Leave Set ID 12 to Group 3");
+            var newAssignment = new GroupLeaveSet
+                {
+                // Note the simple 'd' to match your Entity Model
+                    GroupId = Group.GroupID,
+                    LeaveSetId = selectedNewLeaveSetId,
+                    IsValid = true,
+
+                // 🛑 CRITICAL FIX: Because OperationLogId is an 'int' and not 'int?',
+                // it is REQUIRED by the database. You MUST pass a valid ID here.
+                // Replace '1' with however you normally track the current user/session log in your app.
+                    OperationLogId = 1
+                };
+
+            DbContext.GroupLeaveSets.Add(newAssignment);
+            await DbContext.SaveChangesAsync();
+
+            // Refresh the table and close panel
+            await LoadGroupLeaveSets();
+            showAssignLeavePanel = false;
+        }
+        catch (Exception ex)
+        {
+            // PRO TIP: Using 'InnerException' reveals the ACTUAL SQL error instead of a generic EF error
+            string errorMsg = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            Console.WriteLine($"❌ Error assigning leave set: {errorMsg}");
+        }
+        finally
+        {
+            isSubmittingLeaveSet = false;
+            StateHasChanged();
+        }
+    }
+
+
+    private async Task ClosePanel()
+    {
+        IsOpen = false;
+        await IsOpenChanged.InvokeAsync(IsOpen);
+
+        // Clean up state when closing
+        groupStaff.Clear();
+        activeTab = "Summary";
+    }
+
+  
+    public class GroupStaffDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public DateTime EffectiveStartDate { get; set; }
+        public DateTime? EffectiveEndDate { get; set; }
+    }
+    public class GroupLeaveSetDto
+    {
+        public int GroupLeaveSetID { get; set; }
+        public int LeaveSetID { get; set; }
+
+        public string Name { get; set; } = string.Empty;
+        public bool IsPublic { get; set; }
+        public bool IsGlobal { get; set; }
+        public bool IsValid { get; set; }
+
+        public List<string> IncludedLeaveTypes { get; set; } = new();
+    }
+    public class GroupScheduleDto
+    {
+        public int GroupScheduleID { get; set; }
+        public int ScheduleID { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public bool IsActive { get; set; }
+        public bool IsGlobal { get; set; }
+        public bool IsRamazan { get; set; }
+        public DateTime? StartDate { get; set; }
+        public DateTime? EndDate { get; set; }
+    }
+
+    private class RawEvent
+    {
+        public DateTime Date { get; set; }
+        public string Type { get; set; } = string.Empty;
+    }
+    public class TimelineEvent
+    {
+        public DateTime MonthYear { get; set; }
+        public int Joins { get; set; }
+        public int Leaves { get; set; }
+        public int ActiveStaffCount { get; set; }
+    }
+   
+
+    private record PanelTab(string Name, string IconSvg);
+    private List<PanelTab> panelTabs = new()
+    {
+        new("Summary", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6z"></path></svg>"""),
+        new("Staffs", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>"""),
+        new("Schedules", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>"""),
+        new("Leave Sets", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>"""),
+        new("Configurable Values", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>""")
+    };
+}

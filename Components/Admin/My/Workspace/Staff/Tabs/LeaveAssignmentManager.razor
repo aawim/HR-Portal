@@ -1,0 +1,616 @@
+﻿@using HRM.DTOs.Leave
+@using HRM.DTOs
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@inject ILeaveService LeaveService
+@inject IJobLeaveTypeService JobLeaveTypeService
+@inject ToastService ToastService
+
+<div class="grid grid-cols-12 gap-6">
+
+    <!-- Assigned -->
+    <!-- Assigned Leave Types -->
+    <div class="col-span-3">
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full">
+
+            <!-- Header -->
+            <div class="px-4 py-3 border-b border-slate-100">
+
+                <h3 class="font-semibold text-slate-800">
+                    Assigned Leave Types
+                </h3>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    @assigned.Count assigned
+                </p>
+
+            </div>
+
+            <!-- Search -->
+            <div class="p-3 border-b border-slate-100">
+
+                <input class="w-full rounded-lg border border-slate-300
+                           px-3 py-2 text-sm
+                           focus:outline-none
+                           focus:ring-2
+                           focus:ring-blue-500"
+                placeholder="Search..."
+                @bind="assignedSearch"
+                @bind:event="oninput" />
+
+            </div>
+
+            <!-- List -->
+            <div class="max-h-[650px] overflow-y-auto">
+
+                @foreach (var item in assigned
+                .Where(x => string.IsNullOrWhiteSpace(assignedSearch)
+                || x.LeaveTypeName.Contains(assignedSearch,
+                StringComparison.OrdinalIgnoreCase)))
+                {
+                    <div class="p-3 border-b border-slate-100 cursor-pointer transition
+                            @(selectedAssigned?.JobLeaveTypeId == item.JobLeaveTypeId
+                                ? "bg-blue-50 border-l-4 border-blue-600"
+                                : "hover:bg-slate-50")"
+                    @onclick="() => SelectAssigned(item)">
+
+                        <div class="flex justify-between items-center">
+
+                            <div>
+
+                                <div class="font-medium text-slate-800">
+                                    🌴 @item.LeaveTypeName
+                                </div>
+
+                                <div class="text-xs text-slate-500 mt-1">
+
+                                    Remaining
+                                    <span class="font-semibold text-green-600">
+                                        @item.RemainingDays
+                                    </span>
+
+                                    days
+
+                                </div>
+
+                                <div class="text-xs text-slate-400 mt-1">
+
+                                    @item.EffectiveFromDate
+
+                                    -
+
+                                    @item.EffectiveToDate
+
+                                </div>
+
+                            </div>
+
+                            @if (item.IsValid)
+                            {
+                                <span class="px-2 py-1 rounded-full text-xs
+                                         bg-green-100 text-green-700">
+
+                                    Active
+
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="px-2 py-1 rounded-full text-xs
+                                         bg-red-100 text-red-700">
+
+                                    Inactive
+
+                                </span>
+                            }
+
+                            @if (item.IsLeaveInfoUpdated)
+                            {
+                                <span class="px-2 py-1 rounded-full text-xs
+                                         bg-green-100 text-green-700">
+
+                                    Leave Info Updated
+
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="px-2 py-1 rounded-full text-xs
+                                         bg-amber-100 text-red-700">
+
+                                    Leave Info Exired.
+
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+    </div>
+    <!-------------------------------------Assigned Leave Types-------------------------------- >
+
+
+    <!-- Details -->
+
+    <div class="col-span-6">
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full">
+
+            <!-- Header -->
+            <div class="px-6 py-4 border-b border-slate-100">
+
+                <h2 class="text-lg font-semibold text-slate-800">
+                    Leave Type Details
+                </h2>
+
+                <p class="text-sm text-slate-500">
+                    Update the selected leave assignment.
+                </p>
+
+            </div>
+
+            @if (selectedAssigned == null)
+            {
+                <div class="h-[650px] flex flex-col items-center justify-center text-slate-400">
+
+                    <div class="text-6xl mb-4">
+                        👈
+                    </div>
+
+                    <div class="text-lg font-medium">
+                        Select a leave type
+                    </div>
+
+                    <div class="text-sm">
+                        Choose one from the Assigned list.
+                    </div>
+
+                </div>
+            }
+            else
+            {
+                <div class="p-6 space-y-6">
+
+                    <!-- Leave Type -->
+
+                    <div>
+
+                        <label class="block text-sm font-medium text-slate-600 mb-2">
+                            Leave Type
+                        </label>
+
+                        <input class="w-full rounded-lg border bg-slate-100 px-3 py-2"
+                        value="@selectedAssigned.LeaveTypeName"
+                        readonly />
+
+                    </div>
+
+                    <!-- Dates -->
+
+                    <div class="grid grid-cols-2 gap-4">
+
+                        <div>
+
+                            <label class="block text-sm font-medium text-slate-600 mb-2">
+                                Effective From
+                            </label>
+
+                            <InputDate class="w-full rounded-lg border px-3 py-2"
+                            @bind-Value="selectedAssigned.EffectiveFromDate" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="block text-sm font-medium text-slate-600 mb-2">
+                                Effective To
+                            </label>
+
+                            <InputDate class="w-full rounded-lg border px-3 py-2"
+                            @bind-Value="selectedAssigned.EffectiveToDate" />
+
+                        </div>
+
+                    </div>
+
+                    <!-- Balances -->
+
+                    <div class="grid grid-cols-3 gap-4">
+
+                        @*          <div>
+
+                            <label class="block text-sm font-medium text-slate-600 mb-2">
+                                Entitled Days
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border px-3 py-2"
+                                         @bind-Value="selectedAssigned.EntitledDays" />
+
+                        </div> *@
+
+                        <div>
+
+                            <label class="block text-sm font-medium text-slate-600 mb-2">
+                                Remaining Days
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border px-3 py-2"
+                            @bind-Value="selectedAssigned.RemainingDays" />
+
+                        </div>
+
+                        @*      <div>
+
+                            <label class="block text-sm font-medium text-slate-600 mb-2">
+                                Carry Forward
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border px-3 py-2"
+                                         @bind-Value="selectedAssigned.CarryForwardDays" />
+
+                        </div> *@
+
+                    </div>
+
+                    <!-- Status -->
+
+                    <div class="flex items-center gap-3">
+
+                        <InputCheckbox @bind-Value="selectedAssigned.IsValid" />
+
+                        <span class="text-sm">
+                            Active Leave Type
+                        </span>
+
+                    </div>
+
+                    <hr />
+
+                    <!-- Buttons -->
+
+                    <div class="flex justify-end gap-3">
+
+                        <button class="px-5 py-2 rounded-lg
+                                   bg-red-600 text-white
+                                   hover:bg-red-700"
+                        @onclick="RemoveSelected"> Remove
+
+                        </button>
+
+                        <button class="px-5 py-2 rounded-lg
+                                   bg-blue-600 text-white
+                                   hover:bg-blue-700"
+                        @onclick="SaveSelected"> Save Changes
+
+                        </button>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+
+
+    <!-------------------------------------Details-------------------------------------------- -->
+    <!-- Available Leave Types -->
+    <div class="col-span-3">
+
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full">
+
+            <!-- Header -->
+            <div class="px-4 py-3 border-b border-slate-100">
+
+                <h3 class="font-semibold text-slate-800">
+                    Available Leave Types
+                </h3>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    @available.Count available
+                </p>
+
+            </div>
+
+            <!-- Search -->
+
+            <div class="p-3 border-b border-slate-100">
+
+                <input class="w-full rounded-lg border border-slate-300
+                           px-3 py-2 text-sm
+                           focus:outline-none
+                           focus:ring-2
+                           focus:ring-blue-500"
+                placeholder="Search..."
+                @bind="availableSearch"
+                @bind:event="oninput" />
+
+            </div>
+
+            <!-- List -->
+
+            <div class="max-h-[560px] overflow-y-auto">
+
+                @*      @foreach (var item in available
+                .Where(x => string.IsNullOrWhiteSpace(availableSearch)
+                || x.Name.Contains(availableSearch,
+                StringComparison.OrdinalIgnoreCase)))
+                {
+                    <div class="p-3 border-b border-slate-100
+                            cursor-pointer transition
+                            @(selectedAvailable?.LeaveTypeID == item.LeaveTypeID
+                                ? "bg-green-50 border-l-4 border-green-600"
+                                : "hover:bg-slate-50")"
+                         @onclick="() => SelectAvailable(item)">
+
+                        <div class="font-medium text-slate-800">
+
+                            @GetLeaveIcon(item.Name)
+
+                            @item.Name
+
+                        </div>
+
+                    </div>
+                } *@
+                @foreach (var leave in available)
+                {
+                    <button class="w-full text-left p-3 rounded-lg border mb-2
+                   @(selectedAvailable?.LeaveTypeID == leave.LeaveTypeID
+                       ? "bg-blue-50 border-blue-500"
+                       : "hover:bg-slate-50")"
+                    @onclick="() => SelectAvailable(leave)">
+
+                        <div class="font-semibold">
+                            @leave.Name
+                        </div>
+
+                        <div class="text-xs text-slate-500">
+                            @leave.Duration days
+                        </div>
+
+                    </button>
+                }
+            </div>
+
+            <!-- Footer -->
+
+            <div class="border-t border-slate-100 p-4">
+
+
+
+                @if (selectedAvailable != null)
+                {
+                    <div class="mt-4 border-t pt-4">
+
+                        <button class="btn btn-primary w-full"
+                        @onclick="AssignLeaveType">
+
+                            Assign Leave Type
+
+                        </button>
+
+                    </div>
+                }
+
+
+
+                @*    <button class="w-full rounded-lg
+                           bg-green-600
+                           hover:bg-green-700
+                           text-white
+                           py-2
+                           disabled:bg-slate-300"
+                        disabled="@(selectedAvailable == null)"
+                        @onclick="AssignSelected">
+
+                    + Assign Leave Type
+
+                </button> *@
+
+            </div>
+
+        </div>
+
+    </div>
+    <!-------------------------------------Available Leave Types-------------------------------------------- -->
+</div>
+
+
+
+
+@code {
+
+    [Parameter]
+    public int StaffId { get; set; }
+
+    public int JobId;
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private bool isLoading;
+
+    private List<JobLeaveTypeDto> assigned = new();
+
+    private List<LeaveTypeDto> available = new();
+
+    private JobLeaveTypeDto? selectedAssigned;
+
+    private AssignLeaveTypeDto assignModel = new();
+
+    private LeaveTypeDto? selectedAvailable;
+
+    private string assignedSearch = "";
+
+    private string availableSearch = "";
+
+
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        JobId = await LeaveService.GetJobIdByStaffId(StaffId);
+        await LoadAsync();
+    }
+
+    private void SelectAssigned(JobLeaveTypeDto item)
+    {
+        selectedAssigned = item;
+
+        selectedAvailable = null;
+    }
+
+   
+
+    private void SelectAvailable(LeaveTypeDto leaveType)
+    {
+
+        if (JobId == null)
+            return;
+
+
+        selectedAvailable = leaveType;
+
+        assignModel = new AssignLeaveTypeDto
+            {
+                JobId = JobId,
+
+                LeaveTypeId = leaveType.LeaveTypeID,
+
+                RemainingDays = leaveType.Duration ?? 0,
+
+                EffectiveFromDate = DateTime.Today,
+
+                EffectiveToDate = DateTime.Today.AddYears(1),
+
+                IsValid = true
+            };
+    }
+
+
+
+    private async Task AssignLeaveType()
+    {
+        var result =
+            await JobLeaveTypeService.AssignAsync(assignModel);
+
+        if (!result.Success)
+        {
+            ToastService.Error("Uanble to assign leave Type!.");
+            return;
+        }
+
+
+
+        ToastService.Success("Leave Type Assigned!.");
+
+        selectedAvailable = null;
+
+        await LoadAsync();
+    }
+
+
+
+
+
+
+
+
+
+    private async Task SaveSelected()
+    {
+        if (selectedAssigned == null)
+            return;
+
+        var dto = new JobLeaveTypeEditDto
+            {
+                JobLeaveTypeId = selectedAssigned.JobLeaveTypeId,
+
+                RemainingDays = selectedAssigned.RemainingDays ?? 0,
+
+                EffectiveFromDate =
+                selectedAssigned.EffectiveFromDate,
+
+                EffectiveToDate =
+                selectedAssigned.EffectiveToDate,
+
+                IsValid =
+                selectedAssigned.IsValid,
+
+                IsLeaveInfoUpdated = selectedAssigned.IsLeaveInfoUpdated
+            };
+
+
+        var result =
+            await JobLeaveTypeService.UpdateAsync(dto);
+           
+
+        if (!result.Success)
+        {
+            ToastService.Error("Leave Type Not Updated!.");
+            return;
+        }
+        ToastService.Success("Leave Type Updated!.");
+
+        await LoadAsync();
+
+        // optional:
+        selectedAssigned =
+            assigned.FirstOrDefault(x =>
+                x.JobLeaveTypeId == dto.JobLeaveTypeId);
+    }
+
+    private async Task RemoveSelected()
+    {
+        if (selectedAssigned == null)
+            return;
+
+        // TODO
+    }
+
+
+     
+ 
+
+
+    private async Task LoadAsync()
+    {
+        isLoading = true;
+
+        // assigned = await LeaveService.GetAssignedLeaveTypesAsync(JobId);
+
+        assigned = await LeaveService.GetJobLeaveTypeByJobId(StaffId);
+
+        available = await LeaveService.GetAvailableLeaveTypesAsync(StaffId);
+
+        isLoading = false;
+    }
+
+
+
+    private string GetLeaveIcon(string name)
+    {
+        name = name.ToLower();
+
+        if (name.Contains("annual")) return "🌴";
+        if (name.Contains("medical")) return "🏥";
+        if (name.Contains("maternity")) return "👶";
+        if (name.Contains("study")) return "🎓";
+        if (name.Contains("marriage")) return "💍";
+        if (name.Contains("pilgrimage")) return "🕌";
+
+        return "📄";
+    }
+
+}

@@ -1,0 +1,68 @@
+﻿@inherits LayoutComponentBase
+
+
+
+@using HRM.DTOs
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Services
+@using HRM.Components.Shared
+@using HRM.Services.Interfaces
+ 
+@inject ToastService ToastService
+@inject NavigationManager Navigation
+
+@inject IUserContext UserContext
+@inject PortalContext PortalContext
+
+ 
+<div class="flex h-screen bg-slate-50">
+
+    <Sidebar />
+
+    <div class="flex flex-col flex-1 overflow-hidden">
+
+        <Topbar @rendermode="RenderMode.InteractiveServer" />
+
+        <main class="flex-1 overflow-x-hidden overflow-y-auto p-4">
+
+            @if (IsAdminPortal)
+            {
+                
+                @Body
+            }
+            else
+            {
+                
+                @Body
+            }
+        </main>
+    </div>
+</div>
+
+<ToastContainer @rendermode="RenderMode.InteractiveServer" />
+@code {
+
+    private UserSessionDto? _session;
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private bool IsAdminPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        _session = await UserContext.GetSessionAsync();
+
+        if (_session != null)
+        {
+            PortalContext.Initialize(
+                _session.OrganisationId,
+                _session.OrganisationName,
+                _session.CanAccessAdminPortal);
+        }
+    }
+
+ 
+}

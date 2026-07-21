@@ -1,0 +1,117 @@
+﻿@using HRM.Models
+@using HRM.Models.Archives
+@using Microsoft.EntityFrameworkCore
+
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+
+<div class="bg-white">
+    <!-- Header & Action Bar -->
+    <div class="flex justify-between items-end border-b border-slate-100 pb-4 mb-6">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Manage Leave Types</h2>
+            <p class="text-sm text-slate-500 mt-1">Configure leave policies, durations, and payment rules.</p>
+        </div>
+
+        <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Add New
+        </button>
+    </div>
+
+    <!-- Data Grid -->
+    @if (StaffEnrollmentNumber == null)
+    {
+        <!-- Loading State -->
+        <div class="flex justify-center items-center p-12 min-h-[300px]">
+            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+    }
+    else if (!StaffEnrollmentNumber.Any())
+    {
+        <!-- Empty State -->
+        <div class="bg-slate-50 border border-slate-100 rounded-xl p-12 text-center text-slate-500 min-h-[300px] flex flex-col items-center justify-center">
+            <div class="text-4xl mb-3">🌴</div>
+            <p class="font-medium text-slate-700 text-lg">No leave types found.</p>
+            <p class="text-sm mt-1">Click "Add New" to create your first leave policy.</p>
+        </div>
+    }
+    else
+    {
+        <!-- Data Table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200 shadow-sm">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                        <th class="p-4 font-bold">Individual</th>
+                        <th class="p-4 font-bold">Enrollment number</th>
+                        <th class="p-4 font-bold">Organisation</th>
+                        <th class="p-4 font-bold text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (var staff in StaffEnrollmentNumber)
+                    {
+                        <tr class="hover:bg-slate-50 transition-colors duration-150">
+                            <!-- Names -->
+                            <td class="p-4">
+                                <div class="font-bold text-slate-800 text-sm">@staff.Individual?.Individual?.FirstNameEnglish @staff.Individual?.Individual?.LastNameEnglish</div>
+                                @if (!string.IsNullOrWhiteSpace(staff?.Individual?.Individual?.FirstNameDhivehi))
+                                {
+                                    <div class="text-xs text-slate-500 font-medium mt-0.5" dir="rtl">
+                                        @($"{staff?.Individual?.Individual?.FirstNameDhivehi:D2}:{staff?.Individual?.Individual?.FirstNameDhivehi:D2}:{staff?.Individual?.Individual?.FirstNameDhivehi:D2}")
+                                    </div>
+                                }
+                            </td>
+                            <!-- Enrollment Number -->
+                            <td class="p-4 text-sm text-slate-700 font-medium">
+                                @staff.EnrollmentNumber
+                            </td>
+                             <!-- Organisation -->
+                            <td class="p-4 text-sm text-slate-700 font-medium">
+                                @staff?.Organisation?.OrganisationName
+                            </td>
+        
+
+
+
+                            <!-- Actions -->
+                            <td class="p-4 text-right">
+                                <div class="flex justify-end gap-1">
+                                    <!-- Edit Button -->
+                                    <button class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                                    </button>
+                                    <!-- Delete Button -->
+                                    <button class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    // The list that will hold the data from the database
+    private List<StaffEnrollmentNumber>? StaffEnrollmentNumber;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // 1. Fetch the data asynchronously when the component loads
+        // 2. Order by name so the table is neatly alphabetized
+        StaffEnrollmentNumber = await DbContext.StaffEnrollmentNumbers
+            // 1. Fetch the Staff record (which your model calls 'Individual')
+            .Include(sen => sen.Individual)
+                // 2. Go one level deeper to fetch the actual Individual name record
+                .ThenInclude(staff => staff.Individual)
+            // 3. Fetch the Organisation
+            .Include(sen => sen.Organisation)
+            .OrderBy(l => l.StaffEnrollmentNumberId)
+            .ToListAsync();
+    }
+}

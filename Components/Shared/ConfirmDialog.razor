@@ -1,0 +1,167 @@
+﻿<div class="fixed inset-0 z-50 flex items-center justify-center">
+
+    <div class="absolute inset-0 bg-black/40"
+         @onclick="Cancel">
+    </div>
+
+
+    <div class="relative bg-white rounded-xl shadow-xl w-full max-w-md p-6">
+
+        <div class="flex gap-4">
+
+            <div class="@IconBackground
+                        w-12 h-12 rounded-full
+                        flex items-center justify-center">
+
+                <i class="@Icon text-xl"></i>
+
+            </div>
+
+
+            <div>
+                <h3 class="text-lg font-semibold text-slate-800">
+                    @Title
+                </h3>
+
+                <p class="text-sm text-slate-600 mt-2">
+                    @Message
+                </p>
+            </div>
+
+        </div>
+
+
+        <div class="flex justify-end gap-3 mt-6">
+
+
+            <button class="px-4 py-2 rounded-lg border
+                           hover:bg-slate-100"
+                    @onclick="Cancel">
+
+                @CancelText
+
+            </button>
+
+
+            <button class="@ConfirmButton
+                           px-4 py-2 rounded-lg text-white"
+                    @onclick="Confirm">
+
+                @ConfirmText
+
+            </button>
+
+
+        </div>
+
+    </div>
+
+</div>
+
+
+@code {
+
+    [Parameter]
+    public ConfirmAction ActionType { get; set; } = ConfirmAction.Confirm;
+
+
+    [Parameter]
+    public string Title { get; set; } = "";
+
+
+    [Parameter]
+    public string Message { get; set; } = "";
+
+
+    [Parameter]
+    public string ConfirmText { get; set; } = "Confirm";
+
+
+    [Parameter]
+    public string CancelText { get; set; } = "Close";
+
+
+    [Parameter]
+    public EventCallback OnConfirm { get; set; }
+
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+
+
+    private async Task Confirm()
+    {
+        await OnConfirm.InvokeAsync();
+    }
+
+
+    private async Task Cancel()
+    {
+        await OnCancel.InvokeAsync();
+    }
+
+
+
+    private string ConfirmButton =>
+        ActionType switch
+        {
+            ConfirmAction.Delete =>
+                "bg-red-600 hover:bg-red-700",
+
+            ConfirmAction.Reject =>
+                "bg-red-600 hover:bg-red-700",
+
+            ConfirmAction.Cancel =>
+                "bg-orange-600 hover:bg-orange-700",
+
+            ConfirmAction.Approve =>
+                "bg-green-600 hover:bg-green-700",
+
+            _ =>
+                "bg-blue-600 hover:bg-blue-700"
+        };
+
+
+
+    private string Icon =>
+        ActionType switch
+        {
+            ConfirmAction.Delete =>
+                "fas fa-trash",
+
+            ConfirmAction.Approve =>
+                "fas fa-check",
+
+            ConfirmAction.Reject =>
+                "fas fa-times",
+
+            ConfirmAction.Cancel =>
+                "fas fa-ban",
+
+            _ =>
+                "fas fa-question"
+        };
+
+
+
+    private string IconBackground =>
+        ActionType switch
+        {
+            ConfirmAction.Approve =>
+                "bg-green-100 text-green-600",
+
+            ConfirmAction.Delete =>
+                "bg-red-100 text-red-600",
+
+            ConfirmAction.Reject =>
+                "bg-red-100 text-red-600",
+
+            ConfirmAction.Cancel =>
+                "bg-orange-100 text-orange-600",
+
+            _ =>
+                "bg-blue-100 text-blue-600"
+        };
+
+}

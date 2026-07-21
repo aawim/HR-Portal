@@ -1,0 +1,40 @@
+﻿@using HRM.DTOs
+
+<div class="flex items-center gap-2 text-sm mb-4">
+
+    <button class="text-blue-600 hover:underline"
+            @onclick="Reset">
+        My Workspace
+    </button>
+
+    @if (SelectedItem != null)
+    {
+        <span class="text-slate-400">/</span>
+
+        <span class="text-slate-500">
+            @SelectedItem.EntityType
+        </span>
+
+        <span class="text-slate-400">/</span>
+
+        <span class="text-slate-700 font-medium">
+            @SelectedItem.Name
+        </span>
+    }
+
+</div>
+
+@code {
+
+    [Parameter]
+    public WorkspaceSearchResult? SelectedItem { get; set; }
+
+    [Parameter]
+    public EventCallback OnReset { get; set; }
+
+    private async Task Reset()
+    {
+        await OnReset.InvokeAsync();
+    }
+
+}

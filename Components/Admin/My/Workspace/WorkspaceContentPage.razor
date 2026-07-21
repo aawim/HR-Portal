@@ -1,0 +1,81 @@
+﻿@using HRM.Components.Admin.My.Workspace.Cards
+@using HRM.Components.Cards
+@using HRM.Components.Layout
+@using HRM.Enum
+
+ 
+
+<WorkSpaceLayout Loading="@loading">
+
+@*     <Header>
+
+        <div class="bg-white rounded-xl border border-slate-200 p-4">
+
+            <h2 class="text-lg font-semibold">
+                My Workspace
+            </h2>
+
+            <p class="text-sm text-slate-500">
+                Welcome back.
+            </p>
+
+        </div>
+
+    </Header> *@
+
+ 
+
+    <Left>
+        <CalendarCard />
+        <MyTeamCard />
+        <PendingLeaveCard />
+    </Left>
+
+    <Center>
+
+       @if (ActiveTab == WorkspaceTab.Calendar)
+        {
+            <div class="grid grid-cols-1 gap-4">
+                <WorkspaceCalendarCard />
+            </div>
+        }
+  
+        <TeamAttendanceCard />
+        <RecentActivityCard /> 
+    </Center>
+
+    <Right>
+        <NotificationCard Title="Title" />
+        <TodoCard />
+    </Right>
+
+
+
+
+</WorkSpaceLayout>   
+
+
+
+          
+
+@code {
+    private bool loading = true;
+
+
+    [Parameter] public string Title { get; set; } = "";
+
+    [Parameter]
+    public WorkspaceTab ActiveTab { get; set; }
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+ 
+       loading = false;
+    }
+    private void OnTabChanged(WorkspaceTab tab)
+    {
+        ActiveTab = tab;
+    }
+}

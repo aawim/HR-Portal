@@ -1,0 +1,271 @@
+﻿@page "/admin/settings/{CategoryName}"
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Models
+@using HRM.Services.Interfaces
+@using HRM.Components.Leave
+@using HRM.Components.Admin.Settings.Users
+@using HRM.Components.Admin.Settings.Roles
+@using HRM.Components.Admin.Settings.Positions
+@using HRM.Components.Shared
+
+
+ 
+@using HRM.DTOs
+@using HRM.Enum
+
+@inject ILeaveService LeaveService
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Settings - HR Portal</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        <div class="max-w-12xl mx-auto py-0 px-4">
+            <!-- Back Button -->
+            <a href="/admin/settings" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
+                <svg class="w-4 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                Back to Settings Hub
+            </a>
+
+            <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
+            <div class="flex flex-col md:flex-row gap-1 items-start">
+                <!-- LEFT: Sidebar Menu (Responsive width) -->
+                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-80" : "w-20")">
+
+                    <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
+
+                        <h2 class="text-xl font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                            @CategoryName Management
+                        </h2>
+
+                        <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
+                            <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <div class="flex flex-col gap-1 mb-4">
+                        @foreach (var item in GetSubItems(CategoryName))
+                        {
+                            <button @onclick="() => SelectItem(item)"
+                            title="@(!isSidebarExpanded ? item.Title : null)"
+                            class="text-left p-1 rounded-xl border shadow-sm transition-all duration-200 group flex items-center gap-3 overflow-hidden
+                       @(activeItem?.Title == item.Title ? "bg-blue-50 border-blue-50" : "bg-white border-slate-50 hover:shadow-md hover:border-blue-50 hover:bg-slate-50")">
+
+                                @*      <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
+                        @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
+                                @item.Icon
+                            </div> *@
+
+                                <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
+                        @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
+                                    @item.Icon
+                                </div>
+
+                                <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
+                                    <h3 class="font-bold text-sm mb-0.5 truncate @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
+                                        @item.Title
+                                    </h3>
+                                    <p class="text-slate-500 text-xs leading-tight line-clamp-2">
+                                        @item.Description
+                                    </p>
+                                </div>
+
+                                <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </div>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+
+             
+
+
+                <div class="w-full md:flex-1">
+            @*         @if (CategoryName == "user")
+                    {
+
+                        <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-4">
+                            <div class="relative w-full max-w-xl">
+                                <WorkspaceSearch OnSelected="SelectItem" />
+                            </div>
+                            <div class="w-full md:w-auto md:flex-shrink-0 l-0 ">
+                                <WorkspaceTabs EntityType="WorkspaceEntityType.User"
+                                               ActiveTab="ActiveTab"
+                                               ActiveTabChanged="OnTabChanged" />
+                            </div>
+                        </div>
+                    } *@
+
+
+                       <!-- RIGHT: Dynamic Data Display -->
+
+
+                    <div class="flex flex-col lg:flex-row gap-2 mt-1">
+
+                        <div class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-2 min-h-[600px]">
+
+                            @if (activeItem == null)
+                            {
+                                <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 min-h-[400px]">
+                                    <div class="text-6xl mb-4">👈</div>
+                                    <p class="text-lg font-medium">Select an item from the menu to view data.</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <!-- Header for the selected data -->
+                                @*     <div class="border-b border-slate-100 pb-4 mb-6 flex justify-between items-end">
+                            <div>
+                                <h2 class="text-xl font-bold text-slate-800">@activeItem.Title</h2>
+                                <p class="text-sm text-slate-500 mt-1">@activeItem.Description</p>
+                            </div>
+                            </div> *@
+
+                                <!-- Dynamic Component Rendering -->
+                                <div class="mt-2">
+                                    @if (activeItem.ComponentType != null)
+                                    {
+                                        <DynamicComponent Type="@activeItem.ComponentType" />
+                                    }
+                                    else
+                                    {
+                                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
+                                            <p>Component not yet assigned for <strong>@activeItem.Title</strong>.</p>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="w-full lg:w-80 bg-white rounded-2xl border border-slate-200 shadow-sm p-2">
+                            <!-- Right Panel --> <p>Right</p>
+                        </div>
+
+                    </div>
+
+
+          
+ 
+            </div>
+         </div>
+      
+        </div>
+    </Authorized>
+
+    <NotAuthorized>
+        <div class="p-6 text-center mt-12">
+            <p class="text-slate-500 text-lg">
+                Please log in to view the settings dashboard.
+            </p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public string CategoryName { get; set; } = string.Empty;
+
+    // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
+    private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
+
+     [Parameter]
+    public WorkspaceEntityType EntityType { get; set; }
+
+ 
+
+
+    private SubItem? activeItem;
+
+    private void SelectItem(SubItem item)
+    {
+        activeItem = item;
+    }
+    private bool isSidebarExpanded = true;
+
+    private void ToggleSidebar()
+    {
+        isSidebarExpanded = !isSidebarExpanded;
+    }
+
+    private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
+    {
+        "leaves" => new() {
+            new("Manage Leave Types", "🌴", "Define leave accruals and policies.", typeof(LeaveTypesGrid)),
+            new("Manage Leave Sets", "🗓️", "Group leave types into sets.", typeof(LeaveSetsGrid)),
+            new("Manage Configurable", "⚙️", "Global leave system variables.", typeof(LeaveConfigGrid))
+        },
+        "user" => new() {
+            new("Manage Account", "👤", "Manage user account settings.", typeof(AccountGrid)),
+            new("Manage Permissions", "👤", "Manage user account permissions.", typeof(AccountPermissionsGrid)),
+            new("Manage Staff Enrollment Number", "🔢", "Configure enrollment identification.", typeof(StaffEnrollmentNumberGrid)),
+            new("Manage Staff", "👥", "Configure enrollment identification.", typeof(StaffGrid)),
+            new("Manage User Organisation", "👥", "Configure User Organisation.",typeof(UserOrganisationGrid)),
+        },
+        "org" => new() {
+            new("Manage Organisation", "🏢", "Define core organisation details.", null),
+            new("Manage User Organisation", "👥", "Map users to organisational units.", null)
+        },
+        "payroll" => new() {
+            new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
+            new("Manage Item Type", "📑", "Categorize payroll income and deductions.", null)
+        },
+        "roles" => new() {
+            new("Manage Roles", "🛡️", "Configure pay cycles and deadlines.", typeof(RoleGrid)),
+        },
+        "config" => new() {
+           new("Manage Attendance Clients", "🖥️", "Configure attendance clients and devices.", null),
+        },
+        "positions" => new() {
+           new("Manage Ranks", "🏅", "Configure attendance clients and devices.", typeof(RankGrid)),
+           new("Manage Classiffications", "🏷️", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
+           new("Manage Positions", "💼", "Configure attendance clients and devices.", typeof(PositionGrid)),
+        },
+        _ => new() { new("General Configuration", "🔧", "System level management.", null) }
+    };
+
+    // --- Authentication and Service Logic ---
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string UserName = "User";
+
+
+
+
+    private WorkspaceSearchResult? SelectedItem;
+
+    private WorkspaceTab ActiveTab = WorkspaceTab.Overview;
+
+    private void SelectItem(WorkspaceSearchResult item)
+    {
+        SelectedItem = item;
+        ActiveTab = WorkspaceTab.Overview;
+    }
+
+    private void ResetWorkspace()
+    {
+        SelectedItem = null;
+        ActiveTab = WorkspaceTab.Overview;
+    }
+
+    private void OnTabChanged(WorkspaceTab tab)
+    {
+        ActiveTab = tab;
+    }
+
+
+
+
+    // Variables for Dashboard Data
+    private List<JobLeaveType>? leaveBalances;
+
+    private List<Leaf>? leaveRequests;
+
+    protected override async Task OnInitializedAsync()
+    {
+        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+    }
+}

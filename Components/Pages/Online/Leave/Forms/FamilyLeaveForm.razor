@@ -1,0 +1,30 @@
+﻿@using HRM.Models
+@using HRM.DTOs.Leave
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 bg-slate-50 p-4 rounded-lg">
+</div>
+
+<div class="mb-6">
+    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Explanation</label>
+    <InputTextArea @bind-Value="Model.Explanation" rows="3" class="w-full p-3 border rounded-md" placeholder="Provide details regarding the family leave..."></InputTextArea>
+</div>
+
+@code {
+    [Parameter] public LeaveApplicationModel Model { get; set; }
+    [Parameter] public EventCallback OnDurationChanged { get; set; }
+    [Parameter] public List<JobLeaveTypeDto> LeaveTypes { get; set; } = new();
+    [Parameter] public int RemainingDays { get; set; }
+   
+    private async Task CalculateDates()
+    {
+        if (Model.ToDate >= Model.FromDate)
+            Model.Duration = (Model.ToDate - Model.FromDate).Days + 1;
+        await OnDurationChanged.InvokeAsync();
+    }
+
+    private async Task CalculateDatesFromDuration()
+    {
+        if (Model.Duration >= 1)
+            Model.ToDate = Model.FromDate.AddDays(Model.Duration - 1);
+        await OnDurationChanged.InvokeAsync();
+    }
+}

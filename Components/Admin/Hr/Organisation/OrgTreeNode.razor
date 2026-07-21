@@ -1,0 +1,238 @@
+﻿@using HRM.DTOs
+
+<li>
+    <div class="org-tree-card-wrapper">
+
+        <div class="w-32 h-24 flex flex-col justify-between @Theme.Background @Theme.Border shadow-sm rounded-lg p-2 text-center transform transition-all duration-300 hover:-translate-y-1 hover:shadow-md group cursor-default mx-auto">
+
+            <div class="w-6 h-1 shrink-0 @Theme.Accent rounded-full mx-auto opacity-80 group-hover:opacity-100 transition-opacity"></div>
+
+            <div class="flex-1 flex items-center justify-center overflow-hidden py-1">
+                <h3 class="text-[11px] font-bold text-slate-800 leading-tight line-clamp-3 break-words">@Node.Name</h3>
+            </div>
+
+            <div class="shrink-0">
+                <div class="inline-block px-1.5 py-[2px] @Theme.BadgeBg @Theme.BadgeBorder border rounded text-[8px] font-bold @Theme.BadgeText uppercase tracking-wider">
+                    @LabelText
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Node.Children != null && Node.Children.Any())
+    {
+        <ul>
+            @foreach (var child in Node.Children)
+            {
+                <OrgTreeNode Node="child" />
+            }
+        </ul>
+    }
+</li>
+
+@code {
+    [Parameter]
+    public OrgNodeDto Node { get; set; } = null!;
+
+    // A helper class to hold our Tailwind string combinations
+    private class NodeTheme
+    {
+        public string Background { get; set; } = "";
+        public string Border { get; set; } = "";
+        public string Accent { get; set; } = "";
+        public string BadgeBg { get; set; } = "";
+        public string BadgeBorder { get; set; } = "";
+        public string BadgeText { get; set; } = "";
+    }
+
+    private NodeTheme Theme => GetThemeForType(Node.TypeId);
+
+    private string LabelText => Node.StructureId == -1 ? "Gov" : $"Tier {Node.TypeId}";
+
+    private NodeTheme GetThemeForType(int typeId)
+    {
+        return typeId switch
+        {
+            99 or -1 => new NodeTheme
+                {
+                    Background = "bg-indigo-50 hover:border-indigo-400",
+                    Border = "border-indigo-200",
+                    Accent = "bg-gradient-to-r from-indigo-500 to-purple-500",
+                    BadgeBg = "bg-indigo-100",
+                    BadgeBorder = "border-indigo-200",
+                    BadgeText = "text-indigo-700"
+                },
+            5 => new NodeTheme
+                {
+                    Background = "bg-emerald-50 hover:border-emerald-400",
+                    Border = "border-emerald-200",
+                    Accent = "bg-gradient-to-r from-emerald-500 to-teal-500",
+                    BadgeBg = "bg-emerald-100",
+                    BadgeBorder = "border-emerald-200",
+                    BadgeText = "text-emerald-700"
+                },
+            4 => new NodeTheme
+                {
+                    Background = "bg-blue-50 hover:border-blue-400",
+                    Border = "border-blue-200",
+                    Accent = "bg-gradient-to-r from-blue-500 to-cyan-500",
+                    BadgeBg = "bg-blue-100",
+                    BadgeBorder = "border-blue-200",
+                    BadgeText = "text-blue-700"
+                },
+            3 => new NodeTheme
+                {
+                    Background = "bg-amber-50 hover:border-amber-400",
+                    Border = "border-amber-200",
+                    Accent = "bg-gradient-to-r from-amber-400 to-orange-500",
+                    BadgeBg = "bg-amber-100",
+                    BadgeBorder = "border-amber-200",
+                    BadgeText = "text-amber-700"
+                },
+            2 => new NodeTheme
+                {
+                    Background = "bg-rose-50 hover:border-rose-400",
+                    Border = "border-rose-200",
+                    Accent = "bg-gradient-to-r from-rose-400 to-red-500",
+                    BadgeBg = "bg-rose-100",
+                    BadgeBorder = "border-rose-200",
+                    BadgeText = "text-rose-700"
+                },
+            _ => new NodeTheme
+                {
+                    Background = "bg-white hover:border-slate-400",
+                    Border = "border-slate-200",
+                    Accent = "bg-gradient-to-r from-slate-400 to-slate-500",
+                    BadgeBg = "bg-slate-50",
+                    BadgeBorder = "border-slate-200",
+                    BadgeText = "text-slate-500"
+                }
+        };
+    }
+}
+
+
+
+
+@* 
+
+                    @using HRM.DTOs
+
+<li>
+    <div class="org-tree-card-wrapper">
+
+        <div class="w-32 h-24 flex flex-col justify-between @Theme.Background @Theme.Border border shadow-md rounded-lg p-2 text-center transform transition-all duration-300 hover:-translate-y-1 hover:shadow-xl group cursor-default mx-auto">
+
+            <div class="w-6 h-1 shrink-0 @Theme.Accent rounded-full mx-auto opacity-70 group-hover:opacity-100 transition-opacity"></div>
+
+            <div class="flex-1 flex items-center justify-center overflow-hidden py-1">
+                <h3 class="text-[11.5px] font-bold @Theme.Text leading-tight line-clamp-3 break-words tracking-wide">@Node.Name</h3>
+            </div>
+
+            <div class="shrink-0">
+                <div class="inline-block px-1.5 py-[2px] @Theme.BadgeBg @Theme.BadgeBorder border rounded text-[8px] font-bold @Theme.BadgeText uppercase tracking-wider shadow-inner">
+                    @LabelText
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Node.Children != null && Node.Children.Any())
+    {
+        <ul>
+            @foreach (var child in Node.Children)
+            {
+                <OrgTreeNode Node="child" />
+            }
+        </ul>
+    }
+</li>
+
+@code {
+    [Parameter]
+    public OrgNodeDto Node { get; set; } = null!;
+
+    // Expanded helper to handle text color dynamically
+    private class NodeTheme
+    {
+        public string Background { get; set; } = "";
+        public string Border { get; set; } = "";
+        public string Text { get; set; } = "";
+        public string Accent { get; set; } = "";
+        public string BadgeBg { get; set; } = "";
+        public string BadgeBorder { get; set; } = "";
+        public string BadgeText { get; set; } = "";
+    }
+
+    private NodeTheme Theme => GetThemeForType(Node.TypeId);
+
+    private string LabelText => Node.StructureId == -1 ? "Gov" : $"Tier {Node.TypeId}";
+
+    // Solid, High-Contrast Color Palette
+    private NodeTheme GetThemeForType(int typeId)
+    {
+        return typeId switch
+        {
+            99 or -1 => new NodeTheme
+                {
+                    Background = "bg-slate-800 hover:bg-slate-900",
+                    Border = "border-slate-900",
+                    Text = "text-white",
+                    Accent = "bg-slate-400",
+                    BadgeBg = "bg-slate-900",
+                    BadgeBorder = "border-slate-700",
+                    BadgeText = "text-slate-300"
+                },
+            5 => new NodeTheme
+                {
+                    Background = "bg-violet-700 hover:bg-violet-800",
+                    Border = "border-violet-900",
+                    Text = "text-white",
+                    Accent = "bg-violet-300",
+                    BadgeBg = "bg-violet-900",
+                    BadgeBorder = "border-violet-600",
+                    BadgeText = "text-violet-200"
+                },
+            4 => new NodeTheme
+                {
+                    Background = "bg-blue-700 hover:bg-blue-800",
+                    Border = "border-blue-900",
+                    Text = "text-white",
+                    Accent = "bg-blue-300",
+                    BadgeBg = "bg-blue-900",
+                    BadgeBorder = "border-blue-600",
+                    BadgeText = "text-blue-200"
+                },
+            3 => new NodeTheme
+                {
+                    Background = "bg-teal-700 hover:bg-teal-800",
+                    Border = "border-teal-900",
+                    Text = "text-white",
+                    Accent = "bg-teal-300",
+                    BadgeBg = "bg-teal-900",
+                    BadgeBorder = "border-teal-600",
+                    BadgeText = "text-teal-200"
+                },
+            2 => new NodeTheme
+                {
+                    Background = "bg-rose-700 hover:bg-rose-800",
+                    Border = "border-rose-900",
+                    Text = "text-white",
+                    Accent = "bg-rose-300",
+                    BadgeBg = "bg-rose-900",
+                    BadgeBorder = "border-rose-600",
+                    BadgeText = "text-rose-200"
+                },
+            _ => new NodeTheme
+                {
+                    Background = "bg-slate-600 hover:bg-slate-700",
+                    Border = "border-slate-800",
+                    Text = "text-white",
+                    Accent = "bg-slate-300",
+                    BadgeBg = "bg-slate-800",
+                    BadgeBorder = "border-slate-500",
+                    BadgeText = "text-slate-200"
+                }
+        };
+    }
+} *@

@@ -1,0 +1,374 @@
+﻿@page "/admin/attendance/manage-attendance/attendance-requests"
+@using HRM.Components.Shared
+@using HRM.DTOs
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using Microsoft.EntityFrameworkCore
+
+@rendermode RenderMode.InteractiveServer
+@inject HrmTeContext DbContext
+@inject IOrganisationService OrganisationService
+@inject UserService UserService
+@inject IIndividual _individual;
+
+
+<div class="flex justify-between items-end border-b border-slate-100 mb-2 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
+        <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
+    </div>
+</div>
+
+
+
+<div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6 ">
+
+    @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
+    {
+        <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Summary of the Search</label>
+
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-auto-fit gap-4 mb-6">
+
+            <button @onclick="() => FilterByCard(string.Empty)"
+                    class="flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 transform hover:-translate-y-1
+                           @(string.IsNullOrEmpty(activeCardFilter) ? "ring-2 ring-blue-500 shadow-md bg-white border-blue-200" : "bg-slate-50 border-slate-200 hover:shadow-md")">
+                <span class="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 text-center">Total Records</span>
+                <span class="text-2xl font-black text-slate-800 text-center">@requestsList.Count</span>
+            </button>
+
+            @foreach (var stat in stateStatistics)
+            {
+                <button @onclick="() => FilterByCard(stat.Key)"
+                        class="flex flex-col items-center justify-center p-4 rounded-xl border transition-all duration-200 transform hover:-translate-y-1 @GetStateColorClass(stat.Key)
+                               @(activeCardFilter == stat.Key ? "ring-2 ring-current shadow-md scale-105" : "opacity-80 hover:opacity-100 hover:shadow-md")">
+                    <span class="text-xs font-bold uppercase tracking-wider mb-1 text-center opacity-80">@stat.Key</span>
+                    <span class="text-2xl font-black text-center">@stat.Value</span>
+                </button>
+            }
+        </div>
+        <hr class="border-slate-100 mb-6" />
+    }
+
+    <div class="grid grid-cols-12 gap-4 mb-4">
+
+        <div class="col-span-12 md:col-span-5 lg:col-span-5">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Organisation</label>
+            <select @bind="selectedOrgId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
+                <option value="0">-- All Organisations --</option>
+                @foreach (var org in organisations)
+                {
+                     <option value="@org.Id">@org.Name</option>
+               
+                    
+                }
+            </select>
+        </div>
+
+        <div class="col-span-12 md:col-span-3 lg:col-span-3">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Request Status</label>
+            <select @bind="selectedStatusId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
+                <option value="0">-- All Statuses --</option>
+                @foreach (var state in requestStates)
+                {
+                    <option value="@state.RequestStateId">@state.StateName</option>
+                }
+            </select>
+        </div>
+
+        <div class="col-span-6 md:col-span-2 lg:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From</label>
+            <input type="date" @bind="startDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+        </div>
+
+        <div class="col-span-6 md:col-span-2 lg:col-span-2">
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To</label>
+            <input type="date" @bind="endDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
+        </div>
+    </div>
+
+    <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-[-20px]">
+        <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+            Reset
+        </button>
+        <button @onclick="ExecuteSearch" disabled="@isLoading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+            @if (isLoading)
+            {
+                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                <span>Searching...</span>
+            }
+            else
+            {
+                <svg class="w-4 h-4" fill="none"  stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                <span>Search</span>
+            }
+        </button>
+    </div>
+</div>
+
+@if (isDataLoaded)
+{
+    if (selectedOrgId != 0)
+    {
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+            <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+                <thead class="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Ref No.</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Time</th>
+                        @* <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Organisation</th> *@
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Mode</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Comments</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">State</th>
+                        <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @{
+                        // Create a temporary list based on the active card filter
+                        var displayedList = string.IsNullOrEmpty(activeCardFilter)
+                        ? requestsList
+                        : requestsList.Where(r => r.RequestState == activeCardFilter).ToList();
+                    }
+
+                    @if (!displayedList.Any())
+                    {
+                        <tr>
+                            <td colspan="10" class="py-8 text-center text-slate-500 italic">No requests found for this criteria.</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < displayedList.Count; i++)
+                        {
+                            var req = displayedList[i];
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                                <td class="py-3 px-4 font-medium text-slate-700">@req.ReferenceNo</td>
+                                <td class="py-3 px-4 text-slate-600">@req.LogDate.ToString("dd MMM yyyy")</td>
+                                <td class="py-3 px-4 font-bold text-slate-700">@req.LogTime</td>
+                                @* <td class="py-3 px-4 text-slate-600 truncate max-w-[150px]" title="@req.OrganisationName">@req.OrganisationName</td> *@
+                                <td class="py-3 px-4 font-bold text-slate-800">@req.StaffName</td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 rounded text-xs font-bold">@req.Mode</span>
+                                </td>
+                                <td class="py-3 px-4 text-slate-500 truncate max-w-[200px]" title="@req.Comments">
+                                    @(string.IsNullOrEmpty(req.Comments) ? "-" : req.Comments)
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <span class="@GetStateColorClass(req.RequestState) px-2.5 py-0.5 rounded-full text-xs font-bold">
+                                        @req.RequestState
+                                    </span>
+                                </td>
+                                <td class="py-3 px-4 text-center">
+                                    <div class="flex items-center justify-center gap-2">
+                                        <button class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100" title="View Details">
+                                            Detail
+                                        </button>
+                                        <button class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 px-2 py-1 rounded transition-colors border border-slate-200" title="View Audit Log">
+                                            Audit
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <span class="py-8 text-center text-slate-500 fst-italic ml-5 text-red-500">
+             Select an Organisation
+        </span>
+    }
+}
+   
+
+@code {
+    // Filter Bindings (Ensuring selectedStatus is declared here!)
+    private int selectedOrgId = 0;
+    private int selectedStatusId = 0;
+    private DateTime startDate;
+    private DateTime endDate;
+
+    // UI State
+    private bool isDataLoaded = false;
+    private bool isLoading = false;
+
+    // Data Collections
+    private List<DropdownItem> organisations = new();
+
+    private List<AttendanceRequestDto> requestsList = new();
+    private List<RequestState> requestStates = new();
+    private Dictionary<string, int> stateStatistics = new();
+    private string activeCardFilter = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        activeCardFilter = string.Empty;
+        // 1. Load Dropdown Data
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+        requestStates = await DbContext.RequestStates.ToListAsync();
+
+        // 2. Set the default organisation to the logged-in user's org
+       await  SetDefaultOrganisationAsync();
+
+        // Optional: Automatically run the search on page load
+        // await ExecuteSearch();
+    }
+
+    private void FilterByCard(string status)
+    {
+        activeCardFilter = status;
+    }
+
+
+    private async Task SetDefaultOrganisationAsync()
+    {
+        try
+        {
+            // Get the current logged-in user's Individual ID
+            // (Adjust this line to match your actual authentication/user service)
+            int currentIndividualId = await _individual.GetIndividualID();
+
+            // Find their active job to get their OrganisationID
+            var userJob = await DbContext.Jobs
+                .Where(j => j.IndividualID == currentIndividualId
+                         && (j.TerminatedDate == null || j.TerminatedDate > DateTime.Today))
+                .FirstOrDefaultAsync();
+
+            if (userJob != null)
+            {
+                selectedOrgId = userJob.OrganisationID;
+            }
+        }
+        catch
+        {
+            // Fallback to "All Organisations" if user info cannot be retrieved
+            selectedOrgId = 0;
+        }
+    }
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task ExecuteSearch()
+    {
+        isLoading = true;
+        isDataLoaded = false;
+        requestsList.Clear();
+        StateHasChanged();
+
+        try
+        {
+            var query = from req in DbContext.AttendanceLogRequests
+                        join r in DbContext.Requests on req.RequestId equals r.RequestId
+                        join rs in DbContext.RequestStates on r.RequestStateId equals rs.RequestStateId
+                        join log in DbContext.AttendanceLogs on req.AttendanceLogId equals log.AttendanceLogId
+                        join ind in DbContext.Individuals on log.IndividualId equals ind.BusinessEntityId
+                        join org in DbContext.Organisations on log.OrganisationId equals org.BusinessEntityID
+                        where log.Date >= startDate && log.Date <= endDate
+                                && r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_REQUEST
+                        select new { req, r, rs, log, ind, org };
+
+            // Apply Organisation Filter (If 0, returns ALL)
+            if (selectedOrgId > 0)
+            {
+                query = query.Where(q => q.log.OrganisationId == selectedOrgId);
+            }
+
+            // Apply Status Filter (If 0, skips this block and returns ALL)
+            if (selectedStatusId > 0)
+            {
+                query = query.Where(q => q.r.RequestStateId == selectedStatusId);
+            }
+
+            requestsList = await query
+                .OrderByDescending(q => q.log.Date)
+                .Select(q => new AttendanceRequestDto
+                    {
+                        RequestId = q.req.RequestId,
+                        ReferenceNo = q.r.ReferenceNumber ?? "N/A",
+                        LogDate = q.log.Date,
+                        LogTime = q.log.Date.ToString("HH:mm"),
+                        OrganisationName = q.org.OrganisationName,
+                        StaffName = (q.ind.FirstNameEnglish + " " + q.ind.MiddleNameEnglish + " " + q.ind.LastNameEnglish).Trim(),
+                        Mode = q.log.InOutModeId == 1 ? "In" :
+                               q.log.InOutModeId == 2 ? "Out" :
+                               q.log.InOutModeId == 3 ? "Break Out" :
+                               q.log.InOutModeId == 4 ? "Break In" : q.log.InOutModeId.ToString(),
+                        Comments = q.req.Comments,
+                        RequestState = q.rs.StateName ?? "Unknown" // Pulled dynamically!
+                    })
+                .ToListAsync();
+
+            stateStatistics = requestsList
+                .GroupBy(r => r.RequestState)
+                .ToDictionary(g => g.Key, g => g.Count());
+
+            isDataLoaded = true;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResetFilters()
+    {
+        // Reset to defaults
+        selectedStatusId = 0;
+        SetCurrentSalaryPeriod();
+        isDataLoaded = false;
+        requestsList.Clear();
+        stateStatistics.Clear(); // <-- Add this
+
+        await SetDefaultOrganisationAsync();
+    }
+
+    // --- DTO for Table Rows ---
+    public class AttendanceRequestDto
+    {
+        public int RequestId { get; set; }
+        public string ReferenceNo { get; set; } = string.Empty;
+        public DateTime LogDate { get; set; }
+        public string LogTime { get; set; } = string.Empty;
+        public string OrganisationName { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string Mode { get; set; } = string.Empty;
+        public string? Comments { get; set; }
+        public string RequestState { get; set; } = string.Empty;
+    }
+
+
+
+
+    // Helpers
+    private string GetStateColorClass(string state)
+    {
+        if (string.IsNullOrEmpty(state)) return "bg-slate-100 text-slate-600";
+
+        return state.Trim().ToLower() switch
+        {
+            "approved" => "bg-emerald-100 text-emerald-800",
+            "rejected" => "bg-rose-100 text-rose-800",
+            "pending verification" => "bg-amber-100 text-amber-800",
+            "pending approval" => "bg-blue-100 text-blue-800",
+            "incomplete" => "bg-orange-100 text-orange-800",
+            "pending" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-600" // Default fallback color
+        };
+    }
+}

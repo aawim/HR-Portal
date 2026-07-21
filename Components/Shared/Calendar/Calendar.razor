@@ -1,0 +1,408 @@
+﻿@using HRM.Components.Shared.Calendar
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+
+        <div class="flex items-center gap-2">
+
+            <button class="px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50"
+                    @onclick="GoToday">
+                Today
+            </button>
+
+            <button class="p-2 rounded-lg hover:bg-slate-100"
+                    @onclick="PreviousMonth">
+                ◀
+            </button>
+
+            <button class="p-2 rounded-lg hover:bg-slate-100"
+                    @onclick="NextMonth">
+                ▶
+            </button>
+
+        </div>
+
+
+        <h3 class="font-semibold text-slate-800">
+            @CurrentMonth.ToString("MMMM yyyy")
+        </h3>
+
+
+        <div></div>
+
+    </div>
+
+
+    <!-- Week Header -->
+    <div class="grid grid-cols-7 bg-slate-50 border-b">
+
+        @foreach (var day in WeekDays)
+        {
+                <div class="py-2 text-center text-xs font-medium text-slate-500">
+                @day
+                </div>
+        }
+
+    </div>
+
+
+
+    <!-- Calendar -->
+    <div class="grid grid-cols-7">
+
+
+        @foreach (var day in CalendarDays)
+        {
+
+                <div class="@GetDayClass(day)"
+                     @onclick="() => SelectDate(day)">
+
+
+                    <div class="flex justify-between">
+
+                        <span class="text-xs">
+                        @day.Day
+                        </span>
+
+
+                    @if (IsToday(day))
+                    {
+                                <span class="text-[10px] px-1 rounded bg-blue-600 text-white">
+                                    Today
+                                </span>
+                    }
+
+                    </div>
+
+
+                    <!-- Event dots -->
+                    <div class="mt-2 space-y-1">
+
+
+                    @foreach (var item in GetEvents(day).Take(3))
+                    {
+
+                                <div class="flex items-center gap-1"
+                                     title="@item.Title">
+
+
+                                    <span class="w-2 h-2 rounded-full @GetColor(item.Type)">
+                                    </span>
+
+
+                                    <span class="text-[11px] truncate text-slate-600">
+                                @item.Title
+                                    </span>
+
+                                </div>
+
+                    }
+
+
+                    @if (GetEvents(day).Count() > 3)
+                    {
+                                <div class="text-xs text-blue-600">
+                                    +@(GetEvents(day).Count() - 3) more
+                                </div>
+                    }
+
+
+                    </div>
+
+
+                </div>
+
+        }
+
+
+    </div>
+
+
+
+    <!-- Selected Date -->
+    @if (SelectedDate != null)
+    {
+
+            <div class="border-t bg-slate-50 p-4">
+
+
+                <div class="flex justify-between mb-3">
+
+                    <h4 class="font-semibold text-sm">
+                    @SelectedDate.Value.ToString("dd MMM yyyy")
+                    </h4>
+
+
+                    <button class="text-xs text-slate-500"
+                            @onclick="CloseDetails">
+                        Close
+                    </button>
+
+                </div>
+
+
+
+            @foreach (var item in GetEvents(SelectedDate.Value))
+            {
+
+                        <div class="bg-white border rounded-lg p-3 mb-2">
+
+
+                            <div class="flex items-center gap-2">
+
+
+                                <span class="w-2.5 h-2.5 rounded-full @GetColor(item.Type)">
+                                </span>
+
+
+                                <span class="text-sm font-medium">
+                            @item.Title
+                                </span>
+
+
+                            </div>
+
+
+                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                    {
+                                    <p class="text-xs text-slate-500 mt-1">
+                            @item.Description
+                                    </p>
+                    }
+
+
+                        </div>
+
+            }
+
+
+            @if (!GetEvents(SelectedDate.Value).Any())
+            {
+                        <p class="text-sm text-slate-500">
+                            No events
+                        </p>
+            }
+
+
+            </div>
+
+    }
+
+
+</div>
+
+
+
+@code {
+
+    [Parameter]
+    public List<CalendarEvent> Events { get; set; } = new();
+
+
+    [Parameter]
+    public EventCallback<DateTime> OnDateSelected { get; set; }
+
+
+    private DateTime CurrentMonth =
+        new DateTime(
+            DateTime.Today.Year,
+            DateTime.Today.Month,
+            1);
+
+
+    private DateTime? SelectedDate;
+
+
+    private readonly string[] WeekDays =
+    {
+        "Sun",
+        "Mon",
+        "Tue",
+        "Wed",
+        "Thu",
+        "Fri",
+        "Sat"
+    };
+
+
+
+    private List<DateTime> CalendarDays = new();
+
+
+
+    protected override void OnInitialized()
+    {
+        GenerateCalendar();
+    }
+
+
+
+    protected override void OnParametersSet()
+    {
+        GenerateCalendar();
+    }
+
+
+
+    private void GenerateCalendar()
+    {
+
+        CalendarDays.Clear();
+
+
+        int start =
+            (int)CurrentMonth.DayOfWeek;
+
+
+        var first =
+            CurrentMonth.AddDays(-start);
+
+
+
+        for (int i = 0; i < 42; i++)
+        {
+            CalendarDays.Add(
+                first.AddDays(i));
+        }
+
+    }
+
+
+
+    private void PreviousMonth()
+    {
+        CurrentMonth =
+            CurrentMonth.AddMonths(-1);
+
+        GenerateCalendar();
+    }
+
+
+
+    private void NextMonth()
+    {
+        CurrentMonth =
+            CurrentMonth.AddMonths(1);
+
+        GenerateCalendar();
+    }
+
+
+
+    private void GoToday()
+    {
+        CurrentMonth =
+            new DateTime(
+                DateTime.Today.Year,
+                DateTime.Today.Month,
+                1);
+
+        GenerateCalendar();
+    }
+
+
+
+    private IEnumerable<CalendarEvent> GetEvents(DateTime date)
+    {
+        return Events.Where(x =>
+            x.Date == DateOnly.FromDateTime(date));
+    }
+
+
+
+    private async Task SelectDate(DateTime date)
+    {
+
+        SelectedDate = date;
+
+
+        if (OnDateSelected.HasDelegate)
+        {
+            await OnDateSelected.InvokeAsync(date);
+        }
+
+    }
+
+
+
+    private void CloseDetails()
+    {
+        SelectedDate = null;
+    }
+
+
+
+    private bool IsToday(DateTime date)
+    {
+        return date.Date == DateTime.Today;
+    }
+
+
+
+    private string GetDayClass(DateTime date)
+    {
+
+        string css =
+            "min-h-24 border border-slate-100 p-2 cursor-pointer hover:bg-slate-50 transition";
+
+
+        if (date.Month != CurrentMonth.Month)
+        {
+            css += " bg-slate-50 text-slate-300";
+        }
+
+
+        if (IsToday(date))
+        {
+            css += " ring-2 ring-blue-500";
+        }
+
+
+        return css;
+    }
+
+
+
+
+    private string GetColor(CalendarEventType type)
+    {
+
+        return type switch
+        {
+
+            CalendarEventType.Leave =>
+                "bg-blue-500",
+
+            CalendarEventType.Birthday =>
+                "bg-pink-500",
+
+            CalendarEventType.Holiday =>
+                "bg-red-500",
+
+            CalendarEventType.Meeting =>
+                "bg-purple-500",
+
+            CalendarEventType.Training =>
+                "bg-indigo-500",
+
+            CalendarEventType.Event =>
+                "bg-green-500",
+
+            CalendarEventType.Overtime =>
+                "bg-amber-500",
+
+            CalendarEventType.Attendance =>
+                "bg-cyan-500",
+
+            _ =>
+                "bg-slate-500"
+
+        };
+
+    }
+
+
+
+}

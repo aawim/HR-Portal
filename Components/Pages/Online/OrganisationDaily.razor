@@ -1,0 +1,517 @@
+﻿@page "/online/attendance/organisation-daily"
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models
+@using HRM.Services
+@using HRM.Components.Shared
+@using HRM.DTOs
+@rendermode RenderMode.InteractiveServer
+
+@inject HrmTeContext DbContext
+@inject IOrganisationService OrganisationService
+@inject AttendanceLogService AttendanceLogService
+
+<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+
+
+<!-- Header & Action Bar -->
+<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
+    <div>
+        <h2 class="text-xl font-bold text-slate-800">Organisation Daily Attendance</h2>
+        <p class="text-sm text-slate-500 mt-1">Daily overview of staff attendance, breaks, and late arrivals.</p>
+    </div>
+</div>
+
+<!-- Filters Panel -->
+<div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
+        
+        <!-- 1. Organisation -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation</label>
+            <select value="@selectedOrgId" @onchange="OnOrganisationChanged" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500">
+                <option value="0">-- All --</option>
+                @foreach (var org in organisations)
+                {
+                    <option value="@org.Id">@org.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- 2. Employee Type -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Employee Type</label>
+            <select @bind="selectedEmpType" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500">
+                <option value="">-- All Types --</option>
+                @foreach (var type in employeeTypes)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+
+        <!-- 3. Division -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Division / Unit</label>
+            <select @bind="selectedDivisionId" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                <option value="0">-- All Divisions --</option>
+                @foreach (var div in divisions)
+                {
+                    <option value="@div.OrganisationStructureId">@div.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- 4. Team -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Team</label>
+            <select @bind="selectedTeamId" disabled="@(selectedOrgId == 0)" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500 disabled:opacity-50">
+                <option value="0">-- All Teams --</option>
+                @foreach (var team in teams)
+                {
+                    <option value="@team.TeamId">@team.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- 5. Date -->
+        <div>
+            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Date</label>
+            <input type="date" @bind="searchDate" class="w-full px-3 py-2 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded focus:outline-none focus:border-blue-500" />
+        </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+        <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
+            Reset
+        </button> 
+        <button @onclick="ExecuteSearch" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            Search
+        </button>
+    </div>   
+</div>
+
+@if (isDataLoaded)
+{
+    <!-- 1. Visual Status Chart / KPI Area -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+        <h3 class="text-slate-800 font-bold mb-4">Daily Attendance Overview</h3>
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <!-- Stat Cards -->
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <div class="text-sm font-bold text-slate-500">Attended</div>
+                <div class="text-2xl font-black text-blue-600">@pctAttended.ToString("0")% <span class="text-xs text-slate-400 font-medium">(@cntAttended staff)</span></div>
+            </div>
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <div class="text-sm font-bold text-slate-500">Attended On Time</div>
+                <div class="text-2xl font-black text-emerald-600">@pctOnTime.ToString("0")% <span class="text-xs text-slate-400 font-medium">(@cntOnTime staff)</span></div>
+            </div>
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <div class="text-sm font-bold text-slate-500">Total Absent</div>
+                <div class="text-2xl font-black text-rose-600">@pctAbsent.ToString("0")% <span class="text-xs text-slate-400 font-medium">(@cntAbsent staff)</span></div>
+            </div>
+            <div class="bg-slate-50 p-4 rounded-lg border border-slate-100">
+                <div class="text-sm font-bold text-slate-500">Sick Leave Days</div>
+                <div class="text-2xl font-black text-amber-500">@pctSick.ToString("0")% <span class="text-xs text-slate-400 font-medium">(@cntSick staff)</span></div>
+            </div>
+        </div>
+
+
+        <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
+            <h3 class="text-slate-800 font-bold mb-8">Attendance - (@searchDate.ToString("dd MMM yyyy"))</h3>
+
+            <div class="flex items-stretch h-64 w-full">
+
+                <div class="flex flex-col justify-between text-sm text-slate-500 pr-4 text-right w-16 border-r border-slate-400 relative z-10">
+                    <span>@totalStaff.ToString("0.0")</span>
+                    <span>@((totalStaff * 0.75).ToString("0.0"))</span>
+                    <span>@((totalStaff * 0.5).ToString("0.0"))</span>
+                    <span>@((totalStaff * 0.25).ToString("0.0"))</span>
+                    <span>0.0</span>
+                </div>
+
+                <div class="flex-1 relative flex justify-center items-end border-b border-slate-400">
+
+                    <div class="absolute inset-0 flex flex-col justify-between pointer-events-none z-0">
+                        <div class="border-t border-slate-200 w-full h-0"></div>
+                        <div class="border-t border-slate-200 w-full h-0"></div>
+                        <div class="border-t border-slate-200 w-full h-0"></div>
+                        <div class="border-t border-slate-200 w-full h-0"></div>
+                        <div class="border-t border-transparent w-full h-0"></div>
+                    </div>
+
+                    <div class="flex items-end h-full relative z-10 pb-[1px]" style="width: 250px;">
+                        <div style="height: 100%;" class="flex-1 bg-blue-600 border border-white hover:opacity-90 transition-opacity"></div>
+                        <div style="height: @Math.Round(pctAbsent)%;" class="flex-1 bg-[#da4325] border border-white hover:opacity-90 transition-opacity"></div>
+                        <div style="height: @Math.Round(pctOnTime)%;" class="flex-1 bg-amber-500 border border-white hover:opacity-90 transition-opacity"></div>
+                        <div style="height: @Math.Round(pctAttended)%;" class="flex-1 bg-green-700 border border-white hover:opacity-90 transition-opacity"></div>
+                        <div style="height: @Math.Round(pctSick)%;" class="flex-1 bg-purple-700 border border-white hover:opacity-90 transition-opacity"></div>
+                    </div>
+
+                    <div class="absolute -bottom-8 left-0 w-full text-center text-sm text-slate-700">
+                        Staff
+                    </div>
+                </div>
+
+                <div class="pl-8 flex flex-col justify-start gap-3 w-64 pt-2">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-4 bg-blue-600"></div>
+                        <span class="text-sm text-slate-700">Total</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-4 bg-[#da4325]"></div>
+                        <span class="text-sm text-slate-700">Absent (@Math.Round(pctAbsent)%)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-4 bg-amber-500"></div>
+                        <span class="text-sm text-slate-700">Attended On Time (@Math.Round(pctOnTime)%)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-4 bg-green-700"></div>
+                        <span class="text-sm text-slate-700">Attended (@Math.Round(pctAttended)%)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-4 bg-purple-700"></div>
+                        <span class="text-sm text-slate-700">Sick Leave Days (@Math.Round(pctSick)%)</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mb-6"></div>
+        </div>
+
+        <!-- Stacked Progress Bar representation -->
+        <div class="w-full h-3 rounded-full flex overflow-hidden bg-slate-100">
+            <div style="width: @(pctOnTime)% " class="bg-emerald-500" title="On Time"></div>
+            <div style="width: @(pctAttended - pctOnTime)% " class="bg-blue-500" title="Late"></div>
+            <div style="width: @(pctSick)% " class="bg-amber-400" title="Sick Leave"></div>
+            <div style="width: @(pctAbsent)% " class="bg-rose-500" title="Absent"></div>
+        </div>
+    </div>
+
+    <!-- 2. Detailed Data Table -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden overflow-x-auto">
+        <table class="w-full text-left border-collapse whitespace-nowrap text-sm">
+            <thead class="bg-slate-50 border-b border-slate-200">
+                <tr>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">#</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Staff</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Scheduled In</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Clock In</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Late</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Break Out</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Break In</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Late Break In</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Scheduled Out</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Clock Out</th>
+                    <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+                @if (!dailyRecords.Any())
+                {
+                    <tr>
+                        <td colspan="11" class="py-8 text-center text-slate-500 italic">No attendance records found for this criteria.</td>
+                    </tr>
+                }
+                else
+                {
+                    @for (int i = 0; i < dailyRecords.Count; i++)
+                    {
+                        var record = dailyRecords[i];
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="py-3 px-4 text-slate-400">@(i + 1)</td>
+                            <td class="py-3 px-4">
+                                <div class="font-bold text-slate-800">@record.StaffName</div>
+                                <div class="text-xs text-slate-500">@record.EmployeeNumber</div>
+                            </td>
+                            <td class="py-3 px-4 text-center text-slate-500">@record.ScheduledIn</td>
+                            <td class="py-3 px-4 text-center font-bold @(record.ClockIn == "--:--" ? "text-slate-300" : "text-slate-800")">@record.ClockIn</td>
+                            <td class="py-3 px-4 text-center">
+                                @if (record.LateMins > 0)
+                                {
+                                    <span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-xs font-bold">@record.LateMins m</span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-300">-</span>
+                                }
+                            </td>
+                            <td class="py-3 px-4 text-center text-slate-600">@record.BreakOut</td>
+                            <td class="py-3 px-4 text-center text-slate-600">@record.BreakIn</td>
+                            <td class="py-3 px-4 text-center">
+                                @if (record.LateBreakMins > 0)
+                                {
+                                    <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">@record.LateBreakMins m</span>
+                                }
+                                else
+                                {
+                                    <span class="text-slate-300">-</span>
+                                }
+                            </td>
+                            <td class="py-3 px-4 text-center text-slate-500">@record.ScheduledOut</td>
+                            <td class="py-3 px-4 text-center font-bold @(record.ClockOut == "--:--" ? "text-slate-300" : "text-slate-800")">@record.ClockOut</td>
+                            <td class="py-3 px-4 text-center">
+                                <button class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-3 py-1 rounded transition-colors border border-blue-100">
+                                    View
+                                </button>
+                            </td>
+                        </tr> <!-- THIS TAG WAS MISSING -->
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    // Dropdown Selections
+    private int selectedOrgId = 0;
+    private string selectedEmpType = "";
+    private int selectedDivisionId = 0;
+    private int selectedTeamId = 0;
+    private DateTime searchDate = DateTime.Today;
+
+    // UI State
+    private bool isDataLoaded = false;
+
+    // Data Source Collections
+    private List<DropdownItem> organisations = new();
+    private List<OrganisationStructureDropdownDto> divisions = new();
+    private List<TeamDropdownDto> teams = new();
+    private List<string> employeeTypes = new() { "Permanent", "Contract", "Wage", "Political" };
+
+    // Result Collections
+    private List<DailyStaffRecordDto> dailyRecords = new();
+
+    // Chart Variables
+    private int totalStaff = 0;
+    private int cntAttended = 0;
+    private int cntOnTime = 0;
+    private int cntAbsent = 0;
+    private int cntSick = 0;
+
+    private decimal pctAttended = 0;
+    private decimal pctOnTime = 0;
+    private decimal pctAbsent = 0;
+    private decimal pctSick = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+    }
+
+    private async Task OnOrganisationChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int orgId))
+        {
+            selectedOrgId = orgId;
+            selectedDivisionId = 0;
+            selectedTeamId = 0;
+            isDataLoaded = false;
+
+
+              if (selectedOrgId > 0)
+            {
+                // divisions = await DbContext.Teams.Where(x => x.OrganisationId == selectedOrgId).ToListAsync();
+                divisions = await DbContext.OrganisationStructures
+                .AsNoTracking()
+                .Where(x => x.OrganisationBusinessEntityID == selectedOrgId)
+                .Select(x => new OrganisationStructureDropdownDto
+                    {
+                        OrganisationStructureId = x.OrganisationStructureId,
+                        Name = x.Name
+                    })
+                .ToListAsync();
+                teams = await DbContext.Teams
+                .AsNoTracking()
+                 .Where(x => x.OrganisationId == selectedOrgId)
+                .Select(x => new TeamDropdownDto
+                    {
+                        TeamId = x.TeamId,
+                        Name = x.Name
+                    })                
+               .ToListAsync();
+            }
+            else
+            {
+                divisions.Clear();
+                teams.Clear();
+            }
+        }
+    }
+
+    private async Task ExecuteSearch()
+    {
+        dailyRecords.Clear();
+        isDataLoaded = false;
+
+        // Reset Counters
+        totalStaff = 0; cntAttended = 0; cntOnTime = 0; cntAbsent = 0; cntSick = 0;
+
+        // 1. Fetch Staff based on Filters
+        var query = from s in DbContext.Staffs
+                    join i in DbContext.Individuals on s.IndividualId equals i.BusinessEntityId
+                    join j in DbContext.Jobs on i.BusinessEntityId equals j.IndividualID
+                    where (j.TerminatedDate == null || j.TerminatedDate > DateTime.Today)
+                    select new { s, i, j };
+
+        if (selectedOrgId > 0)
+        {
+            query = query.Where(q => q.j.OrganisationID == selectedOrgId);
+        }
+
+        // TEAM takes priority over DIVISION
+        if (selectedTeamId > 0)
+        {
+            var teamMembers = await DbContext.TeamStaffs
+                .Where(ts => ts.TeamId == selectedTeamId)
+                .Select(ts => ts.StaffId)
+                .ToListAsync();
+
+            query = query.Where(q => teamMembers.Contains(q.i.BusinessEntityId));
+        }
+        else if (selectedDivisionId > 0)
+        {
+            query = query.Where(q => q.j.OrganisationStructureId == selectedDivisionId);
+        }
+
+        var staffList = await query
+            .Select(q => new
+            {
+                StaffId = q.i.BusinessEntityId,
+                EmployeeNumber = q.s.EmployeeNumber,
+                FullName = q.i.FirstNameEnglish + " " +
+                           q.i.MiddleNameEnglish + " " +
+                           q.i.LastNameEnglish
+            })
+            .Distinct()
+            .ToListAsync();
+
+
+
+          staffList = await query
+    .Select(q => new
+    {
+        StaffId = q.i.BusinessEntityId,
+        EmployeeNumber = q.s.EmployeeNumber,
+        FullName = q.i.FirstNameEnglish + " " + q.i.MiddleNameEnglish + " " + q.i.LastNameEnglish
+    })
+    .Distinct()
+    .ToListAsync();
+
+
+        totalStaff = staffList.Count;
+        if (totalStaff == 0) return;
+
+
+
+
+        TimeSpan shiftStart = new TimeSpan(8, 30, 0); // Default, replace with actual schedule
+        TimeSpan shiftEnd = new TimeSpan(15, 30, 0);
+        TimeSpan allowedBreakDuration = TimeSpan.FromMinutes(60);
+
+        // 2. Process Daily Attendance
+        foreach (var staff in staffList)
+        {
+            var logs = await AttendanceLogService.GetAttendanceLogsAsync(staff.StaffId, searchDate, searchDate);
+
+            var record = new DailyStaffRecordDto
+            {
+                StaffId = staff.StaffId,
+                EmployeeNumber = staff.EmployeeNumber ?? "N/A",
+                StaffName = staff.FullName.Trim(),
+                ScheduledIn = shiftStart.ToString(@"hh\:mm"),
+                ScheduledOut = shiftEnd.ToString(@"hh\:mm")
+            };
+
+            // Assume an external method/query checks for Sick Leave
+            bool isOnSickLeave = false; 
+
+            if (isOnSickLeave)
+            {
+                record.ClockIn = "SICK";
+                cntSick++;
+            }
+            else if (logs.Any())
+            {
+                var clockIn = logs.LastOrDefault(l => l.InOutModeId == 1);
+                var clockOut = logs.LastOrDefault(l => l.InOutModeId == 2);
+                var breakOut = logs.LastOrDefault(l => l.InOutModeId == 3);
+                var breakIn = logs.LastOrDefault(l => l.InOutModeId == 4);
+
+                record.ClockIn = clockIn != null ? clockIn.Date.ToString("HH:mm") : "--:--";
+                record.ClockOut = clockOut != null ? clockOut.Date.ToString("HH:mm") : "--:--";
+                record.BreakOut = breakOut != null ? breakOut.Date.ToString("HH:mm") : "--:--";
+                record.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
+
+                cntAttended++;
+
+                // Check Late Arrival
+                if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                {
+                    record.LateMins = (int)(clockIn.Date.TimeOfDay - shiftStart).TotalMinutes;
+                }
+                else if (clockIn != null)
+                {
+                    cntOnTime++;
+                }
+
+                // Check Break Delay
+                if (breakOut != null && breakIn != null)
+                {
+                    TimeSpan actualBreak = breakIn.Date - breakOut.Date;
+                    if (actualBreak > allowedBreakDuration)
+                    {
+                        record.LateBreakMins = (int)(actualBreak - allowedBreakDuration).TotalMinutes;
+                    }
+                }
+            }
+            else
+            {
+                cntAbsent++;
+            }
+
+            dailyRecords.Add(record);
+        }
+
+        // 3. Calculate Percentages for Chart
+        pctAttended = ((decimal)cntAttended / totalStaff) * 100;
+        pctOnTime = ((decimal)cntOnTime / totalStaff) * 100;
+        pctAbsent = ((decimal)cntAbsent / totalStaff) * 100;
+        pctSick = ((decimal)cntSick / totalStaff) * 100;
+
+        isDataLoaded = true;
+    }
+
+    private void ResetFilters()
+    {
+        selectedOrgId = 0;
+        selectedEmpType = "";
+        selectedDivisionId = 0;
+        selectedTeamId = 0;
+        searchDate = DateTime.Today;
+        isDataLoaded = false;
+        dailyRecords.Clear();
+        divisions.Clear();
+        teams.Clear();
+    }
+
+    // --- DTO ---
+    public class DailyStaffRecordDto
+    {
+        public int StaffId { get; set; }
+        public string EmployeeNumber { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string ScheduledIn { get; set; } = string.Empty;
+        public string ClockIn { get; set; } = "--:--";
+        public int LateMins { get; set; }
+        public string BreakOut { get; set; } = "--:--";
+        public string BreakIn { get; set; } = "--:--";
+        public int LateBreakMins { get; set; }
+        public string ScheduledOut { get; set; } = string.Empty;
+        public string ClockOut { get; set; } = "--:--";
+    }
+}

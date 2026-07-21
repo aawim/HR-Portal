@@ -1,0 +1,88 @@
+﻿@using Microsoft.AspNetCore.Components.Authorization
+
+@rendermode RenderMode.InteractiveServer
+
+<header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 z-10">
+
+    <!-- 1. LEFT SIDE: Search Bar -->
+    <AuthorizeView>
+        <Authorized>
+            <div class="flex-1 max-w-md hidden sm:block">
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    </span>
+                    <input type="text" class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-slate-50" placeholder="Search employees, documents..." />
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <!-- Keeps the flex layout balanced when the search bar is hidden -->
+            <div class="flex-1"></div>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <!-- 2. RIGHT SIDE: Actions & Auth -->
+    <div class="flex items-center gap-4 pl-4 w-full sm:w-auto justify-end">
+
+        <div class="text-sm text-slate-500 hidden lg:block">
+            @DateTime.Now.ToString("dddd, yyyy-MM-dd h:mm tt")
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <!-- Notification Bell -->
+                <button class="p-2 text-slate-400 hover:text-blue-600 transition-colors relative">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>
+                    <span class="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"></span>
+                </button>
+
+                <!-- Profile Info using your @UserName variable -->
+                <div class="flex items-center gap-3 border-l border-slate-200 pl-4 cursor-pointer">
+                    <img src="https://i.pravatar.cc/150?img=32" alt="Profile" class="w-9 h-9 rounded-full border-2 border-blue-100 object-cover" />
+                    <div class="hidden md:block">
+                        <p class="text-sm font-semibold text-slate-700">Hello, @UserName!</p>
+                        <p class="text-xs text-slate-500">Employee</p>
+                    </div>
+                </div>
+
+
+                <!-- Tailwind Styled Logout Button -->
+                <form action="/Online/Auth/Logout" method="post" class="m-0 ml-2">
+                    <AntiforgeryToken />
+                    <button type="submit" class="text-sm font-medium text-rose-600 hover:text-white border border-rose-600 hover:bg-rose-600 px-3 py-1.5 rounded-lg transition-colors">Log Out</button>
+                </form>
+            </Authorized>
+
+            <NotAuthorized>
+                <!-- Tailwind Styled Login Button -->
+                <a href="/Online/Auth/login" class="text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg shadow-sm transition-colors">Log In</a>
+            </NotAuthorized>
+        </AuthorizeView>
+
+    </div>
+</header>
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private string UserName = "";
+     protected override async Task OnInitializedAsync()
+    {
+        if (AuthState is not null)
+        {
+            var state = await AuthState;
+            var user = state.User;
+
+            if (user.Identity is not null && user.Identity.IsAuthenticated)
+            {
+                UserName = user.Identity.Name ?? "User";
+            }
+        }
+
+ 
+    
+    }
+
+}

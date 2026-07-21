@@ -1,0 +1,341 @@
+﻿@page "/settings/leaves/types"
+@inject HttpClient Http
+@using Microsoft.EntityFrameworkCore
+@inject HrmTeContext _context
+
+<!-- ADD THIS LINE TO ENABLE BUTTON CLICKS -->
+@rendermode RenderMode.InteractiveServer
+
+
+<div class="max-w-12xl mx-auto py-8 px-4">
+    <!-- Breadcrumb / Back Button -->
+    <a href="/settings/leaves" class="text-slate-400 hover:text-slate-600 text-sm mb-6 flex items-center gap-2 transition-colors">
+        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+        Back to Leaves Management
+    </a>
+
+    <!-- Header & Action Bar -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-8 gap-4">
+        <div>
+           @*  <h1 class="text-2xl font-bold text-slate-800">Manage Leave Types</h1>
+            <p class="text-slate-500 text-sm mt-1">Configure leave policies, durations, and payment rules.</p> *@
+             @if (leaveTypes != null)
+            {
+                <p class="text-slate-500 text-sm mt-1">Total No. Of Leave Types : @leaveTypes.Count().</p>
+            }
+        </div>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <!-- ORGANIZATION FILTER DROPDOWN -->
+            <select @onchange="OnOrganizationChanged" class="border border-slate-300 rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none bg-white min-w-[200px]">
+                <option value="0">All Organizations</option>
+                @if (organizations != null)
+                {
+                    @foreach (var org in organizations)
+                    {
+                    <option value="@org.BusinessEntityID">@org.OrganisationName</option>
+                    }
+                }
+            </select>
+
+            <button @onclick="OpenCreateForm" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium shadow-sm transition-colors flex items-center gap-2 whitespace-nowrap">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                Add New Type
+            </button>
+        </div>
+    </div>
+ 
+
+
+
+
+
+<!-- CREATE / EDIT FORM -->
+    @if (isFormOpen)
+    {
+        <div class="bg-white rounded-xl shadow-md border border-slate-200 p-6 mb-8 relative overflow-hidden animate-fade-in-down">
+            <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+            
+            <div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                <h2 class="text-xl font-bold text-slate-800">
+                    @(editingType.LeaveTypeId == 0 ? "Create New Leave Type" : "Edit Leave Type")
+                </h2>
+                <button @onclick="CloseForm" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                
+                <!-- Text & Number Inputs -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Name (English)</label>
+                    <input @bind="editingType.Name" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none" placeholder="e.g. Annual Leave" />
+                </div>
+                
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Name (Dhivehi)</label>
+                    <input @bind="editingType.NameDhivehi" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none text-right" placeholder="އަހަރީ ޗުއްޓީ" dir="rtl" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Duration (Days)</label>
+                    <input @bind="editingType.Duration" type="number" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Pay Percentage (%)</label>
+                    <input @bind="editingType.PayPercentage" type="number" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none" placeholder="100" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Service Required(Months)</label>
+                    <input @bind="editingType.ServiceDurationMonths" type="number" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none" placeholder="e.g. 6" />
+                </div>
+
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase tracking-wide mb-2">Leave days repeated every (Months)</label>
+                <input @bind="editingType.RepeatedEveryInMonth" type="number" class="w-full border border-slate-300 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-blue-100 focus:border-blue-500 transition-all outline-none" placeholder="e.g. 6" />
+            </div>
+
+           
+                
+                <!-- Spacer for grid alignment -->
+                @* <div class="hidden lg:block"></div> *@
+
+                <!-- Modern Toggle Switches -->
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" @bind="editingType.IncludePay" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-700">Includes Pay</span>
+                    </label>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" @bind="editingType.IncludeHolidays" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-700">Includes Holidays</span>
+                    </label>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" @bind="editingType.IsStaffWideAvailable" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-700">Staff Wide Available</span>
+                    </label>
+                </div>
+
+                <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" @bind="editingType.IsGlobal" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-3 text-sm font-medium text-slate-700">Is Global</span>
+                    </label>
+                </div>
+                    <div class="bg-slate-50 p-4 rounded-lg border border-slate-100 flex flex-col justify-center">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" @bind="editingType.IsLocationRequired" class="sr-only peer">
+                        <div class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                    <span class="ml-3 text-sm font-medium text-slate-700">Location Required</span>
+                    </label>
+                </div>
+
+
+
+            
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex gap-3 justify-end pt-4 border-t border-slate-100">
+                <button @onclick="CloseForm" class="px-5 py-2.5 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-bold transition-colors">
+                    Cancel
+                </button>
+                <button @onclick="SaveLeaveType" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                    Save Leave Type
+                </button>
+            </div>
+        </div>
+    }
+
+
+
+    <!-- LEAVE TYPES GRID -->
+    @if (leaveTypes == null)
+    {
+        <div class="animate-pulse space-y-4">
+            <div class="h-16 bg-slate-200 rounded-xl w-full"></div>
+            <div class="h-16 bg-slate-200 rounded-xl w-full"></div>
+        </div>
+    }
+    else
+    {
+        <!-- Changed to a 1 or 2 column grid for wider rectangular cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            @foreach (var type in leaveTypes)
+            {
+                <div class="bg-white rounded-lg shadow-sm border border-slate-100 p-4 flex items-center gap-4 hover:shadow-md hover:border-blue-200 transition-all duration-200 group relative">
+
+                    <!-- Left: Icon -->
+                    <div class="bg-slate-50 text-slate-400 p-2.5 rounded-lg group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors flex-shrink-0">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                    </div>
+
+                    <!-- Middle: Details -->
+                    <div class="flex-grow min-w-0">
+                        <div class="flex items-center gap-2 mb-1">
+                            <h3 class="font-bold text-slate-800 text-sm truncate group-hover:text-blue-700 transition-colors">
+                                @type.Name
+                            </h3>
+                            @if (type.IncludePay)
+                            {
+                                <span class="bg-emerald-50 text-emerald-600 border border-emerald-200 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Paid</span>
+                            }
+                            else
+                            {
+                                <span class="bg-amber-50 text-amber-600 border border-amber-200 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider flex-shrink-0">Unpaid</span>
+                            }
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                            <span>Duration: <strong class="text-slate-700 font-medium">@type.Duration Days</strong></span>
+                            <span class="hidden sm:inline text-slate-300">•</span>
+                            <span>Pay: <strong class="text-slate-700 font-medium">@(type.PayPercentage?.ToString() ?? "0")%</strong></span>
+                            <span class="hidden sm:inline text-slate-300">•</span>
+                            <span>Staff Wide: <strong class="text-slate-700 font-medium">@(type.IsStaffWideAvailable ? "Yes" : "No")</strong></span>
+                         
+                            <span>IsGlobal: <strong class="text-slate-700 font-medium">@(type.IsGlobal ? "Yes" : "No")</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Right: Actions -->
+                    <div class="flex items-center gap-1 pl-2 border-l border-slate-100">
+                        <button @onclick="() => EditLeaveType(type)" class="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="Edit">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                        </button>
+                        <button @onclick="() => DeleteLeaveType(type.LeaveTypeId)" class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors" title="Delete">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </div>
+
+                </div>
+            }
+        </div>
+
+    }
+</div>
+@code {
+
+
+    @using HRM.Models
+    private List<LeaveType>? leaveTypes;
+    private List<Organisation>? organizations;
+    private LeaveType editingType = new();
+    private bool isFormOpen = false;
+    private int selectedOrgId = 0;
+    
+    protected override async Task OnInitializedAsync()
+    {
+        // organizations = await Http.GetFromJsonAsync<List<Organisation>>("https://localhost:62839/api/organisations");
+    organizations = await _context.Organisations.OrderBy(o => o.OrganisationName).ToListAsync();
+        await LoadLeaveTypes();
+    }
+
+    // Triggered whenever the user selects a new item in the dropdown
+    private async Task OnOrganizationChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int orgId))
+        {
+            selectedOrgId = orgId;
+            await LoadLeaveTypes(); // Reload the grid with the new filter
+        }
+    }
+
+
+    private async Task LoadLeaveTypes()
+    {
+        var query = _context.LeaveTypes.AsQueryable();
+        
+        if (selectedOrgId > 0)
+        {
+            query = query.Where(lt => lt.OrganisationId == selectedOrgId);
+        }
+        
+        leaveTypes = await query.ToListAsync();
+
+
+
+    }
+
+
+    // private async Task LoadLeaveTypes()
+    // {
+    //     // Replace with your actual controller API URL
+    //     //leaveTypes = await Http.GetFromJsonAsync<List<LeaveType>>("api/leavetypes");
+    //     // If an organization is selected, append the query parameter to the URL
+    //     string url = selectedOrgId > 0
+    //         ? $"api/leavetypes?organisationId={selectedOrgId}"
+    //         : "api/leavetypes";
+    //     leaveTypes = await Http.GetFromJsonAsync<List<LeaveType>>(url);
+    
+    // }
+
+    private void OpenCreateForm()
+    {
+        editingType = new LeaveType(); // Reset
+        isFormOpen = true;
+    }
+
+    private void EditLeaveType(LeaveType type)
+    {
+        // Create a copy to edit so we don't mutate the UI list instantly
+        editingType = new LeaveType
+            {
+                LeaveTypeId = type.LeaveTypeId,
+                Name = type.Name,
+                Duration = type.Duration,
+                IncludePay = type.IncludePay,
+                IncludeHolidays = type.IncludeHolidays,
+                IsStaffWideAvailable = type.IsStaffWideAvailable,
+                PayPercentage = type.PayPercentage,
+                IsPublic = type.IsPublic,
+                IsGlobal = type.IsGlobal,
+                IsLocationRequired = type.IsLocationRequired
+            // Map the rest of your properties here...
+            };
+        isFormOpen = true;
+    }
+
+    private void CloseForm()
+    {
+        isFormOpen = false;
+    }
+
+    private async Task SaveLeaveType()
+    {
+        if (editingType.LeaveTypeId == 0)
+        {
+            // CREATE
+            await Http.PostAsJsonAsync("api/leavetypes", editingType);
+        }
+        else
+        {
+            // UPDATE
+            await Http.PutAsJsonAsync($"api/leavetypes/{editingType.LeaveTypeId}", editingType);
+        }
+
+        await LoadLeaveTypes(); // Refresh grid
+        CloseForm();
+    }
+
+    private async Task DeleteLeaveType(int id)
+    {
+        // In a real app, you'd want a confirmation dialog here!
+        await Http.DeleteAsync($"api/leavetypes/{id}");
+        await LoadLeaveTypes();
+    }
+}
+

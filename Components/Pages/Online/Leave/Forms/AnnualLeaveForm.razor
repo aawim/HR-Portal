@@ -1,0 +1,231 @@
+﻿
+@* @page "/online/new-leave-application" *@
+@using HRM.DTOs
+@using HRM.DTOs.Leave
+@using HRM.Services
+@using HRM.Services.State
+@using HRM.Services.Interfaces
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore;
+
+@inject IGeographyService GeographyService
+<div class="bg-white rounded-lg border border-slate-200 p-6">
+
+    <h3 class="text-lg font-semibold mb-4">
+        Annual Leave Information
+    </h3>
+
+    <!-- REMAINING DAYS -->
+
+    <div class="mb-3">
+        <label>Remaining Days</label>
+        <input class="w-full border p-2"
+        value="@LeaveState.RemainingDays"
+        disabled />
+    </div>
+
+    <!-- DATES -->
+    <div class="grid grid-cols-3 gap-3 mb-3">
+        <div>
+            <label>From Date</label>
+            <InputDate class="w-full border p-2"
+            @bind-Value="LeaveState.Model.FromDate"
+            @bind-Value:after="CalculateFromDate" />
+        </div>
+        <div>
+            <label>To Date</label>
+            <InputDate class="w-full border p-2"
+            @bind-Value="LeaveState.Model.ToDate"
+            @bind-Value:after="CalculateToDate" />
+        </div>
+        <div>
+            <label>Duration</label>
+            <InputNumber class="w-full border p-2"
+            @bind-Value="LeaveState.Model.Duration"
+            @bind-Value:after="CalculateToDateFromDuration" />
+        </div>
+    </div>
+
+    <!-- REASON -->
+
+
+    <div class="mb-3">
+        <label>Reason</label>
+
+        <InputSelect @bind-Value="LeaveState.Model.LeaveReasonId"
+        class="w-full h-11 px-3 border rounded-md">
+
+            <option value="0">-- Select Reason --</option>
+
+            @foreach (var item in LeaveState.Reasons)
+            {
+                <option value="@item.Id">@item.Name</option>
+            }
+
+        </InputSelect>
+    </div>
+
+
+
+    <!-- EXPLANATION -->
+    <div class="mb-3">
+        <label>Explanation</label>
+        <InputTextArea class="w-full border p-2" @bind-Value="LeaveState.Model.Explanation" rows="3" />
+    </div>
+
+    <!-- ADDRESS -->
+    <div class="grid grid-cols-2 gap-3 mb-3">
+        <InputSelect class="w-full border p-2"
+        @bind-Value="LeaveState.Model.CountryId"
+        @bind-Value:after="LoadAtolls">
+
+            <option value="0">Select Country</option>
+
+            @foreach (var c in LeaveState.Countries)
+            {
+                <option value="@c.CountryId">@c.NameEnglish</option>
+            }
+
+        </InputSelect>
+
+
+        <InputSelect class="w-full border p-2"
+        @bind-Value="LeaveState.Model.AtollId"
+        @bind-Value:after="LoadIslands">
+
+            <option value="0">Select Atoll</option>
+
+            @foreach (var a in LeaveState.Atolls)
+            {
+                <option value="@a.AtollId">@a.NameEnglish</option>
+            }
+
+        </InputSelect>
+
+        <InputSelect class="w-full border p-2"
+        @bind-Value="LeaveState.Model.IslandId">
+
+            <option value="0">Select Island</option>
+
+            @foreach (var i in LeaveState.Islands)
+            {
+                <option value="@i.IslandId">@i.NameEnglish</option>
+            }
+
+        </InputSelect>
+
+
+        <InputText class="border p-2" placeholder="Phone" @bind-Value="LeaveState.Model.Phone" />
+    </div>
+
+    <InputText class="w-full border p-2 mb-3"
+    placeholder="Address"
+    @bind-Value="LeaveState.Model.Address" />
+
+    <!-- SUBMIT -->
+    <button type="submit"
+    class="bg-blue-600 text-white px-4 py-2 rounded">
+        Submit Application
+    </button>
+
+</div>
+
+@code {
+
+    [Parameter]
+    public LeaveApplicationState LeaveState { get; set; } = default!;
+
+    private ToastService toastService;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+      
+        LeaveState.Countries = await GeographyService.GetCountriesAsync();
+        LeaveState.Model.FromDate = DateTime.Today;
+        LeaveState.Model.ToDate = DateTime.Today;
+        CalculateToDateFromDuration();
+        CalculateFromDate();
+  
+    }
+
+
+ 
+
+    private readonly HashSet<DayOfWeek> WeekendDays =
+    [
+        DayOfWeek.Friday,
+        DayOfWeek.Saturday
+    ];
+
+    private bool IsWeekend(DateTime date)
+    {
+        return WeekendDays.Contains(date.DayOfWeek);
+    }
+    private bool IsWorkingDay(DateTime date)
+    {
+        return !WeekendDays.Contains(date.DayOfWeek);
+    }
+    private async Task LoadAtolls()
+    {
+        LeaveState.Atolls = await GeographyService.GetAtollsAsync();
+
+        LeaveState.Islands.Clear();
+
+        LeaveState.Model.AtollId = 0;
+        LeaveState.Model.IslandId = 0;
+    }
+    private async Task LoadIslands()
+    {
+        LeaveState.Islands = await GeographyService.GetIslandsAsync(LeaveState.Model.AtollId);
+
+        LeaveState.Model.IslandId = 0;
+    }
+
+    private void CalculateFromDate()
+    {
+        LeaveState.Model.ToDate = LeaveState.Model.FromDate.AddDays(LeaveState.Model.Duration - 1);
+    }
+
+    private void CalculateToDate()
+    {
+        LeaveState.Model.Duration = (LeaveState.Model.ToDate - LeaveState.Model.FromDate).Days + 1;
+    }
+
+    private void CalculateToDateFromDuration()
+    {
+        if (LeaveState.Model.Duration <= 0)
+        {
+            LeaveState.Model.Duration = 1;
+        }
+
+        DateTime date = LeaveState.Model.FromDate;
+
+        // If the selected start date is a weekend,
+        // move to the next working day.
+        while (!IsWorkingDay(date))
+        {
+            date = date.AddDays(1);
+        }
+
+        LeaveState.Model.FromDate = date;
+
+        int workingDays = 1;
+
+        while (workingDays < LeaveState.Model.Duration)
+        {
+            date = date.AddDays(1);
+
+            if (IsWorkingDay(date))
+            {
+                workingDays++;
+            }
+        }
+
+        LeaveState.Model.ToDate = date;
+    }
+   
+
+
+
+}
