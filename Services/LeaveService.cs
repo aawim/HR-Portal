@@ -12,7 +12,7 @@ namespace HRM.Services
 {
     public class LeaveService : ILeaveService
     {
-        private readonly IUserContext _userContextService;
+        //private readonly IUserContext _userContextService;
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _operationLogService;
         private readonly IUserAccessService _access;
@@ -32,7 +32,7 @@ namespace HRM.Services
             _dbFactory = dbFactory;
             _operationLogService = operationLogService;
             _toastService = toastService;
-            _userContextService = userContextService;
+            //_userContextService = userContextService;
             _access = access;
             _requestService = requestService;
         }

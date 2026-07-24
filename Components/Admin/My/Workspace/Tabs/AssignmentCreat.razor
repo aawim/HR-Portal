@@ -1,0 +1,260 @@
+﻿@page "/work-planning/assignments/create"
+@using HRM.WorkPlanning.Abstractions
+@using HRM.DTOs.WorkPlanning
+@using Microsoft.EntityFrameworkCore
+
+@inject IWorkAssignmentManagementService AssignmentService
+@inject NavigationManager Navigation
+
+<PageTitle>Assign Work</PageTitle>
+
+<div class="max-w-3xl mx-auto">
+
+    <div class="mb-6">
+        <button class="text-sm text-slate-500 mb-3"
+                @onclick="GoBack">
+            ← Back to assignments
+        </button>
+
+        <h1 class="text-2xl font-semibold">
+            Assign Work to Employee
+        </h1>
+
+        <p class="text-sm text-slate-500">
+            Create a work assignment for one employee.
+        </p>
+    </div>
+
+    <EditForm Model="Request"
+              OnValidSubmit="SaveAsync">
+
+        <DataAnnotationsValidator />
+
+        <div class="bg-white border rounded-xl p-6 space-y-5">
+
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Department
+                </label>
+
+                <InputSelect class="w-full border rounded-lg px-3 py-2"
+                             @bind-Value="Request.OrganisationStructureId"
+                             @bind-Value:after="DepartmentChangedAsync">
+
+                    <option value="0">
+                        Select department
+                    </option>
+
+                    @foreach (var department in Departments)
+                    {
+                        <option value="@department.OrganisationStructureId">
+                            @department.DepartmentName
+                        </option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Employee
+                </label>
+
+                <InputSelect class="w-full border rounded-lg px-3 py-2"
+                             @bind-Value="SelectedIndividualId"
+                             disabled="@(Request.OrganisationStructureId <= 0)">
+
+                    <option value="0">
+                        Select employee
+                    </option>
+
+                    @foreach (var employee in DepartmentStaff)
+                    {
+                        <option value="@employee.IndividualId">
+                            @employee.EmployeeName - @employee.JobTitle
+                        </option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Work Plan
+                </label>
+
+                <InputSelect class="w-full border rounded-lg px-3 py-2"
+                             @bind-Value="Request.WorkPlanId">
+
+                    <option value="">
+                        Select work plan
+                    </option>
+
+                    @foreach (var plan in WorkPlans)
+                    {
+                        <option value="@plan.WorkPlanId">
+                            @plan.DisplayName
+                        </option>
+                    }
+                </InputSelect>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Assignment Name
+                </label>
+
+                <InputText class="w-full border rounded-lg px-3 py-2"
+                           @bind-Value="Request.AssignmentName"
+                           placeholder="Enter assignment name" />
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">
+                        Start
+                    </label>
+
+                    <InputDate Type="InputDateType.DateTimeLocal"
+                               class="w-full border rounded-lg px-3 py-2"
+                               @bind-Value="Request.ScheduledStart" />
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium mb-1">
+                        End
+                    </label>
+
+                    <InputDate Type="InputDateType.DateTimeLocal"
+                               class="w-full border rounded-lg px-3 py-2"
+                               @bind-Value="Request.ScheduledEnd" />
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-1">
+                    Remarks
+                </label>
+
+                <InputTextArea class="w-full border rounded-lg px-3 py-2"
+                               @bind-Value="Request.Remarks" />
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(Message))
+            {
+                <div class="@MessageCssClass">
+                    @Message
+                </div>
+            }
+
+            <div class="flex justify-end gap-3">
+                <button type="button"
+                        class="px-4 py-2 border rounded-lg"
+                        @onclick="GoBack">
+                    Cancel
+                </button>
+
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                        disabled="@IsSaving">
+                    @(IsSaving ? "Saving..." : "Assign Employee")
+                </button>
+            </div>
+
+        </div>
+    </EditForm>
+</div>
+
+@code {
+    private bool IsSaving;
+    private int SelectedIndividualId;
+    private string? Message;
+    private string MessageCssClass =
+        "p-3 rounded-lg bg-red-50 text-red-700";
+
+    private List<WorkAssignmentDepartmentDto> Departments { get; set; } =
+        new();
+
+    private List<WorkPlanLookupDto> WorkPlans { get; set; } =
+        new();
+
+    private List<EligibleAssignmentStaffDto> DepartmentStaff { get; set; } =
+        new();
+
+    private BulkDepartmentAssignmentRequest Request { get; set; } =
+        new()
+            {
+                ScheduledStart = DateTime.Today.AddHours(8),
+                ScheduledEnd = DateTime.Today.AddHours(16),
+                SelectedIndividualIds = new List<int>()
+            };
+
+    protected override async Task OnInitializedAsync()
+    {
+        Departments =
+            await AssignmentService.GetDepartmentsAsync();
+
+        WorkPlans =
+            await AssignmentService.GetWorkPlansAsync();
+    }
+
+    private async Task DepartmentChangedAsync()
+    {
+        SelectedIndividualId = 0;
+        DepartmentStaff.Clear();
+
+        if (Request.OrganisationStructureId <= 0)
+            return;
+
+        DepartmentStaff =
+            await AssignmentService.GetDepartmentStaffAsync(
+                Request.OrganisationStructureId);
+    }
+
+    private async Task SaveAsync()
+    {
+        Message = null;
+
+        if (SelectedIndividualId <= 0)
+        {
+            Message = "Select an employee.";
+            return;
+        }
+
+        Request.SelectedIndividualIds =
+            new List<int>
+                {
+                SelectedIndividualId
+                };
+
+        IsSaving = true;
+
+        try
+        {
+            var result =
+                await AssignmentService.AssignDepartmentAsync(
+                    Request);
+
+            Message = result.Message;
+
+            MessageCssClass =
+                result.Success
+                    ? "p-3 rounded-lg bg-green-50 text-green-700"
+                    : "p-3 rounded-lg bg-red-50 text-red-700";
+
+            if (result.Success)
+            {
+                Navigation.NavigateTo(
+                    "/work-planning/assignments");
+            }
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo(
+            "/work-planning/assignments");
+    }
+}

@@ -87,4 +87,11 @@ public partial class WorkAssignment
 
     public virtual ICollection<AttendanceLogResolution> AttendanceLogResolutions { get; set; }
         = new List<AttendanceLogResolution>();
+
+
+
+   
+
+
+
 }

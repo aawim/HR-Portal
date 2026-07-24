@@ -1,0 +1,2293 @@
+﻿@page "/admin/work-planning/templates"
+
+@using HRM.DTOs
+@using HRM.DTOs.WorkPlanning
+@using HRM.Models.WorkPlanning
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Shared
+
+@inject IWorkTemplateService WorkTemplateService
+@inject ToastService ToastService
+@inject IOperationLogService OperationLogService
+
+<PageTitle>Work Templates</PageTitle>
+
+<div class="space-y-6">
+
+    <!-- Page Header -->
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">Work Templates</h1>
+            <p class="mt-1 text-sm text-slate-500">
+                Configure reusable shifts, duties and work schedules.
+            </p>
+        </div>
+
+        <button type="button"
+        class="inline-flex items-center justify-center gap-2 rounded-lg
+                       bg-blue-600 px-4 py-2 text-sm font-medium text-white
+                       shadow-sm transition hover:bg-blue-700"
+        @onclick="StartNewTemplate">
+            <span class="text-lg leading-none">+</span>
+            New Template
+        </button>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="flex min-h-[500px] items-center justify-center
+                    rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div class="text-center">
+                <div class="mx-auto h-8 w-8 animate-spin rounded-full
+                            border-4 border-slate-200 border-t-blue-600">
+                </div>
+
+                <p class="mt-3 text-sm text-slate-500">
+                    Loading work templates...
+                </p>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 gap-2 xl:grid-cols-12">
+
+            <!-- Existing Templates -->
+            <div class="xl:col-span-9">
+                <div class="overflow-hidden rounded-xl border border-slate-200
+                            bg-white shadow-sm">
+
+                    <div class="flex flex-col gap-2 border-b border-slate-100
+                                px-5 py-4 sm:flex-row sm:items-center
+                                sm:justify-between">
+                        <div>
+                            <h2 class="font-semibold text-slate-800">
+                                Existing Templates
+                            </h2>
+
+                            <p class="mt-1 text-xs text-slate-500">
+                                @FilteredTemplates.Count template(s)
+                            </p>
+                        </div>
+
+                        <label class="flex cursor-pointer items-center gap-2">
+                            <InputCheckbox @bind-Value="showInactive"
+                            class="h-4 w-4 rounded border-slate-300
+                                                  text-blue-600 focus:ring-blue-500" />
+
+                            <span class="text-xs text-slate-600">
+                                Show inactive templates
+                            </span>
+                        </label>
+                    </div>
+
+                    <div class="border-b border-slate-100 p-4">
+                        <div class="relative">
+                            <span class="pointer-events-none absolute inset-y-0 left-0
+                                         flex items-center pl-3 text-slate-400">
+                                <svg class="h-5 w-5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="1.8">
+                                    <circle cx="11" cy="11" r="7"></circle>
+                                    <path d="m20 20-3.5-3.5"></path>
+                                </svg>
+                            </span>
+
+                            <input type="text"
+                            class="w-full rounded-lg border border-slate-300
+                                          py-2 pl-10 pr-3 text-sm outline-none
+                                          transition focus:border-blue-500
+                                          focus:ring-2 focus:ring-blue-100"
+                            placeholder="Search templates..."
+                            @bind="templateSearch"
+                            @bind:event="oninput" />
+                        </div>
+                    </div>
+
+                    @if (!FilteredTemplates.Any())
+                    {
+                        <div class="flex min-h-[450px] flex-col items-center
+                                    justify-center px-6 text-center">
+                            <div class="mb-4 flex h-16 w-16 items-center
+                                        justify-center rounded-full bg-slate-100
+                                        text-3xl">
+                                📋
+                            </div>
+
+                            <p class="font-medium text-slate-700">
+                                No templates found
+                            </p>
+
+                            <p class="mt-1 max-w-sm text-sm text-slate-400">
+                                Create a work template or change the current
+                                search and inactive filters.
+                            </p>
+
+                            <button type="button"
+                            class="mt-5 rounded-lg bg-blue-600 px-4 py-2
+                                           text-sm font-medium text-white
+                                           transition hover:bg-blue-700"
+                            @onclick="StartNewTemplate">
+                                Create Template
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Desktop Table -->
+                        <div class="hidden overflow-x-auto md:block">
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th class="px-5 py-3 text-left text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Template
+                                        </th>
+                                        <th class="px-5 py-3 text-left text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Type
+                                        </th>
+                                        <th class="px-5 py-3 text-left text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Default Schedule
+                                        </th>
+                                        <th class="px-5 py-3 text-left text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Segments
+                                        </th>
+                                        <th class="px-5 py-3 text-left text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Status
+                                        </th>
+                                        <th class="px-5 py-3 text-right text-xs font-semibold
+                                                   uppercase tracking-wide text-slate-500">
+                                            Action
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                <tbody class="divide-y divide-slate-100 bg-white">
+                                    @foreach (var template in FilteredTemplates)
+                                    {
+                                        <tr class="transition hover:bg-slate-50">
+                                            <td class="px-5 py-4">
+                                                <div class="flex items-start gap-3">
+                                                    <div class="flex h-10 w-10 shrink-0
+                                                                items-center justify-center
+                                                                rounded-lg bg-slate-100 text-xl">
+                                                        @GetTemplateIcon(template.TemplateType)
+                                                    </div>
+
+                                                    <div class="min-w-0">
+                                                        <button type="button"
+                                                        class="text-left font-semibold
+                                                                       text-slate-800
+                                                                       hover:text-blue-600"
+                                                        @onclick="() => SelectTemplateAsync(template)">
+                                                            @template.Name
+                                                        </button>
+
+                                                        @if (!string.IsNullOrWhiteSpace(template.Description))
+                                                        {
+                                                            <p class="mt-1 max-w-sm truncate
+                                                                      text-xs text-slate-500">
+                                                                @template.Description
+                                                            </p>
+                                                        }
+                                                    </div>
+                                                </div>
+                                            </td>
+
+                                            <td class="px-5 py-4 text-sm text-slate-600">
+                                                @GetTemplateTypeName(template.TemplateType)
+                                            </td>
+
+                                            <td class="px-5 py-4 text-sm text-slate-600">
+                                                @GetTimeDescription(template)
+                                            </td>
+
+                                            <td class="px-5 py-4 text-sm text-slate-600">
+                                                @template.SegmentCount
+                                            </td>
+
+                                            <td class="px-5 py-4">
+                                                @if (template.IsActive)
+                                                {
+                                                    <span class="inline-flex rounded-full
+                                                                 bg-green-100 px-2.5 py-1
+                                                                 text-xs font-medium
+                                                                 text-green-700">
+                                                        Active
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex rounded-full
+                                                                 bg-red-100 px-2.5 py-1
+                                                                 text-xs font-medium
+                                                                 text-red-700">
+                                                        Inactive
+                                                    </span>
+                                                }
+                                            </td>
+
+                                            <td class="px-5 py-4 text-right">
+                                                <button type="button"
+                                                class="rounded-lg border border-slate-300
+                                                               bg-white px-3 py-1.5 text-xs
+                                                               font-medium text-slate-700
+                                                               transition hover:border-blue-300
+                                                               hover:bg-blue-50
+                                                               hover:text-blue-700"
+                                                @onclick="() => SelectTemplateAsync(template)">
+                                                    View / Edit
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Mobile Cards -->
+                        <div class="divide-y divide-slate-100 md:hidden">
+                            @foreach (var template in FilteredTemplates)
+                            {
+                                <button type="button"
+                                class="w-full p-4 text-left transition
+                                               hover:bg-slate-50"
+                                @onclick="() => SelectTemplateAsync(template)">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-10 w-10 shrink-0
+                                                    items-center justify-center
+                                                    rounded-lg bg-slate-100 text-xl">
+                                            @GetTemplateIcon(template.TemplateType)
+                                        </div>
+
+                                        <div class="min-w-0 flex-1">
+                                            <div class="flex items-start justify-between gap-3">
+                                                <p class="font-semibold text-slate-800">
+                                                    @template.Name
+                                                </p>
+
+                                                @if (template.IsActive)
+                                                {
+                                                    <span class="shrink-0 rounded-full
+                                                                 bg-green-100 px-2 py-1
+                                                                 text-[11px] font-medium
+                                                                 text-green-700">
+                                                        Active
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="shrink-0 rounded-full
+                                                                 bg-red-100 px-2 py-1
+                                                                 text-[11px] font-medium
+                                                                 text-red-700">
+                                                        Inactive
+                                                    </span>
+                                                }
+                                            </div>
+
+                                            <p class="mt-1 text-xs text-slate-500">
+                                                @GetTemplateTypeName(template.TemplateType)
+                                            </p>
+
+                                            <div class="mt-2 flex flex-wrap gap-x-4
+                                                        gap-y-1 text-xs text-slate-400">
+                                                <span>@GetTimeDescription(template)</span>
+                                                <span>@template.SegmentCount segment(s)</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- Quick Templates -->
+            <div class="xl:col-span-3">
+                <div class="flex h-full flex-col overflow-hidden rounded-xl
+                            border border-slate-200 bg-white shadow-sm">
+
+                    <div class="border-b border-slate-100 px-4 py-4">
+                        <h2 class="font-semibold text-slate-800">
+                            Quick Templates
+                        </h2>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Select a preset and customize it before saving.
+                        </p>
+                    </div>
+
+                    <div class="border-b border-slate-100 p-4">
+                        <input type="text"
+                        class="w-full rounded-lg border border-slate-300
+                                      px-3 py-2 text-sm outline-none transition
+                                      focus:border-blue-500 focus:ring-2
+                                      focus:ring-blue-100"
+                        placeholder="Search quick templates..."
+                        @bind="presetSearch"
+                        @bind:event="oninput" />
+                    </div>
+
+                    <div class="max-h-[620px] flex-1 space-y-3 overflow-y-auto p-3">
+                        @if (!FilteredPresets.Any())
+                        {
+                            <div class="py-12 text-center">
+                                <p class="text-sm font-medium text-slate-600">
+                                    No quick templates found
+                                </p>
+
+                                <p class="mt-1 text-xs text-slate-400">
+                                    Change the quick-template search.
+                                </p>
+                            </div>
+                        }
+                        else
+                        {
+                            @foreach (var preset in FilteredPresets)
+                            {
+                                <button type="button"
+                                class="w-full rounded-lg border
+                                               border-slate-200 p-3 text-left
+                                               transition hover:border-blue-300
+                                               hover:bg-blue-50"
+                                @onclick="() => ApplyPreset(preset)">
+                                    <div class="flex items-start gap-3">
+                                        <div class="flex h-11 w-11 shrink-0
+                                                    items-center justify-center
+                                                    rounded-lg bg-slate-100 text-2xl">
+                                            @preset.Icon
+                                        </div>
+
+                                        <div class="min-w-0">
+                                            <p class="font-semibold text-slate-800">
+                                                @preset.Name
+                                            </p>
+
+                                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                                @preset.Description
+                                            </p>
+
+                                            @if (preset.DefaultStartTime.HasValue &&
+                                                preset.DefaultEndTime.HasValue)
+                                            {
+                                                <p class="mt-2 text-xs font-medium text-blue-600">
+                                                    @FormatPresetTime(preset.DefaultStartTime)
+                                                    -
+                                                    @FormatPresetTime(preset.DefaultEndTime)
+                                                </p>
+                                            }
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+                        }
+                    </div>
+
+                    <div class="border-t border-slate-100 bg-slate-50 p-4">
+                        <p class="text-xs leading-5 text-slate-500">
+                            A preset does not save immediately. Its settings
+                            open in the side panel for review.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Template Create/Edit Panel -->
+<RightSidePanel @bind-IsOpen="showTemplatePanel"
+Title="@PanelTitle"
+Description="@PanelDescription"
+Size="RightSidePanel.PanelSize.ExtraLarge"
+ContentWidth="max-w-4xl"
+OnClose="HandleTemplatePanelClosed">
+
+    <ChildContent>
+        <EditForm Model="@editModel"
+        OnValidSubmit="SaveTemplateAsync"
+        id="work-template-form">
+
+            <DataAnnotationsValidator />
+
+            <div class="space-y-6">
+                <ValidationSummary class="rounded-lg border border-red-200
+                                                  bg-red-50 p-3 text-sm
+                                                  text-red-700" />
+
+                <!-- General Details -->
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            General Details
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Define the name, purpose and category of the template.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Template Name
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputText class="w-full rounded-lg border
+                                                      border-slate-300 px-3 py-2
+                                                      text-sm outline-none transition
+                                                      focus:border-blue-500
+                                                      focus:ring-2
+                                                      focus:ring-blue-100"
+                            placeholder="For example, Morning Shift"
+                            @bind-Value="editModel.Name" />
+
+                            <ValidationMessage For="@(() => editModel.Name)"
+                            class="mt-1 block text-xs text-red-600" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Description
+                            </label>
+
+                            <InputTextArea class="min-h-[110px] w-full
+                                                  rounded-lg border border-slate-300
+                                                  px-3 py-2 text-sm outline-none
+                                                  transition focus:border-blue-500
+                                                  focus:ring-2 focus:ring-blue-100"
+                            placeholder="Describe the purpose of this template..."
+                            @bind-Value="editModel.Description" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Template Type
+                            </label>
+
+                            <InputSelect class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2
+                                                        focus:ring-blue-100"
+                            @bind-Value="editModel.TemplateType">
+                                <option value="RegularShift">Regular Shift</option>
+                                <option value="TemporaryDuty">Temporary Duty</option>
+                                <option value="SpecialEvent">Special Event</option>
+                                <option value="OnCall">On-call Duty</option>
+                                <option value="Training">Training</option>
+                            </InputSelect>
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <!-- Default Schedule -->
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Default Schedule
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Leave both fields empty when the schedule is flexible.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Default Start Time
+                            </label>
+
+                            <input type="time"
+                            class="w-full rounded-lg border border-slate-300
+                                          px-3 py-2 text-sm outline-none transition
+                                          focus:border-blue-500 focus:ring-2
+                                          focus:ring-blue-100"
+                            value="@FormatTime(editModel.DefaultStartTime)"
+                            @onchange="OnStartTimeChanged" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Default End Time
+                            </label>
+
+                            <input type="time"
+                            class="w-full rounded-lg border border-slate-300
+                                          px-3 py-2 text-sm outline-none transition
+                                          focus:border-blue-500 focus:ring-2
+                                          focus:ring-blue-100"
+                            value="@FormatTime(editModel.DefaultEndTime)"
+                            @onchange="OnEndTimeChanged" />
+                        </div>
+                    </div>
+
+                    @if (CrossesMidnight)
+                    {
+                        <div class="mt-3 rounded-lg border border-blue-200
+                                    bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                            This schedule ends on the following day.
+                        </div>
+                    }
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <!-- Attendance and Validation -->
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Attendance and Validation
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            These settings become the defaults for work plans
+                            and employee assignments.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <ToggleOption Title="Attendance Required"
+                        Description="Employees must record attendance."
+                        @bind-Value="editModel.RequiresAttendance" />
+
+                        <ToggleOption Title="Checkout Required"
+                        Description="Employees must complete checkout."
+                        @bind-Value="editModel.RequiresCheckOut" />
+
+                        <ToggleOption Title="Location Validation"
+                        Description="Validate the employee's work location."
+                        @bind-Value="editModel.RequiresLocationValidation" />
+
+                        <ToggleOption Title="Device Validation"
+                        Description="Validate the registered employee device."
+                        @bind-Value="editModel.RequiresDeviceValidation" />
+
+                        <ToggleOption Title="Allow Schedule Overlap"
+                        Description="Allow overlap with another assignment."
+                        @bind-Value="editModel.AllowsOverlap" />
+
+                        <ToggleOption Title="Active Template"
+                        Description="Make this template available for planning."
+                        @bind-Value="editModel.IsActive" />
+                    </div>
+                </section>
+
+                <!-- Segments -->
+                <section class="border-t border-slate-200 pt-6">
+                    <div class="flex flex-col gap-4 sm:flex-row
+                                sm:items-center sm:justify-between">
+                        <div>
+                            <h3 class="text-base font-semibold text-slate-900">
+                                Template Segments
+                            </h3>
+
+                            <p class="mt-1 text-sm text-slate-500">
+                                Define work periods, breaks and attendance rules
+                                relative to the template start time.
+                            </p>
+                        </div>
+
+                        <button type="button"
+                        disabled="@(!CanManageSegments)"
+                        @onclick="OpenAddSegmentPanel"
+                        class="inline-flex items-center justify-center gap-2
+                                       rounded-lg bg-blue-600 px-4 py-2 text-sm
+                                       font-medium text-white transition
+                                       hover:bg-blue-700 disabled:cursor-not-allowed
+                                       disabled:opacity-50">
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke-width="1.5"
+                            stroke="currentColor"
+                            class="h-5 w-5">
+                                <path stroke-linecap="round"
+                                stroke-linejoin="round"
+                                d="M12 4.5v15m7.5-7.5h-15" />
+                            </svg>
+
+                            Add Segment
+                        </button>
+                    </div>
+
+                    @if (!CanManageSegments)
+                    {
+                        <div class="mt-5 rounded-xl border border-amber-200
+                                    bg-amber-50 p-4">
+                            <div class="flex gap-3">
+                                <div class="mt-0.5 text-amber-600">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke-width="1.5"
+                                    stroke="currentColor"
+                                    class="h-5 w-5">
+                                        <path stroke-linecap="round"
+                                        stroke-linejoin="round"
+                                        d="M12 9v3.75m9-.75a9 9 0 11-18 0
+                                                 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+                                    </svg>
+                                </div>
+
+                                <div>
+                                    <p class="text-sm font-medium text-amber-800">
+                                        Save the template first
+                                    </p>
+
+                                    <p class="mt-1 text-sm text-amber-700">
+                                        Segments can be added after the work template
+                                        has been created.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                    else if (isLoadingSegments)
+                    {
+                        <div class="mt-5 rounded-xl border border-slate-200
+                                    bg-white p-8 text-center">
+                            <p class="text-sm text-slate-500">
+                                Loading segments...
+                            </p>
+                        </div>
+                    }
+                    else if (!segments.Any())
+                    {
+                        <div class="mt-5 rounded-xl border-2 border-dashed
+                                    border-slate-200 bg-slate-50/50 px-6
+                                    py-10 text-center">
+                            <div class="mx-auto flex h-12 w-12 items-center
+                                        justify-center rounded-full bg-blue-50
+                                        text-blue-600">
+                                <svg xmlns="http://www.w3.org/2000/svg"
+                                fill="none"
+                                viewBox="0 0 24 24"
+                                stroke-width="1.5"
+                                stroke="currentColor"
+                                class="h-6 w-6">
+                                    <path stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    d="M6.75 3v2.25m10.5-2.25v2.25M3.75
+                                             18.75V7.5A2.25 2.25 0 016 5.25h12A2.25
+                                             2.25 0 0120.25 7.5v11.25M3.75
+                                             18.75A2.25 2.25 0 006 21h12a2.25
+                                             2.25 0 002.25-2.25M3.75
+                                             18.75v-7.5A2.25 2.25 0 016
+                                             9h12a2.25 2.25 0 012.25 2.25v7.5" />
+                                </svg>
+                            </div>
+
+                            <h4 class="mt-4 text-sm font-semibold text-slate-900">
+                                No segments configured
+                            </h4>
+
+                            <p class="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                                Add the first work, break, lunch or other segment
+                                to this template.
+                            </p>
+
+                            <button type="button"
+                            @onclick="OpenAddSegmentPanel"
+                            class="mt-5 rounded-lg border border-blue-200
+                                           bg-blue-50 px-4 py-2 text-sm
+                                           font-medium text-blue-700 transition
+                                           hover:bg-blue-100">
+                                Add First Segment
+                            </button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-5 space-y-3">
+                            @foreach (var segment in segments.OrderBy(x => x.SequenceNumber))
+                            {
+                                <div class="group rounded-xl border border-slate-200
+                                            bg-white p-4 transition
+                                            hover:border-blue-200 hover:shadow-sm">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="flex min-w-0 flex-1 gap-3">
+                                            <div class="flex h-9 w-9 shrink-0 items-center
+                                                        justify-center rounded-lg bg-slate-100
+                                                        text-sm font-semibold text-slate-600">
+                                                @segment.SequenceNumber
+                                            </div>
+
+                                            <div class="min-w-0 flex-1">
+                                                <div class="flex flex-wrap items-center gap-2">
+                                                    <h4 class="truncate text-sm font-semibold
+                                                               text-slate-900">
+                                                        @segment.Name
+                                                    </h4>
+
+                                                    <span class="rounded-full bg-blue-50 px-2
+                                                                 py-0.5 text-xs font-medium
+                                                                 text-blue-700">
+                                                        @segment.WorkSegmentTypeName
+                                                    </span>
+
+                                                    @if (segment.IsMandatory)
+                                                    {
+                                                        <span class="rounded-full bg-rose-50 px-2
+                                                                     py-0.5 text-xs font-medium
+                                                                     text-rose-700">
+                                                            Mandatory
+                                                        </span>
+                                                    }
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(segment.Description))
+                                                {
+                                                    <p class="mt-1 line-clamp-1 text-sm text-slate-500">
+                                                        @segment.Description
+                                                    </p>
+                                                }
+
+                                                <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2
+                                                            text-xs text-slate-500">
+                                                    <span>
+                                                        <span class="font-medium text-slate-700">
+                                                            Offset:
+                                                        </span>
+                                                        @FormatMinutes(segment.OffsetMinutes)
+                                                    </span>
+
+                                                    <span>
+                                                        <span class="font-medium text-slate-700">
+                                                            Duration:
+                                                        </span>
+                                                        @FormatMinutes(segment.DurationMinutes)
+                                                    </span>
+
+                                                    <span>
+                                                        <span class="font-medium text-slate-700">
+                                                            Period:
+                                                        </span>
+                                                        @GetSegmentPeriod(segment)
+                                                    </span>
+                                                </div>
+
+                                                <div class="mt-3 flex flex-wrap gap-2">
+                                                    @if (segment.RequiresAttendance)
+                                                    {
+                                                        <span class="rounded-md bg-emerald-50 px-2
+                                                                     py-1 text-xs font-medium
+                                                                     text-emerald-700">
+                                                            Attendance
+                                                        </span>
+                                                    }
+
+                                                    @if (segment.RequiresLocationValidation)
+                                                    {
+                                                        <span class="rounded-md bg-violet-50 px-2
+                                                                     py-1 text-xs font-medium
+                                                                     text-violet-700">
+                                                            Location
+                                                        </span>
+                                                    }
+
+                                                    @if (segment.RequiresDeviceValidation)
+                                                    {
+                                                        <span class="rounded-md bg-cyan-50 px-2
+                                                                     py-1 text-xs font-medium
+                                                                     text-cyan-700">
+                                                            Device
+                                                        </span>
+                                                    }
+
+                                                    @if (!segment.IsActive)
+                                                    {
+                                                        <span class="rounded-md bg-slate-100 px-2
+                                                                     py-1 text-xs font-medium
+                                                                     text-slate-600">
+                                                            Inactive
+                                                        </span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button type="button"
+                                        title="Edit segment"
+                                                @onclick="() => OpenEditSegmentPanel(segment)"
+                                        class="rounded-lg border border-slate-200 p-2
+                                                       text-slate-500 transition
+                                                       hover:border-blue-200
+                                                       hover:bg-blue-50
+                                                       hover:text-blue-700">
+                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke-width="1.5"
+                                            stroke="currentColor"
+                                            class="h-5 w-5">
+                                                <path stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                d="M16.862 4.487l1.687-1.688a1.875
+                                                         1.875 0 112.652 2.652L10.582
+                                                         16.07a4.5 4.5 0 01-1.897
+                                                         1.13L6 18l.8-2.685a4.5 4.5
+                                                         0 011.13-1.897l8.932-8.931z
+                                                         M19.5 7.125L16.862 4.487
+                                                         M18 14.25v4.125A2.625 2.625
+                                                         0 0115.375 21H5.625A2.625
+                                                         2.625 0 013 18.375V8.625A2.625
+                                                         2.625 0 015.625 6H9.75" />
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            <div class="rounded-xl bg-slate-50 p-3">
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-slate-500">
+                                    Segments
+                                </p>
+                                <p class="mt-1 text-lg font-semibold text-slate-900">
+                                    @segments.Count
+                                </p>
+                            </div>
+
+                            <div class="rounded-xl bg-slate-50 p-3">
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-slate-500">
+                                    Total Time
+                                </p>
+                                <p class="mt-1 text-lg font-semibold text-slate-900">
+                                    @FormatMinutes(GetTotalSegmentMinutes())
+                                </p>
+                            </div>
+
+                            <div class="rounded-xl bg-slate-50 p-3">
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-slate-500">
+                                    Attendance
+                                </p>
+                                <p class="mt-1 text-lg font-semibold text-slate-900">
+                                    @segments.Count(x => x.RequiresAttendance)
+                                </p>
+                            </div>
+
+                            <div class="rounded-xl bg-slate-50 p-3">
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-slate-500">
+                                    Mandatory
+                                </p>
+                                <p class="mt-1 text-lg font-semibold text-slate-900">
+                                    @segments.Count(x => x.IsMandatory)
+                                </p>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                @if (!isCreating && selectedTemplate is not null)
+                {
+                    <hr class="border-slate-200" />
+
+                    <section class="rounded-lg border border-red-200
+                                    bg-red-50 p-4">
+                        <h3 class="text-sm font-semibold text-red-800">
+                            Archive Template
+                        </h3>
+
+                        <p class="mt-1 text-xs leading-5 text-red-700">
+                            Archiving removes this template from normal planning
+                            selections. Existing plans and assignments are not
+                            deleted.
+                        </p>
+
+                        <button type="button"
+                        class="mt-4 rounded-lg border border-red-300
+                                       bg-white px-4 py-2 text-sm font-medium
+                                       text-red-700 transition hover:bg-red-100
+                                       disabled:cursor-not-allowed
+                                       disabled:opacity-50"
+                        disabled="@isSaving"
+                        @onclick="ArchiveTemplateAsync">
+                            Archive Template
+                        </button>
+                    </section>
+                }
+            </div>
+        </EditForm>
+    </ChildContent>
+
+    <FooterContent>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row
+                    sm:items-center sm:justify-end">
+            <button type="button"
+            class="rounded-lg border border-slate-300 bg-white
+                           px-5 py-2 text-sm font-medium text-slate-700
+                           transition hover:bg-slate-50
+                           disabled:cursor-not-allowed disabled:opacity-50"
+            disabled="@isSaving"
+            @onclick="CloseTemplatePanel">
+                Cancel
+            </button>
+
+            <button type="submit"
+            form="work-template-form"
+            class="rounded-lg bg-blue-600 px-5 py-2 text-sm
+                           font-medium text-white transition hover:bg-blue-700
+                           disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled="@isSaving">
+                @SaveButtonText
+            </button>
+        </div>
+    </FooterContent>
+</RightSidePanel>
+
+<!-- Segment Add/Edit Panel -->
+<RightSidePanel @bind-IsOpen="showSegmentPanel"
+Title="@SegmentPanelTitle"
+Description="Configure the segment timing and validation rules."
+Size="RightSidePanel.PanelSize.Medium"
+ContentWidth="max-w-2xl"
+OnClose="CloseSegmentPanel">
+
+    <ChildContent>
+        <EditForm Model="@segmentEditModel"
+        OnValidSubmit="SaveSegmentAsync"
+        id="work-template-segment-form">
+
+            <DataAnnotationsValidator />
+
+            <div class="space-y-6">
+                <ValidationSummary class="rounded-lg border border-red-200
+                                                  bg-red-50 p-3 text-sm
+                                                  text-red-700" />
+
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Segment Details
+                        </h3>
+                        <p class="mt-1 text-xs text-slate-500">
+                            Give the segment a name and select its type.
+                        </p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Segment Name
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputText class="w-full rounded-lg border border-slate-300
+                                                      px-3 py-2 text-sm outline-none
+                                                      transition focus:border-blue-500
+                                                      focus:ring-2 focus:ring-blue-100"
+                            placeholder="For example, Morning Work"
+                            @bind-Value="segmentEditModel.Name" />
+
+                            <ValidationMessage For="@(() => segmentEditModel.Name)"
+                            class="mt-1 block text-xs text-red-600" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Segment Type
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputSelect class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.WorkSegmentTypeId">
+                                <option value="0">Select segment type</option>
+
+                                @foreach (var type in segmentTypes)
+                                {
+                                    <option value="@type.WorkSegmentTypeId">
+                                        @type.Name
+                                    </option>
+                                }
+                            </InputSelect>
+
+                            <ValidationMessage For="@(() => segmentEditModel.WorkSegmentTypeId)"
+                            class="mt-1 block text-xs text-red-600" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Description
+                            </label>
+
+                            <InputTextArea class="min-h-[90px] w-full
+                                                  rounded-lg border border-slate-300
+                                                  px-3 py-2 text-sm outline-none
+                                                  transition focus:border-blue-500
+                                                  focus:ring-2 focus:ring-blue-100"
+                            placeholder="Optional description..."
+                            @bind-Value="segmentEditModel.Description" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Sequence Number
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.SequenceNumber" />
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Timing
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Offset is measured from the template start time.
+                        </p>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Offset Hours
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.OffsetHours" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Offset Minutes
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.OffsetMinutePart" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Duration Hours
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.DurationHours" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Duration Minutes
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.DurationMinutes" />
+                        </div>
+                    </div>
+
+                    <div class="mt-4 rounded-lg border border-blue-200
+                                bg-blue-50 p-3 text-sm text-blue-700">
+                        Preview: @GetEditModelPeriod()
+                    </div>
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Grace Periods
+                        </h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Grace Before (minutes)
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.GraceBeforeMinutes" />
+                        </div>
+
+                        <div>
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Grace After (minutes)
+                            </label>
+
+                            <InputNumber class="w-full rounded-lg border
+                                                        border-slate-300 px-3 py-2
+                                                        text-sm outline-none transition
+                                                        focus:border-blue-500
+                                                        focus:ring-2 focus:ring-blue-100"
+                            @bind-Value="segmentEditModel.GraceAfterMinutes" />
+                        </div>
+                    </div>
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <section>
+                    <div class="mb-4">
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Rules
+                        </h3>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <ToggleOption Title="Mandatory Segment"
+                        Description="The segment must be included."
+                        @bind-Value="segmentEditModel.IsMandatory" />
+
+                        <ToggleOption Title="Attendance Required"
+                        Description="Attendance is recorded for this segment."
+                        @bind-Value="segmentEditModel.RequiresAttendance" />
+
+                        <ToggleOption Title="Location Validation"
+                        Description="Validate the employee location."
+                        @bind-Value="segmentEditModel.RequiresLocationValidation" />
+
+                        <ToggleOption Title="Device Validation"
+                        Description="Validate the employee device."
+                        @bind-Value="segmentEditModel.RequiresDeviceValidation" />
+
+                        <ToggleOption Title="Active Segment"
+                        Description="Make this segment active."
+                        @bind-Value="segmentEditModel.IsActive" />
+                    </div>
+                </section>
+            </div>
+        </EditForm>
+    </ChildContent>
+
+    <FooterContent>
+        <div class="flex flex-col-reverse gap-3 sm:flex-row
+                    sm:items-center sm:justify-end">
+            <button type="button"
+            class="rounded-lg border border-slate-300 bg-white
+                           px-5 py-2 text-sm font-medium text-slate-700
+                           transition hover:bg-slate-50
+                           disabled:cursor-not-allowed disabled:opacity-50"
+            disabled="@isSavingSegment"
+            @onclick="CloseSegmentPanel">
+                Cancel
+            </button>
+
+            <button type="submit"
+            form="work-template-segment-form"
+            class="rounded-lg bg-blue-600 px-5 py-2 text-sm
+                           font-medium text-white transition hover:bg-blue-700
+                           disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled="@isSavingSegment">
+                @SegmentSaveButtonText
+            </button>
+        </div>
+    </FooterContent>
+</RightSidePanel>
+
+@code {
+    private bool isLoading;
+    private bool isSaving;
+    private bool isCreating;
+    private bool showInactive = true;
+    private bool showTemplatePanel;
+
+    private string templateSearch = string.Empty;
+    private string presetSearch = string.Empty;
+
+    private List<WorkTemplateDto> templates = new();
+    private WorkTemplateDto? selectedTemplate;
+    private UpdateWorkTemplateDto editModel = CreateEmptyEditModel();
+
+    private List<WorkTemplateSegmentDto> segments = new();
+    private List<WorkSegmentTypeDto> segmentTypes = new();
+
+    private WorkTemplateSegmentEditViewModel segmentEditModel = CreateEmptySegmentEditModel();
+ 
+
+    private bool showSegmentPanel;
+    private bool isEditingSegment;
+    private bool isSavingSegment;
+    private bool isLoadingSegments;
+
+    private bool CanManageSegments => 
+        !isCreating &&
+        selectedTemplate is not null &&
+        editModel.WorkTemplateId > 0;
+
+    private string PanelTitle =>
+        isCreating ? "Create Work Template" : "Edit Work Template";
+
+    private string PanelDescription =>
+        isCreating
+            ? "Configure a reusable shift, duty or work schedule."
+            : "Update the selected template's schedule and validation settings.";
+
+    private string SaveButtonText =>
+        isSaving
+            ? "Saving..."
+            : isCreating
+                ? "Create Template"
+                : "Save Changes";
+
+    private string SegmentPanelTitle =>
+        isEditingSegment ? "Edit Segment" : "Add Segment";
+
+    // private string SegmentSaveButtonText =>
+    //     isSavingSegment
+    //         ? "Saving..."
+    //         : isEditingSegment
+    //             ? "Update Segment"
+    //             : "Add Segment";
+
+    private bool CrossesMidnight =>
+        editModel.DefaultStartTime.HasValue &&
+        editModel.DefaultEndTime.HasValue &&
+        editModel.DefaultEndTime.Value <= editModel.DefaultStartTime.Value;
+
+    
+          
+    private string SegmentSaveButtonText
+    {
+        get
+        {
+            if (isSavingSegment)
+                return "Saving...";
+
+            if (isEditingSegment)
+                return "Update Segment";
+
+            return "Create Segment";
+        }
+    }
+
+    private readonly List<WorkTemplatePresetDto> presets =
+    [
+        new()
+        {
+            Name = "Morning Shift",
+            Description = "Standard daytime shift with attendance and checkout.",
+            WorkTemplateTypeId = 1,
+            TemplateType = "RegularShift",
+            DefaultStartTime = new TimeSpan(8, 0, 0),
+            DefaultEndTime = new TimeSpan(14, 0, 0),
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            Icon = "☀️",
+            IsActive = true
+        },
+        new()
+        {
+            Name = "Evening Shift",
+            Description = "Standard evening work schedule.",
+            WorkTemplateTypeId = 3,
+            TemplateType = "RegularShift",
+            DefaultStartTime = new TimeSpan(14, 0, 0),
+            DefaultEndTime = new TimeSpan(20, 0, 0),
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            Icon = "🌆",
+            IsActive = true
+        },
+        new()
+        {
+            Name = "Night Shift",
+            Description = "Overnight shift that ends on the following day.",
+            WorkTemplateTypeId = 3,
+            TemplateType = "RegularShift",
+            DefaultStartTime = new TimeSpan(20, 0, 0),
+            DefaultEndTime = new TimeSpan(8, 0, 0),
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            Icon = "🌙",
+            IsActive = true
+        },
+        new()
+        {
+            Name = "Temporary Duty",
+            Description = "Short-term duty that can overlap a normal shift.",
+            WorkTemplateTypeId = 4,
+            TemplateType = "TemporaryDuty",
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = true,
+            Icon = "🛠️",
+            IsActive = true
+        },
+        new()
+        {
+            Name = "Product Launch Duty",
+            Description = "Temporary paid duty for product-launch support.",
+            WorkTemplateTypeId = 5,
+            TemplateType = "SpecialEvent",
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = true,
+            Icon = "🚀",
+            IsActive = true
+        },
+        new()
+        {
+            Name = "On-call Duty",
+            Description = "Flexible duty activated when the employee is required.",
+            WorkTemplateTypeId = 6,
+            TemplateType = "OnCall",
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = true,
+            Icon = "📞",
+            IsActive = true
+        }
+    ];
+
+    private List<WorkTemplateDto> FilteredTemplates =>
+        templates
+            .Where(x => showInactive || x.IsActive)
+            .Where(x =>
+                string.IsNullOrWhiteSpace(templateSearch) ||
+                x.Name.Contains(templateSearch, StringComparison.OrdinalIgnoreCase) ||
+                (x.Description?.Contains(
+                    templateSearch,
+                    StringComparison.OrdinalIgnoreCase) ?? false) ||
+                GetTemplateTypeName(x.TemplateType).Contains(
+                    templateSearch,
+                    StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(x => x.IsActive)
+            .ThenBy(x => x.Name)
+            .ToList();
+
+    private List<WorkTemplatePresetDto> FilteredPresets =>
+        presets
+            .Where(x =>
+                string.IsNullOrWhiteSpace(presetSearch) ||
+                x.Name.Contains(presetSearch, StringComparison.OrdinalIgnoreCase) ||
+                x.Description.Contains(
+                    presetSearch,
+                    StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTemplatesAsync();
+        await LoadSegmentTypesAsync();
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            templates = await WorkTemplateService.GetAllAsync(
+                includeInactive: true);
+        }
+        catch (Exception ex)
+        {
+            templates.Clear();
+            ToastService.Error(
+                $"Unable to load work templates: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadSegmentTypesAsync()
+    {
+        try
+        {
+            segmentTypes =
+                await WorkTemplateService.GetAllSegmentTypesAsync();
+        }
+        catch (Exception ex)
+        {
+            segmentTypes.Clear();
+
+            ToastService.Error(
+                $"Unable to load segment types: {ex.Message}");
+        }
+    }
+
+    private async Task SelectTemplateAsync(WorkTemplateDto template)
+    {
+        if (template is null)
+            return;
+
+        selectedTemplate = template;
+        isCreating = false;
+
+        editModel = new UpdateWorkTemplateDto
+        {
+            WorkTemplateId = template.WorkTemplateId,
+            Name = template.Name,
+            Description = template.Description,
+            WorkTemplateTypeId = template.WorkTemplateTypeId,
+            DefaultStartTime = template.DefaultStartTime,
+            DefaultEndTime = template.DefaultEndTime,
+            TemplateType = template.TemplateType,
+            RequiresAttendance = template.RequiresAttendance,
+            RequiresCheckOut = template.RequiresCheckOut,
+            RequiresLocationValidation = template.RequiresLocationValidation,
+            RequiresDeviceValidation = template.RequiresDeviceValidation,
+            AllowsOverlap = template.AllowsOverlap,
+            IsValid = template.IsValid,
+            IsActive = template.IsActive
+        };
+
+        segments.Clear();
+        showTemplatePanel = true;
+
+        await LoadSegmentsAsync(template.WorkTemplateId);
+    }
+
+    private void StartNewTemplate()
+    {
+        selectedTemplate = null;
+        isCreating = true;
+        segments.Clear();
+        segmentEditModel = CreateEmptySegmentEditModel();
+        editModel = CreateEmptyEditModel();
+        showTemplatePanel = true;
+    }
+
+    private void ApplyPreset(WorkTemplatePresetDto preset)
+    {
+        selectedTemplate = null;
+        isCreating = true;
+        segments.Clear();
+        segmentEditModel = CreateEmptySegmentEditModel();
+
+        editModel = new UpdateWorkTemplateDto
+        {
+            WorkTemplateId = 0,
+            Name = preset.Name,
+            Description = preset.Description,
+            TemplateType = preset.TemplateType,
+            WorkTemplateTypeId = preset.WorkTemplateTypeId,
+            DefaultStartTime = preset.DefaultStartTime.HasValue
+                ? TimeOnly.FromTimeSpan(preset.DefaultStartTime.Value)
+                : null,
+            DefaultEndTime = preset.DefaultEndTime.HasValue
+                ? TimeOnly.FromTimeSpan(preset.DefaultEndTime.Value)
+                : null,
+            RequiresAttendance = preset.RequiresAttendance,
+            RequiresCheckOut = preset.RequiresCheckOut,
+            RequiresLocationValidation = false,
+            RequiresDeviceValidation = false,
+            AllowsOverlap = preset.AllowsOverlap,
+            IsValid = true,
+            IsActive = preset.IsActive
+        };
+
+        showTemplatePanel = true;
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        if (isSaving)
+            return;
+
+        if (!ValidateTimes())
+            return;
+
+        try
+        {
+            isSaving = true;
+
+            if (isCreating)
+            {
+                var createDto = new CreateWorkTemplateDto
+                {
+                    Name = editModel.Name.Trim(),
+                    WorkTemplateTypeId = editModel.WorkTemplateTypeId,
+                    Description = editModel.Description?.Trim(),
+                    DefaultStartTime = editModel.DefaultStartTime,
+                    DefaultEndTime = editModel.DefaultEndTime,
+                    TemplateType = editModel.TemplateType,
+                    RequiresAttendance = editModel.RequiresAttendance,
+                    RequiresCheckOut = editModel.RequiresCheckOut,
+                    RequiresLocationValidation =
+                        editModel.RequiresLocationValidation,
+                    RequiresDeviceValidation =
+                        editModel.RequiresDeviceValidation,
+                    AllowsOverlap = editModel.AllowsOverlap,
+                    IsValid = editModel.IsValid,
+                    IsActive = editModel.IsActive
+                };
+
+                var result = await WorkTemplateService.CreateAsync(createDto);
+
+                if (!result.Success)
+                {
+                    ToastService.Error(result.Message);
+                    return;
+                }
+
+                ToastService.Success(
+                    string.IsNullOrWhiteSpace(result.Message)
+                        ? "Work template created successfully."
+                        : result.Message);
+
+                await LoadTemplatesAsync();
+
+                /*
+                 * Since the current ServiceResult does not expose the newly
+                 * created ID, close the create panel. Select the new template
+                 * from the list to add its segments.
+                 */
+                CloseTemplatePanel();
+                return;
+            }
+
+            var updateResult =
+                await WorkTemplateService.UpdateAsync(editModel);
+
+            if (!updateResult.Success)
+            {
+                ToastService.Error(updateResult.Message);
+                return;
+            }
+
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(updateResult.Message)
+                    ? "Work template updated successfully."
+                    : updateResult.Message);
+
+            await LoadTemplatesAsync();
+
+            var refreshedTemplate = templates.FirstOrDefault(
+                x => x.WorkTemplateId == editModel.WorkTemplateId);
+
+            if (refreshedTemplate is not null)
+                selectedTemplate = refreshedTemplate;
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                $"Unable to save the template: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task ArchiveTemplateAsync()
+    {
+        if (selectedTemplate is null || isSaving)
+            return;
+
+        try
+        {
+            isSaving = true;
+
+            var result = await WorkTemplateService.ArchiveAsync(
+                selectedTemplate.WorkTemplateId);
+
+            if (!result.Success)
+            {
+                ToastService.Error(result.Message);
+                return;
+            }
+
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Work template archived successfully."
+                    : result.Message);
+
+            await LoadTemplatesAsync();
+            CloseTemplatePanel();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                $"Unable to archive the template: {ex.Message}");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private void CloseTemplatePanel()
+    {
+        if (isSaving || isSavingSegment)
+            return;
+
+        showSegmentPanel = false;
+        showTemplatePanel = false;
+        ResetEditor();
+    }
+
+    private Task HandleTemplatePanelClosed()
+    {
+        if (!isSaving && !isSavingSegment)
+            ResetEditor();
+
+        return Task.CompletedTask;
+    }
+
+    private void ResetEditor()
+    {
+        selectedTemplate = null;
+        isCreating = false;
+        segments.Clear();
+        isLoadingSegments = false;
+        isEditingSegment = false;
+        segmentEditModel = CreateEmptySegmentEditModel();
+        editModel = CreateEmptyEditModel();
+    }
+
+    private void OnStartTimeChanged(ChangeEventArgs args)
+    {
+        editModel.DefaultStartTime =
+            ParseTimeOnly(args.Value?.ToString());
+    }
+
+    private void OnEndTimeChanged(ChangeEventArgs args)
+    {
+        editModel.DefaultEndTime =
+            ParseTimeOnly(args.Value?.ToString());
+    }
+
+    private bool ValidateTimes()
+    {
+        var onlyOneTimeProvided =
+            editModel.DefaultStartTime.HasValue !=
+            editModel.DefaultEndTime.HasValue;
+
+        if (onlyOneTimeProvided)
+        {
+            ToastService.Error(
+                "Both the default start time and end time must be provided.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private async Task LoadSegmentsAsync(int workTemplateId)
+    {
+        if (workTemplateId <= 0)
+        {
+            segments.Clear();
+            return;
+        }
+
+        try
+        {
+            isLoadingSegments = true;
+
+            segments = await WorkTemplateService.GetSegmentsAsync(workTemplateId);
+        }
+        catch (Exception ex)
+        {
+            segments.Clear();
+
+            ToastService.Error(
+                $"Unable to load segments: {ex.Message}");
+        }
+        finally
+        {
+            isLoadingSegments = false;
+        }
+    }
+
+    private void OpenAddSegmentPanel()
+    {
+        if (!CanManageSegments || selectedTemplate is null)
+        {
+            ToastService.Error(
+                "Save or select a work template before adding segments.");
+
+            return;
+        }
+
+        isEditingSegment = false;
+
+        var nextSequence = segments.Any()
+            ? segments.Max(x => x.SequenceNumber) + 1
+            : 1;
+
+        var nextOffset = segments.Any()
+            ? segments.Max(x => x.OffsetMinutes + x.DurationMinutes)
+            : 0;
+
+        segmentEditModel = CreateEmptySegmentEditModel();
+
+        segmentEditModel.WorkTemplateId =
+            selectedTemplate.WorkTemplateId;
+
+        segmentEditModel.SequenceNumber = nextSequence;
+        segmentEditModel.OffsetHours = nextOffset / 60;
+        segmentEditModel.OffsetMinutePart = nextOffset % 60;
+
+        showSegmentPanel = true;
+    }
+
+    private void OpenEditSegmentPanel(WorkTemplateSegmentDto segment)
+    {
+        if (segment is null)
+            return;
+
+        isEditingSegment = true;
+
+        segmentEditModel = new WorkTemplateSegmentEditViewModel
+        {
+            WorkTemplateSegmentId = segment.WorkTemplateSegmentId,
+            WorkTemplateId = segment.WorkTemplateId,
+            WorkSegmentTypeId = segment.WorkSegmentTypeId,
+            Name = segment.Name,
+            Description = segment.Description,
+            SequenceNumber = segment.SequenceNumber,
+            OffsetHours = segment.OffsetMinutes / 60,
+            OffsetMinutePart = segment.OffsetMinutes % 60,
+            DurationHours = segment.DurationMinutes / 60,
+            DurationMinutePart = segment.DurationMinutes % 60,
+            GraceBeforeMinutes = segment.GraceBeforeMinutes,
+            GraceAfterMinutes = segment.GraceAfterMinutes,
+            IsMandatory = segment.IsMandatory,
+            RequiresAttendance = segment.RequiresAttendance,
+            RequiresLocationValidation = segment.RequiresLocationValidation,
+            RequiresDeviceValidation = segment.RequiresDeviceValidation,
+            IsActive = segment.IsActive,
+            IsPaid = segment.IsPaid,
+ 
+        };
+
+        showSegmentPanel = true;
+    }
+
+    private Task CloseSegmentPanel()
+    {
+        if (isSavingSegment)
+            return Task.CompletedTask;
+
+        showSegmentPanel = false;
+        isEditingSegment = false;
+        segmentEditModel = CreateEmptySegmentEditModel();
+
+        return Task.CompletedTask;
+    }
+
+   
+
+    private bool ValidateSegmentEditModel()
+    {
+        if (segmentEditModel.WorkTemplateId <= 0)
+        {
+            ToastService.Error(
+                "A valid work template is required.");
+
+            return false;
+        }
+
+        if (segmentEditModel.WorkSegmentTypeId <= 0)
+        {
+            ToastService.Error(
+                "Please select a segment type.");
+
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(segmentEditModel.Name))
+        {
+            ToastService.Error(
+                "Segment name is required.");
+
+            return false;
+        }
+
+        if (segmentEditModel.SequenceNumber <= 0)
+        {
+            ToastService.Error(
+                "Sequence number must be greater than zero.");
+
+            return false;
+        }
+
+        if (segmentEditModel.OffsetHours < 0 ||
+            segmentEditModel.OffsetMinutePart is < 0 or > 59)
+        {
+            ToastService.Error(
+                "Offset minutes must be between 0 and 59.");
+
+            return false;
+        }
+
+        if (segmentEditModel.DurationHours < 0 ||
+            segmentEditModel.DurationMinutePart is < 0 or > 59)
+        {
+            ToastService.Error(
+                "Duration minutes must be between 0 and 59.");
+
+            return false;
+        }
+
+        if (segmentEditModel.DurationMinutes <= 0)
+        {
+            ToastService.Error(
+                "Segment duration must be greater than zero.");
+
+            return false;
+        }
+
+        if (segmentEditModel.GraceBeforeMinutes < 0 ||
+            segmentEditModel.GraceAfterMinutes < 0)
+        {
+            ToastService.Error(
+                "Grace periods cannot be negative.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private static UpdateWorkTemplateDto CreateEmptyEditModel()
+    {
+        return new UpdateWorkTemplateDto
+        {
+            WorkTemplateId = 0,
+            Name = string.Empty,
+            Description = string.Empty,
+            TemplateType = "RegularShift",
+            WorkTemplateTypeId = 0,
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            RequiresLocationValidation = false,
+            RequiresDeviceValidation = false,
+            AllowsOverlap = false,
+            IsActive = true,
+            IsValid = true
+        };
+    }
+
+    private static WorkTemplateSegmentEditViewModel CreateEmptySegmentEditModel()
+    {
+        return new WorkTemplateSegmentEditViewModel
+        {
+            WorkTemplateSegmentId = 0,
+            WorkTemplateId = 0,
+            WorkSegmentTypeId = 0,
+            Name = string.Empty,
+            Description = string.Empty,
+            SequenceNumber = 1,
+            OffsetHours = 0,
+            OffsetMinutePart = 0,
+            DurationHours = 1,
+            DurationMinutePart = 0,
+            GraceBeforeMinutes = 0,
+            GraceAfterMinutes = 0,
+            IsMandatory = true,
+            RequiresAttendance = true,
+            RequiresLocationValidation = false,
+            RequiresDeviceValidation = false,
+            IsActive = true
+        };
+    }
+
+    private static TimeOnly? ParseTimeOnly(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (TimeOnly.TryParse(value, out var parsedTime))
+            return parsedTime;
+
+        if (TimeSpan.TryParse(value, out var parsedSpan))
+            return TimeOnly.FromTimeSpan(parsedSpan);
+
+        return null;
+    }
+
+    private static string FormatTime(TimeOnly? value)
+    {
+        return value?.ToString("HH:mm") ?? string.Empty;
+    }
+
+    private static string FormatPresetTime(TimeSpan? value)
+    {
+        return value?.ToString(@"hh\:mm") ?? string.Empty;
+    }
+
+    private static string GetTimeDescription( WorkTemplateDto template)
+    {
+        if (!template.DefaultStartTime.HasValue ||
+            !template.DefaultEndTime.HasValue)
+        {
+            return "Flexible schedule";
+        }
+
+        var crossesMidnight =
+            template.DefaultEndTime.Value <=
+            template.DefaultStartTime.Value;
+
+        var description =
+            $"{template.DefaultStartTime.Value:HH\\:mm} - " +
+            $"{template.DefaultEndTime.Value:HH\\:mm}";
+
+        return crossesMidnight
+            ? $"{description} · Next day"
+            : description;
+    }
+
+    private static string GetTemplateIcon(string? templateType)
+    {
+        return templateType switch
+        {
+            "RegularShift" => "🕘",
+            "TemporaryDuty" => "🛠️",
+            "SpecialEvent" => "🚀",
+            "OnCall" => "📞",
+            "Training" => "🎓",
+            _ => "📋"
+        };
+    }
+
+    private static string GetTemplateTypeName(string? templateType)
+    {
+        return templateType switch
+        {
+            "RegularShift" => "Regular Shift",
+            "TemporaryDuty" => "Temporary Duty",
+            "SpecialEvent" => "Special Event",
+            "OnCall" => "On-call Duty",
+            "Training" => "Training",
+            _ => templateType ?? "Other"
+        };
+    }
+
+    private static string FormatMinutes(int totalMinutes)
+    {
+        if (totalMinutes <= 0)
+            return "0m";
+
+        var hours = totalMinutes / 60;
+        var minutes = totalMinutes % 60;
+
+        if (hours > 0 && minutes > 0)
+            return $"{hours}h {minutes}m";
+
+        if (hours > 0)
+            return $"{hours}h";
+
+        return $"{minutes}m";
+    }
+
+    private string GetSegmentPeriod( WorkTemplateSegmentDto segment)
+    {
+        if (!editModel.DefaultStartTime.HasValue)
+        {
+            return $"Minute {segment.OffsetMinutes} - " +
+                   $"minute {segment.OffsetMinutes + segment.DurationMinutes}";
+        }
+
+        var templateStart =
+            editModel.DefaultStartTime.Value.ToTimeSpan();
+
+        var segmentStart =
+            templateStart.Add(
+                TimeSpan.FromMinutes(segment.OffsetMinutes));
+
+        var segmentEnd =
+            segmentStart.Add(
+                TimeSpan.FromMinutes(segment.DurationMinutes));
+
+        return $"{FormatClockTime(segmentStart)} - " +
+               $"{FormatClockTime(segmentEnd)}";
+    }
+
+    private string GetEditModelPeriod()
+    {
+        if (!editModel.DefaultStartTime.HasValue)
+        {
+            var end =
+                segmentEditModel.OffsetMinutes +
+                segmentEditModel.DurationMinutes;
+
+            return $"Minute {segmentEditModel.OffsetMinutes} " +
+                   $"to minute {end}";
+        }
+
+        var templateStart =
+            editModel.DefaultStartTime.Value.ToTimeSpan();
+
+        var segmentStart =
+            templateStart.Add(
+                TimeSpan.FromMinutes(
+                    segmentEditModel.OffsetMinutes));
+
+        var segmentEnd =
+            segmentStart.Add(
+                TimeSpan.FromMinutes(
+                    segmentEditModel.DurationMinutes));
+
+        return $"{FormatClockTime(segmentStart)} - " +
+               $"{FormatClockTime(segmentEnd)}";
+    }
+
+    private static string FormatClockTime(TimeSpan time)
+    {
+        var dayNumber =
+            (int)Math.Floor(time.TotalDays);
+
+        var normalisedTime =
+            TimeSpan.FromMinutes(time.TotalMinutes % 1440);
+
+        if (normalisedTime < TimeSpan.Zero)
+        {
+            normalisedTime =
+                normalisedTime.Add(TimeSpan.FromDays(1));
+        }
+
+        var formatted =
+            $"{normalisedTime.Hours:00}:" +
+            $"{normalisedTime.Minutes:00}";
+
+        return dayNumber > 0
+            ? $"{formatted} (+{dayNumber} day)"
+            : formatted;
+    }
+
+    private int GetTotalSegmentMinutes()
+    {
+        return segments
+            .Where(x => x.IsActive)
+            .Sum(x => x.DurationMinutes);
+    }
+
+
+
+    private async Task SaveSegmentAsync()
+    {
+
+ 
+
+        if (editModel.WorkTemplateId <= 0)
+        {
+            ToastService.Error(
+                "Save or select a work template first.");
+
+            return;
+        }
+
+        if (segmentEditModel.WorkSegmentTypeId <= 0)
+        {
+            ToastService.Error(
+                "Please select a segment type.");
+
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(segmentEditModel.Name))
+        {
+            ToastService.Error(
+                "Segment name is required.");
+
+            return;
+        }
+
+        if (segmentEditModel.SequenceNumber <= 0)
+        {
+            ToastService.Error(
+                "Sequence number must be greater than zero.");
+
+            return;
+        }
+
+        if (segmentEditModel.OffsetHours < 0 ||
+            segmentEditModel.OffsetMinutePart < 0 ||
+            segmentEditModel.OffsetMinutePart > 59)
+        {
+            ToastService.Error(
+                "Offset minutes must be between 0 and 59.");
+
+            return;
+        }
+
+        if (segmentEditModel.DurationHours < 0 ||
+            segmentEditModel.DurationMinutePart < 0 ||
+            segmentEditModel.DurationMinutePart > 59)
+        {
+            ToastService.Error(
+                "Duration minutes must be between 0 and 59.");
+
+            return;
+        }
+
+        if (segmentEditModel.DurationMinutes <= 0)
+        {
+            ToastService.Error(
+                "Segment duration must be greater than zero.");
+
+            return;
+        }
+
+        if (segmentEditModel.GraceBeforeMinutes < 0 ||
+            segmentEditModel.GraceAfterMinutes < 0)
+        {
+            ToastService.Error(
+                "Grace periods cannot be negative.");
+
+            return;
+        }
+
+        try
+        {
+            isSavingSegment = true;
+
+            var workTemplateId = editModel.WorkTemplateId;
+
+            var dto = new SaveWorkTemplateSegmentDto
+                {
+                    WorkTemplateSegmentId =
+                        segmentEditModel.WorkTemplateSegmentId,
+
+                    WorkTemplateId =
+                        workTemplateId,
+
+                    WorkSegmentTypeId =
+                        segmentEditModel.WorkSegmentTypeId,
+
+                    Name =
+                        segmentEditModel.Name.Trim(),
+
+                    Description =
+                        string.IsNullOrWhiteSpace(
+                            segmentEditModel.Description)
+                            ? null
+                            : segmentEditModel.Description.Trim(),
+
+                    SequenceNumber =
+                        segmentEditModel.SequenceNumber,
+
+                    OffsetMinutes =
+                        segmentEditModel.OffsetMinutes,
+
+                    DurationMinutes =
+                        segmentEditModel.DurationMinutes,
+
+                    GraceBeforeMinutes =
+                        segmentEditModel.GraceBeforeMinutes,
+
+                    GraceAfterMinutes =
+                        segmentEditModel.GraceAfterMinutes,
+
+                    IsMandatory =
+                        segmentEditModel.IsMandatory,
+
+                    RequiresAttendance =
+                        segmentEditModel.RequiresAttendance,
+
+                    RequiresLocationValidation =
+                        segmentEditModel.RequiresLocationValidation,
+
+                    RequiresDeviceValidation =
+                        segmentEditModel.RequiresDeviceValidation,
+
+                    IsActive =
+                        segmentEditModel.IsActive,
+
+     
+
+                    IsPaid = segmentEditModel.IsPaid
+     
+
+
+
+                };
+
+            ServiceResult result;
+
+            if (segmentEditModel.WorkTemplateSegmentId > 0)
+            {
+                result =
+                    await WorkTemplateService
+                        .UpdateSegmentAsync(dto);
+            }
+            else
+            {
+                result =
+                    await WorkTemplateService.CreateSegmentAsync(dto);
+            }
+
+            if (!result.Success)
+            {
+                ToastService.Error(result.Message);
+                return;
+            }
+
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Segment saved successfully."
+                    : result.Message);
+
+            showSegmentPanel = false;
+            isEditingSegment = false;
+
+            segmentEditModel =
+                CreateEmptySegmentEditModel();
+
+            await LoadSegmentsAsync(workTemplateId);
+
+            await LoadTemplatesAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                $"Unable to save segment: {ex.Message}");
+        }
+        finally
+        {
+            isSavingSegment = false;
+        }
+    }
+
+}

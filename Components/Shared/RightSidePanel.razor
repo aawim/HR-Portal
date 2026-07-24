@@ -1,0 +1,155 @@
+﻿@using Microsoft.AspNetCore.Components.Web
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50 overflow-hidden">
+
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-black/40 transition-opacity"
+             @onclick="CloseAsync">
+        </div>
+
+        <!-- Panel container -->
+        <div class="absolute inset-y-0 right-0 flex max-w-full pl-10">
+
+            <div class="@PanelCssClass">
+
+                <!-- Header -->
+                <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+
+                    <div>
+                        <h2 class="text-lg font-semibold text-slate-900">
+                            @Title
+                        </h2>
+
+                        @if (!string.IsNullOrWhiteSpace(Description))
+                        {
+                            <p class="mt-1 text-sm text-slate-500">
+                                @Description
+                            </p>
+                        }
+                    </div>
+
+                    <button type="button"
+                            class="rounded-md p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                            @onclick="CloseAsync">
+
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-6 w-6">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M6 18 18 6M6 6l12 12" />
+                        </svg>
+                    </button>
+
+                </div>
+
+                <!-- Body -->
+                <div class="flex-1 overflow-y-auto">
+                    <div class="mx-auto w-full {ContentWidth} px-6 py-6">
+                        @ChildContent
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                @if (FooterContent is not null)
+                {
+                    <div class="border-t border-slate-200 bg-slate-50">
+                        <div class="mx-auto flex w-full max-w-4xl justify-end gap-3 px-6 py-4">
+                            @FooterContent
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter]
+    public string Title { get; set; } = string.Empty;
+
+    [Parameter]
+    public string? Description { get; set; }
+
+    [Parameter]
+    public PanelSize Size { get; set; } = PanelSize.Large;
+
+    [Parameter]
+    public string ContentWidth { get; set; } = "max-w-4xl";
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? FooterContent { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+
+
+
+    [Parameter]
+    public bool Value { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> ValueChanged { get; set; }
+
+    private async Task HandleChanged(ChangeEventArgs args)
+    {
+        var newValue = args.Value is bool value && value;
+
+        Value = newValue;
+
+        await ValueChanged.InvokeAsync(newValue);
+    }
+
+    private string PanelCssClass =>
+        $"pointer-events-auto flex h-full flex-col bg-white shadow-xl " +
+        $"transition-transform duration-300 ease-in-out {GetSizeClass()}";
+
+    private string GetSizeClass()
+    {
+        return Size switch
+        {
+            PanelSize.Small => "w-screen max-w-md",
+            PanelSize.Medium => "w-screen max-w-xl",
+            PanelSize.Large => "w-screen max-w-3xl",
+            PanelSize.ExtraLarge => "w-screen max-w-5xl",
+            PanelSize.Full => "w-screen",
+            _ => "w-screen max-w-xl"
+        };
+    }
+
+    private async Task CloseAsync()
+    {
+        IsOpen = false;
+
+        await IsOpenChanged.InvokeAsync(false);
+        await OnClose.InvokeAsync();
+    }
+
+    public enum PanelSize
+    {
+        Small,
+        Medium,
+        Large,
+        ExtraLarge,
+        Full
+    }
+}

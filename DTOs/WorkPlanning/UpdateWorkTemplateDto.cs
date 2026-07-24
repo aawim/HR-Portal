@@ -1,10 +1,15 @@
-﻿namespace HRM.Models.WorkPlanning
+﻿using HRM.Models.WorkPlanning;
+using System.ComponentModel.DataAnnotations;
+
+namespace HRM.DTOs.WorkPlanning
 {
-    public class WorkTemplate
+    public class UpdateWorkTemplateDto
     {
         public int WorkTemplateId { get; set; }
 
         public int WorkTemplateTypeId { get; set; }
+
+        public int WorkTemplateSegmentId { get; set; }  
 
         public int? OrganisationBusinessEntityId { get; set; }
 
@@ -13,6 +18,12 @@
         public string? Code { get; set; }
 
         public string? Description { get; set; }
+
+
+        public TimeOnly? StartTime { get; set; }
+
+        public TimeOnly? EndTime { get; set; }
+
 
         public TimeOnly? DefaultStartTime { get; set; }
 
@@ -38,19 +49,23 @@
 
         public int? OperationLogId { get; set; }
 
-        public virtual WorkTemplateType WorkTemplateType { get; set; } = null!;
-
-        public virtual Organisation? Organisation { get; set; }
-
-        public virtual OperationLog? OperationLog { get; set; }
-
-        public virtual ICollection<WorkTemplateSegment> WorkTemplateSegments { get; set; } = new List<WorkTemplateSegment>();
-
-        public virtual ICollection<WorkAssignment> WorkAssignments { get; set; } = new List<WorkAssignment>();
-
-        public virtual ICollection<WorkPlan> WorkPlans { get; set; } = new List<WorkPlan>();
-
+ 
  
 
+        [Required]
+        public string TemplateType { get; set; } = "Regular Shift";
+
+        //public virtual WorkTemplateType TemplateType { get; set; } = null!;
+
+        public bool RequiresLocationValidation { get; set; }
+
+        public bool RequiresDeviceValidation { get; set; }
+
+        public bool AllowsOverlap { get; set; }
+
+        public bool IsValid { get; set; }
+ 
+
+         
     }
 }

@@ -39,6 +39,11 @@
             }
         }
 
-      
+        public bool IsExpanded { get; set; }
+
+        public bool IsLoadingEmployees { get; set; }
+
+     
+
     }
 }

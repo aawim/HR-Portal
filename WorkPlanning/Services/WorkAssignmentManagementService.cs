@@ -68,36 +68,70 @@ public sealed class WorkAssignmentManagementService
         .ToListAsync(cancellationToken);
     }
 
+    //public async Task<List<WorkPlanLookupDto>>
+    //    GetWorkPlansAsync(
+    //        CancellationToken cancellationToken = default)
+    //{
+    //    await using var db =
+    //        await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+    //    var workPlans = await db.WorkPlans
+    //        .AsNoTracking()
+    //        .Where(x => x.IsValid)
+    //        .OrderByDescending(x => x.WorkDate)
+    //        .ThenByDescending(x => x.WorkPlanId)
+    //        .Select(x => new
+    //        {
+    //            x.WorkPlanId,
+    //            x.WorkDate,
+    //            x.IndividualId
+    //        })
+    //        .ToListAsync(cancellationToken);
+
+    //    return workPlans
+    //        .Select(x => new WorkPlanLookupDto
+    //        {
+    //            WorkPlanId = (int)x.WorkPlanId,
+
+    //            DisplayName =
+    //                $"{x.WorkDate:dd MMM yyyy} - " +
+    //                $"Plan {x.WorkPlanId}"
+    //        })
+    //        .ToList();
+    //}
     public async Task<List<WorkPlanLookupDto>>
-        GetWorkPlansAsync(
-            CancellationToken cancellationToken = default)
+    GetWorkPlansAsync(
+        CancellationToken cancellationToken = default)
     {
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        var workPlans = await db.WorkPlans
-            .AsNoTracking()
-            .Where(x => x.IsValid)
-            .OrderByDescending(x => x.WorkDate)
-            .ThenByDescending(x => x.WorkPlanId)
-            .Select(x => new
-            {
-                x.WorkPlanId,
-                x.WorkDate,
-                x.IndividualId
-            })
-            .ToListAsync(cancellationToken);
+        return await
+        (
+            from workPlan in db.WorkPlans.AsNoTracking()
 
-        return workPlans
-            .Select(x => new WorkPlanLookupDto
+            join workTemplate in db.WorkTemplates.AsNoTracking()
+                on workPlan.WorkTemplateId
+                equals workTemplate.WorkTemplateId
+
+            where workPlan.IsValid
+                  && workTemplate.IsActive
+
+            orderby workPlan.WorkDate descending,
+                    workTemplate.Name
+
+            select new WorkPlanLookupDto
             {
-                WorkPlanId = (int)x.WorkPlanId,
+                WorkPlanId =(int)
+                    workPlan.WorkPlanId,
 
                 DisplayName =
-                    $"{x.WorkDate:dd MMM yyyy} - " +
-                    $"Plan {x.WorkPlanId}"
-            })
-            .ToList();
+                    workTemplate.Name
+                    + " - "
+                    + (workPlan.WorkDate.HasValue ? workPlan.WorkDate.Value.ToString("dd MMM yyyy") : "No Date")
+            }
+        )
+        .ToListAsync(cancellationToken);
     }
 
     public async Task<List<WorkAssignmentGroupDto>>
@@ -419,8 +453,167 @@ public sealed class WorkAssignmentManagementService
             .ToList();
     }
 
-    public async Task<List<WorkAssignmentEmployeeDto>>
-    GetAssignmentEmployeesAsync(
+    //public async Task<List<WorkAssignmentEmployeeDto>>
+    //GetAssignmentEmployeesAsync(
+    //    int organisationStructureId,
+    //    int? workPlanId,
+    //    string assignmentName,
+    //    DateTime scheduledStart,
+    //    DateTime scheduledEnd,
+    //    CancellationToken cancellationToken = default)
+    //{
+    //    if (organisationStructureId <= 0)
+    //    {
+    //        return new List<WorkAssignmentEmployeeDto>();
+    //    }
+
+    //    await using var db =
+    //        await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+    //    var today = DateTime.Today;
+
+    //    var query =
+    //        from workAssignment in db.WorkAssignments.AsNoTracking()
+
+    //        join currentOwner in db.WorkAssignmentOwners.AsNoTracking()
+    //            on workAssignment.WorkAssignmentId
+    //            equals currentOwner.WorkAssignmentId
+
+    //        join job in db.Jobs.AsNoTracking()
+    //            on currentOwner.JobId
+    //            equals job.JobId
+
+    //        join individual in db.Individuals.AsNoTracking()
+    //            on currentOwner.IndividualId
+    //            equals individual.BusinessEntityId
+
+    //        let currentPositionId =
+    //            db.JobPositions
+    //                .Where(jobPosition =>
+    //                    jobPosition.JobId == currentOwner.JobId &&
+    //                    jobPosition.FromDate <= today &&
+    //                    (
+    //                        !jobPosition.ToDate.HasValue ||
+    //                        jobPosition.ToDate.Value >= today
+    //                    ))
+    //                .OrderByDescending(jobPosition =>
+    //                    jobPosition.FromDate)
+    //                .ThenByDescending(jobPosition =>
+    //                    jobPosition.JobPositionId)
+    //                .Select(jobPosition =>
+    //                    (int?)jobPosition.PositionId)
+    //                .FirstOrDefault()
+
+    //        join position in db.Positions.AsNoTracking()
+    //            on currentPositionId
+    //            equals (int?)position.PositionId
+    //            into positionJoin
+
+    //        from position in positionJoin.DefaultIfEmpty()
+
+    //        where workAssignment.IsValid
+    //              && !workAssignment.CancelledDate.HasValue
+
+    //              && currentOwner.IsValid
+    //              && currentOwner.IsCurrentOwner
+    //              && !currentOwner.RelievedDate.HasValue
+
+    //              && job.OrganisationStructureId ==
+    //                 organisationStructureId
+
+    //              && workAssignment.StartDateTime ==
+    //                 scheduledStart
+
+    //              && workAssignment.EndDateTime ==
+    //                 scheduledEnd
+
+    //        select new
+    //        {
+    //            workAssignment.WorkAssignmentId,
+    //            currentOwner.WorkAssignmentOwnerId,
+    //            currentOwner.IndividualId,
+    //            currentOwner.JobId,
+
+    //            workAssignment.WorkPlanId,
+    //            workAssignment.Name,
+    //            workAssignment.StartDateTime,
+    //            workAssignment.EndDateTime,
+
+    //            individual.FirstNameEnglish,
+    //            individual.MiddleNameEnglish,
+    //            individual.LastNameEnglish,
+
+    //            PositionName =
+    //                position == null
+    //                    ? null
+    //                    : position.Name
+    //        };
+
+    //    if (workPlanId.HasValue &&
+    //        workPlanId.Value > 0)
+    //    {
+    //        var selectedWorkPlanId =
+    //            workPlanId.Value;
+
+    //        query = query.Where(x =>
+    //            x.WorkPlanId == selectedWorkPlanId);
+    //    }
+
+    //    if (!string.IsNullOrWhiteSpace(assignmentName))
+    //    {
+    //        var selectedAssignmentName =
+    //            assignmentName.Trim();
+
+    //        query = query.Where(x =>
+    //            x.Name == selectedAssignmentName);
+    //    }
+
+    //    var rows =
+    //        await query.ToListAsync(cancellationToken);
+
+    //    var now = DateTime.Now;
+
+    //    return rows
+    //        .Select(x => new WorkAssignmentEmployeeDto
+    //        {
+    //            WorkAssignmentId =
+    //                x.WorkAssignmentId,
+
+    //            WorkAssignmentOwnerId =
+    //                x.WorkAssignmentOwnerId,
+
+    //            IndividualId =
+    //                x.IndividualId,
+
+    //            JobId =
+    //                x.JobId,
+
+    //            EmployeeName =
+    //                BuildFullName(
+    //                    x.FirstNameEnglish,
+    //                    x.MiddleNameEnglish,
+    //                    x.LastNameEnglish),
+
+    //            JobTitle =
+    //                string.IsNullOrWhiteSpace(x.PositionName)
+    //                    ? "No active position"
+    //                    : x.PositionName,
+
+    //            HasCurrentOwner =
+    //                true,
+
+    //            AssignmentState =
+    //                GetAssignmentState(
+    //                    x.StartDateTime,
+    //                    x.EndDateTime,
+    //                    now)
+    //        })
+    //        .OrderBy(x => x.EmployeeName)
+    //        .ToList();
+    //}
+
+
+    public async Task<List<WorkAssignmentEmployeeDto>>GetAssignmentEmployeesAsync(
         int organisationStructureId,
         int? workPlanId,
         string assignmentName,
@@ -428,11 +621,6 @@ public sealed class WorkAssignmentManagementService
         DateTime scheduledEnd,
         CancellationToken cancellationToken = default)
     {
-        if (organisationStructureId <= 0)
-        {
-            return new List<WorkAssignmentEmployeeDto>();
-        }
-
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -441,22 +629,22 @@ public sealed class WorkAssignmentManagementService
         var query =
             from workAssignment in db.WorkAssignments.AsNoTracking()
 
-            join currentOwner in db.WorkAssignmentOwners.AsNoTracking()
+            join owner in db.WorkAssignmentOwners.AsNoTracking()
                 on workAssignment.WorkAssignmentId
-                equals currentOwner.WorkAssignmentId
+                equals owner.WorkAssignmentId
 
             join job in db.Jobs.AsNoTracking()
-                on currentOwner.JobId
+                on owner.JobId
                 equals job.JobId
 
             join individual in db.Individuals.AsNoTracking()
-                on currentOwner.IndividualId
+                on owner.IndividualId
                 equals individual.BusinessEntityId
 
-            let currentPositionId =
+            let positionId =
                 db.JobPositions
                     .Where(jobPosition =>
-                        jobPosition.JobId == currentOwner.JobId &&
+                        jobPosition.JobId == job.JobId &&
                         jobPosition.FromDate <= today &&
                         (
                             !jobPosition.ToDate.HasValue ||
@@ -464,14 +652,12 @@ public sealed class WorkAssignmentManagementService
                         ))
                     .OrderByDescending(jobPosition =>
                         jobPosition.FromDate)
-                    .ThenByDescending(jobPosition =>
-                        jobPosition.JobPositionId)
                     .Select(jobPosition =>
                         (int?)jobPosition.PositionId)
                     .FirstOrDefault()
 
             join position in db.Positions.AsNoTracking()
-                on currentPositionId
+                on positionId
                 equals (int?)position.PositionId
                 into positionJoin
 
@@ -480,12 +666,18 @@ public sealed class WorkAssignmentManagementService
             where workAssignment.IsValid
                   && !workAssignment.CancelledDate.HasValue
 
-                  && currentOwner.IsValid
-                  && currentOwner.IsCurrentOwner
-                  && !currentOwner.RelievedDate.HasValue
+                  && owner.IsValid
+                  && owner.IsCurrentOwner
+                  && !owner.RelievedDate.HasValue
 
                   && job.OrganisationStructureId ==
                      organisationStructureId
+
+                  && workAssignment.WorkPlanId ==
+                     workPlanId
+
+                  && workAssignment.Name ==
+                     assignmentName
 
                   && workAssignment.StartDateTime ==
                      scheduledStart
@@ -496,12 +688,10 @@ public sealed class WorkAssignmentManagementService
             select new
             {
                 workAssignment.WorkAssignmentId,
-                currentOwner.WorkAssignmentOwnerId,
-                currentOwner.IndividualId,
-                currentOwner.JobId,
+                owner.WorkAssignmentOwnerId,
+                owner.IndividualId,
+                owner.JobId,
 
-                workAssignment.WorkPlanId,
-                workAssignment.Name,
                 workAssignment.StartDateTime,
                 workAssignment.EndDateTime,
 
@@ -514,25 +704,6 @@ public sealed class WorkAssignmentManagementService
                         ? null
                         : position.Name
             };
-
-        if (workPlanId.HasValue &&
-            workPlanId.Value > 0)
-        {
-            var selectedWorkPlanId =
-                workPlanId.Value;
-
-            query = query.Where(x =>
-                x.WorkPlanId == selectedWorkPlanId);
-        }
-
-        if (!string.IsNullOrWhiteSpace(assignmentName))
-        {
-            var selectedAssignmentName =
-                assignmentName.Trim();
-
-            query = query.Where(x =>
-                x.Name == selectedAssignmentName);
-        }
 
         var rows =
             await query.ToListAsync(cancellationToken);
@@ -577,6 +748,10 @@ public sealed class WorkAssignmentManagementService
             .OrderBy(x => x.EmployeeName)
             .ToList();
     }
+
+
+
+
 
     public async Task<BulkAssignmentResultDto>
         AssignDepartmentAsync(

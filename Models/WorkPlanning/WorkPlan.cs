@@ -68,6 +68,16 @@ namespace HRM.Models.WorkPlanning
         public virtual ICollection<AttendanceLogResolution>AttendanceLogResolutions{ get; set; }
             = new List<AttendanceLogResolution>();
 
+  
+
+        public string Name { get; set; } = null!;
+
+        public DateTime StartDate { get; set; }
+
+        public DateTime EndDate { get; set; }
+
+        
+
 
     }
 

@@ -32,6 +32,14 @@
 
         public bool IsActive { get; set; }
 
+        public bool IsPaid { get; set; }
+
+        public int OperationLogId { get; set; }
+
+        public DateTime? CreatedAt { get; set; }
+
+        public DateTime? UpdatedAt { get; set; }
+
         public virtual WorkTemplate WorkTemplate { get; set; } = null!;
 
         public virtual WorkSegmentType WorkSegmentType { get; set; } = null!;

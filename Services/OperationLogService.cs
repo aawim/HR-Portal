@@ -14,7 +14,6 @@ namespace HRM.Services
         private readonly AuthenticationStateProvider _authStateProvider;
         private readonly IUserAccessService _access;
         private readonly IHttpContextAccessor _httpContextAccessor;
-        private readonly IIndividual _individual;
         public OperationLogService(HrmTeContext dbContext, AuthenticationStateProvider authStateProvider, PortalContext portalContext, IHttpContextAccessor httpContextAccessor ,IIndividual individual, 
             IUserAccessService access )
         {
@@ -22,7 +21,6 @@ namespace HRM.Services
             _authStateProvider = authStateProvider;
             _portalContext = portalContext;
             _httpContextAccessor = httpContextAccessor;
-            _individual = individual;
             _access = access;
          
         }

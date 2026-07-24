@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using HRM.Enum;
+using Microsoft.AspNetCore.Http.HttpResults;
+using System.ComponentModel.DataAnnotations;
 
 namespace HRM.Enum
 {
@@ -38,7 +40,12 @@ namespace HRM.Enum
         LeaveType,
 
         [Display(Name = "Shift/Work")]
-         ShiftWork,
-
+        ShiftWork,
+        Assignments,
+        [Display(Name = "Create Assignment")]
+        AssignmentCreate
     }
 }
+
+
+ 

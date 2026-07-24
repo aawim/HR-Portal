@@ -1,30 +1,15 @@
 ﻿@using HRM.Components.Admin.My.Workspace.Cards
+@using HRM.Components.Admin.My.Workspace.Tabs
 @using HRM.Components.Cards
 @using HRM.Components.Layout
 @using HRM.Enum
 
- 
+
+
+
+
 
 <WorkSpaceLayout Loading="@loading">
-
-@*     <Header>
-
-        <div class="bg-white rounded-xl border border-slate-200 p-4">
-
-            <h2 class="text-lg font-semibold">
-                My Workspace
-            </h2>
-
-            <p class="text-sm text-slate-500">
-                Welcome back.
-            </p>
-
-        </div>
-
-    </Header> *@
-
- 
-
     <Left>
         <CalendarCard />
         <MyTeamCard />
@@ -32,14 +17,6 @@
     </Left>
 
     <Center>
-
-       @if (ActiveTab == WorkspaceTab.Calendar)
-        {
-            <div class="grid grid-cols-1 gap-4">
-                <WorkspaceCalendarCard />
-            </div>
-        }
-  
         <TeamAttendanceCard />
         <RecentActivityCard /> 
     </Center>
@@ -48,15 +25,41 @@
         <NotificationCard Title="Title" />
         <TodoCard />
     </Right>
-
-
-
-
 </WorkSpaceLayout>   
 
 
-
+    @if (ActiveTab == WorkspaceTab.Calendar)
+    {
+        <div class="grid grid-cols-1 gap-4">
+            <WorkspaceCalendarCard />
+        </div>
+    }
+    else if (ActiveTab == WorkspaceTab.ShiftWork)
+    {
+        <div class="grid grid-cols-1 gap-4">
+            <ShiftAssignments />
+        </div>
+    }
+    else if (ActiveTab == WorkspaceTab.AssignmentCreate)
+    {
+        <div class="grid grid-cols-1 gap-4">
+            <AssignmentCreat />
+        </div>
+    }
+    else if (ActiveTab == WorkspaceTab.Assignments)
+    {
+        <div class="grid grid-cols-1 gap-4">
+            <Assignment />
+        </div>
+    }
           
+
+
+
+
+
+
+
 
 @code {
     private bool loading = true;

@@ -373,6 +373,14 @@ namespace HRM.Components.Shared
             public const int KPI_RELATED_DOCUMENT_CREATE = 283;
             public const int KPI_RELATED_DOCUMENT_DELETE = 284;
 
+            /// Work Templates
+            /// 
+
+            public const int WORK_TEMPLATE_SEGMENT_CREATE = 285;
+            public const int WORK_TEMPLATE_SEGMENT_UPDATE = 286;
+            public const int WORK_TEMPLATE_SEGMENT_DELETE = 302;
+            public const int WORK_TEMPLATE_SEGMENT_ARCHIVED = 303;
+
 
         }
 

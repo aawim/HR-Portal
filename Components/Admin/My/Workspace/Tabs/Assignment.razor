@@ -1,0 +1,198 @@
+﻿@page "/work-planning/assignments"
+
+@using HRM.WorkPlanning.Abstractions
+@using HRM.DTOs.WorkPlanning
+@using Microsoft.EntityFrameworkCore
+
+@inject IWorkAssignmentManagementService AssignmentService
+@inject NavigationManager Navigation
+
+<PageTitle>Work Assignments</PageTitle>
+
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-semibold text-slate-900">
+            Work Assignments
+        </h1>
+
+        <p class="text-sm text-slate-500">
+            View and manage employee work assignments.
+        </p>
+    </div>
+
+    <div class="flex gap-2">
+        <button class="px-4 py-2 border rounded-lg"
+                @onclick="OpenIndividualAssignment">
+            Assign Individual
+        </button>
+
+        <button class="px-4 py-2 bg-blue-600 text-white rounded-lg"
+                @onclick="OpenBulkAssignment">
+            Bulk Assignment
+        </button>
+    </div>
+</div>
+
+<div class="bg-white border rounded-xl p-4 mb-5">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+
+        <div>
+            <label class="block text-sm mb-1">From</label>
+
+            <InputDate class="w-full border rounded-lg px-3 py-2"
+                       @bind-Value="Filter.FromDate" />
+        </div>
+
+        <div>
+            <label class="block text-sm mb-1">To</label>
+
+            <InputDate class="w-full border rounded-lg px-3 py-2"
+                       @bind-Value="Filter.ToDate" />
+        </div>
+
+        <div>
+            <label class="block text-sm mb-1">Search</label>
+
+            <InputText class="w-full border rounded-lg px-3 py-2"
+                       @bind-Value="Filter.SearchText"
+                       placeholder="Assignment or department" />
+        </div>
+
+        <div class="flex items-end">
+            <button class="w-full px-4 py-2 bg-slate-900 text-white rounded-lg"
+                    @onclick="LoadAssignmentsAsync"
+                    disabled="@IsLoading">
+                Search
+            </button>
+        </div>
+
+    </div>
+</div>
+
+@if (IsLoading)
+{
+    <div class="p-8 text-center text-slate-500">
+        Loading assignments...
+    </div>
+}
+else if (!Assignments.Any())
+{
+    <div class="bg-white border rounded-xl p-10 text-center">
+        <h3 class="font-semibold text-slate-800">
+            No work assignments found
+        </h3>
+
+        <p class="text-sm text-slate-500 mt-1">
+            Change the filters or create a new assignment.
+        </p>
+    </div>
+}
+else
+{
+    <div class="bg-white border rounded-xl overflow-hidden">
+        <table class="w-full text-sm">
+            <thead class="bg-slate-50">
+                <tr>
+                    <th class="text-left p-3">Assignment</th>
+                    <th class="text-left p-3">Department</th>
+                    <th class="text-left p-3">Schedule</th>
+                    <th class="text-left p-3">Staff</th>
+                    <th class="text-left p-3">Status</th>
+                    <th class="p-3"></th>
+                </tr>
+            </thead>
+
+            <tbody>
+                @foreach (var assignment in Assignments)
+                {
+                    <tr class="border-t">
+                        <td class="p-3">
+                            @assignment.AssignmentName
+                        </td>
+
+                        <td class="p-3">
+                            @assignment.DepartmentName
+                        </td>
+
+                        <td class="p-3">
+                            <div>
+                                @assignment.ScheduledStart.ToString("dd MMM yyyy HH:mm")
+                            </div>
+
+                            <div class="text-slate-500">
+                                @assignment.ScheduledEnd.ToString("dd MMM yyyy HH:mm")
+                            </div>
+                        </td>
+
+                        <td class="p-3">
+                            @assignment.AssignedStaffCount
+                        </td>
+
+                        <td class="p-3">
+                            @assignment.AssignmentStatus
+                        </td>
+
+                        <td class="p-3 text-right">
+                            <button class="text-blue-600"
+                                    @onclick="() => ViewAssignment(assignment)">
+                                View
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private bool IsLoading;
+
+    private List<WorkAssignmentGroupDto> Assignments { get; set; } =
+        new();
+
+    private WorkAssignmentFilterDto Filter { get; set; } = new()
+        {
+            FromDate = DateTime.Today.AddDays(-30),
+            ToDate = DateTime.Today.AddDays(30)
+        };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAssignmentsAsync();
+    }
+
+    private async Task LoadAssignmentsAsync()
+    {
+        IsLoading = true;
+
+        try
+        {
+            Assignments =
+                await AssignmentService.GetAssignmentsAsync(Filter);
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private void OpenIndividualAssignment()
+    {
+        Navigation.NavigateTo(
+            "/work-planning/assignments/create");
+    }
+
+    private void OpenBulkAssignment()
+    {
+        Navigation.NavigateTo(
+            "/work-planning/assignments/bulk");
+    }
+
+    private void ViewAssignment(
+        WorkAssignmentGroupDto assignment)
+    {
+        Navigation.NavigateTo(
+            $"/work-planning/assignments/{assignment.GroupId}");
+    }
+}

@@ -1,10 +1,15 @@
-﻿namespace HRM.Models.WorkPlanning
+﻿using HRM.Models.WorkPlanning;
+
+namespace HRM.DTOs.WorkPlanning
 {
-    public class WorkTemplate
+    public class WorkTemplateDto
     {
+
         public int WorkTemplateId { get; set; }
 
         public int WorkTemplateTypeId { get; set; }
+
+        public string WorkTemplateTypeName { get; set; } = string.Empty;
 
         public int? OrganisationBusinessEntityId { get; set; }
 
@@ -36,21 +41,20 @@
 
         public DateOnly? EffectiveTo { get; set; }
 
-        public int? OperationLogId { get; set; }
+        public int SegmentCount { get; set; }
 
-        public virtual WorkTemplateType WorkTemplateType { get; set; } = null!;
+        public string TemplateType { get; set; } = "RegularShift";
 
-        public virtual Organisation? Organisation { get; set; }
+        //public virtual WorkTemplateType TemplateType { get; set; } = null!;
 
-        public virtual OperationLog? OperationLog { get; set; }
+        public bool RequiresLocationValidation { get; set; }
 
-        public virtual ICollection<WorkTemplateSegment> WorkTemplateSegments { get; set; } = new List<WorkTemplateSegment>();
+        public bool RequiresDeviceValidation { get; set; }
 
-        public virtual ICollection<WorkAssignment> WorkAssignments { get; set; } = new List<WorkAssignment>();
+        public bool AllowsOverlap { get; set; }
 
-        public virtual ICollection<WorkPlan> WorkPlans { get; set; } = new List<WorkPlan>();
+        public bool IsValid { get; set; }
 
- 
-
+    
     }
 }
