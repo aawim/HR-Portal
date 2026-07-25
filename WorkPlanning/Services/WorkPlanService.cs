@@ -1,8 +1,10 @@
 ﻿using Azure.Core;
+using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Models.WorkPlanning;
+using HRM.Services.Interfaces;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,16 +13,108 @@ namespace HRM.WorkPlanning.Services
     public class WorkPlanService : IWorkPlanService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
-
+        private readonly IOperationLogService _logService;
+        private readonly IUserAccessService _userAccessService;
         public WorkPlanService(
-            IDbContextFactory<HrmTeContext> dbFactory)
+            IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService, IUserAccessService userAccessService    )
         {
             _dbFactory = dbFactory;
+            _logService = logService;
+            _userAccessService = userAccessService;
         }
 
+        public async Task<List<WorkPlanEmployeeDto>> SearchEmployeesAsync(string searchText)
+        {
+            if (string.IsNullOrWhiteSpace(searchText))
+                return [];
 
-        public async Task<GenerateWorkPlanResultDto> GenerateWorkPlanAsync(
-       GenerateWorkPlanDto request)
+            searchText = searchText.Trim();
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            var approvedJobStateId =
+                SharedConfig.JobStates.APPROVED;
+
+            return await
+            (
+                from job in db.Jobs.AsNoTracking()
+
+                join individual in db.Individuals.AsNoTracking()
+                    on job.IndividualID
+                    equals individual.BusinessEntityId
+
+                join staff in db.Staffs.AsNoTracking()
+                    on individual.BusinessEntityId
+                    equals staff.IndividualId
+                    into staffJoin
+
+                from staff in staffJoin.DefaultIfEmpty()
+
+                join organisation in db.Organisations.AsNoTracking()
+                    on job.OrganisationID
+                    equals organisation.BusinessEntityID
+                    into organisationJoin
+
+                from organisation in organisationJoin.DefaultIfEmpty()
+
+                join structure in db.OrganisationStructures.AsNoTracking()
+                    on job.OrganisationStructureId
+                    equals structure.OrganisationStructureId
+                    into structureJoin
+
+                from structure in structureJoin.DefaultIfEmpty()
+
+                let fullName =
+                    ((individual.FirstNameEnglish ?? string.Empty) + " " +
+                      (individual.LastNameEnglish ?? string.Empty))
+                    .Trim()
+
+                where job.JobStateId == approvedJobStateId
+                      && job.TerminatedDate == null
+                      && (
+                          fullName.Contains(searchText) ||
+                          (staff != null &&
+                           staff.EmployeeNumber.Contains(searchText))
+                      )
+
+                orderby fullName
+
+                select new WorkPlanEmployeeDto
+                {
+                    IndividualId =
+                        individual.BusinessEntityId,
+
+                    JobId =
+                        job.JobId,
+
+                    OrganisationId =
+                        job.OrganisationID,
+
+                    Name =
+                        fullName,
+
+                    EmployeeNumber =
+                        staff != null
+                            ? staff.EmployeeNumber
+                            : null,
+
+                    PositionName =
+                        structure != null
+                            ? structure.Name
+                            : null,
+
+                    OrganisationName =
+                        organisation != null
+                            ? organisation.OrganisationName
+                            : null
+                }
+            )
+            .Take(20)
+            .ToListAsync();
+        }
+
+        public async Task<GenerateWorkPlanResultDto> GenerateWorkPlanAsync(GenerateWorkPlanDto request)
         {
             var result = new GenerateWorkPlanResultDto();
 
@@ -32,6 +126,27 @@ namespace HRM.WorkPlanning.Services
 
             try
             {
+
+
+                var userContext = await _userAccessService.GetContextAsync();
+
+                if (userContext == null || userContext.UserId <= 0)
+                {
+                    throw new UnauthorizedAccessException(
+                        "The current user account could not be identified.");
+                }
+
+
+
+
+                if (!request.PlanningProviderId.HasValue)
+                {
+                    throw new InvalidOperationException(
+                        "Planning provider is required.");
+                }
+
+
+
                 var workDate = request.WorkDate.Date;
 
                 // 1. Validate the employee's job.
@@ -164,6 +279,14 @@ namespace HRM.WorkPlanning.Services
                     previousPlan.IsValid = false;
                 }
 
+
+
+                var operationLog = await _logService.CreateAsync(
+                 db,
+                 actionId: SharedConfig.OperationLogActionTypes.WORK_PLAN_CREATE_CREATE,
+                 remarks: "Work Plan Create");
+
+
                 // 5. Create the plan header.
                 var workPlan = new WorkPlan
                 {
@@ -173,8 +296,7 @@ namespace HRM.WorkPlanning.Services
                     OrganisationBusinessEntityId =
                         request.OrganisationBusinessEntityId,
 
-                    PlanningProviderId = (int)
-                        request.PlanningProviderId,
+                    PlanningProviderId = request.PlanningProviderId.Value,
 
                     WorkDate = request.WorkDate,
 
@@ -183,8 +305,8 @@ namespace HRM.WorkPlanning.Services
 
                     GeneratedDate = DateTime.UtcNow,
 
-                    GeneratedByUserId =
-                        request.GeneratedByUserId,
+                    GeneratedByUserId = userContext.UserId,
+            
 
                     IsFinalized = false,
                     FinalizedDate = null,
@@ -194,13 +316,11 @@ namespace HRM.WorkPlanning.Services
 
                     IsValid = true,
 
-                    OperationLogId =
-                        request.OperationLogId,
+                    OperationLogId = operationLog.OperationLogId,
 
                     CreatedDate = DateTime.UtcNow,
 
-                    WorkTemplateId =
-                        request.WorkTemplateId,
+                    WorkTemplateId = request.WorkTemplateId,
 
                     PlanGuid = planGuid,
 
@@ -218,8 +338,7 @@ namespace HRM.WorkPlanning.Services
                 // 6. Generate actual dated segments.
                 var assignmentBaseDateTime = workDate;
 
-                var generatedSegments =
-                    new List<WorkPlanSegment>();
+                var generatedSegments = new List<WorkPlanSegment>();
 
                 foreach (var templateSegment in templateSegments)
                 {
@@ -331,8 +450,7 @@ namespace HRM.WorkPlanning.Services
                 result.Success = true;
                 result.WorkPlanId = workPlan.WorkPlanId;
                 result.PlanGuid = workPlan.PlanGuid;
-                result.GeneratedSegmentCount =
-                    generatedSegments.Count;
+                result.GeneratedSegmentCount = generatedSegments.Count;
 
                 return result;
             }
@@ -381,7 +499,7 @@ namespace HRM.WorkPlanning.Services
                             ? x.WorkTemplate.Name
                             : string.Empty,
 
-                    GenerationSource = x.GenerationSource.ToString(),
+                    GenerationSource = x.GenerationSource,
 
                     GeneratedDate =
                         x.GeneratedDate,
@@ -415,7 +533,7 @@ namespace HRM.WorkPlanning.Services
                             WorkPlanSegmentId =
                                 s.WorkPlanSegmentId,
 
-                            WorkPlanId =
+                            WorkPlanId =(int)
                                 s.WorkPlanId,
 
                             WorkTemplateSegmentId =
@@ -511,7 +629,7 @@ namespace HRM.WorkPlanning.Services
                         ? x.WorkTemplate.Name
                         : string.Empty,
 
-                    GenerationSource = x.GenerationSource.ToString(),
+                    GenerationSource = x.GenerationSource,
                     GeneratedDate = x.GeneratedDate,
 
                     IsGenerated = x.IsGenerated,
@@ -528,6 +646,55 @@ namespace HRM.WorkPlanning.Services
                     Remarks = x.Remarks,
 
                     IsValid = x.IsValid
+                })
+                .ToListAsync();
+        }
+
+        public async Task<List<WorkTemplateLookupDto>>
+      GetActiveTemplatesAsync()
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            return await db.WorkTemplates
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new WorkTemplateLookupDto
+                {
+                    WorkTemplateId =
+                        x.WorkTemplateId,
+
+                    Name =
+                        x.Name,
+
+                    Description =
+                        x.Description
+                })
+                .ToListAsync();
+        }
+
+
+
+        public async Task<List<PlanningProviderLookupDto>>GetPlanningProvidersAsync()
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            return await db.PlanningProviders
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new PlanningProviderLookupDto
+                {
+                    PlanningProviderId =
+                        x.PlanningProviderId,
+
+                    Name =
+                        x.Name,
+
+                    Description =
+                        x.Description
                 })
                 .ToListAsync();
         }

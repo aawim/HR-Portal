@@ -378,8 +378,15 @@ namespace HRM.Components.Shared
 
             public const int WORK_TEMPLATE_SEGMENT_CREATE = 285;
             public const int WORK_TEMPLATE_SEGMENT_UPDATE = 286;
-            public const int WORK_TEMPLATE_SEGMENT_DELETE = 302;
-            public const int WORK_TEMPLATE_SEGMENT_ARCHIVED = 303;
+            public const int WORK_TEMPLATE_SEGMENT_DELETE = 287;
+            public const int WORK_TEMPLATE_SEGMENT_ARCHIVED = 288;
+
+
+            public const int WORK_PLAN_CREATE_CREATE = 289;
+            public const int WORK_PLAN_CREATE_UPDATE = 290;
+            public const int WORK_PLAN_CREATE_ARCHIVE = 291;
+
+
 
 
         }

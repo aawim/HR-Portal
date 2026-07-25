@@ -6,7 +6,7 @@ namespace HRM.Models.WorkPlanning
     {
         public int WorkPlanSegmentId { get; set; }
 
-        public int WorkPlanId { get; set; }
+        public long WorkPlanId { get; set; }
 
         public int? WorkTemplateSegmentId { get; set; }
 

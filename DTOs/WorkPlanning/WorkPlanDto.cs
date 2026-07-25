@@ -1,4 +1,6 @@
-﻿namespace HRM.DTOs.WorkPlanning
+﻿using HRM.Enum;
+
+namespace HRM.DTOs.WorkPlanning
 {
     public class WorkPlanDto
     {
@@ -18,7 +20,7 @@
 
         public string WorkTemplateName { get; set; } = string.Empty;
 
-        public string? GenerationSource { get; set; }
+        public WorkPlanGenerationSource? GenerationSource { get; set; }
 
         public DateTime? GeneratedDate { get; set; }
 

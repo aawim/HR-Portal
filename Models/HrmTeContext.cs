@@ -18,9 +18,7 @@ public partial class HrmTeContext : DbContext
     }
     public virtual DbSet<PlanningProvider> PlanningProviders { get; set; }
 
-    public virtual DbSet<OrganisationWorkPlanningSetting>
-        OrganisationWorkPlanningSettings
-    { get; set; }
+    public virtual DbSet<OrganisationWorkPlanningSetting>OrganisationWorkPlanningSettings{ get; set; }
 
     public virtual DbSet<WorkPlanSegment> WorkPlanSegments { get; set; }
     public virtual DbSet<AttendanceLogResolution> AttendanceLogResolutions { get; set; }
@@ -6947,8 +6945,8 @@ public partial class HrmTeContext : DbContext
         {
             entity.ToTable("WorkPlans");
 
-            entity.HasKey(x => x.WorkPlanId)
-                .HasName("PK_WorkPlans");
+            //entity.HasKey(x => x.WorkPlanId)
+            //    .HasName("PK_WorkPlans");
 
             entity.Property(x => x.WorkPlanId)
                 .HasColumnName("WorkPlanID");
@@ -6959,14 +6957,13 @@ public partial class HrmTeContext : DbContext
             entity.Property(x => x.JobId)
                 .HasColumnName("JobID");
 
-            entity.Property(e => e.WorkTemplateId)
-    .HasColumnName("WorkTemplateID");
+      
 
             entity.Property(e => e.PlanGuid)
                 .HasDefaultValueSql("(newid())");
 
             entity.Property(e => e.Version)
-    .HasDefaultValue(1);
+                .HasDefaultValue(1);
 
             entity.Property(e => e.IsGenerated)
                 .HasDefaultValue(false);
@@ -6984,9 +6981,9 @@ public partial class HrmTeContext : DbContext
             entity.Property(x => x.WorkDate)
                 .HasColumnType("date");
 
-            entity.Property(x => x.GenerationSource)
-                .HasMaxLength(50)
-                .IsRequired();
+            entity.Property(e => e.GenerationSource)
+                   .HasConversion<string>()
+                   .HasMaxLength(50);
 
             entity.Property(x => x.GeneratedDate)
                 .HasColumnType("datetime2(0)");
@@ -7014,9 +7011,7 @@ public partial class HrmTeContext : DbContext
 
             entity.Property(x => x.CreatedDate)
                 .HasColumnType("datetime2(0)");
-
-            entity.Property(e => e.WorkTemplateId)
-                    .HasColumnName("WorkTemplateID");
+ 
 
             entity.HasOne(x => x.Individual)
                 .WithMany()
@@ -7025,9 +7020,11 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_WorkPlans_Individuals");
 
             entity.HasOne(e => e.WorkTemplate)
-            .WithMany()
-            .HasForeignKey(e => e.WorkTemplateId)
-            .OnDelete(DeleteBehavior.Restrict);
+                .WithMany(e => e.WorkPlans)
+                .HasForeignKey(e => e.WorkTemplateId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+
 
             entity.HasOne(x => x.Job)
                 .WithMany()
@@ -7065,10 +7062,7 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_WorkPlans_OperationLogs");
 
-            entity.HasOne(e => e.WorkTemplate)
-                .WithMany()
-                .HasForeignKey(e => e.WorkTemplateId)
-                .OnDelete(DeleteBehavior.Restrict);
+      
 
             entity.HasIndex(x => new
             {

@@ -88,126 +88,7 @@ public partial class HrmTeContext
         });
     }
 
-    //private static void ConfigureWorkPlan(ModelBuilder modelBuilder)
-    //{
-    //    modelBuilder.Entity<WorkPlan>(entity =>
-    //    {
-    //        entity.ToTable("WorkPlans");
-
-    //        entity.HasKey(e => e.WorkPlanId);
-
-    //        entity.Property(e => e.WorkPlanId)
-    //            .HasColumnName("WorkPlanID");
-
-    //        entity.Property(e => e.IndividualId)
-    //            .HasColumnName("IndividualID");
-
-    //        entity.Property(e => e.JobId)
-    //            .HasColumnName("JobID");
-
-    //        entity.Property(e => e.OrganisationBusinessEntityId)
-    //            .HasColumnName("OrganisationBusinessEntityID");
-
-    //        entity.Property(e => e.PlanningProviderId)
-    //            .HasColumnName("PlanningProviderID");
-
-    //        entity.Property(e => e.WorkDate)
-    //            .HasColumnType("date");
-
-    //        entity.Property(e => e.GenerationSource)
-    //            .HasMaxLength(100)
-    //            .IsRequired();
-
-    //        entity.Property(e => e.GeneratedDate)
-    //            .HasColumnType("datetime2");
-
-    //        entity.Property(e => e.GeneratedByUserId)
-    //            .HasColumnName("GeneratedByUserID");
-
-    //        entity.Property(e => e.IsFinalized)
-    //            .HasDefaultValue(false);
-
-    //        entity.Property(e => e.FinalizedDate)
-    //            .HasColumnType("datetime2");
-
-    //        entity.Property(e => e.FinalizedByUserId)
-    //            .HasColumnName("FinalizedByUserID");
-
-    //        entity.Property(e => e.Remarks)
-    //            .HasMaxLength(1000);
-
-    //        entity.Property(e => e.IsValid)
-    //            .HasDefaultValue(true);
-
-    //        entity.Property(e => e.OperationLogId)
-    //            .HasColumnName("OperationLogID");
-
-    //        entity.Property(e => e.CreatedDate)
-    //            .HasColumnType("datetime2");
-
-    //        entity.HasIndex(e => new
-    //        {
-    //            e.JobId,
-    //            e.WorkDate
-    //        })
-    //            .IsUnique()
-    //            .HasDatabaseName("UX_WorkPlans_JobID_WorkDate");
-
-    //        entity.HasIndex(e => new
-    //        {
-    //            e.IndividualId,
-    //            e.WorkDate
-    //        })
-    //            .HasDatabaseName("IX_WorkPlans_IndividualID_WorkDate");
-
-    //        entity.HasIndex(e => new
-    //        {
-    //            e.OrganisationBusinessEntityId,
-    //            e.WorkDate
-    //        })
-    //            .HasDatabaseName(
-    //                "IX_WorkPlans_OrganisationBusinessEntityID_WorkDate");
-
-    //        entity.HasOne(e => e.Individual)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.IndividualId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.Job)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.JobId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.Organisation)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.OrganisationBusinessEntityId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.PlanningProvider)
-    //            .WithMany(e => e.WorkPlans)
-    //            .HasForeignKey(e => e.PlanningProviderId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.GeneratedByUser)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.GeneratedByUserId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.FinalizedByUser)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.FinalizedByUserId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-
-    //        entity.HasOne(e => e.OperationLog)
-    //            .WithMany()
-    //            .HasForeignKey(e => e.OperationLogId)
-    //            .OnDelete(DeleteBehavior.Restrict);
-    //    });
-    //}
-
-
-    private static void ConfigureWorkAssignment(
-     ModelBuilder modelBuilder)
+     private static void ConfigureWorkAssignment(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<WorkAssignment>(entity =>
         {
@@ -360,9 +241,6 @@ public partial class HrmTeContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
-
-
-
 
     private static void ConfigureWorkAssignmentSegment(
       ModelBuilder modelBuilder)

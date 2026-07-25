@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using HRM.Enum;
+using System.ComponentModel.DataAnnotations;
 
 namespace HRM.DTOs.WorkPlanning
 {
@@ -16,6 +17,7 @@ namespace HRM.DTOs.WorkPlanning
         [Range(1, int.MaxValue, ErrorMessage = "Work template is required.")]
         public int WorkTemplateId { get; set; }
 
+        [Required(ErrorMessage = "Planning provider is required.")]
         public int? PlanningProviderId { get; set; }
 
         [Required]
@@ -26,6 +28,10 @@ namespace HRM.DTOs.WorkPlanning
         public bool IsManual { get; set; }
 
         public int GeneratedByUserId { get; set; }
+
+        public WorkPlanGenerationSource? WorkPlanGenerationSource { get; set; }
+
+        public int WorkPlanId { get; set; }
 
         public int OperationLogId { get; set; }
     }
