@@ -16,7 +16,7 @@ namespace HRM.Models.WorkPlanning
 
         public int? WorkTemplateId { get; set; }
 
-        public DateOnly? WorkDate { get; set; }
+        public DateTime WorkDate { get; set; }
 
         public WorkPlanGenerationSource GenerationSource { get; set; }
 
@@ -65,8 +65,13 @@ namespace HRM.Models.WorkPlanning
         public virtual ICollection<WorkAssignment> WorkAssignments { get; set; }
             = new List<WorkAssignment>();
 
+        public virtual ICollection<WorkPlanSegment> WorkPlanSegments { get; set; }
+        = new List<WorkPlanSegment>();
+
         public virtual ICollection<AttendanceLogResolution>AttendanceLogResolutions{ get; set; }
             = new List<AttendanceLogResolution>();
+
+
 
   
 

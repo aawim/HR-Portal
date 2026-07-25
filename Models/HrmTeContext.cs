@@ -22,6 +22,7 @@ public partial class HrmTeContext : DbContext
         OrganisationWorkPlanningSettings
     { get; set; }
 
+    public virtual DbSet<WorkPlanSegment> WorkPlanSegments { get; set; }
     public virtual DbSet<AttendanceLogResolution> AttendanceLogResolutions { get; set; }
 
     public virtual DbSet<AttendanceResolutionStatus> AttendanceResolutionStatuses { get; set; }

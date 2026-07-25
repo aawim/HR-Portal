@@ -12,7 +12,7 @@ namespace HRM.DTOs.WorkPlanning
 
         public int JobId { get; set; }
 
-        public DateOnly WorkDate { get; set; }
+        public DateTime WorkDate { get; set; }
 
         public int? PlanningProviderId { get; set; }
 

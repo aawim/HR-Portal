@@ -594,68 +594,74 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
-            return await db.WorkTemplateSegments
-          .AsNoTracking()
-          .Where(x =>
-              x.WorkTemplateId == workTemplateId)
-          .OrderBy(x => x.SequenceNumber)
-          .Select(x => new WorkTemplateSegmentDto
-          {
-              WorkTemplateSegmentId =
-                  x.WorkTemplateSegmentId,
+            return await db.WorkTemplateSegments.AsNoTracking()
+                  .Where(x =>x.WorkTemplateId == workTemplateId)
+                  .OrderBy(x => x.SequenceNumber)
+                  .Select(x => new WorkTemplateSegmentDto
+                  {
+                      WorkTemplateSegmentId =
+                          x.WorkTemplateSegmentId,
 
-              WorkTemplateId =
-                  x.WorkTemplateId,
+                      WorkTemplateId =
+                          x.WorkTemplateId,
 
-              WorkSegmentTypeId =
-                  x.WorkSegmentTypeId,
+                      WorkSegmentTypeId =
+                          x.WorkSegmentTypeId,
 
-              WorkSegmentTypeName =
-                  x.WorkSegmentType.Name,
+                      WorkSegmentTypeName =
+                          x.WorkSegmentType.Name,
 
-              Name =
-                  x.Name,
+                      Name =
+                          x.Name,
 
-              Description =
-                  x.Description,
+                      Description =
+                          x.Description,
 
-              SequenceNumber =
-                  x.SequenceNumber,
+                      SequenceNumber =
+                          x.SequenceNumber,
 
-              OffsetMinutes =
-                  x.OffsetMinutes,
+                      //OffsetMinutes =
+                      //    x.OffsetMinutes,
 
-              DurationMinutes = (int)
-                  x.DurationMinutes,
+                      //DurationMinutes = (int)
+                      //    x.DurationMinutes,
 
-              GraceBeforeMinutes =
-                  x.GraceBeforeMinutes,
+                      //GraceBeforeMinutes =
+                      //    x.GraceBeforeMinutes,
 
-              GraceAfterMinutes =
-                  x.GraceAfterMinutes,
+                      //GraceAfterMinutes =
+                      //    x.GraceAfterMinutes,
 
-              IsMandatory =
-                  x.IsMandatory,
+                      OffsetMinutes = x.OffsetMinutes ?? 0,
 
-              RequiresAttendance =
-                  x.RequiresAttendance,
+                      DurationMinutes = x.DurationMinutes ?? 0,
 
-              RequiresLocationValidation =
-                  x.RequiresLocationValidation,
+                      GraceBeforeMinutes = x.GraceBeforeMinutes ?? 0,
 
-              RequiresDeviceValidation =
-                  x.RequiresDeviceValidation,
+                      GraceAfterMinutes = x.GraceAfterMinutes ?? 0,
 
-              IsActive =
-                  x.IsActive,
+                      IsMandatory =
+                          x.IsMandatory,
 
-              IsPaid =
-                  x.IsPaid,
+                      RequiresAttendance =
+                          x.RequiresAttendance,
 
-              OperationLogId =
-                  x.OperationLogId
-          })
-          .ToListAsync();
+                      RequiresLocationValidation =
+                          x.RequiresLocationValidation,
+
+                      RequiresDeviceValidation =
+                          x.RequiresDeviceValidation,
+
+                      IsActive =
+                          x.IsActive,
+
+                      IsPaid =
+                          x.IsPaid,
+
+                      OperationLogId =
+                          x.OperationLogId
+                  })
+                  .ToListAsync();
         }
 
 
@@ -830,10 +836,10 @@ namespace HRM.Services
                 segment.WorkTemplateSegmentId,
                 segment.WorkSegmentTypeId,
                 segment.SequenceNumber,
-                segment.OffsetMinutes,
+                (int)segment.OffsetMinutes,
                 (int)segment.DurationMinutes,
-                segment.GraceAfterMinutes,
-                segment.GraceBeforeMinutes );
+                (int)segment.GraceAfterMinutes,
+                (int)segment.GraceBeforeMinutes );
 
 
             if (!validationResult.Success)
@@ -918,10 +924,10 @@ namespace HRM.Services
                 segment.WorkTemplateSegmentId,
                 segment.WorkSegmentTypeId,
                  segment.SequenceNumber,
-                 segment.OffsetMinutes,
+                 (int)segment.OffsetMinutes,
                  (int)segment.DurationMinutes,
-                 segment.GraceAfterMinutes,
-                 segment.GraceBeforeMinutes
+                 (int)segment.GraceAfterMinutes,
+                 (int)segment.GraceBeforeMinutes
                        
                    );
 

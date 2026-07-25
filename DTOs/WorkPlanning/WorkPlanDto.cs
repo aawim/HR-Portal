@@ -1,0 +1,42 @@
+﻿namespace HRM.DTOs.WorkPlanning
+{
+    public class WorkPlanDto
+    {
+        public long WorkPlanId { get; set; }
+
+        public int IndividualId { get; set; }
+
+        public string IndividualName { get; set; } = string.Empty;
+
+        public int JobId { get; set; }
+
+        public int OrganisationBusinessEntityId { get; set; }
+
+        public DateTime WorkDate { get; set; }
+
+        public int? WorkTemplateId { get; set; }
+
+        public string WorkTemplateName { get; set; } = string.Empty;
+
+        public string? GenerationSource { get; set; }
+
+        public DateTime? GeneratedDate { get; set; }
+
+        public bool IsGenerated { get; set; }
+
+        public DateTime? FinalizedDate { get; set; }
+        public bool IsFinalized { get; set; }
+
+        public bool IsManual { get; set; }
+
+        public bool IsValid { get; set; }
+
+        public Guid PlanGuid { get; set; }
+
+        public int Version { get; set; }
+
+        public string? Remarks { get; set; }
+
+        public List<WorkPlanSegmentDto> Segments { get; set; } = [];
+    }
+}

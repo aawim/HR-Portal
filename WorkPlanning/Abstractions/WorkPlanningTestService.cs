@@ -53,7 +53,7 @@ namespace HRM.WorkPlanning.Abstractions
                     };
                 }
 
-                var date = DateOnly.FromDateTime(workDate.Date);
+          
 
                 var job = await db.Jobs
                     .AsNoTracking()
@@ -85,7 +85,7 @@ namespace HRM.WorkPlanning.Abstractions
                         x.IndividualId == individualId &&
                         x.JobId == job.JobId &&
                         x.OrganisationBusinessEntityId == organisationId &&
-                        x.WorkDate == date &&
+                        x.WorkDate == workDate &&
                         x.IsValid)
                     .Select(x => new
                     {
@@ -132,7 +132,7 @@ namespace HRM.WorkPlanning.Abstractions
                     OrganisationBusinessEntityId = organisationId,
                     IndividualId = individualId,
                     JobId = job.JobId,
-                    WorkDate = date,
+                    //WorkDate = request.WorkDate,
                     GenerationSource = WorkPlanGenerationSource.Manual,
                     AssignmentSource = WorkAssignmentSource.Template,
                     OperationLogId = operationLogId

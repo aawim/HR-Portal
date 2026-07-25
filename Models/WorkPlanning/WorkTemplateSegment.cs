@@ -14,13 +14,13 @@
 
         public int SequenceNumber { get; set; }
 
-        public int OffsetMinutes { get; set; }
+        public int? OffsetMinutes { get; set; }
 
-        public int? DurationMinutes { get; set; }
+        public int? DurationMinutes { get; set; } = 1;
 
-        public int GraceBeforeMinutes { get; set; }
+        public int? GraceBeforeMinutes { get; set; }
 
-        public int GraceAfterMinutes { get; set; }
+        public int? GraceAfterMinutes { get; set; }
 
         public bool IsMandatory { get; set; }
 

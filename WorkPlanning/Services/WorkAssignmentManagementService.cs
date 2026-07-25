@@ -128,7 +128,7 @@ public sealed class WorkAssignmentManagementService
                 DisplayName =
                     workTemplate.Name
                     + " - "
-                    + (workPlan.WorkDate.HasValue ? workPlan.WorkDate.Value.ToString("dd MMM yyyy") : "No Date")
+                    + (workPlan.WorkDate)
             }
         )
         .ToListAsync(cancellationToken);

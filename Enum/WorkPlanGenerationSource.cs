@@ -9,6 +9,7 @@
         Transfer,
         PublicHoliday,
         Training,
-        Import
+        Import,
+        Template
     }
 }

@@ -172,14 +172,22 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             //var template = DateTimeCalculationResult
            
 
-            var assignmentPeriod = CalculateAssignmentPeriod(
-                    request.WorkDate,
-                    new TimeOnly(8, 0),
-                    template.WorkTemplateSegments
-                        .Where(x => x.IsActive)
-                        .ToList());
+            //var assignmentPeriod = CalculateAssignmentPeriod(
+            //        request.WorkDate,
+            //        new TimeOnly(8, 0),
+            //        template.WorkTemplateSegments
+            //            .Where(x => x.IsActive)
+            //            .ToList());
 
-         
+            var assignmentPeriod = CalculateAssignmentPeriod(
+        // Fix: Convert the DateTime to DateOnly
+        DateOnly.FromDateTime(request.WorkDate),
+        new TimeOnly(8, 0),
+        template.WorkTemplateSegments
+            .Where(x => x.IsActive)
+            .ToList());
+
+
 
             if (!assignmentPeriod.Success)
             {
@@ -347,12 +355,12 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
 
                     EndDateTime =
                         segmentPeriod.EndDateTime,
-
+                    
                     GraceBeforeMinutes =
-                        templateSegment.GraceBeforeMinutes,
+                        (int)templateSegment.GraceBeforeMinutes,
 
                     GraceAfterMinutes =
-                        templateSegment.GraceAfterMinutes,
+                        (int)templateSegment.GraceAfterMinutes,
 
                     IsMandatory =
                         templateSegment.IsMandatory,
@@ -643,15 +651,9 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
                 "The segment duration cannot be negative.");
         }
 
-        var segmentStartDateTime =
-            assignmentBaseDateTime.AddMinutes(
-                segment.OffsetMinutes);
+        var segmentStartDateTime = assignmentBaseDateTime.AddMinutes(segment.OffsetMinutes ?? 0);
 
-        var segmentEndDateTime =
-            segment.DurationMinutes.HasValue
-                ? segmentStartDateTime.AddMinutes(
-                    segment.DurationMinutes.Value)
-                : segmentStartDateTime;
+        var segmentEndDateTime = segment.DurationMinutes.HasValue? segmentStartDateTime.AddMinutes(segment.DurationMinutes.Value): segmentStartDateTime;
 
         return DateTimeCalculationResult.Ok(
             segmentStartDateTime,

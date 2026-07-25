@@ -54,6 +54,9 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 ////////////////////////////////////////////////////////////////////////////////
 ///
 
+
+builder.Services.AddScoped<IWorkPlanningService, WorkPlanningService>();
+
 builder.Services.AddScoped<IWorkTemplateService, WorkTemplateService>();
 
 builder.Services.AddScoped<IWorkAssignmentManagementService,WorkAssignmentManagementService>();
