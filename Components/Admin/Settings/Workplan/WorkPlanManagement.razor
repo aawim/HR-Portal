@@ -433,7 +433,7 @@
                                             <div>
                                                 <p class="text-slate-500">Generated</p>
                                                 <p class="mt-1 font-medium text-slate-900">
-                                                    @(selectedPlan?.GeneratedDate?.ToString("dd MMM yyyy HH:mm") ?? "Not generated")
+                                                    @(selectedPlan?.GeneratedDate.ToString("dd MMM yyyy HH:mm") ?? "Not generated")
                                                 </p>
                                             </div>
 
@@ -751,7 +751,8 @@
 </div>
 
 @code {
-    private List<WorkPlanDto> plans = [];
+    // private List<WorkPlanDto> plans = [];
+    private List<WorkPlanListDto> plans = new();
     private List<WorkTemplateLookupDto> templates = [];
     private List<WorkPlanSegmentDto> planSegments = [];
     private List<WorkPlanSegmentDto> previewSegments = [];
@@ -760,8 +761,8 @@
     private List<PlanningProviderLookupDto>planningProviders = [];
 
     private GenerateWorkPlanDto planEditModel = CreateEmptyModel();
-    private WorkPlanDto? selectedPlan;
-
+    // private WorkPlanDto? selectedPlan;
+    private WorkPlanListDto? selectedPlan;
     private string searchText = string.Empty;
     private string employeeSearchText = string.Empty;
 
@@ -781,16 +782,31 @@
     private bool IsExistingPlan =>
         planEditModel.WorkPlanId > 0;
 
-    private IEnumerable<WorkPlanDto> FilteredPlans =>
+    private IEnumerable<WorkPlanListDto> FilteredPlans =>
         string.IsNullOrWhiteSpace(searchText)
             ? plans
-            : plans.Where(x =>
+            : plans.Where(x => 
                 x.IndividualName.Contains(
                     searchText,
                     StringComparison.OrdinalIgnoreCase) ||
                 x.WorkTemplateName.Contains(
                     searchText,
                     StringComparison.OrdinalIgnoreCase));
+
+
+    // private IEnumerable<WorkPlanListDto> FilteredPlans =>
+    //     string.IsNullOrWhiteSpace(searchText)
+    //     ? plans2
+    //     : plans2.Where(x =>
+    //      x.EmployeeName.Contains(
+    //          searchText,
+    //          StringComparison.OrdinalIgnoreCase) ||
+    //      x.WorkTemplateName.Contains(
+    //          searchText,
+    //          StringComparison.OrdinalIgnoreCase));
+
+
+
 
     private IEnumerable<WorkPlanSegmentDto> DisplayedSegments =>
         isPreviewMode
@@ -828,7 +844,7 @@
             // Replace 0 with the required individual filter,
             // or add a service method that loads organisation plans.
             plans = await WorkPlanService.GetWorkPlansAsync(
-                0,
+                // 0,
                 filterFromDate,
                 filterToDate);
         }
@@ -920,17 +936,15 @@
         {
             isSaving = true;
 
-            var result =
-                await WorkPlanService.GenerateWorkPlanAsync(
-                    planEditModel);
+
+            var result = await WorkPlanService.GenerateWorkPlanAsync(planEditModel);
+            showPlanPanel = false;
+            showSegmentPanel = false;
 
             if (!result.Success)
             {
                 return;
             }
-
-            showSegmentPanel = false;
-            showPlanPanel = false;
 
             await LoadPlansAsync();
         }
@@ -1046,7 +1060,7 @@
     }
 
     private static string GetStatusText(
-        WorkPlanDto plan)
+        WorkPlanListDto plan)
     {
         if (plan.IsFinalized)
             return "Finalized";
@@ -1058,7 +1072,7 @@
     }
 
     private static string GetStatusClass(
-        WorkPlanDto plan)
+        WorkPlanListDto plan)
     {
         if (plan.IsFinalized)
         {

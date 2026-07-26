@@ -4,12 +4,12 @@ namespace HRM.WorkPlanning.Abstractions
 {
     public interface IWorkPlanService
     {
-        Task<List<WorkPlanDto>> GetWorkPlansAsync(
-           int individualId,
+        Task<List<WorkPlanListDto>> GetWorkPlansAsync(
+           //int individualId,
            DateTime fromDate,
            DateTime toDate);
 
-        Task<WorkPlanDto?> GetWorkPlanAsync(int workPlanId);
+        Task<WorkPlanListDto?> GetWorkPlanAsync(int workPlanId);
 
         Task<List<WorkPlanEmployeeDto>> SearchEmployeesAsync(string searchText);
 

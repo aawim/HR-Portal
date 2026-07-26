@@ -15,6 +15,7 @@ namespace HRM.WorkPlanning.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _logService;
         private readonly IUserAccessService _userAccessService;
+        public string searchText = string.Empty;
         public WorkPlanService(
             IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService, IUserAccessService userAccessService    )
         {
@@ -468,7 +469,7 @@ namespace HRM.WorkPlanning.Services
         }
 
       
-        public async Task<WorkPlanDto?> GetWorkPlanAsync(int workPlanId)
+        public async Task<WorkPlanListDto?> GetWorkPlanAsync(int workPlanId)
         {
 
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -478,7 +479,7 @@ namespace HRM.WorkPlanning.Services
                 .Where(x =>
                     x.WorkPlanId == workPlanId &&
                     x.IsValid)
-                .Select(x => new WorkPlanDto
+                .Select(x => new WorkPlanListDto
                 {
                     WorkPlanId = x.WorkPlanId,
                     IndividualId = x.IndividualId,
@@ -594,64 +595,109 @@ namespace HRM.WorkPlanning.Services
                 .SingleOrDefaultAsync();
         }
 
-        public async Task<List<WorkPlanDto>> GetWorkPlansAsync(
-             int individualId,
-             DateTime fromDate,
-             DateTime toDate)
+        public async Task<List<WorkPlanListDto>> GetWorkPlansAsync(
+         //int individualId,
+         DateTime fromDate,
+         DateTime toDate)
         {
-            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
 
+            var startFilter =
+                DateOnly.FromDateTime(fromDate.Date);
 
-            DateOnly startFilter = DateOnly.FromDateTime(fromDate);
-            DateOnly endFilter = DateOnly.FromDateTime(toDate);
+            var endFilter =
+                DateOnly.FromDateTime(toDate.Date);
 
+            var query =
+               from wp in db.WorkPlans.AsNoTracking()
 
-            return await db.WorkPlans
-                .AsNoTracking()
-                .Where(x =>
-                    x.IndividualId == individualId &&
-                    x.WorkDate >= fromDate &&
-                    x.WorkDate <= toDate &&
-                    x.IsValid)
-                .OrderBy(x => x.WorkDate)
-                .Select(x => new WorkPlanDto
+               join individual in db.Individuals
+                   on wp.IndividualId equals individual.BusinessEntityId
+
+               join templateItem in db.WorkTemplates
+                   on wp.WorkTemplateId equals templateItem.WorkTemplateId
+                   into templateGroup
+
+               from template in templateGroup.DefaultIfEmpty()
+
+               where wp.IsValid
+
+               select new
+               {
+                   WorkPlan = wp,
+                   Individual = individual,
+                   Template = template
+               };
+
+            if (fromDate != DateTime.MinValue)
+            {
+                //var startDate = DateOnly.FromDateTime(fromDate.Date);
+
+                query = query.Where(x =>
+                    x.WorkPlan.WorkDate >= fromDate);
+            }
+
+            if (toDate != DateTime.MinValue)
+            {
+                //var endDate = DateOnly.FromDateTime(toDate.Date);
+
+                query = query.Where(x =>
+                    x.WorkPlan.WorkDate <= toDate);
+            }
+
+            return await query
+                .OrderByDescending(x => x.WorkPlan.WorkDate)
+                .ThenBy(x => x.Individual.FirstNameEnglish)
+                .ThenBy(x => x.Individual.MiddleNameEnglish)
+                .ThenBy(x => x.Individual.LastNameEnglish)
+                .Select(x => new WorkPlanListDto
                 {
-                    WorkPlanId = x.WorkPlanId,
-                    IndividualId = x.IndividualId,
-                    JobId = x.JobId,
-                    OrganisationBusinessEntityId = x.OrganisationBusinessEntityId,
+                    WorkPlanId = x.WorkPlan.WorkPlanId,
+                    IndividualId = x.WorkPlan.IndividualId,
+                    JobId = x.WorkPlan.JobId,
 
-                    WorkDate =  x.WorkDate,
-                   
+                    EmployeeName =
+                        ((x.Individual.FirstNameEnglish ?? string.Empty) + " " +
+                         (x.Individual.MiddleNameEnglish ?? string.Empty) + " " +
+                         (x.Individual.LastNameEnglish ?? string.Empty))
+                        .Trim(),
 
-                    WorkTemplateId = x.WorkTemplateId,
-                    WorkTemplateName = x.WorkTemplate != null
-                        ? x.WorkTemplate.Name
-                        : string.Empty,
+                    OrganisationBusinessEntityId =
+                        x.WorkPlan.OrganisationBusinessEntityId,
 
-                    GenerationSource = x.GenerationSource,
-                    GeneratedDate = x.GeneratedDate,
+                    PlanningProviderId =
+                        x.WorkPlan.PlanningProviderId,
 
-                    IsGenerated = x.IsGenerated,
-                    IsManual = x.IsManual,
+                    WorkTemplateId =
+                        x.WorkPlan.WorkTemplateId,
 
-                    IsFinalized = x.IsFinalized,
+                    WorkTemplateName =
+                        x.Template != null
+                            ? x.Template.Name
+                            : "Manual Plan",
 
-                    FinalizedDate = x.FinalizedDate,
+                    WorkDate =
+                        x.WorkPlan.WorkDate,
 
+                    IsManual =
+                        x.WorkPlan.IsManual,
 
-                    PlanGuid = x.PlanGuid,
-                    Version = x.Version,
+                    IsGenerated =
+                        x.WorkPlan.IsGenerated,
 
-                    Remarks = x.Remarks,
+                    IsFinalized =
+                        x.WorkPlan.IsFinalized,
 
-                    IsValid = x.IsValid
+                    Remarks =
+                        x.WorkPlan.Remarks,
+
+                    GeneratedDate =
+                        x.WorkPlan.GeneratedDate
                 })
                 .ToListAsync();
         }
-
-        public async Task<List<WorkTemplateLookupDto>>
-      GetActiveTemplatesAsync()
+        public async Task<List<WorkTemplateLookupDto>>GetActiveTemplatesAsync()
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
@@ -698,5 +744,6 @@ namespace HRM.WorkPlanning.Services
                 })
                 .ToListAsync();
         }
+ 
     }
 }
