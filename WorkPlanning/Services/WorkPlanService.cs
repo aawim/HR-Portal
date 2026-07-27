@@ -128,7 +128,6 @@ namespace HRM.WorkPlanning.Services
             try
             {
 
-
                 var userContext = await _userAccessService.GetContextAsync();
 
                 if (userContext == null || userContext.UserId <= 0)
@@ -138,14 +137,11 @@ namespace HRM.WorkPlanning.Services
                 }
 
 
-
-
                 if (!request.PlanningProviderId.HasValue)
                 {
                     throw new InvalidOperationException(
                         "Planning provider is required.");
                 }
-
 
 
                 var workDate = request.WorkDate.Date;
@@ -720,8 +716,6 @@ namespace HRM.WorkPlanning.Services
                 .ToListAsync();
         }
 
-
-
         public async Task<List<PlanningProviderLookupDto>>GetPlanningProvidersAsync()
         {
             await using var db =
@@ -744,6 +738,8 @@ namespace HRM.WorkPlanning.Services
                 })
                 .ToListAsync();
         }
+
+
  
     }
 }

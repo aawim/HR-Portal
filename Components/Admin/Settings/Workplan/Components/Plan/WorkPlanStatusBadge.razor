@@ -1,0 +1,42 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<span class="@StatusClass">
+    @StatusText
+</span>
+
+@code {
+    [Parameter, EditorRequired]
+    public WorkPlanListDto Plan { get; set; } = null!;
+
+    private string StatusText
+    {
+        get
+        {
+            if (Plan.IsFinalized)
+                return "Finalized";
+
+            if (Plan.IsGenerated)
+                return "Generated";
+
+            return "Draft";
+        }
+    }
+
+    private string StatusClass
+    {
+        get
+        {
+            if (Plan.IsFinalized)
+            {
+                return "rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700";
+            }
+
+            if (Plan.IsGenerated)
+            {
+                return "rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700";
+            }
+
+            return "rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600";
+        }
+    }
+}

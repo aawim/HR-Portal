@@ -1,0 +1,131 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+
+<div class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+
+    <div class="grid grid-cols-1 gap-4 md:grid-cols-4">
+
+        <div class="md:col-span-2">
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Search
+            </label>
+
+            <input type="text"
+                   value="@SearchText"
+                   @oninput="HandleSearchInputAsync"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none transition focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                   placeholder="Search employee or template..." />
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                From date
+            </label>
+
+            <InputDate TValue="DateTime"
+                       Value="@FromDate"
+                       ValueChanged="@HandleFromDateChangedAsync"
+                       ValueExpression="@(() => FromDate)"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                To date
+            </label>
+
+            <InputDate TValue="DateTime"
+                       Value="@ToDate"
+                       ValueChanged="@HandleToDateChangedAsync"
+                       ValueExpression="@(() => ToDate)"
+                       class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
+
+        </div>
+
+    </div>
+
+    <div class="mt-4 flex justify-end gap-2">
+
+        <button type="button"
+                class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                @onclick="HandleClearAsync">
+            Clear
+        </button>
+
+        <button type="button"
+                class="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800"
+                @onclick="HandleSearchAsync">
+            Search
+        </button>
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public string SearchText { get; set; } = string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchTextChanged { get; set; }
+
+    [Parameter]
+    public DateTime FromDate { get; set; }
+
+    [Parameter]
+    public EventCallback<DateTime> FromDateChanged { get; set; }
+
+    [Parameter]
+    public DateTime ToDate { get; set; }
+
+    [Parameter]
+    public EventCallback<DateTime> ToDateChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnSearch { get; set; }
+
+    [Parameter]
+    public EventCallback OnClear { get; set; }
+
+    private async Task HandleSearchInputAsync(
+        ChangeEventArgs args)
+    {
+        var value =
+            args.Value?.ToString() ??
+            string.Empty;
+
+        await SearchTextChanged.InvokeAsync(value);
+    }
+
+    private async Task HandleFromDateChangedAsync(
+        DateTime value)
+    {
+        await FromDateChanged.InvokeAsync(value);
+    }
+
+    private async Task HandleToDateChangedAsync(
+        DateTime value)
+    {
+        await ToDateChanged.InvokeAsync(value);
+    }
+
+    private async Task HandleSearchAsync()
+    {
+        if (OnSearch.HasDelegate)
+        {
+            await OnSearch.InvokeAsync();
+        }
+    }
+
+    private async Task HandleClearAsync()
+    {
+        if (OnClear.HasDelegate)
+        {
+            await OnClear.InvokeAsync();
+        }
+    }
+}

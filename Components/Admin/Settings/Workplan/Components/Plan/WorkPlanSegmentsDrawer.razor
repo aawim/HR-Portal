@@ -1,0 +1,304 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-[60] bg-slate-900/20"
+         @onclick="OnClose">
+    </div>
+
+    <aside class="fixed inset-y-0 right-0 z-[70] flex w-full max-w-lg flex-col bg-white shadow-2xl">
+
+        <!-- Header -->
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+
+            <div>
+                <h2 class="text-lg font-semibold text-slate-900">
+                    @(IsPreviewMode
+                        ? "Plan Preview"
+                        : "Plan Segments")
+                </h2>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    @(IsPreviewMode
+                        ? "Review the generated times before saving."
+                        : string.IsNullOrWhiteSpace(TemplateName)
+                        ? "Generated work plan segments."
+                        : TemplateName)
+                </p>
+            </div>
+
+            <button type="button"
+                    class="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-slate-500 hover:bg-slate-100"
+                    @onclick="HandleCloseAsync">
+                ×
+            </button>
+
+        </div>
+
+        <!-- Content -->
+        <div class="flex-1 overflow-y-auto p-6">
+
+            @if (IsLoading)
+            {
+                <div class="flex min-h-64 items-center justify-center text-sm text-slate-500">
+                    Loading segments...
+                </div>
+            }
+            else if (!OrderedSegments.Any())
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                    No segments available.
+                </div>
+            }
+            else
+            {
+                <div class="space-y-4">
+
+                    @foreach (var segment in OrderedSegments)
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-white p-4">
+
+                            <div class="flex items-start justify-between gap-4">
+
+                                <div class="flex min-w-0 items-start gap-3">
+
+                                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-900 text-xs font-semibold text-white">
+                                        @segment.SequenceNumber
+                                    </div>
+
+                                    <div class="min-w-0">
+
+                                        <div class="flex flex-wrap items-center gap-2">
+
+                                            <h3 class="font-medium text-slate-900">
+                                                @segment.Name
+                                            </h3>
+
+                                            @if (segment.IsMandatory)
+                                            {
+                                                <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
+                                                    Mandatory
+                                                </span>
+                                            }
+
+                                            @if (segment.IsPaid)
+                                            {
+                                                <span class="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                                                    Paid
+                                                </span>
+                                            }
+
+                                        </div>
+
+                                        <p class="mt-1 text-sm text-slate-500">
+                                            @segment.WorkSegmentTypeName
+                                        </p>
+
+                                        @if (!string.IsNullOrWhiteSpace(segment.Description))
+                                        {
+                                            <p class="mt-2 text-sm text-slate-600">
+                                                @segment.Description
+                                            </p>
+                                        }
+
+                                    </div>
+
+                                </div>
+
+                                <div class="shrink-0 text-right">
+
+                                    <p class="font-semibold text-slate-900">
+                                        @segment.StartDateTime.ToString("HH:mm")
+                                        –
+                                        @segment.EndDateTime.ToString("HH:mm")
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        @GetDateText(segment)
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+                            <div class="mt-4 grid grid-cols-1 gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500 sm:grid-cols-2">
+
+                                <span>
+                                    Grace before:
+                                    <strong class="text-slate-700">
+                                        @segment.GraceBeforeMinutes min
+                                    </strong>
+                                </span>
+
+                                <span>
+                                    Grace after:
+                                    <strong class="text-slate-700">
+                                        @segment.GraceAfterMinutes min
+                                    </strong>
+                                </span>
+
+                                <span>
+                                    Attendance:
+                                    <strong class="text-slate-700">
+                                        @(segment.RequiresAttendance
+                                            ? "Required"
+                                            : "Not required")
+                                    </strong>
+                                </span>
+
+                                <span>
+                                    Duration:
+                                    <strong class="text-slate-700">
+                                        @GetDurationText(segment)
+                                    </strong>
+                                </span>
+
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
+
+        <!-- Preview footer -->
+        @if (IsPreviewMode)
+        {
+            <div class="flex justify-end gap-3 border-t border-slate-200 bg-white px-6 py-4">
+
+                <button type="button"
+                        disabled="@IsSaving"
+                        class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        @onclick="HandleCloseAsync">
+                    Back
+                </button>
+
+                <button type="button"
+                        disabled="@IsSaving"
+                        class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+                        @onclick="HandleGenerateAsync">
+
+                    @(IsSaving
+                        ? "Generating..."
+                        : "Generate Plan")
+
+                </button>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            </div>
+        }
+
+    </aside>
+}
+
+@code {
+
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsPreviewMode { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public string? TemplateName { get; set; }
+
+    [Parameter]
+    public IEnumerable<WorkPlanSegmentDto> Segments { get; set; } =
+        Enumerable.Empty<WorkPlanSegmentDto>();
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnGenerate { get; set; }
+
+    private IEnumerable<WorkPlanSegmentDto> OrderedSegments =>
+        Segments?
+            .OrderBy(x => x.SequenceNumber)
+        ?? Enumerable.Empty<WorkPlanSegmentDto>();
+
+    private static string GetDurationText(
+        WorkPlanSegmentDto segment)
+    {
+        var duration =
+            segment.EndDateTime -
+            segment.StartDateTime;
+
+        if (duration.TotalMinutes <= 0)
+            return "0m";
+
+        var totalHours =
+            (int)duration.TotalHours;
+
+        var minutes =
+            duration.Minutes;
+
+        if (totalHours > 0 && minutes > 0)
+            return $"{totalHours}h {minutes}m";
+
+        if (totalHours > 0)
+            return $"{totalHours}h";
+
+        return $"{minutes}m";
+    }
+
+    private async Task HandleCloseAsync()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task HandleGenerateAsync()
+    {
+        if (OnGenerate.HasDelegate)
+        {
+            await OnGenerate.InvokeAsync();
+        }
+    }
+
+
+
+
+    private static string GetDateText(
+        WorkPlanSegmentDto segment)
+    {
+        var startDate =
+            segment.StartDateTime.Date;
+
+        var endDate =
+            segment.EndDateTime.Date;
+
+        if (startDate == endDate)
+        {
+            return startDate.ToString(
+                "dd MMM yyyy");
+        }
+
+        return
+            $"{startDate:dd MMM yyyy} – {endDate:dd MMM yyyy}";
+    }
+}

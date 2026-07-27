@@ -1,0 +1,152 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using HRM.DTOs.WorkPlanning
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-40 bg-slate-900/30"
+         @onclick="OnClose">
+    </div>
+
+    <aside class="fixed inset-y-0 right-0 z-50 flex w-full max-w-2xl flex-col bg-white shadow-2xl">
+
+        <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+
+            <div>
+
+                <h2 class="text-lg font-semibold text-slate-900">
+                    @(IsExistingPlan
+                        ? "Work Plan Details"
+                        : "Generate Work Plan")
+                </h2>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    @(IsExistingPlan
+                        ? $"Plan #{Model.WorkPlanId}"
+                        : "Select the employee, template and work date.")
+                </p>
+
+            </div>
+
+            <button type="button"
+                    class="flex h-9 w-9 items-center justify-center rounded-lg text-xl text-slate-500 hover:bg-slate-100"
+                    @onclick="OnClose">
+                ×
+            </button>
+
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6">
+
+            @if (IsLoading)
+            {
+                <div class="flex min-h-64 items-center justify-center text-sm text-slate-500">
+                    Loading work plan...
+                </div>
+            }
+            else
+            {
+                <EditForm Model="@Model"
+                          OnValidSubmit="OnGenerate">
+
+                    <DataAnnotationsValidator />
+
+                    <ValidationSummary class="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" />
+
+                    <div class="space-y-6">
+
+                        <WorkPlanForm Model="@Model"
+                                      Templates="@Templates"
+                                      PlanningProviders="@PlanningProviders"
+                                      EmployeeDisplayName="@EmployeeDisplayName"
+                                      IsExistingPlan="@IsExistingPlan"
+                                      IsFinalized="@(SelectedPlan?.IsFinalized == true)"
+                                      OnEmployeeSelected="@OnEmployeeSelected" />
+
+                        @if (IsExistingPlan)
+                        {
+                            <WorkPlanStatusCard Plan="@SelectedPlan" />
+
+                            <WorkPlanSegmentsSummary Segments="@Segments"
+                                                     OnViewAll="@OnViewSegments" />
+                        }
+
+                    </div>
+
+                    <div class="sticky bottom-0 mt-8 flex justify-end gap-3 border-t border-slate-200 bg-white pt-4">
+
+                        <button type="button"
+                                class="rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                                @onclick="OnClose">
+                            Close
+                        </button>
+
+                        @if (!IsExistingPlan)
+                        {
+                            <button type="submit"
+                                    disabled="@IsSaving"
+                                    class="rounded-lg bg-slate-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">
+
+                                @(IsSaving
+                                    ? "Generating..."
+                                    : "Generate Plan")
+
+                            </button>
+                        }
+
+                    </div>
+
+                </EditForm>
+            }
+
+        </div>
+
+    </aside>
+}
+
+@code {
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter, EditorRequired]
+    public GenerateWorkPlanDto Model { get; set; } = null!;
+
+    [Parameter]
+    public WorkPlanListDto? SelectedPlan { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<WorkTemplateLookupDto> Templates { get; set; } =
+        Array.Empty<WorkTemplateLookupDto>();
+
+    [Parameter]
+    public IReadOnlyList<PlanningProviderLookupDto> PlanningProviders { get; set; } =
+        Array.Empty<PlanningProviderLookupDto>();
+
+    [Parameter]
+    public IReadOnlyList<WorkPlanSegmentDto> Segments { get; set; } =
+        Array.Empty<WorkPlanSegmentDto>();
+
+    [Parameter]
+    public string EmployeeDisplayName { get; set; } =
+        string.Empty;
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnGenerate { get; set; }
+
+    [Parameter]
+    public EventCallback OnViewSegments { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkPlanEmployeeDto> OnEmployeeSelected { get; set; }
+
+    private bool IsExistingPlan =>
+        Model.WorkPlanId > 0;
+}

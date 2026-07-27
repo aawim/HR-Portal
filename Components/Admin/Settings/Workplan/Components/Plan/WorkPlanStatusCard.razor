@@ -1,0 +1,68 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+@if (Plan != null)
+{
+    <section class="border-t border-slate-200 pt-6">
+
+        <div class="mb-4 flex items-center justify-between">
+
+            <div>
+
+                <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                    Plan status
+                </h3>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    Generation and finalization information.
+                </p>
+
+            </div>
+
+            <WorkPlanStatusBadge Plan="@Plan" />
+
+        </div>
+
+        <div class="grid grid-cols-2 gap-4 rounded-xl bg-slate-50 p-4 text-sm">
+
+            <div>
+                <p class="text-slate-500">Version</p>
+                <p class="mt-1 font-medium text-slate-900">
+                    @Plan.Version
+                </p>
+            </div>
+
+            <div>
+                <p class="text-slate-500">Generated</p>
+                <p class="mt-1 font-medium text-slate-900">
+                    @GeneratedDateText
+                </p>
+            </div>
+
+            <div>
+                <p class="text-slate-500">Source</p>
+                <p class="mt-1 font-medium text-slate-900">
+                    @Plan.GenerationSource
+                </p>
+            </div>
+
+            <div>
+                <p class="text-slate-500">Finalized</p>
+                <p class="mt-1 font-medium text-slate-900">
+                    @(Plan.IsFinalized ? "Yes" : "No")
+                </p>
+            </div>
+
+        </div>
+
+    </section>
+}
+
+@code {
+    [Parameter]
+    public WorkPlanListDto? Plan { get; set; }
+
+    private string GeneratedDateText =>
+        Plan?.GeneratedDate.ToString(
+            "dd MMM yyyy HH:mm")
+        ?? "Not generated";
+}

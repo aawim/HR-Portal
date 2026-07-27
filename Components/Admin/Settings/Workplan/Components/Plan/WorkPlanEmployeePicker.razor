@@ -1,0 +1,135 @@
+﻿@using HRM.DTOs.WorkPlanning
+@using HRM.WorkPlanning.Abstractions
+
+@inject IWorkPlanService WorkPlanService
+
+<div>
+
+    <label class="mb-1.5 block text-sm font-medium text-slate-700">
+        Employee
+    </label>
+
+    @if (IsReadOnly)
+    {
+        <div class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+
+            <p class="text-sm font-medium text-slate-900">
+                @DisplayName
+            </p>
+
+            <p class="mt-0.5 text-xs text-slate-500">
+                Employee assigned to this work plan
+            </p>
+
+        </div>
+    }
+    else
+    {
+        <div class="relative">
+
+            <input type="text"
+                   value="@searchText"
+                   @oninput="OnSearchChanged"
+                   class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                   placeholder="Search employee..." />
+
+            @if (isSearching)
+            {
+                <div class="absolute z-20 mt-1 w-full rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-500 shadow-lg">
+                    Searching...
+                </div>
+            }
+            else if (showResults)
+            {
+                <div class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg">
+
+                    @foreach (var employee in results)
+                    {
+                        <button type="button"
+                                class="block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50"
+                                @onclick="() => SelectEmployee(employee)">
+
+                            <p class="font-medium text-slate-900">
+                                @employee.Name
+                            </p>
+
+                            <p class="mt-0.5 text-xs text-slate-500">
+                                @employee.Description
+                            </p>
+
+                        </button>
+                    }
+
+                </div>
+            }
+
+        </div>
+    }
+
+</div>
+
+@code {
+    private readonly List<WorkPlanEmployeeDto> results = [];
+
+    private string searchText = string.Empty;
+
+    private bool showResults;
+    private bool isSearching;
+
+    [Parameter]
+    public string DisplayName { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsReadOnly { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkPlanEmployeeDto> OnSelected { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (IsReadOnly)
+            searchText = DisplayName;
+    }
+
+    private async Task OnSearchChanged(ChangeEventArgs args)
+    {
+        searchText =
+            args.Value?.ToString()?.Trim() ??
+            string.Empty;
+
+        results.Clear();
+
+        if (searchText.Length < 2)
+        {
+            showResults = false;
+            return;
+        }
+
+        try
+        {
+            isSearching = true;
+
+            var employees =
+                await WorkPlanService.SearchEmployeesAsync(
+                    searchText);
+
+            results.AddRange(employees);
+
+            showResults =
+                results.Count > 0;
+        }
+        finally
+        {
+            isSearching = false;
+        }
+    }
+
+    private async Task SelectEmployee(
+        WorkPlanEmployeeDto employee)
+    {
+        searchText = employee.Name;
+        showResults = false;
+
+        await OnSelected.InvokeAsync(employee);
+    }
+}

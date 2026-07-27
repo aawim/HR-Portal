@@ -47,24 +47,6 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<WorkAssignmentTransfer>WorkAssignmentTransfers{ get; set; }
 
-   
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
     public virtual DbSet<AdditionDeductionTypeDependencyTimePeriodAmount> AdditionDeductionTypeDependencyTimePeriodAmounts { get; set; }
 
     public virtual DbSet<AdditionOrDeductionType> AdditionOrDeductionTypes { get; set; }
@@ -6922,6 +6904,35 @@ public partial class HrmTeContext : DbContext
         });
 
 
+
+        modelBuilder.Entity<JobWorkTemplateAssignment>(entity =>
+        {
+            entity.HasKey(x =>
+                x.JobWorkTemplateAssignmentId);
+
+            entity.Property(x => x.JobWorkTemplateAssignmentId)
+                .HasColumnName("JobWorkTemplateAssignmentID");
+
+            entity.Property(x => x.JobId)
+                .HasColumnName("JobID");
+
+            entity.Property(x => x.WorkTemplateId)
+                .HasColumnName("WorkTemplateID");
+
+            entity.HasOne(x => x.Job)
+                .WithMany()
+                .HasForeignKey(x => x.JobId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.WorkTemplate)
+                .WithMany()
+                .HasForeignKey(x => x.WorkTemplateId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+
+
+
         ConfigurePlanningProvider(modelBuilder);
         ConfigureOrganisationWorkPlanningSetting(modelBuilder);
         ConfigureWorkTemplateType(modelBuilder);
@@ -7274,8 +7285,7 @@ public partial class HrmTeContext : DbContext
         });
     }
 
-    private static void ConfigureWorkTemplateSegment(
-      ModelBuilder modelBuilder)
+    private static void ConfigureWorkTemplateSegment(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<WorkTemplateSegment>(entity =>
         {

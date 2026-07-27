@@ -1,0 +1,163 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using HRM.DTOs.WorkPlanning
+@using HRM.Enum
+
+<div class="space-y-6">
+
+    <section>
+
+        <div class="mb-4">
+
+            <h3 class="text-sm font-semibold uppercase tracking-wide text-slate-900">
+                Plan details
+            </h3>
+
+            <p class="mt-1 text-sm text-slate-500">
+                Define who the plan applies to and which template should be used.
+            </p>
+
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+            <div class="sm:col-span-2">
+
+                <WorkPlanEmployeePicker DisplayName="@EmployeeDisplayName"
+                                        IsReadOnly="@IsExistingPlan"
+                                        OnSelected="@OnEmployeeSelected" />
+
+                <ValidationMessage For="@(() => Model.IndividualId)"
+                                   class="mt-1 text-xs text-red-600" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Planning provider
+                </label>
+
+                <InputSelect @bind-Value="Model.PlanningProviderId"
+                             disabled="@IsExistingPlan"
+                             class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+
+                    <option value="">Select planning provider</option>
+
+                    @foreach (var provider in PlanningProviders)
+                    {
+                        <option value="@provider.PlanningProviderId">
+                            @provider.Name
+                        </option>
+                    }
+
+                </InputSelect>
+
+                <ValidationMessage For="@(() => Model.PlanningProviderId)"
+                                   class="mt-1 text-xs text-red-600" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Work template
+                </label>
+
+                <InputSelect @bind-Value="Model.WorkTemplateId"
+                             disabled="@IsExistingPlan"
+                             class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+
+                    <option value="0">Select template</option>
+
+                    @foreach (var template in Templates)
+                    {
+                        <option value="@template.WorkTemplateId">
+                            @template.Name
+                        </option>
+                    }
+
+                </InputSelect>
+
+                <ValidationMessage For="@(() => Model.WorkTemplateId)"
+                                   class="mt-1 text-xs text-red-600" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Work date
+                </label>
+
+                <InputDate @bind-Value="Model.WorkDate"
+                           disabled="@IsExistingPlan"
+                           class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Generation source
+                </label>
+
+                <InputSelect @bind-Value="Model.WorkPlanGenerationSource"
+                             disabled="@IsExistingPlan"
+                             class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200">
+
+                    <option value="@WorkPlanGenerationSource.Template">
+                        Template
+                    </option>
+
+                    <option value="@WorkPlanGenerationSource.Manual">
+                        Manual
+                    </option>
+
+                </InputSelect>
+
+            </div>
+
+            <div class="sm:col-span-2">
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Remarks
+                </label>
+
+                <InputTextArea @bind-Value="Model.Remarks"
+                               rows="3"
+                               disabled="@IsFinalized"
+                               class="w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+                               placeholder="Optional remarks..." />
+
+            </div>
+
+        </div>
+
+    </section>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public GenerateWorkPlanDto Model { get; set; } = null!;
+
+    [Parameter]
+    public IReadOnlyList<WorkTemplateLookupDto> Templates { get; set; } =
+        Array.Empty<WorkTemplateLookupDto>();
+
+    [Parameter]
+    public IReadOnlyList<PlanningProviderLookupDto> PlanningProviders { get; set; } =
+        Array.Empty<PlanningProviderLookupDto>();
+
+    [Parameter]
+    public string EmployeeDisplayName { get; set; } = string.Empty;
+
+    [Parameter]
+    public bool IsExistingPlan { get; set; }
+
+    [Parameter]
+    public bool IsFinalized { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkPlanEmployeeDto> OnEmployeeSelected { get; set; }
+}
