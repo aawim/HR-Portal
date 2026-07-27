@@ -1,0 +1,248 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using HRM.DTOs.WorkPlanning
+
+
+
+<section>
+
+    <div class="mb-4">
+
+        <h3 class="text-sm font-semibold text-slate-900">
+            General Details
+        </h3>
+
+        <p class="mt-1 text-xs text-slate-500">
+            Define the name, purpose, and category of the template.
+        </p>
+
+    </div>
+
+    <div class="space-y-4">
+
+        <!-- Template Name -->
+        <div>
+
+            <label class="mb-2 block text-sm font-medium text-slate-700">
+                Template Name
+                <span class="text-red-500">*</span>
+            </label>
+
+            <InputText @bind-Value="Model.Name"
+                       disabled="@IsDisabled"
+                       placeholder="For example, Morning Shift"
+                       class="w-full rounded-lg border border-slate-300
+                              px-3 py-2 text-sm outline-none transition
+                              focus:border-blue-500 focus:ring-2
+                              focus:ring-blue-100
+                              disabled:cursor-not-allowed
+                              disabled:bg-slate-100
+                              disabled:text-slate-500" />
+
+            <ValidationMessage For="@(() => Model.Name)"
+                               class="mt-1 block text-xs text-red-600" />
+
+        </div>
+
+        <!-- Description -->
+        <div>
+
+            <label class="mb-2 block text-sm font-medium text-slate-700">
+                Description
+            </label>
+
+            <InputTextArea @bind-Value="Model.Description"
+                           disabled="@IsDisabled"
+                           placeholder="Describe the purpose of this template..."
+                           class="min-h-[110px] w-full rounded-lg
+                                  border border-slate-300 px-3 py-2
+                                  text-sm outline-none transition
+                                  focus:border-blue-500 focus:ring-2
+                                  focus:ring-blue-100
+                                  disabled:cursor-not-allowed
+                                  disabled:bg-slate-100
+                                  disabled:text-slate-500" />
+
+        </div>
+
+        <!-- Template Type -->
+        <InputSelect TValue="int"
+                     @bind-Value="Model.WorkTemplateTypeId"
+                     @bind-Value:after="HandleTemplateTypeChangedAsync"
+                     disabled="@IsDisabled"
+                     class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm
+                    outline-none transition focus:border-blue-500 focus:ring-2
+                    focus:ring-blue-100 disabled:cursor-not-allowed
+                    disabled:bg-slate-100 disabled:text-slate-500">
+
+            <option value="0">
+                Select template type
+            </option>
+
+            @foreach (var type in TemplateTypes)
+            {
+                <option value="@type.WorkTemplateTypeId">
+                    @type.Name
+                </option>
+            }
+
+        </InputSelect>
+
+        @if (SelectedTemplateType is not null)
+        {
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                <p class="text-sm font-medium text-slate-800">
+                    @SelectedTemplateType.Name
+                </p>
+
+                @if (!string.IsNullOrWhiteSpace(SelectedTemplateType.Description))
+                {
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                        @SelectedTemplateType.Description
+                    </p>
+                }
+            </div>
+        }
+
+    </div>
+
+
+        <!-- Template Type Description -->
+        <div class="rounded-lg border border-slate-200 bg-slate-50 p-3">
+
+            <div class="flex items-start gap-3">
+
+                <div class="flex h-9 w-9 shrink-0 items-center
+                            justify-center rounded-lg bg-white text-xl
+                            shadow-sm">
+                    @GetTemplateIcon(Model.TemplateType)
+                </div>
+
+                <div>
+
+                    <p class="text-sm font-medium text-slate-800">
+                        @GetTemplateTypeName(Model.TemplateType)
+                    </p>
+
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                        @GetTemplateTypeDescription(Model.TemplateType)
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+
+   
+
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public UpdateWorkTemplateDto Model { get; set; } = null!;
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback<int> TemplateTypeChanged { get; set; }
+
+
+    [Parameter]
+    public IReadOnlyList<WorkTemplateTypeDto> TemplateTypes { get; set; } =
+          Array.Empty<WorkTemplateTypeDto>();
+
+
+    private WorkTemplateTypeDto? SelectedTemplateType =>
+         TemplateTypes.FirstOrDefault(
+             x => x.WorkTemplateTypeId == Model.WorkTemplateTypeId);
+
+
+
+    private async Task HandleTemplateTypeChangedAsync()
+    {
+        var selectedType = TemplateTypes.FirstOrDefault(
+            x => x.WorkTemplateTypeId == Model.WorkTemplateTypeId);
+
+        Model.TemplateType = selectedType?.Name ?? string.Empty;
+
+        if (TemplateTypeChanged.HasDelegate)
+        {
+            await TemplateTypeChanged.InvokeAsync(
+                Model.WorkTemplateTypeId);
+        }
+    }
+
+
+
+
+
+
+    private void SetWorkTemplateTypeId(
+        string? templateType)
+    {
+        Model.WorkTemplateTypeId =
+            templateType switch
+            {
+                "RegularShift" => 1,
+                "TemporaryDuty" => 4,
+                "SpecialEvent" => 5,
+                "OnCall" => 6,
+                "Training" => 7,
+                _ => 0
+            };
+    }
+
+    private static string GetTemplateIcon(
+        string? templateType)
+    {
+        return templateType switch
+        {
+            "RegularShift" => "🕘",
+            "TemporaryDuty" => "🛠️",
+            "SpecialEvent" => "🚀",
+            "OnCall" => "📞",
+            "Training" => "🎓",
+            _ => "📋"
+        };
+    }
+
+    private static string GetTemplateTypeName(
+        string? templateType)
+    {
+        return templateType switch
+        {
+            "RegularShift" => "Regular Shift",
+            "TemporaryDuty" => "Temporary Duty",
+            "SpecialEvent" => "Special Event",
+            "OnCall" => "On-call Duty",
+            "Training" => "Training",
+            _ => "Other"
+        };
+    }
+
+    private static string GetTemplateTypeDescription(
+        string? templateType)
+    {
+        return templateType switch
+        {
+            "RegularShift" =>
+                "A standard recurring work shift with fixed or flexible start and end times.",
+
+            "TemporaryDuty" =>
+                "A temporary assignment that may run alongside the employee's normal schedule.",
+
+            "SpecialEvent" =>
+                "A schedule used for events, launches, ceremonies, or other special duties.",
+
+            "OnCall" =>
+                "A flexible availability period activated when the employee is required.",
+
+            "Training" =>
+                "A work schedule used for training sessions, workshops, or professional development.",
+
+            _ =>
+                "Select the category that best describes how this template will be used."
+        };
+    }
+}

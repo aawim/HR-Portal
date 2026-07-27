@@ -44,23 +44,15 @@ namespace HRM.DTOs.WorkPlanning
 
         public int Version { get; set; }
 
- 
-
         public string IndividualName { get; set; } = string.Empty;
 
- 
-
         public string WorkTemplateName { get; set; } = string.Empty;
-
-   
-
+  
         public DateTime? FinalizedDate { get; set; }
 
         public Guid PlanGuid { get; set; }
 
  
-
-
         public List<WorkPlanSegmentDto> Segments { get; set; } = [];
 
     }

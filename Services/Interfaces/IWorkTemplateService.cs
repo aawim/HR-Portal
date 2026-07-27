@@ -6,14 +6,13 @@ namespace HRM.Services.Interfaces
 {
     public interface IWorkTemplateService
     {
-        Task<List<WorkTemplateDto>> GetAllAsync(
-       bool includeInactive = true);
+        Task<List<WorkTemplateDto>> GetAllAsync(bool includeInactive = true);
 
         Task<WorkTemplateDto?> GetByIdAsync(
             int workTemplateId);
 
-        Task<ServiceResult> CreateAsync(
-            CreateWorkTemplateDto dto);
+        Task<List<WorkTemplateTypeDto>> GetAllTemplateTypesAsync();
+        Task<ServiceResult> CreateAsync(CreateWorkTemplateDto dto);
 
         Task<ServiceResult> UpdateAsync(UpdateWorkTemplateDto dto);
 

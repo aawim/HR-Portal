@@ -1,0 +1,258 @@
+﻿@using HRM.DTOs.WorkPlanning
+@using HRM.Components.Shared
+
+<section>
+
+    <div class="mb-4">
+
+        <h3 class="text-sm font-semibold text-slate-900">
+            Attendance and Validation
+        </h3>
+
+        <p class="mt-1 text-xs text-slate-500">
+            These settings become the default rules for generated work plans
+            and employee assignments.
+        </p>
+
+    </div>
+
+    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+        <ToggleOption Title="Attendance Required"
+                      Description="Employees must record attendance for this schedule."
+                      Value="@Model.RequiresAttendance"
+                      ValueChanged="@HandleAttendanceChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
+        <ToggleOption Title="Checkout Required"
+                      Description="Employees must complete checkout before the work period ends."
+                      Value="@Model.RequiresCheckOut"
+                      ValueChanged="@HandleCheckoutChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
+        <ToggleOption Title="Location Validation"
+                      Description="Validate the employee's work location during attendance."
+                      Value="@Model.RequiresLocationValidation"
+                      ValueChanged="@HandleLocationValidationChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
+        <ToggleOption Title="Device Validation"
+                      Description="Validate the employee's registered device during attendance."
+                      Value="@Model.RequiresDeviceValidation"
+                      ValueChanged="@HandleDeviceValidationChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
+        <ToggleOption Title="Allow Schedule Overlap"
+                      Description="Allow this template to overlap another work assignment."
+                      Value="@Model.AllowsOverlap"
+                      ValueChanged="@HandleOverlapChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
+        <ToggleOption Title="Active Template"
+                      Description="Make this template available for planning and assignment."
+                      Value="@Model.IsActive"
+                      ValueChanged="@HandleActiveChangedAsync"
+                      IsDisabled="@IsDisabled" 
+                      />
+
+    </div>
+
+    @if (!Model.RequiresAttendance)
+    {
+        <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+
+            <div class="flex items-start gap-3">
+
+                <div class="mt-0.5 shrink-0 text-amber-600">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M12 9v3.75m9-.75a9 9 0 11-18 0
+                                 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+
+                    </svg>
+
+                </div>
+
+                <div>
+
+                    <p class="text-sm font-medium text-amber-800">
+                        Attendance is disabled
+                    </p>
+
+                    <p class="mt-1 text-xs leading-5 text-amber-700">
+                        Checkout, location validation, and device validation
+                        will not normally apply when attendance is not required.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+    @if (!Model.IsActive)
+    {
+        <div class="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+
+            <div class="flex items-start gap-3">
+
+                <div class="mt-0.5 shrink-0 text-slate-500">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0
+                                 9 9 0 0118 0z" />
+
+                    </svg>
+
+                </div>
+
+                <div>
+
+                    <p class="text-sm font-medium text-slate-700">
+                        Inactive template
+                    </p>
+
+                    <p class="mt-1 text-xs leading-5 text-slate-500">
+                        This template will remain saved but will not be shown
+                        in normal planning selections.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public UpdateWorkTemplateDto Model { get; set; } = null!;
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> AttendanceChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> CheckoutChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> LocationValidationChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> DeviceValidationChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> OverlapChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> ActiveChanged { get; set; }
+
+    private async Task HandleAttendanceChangedAsync(
+        bool value)
+    {
+        Model.RequiresAttendance = value;
+
+        if (!value)
+        {
+            Model.RequiresCheckOut = false;
+            Model.RequiresLocationValidation = false;
+            Model.RequiresDeviceValidation = false;
+        }
+
+        if (AttendanceChanged.HasDelegate)
+        {
+            await AttendanceChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleCheckoutChangedAsync(
+        bool value)
+    {
+        Model.RequiresCheckOut = value;
+
+        if (value)
+        {
+            Model.RequiresAttendance = true;
+        }
+
+        if (CheckoutChanged.HasDelegate)
+        {
+            await CheckoutChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleLocationValidationChangedAsync(
+        bool value)
+    {
+        Model.RequiresLocationValidation = value;
+
+        if (value)
+        {
+            Model.RequiresAttendance = true;
+        }
+
+        if (LocationValidationChanged.HasDelegate)
+        {
+            await LocationValidationChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleDeviceValidationChangedAsync(
+        bool value)
+    {
+        Model.RequiresDeviceValidation = value;
+
+        if (value)
+        {
+            Model.RequiresAttendance = true;
+        }
+
+        if (DeviceValidationChanged.HasDelegate)
+        {
+            await DeviceValidationChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleOverlapChangedAsync(
+        bool value)
+    {
+        Model.AllowsOverlap = value;
+
+        if (OverlapChanged.HasDelegate)
+        {
+            await OverlapChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleActiveChangedAsync(
+        bool value)
+    {
+        Model.IsActive = value;
+
+        if (ActiveChanged.HasDelegate)
+        {
+            await ActiveChanged.InvokeAsync(value);
+        }
+    }
+}

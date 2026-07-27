@@ -1,0 +1,872 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using HRM.DTOs.WorkPlanning
+@using HRM.Components.Shared
+
+<RightSidePanel IsOpen="@IsOpen"
+                IsOpenChanged="@HandlePanelVisibilityChangedAsync"
+                Title="@PanelTitle"
+                Description="Configure the segment timing and validation rules."
+                Size="RightSidePanel.PanelSize.Medium"
+                ContentWidth="max-w-2xl">
+
+    <ChildContent>
+
+        <EditForm Model="@Model"
+                  OnValidSubmit="@HandleSaveAsync"
+                  id="@FormId">
+
+            <DataAnnotationsValidator />
+
+            <div class="space-y-6">
+
+                <ValidationSummary class="rounded-lg border border-red-200
+                                                  bg-red-50 p-3 text-sm
+                                                  text-red-700" />
+
+                <!-- Segment Details -->
+                <section>
+
+                    <div class="mb-4">
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Segment Details
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Give the segment a name, type, and display order.
+                        </p>
+
+                    </div>
+
+                    <div class="space-y-4">
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Segment Name
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputText @bind-Value="Model.Name"
+                                       disabled="@IsSaving"
+                                       placeholder="For example, Morning Work"
+                                       class="w-full rounded-lg border
+                                              border-slate-300 px-3 py-2
+                                              text-sm outline-none transition
+                                              focus:border-blue-500
+                                              focus:ring-2 focus:ring-blue-100
+                                              disabled:cursor-not-allowed
+                                              disabled:bg-slate-100
+                                              disabled:text-slate-500" />
+
+                            <ValidationMessage For="@(() => Model.Name)"
+                                               class="mt-1 block text-xs text-red-600" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Segment Type
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputSelect TValue="int"
+                                         @bind-Value="Model.WorkSegmentTypeId"
+                                         disabled="@IsSaving"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500">
+
+                                <option value="0">
+                                    Select segment type
+                                </option>
+
+                                @foreach (var type in SegmentTypes)
+                                {
+                                    <option value="@type.WorkSegmentTypeId">
+                                        @type.Name
+                                    </option>
+                                }
+
+                            </InputSelect>
+
+                            <ValidationMessage For="@(() => Model.WorkSegmentTypeId)"
+                                               class="mt-1 block text-xs text-red-600" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Description
+                            </label>
+
+                            <InputTextArea @bind-Value="Model.Description"
+                                           disabled="@IsSaving"
+                                           placeholder="Optional description..."
+                                           class="min-h-[90px] w-full rounded-lg
+                                                  border border-slate-300
+                                                  px-3 py-2 text-sm outline-none
+                                                  transition focus:border-blue-500
+                                                  focus:ring-2 focus:ring-blue-100
+                                                  disabled:cursor-not-allowed
+                                                  disabled:bg-slate-100
+                                                  disabled:text-slate-500" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Sequence Number
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.SequenceNumber"
+                                         disabled="@IsSaving"
+                                         min="1"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <!-- Timing -->
+                <section>
+
+                    <div class="mb-4">
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Timing
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Offset is measured from the template start time.
+                        </p>
+
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-4">
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Offset Hours
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.OffsetHours"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Offset Minutes
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.OffsetMinutePart"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         max="59"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Duration Hours
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.DurationHours"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Duration Minutes
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.DurationMinutePart"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         max="59"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                    </div>
+
+                    <div class="mt-4 rounded-lg border border-blue-200
+                                bg-blue-50 p-3">
+
+                        <p class="text-xs font-medium uppercase tracking-wide
+                                  text-blue-600">
+                            Preview
+                        </p>
+
+                        <p class="mt-1 text-sm font-semibold text-blue-800">
+                            @PeriodPreview
+                        </p>
+
+                        <div class="mt-2 flex flex-wrap gap-2">
+
+                            <span class="rounded-full bg-white px-2.5 py-1
+                                         text-xs font-medium text-blue-700">
+                                Offset: @FormatMinutes(Model.OffsetMinutes)
+                            </span>
+
+                            <span class="rounded-full bg-white px-2.5 py-1
+                                         text-xs font-medium text-blue-700">
+                                Duration: @FormatMinutes(Model.DurationMinutes)
+                            </span>
+
+                            @if (EndsOnLaterDay)
+                            {
+                                <span class="rounded-full bg-indigo-100 px-2.5 py-1
+                                             text-xs font-medium text-indigo-700">
+                                    Crosses day boundary
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <!-- Grace Periods -->
+                <section>
+
+                    <div class="mb-4">
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Grace Periods
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Define how early or late attendance may be recorded.
+                        </p>
+
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Grace Before
+                                <span class="text-xs font-normal text-slate-400">
+                                    (minutes)
+                                </span>
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.GraceBeforeMinutes"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                        <div>
+
+                            <label class="mb-2 block text-sm font-medium text-slate-700">
+                                Grace After
+                                <span class="text-xs font-normal text-slate-400">
+                                    (minutes)
+                                </span>
+                            </label>
+
+                            <InputNumber TValue="int"
+                                         @bind-Value="Model.GraceAfterMinutes"
+                                         disabled="@IsSaving"
+                                         min="0"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2
+                                                text-sm outline-none transition
+                                                focus:border-blue-500
+                                                focus:ring-2 focus:ring-blue-100
+                                                disabled:cursor-not-allowed
+                                                disabled:bg-slate-100
+                                                disabled:text-slate-500" />
+
+                        </div>
+
+                    </div>
+
+                    @if (Model.GraceBeforeMinutes > 0 ||
+                    Model.GraceAfterMinutes > 0)
+                    {
+                        <div class="mt-4 rounded-lg border border-slate-200
+                                    bg-slate-50 p-3 text-xs text-slate-600">
+
+                            Attendance may be recorded from
+
+                            <span class="font-semibold text-slate-800">
+                                @GetGraceWindowStart()
+                            </span>
+
+                            until
+
+                            <span class="font-semibold text-slate-800">
+                                @GetGraceWindowEnd()
+                            </span>.
+
+                        </div>
+                    }
+
+                </section>
+
+                <hr class="border-slate-200" />
+
+                <!-- Rules -->
+                <section>
+
+                    <div class="mb-4">
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Segment Rules
+                        </h3>
+
+                        <p class="mt-1 text-xs text-slate-500">
+                            Configure attendance, payment, and validation behavior.
+                        </p>
+
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                        <ToggleOption Title="Mandatory Segment"
+                                      Description="The segment must be included in generated work plans."
+                                      @bind-Value="Model.IsMandatory" />
+
+                        <ToggleOption Title="Paid Segment"
+                                      Description="The segment contributes to paid working time."
+                                      @bind-Value="Model.IsPaid" />
+
+                        <ToggleOption Title="Attendance Required"
+                                      Description="Attendance is recorded for this segment."
+                                      Value="@Model.RequiresAttendance"
+                                      ValueChanged="@HandleAttendanceChangedAsync" />
+
+                        <ToggleOption Title="Location Validation"
+                                      Description="Validate the employee's work location."
+                                      Value="@Model.RequiresLocationValidation"
+                                      ValueChanged="@HandleLocationChangedAsync" />
+
+                        <ToggleOption Title="Device Validation"
+                                      Description="Validate the employee's registered device."
+                                      Value="@Model.RequiresDeviceValidation"
+                                      ValueChanged="@HandleDeviceChangedAsync" />
+
+                        <ToggleOption Title="Active Segment"
+                                      Description="Make this segment available in the template."
+                                      @bind-Value="Model.IsActive" />
+
+                    </div>
+
+                    @if (!Model.RequiresAttendance)
+                    {
+                        <div class="mt-4 rounded-lg border border-amber-200
+                                    bg-amber-50 p-3">
+
+                            <p class="text-sm font-medium text-amber-800">
+                                Attendance is disabled
+                            </p>
+
+                            <p class="mt-1 text-xs leading-5 text-amber-700">
+                                Location and device validation are also disabled
+                                because they depend on attendance.
+                            </p>
+
+                        </div>
+                    }
+
+                    @if (!Model.IsActive)
+                    {
+                        <div class="mt-4 rounded-lg border border-slate-200
+                                    bg-slate-50 p-3">
+
+                            <p class="text-sm font-medium text-slate-700">
+                                Inactive segment
+                            </p>
+
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                This segment remains saved but should not be included
+                                in newly generated work plans.
+                            </p>
+
+                        </div>
+                    }
+
+                </section>
+
+            </div>
+
+        </EditForm>
+
+    </ChildContent>
+
+    <FooterContent>
+
+        <div class="flex flex-col-reverse gap-3 sm:flex-row
+                    sm:items-center sm:justify-end">
+
+            <button type="button"
+                    disabled="@IsSaving"
+                    @onclick="@HandleCloseAsync"
+                    class="rounded-lg border border-slate-300 bg-white
+                           px-5 py-2 text-sm font-medium text-slate-700
+                           transition hover:bg-slate-50
+                           disabled:cursor-not-allowed disabled:opacity-50">
+                Cancel
+            </button>
+
+            <button type="submit"
+                    form="@FormId"
+                    disabled="@SaveDisabled"
+                    class="rounded-lg bg-blue-600 px-5 py-2 text-sm
+                           font-medium text-white transition hover:bg-blue-700
+                           disabled:cursor-not-allowed disabled:bg-slate-300">
+
+                @SaveButtonText
+
+            </button>
+
+        </div>
+
+    </FooterContent>
+
+</RightSidePanel>
+
+@code {
+    private const string FormId =
+        "work-template-segment-form";
+
+    private bool isClosing;
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public WorkTemplateSegmentEditViewModel Model { get; set; } = null!;
+
+    [Parameter]
+    public IReadOnlyList<WorkSegmentTypeDto> SegmentTypes { get; set; } =
+        Array.Empty<WorkSegmentTypeDto>();
+
+    [Parameter]
+    public TimeOnly? TemplateStartTime { get; set; }
+
+    [Parameter]
+    public bool IsEditing { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    private bool SaveDisabled =>
+        IsSaving ||
+        string.IsNullOrWhiteSpace(Model.Name) ||
+        Model.WorkSegmentTypeId <= 0 ||
+        Model.SequenceNumber <= 0 ||
+        Model.OffsetHours < 0 ||
+        Model.OffsetMinutePart is < 0 or > 59 ||
+        Model.DurationHours < 0 ||
+        Model.DurationMinutePart is < 0 or > 59 ||
+        Model.DurationMinutes <= 0 ||
+        Model.GraceBeforeMinutes < 0 ||
+        Model.GraceAfterMinutes < 0;
+
+    private string PanelTitle =>
+        IsEditing
+            ? "Edit Segment"
+            : "Add Segment";
+
+    private string SaveButtonText
+    {
+        get
+        {
+            if (IsSaving)
+            {
+                return "Saving...";
+            }
+
+            return IsEditing
+                ? "Update Segment"
+                : "Create Segment";
+        }
+    }
+
+    private string PeriodPreview =>
+        GetPeriodPreview();
+
+    private bool EndsOnLaterDay
+    {
+        get
+        {
+            if (!TemplateStartTime.HasValue)
+            {
+                return false;
+            }
+
+            var end =
+                TemplateStartTime.Value
+                    .ToTimeSpan()
+                    .Add(
+                        TimeSpan.FromMinutes(
+                            Model.OffsetMinutes +
+                            Model.DurationMinutes));
+
+            return end.TotalMinutes >= 1440;
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (IsOpen)
+        {
+            isClosing = false;
+        }
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (SaveDisabled)
+        {
+            return;
+        }
+
+        if (OnSave.HasDelegate)
+        {
+            await OnSave.InvokeAsync();
+        }
+    }
+
+    private async Task HandleCloseAsync()
+    {
+        if (IsSaving || isClosing)
+        {
+            return;
+        }
+
+        isClosing = true;
+
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+            return;
+        }
+
+        if (IsOpenChanged.HasDelegate)
+        {
+            await IsOpenChanged.InvokeAsync(false);
+        }
+    }
+
+    private async Task HandlePanelVisibilityChangedAsync(
+        bool value)
+    {
+        if (IsSaving && !value)
+        {
+            return;
+        }
+
+        if (!value && isClosing)
+        {
+            return;
+        }
+
+        if (!value)
+        {
+            isClosing = true;
+        }
+
+        if (IsOpenChanged.HasDelegate)
+        {
+            await IsOpenChanged.InvokeAsync(value);
+        }
+    }
+
+    private Task HandleAttendanceChangedAsync(
+        bool value)
+    {
+        Model.RequiresAttendance =
+            value;
+
+        if (!value)
+        {
+            Model.RequiresLocationValidation =
+                false;
+
+            Model.RequiresDeviceValidation =
+                false;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleLocationChangedAsync(
+        bool value)
+    {
+        Model.RequiresLocationValidation =
+            value;
+
+        if (value)
+        {
+            Model.RequiresAttendance =
+                true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleDeviceChangedAsync(
+        bool value)
+    {
+        Model.RequiresDeviceValidation =
+            value;
+
+        if (value)
+        {
+            Model.RequiresAttendance =
+                true;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private string GetPeriodPreview()
+    {
+        if (Model.DurationMinutes <= 0)
+        {
+            return "Enter a duration greater than zero.";
+        }
+
+        if (!TemplateStartTime.HasValue)
+        {
+            var startMinute =
+                Model.OffsetMinutes;
+
+            var endMinute =
+                Model.OffsetMinutes +
+                Model.DurationMinutes;
+
+            return
+                $"Minute {startMinute} to minute {endMinute}";
+        }
+
+        var templateStart =
+            TemplateStartTime.Value.ToTimeSpan();
+
+        var segmentStart =
+            templateStart.Add(
+                TimeSpan.FromMinutes(
+                    Model.OffsetMinutes));
+
+        var segmentEnd =
+            segmentStart.Add(
+                TimeSpan.FromMinutes(
+                    Model.DurationMinutes));
+
+        return
+            $"{FormatClockTime(segmentStart)} - " +
+            $"{FormatClockTime(segmentEnd)}";
+    }
+
+    private string GetGraceWindowStart()
+    {
+        if (!TemplateStartTime.HasValue)
+        {
+            var value =
+                Model.OffsetMinutes -
+                Model.GraceBeforeMinutes;
+
+            return $"minute {Math.Max(value, 0)}";
+        }
+
+        var segmentStart =
+            TemplateStartTime.Value
+                .ToTimeSpan()
+                .Add(
+                    TimeSpan.FromMinutes(
+                        Model.OffsetMinutes));
+
+        return FormatClockTime(
+            segmentStart.Subtract(
+                TimeSpan.FromMinutes(
+                    Model.GraceBeforeMinutes)));
+    }
+
+    private string GetGraceWindowEnd()
+    {
+        if (!TemplateStartTime.HasValue)
+        {
+            var value =
+                Model.OffsetMinutes +
+                Model.DurationMinutes +
+                Model.GraceAfterMinutes;
+
+            return $"minute {value}";
+        }
+
+        var segmentEnd =
+            TemplateStartTime.Value
+                .ToTimeSpan()
+                .Add(
+                    TimeSpan.FromMinutes(
+                        Model.OffsetMinutes +
+                        Model.DurationMinutes));
+
+        return FormatClockTime(
+            segmentEnd.Add(
+                TimeSpan.FromMinutes(
+                    Model.GraceAfterMinutes)));
+    }
+
+    private static string FormatMinutes(
+        int totalMinutes)
+    {
+        if (totalMinutes <= 0)
+        {
+            return "0m";
+        }
+
+        var hours =
+            totalMinutes / 60;
+
+        var minutes =
+            totalMinutes % 60;
+
+        if (hours > 0 && minutes > 0)
+        {
+            return $"{hours}h {minutes}m";
+        }
+
+        if (hours > 0)
+        {
+            return $"{hours}h";
+        }
+
+        return $"{minutes}m";
+    }
+
+    private static string FormatClockTime(
+        TimeSpan time)
+    {
+        var totalMinutes =
+            (int)Math.Floor(
+                time.TotalMinutes);
+
+        var dayNumber =
+            (int)Math.Floor(
+                totalMinutes / 1440d);
+
+        var normalisedMinutes =
+            totalMinutes % 1440;
+
+        if (normalisedMinutes < 0)
+        {
+            normalisedMinutes += 1440;
+        }
+
+        var hours =
+            normalisedMinutes / 60;
+
+        var minutes =
+            normalisedMinutes % 60;
+
+        var formatted =
+            $"{hours:00}:{minutes:00}";
+
+        if (dayNumber > 0)
+        {
+            return dayNumber == 1
+                ? $"{formatted} (+1 day)"
+                : $"{formatted} (+{dayNumber} days)";
+        }
+
+        if (dayNumber < 0)
+        {
+            return dayNumber == -1
+                ? $"{formatted} (-1 day)"
+                : $"{formatted} ({dayNumber} days)";
+        }
+
+        return formatted;
+    }
+}

@@ -9,7 +9,7 @@ namespace HRM.WorkPlanning.Abstractions
            DateTime fromDate,
            DateTime toDate);
 
-        Task<WorkPlanListDto?> GetWorkPlanAsync(int workPlanId);
+        Task<WorkPlanListDto?> GetWorkPlanDetailAsync(int workPlanId);
 
         Task<List<WorkPlanEmployeeDto>> SearchEmployeesAsync(string searchText);
 

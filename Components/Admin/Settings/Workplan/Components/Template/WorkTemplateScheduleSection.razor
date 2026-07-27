@@ -1,0 +1,495 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<section>
+
+    <div class="mb-4">
+
+        <h3 class="text-sm font-semibold text-slate-900">
+            Default Schedule
+        </h3>
+
+        <p class="mt-1 text-xs text-slate-500">
+            Define the default start and end time for work plans created from
+            this template. Leave both fields empty for a flexible schedule.
+        </p>
+
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+        <!-- Start Time -->
+        <div>
+
+            <label class="mb-2 block text-sm font-medium text-slate-700">
+                Default Start Time
+            </label>
+
+            <input type="time"
+                   value="@FormatTime(Model.DefaultStartTime)"
+                   disabled="@IsDisabled"
+                   @onchange="@HandleStartTimeChangedAsync"
+                   class="w-full rounded-lg border border-slate-300
+                          px-3 py-2 text-sm outline-none transition
+                          focus:border-blue-500 focus:ring-2
+                          focus:ring-blue-100
+                          disabled:cursor-not-allowed
+                          disabled:bg-slate-100
+                          disabled:text-slate-500" />
+
+        </div>
+
+        <!-- End Time -->
+        <div>
+
+            <label class="mb-2 block text-sm font-medium text-slate-700">
+                Default End Time
+            </label>
+
+            <input type="time"
+                   value="@FormatTime(Model.DefaultEndTime)"
+                   disabled="@IsDisabled"
+                   @onchange="@HandleEndTimeChangedAsync"
+                   class="w-full rounded-lg border border-slate-300
+                          px-3 py-2 text-sm outline-none transition
+                          focus:border-blue-500 focus:ring-2
+                          focus:ring-blue-100
+                          disabled:cursor-not-allowed
+                          disabled:bg-slate-100
+                          disabled:text-slate-500" />
+
+        </div>
+
+    </div>
+
+    <!-- Schedule summary -->
+    <div class="mt-4">
+
+        @if (OnlyOneTimeProvided)
+        {
+            <div class="rounded-lg border border-amber-200
+                        bg-amber-50 p-3">
+
+                <div class="flex items-start gap-3">
+
+                    <div class="mt-0.5 shrink-0 text-amber-600">
+
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-5 w-5">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M12 9v3.75m9-.75a9 9 0 11-18 0
+                                     9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+
+                        </svg>
+
+                    </div>
+
+                    <div>
+
+                        <p class="text-sm font-medium text-amber-800">
+                            Incomplete schedule
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-amber-700">
+                            Both the default start time and end time must be
+                            provided, or both fields must be left empty.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+        else if (!HasSchedule)
+        {
+            <div class="rounded-lg border border-slate-200
+                        bg-slate-50 p-3">
+
+                <div class="flex items-start gap-3">
+
+                    <div class="mt-0.5 shrink-0 text-slate-500">
+
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-5 w-5">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0
+                                     9 9 0 0118 0z" />
+
+                        </svg>
+
+                    </div>
+
+                    <div>
+
+                        <p class="text-sm font-medium text-slate-700">
+                            Flexible schedule
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-slate-500">
+                            Work plans created from this template will not have
+                            a default start or end time.
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+        else
+        {
+            <div class="rounded-lg border border-blue-200
+                        bg-blue-50 p-4">
+
+                <div class="flex flex-col gap-4 sm:flex-row
+                            sm:items-center sm:justify-between">
+
+                    <div class="flex items-start gap-3">
+
+                        <div class="flex h-10 w-10 shrink-0 items-center
+                                    justify-center rounded-lg bg-white
+                                    text-blue-600 shadow-sm">
+
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke-width="1.5"
+                                 stroke="currentColor"
+                                 class="h-5 w-5">
+
+                                <path stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0
+                                         9 9 0 0118 0z" />
+
+                            </svg>
+
+                        </div>
+
+                        <div>
+
+                            <p class="text-sm font-semibold text-blue-900">
+                                @SchedulePeriodText
+                            </p>
+
+                            <p class="mt-1 text-xs text-blue-700">
+                                Default schedule duration
+                            </p>
+
+                        </div>
+
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2">
+
+                        <span class="rounded-full bg-white px-3 py-1
+                                     text-xs font-semibold text-blue-700
+                                     shadow-sm">
+                            @ScheduleDurationText
+                        </span>
+
+                        @if (CrossesMidnight)
+                        {
+                            <span class="rounded-full bg-indigo-100 px-3 py-1
+                                         text-xs font-semibold text-indigo-700">
+                                Ends next day
+                            </span>
+                        }
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+    @if (HasSchedule)
+    {
+        <div class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+
+            <div class="rounded-lg border border-slate-200
+                        bg-white p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide
+                          text-slate-500">
+                    Starts
+                </p>
+
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                    @FormatDisplayTime(Model.DefaultStartTime)
+                </p>
+
+            </div>
+
+            <div class="rounded-lg border border-slate-200
+                        bg-white p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide
+                          text-slate-500">
+                    Ends
+                </p>
+
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                    @FormatDisplayTime(Model.DefaultEndTime)
+                </p>
+
+            </div>
+
+            <div class="rounded-lg border border-slate-200
+                        bg-white p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide
+                          text-slate-500">
+                    Duration
+                </p>
+
+                <p class="mt-1 text-sm font-semibold text-slate-900">
+                    @ScheduleDurationText
+                </p>
+
+            </div>
+
+        </div>
+    }
+
+    @if (!IsDisabled && HasSchedule)
+    {
+        <div class="mt-4 flex justify-end">
+
+            <button type="button"
+                    @onclick="@ClearScheduleAsync"
+                    class="text-xs font-medium text-slate-500
+                           transition hover:text-red-600">
+                Clear schedule
+            </button>
+
+        </div>
+    }
+
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public UpdateWorkTemplateDto Model { get; set; } = null!;
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback<TimeOnly?> StartTimeChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<TimeOnly?> EndTimeChanged { get; set; }
+
+    [Parameter]
+    public EventCallback ScheduleChanged { get; set; }
+
+    private bool HasSchedule =>
+        Model.DefaultStartTime.HasValue &&
+        Model.DefaultEndTime.HasValue;
+
+    private bool OnlyOneTimeProvided =>
+        Model.DefaultStartTime.HasValue !=
+        Model.DefaultEndTime.HasValue;
+
+    private bool CrossesMidnight =>
+        HasSchedule &&
+        Model.DefaultEndTime!.Value <=
+        Model.DefaultStartTime!.Value;
+
+    private string SchedulePeriodText
+    {
+        get
+        {
+            if (!HasSchedule)
+                return "Flexible schedule";
+
+            var start =
+                FormatDisplayTime(
+                    Model.DefaultStartTime);
+
+            var end =
+                FormatDisplayTime(
+                    Model.DefaultEndTime);
+
+            return CrossesMidnight
+                ? $"{start} - {end} · Next day"
+                : $"{start} - {end}";
+        }
+    }
+
+    private string ScheduleDurationText =>
+        GetScheduleDurationText();
+
+    private async Task HandleStartTimeChangedAsync(
+        ChangeEventArgs args)
+    {
+        var value =
+            ParseTimeOnly(
+                args.Value?.ToString());
+
+        Model.DefaultStartTime = value;
+
+        if (StartTimeChanged.HasDelegate)
+        {
+            await StartTimeChanged.InvokeAsync(value);
+        }
+
+        await NotifyScheduleChangedAsync();
+    }
+
+    private async Task HandleEndTimeChangedAsync(
+        ChangeEventArgs args)
+    {
+        var value =
+            ParseTimeOnly(
+                args.Value?.ToString());
+
+        Model.DefaultEndTime = value;
+
+        if (EndTimeChanged.HasDelegate)
+        {
+            await EndTimeChanged.InvokeAsync(value);
+        }
+
+        await NotifyScheduleChangedAsync();
+    }
+
+    private async Task ClearScheduleAsync()
+    {
+        if (IsDisabled)
+            return;
+
+        Model.DefaultStartTime = null;
+        Model.DefaultEndTime = null;
+
+        if (StartTimeChanged.HasDelegate)
+        {
+            await StartTimeChanged.InvokeAsync(null);
+        }
+
+        if (EndTimeChanged.HasDelegate)
+        {
+            await EndTimeChanged.InvokeAsync(null);
+        }
+
+        await NotifyScheduleChangedAsync();
+    }
+
+    private async Task NotifyScheduleChangedAsync()
+    {
+        if (ScheduleChanged.HasDelegate)
+        {
+            await ScheduleChanged.InvokeAsync();
+        }
+    }
+
+    private string GetScheduleDurationText()
+    {
+        if (!HasSchedule)
+            return "Flexible";
+
+        var start =
+            Model.DefaultStartTime!.Value
+                .ToTimeSpan();
+
+        var end =
+            Model.DefaultEndTime!.Value
+                .ToTimeSpan();
+
+        if (end <= start)
+        {
+            end =
+                end.Add(
+                    TimeSpan.FromDays(1));
+        }
+
+        var duration =
+            end - start;
+
+        return FormatDuration(
+            (int)duration.TotalMinutes);
+    }
+
+    private static TimeOnly? ParseTimeOnly(
+        string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        if (TimeOnly.TryParse(
+            value,
+            out var parsedTime))
+        {
+            return parsedTime;
+        }
+
+        if (TimeSpan.TryParse(
+            value,
+            out var parsedSpan))
+        {
+            return TimeOnly.FromTimeSpan(
+                parsedSpan);
+        }
+
+        return null;
+    }
+
+    private static string FormatTime(
+        TimeOnly? value)
+    {
+        return value?.ToString("HH:mm") ??
+               string.Empty;
+    }
+
+    private static string FormatDisplayTime(
+        TimeOnly? value)
+    {
+        return value?.ToString("HH:mm") ??
+               "--:--";
+    }
+
+    private static string FormatDuration(
+        int totalMinutes)
+    {
+        if (totalMinutes <= 0)
+            return "0 minutes";
+
+        var hours =
+            totalMinutes / 60;
+
+        var minutes =
+            totalMinutes % 60;
+
+        if (hours > 0 &&
+            minutes > 0)
+        {
+            return $"{hours}h {minutes}m";
+        }
+
+        if (hours > 0)
+        {
+            return hours == 1
+                ? "1 hour"
+                : $"{hours} hours";
+        }
+
+        return minutes == 1
+            ? "1 minute"
+            : $"{minutes} minutes";
+    }
+}

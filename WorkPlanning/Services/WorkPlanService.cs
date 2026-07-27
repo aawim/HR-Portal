@@ -464,11 +464,137 @@ namespace HRM.WorkPlanning.Services
 
         }
 
-      
-        public async Task<WorkPlanListDto?> GetWorkPlanAsync(int workPlanId)
-        {
 
-            await using var db = await _dbFactory.CreateDbContextAsync();
+        //public async Task<WorkPlanDetailDto?> GetWorkPlanDetailAsync(int workPlanId)
+        //{
+
+        //    await using var db = await _dbFactory.CreateDbContextAsync();
+
+        //    return await db.WorkPlans
+        //        .AsNoTracking()
+        //        .Where(x =>
+        //            x.WorkPlanId == workPlanId &&
+        //            x.IsValid)
+        //        .Select(x => new WorkPlanDetailDto
+        //        {
+        //            WorkPlanId = x.WorkPlanId,
+        //            IndividualId = x.IndividualId,
+        //            JobId = x.JobId,
+
+        //            OrganisationBusinessEntityId =
+        //                x.OrganisationBusinessEntityId,
+
+        //            WorkDate =   x.WorkDate ,
+
+        //            //WorkDate = x.WorkDate.HasValue? x.WorkDate.Value.ToDateTime(TimeOnly.MinValue) : DateTime.MinValue,
+
+        //            WorkTemplateId =
+        //                x.WorkTemplateId,
+
+        //            WorkTemplateName =
+        //                x.WorkTemplate != null
+        //                    ? x.WorkTemplate.Name
+        //                    : string.Empty,
+
+        //            GenerationSource = x.GenerationSource,
+
+        //            GeneratedDate =
+        //                x.GeneratedDate,
+
+        //            IsGenerated =
+        //                x.IsGenerated,
+
+        //            IsFinalized =
+        //                x.IsFinalized,
+
+        //            IsManual =
+        //                x.IsManual,
+
+        //            IsValid =
+        //                x.IsValid,
+
+        //            PlanGuid =
+        //                x.PlanGuid,
+
+        //            Version =
+        //                x.Version,
+
+        //            Remarks =
+        //                x.Remarks,
+
+        //            Segments = x.WorkPlanSegments
+        //                .Where(s => s.IsValid)
+        //                .OrderBy(s => s.SequenceNumber)
+        //                .Select(s => new WorkPlanSegmentDto
+        //                {
+        //                    WorkPlanSegmentId =
+        //                        s.WorkPlanSegmentId,
+
+        //                    WorkPlanId =(int)
+        //                        s.WorkPlanId,
+
+        //                    WorkTemplateSegmentId =
+        //                        s.WorkTemplateSegmentId,
+
+        //                    WorkSegmentTypeId =
+        //                        s.WorkSegmentTypeId,
+
+        //                    WorkSegmentTypeName =
+        //                        s.WorkSegmentType != null
+        //                            ? s.WorkSegmentType.Name
+        //                            : string.Empty,
+
+        //                    Name =
+        //                        s.Name ?? string.Empty,
+
+        //                    Description =
+        //                        s.Description,
+
+        //                    SequenceNumber =
+        //                        s.SequenceNumber,
+
+        //                    StartDateTime =
+        //                        s.StartDateTime,
+
+        //                    EndDateTime =
+        //                        s.EndDateTime,
+
+        //                    GraceBeforeMinutes =
+        //                        s.GraceBeforeMinutes,
+
+        //                    GraceAfterMinutes =
+        //                        s.GraceAfterMinutes,
+
+        //                    IsMandatory =
+        //                        s.IsMandatory,
+
+        //                    RequiresAttendance =
+        //                        s.RequiresAttendance,
+
+        //                    RequiresLocationValidation =
+        //                        s.RequiresLocationValidation,
+
+        //                    RequiresDeviceValidation =
+        //                        s.RequiresDeviceValidation,
+
+        //                    IsPaid =
+        //                        s.IsPaid,
+
+        //                    IsCompleted =
+        //                        s.IsCompleted,
+
+        //                    AttendanceId =
+        //                        s.AttendanceId
+        //                })
+        //                .ToList()
+        //        })
+        //        .SingleOrDefaultAsync();
+        //}
+
+        public async Task<WorkPlanListDto?> GetWorkPlanDetailAsync(int workPlanId)
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
 
             return await db.WorkPlans
                 .AsNoTracking()
@@ -478,60 +604,48 @@ namespace HRM.WorkPlanning.Services
                 .Select(x => new WorkPlanListDto
                 {
                     WorkPlanId = x.WorkPlanId,
+
                     IndividualId = x.IndividualId,
+
                     JobId = x.JobId,
 
-                    OrganisationBusinessEntityId =
-                        x.OrganisationBusinessEntityId,
+                    OrganisationBusinessEntityId = x.OrganisationBusinessEntityId,
 
-                    WorkDate =   x.WorkDate ,
+                    WorkDate = x.WorkDate,
 
-                    //WorkDate = x.WorkDate.HasValue? x.WorkDate.Value.ToDateTime(TimeOnly.MinValue) : DateTime.MinValue,
+                    WorkTemplateId = x.WorkTemplateId,
 
-                    WorkTemplateId =
-                        x.WorkTemplateId,
-
-                    WorkTemplateName =
-                        x.WorkTemplate != null
-                            ? x.WorkTemplate.Name
-                            : string.Empty,
+                    WorkTemplateName = x.WorkTemplate != null ? x.WorkTemplate.Name : "Manual Plan",
 
                     GenerationSource = x.GenerationSource,
 
-                    GeneratedDate =
-                        x.GeneratedDate,
+                    GeneratedDate = x.GeneratedDate,
 
-                    IsGenerated =
-                        x.IsGenerated,
+                    IsGenerated = x.IsGenerated,
 
-                    IsFinalized =
-                        x.IsFinalized,
+                    IsFinalized = x.IsFinalized,
 
-                    IsManual =
-                        x.IsManual,
+                    IsManual = x.IsManual,
 
-                    IsValid =
-                        x.IsValid,
+                    IsValid = x.IsValid,
 
-                    PlanGuid =
-                        x.PlanGuid,
+                    PlanGuid = x.PlanGuid,
 
-                    Version =
-                        x.Version,
+                    Version = x.Version,
 
-                    Remarks =
-                        x.Remarks,
+                    Remarks = x.Remarks,
 
                     Segments = x.WorkPlanSegments
                         .Where(s => s.IsValid)
                         .OrderBy(s => s.SequenceNumber)
+                        .ThenBy(s => s.StartDateTime)
                         .Select(s => new WorkPlanSegmentDto
                         {
                             WorkPlanSegmentId =
                                 s.WorkPlanSegmentId,
 
-                            WorkPlanId =(int)
-                                s.WorkPlanId,
+                            WorkPlanId =
+                                x.WorkPlanId,
 
                             WorkTemplateSegmentId =
                                 s.WorkTemplateSegmentId,
@@ -689,7 +803,8 @@ namespace HRM.WorkPlanning.Services
                         x.WorkPlan.Remarks,
 
                     GeneratedDate =
-                        x.WorkPlan.GeneratedDate
+                        x.WorkPlan.GeneratedDate,
+                    Version = x.WorkPlan.Version,
                 })
                 .ToListAsync();
         }

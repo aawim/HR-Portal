@@ -1,0 +1,604 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<section class="border-t border-slate-200 pt-6">
+
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+
+        <div>
+
+            <h3 class="text-base font-semibold text-slate-900">
+                Template Segments
+            </h3>
+
+            <p class="mt-1 text-sm text-slate-500">
+                Define work periods, breaks, attendance windows, and validation
+                rules relative to the template start time.
+            </p>
+
+        </div>
+
+        <button type="button"
+                disabled="@(!CanManageSegments || IsDisabled)"
+                @onclick="@HandleAddSegmentAsync"
+                class="inline-flex items-center justify-center gap-2
+                       rounded-lg bg-blue-600 px-4 py-2 text-sm
+                       font-medium text-white transition
+                       hover:bg-blue-700
+                       disabled:cursor-not-allowed
+                       disabled:opacity-50">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke-width="1.5"
+                 stroke="currentColor"
+                 class="h-5 w-5">
+
+                <path stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 4.5v15m7.5-7.5h-15" />
+
+            </svg>
+
+            Add Segment
+
+        </button>
+
+    </div>
+
+    @if (!CanManageSegments)
+    {
+        <div class="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+
+            <div class="flex gap-3">
+
+                <div class="mt-0.5 shrink-0 text-amber-600">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M12 9v3.75m9-.75a9 9 0 11-18 0
+                                 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+
+                    </svg>
+
+                </div>
+
+                <div>
+
+                    <p class="text-sm font-medium text-amber-800">
+                        Save the template first
+                    </p>
+
+                    <p class="mt-1 text-sm leading-5 text-amber-700">
+                        Segments can be added after the work template has been
+                        created successfully.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+    else if (IsLoading)
+    {
+        <div class="mt-5 rounded-xl border border-slate-200 bg-white p-8 text-center">
+
+            <div class="mx-auto h-7 w-7 animate-spin rounded-full
+                        border-4 border-slate-200 border-t-blue-600">
+            </div>
+
+            <p class="mt-3 text-sm text-slate-500">
+                Loading segments...
+            </p>
+
+        </div>
+    }
+    else if (!OrderedSegments.Any())
+    {
+        <div class="mt-5 rounded-xl border-2 border-dashed
+                    border-slate-200 bg-slate-50/50 px-6 py-10 text-center">
+
+            <div class="mx-auto flex h-12 w-12 items-center justify-center
+                        rounded-full bg-blue-50 text-blue-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-6 w-6">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6.75 3v2.25m10.5-2.25v2.25
+                             M3.75 18.75V7.5A2.25 2.25 0 016 5.25h12
+                             A2.25 2.25 0 0120.25 7.5v11.25
+                             M3.75 18.75A2.25 2.25 0 006 21h12
+                             a2.25 2.25 0 002.25-2.25
+                             M3.75 18.75v-7.5A2.25 2.25 0 016 9h12
+                             a2.25 2.25 0 012.25 2.25v7.5" />
+
+                </svg>
+
+            </div>
+
+            <h4 class="mt-4 text-sm font-semibold text-slate-900">
+                No segments configured
+            </h4>
+
+            <p class="mx-auto mt-1 max-w-sm text-sm text-slate-500">
+                Add the first work, break, lunch, training, or other segment
+                to this template.
+            </p>
+
+            <button type="button"
+                    disabled="@IsDisabled"
+                    @onclick="@HandleAddSegmentAsync"
+                    class="mt-5 rounded-lg border border-blue-200
+                           bg-blue-50 px-4 py-2 text-sm font-medium
+                           text-blue-700 transition hover:bg-blue-100
+                           disabled:cursor-not-allowed
+                           disabled:opacity-50">
+                Add First Segment
+            </button>
+
+        </div>
+    }
+    else
+    {
+        <div class="mt-5 space-y-3">
+
+            @foreach (var segment in OrderedSegments)
+            {
+                <div class="group rounded-xl border border-slate-200
+                            bg-white p-4 transition
+                            hover:border-blue-200 hover:shadow-sm">
+
+                    <div class="flex items-start justify-between gap-4">
+
+                        <div class="flex min-w-0 flex-1 gap-3">
+
+                            <div class="flex h-9 w-9 shrink-0 items-center
+                                        justify-center rounded-lg bg-slate-100
+                                        text-sm font-semibold text-slate-600">
+                                @segment.SequenceNumber
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+
+                                <div class="flex flex-wrap items-center gap-2">
+
+                                    <h4 class="truncate text-sm font-semibold text-slate-900">
+                                        @segment.Name
+                                    </h4>
+
+                                    @if (!string.IsNullOrWhiteSpace(segment.WorkSegmentTypeName))
+                                    {
+                                        <span class="rounded-full bg-blue-50 px-2 py-0.5
+                                                     text-xs font-medium text-blue-700">
+                                            @segment.WorkSegmentTypeName
+                                        </span>
+                                    }
+
+                                    @if (segment.IsMandatory)
+                                    {
+                                        <span class="rounded-full bg-rose-50 px-2 py-0.5
+                                                     text-xs font-medium text-rose-700">
+                                            Mandatory
+                                        </span>
+                                    }
+
+                                    @if (segment.IsPaid)
+                                    {
+                                        <span class="rounded-full bg-emerald-50 px-2 py-0.5
+                                                     text-xs font-medium text-emerald-700">
+                                            Paid
+                                        </span>
+                                    }
+
+                                    @if (!segment.IsActive)
+                                    {
+                                        <span class="rounded-full bg-slate-100 px-2 py-0.5
+                                                     text-xs font-medium text-slate-600">
+                                            Inactive
+                                        </span>
+                                    }
+
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(segment.Description))
+                                {
+                                    <p class="mt-1 line-clamp-2 text-sm text-slate-500">
+                                        @segment.Description
+                                    </p>
+                                }
+
+                                <div class="mt-3 flex flex-wrap gap-x-5 gap-y-2
+                                            text-xs text-slate-500">
+
+                                    <span>
+                                        <span class="font-medium text-slate-700">
+                                            Offset:
+                                        </span>
+
+                                        @FormatMinutes(segment.OffsetMinutes)
+                                    </span>
+
+                                    <span>
+                                        <span class="font-medium text-slate-700">
+                                            Duration:
+                                        </span>
+
+                                        @FormatMinutes(segment.DurationMinutes)
+                                    </span>
+
+                                    <span>
+                                        <span class="font-medium text-slate-700">
+                                            Period:
+                                        </span>
+
+                                        @GetSegmentPeriod(segment)
+                                    </span>
+
+                                </div>
+
+                                <div class="mt-3 flex flex-wrap gap-2">
+
+                                    @if (segment.RequiresAttendance)
+                                    {
+                                        <span class="rounded-md bg-emerald-50 px-2 py-1
+                                                     text-xs font-medium text-emerald-700">
+                                            Attendance
+                                        </span>
+                                    }
+
+                                    @if (segment.RequiresLocationValidation)
+                                    {
+                                        <span class="rounded-md bg-violet-50 px-2 py-1
+                                                     text-xs font-medium text-violet-700">
+                                            Location
+                                        </span>
+                                    }
+
+                                    @if (segment.RequiresDeviceValidation)
+                                    {
+                                        <span class="rounded-md bg-cyan-50 px-2 py-1
+                                                     text-xs font-medium text-cyan-700">
+                                            Device
+                                        </span>
+                                    }
+
+                                    @if (segment.GraceBeforeMinutes > 0)
+                                    {
+                                        <span class="rounded-md bg-amber-50 px-2 py-1
+                                                     text-xs font-medium text-amber-700">
+                                            @segment.GraceBeforeMinutes min early
+                                        </span>
+                                    }
+
+                                    @if (segment.GraceAfterMinutes > 0)
+                                    {
+                                        <span class="rounded-md bg-orange-50 px-2 py-1
+                                                     text-xs font-medium text-orange-700">
+                                            @segment.GraceAfterMinutes min late
+                                        </span>
+                                    }
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <button type="button"
+                                title="Edit segment"
+                                disabled="@IsDisabled"
+                                @onclick="@(() => HandleEditSegmentAsync(segment))"
+                                class="rounded-lg border border-slate-200 p-2
+                                       text-slate-500 transition
+                                       hover:border-blue-200 hover:bg-blue-50
+                                       hover:text-blue-700
+                                       disabled:cursor-not-allowed
+                                       disabled:opacity-50">
+
+                            <svg xmlns="http://www.w3.org/2000/svg"
+                                 fill="none"
+                                 viewBox="0 0 24 24"
+                                 stroke-width="1.5"
+                                 stroke="currentColor"
+                                 class="h-5 w-5">
+
+                                <path stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      d="M16.862 4.487l1.687-1.688
+                                         a1.875 1.875 0 112.652 2.652
+                                         L10.582 16.07a4.5 4.5 0 01-1.897 1.13
+                                         L6 18l.8-2.685a4.5 4.5 0 011.13-1.897
+                                         l8.932-8.931z
+                                         M19.5 7.125L16.862 4.487
+                                         M18 14.25v4.125
+                                         A2.625 2.625 0 0115.375 21H5.625
+                                         A2.625 2.625 0 013 18.375V8.625
+                                         A2.625 2.625 0 015.625 6H9.75" />
+
+                            </svg>
+
+                        </button>
+
+                    </div>
+
+                </div>
+            }
+
+        </div>
+
+        <div class="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+
+            <div class="rounded-xl bg-slate-50 p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Segments
+                </p>
+
+                <p class="mt-1 text-lg font-semibold text-slate-900">
+                    @Segments.Count
+                </p>
+
+            </div>
+
+            <div class="rounded-xl bg-slate-50 p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Total Time
+                </p>
+
+                <p class="mt-1 text-lg font-semibold text-slate-900">
+                    @FormatMinutes(TotalActiveMinutes)
+                </p>
+
+            </div>
+
+            <div class="rounded-xl bg-slate-50 p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Attendance
+                </p>
+
+                <p class="mt-1 text-lg font-semibold text-slate-900">
+                    @AttendanceCount
+                </p>
+
+            </div>
+
+            <div class="rounded-xl bg-slate-50 p-3">
+
+                <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+                    Mandatory
+                </p>
+
+                <p class="mt-1 text-lg font-semibold text-slate-900">
+                    @MandatoryCount
+                </p>
+
+            </div>
+
+        </div>
+
+        @if (HasOverlappingSegments)
+        {
+            <div class="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3">
+
+                <p class="text-sm font-medium text-amber-800">
+                    Overlapping segments detected
+                </p>
+
+                <p class="mt-1 text-xs leading-5 text-amber-700">
+                    One or more active segments overlap based on their offset
+                    and duration values.
+                </p>
+
+            </div>
+        }
+    }
+
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<WorkTemplateSegmentDto> Segments { get; set; } =
+        Array.Empty<WorkTemplateSegmentDto>();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public bool CanManageSegments { get; set; }
+
+    [Parameter]
+    public TimeOnly? TemplateStartTime { get; set; }
+
+    [Parameter]
+    public EventCallback OnAddSegment { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkTemplateSegmentDto> OnEditSegment { get; set; }
+
+    private IEnumerable<WorkTemplateSegmentDto> OrderedSegments =>
+        Segments
+            .OrderBy(x => x.SequenceNumber)
+            .ThenBy(x => x.OffsetMinutes);
+
+    private int TotalActiveMinutes =>
+        Segments
+            .Where(x => x.IsActive)
+            .Sum(x => x.DurationMinutes);
+
+    private int AttendanceCount =>
+        Segments.Count(
+            x => x.IsActive &&
+                 x.RequiresAttendance);
+
+    private int MandatoryCount =>
+        Segments.Count(
+            x => x.IsActive &&
+                 x.IsMandatory);
+
+    private bool HasOverlappingSegments =>
+        DetectOverlaps();
+
+    private Task HandleAddSegmentAsync()
+    {
+        return OnAddSegment.HasDelegate
+            ? OnAddSegment.InvokeAsync()
+            : Task.CompletedTask;
+    }
+
+    private Task HandleEditSegmentAsync(
+        WorkTemplateSegmentDto segment)
+    {
+        return OnEditSegment.HasDelegate
+            ? OnEditSegment.InvokeAsync(segment)
+            : Task.CompletedTask;
+    }
+
+    private string GetSegmentPeriod(
+        WorkTemplateSegmentDto segment)
+    {
+        if (!TemplateStartTime.HasValue)
+        {
+            var endMinute =
+                segment.OffsetMinutes +
+                segment.DurationMinutes;
+
+            return
+                $"Minute {segment.OffsetMinutes} - minute {endMinute}";
+        }
+
+        var start =
+            TemplateStartTime.Value.ToTimeSpan()
+                .Add(
+                    TimeSpan.FromMinutes(
+                        segment.OffsetMinutes));
+
+        var end =
+            start.Add(
+                TimeSpan.FromMinutes(
+                    segment.DurationMinutes));
+
+        return
+            $"{FormatClockTime(start)} - {FormatClockTime(end)}";
+    }
+
+    private bool DetectOverlaps()
+    {
+        var activeSegments =
+            Segments
+                .Where(x =>
+                    x.IsActive &&
+                    x.DurationMinutes > 0)
+                .OrderBy(x => x.OffsetMinutes)
+                .ToList();
+
+        for (var index = 0;
+             index < activeSegments.Count - 1;
+             index++)
+        {
+            var current =
+                activeSegments[index];
+
+            var next =
+                activeSegments[index + 1];
+
+            var currentEnd =
+                current.OffsetMinutes +
+                current.DurationMinutes;
+
+            if (next.OffsetMinutes < currentEnd)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string FormatMinutes(
+        int totalMinutes)
+    {
+        if (totalMinutes <= 0)
+            return "0m";
+
+        var hours =
+            totalMinutes / 60;
+
+        var minutes =
+            totalMinutes % 60;
+
+        if (hours > 0 &&
+            minutes > 0)
+        {
+            return $"{hours}h {minutes}m";
+        }
+
+        if (hours > 0)
+            return $"{hours}h";
+
+        return $"{minutes}m";
+    }
+
+    private static string FormatClockTime(
+        TimeSpan time)
+    {
+        var totalMinutes =
+            (int)time.TotalMinutes;
+
+        var dayNumber =
+            (int)Math.Floor(
+                totalMinutes / 1440d);
+
+        var normalizedMinutes =
+            totalMinutes % 1440;
+
+        if (normalizedMinutes < 0)
+        {
+            normalizedMinutes += 1440;
+            dayNumber--;
+        }
+
+        var hours =
+            normalizedMinutes / 60;
+
+        var minutes =
+            normalizedMinutes % 60;
+
+        var formatted =
+            $"{hours:00}:{minutes:00}";
+
+        if (dayNumber > 0)
+        {
+            return dayNumber == 1
+                ? $"{formatted} (+1 day)"
+                : $"{formatted} (+{dayNumber} days)";
+        }
+
+        if (dayNumber < 0)
+        {
+            return dayNumber == -1
+                ? $"{formatted} (-1 day)"
+                : $"{formatted} ({dayNumber} days)";
+        }
+
+        return formatted;
+    }
+}

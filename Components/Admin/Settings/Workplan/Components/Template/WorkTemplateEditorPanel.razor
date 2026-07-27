@@ -1,0 +1,398 @@
+﻿@using Microsoft.AspNetCore.Components.Forms
+@using HRM.DTOs.WorkPlanning
+@using HRM.Components.Shared
+
+<RightSidePanel IsOpen="@IsOpen"
+                IsOpenChanged="@HandlePanelVisibilityChangedAsync"
+                Title="@PanelTitle"
+                Description="@PanelDescription"
+                Size="RightSidePanel.PanelSize.ExtraLarge"
+                ContentWidth="max-w-4xl">
+
+    <ChildContent>
+
+        <EditForm Model="@Model"
+                  OnValidSubmit="@HandleSaveAsync"
+                  id="@FormId">
+
+            <DataAnnotationsValidator />
+
+            <div class="space-y-6">
+
+                <ValidationSummary class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700" />
+
+                <!-- General Details -->
+                <WorkTemplateGeneralSection Model="@Model"
+                                            TemplateTypes="@TemplateTypes"
+                                            IsDisabled="@IsSaving"
+                                            TemplateTypeChanged="@HandleTemplateTypeChangedAsync" />
+
+                <hr class="border-slate-200" />
+
+                <!-- Schedule -->
+                <WorkTemplateScheduleSection Model="@Model"
+                                             IsDisabled="@IsSaving"
+                                             StartTimeChanged="@HandleStartTimeChangedAsync"
+                                             EndTimeChanged="@HandleEndTimeChangedAsync"
+                                             ScheduleChanged="@HandleScheduleChangedAsync" />
+
+                <hr class="border-slate-200" />
+
+                <!-- Attendance and validation rules -->
+                <WorkTemplateRulesSection Model="@Model"
+                                          IsDisabled="@IsSaving" />
+
+                <hr class="border-slate-200" />
+
+                <!-- Template segments -->
+                <WorkTemplateSegmentsSection Segments="@Segments"
+                                             IsLoading="@IsLoadingSegments"
+                                             IsDisabled="@IsSaving"
+                                             CanManageSegments="@CanManageSegments"
+                                             TemplateStartTime="@Model.DefaultStartTime"
+                                             OnAddSegment="@HandleAddSegmentAsync"
+                                             OnEditSegment="@HandleEditSegmentAsync" />
+
+                <!-- Archive -->
+                @if (!IsCreating &&
+                Model.WorkTemplateId > 0)
+                {
+                    <hr class="border-slate-200" />
+
+                    <section class="rounded-lg border border-red-200 bg-red-50 p-4">
+
+                        <h3 class="text-sm font-semibold text-red-800">
+                            Archive Template
+                        </h3>
+
+                        <p class="mt-1 text-xs leading-5 text-red-700">
+                            Archiving removes this template from normal planning selections.
+                            Existing plans and assignments are not deleted.
+                        </p>
+
+                        <button type="button"
+                                disabled="@IsSaving"
+                                @onclick="@HandleArchiveAsync"
+                                class="mt-4 rounded-lg border border-red-300 bg-white
+                                       px-4 py-2 text-sm font-medium text-red-700
+                                       transition hover:bg-red-100
+                                       disabled:cursor-not-allowed
+                                       disabled:opacity-50">
+
+                            @(IsSaving
+                                ? "Processing..."
+                                : "Archive Template")
+
+                        </button>
+
+                    </section>
+                }
+
+            </div>
+
+        </EditForm>
+
+    </ChildContent>
+
+    <FooterContent>
+
+        <div class="flex flex-col-reverse gap-3
+                    sm:flex-row sm:items-center sm:justify-end">
+
+            <button type="button"
+                    disabled="@IsSaving"
+                    @onclick="@HandleCloseAsync"
+                    class="rounded-lg border border-slate-300 bg-white
+                           px-5 py-2 text-sm font-medium text-slate-700
+                           transition hover:bg-slate-50
+                           disabled:cursor-not-allowed
+                           disabled:opacity-50">
+                Cancel
+            </button>
+
+            <button type="submit"
+                    form="@FormId"
+                    disabled="@SaveDisabled"
+                    class="rounded-lg bg-blue-600 px-5 py-2
+                           text-sm font-medium text-white
+                           transition hover:bg-blue-700
+                           disabled:cursor-not-allowed
+                           disabled:bg-slate-300">
+
+                @SaveButtonText
+
+            </button>
+
+        </div>
+
+    </FooterContent>
+
+</RightSidePanel>
+
+@code {
+    private const string FormId =
+        "work-template-form";
+
+    private bool isClosing;
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter, EditorRequired]
+    public UpdateWorkTemplateDto Model { get; set; } = null!;
+
+    [Parameter]
+    public bool IsCreating { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public WorkTemplateDto? SelectedTemplate { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<WorkTemplateTypeDto> TemplateTypes { get; set; } =
+        Array.Empty<WorkTemplateTypeDto>();
+
+    [Parameter]
+    public IReadOnlyList<WorkTemplateSegmentDto> Segments { get; set; } =
+        Array.Empty<WorkTemplateSegmentDto>();
+
+    [Parameter]
+    public bool IsLoadingSegments { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback OnArchive { get; set; }
+
+    [Parameter]
+    public EventCallback OnAddSegment { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkTemplateSegmentDto> OnEditSegment { get; set; }
+
+    [Parameter]
+    public EventCallback<int> TemplateTypeChanged { get; set; }
+
+    private bool CanManageSegments =>
+        Model.WorkTemplateId > 0 &&
+        !IsSaving;
+
+    private bool OnlyOneTimeProvided =>
+        Model.DefaultStartTime.HasValue !=
+        Model.DefaultEndTime.HasValue;
+
+    private bool SaveDisabled =>
+        IsSaving ||
+        string.IsNullOrWhiteSpace(Model.Name) ||
+        Model.WorkTemplateTypeId <= 0 ||
+        OnlyOneTimeProvided;
+
+    private string PanelTitle =>
+        IsCreating
+            ? "Create Work Template"
+            : "Edit Work Template";
+
+    private string PanelDescription =>
+        IsCreating
+            ? "Configure a reusable shift, duty, or work schedule."
+            : "Update the selected template's schedule and validation settings.";
+
+    private string SaveButtonText
+    {
+        get
+        {
+            if (IsSaving)
+            {
+                return "Saving...";
+            }
+
+            return IsCreating
+                ? "Create Template"
+                : "Save Changes";
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        /*
+        * Reset the close guard whenever the parent
+             * opens the panel again.
+             */
+        if (IsOpen)
+        {
+            isClosing = false;
+        }
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (IsSaving)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(Model.Name))
+        {
+            return;
+        }
+
+        if (Model.WorkTemplateTypeId <= 0)
+        {
+            return;
+        }
+
+        if (OnlyOneTimeProvided)
+        {
+            return;
+        }
+
+        if (OnSave.HasDelegate)
+        {
+            await OnSave.InvokeAsync();
+        }
+    }
+
+    private async Task HandleCloseAsync()
+    {
+        if (IsSaving || isClosing)
+        {
+            return;
+        }
+
+        isClosing = true;
+
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+            return;
+        }
+
+        if (IsOpenChanged.HasDelegate)
+        {
+            await IsOpenChanged.InvokeAsync(false);
+        }
+    }
+
+    private async Task HandlePanelVisibilityChangedAsync(
+        bool value)
+    {
+        if (IsSaving && !value)
+        {
+            return;
+        }
+
+        /*
+        * Prevent duplicate close notifications when
+             * Cancel and the panel overlay fire together.
+             */
+        if (!value && isClosing)
+        {
+            return;
+        }
+
+        if (!value)
+        {
+            isClosing = true;
+        }
+
+        if (IsOpenChanged.HasDelegate)
+        {
+            await IsOpenChanged.InvokeAsync(value);
+        }
+    }
+
+    private async Task HandleArchiveAsync()
+    {
+        if (IsSaving ||
+            Model.WorkTemplateId <= 0)
+        {
+            return;
+        }
+
+        if (OnArchive.HasDelegate)
+        {
+            await OnArchive.InvokeAsync();
+        }
+    }
+
+    private async Task HandleAddSegmentAsync()
+    {
+        if (!CanManageSegments)
+        {
+            return;
+        }
+
+        if (OnAddSegment.HasDelegate)
+        {
+            await OnAddSegment.InvokeAsync();
+        }
+    }
+
+    private async Task HandleEditSegmentAsync(
+        WorkTemplateSegmentDto segment)
+    {
+        if (IsSaving || segment is null)
+        {
+            return;
+        }
+
+        if (OnEditSegment.HasDelegate)
+        {
+            await OnEditSegment.InvokeAsync(segment);
+        }
+    }
+
+    private async Task HandleTemplateTypeChangedAsync(
+        int workTemplateTypeId)
+    {
+        Model.WorkTemplateTypeId =
+            workTemplateTypeId;
+
+        var selectedType =
+            TemplateTypes.FirstOrDefault(
+                x => x.WorkTemplateTypeId ==
+                     workTemplateTypeId);
+
+        Model.TemplateType =
+            selectedType?.Name ??
+            string.Empty;
+
+        if (TemplateTypeChanged.HasDelegate)
+        {
+            await TemplateTypeChanged.InvokeAsync(
+                workTemplateTypeId);
+        }
+    }
+
+    private Task HandleStartTimeChangedAsync(
+        TimeOnly? value)
+    {
+        Model.DefaultStartTime =
+            value;
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleEndTimeChangedAsync(
+        TimeOnly? value)
+    {
+        Model.DefaultEndTime =
+            value;
+
+        return Task.CompletedTask;
+    }
+
+    private Task HandleScheduleChangedAsync()
+    {
+        return Task.CompletedTask;
+    }
+}

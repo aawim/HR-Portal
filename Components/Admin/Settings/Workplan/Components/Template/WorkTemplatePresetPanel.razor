@@ -1,0 +1,141 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<div class="flex h-full flex-col overflow-hidden rounded-xl
+            border border-slate-200 bg-white shadow-sm">
+
+    <div class="border-b border-slate-100 px-4 py-4">
+
+        <h2 class="font-semibold text-slate-800">
+            Quick Templates
+        </h2>
+
+        <p class="mt-1 text-xs text-slate-500">
+            Select a preset and customize it before saving.
+        </p>
+
+    </div>
+
+    <div class="border-b border-slate-100 p-4">
+
+        <input type="text"
+               value="@SearchText"
+               @oninput="HandleSearchChanged"
+               class="w-full rounded-lg border border-slate-300
+                      px-3 py-2 text-sm outline-none transition
+                      focus:border-blue-500 focus:ring-2
+                      focus:ring-blue-100"
+               placeholder="Search quick templates..." />
+
+    </div>
+
+    <div class="max-h-[620px] flex-1 space-y-3 overflow-y-auto p-3">
+
+        @if (Presets.Count == 0)
+        {
+            <div class="py-12 text-center">
+
+                <p class="text-sm font-medium text-slate-600">
+                    No quick templates found
+                </p>
+
+                <p class="mt-1 text-xs text-slate-400">
+                    Change the quick-template search.
+                </p>
+
+            </div>
+        }
+        else
+        {
+            @foreach (var preset in Presets)
+            {
+                <button type="button"
+                        class="w-full rounded-lg border
+                               border-slate-200 p-3 text-left
+                               transition hover:border-blue-300
+                               hover:bg-blue-50"
+                        @onclick="() => SelectPresetAsync(preset)">
+
+                    <div class="flex items-start gap-3">
+
+                        <div class="flex h-11 w-11 shrink-0
+                                    items-center justify-center
+                                    rounded-lg bg-slate-100 text-2xl">
+                            @preset.Icon
+                        </div>
+
+                        <div class="min-w-0">
+
+                            <p class="font-semibold text-slate-800">
+                                @preset.Name
+                            </p>
+
+                            <p class="mt-1 text-xs leading-5 text-slate-500">
+                                @preset.Description
+                            </p>
+
+                            @if (preset.DefaultStartTime.HasValue &&
+                           preset.DefaultEndTime.HasValue)
+                            {
+                                <p class="mt-2 text-xs font-medium text-blue-600">
+                                    @FormatTime(preset.DefaultStartTime)
+                                    -
+                                    @FormatTime(preset.DefaultEndTime)
+                                </p>
+                            }
+
+                        </div>
+
+                    </div>
+
+                </button>
+            }
+        }
+
+    </div>
+
+    <div class="border-t border-slate-100 bg-slate-50 p-4">
+
+        <p class="text-xs leading-5 text-slate-500">
+            A preset does not save immediately. Its settings open
+            in the side panel for review.
+        </p>
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<WorkTemplatePresetDto> Presets { get; set; } =
+        Array.Empty<WorkTemplatePresetDto>();
+
+    [Parameter]
+    public string SearchText { get; set; } =
+        string.Empty;
+
+    [Parameter]
+    public EventCallback<string> SearchTextChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<WorkTemplatePresetDto> OnPresetSelected { get; set; }
+
+    private Task HandleSearchChanged(
+        ChangeEventArgs args)
+    {
+        return SearchTextChanged.InvokeAsync(
+            args.Value?.ToString() ?? string.Empty);
+    }
+
+    private Task SelectPresetAsync(
+        WorkTemplatePresetDto preset)
+    {
+        return OnPresetSelected.InvokeAsync(preset);
+    }
+
+    private static string FormatTime(
+        TimeSpan? value)
+    {
+        return value?.ToString(@"hh\:mm") ??
+               string.Empty;
+    }
+}

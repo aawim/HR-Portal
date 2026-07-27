@@ -21,6 +21,30 @@ namespace HRM.Services
             _logService = logService;
         }
 
+
+        public async Task<List<WorkTemplateTypeDto>>
+    GetAllTemplateTypesAsync()
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            return await db.WorkTemplateTypes
+                .AsNoTracking()
+                .Where(x => x.IsActive)
+                .OrderBy(x => x.Name)
+                .Select(x => new WorkTemplateTypeDto
+                {
+                    WorkTemplateTypeId =
+                        x.WorkTemplateTypeId,
+
+                    Name =
+                        x.Name,
+
+                    Description =
+                        x.Description
+                })
+                .ToListAsync();
+        }
         public async Task<List<WorkTemplateDto>> GetAllAsync(bool includeInactive = true)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
