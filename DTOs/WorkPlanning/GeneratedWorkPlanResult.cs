@@ -41,5 +41,7 @@
         public int SegmentCount { get; set; }
 
         public int OwnerCount { get; set; }
+
+        public int Version {  get; set; }
     }
 }

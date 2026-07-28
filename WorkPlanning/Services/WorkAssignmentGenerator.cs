@@ -1,130 +1,142 @@
-﻿using HRM.Components.Shared;
+﻿using Azure.Core;
+using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Models.WorkPlanning;
-using HRM.Services.Interfaces;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 
 namespace HRM.Services.WorkPlanning;
 
-public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
+public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 {
+    private const int AssignedWorkAssignmentStateId = 1;
+
+    /*
+     * Temporary default because JobWorkTemplateAssignments does not
+     * currently contain a scheduled start-time column.
+     *
+     * Later, this can be replaced by:
+     *
+     * JobWorkTemplateAssignment.ScheduledStartTime
+     */
+    private static readonly TimeOnly DefaultScheduledStartTime =
+        new(8, 0);
+
     private readonly IDbContextFactory<HrmTeContext> _dbFactory;
-    private readonly ILogger<WorkAssignmentGenerator> _logger;
-    private readonly IOperationLogService _operationLogService;
-    public WorkAssignmentGenerator(
+    private readonly ILogger<WorkAssignmentGeneratorService> _logger;
+
+    public WorkAssignmentGeneratorService(
         IDbContextFactory<HrmTeContext> dbFactory,
-        ILogger<WorkAssignmentGenerator> logger, IOperationLogService operationLogService)
+        ILogger<WorkAssignmentGeneratorService> logger)
     {
         _dbFactory = dbFactory;
         _logger = logger;
-        _operationLogService = operationLogService;
     }
 
     public async Task<GeneratedWorkPlanResult> GenerateAsync(
         GenerateWorkPlanRequest request,
         CancellationToken cancellationToken = default)
     {
-       
         if (request is null)
         {
             return Failure(
                 "The work-plan generation request is required.");
         }
 
-        var validationMessage = ValidateRequest(request);
+        var requestValidationMessage =
+            ValidateRequest(request);
 
-        if (validationMessage is not null)
+        if (requestValidationMessage is not null)
         {
-            return Failure(validationMessage);
+            return Failure(requestValidationMessage);
         }
 
         await using var db =
-            await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-        await using var transaction =
-            await db.Database.BeginTransactionAsync(cancellationToken);
+            await _dbFactory.CreateDbContextAsync(
+                cancellationToken);
 
         try
         {
-            var template = await db.WorkTemplates
-                .AsNoTracking()
-                .Where(x =>
-                    x.WorkTemplateId == request.WorkTemplateId &&
-                    x.IsActive)
-                .Select(x => new
-                {
-                    x.WorkTemplateSegments,
-                    x.WorkTemplateId,
-                    x.Name,
-                    x.Description,
-                    x.WorkTemplateTypeId
-                })
-                .SingleOrDefaultAsync(cancellationToken);
+            /*
+             * Load the template and all active template segments
+             * using a non-tracked projection.
+             */
+            var template = await LoadTemplateAsync(
+                db,
+                request.WorkTemplateId,
+                cancellationToken);
 
             if (template is null)
             {
                 return Failure(
-                    $"Work template ID {request.WorkTemplateId} was not found or is inactive.");
+                    $"Work template ID {request.WorkTemplateId} " +
+                    "was not found or is inactive.");
             }
 
-            var templateSegments = await db.WorkTemplateSegments
-          .AsNoTracking()
-          .Where(x =>
-              x.WorkTemplateId == request.WorkTemplateId &&
-              x.IsActive)
-          .OrderBy(x => x.SequenceNumber)
-          .ToListAsync(cancellationToken);
-
-            if (templateSegments.Count == 0)
+            if (template.Segments.Count == 0)
             {
                 return Failure(
-                    $"Work template '{template.Name}' does not contain any active segments.");
+                    $"Work template '{template.Name}' does not " +
+                    "contain any active segments.");
             }
 
-            var individualExists = await db.Individuals
-                .AsNoTracking()
-                .AnyAsync(
-                    x => x.BusinessEntityId == request.IndividualId,
+            var segmentValidationMessage =
+                ValidateTemplateSegments(
+                    template.Segments);
+
+            if (segmentValidationMessage is not null)
+            {
+                return Failure(segmentValidationMessage);
+            }
+
+            /*
+             * Validate the employee, job and organisation using
+             * one database query.
+             */
+            var job = await LoadValidJobAsync(
+                db,
+                request,
+                cancellationToken);
+
+            if (job is null)
+            {
+                return Failure(
+                    "The selected job does not belong to the " +
+                    "selected employee and organisation.");
+            }
+
+            if (job.JobStateId !=
+                SharedConfig.JobStates.APPROVED)
+            {
+                return Failure(
+                    "The selected job is not approved.");
+            }
+
+            if (job.TerminatedDate.HasValue)
+            {
+                return Failure(
+                    "An assignment cannot be generated for a " +
+                    "terminated job.");
+            }
+
+            /*
+             * Validate that the template is assigned to the selected
+             * job for the requested work date.
+             */
+            var jobTemplateAssignment =
+                await ResolveJobTemplateAssignmentAsync(
+                    db,
+                    request,
                     cancellationToken);
 
-            if (!individualExists)
+            if (jobTemplateAssignment is null)
             {
                 return Failure(
-                    $"Individual ID {request.IndividualId} was not found.");
-            }
-
-            var organisationExists = await db.Organisations
-                .AsNoTracking()
-                .AnyAsync(
-                    x =>
-                        x.BusinessEntityID ==
-                        request.OrganisationBusinessEntityId,
-                    cancellationToken);
-
-            if (!organisationExists)
-            {
-                return Failure(
-                    $"Organisation ID {request.OrganisationBusinessEntityId} was not found.");
-            }
-
-            var jobExists = await db.Jobs
-                .AsNoTracking()
-                .AnyAsync(
-                    x =>
-                        x.JobId == request.JobId &&
-                        x.IndividualID == request.IndividualId &&
-                        x.OrganisationID ==
-                        request.OrganisationBusinessEntityId,
-                    cancellationToken);
-
-            if (!jobExists)
-            {
-                return Failure(
-                    "The selected job does not belong to the selected employee and organisation.");
+                    "The selected work template is not actively " +
+                    "assigned to this job for the requested date.");
             }
 
             var planningProvider =
@@ -136,210 +148,499 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             if (planningProvider is null)
             {
                 return Failure(
-                    "No active planning provider was found for the organisation.");
+                    "No active planning provider is configured " +
+                    "for the selected organisation.");
             }
 
-            var existingPlan = await db.WorkPlans
-                .AsNoTracking()
-                .Where(x =>
-                    x.WorkTemplateId == request.WorkTemplateId &&
-                    x.IndividualId == request.IndividualId &&
-                    x.JobId == request.JobId &&
-                    x.OrganisationBusinessEntityId ==
-                    request.OrganisationBusinessEntityId &&
-                    x.WorkDate == request.WorkDate &&
-                    x.IsValid)
-                .Select(x => new
-                {
-                    x.WorkPlanId
-                })
-                .FirstOrDefaultAsync(cancellationToken);
+            /*
+             * Only one active work plan should exist for the same:
+             *
+             * Employee + Job + Organisation + Date
+             *
+             * WorkTemplateId must not be included because otherwise
+             * different templates could create duplicate assignments.
+             */
+            var existingPlan =
+                await FindExistingActivePlanAsync(
+                    db,
+                    request,
+                    cancellationToken);
 
             if (existingPlan is not null)
             {
+                var state =
+                    existingPlan.IsFinalized
+                        ? "finalized"
+                        : "active";
+
                 return Failure(
-                    $"A work plan already exists for this employee on " +
+                    $"A {state} work assignment already exists " +
+                    $"for this employee on " +
                     $"{request.WorkDate:yyyy-MM-dd}.",
                     existingPlan.WorkPlanId);
             }
 
-            //var assignmentPeriod =
-            //    CalculateAssignmentPeriod(
-            //        request.WorkDate,
-            //        templateSegments);
+            /*
+             * Version is calculated from all previous versions,
+             * including invalidated versions.
+             */
+            var nextVersion =
+                await GetNextVersionAsync(
+                    db,
+                    request,
+                    cancellationToken);
 
+            /*
+             * The current database has no scheduled-start-time field.
+             * Therefore 08:00 is used as the assignment base time.
+             */
+            var scheduledStartTime =
+                DefaultScheduledStartTime;
 
-            //var template = DateTimeCalculationResult
-           
-
-            //var assignmentPeriod = CalculateAssignmentPeriod(
-            //        request.WorkDate,
-            //        new TimeOnly(8, 0),
-            //        template.WorkTemplateSegments
-            //            .Where(x => x.IsActive)
-            //            .ToList());
-
-            var assignmentPeriod = CalculateAssignmentPeriod(
-        // Fix: Convert the DateTime to DateOnly
-        DateOnly.FromDateTime(request.WorkDate),
-        new TimeOnly(8, 0),
-        template.WorkTemplateSegments
-            .Where(x => x.IsActive)
-            .ToList());
-
-
+            var assignmentPeriod =
+                CalculateAssignmentPeriod(
+                    DateOnly.FromDateTime(
+                        request.WorkDate),
+                    scheduledStartTime,
+                    template.Segments);
 
             if (!assignmentPeriod.Success)
             {
-                return Failure(assignmentPeriod.Message);
+                return Failure(
+                    assignmentPeriod.Message);
             }
 
-            var now = DateTime.Now;
+            /*
+             * Start the transaction only after all read-only validation
+             * has completed.
+             */
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    cancellationToken);
 
-            var workPlan = new WorkPlan
+            try
             {
-                IndividualId = request.IndividualId,
-                JobId = request.JobId,
+                var result =
+                    await CreateWorkPlanAndAssignmentAsync(
+                        db,
+                        request,
+                        template,
+                        planningProvider,
+                        assignmentPeriod,
+                        nextVersion,
+                        cancellationToken);
 
-                OrganisationBusinessEntityId =
-                    request.OrganisationBusinessEntityId,
+                await transaction.CommitAsync(
+                    cancellationToken);
 
-                PlanningProviderId =
-                    planningProvider.PlanningProviderId,
+                _logger.LogInformation(
+                    """
+                    Work assignment generated successfully.
+                    WorkPlanId: {WorkPlanId}
+                    WorkAssignmentId: {WorkAssignmentId}
+                    TemplateId: {TemplateId}
+                    IndividualId: {IndividualId}
+                    JobId: {JobId}
+                    WorkDate: {WorkDate}
+                    Version: {Version}
+                    GenerationSource: {GenerationSource}
+                    """,
+                    result.WorkPlanId,
+                    result.WorkAssignmentId,
+                    request.WorkTemplateId,
+                    request.IndividualId,
+                    request.JobId,
+                    request.WorkDate.Date,
+                    result.Version,
+                    request.GenerationSource);
 
-                WorkTemplateId = request.WorkTemplateId,
-                WorkDate = request.WorkDate,
-                GenerationSource = request.GenerationSource,
-
-                GeneratedDate = now,
-                GeneratedByUserId = request.GeneratedByUserId,
-
-                IsFinalized = false,
-                FinalizedDate = null,
-                FinalizedByUserId = null,
-
-                Remarks = request.Remarks,
-                IsValid = true,
-                OperationLogId = request.OperationLogId,
-                CreatedDate = now,
-
-                PlanGuid = Guid.NewGuid(),
-                Version = 1,
-                IsGenerated = true,
-
-                IsManual =
-                    request.GenerationSource ==
-                    WorkPlanGenerationSource.Manual
-            };
-
-            db.WorkPlans.Add(workPlan);
-
-
-            //var plannedStateId = await db.WorkAssignmentStates
-            //.AsNoTracking()
-            //.Where(x => x.IsActive && x.Code == "PLANNED")
-            //.Select(x => x.WorkAssignmentStateId)
-            //.SingleOrDefaultAsync(cancellationToken);
-
-            //if (plannedStateId == 0)
-            //{
-            //    return Failure("Work assignment state 'PLANNED' was not found.");
-            //}
-
-            await db.SaveChangesAsync(cancellationToken);
-
-            var workAssignment = new WorkAssignment
+                return result;
+            }
+            catch (OperationCanceledException)
             {
-                WorkPlanId = workPlan.WorkPlanId,
+                await RollbackSafelyAsync(
+                    transaction);
 
-                WorkTemplateId = request.WorkTemplateId,
-
-                WorkTemplateTypeId = template.WorkTemplateTypeId,
-
-                WorkAssignmentStateId = 1,
-
-                Name = string.IsNullOrWhiteSpace(request.AssignmentTitle)
-                   ? template.Name
-                   : request.AssignmentTitle.Trim(),
-
-                Code = null,
-
-                Description = string.IsNullOrWhiteSpace(request.AssignmentDescription)
-           ? template.Description
-           : request.AssignmentDescription.Trim(),
-
-                StartDateTime = assignmentPeriod.StartDateTime,
-
-                EndDateTime = assignmentPeriod.EndDateTime,
-
-                GraceMinutes = 0,
-
-                RequiresAttendance = request.RequiresAttendance,
-
-                RequiresCheckOut = request.RequiresCheckout,
-
-                Priority = request.Priority,
-
-                AssignmentSource = request.AssignmentSource,
-
-                SourceReferenceType = null,
-
-                SourceReferenceId = null,
-
-                LocationName = null,
-
-                Latitude = null,
-
-                Longitude = null,
-
-                AllowedRadiusMeters = null,
-
-                CancelledDate = null,
-
-                CancellationReason = null,
-
-                CancelledByUserId = null,
-
-                IsValid = true,
-
-                OperationLogId = request.OperationLogId,
-
-                CreatedDate = now,
-
-                CreatedByUserId = request.GeneratedByUserId
-            };
-
-            db.WorkAssignments.Add(workAssignment);
-
-            await db.SaveChangesAsync(cancellationToken);
-
-            //db.WorkAssignments.Add(workAssignment);
-
-            //await db.SaveChangesAsync(cancellationToken);
-
-            foreach (var templateSegment in templateSegments)
+                throw;
+            }
+            catch (DbUpdateException exception)
             {
-                var segmentPeriod =
-                    CalculateSegmentPeriod(
-                        workAssignment.StartDateTime,
-                        templateSegment);
+                await RollbackSafelyAsync(
+                    transaction);
 
-                if (!segmentPeriod.Success)
+                _logger.LogError(
+                    exception,
+                    """
+                    A database error occurred while generating
+                    a work assignment.
+                    TemplateId: {TemplateId}
+                    IndividualId: {IndividualId}
+                    JobId: {JobId}
+                    WorkDate: {WorkDate}
+                    """,
+                    request.WorkTemplateId,
+                    request.IndividualId,
+                    request.JobId,
+                    request.WorkDate);
+
+                return Failure(
+                    "The work assignment could not be saved. " +
+                    "It may already exist or contain invalid data.");
+            }
+            catch (Exception exception)
+            {
+                await RollbackSafelyAsync(
+                    transaction);
+
+                _logger.LogError(
+                    exception,
+                    """
+                    An unexpected error occurred while generating
+                    a work assignment.
+                    TemplateId: {TemplateId}
+                    IndividualId: {IndividualId}
+                    JobId: {JobId}
+                    WorkDate: {WorkDate}
+                    """,
+                    request.WorkTemplateId,
+                    request.IndividualId,
+                    request.JobId,
+                    request.WorkDate);
+
+                return Failure(
+                    "An unexpected error occurred while generating " +
+                    "the work assignment.");
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _logger.LogError(
+                exception,
+                """
+                Work-assignment validation failed unexpectedly.
+                TemplateId: {TemplateId}
+                IndividualId: {IndividualId}
+                JobId: {JobId}
+                WorkDate: {WorkDate}
+                """,
+                request.WorkTemplateId,
+                request.IndividualId,
+                request.JobId,
+                request.WorkDate);
+
+            return Failure(
+                "The work-assignment request could not be processed.");
+        }
+    }
+
+    private static async Task<GeneratedWorkPlanResult>
+        CreateWorkPlanAndAssignmentAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            TemplateGenerationModel template,
+            PlanningProvider planningProvider,
+            DateTimeCalculationResult assignmentPeriod,
+            int nextVersion,
+            CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+
+        var workPlan = new WorkPlan
+        {
+            IndividualId =
+                request.IndividualId,
+
+            JobId =
+                request.JobId,
+
+            OrganisationBusinessEntityId =
+                request.OrganisationBusinessEntityId,
+
+            PlanningProviderId =
+                planningProvider.PlanningProviderId,
+
+            WorkTemplateId =
+                request.WorkTemplateId,
+
+            WorkDate =
+                request.WorkDate.Date,
+
+            GenerationSource =
+                request.GenerationSource,
+
+            GeneratedDate =
+                now,
+
+            GeneratedByUserId =
+                request.GeneratedByUserId,
+
+            IsGenerated =
+                true,
+
+            IsManual =
+                request.GenerationSource ==
+                WorkPlanGenerationSource.Manual,
+
+            IsFinalized =
+                false,
+
+            FinalizedDate =
+                null,
+
+            FinalizedByUserId =
+                null,
+
+            Remarks =
+                NullIfWhiteSpace(
+                    request.Remarks),
+
+            IsValid =
+                true,
+
+            OperationLogId =
+                request.OperationLogId,
+
+            CreatedDate =
+                now,
+
+            PlanGuid =
+                Guid.NewGuid(),
+
+            Version =
+                nextVersion
+        };
+
+        db.WorkPlans.Add(workPlan);
+
+        /*
+         * WorkPlanId is database-generated, so save the WorkPlan first.
+         */
+        await db.SaveChangesAsync(
+            cancellationToken);
+
+        var workAssignment = new WorkAssignment
+        {
+            WorkPlanId =
+                workPlan.WorkPlanId,
+
+            WorkTemplateId =
+                template.WorkTemplateId,
+
+            WorkTemplateTypeId =
+                template.WorkTemplateTypeId,
+
+            WorkAssignmentStateId =
+                AssignedWorkAssignmentStateId,
+
+            Name =
+                string.IsNullOrWhiteSpace(
+                    request.AssignmentTitle)
+                    ? template.Name
+                    : request.AssignmentTitle.Trim(),
+
+            Code =
+                null,
+
+            Description =
+                string.IsNullOrWhiteSpace(
+                    request.AssignmentDescription)
+                    ? template.Description
+                    : request.AssignmentDescription.Trim(),
+
+            StartDateTime =
+                assignmentPeriod.StartDateTime,
+
+            EndDateTime =
+                assignmentPeriod.EndDateTime,
+
+            GraceMinutes =
+                0,
+
+            RequiresAttendance =
+                request.RequiresAttendance,
+
+            RequiresCheckOut =
+                request.RequiresCheckout,
+
+            Priority =
+                request.Priority,
+
+            AssignmentSource =
+                request.AssignmentSource,
+
+            SourceReferenceType =
+                null,
+
+            SourceReferenceId =
+                null,
+
+            LocationName =
+                null,
+
+            Latitude =
+                null,
+
+            Longitude =
+                null,
+
+            AllowedRadiusMeters =
+                null,
+
+            CancelledDate =
+                null,
+
+            CancellationReason =
+                null,
+
+            CancelledByUserId =
+                null,
+
+            IsValid =
+                true,
+
+            OperationLogId =
+                request.OperationLogId,
+
+            CreatedDate =
+                now,
+
+            CreatedByUserId =
+                request.GeneratedByUserId
+        };
+
+        db.WorkAssignments.Add(
+            workAssignment);
+
+        /*
+         * WorkAssignmentId is database-generated.
+         */
+        await db.SaveChangesAsync(
+            cancellationToken);
+
+        var assignmentSegments =
+            BuildAssignmentSegments(
+                request,
+                template,
+                workAssignment,
+                assignmentPeriod.AssignmentBaseDateTime);
+
+        db.WorkAssignmentSegments.AddRange(
+            assignmentSegments);
+
+        var owner = new WorkAssignmentOwner
+        {
+            WorkAssignmentId =
+                workAssignment.WorkAssignmentId,
+
+            IndividualId =
+                request.IndividualId,
+
+            JobId =
+                request.JobId,
+
+            OwnershipType =
+                WorkOwnershipType.Original,
+
+            AssignedDate =
+                now,
+
+            AssignedByUserId =
+                request.GeneratedByUserId,
+
+            EffectiveFrom =
+                assignmentPeriod.StartDateTime,
+
+            EffectiveTo =
+                assignmentPeriod.EndDateTime,
+
+            RelievedDate =
+                null,
+
+            RelievedByUserId =
+                null,
+
+            ReliefReason =
+                null,
+
+            IsCurrentOwner =
+                true,
+
+            IsValid =
+                true,
+
+            OperationLogId =
+                request.OperationLogId
+        };
+
+        db.WorkAssignmentOwners.Add(
+            owner);
+
+        await db.SaveChangesAsync(
+            cancellationToken);
+
+        return new GeneratedWorkPlanResult
+        {
+            Success = true,
+
+            Message =
+                $"Work assignment '{workAssignment.Name}' " +
+                "was generated successfully.",
+
+            WorkPlanId =
+                workPlan.WorkPlanId,
+
+            WorkAssignmentId =
+                workAssignment.WorkAssignmentId,
+
+            Version =
+                workPlan.Version
+        };
+    }
+
+    private static List<WorkAssignmentSegment>
+        BuildAssignmentSegments(
+            GenerateWorkPlanRequest request,
+            TemplateGenerationModel template,
+            WorkAssignment workAssignment,
+            DateTime assignmentBaseDateTime)
+    {
+        var assignmentSegments =
+            new List<WorkAssignmentSegment>();
+
+        foreach (var templateSegment in
+                 template.Segments.OrderBy(
+                     x => x.SequenceNumber))
+        {
+            var segmentPeriod =
+                CalculateSegmentPeriod(
+                    assignmentBaseDateTime,
+                    templateSegment);
+
+            if (!segmentPeriod.Success)
+            {
+                throw new InvalidOperationException(
+                    $"Unable to create segment " +
+                    $"'{templateSegment.Name}'. " +
+                    segmentPeriod.Message);
+            }
+
+            var assignmentSegment =
+                new WorkAssignmentSegment
                 {
-                    return Failure(
-                        $"Unable to create segment '{templateSegment.Name}'. " +
-                        segmentPeriod.Message);
-                }
-
-                var assignmentSegment = new WorkAssignmentSegment
-                {
-                    WorkAssignment = workAssignment,
+                    WorkAssignmentId =
+                        workAssignment.WorkAssignmentId,
 
                     WorkTemplateSegmentId =
-                        templateSegment.WorkTemplateSegmentId,
+                        templateSegment
+                            .WorkTemplateSegmentId,
 
                     WorkSegmentTypeId =
-                        templateSegment.WorkSegmentTypeId,
+                        templateSegment
+                            .WorkSegmentTypeId,
 
                     Name =
                         templateSegment.Name,
@@ -355,116 +656,341 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
 
                     EndDateTime =
                         segmentPeriod.EndDateTime,
-                    
+
                     GraceBeforeMinutes =
-                        (int)templateSegment.GraceBeforeMinutes,
+                        templateSegment
+                            .GraceBeforeMinutes,
 
                     GraceAfterMinutes =
-                        (int)templateSegment.GraceAfterMinutes,
+                        templateSegment
+                            .GraceAfterMinutes,
 
                     IsMandatory =
                         templateSegment.IsMandatory,
 
                     RequiresAttendance =
-                        templateSegment.RequiresAttendance,
+                        templateSegment
+                            .RequiresAttendance,
 
                     RequiresLocationValidation =
-                        templateSegment.RequiresLocationValidation,
+                        templateSegment
+                            .RequiresLocationValidation,
 
                     RequiresDeviceValidation =
-                        templateSegment.RequiresDeviceValidation,
+                        templateSegment
+                            .RequiresDeviceValidation,
 
-                    IsValid = true,
+                    IsValid =
+                        true,
 
                     OperationLogId =
                         request.OperationLogId
                 };
 
-                db.WorkAssignmentSegments.Add(assignmentSegment);
-            }
-
-            var owner = new WorkAssignmentOwner
-            {
-                WorkAssignmentId =
-                    workAssignment.WorkAssignmentId,
-
-                IndividualId = request.IndividualId,
-                JobId = request.JobId,
-
-                //AssignedDate = assignmentPeriod.StartDateTime.ToUniversalTime(),
-                EffectiveFrom =
-                    assignmentPeriod.StartDateTime,
-                EffectiveTo = null,
-
-                OwnershipType = WorkOwnershipType.Original,
-                IsCurrentOwner = true,
-                IsValid = true,
-                OperationLogId = request.OperationLogId,
- 
-            };
-
-            db.WorkAssignmentOwners.Add(owner);
-
-            await db.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-
-            return new GeneratedWorkPlanResult
-            {
-                Success = true,
-
-                Message =
-                    $"Work plan '{template.Name}' was generated successfully.",
-
-                WorkPlanId = workPlan.WorkPlanId,
- 
-            };
+            assignmentSegments.Add(
+                assignmentSegment);
         }
-        catch (OperationCanceledException)
+
+        return assignmentSegments;
+    }
+
+    private static async Task<TemplateGenerationModel?>
+        LoadTemplateAsync(
+            HrmTeContext db,
+            int workTemplateId,
+            CancellationToken cancellationToken)
+    {
+        return await db.WorkTemplates
+            .AsNoTracking()
+            .Where(x =>
+                x.WorkTemplateId == workTemplateId &&
+                x.IsActive)
+            .Select(x => new TemplateGenerationModel
+            {
+                WorkTemplateId =
+                    x.WorkTemplateId,
+
+                WorkTemplateTypeId =
+                    x.WorkTemplateTypeId,
+
+                Name =
+                    x.Name,
+
+                Description =
+                    x.Description,
+
+                Segments = x.WorkTemplateSegments
+                    .Where(segment =>
+                        segment.IsActive)
+                    .OrderBy(segment =>
+                        segment.SequenceNumber)
+                    .Select(segment =>
+                        new TemplateSegmentGenerationModel
+                        {
+                            WorkTemplateSegmentId =
+                                segment
+                                    .WorkTemplateSegmentId,
+
+                            WorkSegmentTypeId =
+                                segment
+                                    .WorkSegmentTypeId,
+
+                            Name =
+                                segment.Name,
+
+                            Description =
+                                segment.Description,
+
+                            SequenceNumber =
+                                segment.SequenceNumber,
+
+                            OffsetMinutes =
+                                segment.OffsetMinutes ?? 0,
+
+                            DurationMinutes =
+                                segment.DurationMinutes,
+
+                            GraceBeforeMinutes = segment.GraceBeforeMinutes ?? 0,
+
+                            GraceAfterMinutes = segment.GraceAfterMinutes ?? 0,
+
+                            IsMandatory =
+                                segment.IsMandatory,
+
+                            RequiresAttendance =
+                                segment.RequiresAttendance,
+
+                            RequiresLocationValidation =
+                                segment
+                                    .RequiresLocationValidation,
+
+                            RequiresDeviceValidation =
+                                segment
+                                    .RequiresDeviceValidation
+                        })
+                    .ToList()
+            })
+            .SingleOrDefaultAsync(
+                cancellationToken);
+    }
+
+    private static async Task<JobGenerationModel?>
+        LoadValidJobAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            CancellationToken cancellationToken)
+    {
+        return await db.Jobs
+            .AsNoTracking()
+            .Where(x =>
+                x.JobId == request.JobId &&
+                x.IndividualID ==
+                    request.IndividualId &&
+                x.OrganisationID ==
+                    request.OrganisationBusinessEntityId)
+            .Select(x => new JobGenerationModel
+            {
+                JobId =
+                    x.JobId,
+
+                IndividualId =
+                    x.IndividualID,
+
+                OrganisationId =
+                    x.OrganisationID,
+
+                JobStateId =
+                    x.JobStateId,
+
+                TerminatedDate =
+                    x.TerminatedDate
+            })
+            .SingleOrDefaultAsync(
+                cancellationToken);
+    }
+
+    private static async Task<JobTemplateAssignmentModel?>ResolveJobTemplateAssignmentAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            CancellationToken cancellationToken)
+    {
+        //var workDate = request.WorkDate.Date;
+
+        DateOnly workDate = DateOnly.FromDateTime(request.WorkDate.Date);
+
+        return await db.JobWorkTemplateAssignments
+            .AsNoTracking()
+            .Where(x =>
+                x.JobID == request.JobId &&
+                x.WorkTemplateID ==
+                    request.WorkTemplateId &&
+                x.IsActive &&
+                x.EffectiveFrom <= request.WorkDate.Date &&
+                (
+                    x.EffectiveTo == null ||
+                    x.EffectiveTo >= request.WorkDate.Date
+                ))
+            .OrderByDescending(x =>
+                x.EffectiveFrom)
+            .Select(x => new JobTemplateAssignmentModel
+            {
+                JobWorkTemplateAssignmentId =
+                    x.JobWorkTemplateAssignmentID,
+
+                JobId =
+                    x.JobID,
+
+                WorkTemplateId =
+                    x.WorkTemplateID,
+
+                EffectiveFrom = x.EffectiveFrom,
+
+                EffectiveTo = x.EffectiveTo.HasValue ? x.EffectiveTo.Value : null
+            })
+            .FirstOrDefaultAsync(
+                cancellationToken);
+    }
+
+    private static async Task<PlanningProvider?>
+        ResolvePlanningProviderAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            CancellationToken cancellationToken)
+    {
+        /*
+         * When the request specifies a provider, validate that it is
+         * active and configured for the organisation.
+         */
+        if (request.PlanningProviderId.HasValue &&
+            request.PlanningProviderId.Value > 0)
         {
-            if (transaction.GetDbTransaction().Connection is not null)
+            var requestedProviderId =
+                request.PlanningProviderId.Value;
+
+            var isConfiguredForOrganisation =
+                await db.OrganisationWorkPlanningSettings
+                    .AsNoTracking()
+                    .AnyAsync(
+                        x =>
+                            x.OrganisationBusinessEntityId ==
+                            request
+                                .OrganisationBusinessEntityId &&
+                            x.PlanningProviderId ==
+                            requestedProviderId &&
+                            x.IsActive,
+                        cancellationToken);
+
+            if (!isConfiguredForOrganisation)
             {
-                await transaction.RollbackAsync(
-                    CancellationToken.None);
+                return null;
             }
 
-            throw;
+            return await db.PlanningProviders
+                .AsNoTracking()
+                .SingleOrDefaultAsync(
+                    x =>
+                        x.PlanningProviderId ==
+                            requestedProviderId &&
+                        x.IsActive,
+                    cancellationToken);
         }
-        catch (Exception exception)
+
+        /*
+         * Resolve the organisation's active configured provider.
+         */
+        var configuredProviderId =
+            await db.OrganisationWorkPlanningSettings
+                .AsNoTracking()
+                .Where(x =>
+                    x.OrganisationBusinessEntityId ==
+                        request
+                            .OrganisationBusinessEntityId &&
+                    x.IsActive)
+                .OrderByDescending(x =>
+                    x.OrganisationWorkPlanningSettingId)
+                .Select(x =>
+                    (int?)x.PlanningProviderId)
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+
+        if (!configuredProviderId.HasValue)
         {
-            try
-            {
-                await transaction.RollbackAsync(
-                    CancellationToken.None);
-            }
-            catch (Exception rollbackException)
-            {
-                _logger.LogError(
-                    rollbackException,
-                    "An error occurred while rolling back the work-plan transaction.");
-            }
-
-            _logger.LogError(
-                exception,
-                """
-                Failed to generate work plan.
-                TemplateId: {TemplateId}
-                IndividualId: {IndividualId}
-                JobId: {JobId}
-                WorkDate: {WorkDate}
-                """,
-                request.WorkTemplateId,
-                request.IndividualId,
-                request.JobId,
-                request.WorkDate);
-
-            var baseException =
-                exception.GetBaseException();
-
-            return Failure(
-                $"{baseException.GetType().Name}: " +
-                $"{baseException.Message}");
+            return null;
         }
+
+        return await db.PlanningProviders
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x =>
+                    x.PlanningProviderId ==
+                        configuredProviderId.Value &&
+                    x.IsActive,
+                cancellationToken);
+    }
+
+    private static async Task<ExistingPlanModel?>
+        FindExistingActivePlanAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            CancellationToken cancellationToken)
+    {
+        var workDate =
+            request.WorkDate.Date;
+
+        return await db.WorkPlans
+            .AsNoTracking()
+            .Where(x =>
+                x.IndividualId ==
+                    request.IndividualId &&
+                x.JobId ==
+                    request.JobId &&
+                x.OrganisationBusinessEntityId ==
+                    request
+                        .OrganisationBusinessEntityId &&
+                x.WorkDate == workDate &&
+                x.IsValid)
+            .Select(x => new ExistingPlanModel
+            {
+                WorkPlanId =
+                    x.WorkPlanId,
+
+                Version =
+                    x.Version,
+
+                IsFinalized =
+                    x.IsFinalized
+            })
+            .SingleOrDefaultAsync(
+                cancellationToken);
+    }
+
+    private static async Task<int>
+        GetNextVersionAsync(
+            HrmTeContext db,
+            GenerateWorkPlanRequest request,
+            CancellationToken cancellationToken)
+    {
+        var workDate =
+            request.WorkDate.Date;
+
+        var latestVersion =
+            await db.WorkPlans
+                .AsNoTracking()
+                .Where(x =>
+                    x.IndividualId ==
+                        request.IndividualId &&
+                    x.JobId ==
+                        request.JobId &&
+                    x.OrganisationBusinessEntityId ==
+                        request
+                            .OrganisationBusinessEntityId &&
+                    x.WorkDate == workDate)
+                .MaxAsync(
+                    x => (int?)x.Version,
+                    cancellationToken)
+            ?? 0;
+
+        return latestVersion + 1;
     }
 
     private static string? ValidateRequest(
@@ -490,6 +1016,11 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             return "A valid job is required.";
         }
 
+        if (request.GeneratedByUserId <= 0)
+        {
+            return "The user generating the assignment is required.";
+        }
+
         if (request.OperationLogId <= 0)
         {
             return "A valid operation log is required.";
@@ -500,6 +1031,13 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             return "A valid work date is required.";
         }
 
+        if (!System.Enum.IsDefined(
+                typeof(WorkPlanGenerationSource),
+                request.GenerationSource))
+        {
+            return "A valid generation source is required.";
+        }
+
         if (request.Priority < 0)
         {
             return "Priority cannot be less than zero.";
@@ -508,85 +1046,98 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
         return null;
     }
 
-    private static async Task<PlanningProvider?>
-        ResolvePlanningProviderAsync(
-            HrmTeContext db,
-            GenerateWorkPlanRequest request,
-            CancellationToken cancellationToken)
+    private static string? ValidateTemplateSegments(
+        IReadOnlyCollection<TemplateSegmentGenerationModel>
+            segments)
     {
-        if (request.PlanningProviderId.HasValue &&
-            request.PlanningProviderId.Value > 0)
+        var duplicateSequence =
+            segments
+                .GroupBy(x =>
+                    x.SequenceNumber)
+                .FirstOrDefault(group =>
+                    group.Count() > 1);
+
+        if (duplicateSequence is not null)
         {
-            return await db.PlanningProviders
-                .AsNoTracking()
-                .SingleOrDefaultAsync(
-                    x =>
-                        x.PlanningProviderId ==
-                        request.PlanningProviderId.Value &&
-                        x.IsActive,
-                    cancellationToken);
+            return
+                $"The template contains duplicate sequence " +
+                $"number {duplicateSequence.Key}.";
         }
 
-        var organisationProviderId =
-            await db.OrganisationWorkPlanningSettings
-                .AsNoTracking()
-                .Where(x =>
-                    x.OrganisationBusinessEntityId ==
-                    request.OrganisationBusinessEntityId &&
-                    x.IsActive)
-                .Select(x => (int?)x.PlanningProviderId)
-                .FirstOrDefaultAsync(cancellationToken);
-
-        if (organisationProviderId.HasValue)
+        foreach (var segment in segments)
         {
-            var organisationProvider =
-                await db.PlanningProviders
-                    .AsNoTracking()
-                    .SingleOrDefaultAsync(
-                        x =>
-                            x.PlanningProviderId ==
-                            organisationProviderId.Value &&
-                            x.IsActive,
-                        cancellationToken);
-
-            if (organisationProvider is not null)
+            if (segment.SequenceNumber <= 0)
             {
-                return organisationProvider;
+                return
+                    $"Segment '{segment.Name}' has an invalid " +
+                    "sequence number.";
+            }
+
+            if (segment.OffsetMinutes < 0)
+            {
+                return
+                    $"Segment '{segment.Name}' has a negative " +
+                    "offset.";
+            }
+
+            if (!segment.DurationMinutes.HasValue ||
+                segment.DurationMinutes.Value <= 0)
+            {
+                return
+                    $"Segment '{segment.Name}' must have a " +
+                    "duration greater than zero.";
+            }
+
+            if (segment.GraceBeforeMinutes < 0)
+            {
+                return
+                    $"Segment '{segment.Name}' has invalid " +
+                    "grace-before minutes.";
+            }
+
+            if (segment.GraceAfterMinutes < 0)
+            {
+                return
+                    $"Segment '{segment.Name}' has invalid " +
+                    "grace-after minutes.";
             }
         }
 
-        return await db.PlanningProviders
-            .AsNoTracking()
-            .Where(x => x.IsActive)
-            .OrderBy(x => x.PlanningProviderId)
-            .FirstOrDefaultAsync(cancellationToken);
+        return null;
     }
 
-     
-    private static DateTimeCalculationResult CalculateAssignmentPeriod(
-    DateOnly workDate,
-    TimeOnly scheduledStartTime,
-    IReadOnlyCollection<WorkTemplateSegment> segments)
+    private static DateTimeCalculationResult
+        CalculateAssignmentPeriod(
+            DateOnly workDate,
+            TimeOnly scheduledStartTime,
+            IReadOnlyCollection<TemplateSegmentGenerationModel>
+                segments)
     {
-        if (segments == null || segments.Count == 0)
+        if (segments.Count == 0)
         {
             return DateTimeCalculationResult.Fail(
                 "No template segments were provided.");
         }
 
+        /*
+         * This is an internal calculated value only.
+         * It is not a database column.
+         */
         var assignmentBaseDateTime =
-            workDate.ToDateTime(scheduledStartTime);
+            workDate.ToDateTime(
+                scheduledStartTime);
 
         DateTime? earliestStart = null;
         DateTime? latestEnd = null;
 
-        foreach (var segment in segments
-                     .Where(x => x.IsActive)
-                     .OrderBy(x => x.SequenceNumber))
+        foreach (var segment in
+                 segments.OrderBy(
+                     x => x.SequenceNumber))
         {
-            var segmentPeriod = CalculateSegmentPeriod(
-                assignmentBaseDateTime,
-                segment);
+            var segmentPeriod =
+                CalculateSegmentPeriod(
+                    assignmentBaseDateTime,
+                    segment);
 
             if (!segmentPeriod.Success)
             {
@@ -596,15 +1147,19 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
             }
 
             if (!earliestStart.HasValue ||
-                segmentPeriod.StartDateTime < earliestStart.Value)
+                segmentPeriod.StartDateTime <
+                earliestStart.Value)
             {
-                earliestStart = segmentPeriod.StartDateTime;
+                earliestStart =
+                    segmentPeriod.StartDateTime;
             }
 
             if (!latestEnd.HasValue ||
-                segmentPeriod.EndDateTime > latestEnd.Value)
+                segmentPeriod.EndDateTime >
+                latestEnd.Value)
             {
-                latestEnd = segmentPeriod.EndDateTime;
+                latestEnd =
+                    segmentPeriod.EndDateTime;
             }
         }
 
@@ -615,84 +1170,224 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
                 "The assignment period could not be calculated.");
         }
 
-        if (latestEnd.Value < earliestStart.Value)
+        if (latestEnd.Value <=
+            earliestStart.Value)
         {
             return DateTimeCalculationResult.Fail(
-                "The assignment end date and time cannot be before its start date and time.");
+                "The assignment end date and time must be " +
+                "after its start date and time.");
         }
 
         return DateTimeCalculationResult.Ok(
+            assignmentBaseDateTime,
             earliestStart.Value,
             latestEnd.Value);
     }
 
-
- 
-    private static DateTimeCalculationResult CalculateSegmentPeriod(
-    DateTime assignmentBaseDateTime,
-    WorkTemplateSegment segment)
+    private static DateTimeCalculationResult
+        CalculateSegmentPeriod(
+            DateTime assignmentBaseDateTime,
+            TemplateSegmentGenerationModel segment)
     {
-        if (segment == null)
-        {
-            return DateTimeCalculationResult.Fail(
-                "The template segment is required.");
-        }
-
         if (segment.OffsetMinutes < 0)
         {
             return DateTimeCalculationResult.Fail(
                 "The segment offset cannot be negative.");
         }
 
-        if (segment.DurationMinutes.HasValue &&
-            segment.DurationMinutes.Value < 0)
+        if (!segment.DurationMinutes.HasValue ||
+            segment.DurationMinutes.Value <= 0)
         {
             return DateTimeCalculationResult.Fail(
-                "The segment duration cannot be negative.");
+                "The segment duration must be greater than zero.");
         }
 
-        var segmentStartDateTime = assignmentBaseDateTime.AddMinutes(segment.OffsetMinutes ?? 0);
+        var startDateTime =
+            assignmentBaseDateTime.AddMinutes(
+                segment.OffsetMinutes);
 
-        var segmentEndDateTime = segment.DurationMinutes.HasValue? segmentStartDateTime.AddMinutes(segment.DurationMinutes.Value): segmentStartDateTime;
+        var endDateTime =
+            startDateTime.AddMinutes(
+                segment.DurationMinutes.Value);
 
         return DateTimeCalculationResult.Ok(
-            segmentStartDateTime,
-            segmentEndDateTime);
+            assignmentBaseDateTime,
+            startDateTime,
+            endDateTime);
     }
 
-    
+    private async Task RollbackSafelyAsync(
+        IDbContextTransaction transaction)
+    {
+        try
+        {
+            await transaction.RollbackAsync(
+                CancellationToken.None);
+        }
+        catch (Exception rollbackException)
+        {
+            _logger.LogError(
+                rollbackException,
+                "An error occurred while rolling back the " +
+                "work-assignment transaction.");
+        }
+    }
+
+    private static string? NullIfWhiteSpace(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? null
+            : value.Trim();
+    }
+
     private static GeneratedWorkPlanResult Failure(
         string message,
         long? workPlanId = null)
     {
         return new GeneratedWorkPlanResult
         {
-            Success = false,
-            Message = message,
-            WorkPlanId = workPlanId ?? 0
+            Success =
+                false,
+
+            Message =
+                message,
+
+            WorkPlanId =
+                workPlanId ?? 0,
+
+            WorkAssignmentId =
+                0,
+
+            Version =
+                0
         };
+    }
+
+    private sealed class TemplateGenerationModel
+    {
+        public int WorkTemplateId { get; init; }
+
+        public int WorkTemplateTypeId { get; init; }
+
+        public string Name { get; init; } =
+            string.Empty;
+
+        public string? Description { get; init; }
+
+        public List<TemplateSegmentGenerationModel>
+            Segments
+        { get; init; } = [];
+    }
+
+    private sealed class TemplateSegmentGenerationModel
+    {
+        public int WorkTemplateSegmentId { get; init; }
+
+        public int WorkSegmentTypeId { get; init; }
+
+        public string Name { get; init; } =
+            string.Empty;
+
+        public string? Description { get; init; }
+
+        public int SequenceNumber { get; init; }
+
+        public int OffsetMinutes { get; init; }
+
+        public int? DurationMinutes { get; init; }
+
+        public int GraceBeforeMinutes { get; init; }
+
+        public int GraceAfterMinutes { get; init; }
+
+        public bool IsMandatory { get; init; }
+
+        public bool RequiresAttendance { get; init; }
+
+        public bool RequiresLocationValidation { get; init; }
+
+        public bool RequiresDeviceValidation { get; init; }
+    }
+
+    private sealed class JobGenerationModel
+    {
+        public int JobId { get; init; }
+
+        public int IndividualId { get; init; }
+
+        public int OrganisationId { get; init; }
+
+        public int JobStateId { get; init; }
+
+        public DateTime? TerminatedDate { get; init; }
+    }
+
+    private sealed class JobTemplateAssignmentModel
+    {
+        public int JobWorkTemplateAssignmentId { get; init; }
+
+        public int JobId { get; init; }
+
+        public int WorkTemplateId { get; init; }
+
+        public DateTime EffectiveFrom { get; init; }
+
+        public DateTime? EffectiveTo { get; init; }
+    }
+
+    private sealed class ExistingPlanModel
+    {
+        public long WorkPlanId { get; init; }
+
+        public int Version { get; init; }
+
+        public bool IsFinalized { get; init; }
     }
 
     private sealed class DateTimeCalculationResult
     {
         public bool Success { get; private init; }
 
-        public string Message { get; private init; }
-            = string.Empty;
+        public string Message { get; private init; } =
+            string.Empty;
 
-        public DateTime StartDateTime { get; private init; }
+        public DateTime AssignmentBaseDateTime
+        {
+            get;
+            private init;
+        }
 
-        public DateTime EndDateTime { get; private init; }
+        public DateTime StartDateTime
+        {
+            get;
+            private init;
+        }
+
+        public DateTime EndDateTime
+        {
+            get;
+            private init;
+        }
 
         public static DateTimeCalculationResult Ok(
+            DateTime assignmentBaseDateTime,
             DateTime startDateTime,
             DateTime endDateTime)
         {
             return new DateTimeCalculationResult
             {
-                Success = true,
-                StartDateTime = startDateTime,
-                EndDateTime = endDateTime
+                Success =
+                    true,
+
+                AssignmentBaseDateTime =
+                    assignmentBaseDateTime,
+
+                StartDateTime =
+                    startDateTime,
+
+                EndDateTime =
+                    endDateTime
             };
         }
 
@@ -701,181 +1396,12 @@ public sealed class WorkAssignmentGenerator : IWorkAssignmentGenerator
         {
             return new DateTimeCalculationResult
             {
-                Success = false,
-                Message = message
+                Success =
+                    false,
+
+                Message =
+                    message
             };
         }
     }
-
-
-    public async Task<BulkAssignmentResult> AssignDepartmentAsync(
-        BulkDepartmentAssignmentRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        await using var db =
-            await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-        await using var transaction =
-            await db.Database.BeginTransactionAsync(cancellationToken);
-
-        var result = new BulkAssignmentResult();
-
-        try
-        {
-            var staff = await db.Jobs
-                .Where(x =>
-                    x.OrganisationStructureId ==
-                        request.OrganisationStructureId &&
-                    x.JobStateId ==
-                        SharedConfig.JobStates.APPROVED &&
-                    x.TerminatedDate == null)
-                .Select(x => new
-                {
-                    IndividualId = x.IndividualID,
-                    JobId = x.JobId,
-                    EmployeeName =
-                        x.Individual.Individual.FirstNameEnglish + " " +
-                        x.Individual.Individual.LastNameEnglish
-                })
-                .ToListAsync(cancellationToken);
-
-            if (request.SelectedIndividualIds.Any())
-            {
-                staff = staff
-                    .Where(x =>
-                        request.SelectedIndividualIds.Contains(
-                            x.IndividualId))
-                    .ToList();
-            }
-
-            result.TotalSelected = staff.Count;
-
-            foreach (var employee in staff)
-            {
-                var duplicateExists =
-                    await db.WorkAssignments.AnyAsync(x =>
-                        x.WorkAssignmentStateId == request.WorkPlanId &&
-                        x.StartDateTime == request.ScheduledStart && 
-                        x.EndDateTime == request.ScheduledEnd &&
-                        x.WorkAssignmentOwners.Any(o =>
-                            o.IndividualId ==
-                                employee.IndividualId &&
-                            o.IsCurrentOwner &&
-                            o.IsValid),
-                        cancellationToken);
-
-                if (duplicateExists)
-                {
-                    result.SkippedCount++;
-
-                    result.Items.Add(
-                        new BulkAssignmentItemResult
-                        {
-                            IndividualId =
-                                employee.IndividualId,
-
-                            EmployeeName =
-                                employee.EmployeeName,
-
-                            Success = false,
-
-                            Message =
-                                "The employee already has this assignment."
-                        });
-
-                    continue;
-                }
- 
-                var operationLog = await _operationLogService.CreateAsync(
-                         db,
-                         actionId: SharedConfig.OperationLogActionTypes.LEAVE_CREATE,
-                         remarks: "This need to be changed, this line is comming from WorkAssignmentGenerator line 790");
-
-                var assignment = new WorkAssignment
-                {
-                    WorkPlanId = (int) request.WorkPlanId,
-
-                    WorkAssignmentId = (int)request.WorkPlanId,
-
-                    StartDateTime = request.ScheduledStart,
-
-                    EndDateTime = request.ScheduledEnd,
-
-                    OperationLogId = operationLog.OperationLogId,
-
-                    IsValid = true
-                };
-
-                db.WorkAssignments.Add(assignment);
-
-                await db.SaveChangesAsync(cancellationToken);
-
-                var owner = new WorkAssignmentOwner
-                {
-                    WorkAssignmentId =
-                        assignment.WorkAssignmentId,
-
-                    IndividualId =
-                        employee.IndividualId,
-
-                    JobId =
-                        employee.JobId,
-
-                    EffectiveFrom =
-                        DateTime.Now,
-
-                    OwnershipType = WorkOwnershipType.Original,
-
-                    IsCurrentOwner = true,
-
-                    IsValid = true,
-
-                    OperationLogId = operationLog.OperationLogId
-                };
-
-                db.WorkAssignmentOwners.Add(owner);
-
-                await db.SaveChangesAsync(cancellationToken);
-
-                result.AssignedCount++;
-
-                result.Items.Add(
-                    new BulkAssignmentItemResult
-                    {
-                        IndividualId =
-                            employee.IndividualId,
-
-                        EmployeeName =
-                            employee.EmployeeName,
-
-                        WorkAssignmentId =
-                            assignment.WorkAssignmentId,
-
-                        Success = true
-                    });
-            }
-
-            await transaction.CommitAsync(cancellationToken);
-
-            result.Success = result.AssignedCount > 0;
-
-            result.Message =
-                $"{result.AssignedCount} staff assigned. " +
-                $"{result.SkippedCount} skipped.";
-
-            return result;
-        }
-        catch (Exception ex)
-        {
-            await transaction.RollbackAsync(cancellationToken);
-
-            result.Success = false;
-            result.Message = ex.Message;
-
-            return result;
-        }
-    }
-
-
-
 }

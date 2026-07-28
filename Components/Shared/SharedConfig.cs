@@ -1,5 +1,9 @@
 ﻿
 
+using Microsoft.AspNetCore.Http.HttpResults;
+using System.Numerics;
+using System;
+
 namespace HRM.Components.Shared
 {
     internal class SharedConfig
@@ -53,16 +57,41 @@ namespace HRM.Components.Shared
             public const int CLOSE_COMPLETED = 25;
         }
 
+
+
+
+
+
         //*******************************************************************************
 
         #endregion "Request States"
-
-
         #region Operation Log Action Types
 
-        //*******************************************************************************
+        
 
-        public static class OperationLogActionTypes
+        public static class WorkAssignmentStates
+        {
+            public const int PLANNED = 1;
+            public const int ASSIGNED = 2;
+            public const int ACCEPTED = 3;
+            public const int IN_PROGRESS = 4;
+            public const int COMPLETED = 5;
+            public const int CANCELLED = 6;
+            public const int TRANSFERED = 7;
+            public const int MISSED = 8;
+        }
+
+            #endregion Operation Log Action Types
+
+
+
+
+
+            #region Operation Log Action Types
+
+            //*******************************************************************************
+
+            public static class OperationLogActionTypes
         {
             public const int DATA_COLLECTION_CREATE = 1;
             public const int DATA_COLLECTION_UPDATE = 2;

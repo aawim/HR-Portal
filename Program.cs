@@ -70,7 +70,7 @@ builder.Services.AddScoped<IAttendanceLogProcessor,AttendanceLogProcessor>();
 
 builder.Services.AddScoped<IAttendanceLogResolutionRepository,AttendanceLogResolutionRepository>();
 
-builder.Services.AddScoped<IWorkAssignmentGenerator,WorkAssignmentGenerator>();
+builder.Services.AddScoped<IWorkAssignmentGenerator, WorkAssignmentGeneratorService>();
 
 builder.Services.AddScoped<IWorkAssignmentResolver,WorkAssignmentResolver>();
 
@@ -80,8 +80,7 @@ builder.Services.AddScoped<IWorkPlanningService,WorkPlanningService>();
 builder.Services.AddScoped<IWorkPlanBuilder,WorkPlanBuilder>();
 
 builder.Services.AddScoped<IPlanningProviderResolver, PlanningProviderResolver>();
-
-builder.Services.AddScoped<IWorkAssignmentGenerator, WorkAssignmentGenerator>();
+ 
 
 
 //builder.Services.AddScoped<IWorkTemplateResolver,WorkTemplateResolver>();

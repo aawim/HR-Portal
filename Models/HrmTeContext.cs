@@ -18,6 +18,7 @@ public partial class HrmTeContext : DbContext
     }
     public virtual DbSet<PlanningProvider> PlanningProviders { get; set; }
 
+    public virtual DbSet<JobWorkTemplateAssignment> JobWorkTemplateAssignments { get; set; }
     public virtual DbSet<OrganisationWorkPlanningSetting>OrganisationWorkPlanningSettings{ get; set; }
 
     public virtual DbSet<WorkPlanSegment> WorkPlanSegments { get; set; }
@@ -6907,27 +6908,55 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<JobWorkTemplateAssignment>(entity =>
         {
-            entity.HasKey(x =>
-                x.JobWorkTemplateAssignmentId);
+            entity.ToTable("JobWorkTemplateAssignments");
 
-            entity.Property(x => x.JobWorkTemplateAssignmentId)
+            entity.HasKey(e => e.JobWorkTemplateAssignmentID);
+
+            entity.Property(e => e.JobWorkTemplateAssignmentID)
                 .HasColumnName("JobWorkTemplateAssignmentID");
 
-            entity.Property(x => x.JobId)
+            entity.Property(e => e.JobID)
                 .HasColumnName("JobID");
 
-            entity.Property(x => x.WorkTemplateId)
+            entity.Property(e => e.WorkTemplateID)
                 .HasColumnName("WorkTemplateID");
 
-            entity.HasOne(x => x.Job)
-                .WithMany()
-                .HasForeignKey(x => x.JobId)
-                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(e => e.ScheduledStartTime)
+                .HasColumnName("ScheduledStartTime");
 
-            entity.HasOne(x => x.WorkTemplate)
-                .WithMany()
-                .HasForeignKey(x => x.WorkTemplateId)
-                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(e => e.EffectiveFrom)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.EffectiveTo)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.IsActive)
+                .HasDefaultValue(true);
+
+            entity.Property(e => e.CreatedDate)
+                .HasColumnType("datetime")
+                .HasDefaultValueSql("(getdate())");
+
+            //entity.HasOne(d => d.Job)
+            //    .WithMany(p => p.JobWorkTemplateAssignments)
+            //    .HasForeignKey(d => d.JobID)
+            //    .OnDelete(DeleteBehavior.Cascade)
+            //    .HasConstraintName("FK_JobWorkTemplateAssignments_Jobs");
+
+            //entity.HasOne(d => d.WorkTemplate)
+            //    .WithMany(p => p.JobWorkTemplateAssignments)
+            //    .HasForeignKey(d => d.WorkTemplateID)
+            //    .OnDelete(DeleteBehavior.Cascade)
+            //    .HasConstraintName("FK_JobWorkTemplateAssignments_WorkTemplates");
+
+            entity.HasIndex(e => new
+            {
+                e.JobID,
+                e.WorkTemplateID,
+                e.EffectiveFrom
+            })
+            .HasDatabaseName("IX_JobWorkTemplateAssignment_Job_Template");
+
         });
 
 

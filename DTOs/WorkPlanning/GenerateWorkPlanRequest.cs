@@ -14,6 +14,8 @@ namespace HRM.DTOs.WorkPlanning
 
         public DateTime WorkDate { get; set; }
 
+        public TimeOnly ScheduledStartTime { get; set; }
+
         public int? PlanningProviderId { get; set; }
 
         public WorkPlanGenerationSource GenerationSource { get; set; }
@@ -37,6 +39,8 @@ namespace HRM.DTOs.WorkPlanning
         public bool RequiresCheckout { get; set; } = true;
 
         public int Priority { get; set; } = 1;
+
+        public int Version { get; set; }
 
     }
 }
