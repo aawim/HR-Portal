@@ -68,28 +68,30 @@
 
         </div>
 
-        @*   <ManualAssignmentCard
-            StaffId="@schedule.IndividualId"
-            JobId="@schedule.JobId"
-            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-            Assignments="@schedule.ManualAssignments"
-            CurrentTemplate="@schedule.CurrentTemplate"
-            IsDisabled="@(!schedule.HasActiveJob)"
-            OnChanged="@LoadScheduleAsync" /> *@
+     
 
 
         <ManualAssignmentCard StaffId="@schedule.IndividualId"
-            JobId="@schedule.JobId"
-            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-            Assignments="@schedule.ManualAssignments"
-            CurrentTemplate="@schedule.CurrentTemplate"
-            IsDisabled="@(!schedule.HasActiveJob)"
-            OnAssignRequested="@OpenManualAssignmentDrawerAsync"
-            OnViewRequested="@OpenManualAssignmentDetailsAsync"
-            OnEditRequested="@OpenManualAssignmentEditAsync"
-            OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
-            OnChanged="@HandleScheduleChangedAsync" />
+                              JobId="@schedule.JobId"
+                              OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                              Assignments="@schedule.ManualAssignments"
+                              CurrentTemplate="@schedule.CurrentTemplate"
+                              IsDisabled="@(!schedule.HasActiveJob)"
+                              OnAssignTemplateRequested="@OpenTemplateAssignmentDrawerAsync"
+                              OnAssignRequested="@OpenManualAssignmentDrawerAsync"
+                              OnViewRequested="@OpenManualAssignmentDetailsAsync"
+                              OnEditRequested="@OpenManualAssignmentEditAsync"
+                              OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
+                              OnChanged="@HandleScheduleChangedAsync" />
 
+
+
+        <AssignTemplateDrawer @bind-IsOpen="showTemplateAssignmentDrawer"
+                              StaffId="@schedule.IndividualId"
+                              JobId="@schedule.JobId"
+                              OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                              CurrentAssignment="@schedule.CurrentTemplate"
+                              OnSaved="@HandleTemplateAssignmentSavedAsync" />
 
     }
 
@@ -126,13 +128,22 @@
     private ManualWorkAssignmentListDto?
         selectedManualAssignment;
 
+
     private Task OpenManualAssignmentDrawerAsync()
     {
+        if (schedule?.CurrentTemplate is null)
+        {
+            showTemplateAssignmentDrawer = true;
+            return Task.CompletedTask;
+        }
+
         selectedManualAssignment = null;
         showManualAssignmentDrawer = true;
 
         return Task.CompletedTask;
     }
+
+
 
     private Task OpenManualAssignmentDetailsAsync(
         ManualWorkAssignmentListDto assignment)
@@ -181,6 +192,15 @@
 
         await LoadScheduleAsync();
     }
+
+
+    private async Task HandleTemplateAssignmentSavedAsync()
+{
+    showTemplateAssignmentDrawer = false;
+
+    await LoadScheduleAsync();
+}
+
 
     private Task OpenTemplateAssignmentDrawerAsync()
     {

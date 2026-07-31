@@ -2,12 +2,6 @@
 {
     public class JobWorkTemplateAssignment
     {
-        public int JobWorkTemplateAssignmentId { get; set; }
-
-        public int JobId { get; set; }
-
-        public int WorkTemplateId { get; set; }
-
         public DateTime EffectiveFrom { get; set; }
 
         public DateTime? EffectiveTo { get; set; }

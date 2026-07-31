@@ -1,5 +1,777 @@
-﻿<h3>ManualAssignmentDrawer</h3>
+﻿@using HRM.DTOs.WorkPlanning
+@using HRM.WorkPlanning.Abstractions
+@using Microsoft.AspNetCore.Components.Forms
+@using System.ComponentModel.DataAnnotations;
+
+@implements IDisposable
+
+@inject IManualWorkAssignmentLookupService LookupService
+@inject IManualWorkAssignmentService ManualAssignmentService
+
+@if (IsOpen)
+{
+    <div class="fixed inset-0 z-50">
+
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-slate-950/40"
+             @onclick="HandleCloseAsync">
+        </div>
+
+        <!-- Drawer -->
+        <aside class="absolute inset-y-0 right-0 flex w-full
+                      max-w-2xl flex-col bg-white shadow-2xl">
+
+            <!-- Header -->
+            <div class="flex items-start justify-between border-b
+                        border-slate-200 px-6 py-5">
+
+                <div>
+                    <p class="text-xs font-medium uppercase
+                              tracking-wide text-amber-600">
+                        Manual Assignment
+                    </p>
+
+                    <h2 class="mt-1 text-lg font-semibold text-slate-900">
+                        Create Manual Work Assignment
+                    </h2>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        Create a date-specific assignment for this
+                        staff member.
+                    </p>
+                </div>
+
+                <button type="button"
+                        disabled="@isSaving"
+                        @onclick="HandleCloseAsync"
+                        class="rounded-lg p-2 text-slate-400
+                               hover:bg-slate-100 hover:text-slate-700
+                               disabled:cursor-not-allowed
+                               disabled:opacity-50">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M6 18 18 6M6 6l12 12" />
+                    </svg>
+
+                </button>
+
+            </div>
+
+            <!-- Content -->
+            <div class="flex-1 overflow-y-auto px-6 py-5">
+
+                @if (!string.IsNullOrWhiteSpace(errorMessage))
+                {
+                    <div class="mb-5 rounded-lg border border-red-200
+                                bg-red-50 p-4">
+
+                        <p class="text-sm font-medium text-red-800">
+                            Unable to create assignment
+                        </p>
+
+                        <p class="mt-1 text-sm text-red-700">
+                            @errorMessage
+                        </p>
+
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(successMessage))
+                {
+                    <div class="mb-5 rounded-lg border
+                                border-emerald-200 bg-emerald-50 p-4">
+
+                        <p class="text-sm font-medium text-emerald-800">
+                            @successMessage
+                        </p>
+
+                    </div>
+                }
+
+                <EditForm Model="@model"
+                          OnValidSubmit="HandleSaveAsync">
+
+                    <DataAnnotationsValidator />
+
+                    <div class="space-y-6">
+
+                        <!-- Staff context -->
+                        <div class="rounded-lg border border-slate-200
+                                    bg-slate-50 p-4">
+
+                            <div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+
+                                <div>
+                                    <p class="text-xs text-slate-500">
+                                        Staff ID
+                                    </p>
+
+                                    <p class="mt-1 text-sm font-medium
+                                              text-slate-800">
+                                        @StaffId
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p class="text-xs text-slate-500">
+                                        Job ID
+                                    </p>
+
+                                    <p class="mt-1 text-sm font-medium
+                                              text-slate-800">
+                                        @JobId
+                                    </p>
+                                </div>
+
+                                <div>
+                                    <p class="text-xs text-slate-500">
+                                        Organisation ID
+                                    </p>
+
+                                    <p class="mt-1 text-sm font-medium
+                                              text-slate-800">
+                                        @OrganisationBusinessEntityId
+                                    </p>
+                                </div>
+
+                            </div>
+
+                        </div>
+
+                        <!-- Work date -->
+                        <div>
+
+                            <label class="mb-1.5 block text-sm font-medium
+                                          text-slate-700">
+                                Work date
+                                <span class="text-red-500">*</span>
+                            </label>
+
+                            <InputDate TValue="DateTime"
+                                       @bind-Value="model.WorkDate"
+                                       @bind-Value:after="HandleWorkDateChangedAsync"
+                                       disabled="@isSaving"
+                                       class="w-full rounded-lg border
+                                              border-slate-300 px-3 py-2.5
+                                              text-sm outline-none transition
+                                              focus:border-amber-500
+                                              focus:ring-2 focus:ring-amber-100
+                                              disabled:bg-slate-100" />
+
+                            <ValidationMessage For="@(() => model.WorkDate)"
+                                               class="mt-1 block text-xs text-red-600" />
+
+                        </div>
+
+                        <!-- Template selector -->
+                        <div>
+
+                            <div class="mb-2 flex items-center justify-between">
+
+                                <label class="block text-sm font-medium
+                                              text-slate-700">
+                                    Work template
+                                    <span class="text-red-500">*</span>
+                                </label>
+
+                                @if (isLoadingTemplates)
+                                {
+                                    <span class="text-xs text-slate-500">
+                                        Loading...
+                                    </span>
+                                }
+
+                            </div>
+
+                            @if (templates.Count == 0 &&
+                           !isLoadingTemplates)
+                            {
+                                <div class="rounded-lg border border-dashed
+                                            border-amber-300 bg-amber-50 p-4">
+
+                                    <p class="text-sm font-medium
+                                              text-amber-800">
+                                        No template assigned to this job
+                                    </p>
+
+                                    <p class="mt-1 text-xs leading-5
+                                              text-amber-700">
+                                        Assign a recurring work template
+                                        to the staff job before creating
+                                        an assignment from a template.
+                                    </p>
+
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="relative">
+
+                                    <select value="@model.WorkTemplateId"
+                                            disabled="@(isSaving ||
+                                                        isLoadingTemplates ||
+                                                        templates.Count == 0)"
+                                            @onchange="HandleTemplateChanged"
+                                            class="w-full appearance-none
+                                                   rounded-lg border
+                                                   border-slate-300 bg-white
+                                                   px-3 py-2.5 pr-10 text-sm
+                                                   text-slate-900 outline-none
+                                                   transition
+                                                   focus:border-amber-500
+                                                   focus:ring-2
+                                                   focus:ring-amber-100
+                                                   disabled:bg-slate-100">
+
+                                        <option value="0">
+                                            Select a work template
+                                        </option>
+
+                                        @foreach (var template in templates)
+                                        {
+                                            <option value="@template.WorkTemplateId">
+                                                @template.TemplateName
+                                            </option>
+                                        }
+
+                                    </select>
+
+                                    <div class="pointer-events-none absolute
+                                                inset-y-0 right-0 flex
+                                                items-center pr-3
+                                                text-slate-400">
+
+                                        @if (isLoadingTemplates)
+                                        {
+                                            <span class="h-4 w-4 animate-spin
+                                                         rounded-full border-2
+                                                         border-slate-300
+                                                         border-t-slate-700">
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                                 fill="none"
+                                                 viewBox="0 0 24 24"
+                                                 stroke-width="1.5"
+                                                 stroke="currentColor"
+                                                 class="h-4 w-4">
+
+                                                <path stroke-linecap="round"
+                                                      stroke-linejoin="round"
+                                                      d="m19.5 8.25-7.5
+                                                         7.5-7.5-7.5" />
+                                            </svg>
+                                        }
+
+                                    </div>
+
+                                </div>
+                            }
+
+                            <ValidationMessage For="@(() => model.WorkTemplateId)"
+                                               class="mt-1 block text-xs text-red-600" />
+
+                        </div>
+
+                        @if (SelectedTemplate is not null)
+                        {
+                            <div class="rounded-lg border border-amber-100
+                                        bg-amber-50/70 p-4">
+
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-amber-700">
+                                    Selected Template
+                                </p>
+
+                                <p class="mt-1 text-sm font-semibold
+                                          text-slate-900">
+                                    @SelectedTemplate.TemplateName
+                                </p>
+
+                                <p class="mt-1 text-xs text-slate-600">
+                                    Effective
+                                    @SelectedTemplate.EffectiveFrom
+                                    .ToString("dd MMM yyyy")
+
+                                    @if (SelectedTemplate.EffectiveTo.HasValue)
+                                    {
+                                        <span>
+                                            –
+                                            @SelectedTemplate.EffectiveTo.Value
+                                            .ToString("dd MMM yyyy")
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span>– No end date</span>
+                                    }
+                                </p>
+
+                            </div>
+                        }
+
+                        <!-- Assignment title -->
+                        <div>
+
+                            <label class="mb-1.5 block text-sm font-medium
+                                          text-slate-700">
+                                Assignment title
+                            </label>
+
+                            <InputText @bind-Value="model.AssignmentTitle"
+                                       disabled="@isSaving"
+                                       placeholder="For example, Special duty"
+                                       class="w-full rounded-lg border
+                                              border-slate-300 px-3 py-2.5
+                                              text-sm outline-none transition
+                                              focus:border-amber-500
+                                              focus:ring-2 focus:ring-amber-100
+                                              disabled:bg-slate-100" />
+
+                        </div>
+
+                        <!-- Description -->
+                        <div>
+
+                            <label class="mb-1.5 block text-sm font-medium
+                                          text-slate-700">
+                                Description
+                            </label>
+
+                            <InputTextArea @bind-Value="model.AssignmentDescription"
+                                           disabled="@isSaving"
+                                           placeholder="Describe the purpose of this assignment..."
+                                           class="min-h-[90px] w-full rounded-lg
+                                       border border-slate-300 px-3 py-2.5
+                                       text-sm outline-none transition
+                                       focus:border-amber-500 focus:ring-2
+                                       focus:ring-amber-100
+                                       disabled:bg-slate-100" />
+
+                        </div>
+
+                        <!-- Rules -->
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+
+                            <label class="flex cursor-pointer items-start
+                                          gap-3 rounded-lg border
+                                          border-slate-200 p-4">
+
+                                <InputCheckbox @bind-Value="model.RequiresAttendance"
+                                               disabled="@isSaving"
+                                               class="mt-0.5 h-4 w-4 rounded
+                                           border-slate-300" />
+
+                                <span>
+                                    <span class="block text-sm font-medium
+                                                 text-slate-800">
+                                        Requires attendance
+                                    </span>
+
+                                    <span class="mt-1 block text-xs
+                                                 text-slate-500">
+                                        Check-in or attendance validation
+                                        is required.
+                                    </span>
+                                </span>
+
+                            </label>
+
+                            <label class="flex cursor-pointer items-start
+                                          gap-3 rounded-lg border
+                                          border-slate-200 p-4">
+
+                                <InputCheckbox @bind-Value="model.RequiresCheckout"
+                                               disabled="@isSaving"
+                                               class="mt-0.5 h-4 w-4 rounded
+                                           border-slate-300" />
+
+                                <span>
+                                    <span class="block text-sm font-medium
+                                                 text-slate-800">
+                                        Requires checkout
+                                    </span>
+
+                                    <span class="mt-1 block text-xs
+                                                 text-slate-500">
+                                        The employee must complete a
+                                        checkout.
+                                    </span>
+                                </span>
+
+                            </label>
+
+                        </div>
+
+                        <!-- Priority -->
+                        <div>
+
+                            <label class="mb-1.5 block text-sm font-medium
+                                          text-slate-700">
+                                Priority
+                            </label>
+
+                            <InputNumber @bind-Value="model.Priority"
+                                         disabled="@isSaving"
+                                         class="w-full rounded-lg border
+                                                border-slate-300 px-3 py-2.5
+                                                text-sm outline-none transition
+                                                focus:border-amber-500
+                                                focus:ring-2
+                                                focus:ring-amber-100
+                                                disabled:bg-slate-100" />
+
+                            <ValidationMessage For="@(() => model.Priority)"
+                                               class="mt-1 block text-xs text-red-600" />
+
+                        </div>
+
+                        <!-- Remarks -->
+                        <div>
+
+                            <label class="mb-1.5 block text-sm font-medium
+                                          text-slate-700">
+                                Remarks
+                            </label>
+
+                            <InputTextArea @bind-Value="model.Remarks"
+                                           disabled="@isSaving"
+                                           placeholder="Add an internal note or reason..."
+                                           class="min-h-[90px] w-full rounded-lg
+                                       border border-slate-300 px-3 py-2.5
+                                       text-sm outline-none transition
+                                       focus:border-amber-500 focus:ring-2
+                                       focus:ring-amber-100
+                                       disabled:bg-slate-100" />
+
+                        </div>
+
+                    </div>
+
+                </EditForm>
+
+            </div>
+
+            <!-- Footer -->
+            <div class="flex items-center justify-end gap-3 border-t
+                        border-slate-200 bg-slate-50 px-6 py-4">
+
+                <button type="button"
+                        disabled="@isSaving"
+                        @onclick="HandleCloseAsync"
+                        class="rounded-lg border border-slate-300 bg-white
+                               px-4 py-2.5 text-sm font-medium
+                               text-slate-700 hover:bg-slate-100
+                               disabled:cursor-not-allowed
+                               disabled:opacity-50">
+                    Cancel
+                </button>
+
+                <button type="button"
+                        disabled="@(!CanSave)"
+                        @onclick="HandleSaveAsync"
+                        class="rounded-lg bg-amber-600 px-4 py-2.5
+                               text-sm font-medium text-white
+                               hover:bg-amber-700
+                               disabled:cursor-not-allowed
+                               disabled:bg-slate-300">
+
+                    @(isSaving
+                        ? "Generating..."
+                        : "Generate Assignment")
+
+                </button>
+
+            </div>
+
+        </aside>
+
+    </div>
+}
 
 @code {
+    [Parameter]
+    public bool IsOpen { get; set; }
 
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public int JobId { get; set; }
+
+    [Parameter]
+    public int OrganisationBusinessEntityId { get; set; }
+
+    [Parameter]
+    public EventCallback OnSaved { get; set; }
+
+    private ManualWorkAssignmentRequest model = new();
+
+    private List<AssignedWorkTemplateDto> templates = [];
+
+    private bool wasOpen;
+
+    private bool isLoadingTemplates;
+
+    private bool isSaving;
+
+    private string? errorMessage;
+
+    private string? successMessage;
+
+    private CancellationTokenSource? loadCancellation;
+
+    private AssignedWorkTemplateDto? SelectedTemplate =>
+        templates.FirstOrDefault(
+            x => x.WorkTemplateId ==
+                 model.WorkTemplateId);
+
+    private bool CanSave =>
+        !isSaving &&
+        StaffId > 0 &&
+        JobId > 0 &&
+        OrganisationBusinessEntityId > 0 &&
+        model.WorkTemplateId > 0 &&
+        model.WorkDate != default &&
+        model.Priority >= 0;
+
+
+    private async Task HandleWorkDateChangedAsync()
+    {
+        model.WorkDate = model.WorkDate.Date;
+        model.WorkTemplateId = 0;
+
+        await LoadTemplatesAsync();
+    }
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (IsOpen && !wasOpen)
+        {
+            InitialiseModel();
+
+            await LoadTemplatesAsync();
+        }
+
+        wasOpen = IsOpen;
+    }
+
+    private void InitialiseModel()
+    {
+        errorMessage = null;
+        successMessage = null;
+
+        model = new ManualWorkAssignmentRequest
+            {
+                IndividualId =
+                    StaffId,
+
+                JobId =
+                    JobId,
+
+                OrganisationBusinessEntityId =
+                    OrganisationBusinessEntityId,
+
+                WorkDate =
+                    DateTime.Today,
+
+                WorkTemplateId =
+                    0,
+
+                AssignmentTitle =
+                    null,
+
+                AssignmentDescription =
+                    null,
+
+                Remarks =
+                    null,
+
+                RequiresAttendance =
+                    true,
+
+                RequiresCheckout =
+                    true,
+
+                Priority =
+                    0,
+
+                AssignmentSource =
+                    "Manual"
+            };
+    }
+
+    private async Task HandleWorkDateChangedAsync(
+        DateTime value)
+    {
+        model.WorkDate =
+            value.Date;
+
+        model.WorkTemplateId =
+            0;
+
+        await LoadTemplatesAsync();
+    }
+
+    private void HandleTemplateChanged(
+        ChangeEventArgs args)
+    {
+        if (int.TryParse(
+            args.Value?.ToString(),
+            out var templateId))
+        {
+            model.WorkTemplateId =
+                templateId;
+        }
+        else
+        {
+            model.WorkTemplateId =
+                0;
+        }
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        loadCancellation?.Cancel();
+        loadCancellation?.Dispose();
+
+        loadCancellation =
+            new CancellationTokenSource();
+
+        if (JobId <= 0 ||
+            model.WorkDate == default)
+        {
+            templates = [];
+            return;
+        }
+
+        try
+        {
+            isLoadingTemplates = true;
+            errorMessage = null;
+
+            templates =
+                await LookupService.GetTemplatesForJobAsync(
+                    JobId,
+                    model.WorkDate,
+                    loadCancellation.Token);
+
+            if (templates.Count == 1)
+            {
+                model.WorkTemplateId =
+                    templates[0].WorkTemplateId;
+            }
+            else if (!templates.Any(
+                x => x.WorkTemplateId ==
+                     model.WorkTemplateId))
+            {
+                model.WorkTemplateId =
+                    0;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Another load replaced this one.
+        }
+        catch
+        {
+            templates = [];
+
+            errorMessage =
+                "Unable to load the templates assigned to this job.";
+        }
+        finally
+        {
+            isLoadingTemplates = false;
+        }
+    }
+
+    private async Task HandleSaveAsync()
+    {
+        if (!CanSave)
+        {
+            return;
+        }
+
+        try
+        {
+            isSaving = true;
+            errorMessage = null;
+            successMessage = null;
+
+            /*
+            * Use your access service here instead when the manual
+                 * service does not resolve the current user internally.
+                 */
+            var result =
+                await ManualAssignmentService.GenerateAsync(model);
+
+            if (!result.Success)
+            {
+                errorMessage =
+                    result.Message;
+
+                return;
+            }
+
+            successMessage =
+                result.Message;
+
+            if (OnSaved.HasDelegate)
+            {
+                await OnSaved.InvokeAsync();
+            }
+
+            await SetOpenAsync(false);
+        }
+        catch (Exception)
+        {
+            errorMessage =
+                "An unexpected error occurred while generating " +
+                "the manual work assignment.";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task HandleCloseAsync()
+    {
+        if (isSaving)
+        {
+            return;
+        }
+
+        await SetOpenAsync(false);
+    }
+
+    private async Task SetOpenAsync(
+        bool value)
+    {
+        if (IsOpenChanged.HasDelegate)
+        {
+            await IsOpenChanged.InvokeAsync(value);
+        }
+    }
+
+    public void Dispose()
+    {
+        loadCancellation?.Cancel();
+        loadCancellation?.Dispose();
+    }
 }

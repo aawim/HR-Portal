@@ -6923,41 +6923,36 @@ public partial class HrmTeContext : DbContext
             entity.HasKey(e => e.JobWorkTemplateAssignmentID);
 
             entity.Property(e => e.JobWorkTemplateAssignmentID)
-                .HasColumnName("JobWorkTemplateAssignmentID");
+                .HasColumnName("JobWorkTemplateAssignmentID")
+                .ValueGeneratedOnAdd();
 
             entity.Property(e => e.JobID)
-                .HasColumnName("JobID");
+                .HasColumnName("JobID")
+                .IsRequired();
 
             entity.Property(e => e.WorkTemplateID)
-                .HasColumnName("WorkTemplateID");
-
-            entity.Property(e => e.ScheduledStartTime)
-                .HasColumnName("ScheduledStartTime");
+                .HasColumnName("WorkTemplateID")
+                .IsRequired();
 
             entity.Property(e => e.EffectiveFrom)
-                .HasColumnType("datetime");
+                .HasColumnName("EffectiveFrom")
+                .HasColumnType("datetime")
+                .IsRequired();
 
             entity.Property(e => e.EffectiveTo)
+                .HasColumnName("EffectiveTo")
                 .HasColumnType("datetime");
 
             entity.Property(e => e.IsActive)
-                .HasDefaultValue(true);
+                .HasColumnName("IsActive")
+                .HasDefaultValue(true)
+                .IsRequired();
 
             entity.Property(e => e.CreatedDate)
+                .HasColumnName("CreatedDate")
                 .HasColumnType("datetime")
-                .HasDefaultValueSql("(getdate())");
-
-            //entity.HasOne(d => d.Job)
-            //    .WithMany(p => p.JobWorkTemplateAssignments)
-            //    .HasForeignKey(d => d.JobID)
-            //    .OnDelete(DeleteBehavior.Cascade)
-            //    .HasConstraintName("FK_JobWorkTemplateAssignments_Jobs");
-
-            //entity.HasOne(d => d.WorkTemplate)
-            //    .WithMany(p => p.JobWorkTemplateAssignments)
-            //    .HasForeignKey(d => d.WorkTemplateID)
-            //    .OnDelete(DeleteBehavior.Cascade)
-            //    .HasConstraintName("FK_JobWorkTemplateAssignments_WorkTemplates");
+                .HasDefaultValueSql("(getdate())")
+                .ValueGeneratedOnAdd();
 
             entity.HasIndex(e => new
             {
@@ -6965,8 +6960,18 @@ public partial class HrmTeContext : DbContext
                 e.WorkTemplateID,
                 e.EffectiveFrom
             })
-            .HasDatabaseName("IX_JobWorkTemplateAssignment_Job_Template");
+            .HasDatabaseName(
+                "IX_JobWorkTemplateAssignment_Job_Template");
 
+            entity.HasOne(e => e.Job)
+                .WithMany()
+                .HasForeignKey(e => e.JobID)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            //entity.HasOne(e => e.WorkTemplate)
+            //    .WithMany(e => e.JobWorkTemplateAssignments)
+            //    .HasForeignKey(e => e.WorkTemplateID)
+            //    .OnDelete(DeleteBehavior.Restrict);
         });
 
 

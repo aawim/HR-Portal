@@ -2,6 +2,7 @@
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
 using HRM.Models;
+using HRM.Services;
 using HRM.Services.Interfaces;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -14,32 +15,46 @@ namespace HRM.WorkPlanning.Services
         private readonly IWorkAssignmentGenerator _generator;
         private readonly IOperationLogService _operationLogService;
         private readonly ILogger<ManualWorkAssignmentService> _logger;
+        private readonly IUserContextBuilder _userContextBuilder;
+
 
         public ManualWorkAssignmentService(
             IDbContextFactory<HrmTeContext> dbFactory,
             IWorkAssignmentGenerator generator,
             IOperationLogService operationLogService,
-            ILogger<ManualWorkAssignmentService> logger)
+            ILogger<ManualWorkAssignmentService> logger,
+            IUserContextBuilder userContextBuilder)
         {
             _dbFactory = dbFactory;
             _generator = generator;
             _operationLogService = operationLogService;
             _logger = logger;
+            _userContextBuilder = userContextBuilder;
         }
 
         public async Task<GeneratedWorkPlanResult> GenerateAsync(
-       ManualWorkAssignmentRequest request,
-       int generatedByUserId,
-       CancellationToken cancellationToken = default)
+           ManualWorkAssignmentRequest request,
+           CancellationToken cancellationToken = default)
         {
+            var userContext = await _userContextBuilder.BuildCurrentUserAsync();
+
+
+            if (userContext is null ||
+                userContext.UserId <= 0)
+            {
+                return GeneratedWorkPlanResult.Failure(
+                    "The current user could not be identified.");
+            }
+
+            var generatedByUserId = userContext.UserId;
+
             if (request is null)
             {
                 return Failure(
                     "The manual work-assignment request is required.");
             }
 
-            var validationMessage =
-                ValidateRequest(request, generatedByUserId);
+            var validationMessage = ValidateRequest(request, generatedByUserId);
 
             if (validationMessage is not null)
             {

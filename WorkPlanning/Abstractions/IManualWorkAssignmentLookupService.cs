@@ -4,11 +4,10 @@ namespace HRM.WorkPlanning.Abstractions
 {
     public interface IManualWorkAssignmentLookupService
     {
-        //Task<IReadOnlyList<AssignedWorkTemplateDto>>
-        //   GetTemplatesForJobAsync(
-        //       int jobId,
-        //       DateTime workDate,
-        //       CancellationToken cancellationToken = default);
+        Task<List<AssignedWorkTemplateDto>>GetTemplatesForJobAsync(
+         int jobId,
+         DateTime workDate,
+         CancellationToken cancellationToken = default);
 
         Task<List<PlanningProviderLookupDto>> GetPlanningProvidersAsync(
           int organisationBusinessEntityId,

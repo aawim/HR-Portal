@@ -347,22 +347,34 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
              * with the same effective start date.
              */
             var duplicateExists =
-                await db.JobWorkTemplateAssignments
-                    .AsNoTracking()
-                    .AnyAsync(
-                        x =>
+                    await db.JobWorkTemplateAssignments
+                        .AsNoTracking()
+                        .Where(x =>
                             x.JobID == dto.JobId &&
-                            x.WorkTemplateID ==
-                                dto.WorkTemplateId &&
+                            x.WorkTemplateID == dto.WorkTemplateId &&
                             x.IsActive &&
-                            x.EffectiveFrom ==
-                                effectiveFrom,
-                        cancellationToken);
+                            x.EffectiveFrom >= effectiveFrom &&
+                            x.EffectiveFrom < effectiveFrom.AddDays(1))
+                        .Select(x => new
+                        {
+                            x.JobWorkTemplateAssignmentID,
+                            x.EffectiveFrom,
+                            x.EffectiveTo
+                        })
+                        .FirstOrDefaultAsync(cancellationToken);
 
-            if (duplicateExists)
+            if (duplicateExists is not null)
             {
+                var periodText =
+                    duplicateExists.EffectiveTo.HasValue
+                        ? $"{duplicateExists.EffectiveFrom:dd MMM yyyy} – " +
+                          $"{duplicateExists.EffectiveTo.Value:dd MMM yyyy}"
+                        : $"{duplicateExists.EffectiveFrom:dd MMM yyyy} onwards";
+
                 return ServiceResult.Failed(
-                    "This work template is already assigned to the job from the selected effective date.");
+                    $"This template already has assignment ID " +
+                    $"{duplicateExists.JobWorkTemplateAssignmentID} " +
+                    $"for the period {periodText}.");
             }
 
             await using var transaction =
@@ -462,8 +474,10 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                             true,
 
                         CreatedDate =
-                            DateTime.UtcNow
-                    };
+                            DateTime.UtcNow,
+
+                        ScheduledStartTime = null,
+                };
 
                 db.JobWorkTemplateAssignments.Add(
                     assignment);

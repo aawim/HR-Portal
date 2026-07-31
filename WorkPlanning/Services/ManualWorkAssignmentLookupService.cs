@@ -16,6 +16,78 @@ namespace HRM.WorkPlanning.Services
             _dbFactory = dbFactory;
         }
 
+        public async Task<List<AssignedWorkTemplateDto>>
+       GetTemplatesForJobAsync(
+           int jobId,
+           DateTime workDate,
+           CancellationToken cancellationToken = default)
+        {
+            if (jobId <= 0)
+            {
+                return [];
+            }
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
+
+            var date = workDate.Date;
+
+            return await db.JobWorkTemplateAssignments
+                .AsNoTracking()
+                .Where(x =>
+                    x.JobID == jobId &&
+                    x.IsActive &&
+                    x.EffectiveFrom <= date &&
+                    (
+                        x.EffectiveTo == null ||
+                        x.EffectiveTo >= date
+                    ) &&
+                    x.WorkTemplate.IsActive &&
+                    (
+                        !x.WorkTemplate.EffectiveFrom.HasValue ||
+                        x.WorkTemplate.EffectiveFrom.Value <= date
+                    ) &&
+                    (
+                        !x.WorkTemplate.EffectiveTo.HasValue ||
+                        x.WorkTemplate.EffectiveTo.Value >= date
+                    ))
+                .OrderByDescending(x => x.EffectiveFrom)
+                .ThenBy(x => x.WorkTemplate.Name)
+                .Select(x => new AssignedWorkTemplateDto
+                {
+                    JobWorkTemplateAssignmentId =
+                        x.JobWorkTemplateAssignmentID,
+
+                    WorkTemplateId =
+                        x.WorkTemplateID,
+
+                    TemplateName =
+                        x.WorkTemplate.Name,
+
+                    TemplateCode =
+                        x.WorkTemplate.Code,
+
+                    TemplateTypeName =
+                        x.WorkTemplate.WorkTemplateType.Name,
+
+                    EffectiveFrom =
+                        x.EffectiveFrom,
+
+                    EffectiveTo =
+                        x.EffectiveTo,
+
+                    DefaultStartTime =
+                        x.WorkTemplate.DefaultStartTime,
+
+                    DefaultEndTime =
+                        x.WorkTemplate.DefaultEndTime,
+
+                    EndsNextDay =
+                        x.WorkTemplate.EndsNextDay
+                })
+                .ToListAsync(cancellationToken);
+        }
         public async Task<List<PlanningProviderLookupDto>> GetPlanningProvidersAsync(
         int organisationBusinessEntityId,
         CancellationToken cancellationToken = default)
@@ -241,8 +313,7 @@ namespace HRM.WorkPlanning.Services
         }
 
 
-        public async Task<IReadOnlyList<ManualAssignmentJobDto>>
-    SearchActiveJobsAsync(
+        public async Task<IReadOnlyList<ManualAssignmentJobDto>>SearchActiveJobsAsync(
         string? searchText,
         int? organisationId,
         CancellationToken cancellationToken = default)
@@ -417,8 +488,7 @@ namespace HRM.WorkPlanning.Services
         }
 
 
-        public async Task<IReadOnlyList<AssignedWorkTemplateDto>>
-       GetAvailableTemplatesAsync(
+        public async Task<IReadOnlyList<AssignedWorkTemplateDto>>GetAvailableTemplatesAsync(
            int organisationId,
            DateTime workDate,
            CancellationToken cancellationToken = default)
@@ -479,77 +549,7 @@ namespace HRM.WorkPlanning.Services
                 .ToListAsync(cancellationToken);
         }
 
-        //public async Task<IReadOnlyList<AssignedWorkTemplateDto>>
-        //GetTemplatesForJobAsync(
-        //int jobId,
-        //DateTime workDate,
-        //CancellationToken cancellationToken = default)
-        //{
-        //    if (jobId <= 0)
-        //    {
-        //        return [];
-        //    }
-
-        //    await using var db =
-        //        await _dbFactory.CreateDbContextAsync(
-        //            cancellationToken);
-
-        //    var selectedDate =
-        //        workDate.Date;
-
-        //    var templates =
-        //        await
-        //        (
-        //            from assignment in
-        //                db.JobWorkTemplateAssignments.AsNoTracking()
-
-        //            join template in
-        //                db.WorkTemplates.AsNoTracking()
-
-        //                on assignment.WorkTemplateID equals
-        //                template.WorkTemplateId
-
-        //            where
-        //                assignment.JobID == jobId
-        //                &&
-        //                assignment.IsActive
-        //                &&
-        //                assignment.EffectiveFrom.Date <=
-        //                    selectedDate
-        //                &&
-        //                (
-        //                    assignment.EffectiveTo == null
-        //                    ||
-        //                    assignment.EffectiveTo.Value.Date >=
-        //                        selectedDate
-        //                )
-        //                &&
-        //                template.IsActive
-
-        //            orderby template.Name
-
-        //            select new AssignedWorkTemplateDto
-        //            {
-        //                JobWorkTemplateAssignmentId =
-        //                    assignment.JobWorkTemplateAssignmentID,
-
-        //                WorkTemplateId =
-        //                    assignment.WorkTemplateID,
-
-        //                TemplateName =
-        //                    template.Name,
-
-        //                EffectiveFrom =
-        //                    assignment.EffectiveFrom,
-
-        //                EffectiveTo =
-        //                    assignment.EffectiveTo
-        //            }
-        //        )
-        //        .ToListAsync(cancellationToken);
-
-        //    return templates;
-        //}
+       
 
 
     }

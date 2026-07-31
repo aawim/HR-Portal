@@ -149,11 +149,6 @@ namespace HRM.WorkPlanning.Services.Schedules
         }
 
 
-
-
-
-
-
         private static async Task<CurrentWorkTemplateAssignmentDto?>
             GetCurrentTemplateAsync(
                 HrmTeContext db,
@@ -161,62 +156,60 @@ namespace HRM.WorkPlanning.Services.Schedules
                 DateTime effectiveDate,
                 CancellationToken cancellationToken)
         {
+            var date = effectiveDate.Date;
+            var nextDate = date.AddDays(1);
+
             return await db.JobWorkTemplateAssignments
                 .AsNoTracking()
                 .Where(x =>
                     x.JobID == jobId &&
                     x.IsActive &&
-                    x.EffectiveFrom <= effectiveDate &&
+                    x.EffectiveFrom < nextDate &&
                     (
                         x.EffectiveTo == null ||
-                        x.EffectiveTo >= effectiveDate
+                        x.EffectiveTo >= date
                     ) &&
                     x.WorkTemplate.IsActive)
-                .OrderByDescending(x =>
-                    x.EffectiveFrom)
-                .Select(x =>
-                    new CurrentWorkTemplateAssignmentDto
-                    {
-                        JobWorkTemplateAssignmentId =
-                            x.JobWorkTemplateAssignmentID,
+                .OrderByDescending(x => x.EffectiveFrom)
+                .ThenByDescending(x =>
+                    x.JobWorkTemplateAssignmentID)
+                .Select(x => new CurrentWorkTemplateAssignmentDto
+                {
+                    JobWorkTemplateAssignmentId =
+                        x.JobWorkTemplateAssignmentID,
 
-                        JobId =
-                            x.JobID,
+                    JobId =
+                        x.JobID,
 
-                        WorkTemplateId =
-                            x.WorkTemplateID,
+                    WorkTemplateId =
+                        x.WorkTemplateID,
 
-                        TemplateName =
-                            x.WorkTemplate.Name,
+                    TemplateName =
+                        x.WorkTemplate.Name,
 
-                        TemplateCode =
-                            x.WorkTemplate.Code,
+                    TemplateCode =
+                        x.WorkTemplate.Code,
 
-                        TemplateTypeName =
-                            x.WorkTemplate.WorkTemplateType.Name,
+                    TemplateTypeName =
+                        x.WorkTemplate.WorkTemplateType.Name,
 
-                        EffectiveFrom =
-                            x.EffectiveFrom,
+                    EffectiveFrom =
+                        x.EffectiveFrom,
 
-                        EffectiveTo =
-                            x.EffectiveTo,
+                    EffectiveTo =
+                        x.EffectiveTo,
 
-                        IsActive =
-                            x.IsActive,
+                    IsActive =
+                        x.IsActive,
 
-                        DefaultStartTime = x.WorkTemplate.DefaultStartTime.HasValue
-                                        ? DateTime.MinValue.Add(x.WorkTemplate.DefaultStartTime.Value.ToTimeSpan())
-                                        : null,
+                    DefaultStartTime = x.WorkTemplate.DefaultStartTime.HasValue
+                    ? DateTime.MinValue.Add(x.WorkTemplate.DefaultStartTime.Value.ToTimeSpan())
+                    : null,
 
-                        DefaultEndTime = x.WorkTemplate.DefaultEndTime.HasValue
-                                        ? DateTime.MinValue.Add(x.WorkTemplate.DefaultEndTime.Value.ToTimeSpan())
-                                        : null
-
-
-               
-
-
-                    })
+                    DefaultEndTime = x.WorkTemplate.DefaultEndTime.HasValue
+                    ? DateTime.MinValue.Add(x.WorkTemplate.DefaultEndTime.Value.ToTimeSpan())
+                    : null
+                })
                 .FirstOrDefaultAsync(cancellationToken);
         }
 

@@ -74,37 +74,83 @@
     <!-- Information -->
     @if (CurrentTemplate is null)
     {
-        <div class="border-b border-amber-200 bg-amber-50 px-5 py-3">
+        <div class="border-b border-amber-200 bg-amber-50 px-5 py-4">
 
-            <div class="flex items-start gap-3">
+            <div class="flex flex-col gap-4 sm:flex-row
+                    sm:items-center sm:justify-between">
 
-                <svg xmlns="http://www.w3.org/2000/svg"
-                     fill="none"
-                     viewBox="0 0 24 24"
-                     stroke-width="1.5"
-                     stroke="currentColor"
-                     class="mt-0.5 h-4 w-4 shrink-0 text-amber-600">
+                <div class="flex items-start gap-3">
 
-                    <path stroke-linecap="round"
-                          stroke-linejoin="round"
-                          d="M12 9v3.75m9-.75a9 9 0 1
-                             1-18 0 9 9 0 0 1 18 0Zm-9
-                             3.75h.008v.008H12v-.008Z" />
-                </svg>
+                    <div class="flex h-9 w-9 shrink-0 items-center
+                            justify-center rounded-lg bg-amber-100
+                            text-amber-700">
 
-                <div>
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-5 w-5">
 
-                    <p class="text-sm font-medium text-amber-800">
-                        No recurring work template assigned
-                    </p>
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M12 9v3.75m9-.75a9 9 0 1
+                                 1-18 0 9 9 0 0 1 18 0Zm-9
+                                 3.75h.008v.008H12v-.008Z" />
 
-                    <p class="mt-0.5 text-xs leading-5 text-amber-700">
-                        You can still create a manual assignment, but the
-                        staff member currently has no default recurring
-                        template.
-                    </p>
+                        </svg>
+
+                    </div>
+
+                    <div>
+
+                        <p class="text-sm font-semibold text-amber-900">
+                            No work template assigned
+                        </p>
+
+                        <p class="mt-1 max-w-xl text-xs leading-5
+                              text-amber-700">
+                            Assign a recurring work template to this
+                            staff job before creating a manual work
+                            assignment.
+                        </p>
+
+                    </div>
 
                 </div>
+
+                @if (CurrentTemplate is null)
+                {
+                    <button type="button"
+                            disabled="@IsDisabled"
+                            @onclick="HandleAssignTemplateRequestedAsync"
+                            class="mt-4 rounded-lg border border-amber-300
+                   bg-white px-3.5 py-2 text-sm
+                   font-medium text-amber-700
+                   hover:bg-amber-50
+                   disabled:cursor-not-allowed
+                   disabled:opacity-50">
+
+                        Assign Work Template
+
+                    </button>
+                }
+                else
+                {
+                    <button type="button"
+                            disabled="@IsDisabled"
+                            @onclick="HandleAssignRequestedAsync"
+                            class="mt-4 rounded-lg border border-amber-200
+                   bg-white px-3.5 py-2 text-sm
+                   font-medium text-amber-700
+                   hover:bg-amber-50
+                   disabled:cursor-not-allowed
+                   disabled:opacity-50">
+
+                        Create Manual Assignment
+
+                    </button>
+                }
 
             </div>
 
@@ -374,6 +420,10 @@
     }
 
     [Parameter]
+    public EventCallback OnAssignTemplateRequested { get; set; }
+
+
+    [Parameter]
     public bool IsDisabled { get; set; }
 
     [Parameter]
@@ -399,6 +449,38 @@
 
     private ManualAssignmentFilter selectedFilter =
         ManualAssignmentFilter.Upcoming;
+
+
+    private async Task HandleAssignTemplateRequestedAsync()
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnAssignTemplateRequested.HasDelegate)
+        {
+            await OnAssignTemplateRequested.InvokeAsync();
+        }
+    }
+
+    private async Task HandleAssignRequestedAsync()
+    {
+        if (IsDisabled ||
+            CurrentTemplate is null)
+        {
+            return;
+        }
+
+        if (OnAssignRequested.HasDelegate)
+        {
+            await OnAssignRequested.InvokeAsync();
+        }
+    }
+
+ 
+
+
 
     private List<ManualWorkAssignmentListDto> FilteredAssignments =>
         selectedFilter switch
@@ -441,17 +523,6 @@
         ManualAssignmentFilter filter)
     {
         selectedFilter = filter;
-    }
-
-    private async Task HandleAssignRequestedAsync()
-    {
-        if (IsDisabled)
-            return;
-
-        if (OnAssignRequested.HasDelegate)
-        {
-            await OnAssignRequested.InvokeAsync();
-        }
     }
 
     private async Task HandleViewRequestedAsync(
