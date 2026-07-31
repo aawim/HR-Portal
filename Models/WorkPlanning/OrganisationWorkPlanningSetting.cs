@@ -8,9 +8,9 @@
 
         public int PlanningProviderId { get; set; }
 
-        public DateOnly? EffectiveFromDate { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
 
-        public DateOnly? EffectiveToDate { get; set; }
+        public DateTime? EffectiveTo { get; set; }
 
         public bool IsActive { get; set; }
 

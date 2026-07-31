@@ -20,7 +20,10 @@ using HRM.Services.WorkPlanning;
 using HRM.Services.Attendance.Repositories;
 using HRM.Services.Attendance.Abstraction;
 using HRM.Services.Attendance.Abstraction.Services;
-
+using HRM.WorkPlanning.Services.Schedules;
+using HRM.WorkPlanning.Abstractions.Schedules;
+using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment;
+using HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -53,6 +56,13 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+builder.Services.AddScoped<IJobWorkTemplateAssignmentService,JobWorkTemplateAssignmentService>();
+
+builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();
+
+builder.Services.AddScoped<IManualWorkAssignmentService,ManualWorkAssignmentService>();
+
+builder.Services.AddScoped<IManualWorkAssignmentLookupService,ManualWorkAssignmentLookupService>();
 
 
 builder.Services.AddScoped<IWorkPlanService, WorkPlanService>();

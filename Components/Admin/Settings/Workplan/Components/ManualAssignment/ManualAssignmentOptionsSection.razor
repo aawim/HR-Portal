@@ -1,0 +1,153 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M10.5 6h9.75M10.5 12h9.75M10.5 18h9.75M3.75 6h.008v.008H3.75V6zm0 6h.008v.008H3.75V12zm0 6h.008v.008H3.75V18z" />
+                </svg>
+
+            </div>
+
+            <div>
+                <h2 class="font-semibold text-slate-900">
+                    Assignment Options
+                </h2>
+
+                <p class="text-sm text-slate-500">
+                    Configure the generated assignment.
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="space-y-5 p-5">
+
+        <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Assignment title
+                </label>
+
+                <InputText @bind-Value="Model.AssignmentTitle"
+                           disabled="@IsDisabled"
+                           placeholder="Uses template name when empty"
+                           class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                    Priority
+                </label>
+
+                <InputNumber TValue="int"
+                             @bind-Value="Model.Priority"
+                             disabled="@IsDisabled"
+                             min="0"
+                             class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100" />
+
+                <ValidationMessage For="@(() => Model.Priority)" />
+
+            </div>
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Assignment description
+            </label>
+
+            <InputTextArea @bind-Value="Model.AssignmentDescription"
+                           disabled="@IsDisabled"
+                           rows="3"
+                           placeholder="Optional description for this assignment"
+                           class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100" />
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Remarks
+            </label>
+
+            <InputTextArea @bind-Value="Model.Remarks"
+                           disabled="@IsDisabled"
+                           rows="3"
+                           placeholder="Reason or notes for manual generation"
+                           class="w-full resize-y rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-100 disabled:bg-slate-100" />
+
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
+
+                <InputCheckbox @bind-Value="Model.RequiresAttendance"
+                               disabled="@IsDisabled"
+                               class="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+
+                <span>
+                    <span class="block text-sm font-medium text-slate-900">
+                        Requires attendance
+                    </span>
+
+                    <span class="mt-0.5 block text-xs text-slate-500">
+                        Attendance must be recorded for this assignment.
+                    </span>
+                </span>
+
+            </label>
+
+            <label class="flex cursor-pointer items-start gap-3 rounded-lg border border-slate-200 p-4 hover:bg-slate-50">
+
+                <InputCheckbox @bind-Value="Model.RequiresCheckout"
+                               disabled="@IsDisabled"
+                               class="mt-0.5 h-4 w-4 rounded border-slate-300 text-violet-600 focus:ring-violet-500" />
+
+                <span>
+                    <span class="block text-sm font-medium text-slate-900">
+                        Requires checkout
+                    </span>
+
+                    <span class="mt-0.5 block text-xs text-slate-500">
+                        Employee must complete checkout.
+                    </span>
+                </span>
+
+            </label>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ManualWorkAssignmentRequest Model { get; set; } =
+        null!;
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+}

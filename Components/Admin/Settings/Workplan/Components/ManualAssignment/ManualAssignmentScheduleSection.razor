@@ -1,0 +1,204 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6.75 3v2.25M17.25 3v2.25M3.75 9.75h16.5M5.25 5.25h13.5A1.5 1.5 0 0120.25 6.75v12a1.5 1.5 0 01-1.5 1.5H5.25a1.5 1.5 0 01-1.5-1.5v-12a1.5 1.5 0 011.5-1.5z" />
+                </svg>
+
+            </div>
+
+            <div>
+                <h2 class="font-semibold text-slate-900">
+                    Date and Template
+                </h2>
+
+                <p class="text-sm text-slate-500">
+                    Choose the work date and assigned template.
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Work date
+                <span class="text-red-500">*</span>
+            </label>
+
+            <InputDate TValue="DateTime"
+                       Value="@Model.WorkDate"
+                       ValueChanged="@HandleWorkDateChanged"
+                       ValueExpression="@(() => Model.WorkDate)"
+                       disabled="@IsDisabled"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100" />
+
+            <ValidationMessage For="@(() => Model.WorkDate)" />
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Work template
+                <span class="text-red-500">*</span>
+            </label>
+
+            <div class="relative">
+
+                <select value="@Model.WorkTemplateId"
+                        disabled="@(IsDisabled || IsLoadingTemplates || Model.JobId <= 0)"
+                        @onchange="@HandleTemplateChanged"
+                        class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100 disabled:bg-slate-100">
+
+                    <option value="0">
+                        Select a work template
+                    </option>
+
+                    @foreach (var template in Templates)
+                    {
+                        <option value="@template.WorkTemplateId">
+                            @template.TemplateName
+                        </option>
+                    }
+
+                </select>
+
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+
+                    @if (IsLoadingTemplates)
+                    {
+                        <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
+                    }
+                    else
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-4 w-4">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    }
+
+                </div>
+
+            </div>
+
+            @if (Model.JobId > 0 &&
+            !IsLoadingTemplates &&
+            Templates.Count == 0)
+            {
+                <p class="mt-2 text-sm text-amber-600">
+                    No active template is assigned to this job
+                    for the selected date.
+                </p>
+            }
+
+        </div>
+
+        @if (SelectedTemplate is not null)
+        {
+            <div class="md:col-span-2">
+
+                <div class="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+
+                    <p class="font-medium text-slate-900">
+                        @SelectedTemplate.TemplateName
+                    </p>
+
+                    <div class="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm text-slate-600">
+
+                        <span>
+                            Effective from:
+                            @SelectedTemplate.EffectiveFrom.ToString("dd MMM yyyy")
+                        </span>
+
+                        <span>
+                            Effective to:
+                            @(SelectedTemplate.EffectiveTo?.ToString("dd MMM yyyy") ?? "No end date")
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ManualWorkAssignmentRequest Model { get; set; } =
+        null!;
+
+    [Parameter]
+    public IReadOnlyList<AssignedWorkTemplateDto> Templates
+    {
+        get;
+        set;
+    } = [];
+
+    [Parameter]
+    public bool IsLoadingTemplates { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback<DateTime> OnWorkDateChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnTemplateChanged { get; set; }
+
+    private AssignedWorkTemplateDto? SelectedTemplate =>
+        Templates.FirstOrDefault(
+            x => x.WorkTemplateId == Model.WorkTemplateId);
+
+    private async Task HandleWorkDateChanged(
+        DateTime workDate)
+    {
+        await OnWorkDateChanged.InvokeAsync(
+            workDate);
+    }
+
+    private async Task HandleTemplateChanged(
+        ChangeEventArgs args)
+    {
+        var workTemplateId =
+            int.TryParse(
+                args.Value?.ToString(),
+                out var parsedTemplateId)
+                ? parsedTemplateId
+                : 0;
+
+        await OnTemplateChanged.InvokeAsync(
+            workTemplateId);
+    }
+}

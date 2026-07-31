@@ -1,0 +1,253 @@
+﻿@using HRM.DTOs.StaffSchedule
+@using HRM.WorkPlanning.Abstractions.Schedules
+@using HRM.Services
+@using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents
+@using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents.Summary
+@using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents.Summary.ItemComponents
+@inject IStaffScheduleService StaffScheduleService
+@inject ToastService ToastService
+
+
+<div class="space-y-6">
+
+    @if (isLoading)
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-8 text-center">
+            <p class="text-sm text-slate-500">
+                Loading staff schedule...
+            </p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+
+            <h3 class="font-semibold text-amber-800">
+                Schedule unavailable
+            </h3>
+
+            <p class="mt-1 text-sm text-amber-700">
+                @errorMessage
+            </p>
+
+        </div>
+    }
+    else if (schedule is not null)
+    {
+        <CurrentScheduleSummary Schedule="@schedule" />
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
+
+
+            <TemplateAssignmentCard StaffId="@schedule.IndividualId"
+            JobId="@schedule.JobId"
+            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+            CurrentAssignment="@schedule.CurrentTemplate"
+            History="@schedule.TemplateHistory"
+            IsDisabled="@(!schedule.HasActiveJob)"
+            OnAssignRequested="@OpenTemplateAssignmentDrawerAsync"
+            OnRemoveRequested="@OpenTemplateRemovalAsync"
+            OnChanged="@HandleScheduleChangedAsync" />
+
+
+            <RemoveTemplateAssignmentDialog
+            @bind-IsOpen="showTemplateRemovalDialog"
+            JobId="@schedule.JobId"
+            Assignment="@selectedTemplateAssignment"
+            OnRemoved="@HandleTemplateRemovedAsync" />
+
+
+            <ShiftAssignmentCard
+            StaffId="@schedule.IndividualId"
+            JobId="@schedule.JobId"
+            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+            CurrentAssignment="@schedule.CurrentShift"
+            History="@schedule.ShiftHistory"
+            IsDisabled="@(!schedule.HasActiveJob)"
+            OnChanged="@LoadScheduleAsync" />
+
+        </div>
+
+        @*   <ManualAssignmentCard
+            StaffId="@schedule.IndividualId"
+            JobId="@schedule.JobId"
+            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+            Assignments="@schedule.ManualAssignments"
+            CurrentTemplate="@schedule.CurrentTemplate"
+            IsDisabled="@(!schedule.HasActiveJob)"
+            OnChanged="@LoadScheduleAsync" /> *@
+
+
+        <ManualAssignmentCard StaffId="@schedule.IndividualId"
+            JobId="@schedule.JobId"
+            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+            Assignments="@schedule.ManualAssignments"
+            CurrentTemplate="@schedule.CurrentTemplate"
+            IsDisabled="@(!schedule.HasActiveJob)"
+            OnAssignRequested="@OpenManualAssignmentDrawerAsync"
+            OnViewRequested="@OpenManualAssignmentDetailsAsync"
+            OnEditRequested="@OpenManualAssignmentEditAsync"
+            OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
+            OnChanged="@HandleScheduleChangedAsync" />
+
+
+    }
+
+</div>
+
+@code {
+    [Parameter]
+    public int StaffId { get; set; }
+
+    private StaffScheduleDto? schedule;
+
+    private bool isLoading;
+
+    private string? errorMessage;
+
+    private int loadedStaffId;
+
+    private bool showTemplateAssignmentDrawer;
+
+    private bool showTemplateRemovalDialog;
+
+    private CurrentWorkTemplateAssignmentDto?
+        selectedTemplateAssignment;
+
+
+    /// <summary>
+    /// Temporary methods
+    /// </summary>
+    /// <returns></returns>
+
+
+    private bool showManualAssignmentDrawer;
+
+    private ManualWorkAssignmentListDto?
+        selectedManualAssignment;
+
+    private Task OpenManualAssignmentDrawerAsync()
+    {
+        selectedManualAssignment = null;
+        showManualAssignmentDrawer = true;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentDetailsAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        selectedManualAssignment = assignment;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentEditAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        selectedManualAssignment = assignment;
+        showManualAssignmentDrawer = true;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentRemovalAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        selectedManualAssignment = assignment;
+
+        return Task.CompletedTask;
+    }
+
+
+
+    /// Temporary Methods ends
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId <= 0)
+        {
+            schedule = null;
+            errorMessage = "A valid staff ID is required.";
+            return;
+        }
+
+        if (loadedStaffId == StaffId &&
+            schedule is not null)
+        {
+            return;
+        }
+
+        loadedStaffId = StaffId;
+
+        await LoadScheduleAsync();
+    }
+
+    private Task OpenTemplateAssignmentDrawerAsync()
+    {
+        showTemplateAssignmentDrawer = true;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenTemplateRemovalAsync(
+     CurrentWorkTemplateAssignmentDto assignment)
+    {
+        selectedTemplateAssignment = assignment;
+
+        showTemplateRemovalDialog = true;
+
+        return Task.CompletedTask;
+    }
+
+   
+    private async Task HandleScheduleChangedAsync()
+    {
+        await LoadScheduleAsync();
+    }
+
+    private async Task HandleTemplateRemovedAsync()
+    {
+        selectedTemplateAssignment = null;
+
+        await LoadScheduleAsync();
+    }
+
+
+  
+
+    private async Task HandleTemplateSavedAsync()
+    {
+        await LoadScheduleAsync();
+    }
+
+
+    private async Task LoadScheduleAsync()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = null;
+            schedule = null;
+
+            var result =
+                await StaffScheduleService.GetScheduleAsync(StaffId);
+
+            if (!result.Success)
+            {
+                errorMessage = result.Message;
+                return;
+            }
+
+            schedule = result.Schedule;
+        }
+        catch
+        {
+            errorMessage =
+                "An unexpected error occurred while loading the staff schedule.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

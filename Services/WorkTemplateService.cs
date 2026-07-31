@@ -113,16 +113,16 @@ namespace HRM.Services
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
 
-            var today = DateOnly.FromDateTime(DateTime.Today);
+            //var today = DateOnly.FromDateTime(DateTime.Today);
 
             return await db.WorkTemplates
                 .AsNoTracking()
                 .Where(x =>
                     x.IsActive &&
                     (!x.EffectiveFrom.HasValue ||
-                     x.EffectiveFrom.Value <= today) &&
+                     x.EffectiveFrom.Value <= DateTime.Today) &&
                     (!x.EffectiveTo.HasValue ||
-                     x.EffectiveTo.Value >= today))
+                     x.EffectiveTo.Value >= DateTime.Today))
                 .OrderBy(x => x.Name)
                 .Select(x => new WorkTemplateDto
                 {
@@ -266,7 +266,8 @@ namespace HRM.Services
                 dto.DefaultEndTime,
                 dto.EndsNextDay,
                 dto.EffectiveFrom,
-                dto.EffectiveTo);
+                dto.EffectiveTo
+                );
 
             if (!validationResult.Success)
                 return validationResult;
@@ -566,8 +567,8 @@ namespace HRM.Services
             TimeOnly? defaultStartTime,
             TimeOnly? defaultEndTime,
             bool endsNextDay,
-            DateOnly? effectiveFrom,
-            DateOnly? effectiveTo)
+            DateTime? effectiveFrom,
+            DateTime? effectiveTo)
         {
             // Start and end times should either both exist or both be empty.
             if (defaultStartTime.HasValue != defaultEndTime.HasValue)

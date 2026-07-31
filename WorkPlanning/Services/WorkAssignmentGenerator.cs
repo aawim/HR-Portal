@@ -851,62 +851,108 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 cancellationToken);
     }
 
+    //private static async Task<PlanningProvider?>
+    //    ResolvePlanningProviderAsync(
+    //        HrmTeContext db,
+    //        GenerateWorkPlanRequest request,
+    //        CancellationToken cancellationToken)
+    //{
+    //    /*
+    //     * When the request specifies a provider, validate that it is
+    //     * active and configured for the organisation.
+    //     */
+    //    //if (request.PlanningProviderId.HasValue &&
+    //    //    request.PlanningProviderId.Value > 0)
+    //    //{
+    //    //    var requestedProviderId =
+    //    //        request.PlanningProviderId.Value;
+
+    //    //    var isConfiguredForOrganisation =
+    //    //        await db.OrganisationWorkPlanningSettings
+    //    //            .AsNoTracking()
+    //    //            .AnyAsync(
+    //    //                x =>
+    //    //                    x.OrganisationBusinessEntityId ==
+    //    //                    request
+    //    //                        .OrganisationBusinessEntityId &&
+    //    //                    x.PlanningProviderId ==
+    //    //                    requestedProviderId &&
+    //    //                    x.IsActive,
+    //    //                cancellationToken);
+
+    //    //    if (!isConfiguredForOrganisation)
+    //    //    {
+    //    //        return null;
+    //    //    }
+
+    //    //    return await db.PlanningProviders
+    //    //        .AsNoTracking()
+    //    //        .SingleOrDefaultAsync(
+    //    //            x =>
+    //    //                x.PlanningProviderId ==
+    //    //                    requestedProviderId &&
+    //    //                x.IsActive,
+    //    //            cancellationToken);
+    //    //}
+
+    //    /*
+    //     * Resolve the organisation's active configured provider.
+    //     */
+    //    var configuredProviderId =
+    //        await db.OrganisationWorkPlanningSettings
+    //            .AsNoTracking()
+    //            .Where(x =>
+    //                x.OrganisationBusinessEntityId ==
+    //                    request
+    //                        .OrganisationBusinessEntityId &&
+    //                x.IsActive)
+    //            .OrderByDescending(x =>
+    //                x.OrganisationWorkPlanningSettingId)
+    //            .Select(x =>
+    //                (int?)x.PlanningProviderId)
+    //            .FirstOrDefaultAsync(
+    //                cancellationToken);
+
+    //    if (!configuredProviderId.HasValue)
+    //    {
+    //        return null;
+    //    }
+
+    //    return await db.PlanningProviders
+    //        .AsNoTracking()
+    //        .SingleOrDefaultAsync(
+    //            x =>
+    //                x.PlanningProviderId ==
+    //                    configuredProviderId.Value &&
+    //                x.IsActive,
+    //            cancellationToken);
+    //}
+
+
+
     private static async Task<PlanningProvider?>
-        ResolvePlanningProviderAsync(
-            HrmTeContext db,
-            GenerateWorkPlanRequest request,
-            CancellationToken cancellationToken)
+    ResolvePlanningProviderAsync(
+        HrmTeContext db,
+        GenerateWorkPlanRequest request,
+        CancellationToken cancellationToken)
     {
-        /*
-         * When the request specifies a provider, validate that it is
-         * active and configured for the organisation.
-         */
-        if (request.PlanningProviderId.HasValue &&
-            request.PlanningProviderId.Value > 0)
-        {
-            var requestedProviderId =
-                request.PlanningProviderId.Value;
+        var effectiveDate = request.WorkDate;
 
-            var isConfiguredForOrganisation =
-                await db.OrganisationWorkPlanningSettings
-                    .AsNoTracking()
-                    .AnyAsync(
-                        x =>
-                            x.OrganisationBusinessEntityId ==
-                            request
-                                .OrganisationBusinessEntityId &&
-                            x.PlanningProviderId ==
-                            requestedProviderId &&
-                            x.IsActive,
-                        cancellationToken);
-
-            if (!isConfiguredForOrganisation)
-            {
-                return null;
-            }
-
-            return await db.PlanningProviders
-                .AsNoTracking()
-                .SingleOrDefaultAsync(
-                    x =>
-                        x.PlanningProviderId ==
-                            requestedProviderId &&
-                        x.IsActive,
-                    cancellationToken);
-        }
-
-        /*
-         * Resolve the organisation's active configured provider.
-         */
         var configuredProviderId =
             await db.OrganisationWorkPlanningSettings
                 .AsNoTracking()
                 .Where(x =>
-                    x.OrganisationBusinessEntityId ==
-                        request
-                            .OrganisationBusinessEntityId &&
-                    x.IsActive)
+                    x.OrganisationBusinessEntityId == request.OrganisationBusinessEntityId &&
+                    x.IsActive &&
+                    (!x.EffectiveFrom.HasValue ||
+                     x.EffectiveFrom.Value.Date <=
+                        effectiveDate) &&
+                    (!x.EffectiveTo.HasValue ||
+                     x.EffectiveTo.Value.Date >=
+                        effectiveDate))
                 .OrderByDescending(x =>
+                    x.EffectiveFrom)
+                .ThenByDescending(x =>
                     x.OrganisationWorkPlanningSettingId)
                 .Select(x =>
                     (int?)x.PlanningProviderId)
@@ -924,6 +970,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 x =>
                     x.PlanningProviderId ==
                         configuredProviderId.Value &&
+                    x.OrganisationBusinessEntityID == request.OrganisationBusinessEntityId &&
                     x.IsActive,
                 cancellationToken);
     }

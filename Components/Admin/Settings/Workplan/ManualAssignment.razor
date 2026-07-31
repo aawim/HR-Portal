@@ -1,0 +1,594 @@
+﻿@page "/admin/work-planning/manual-assignment"
+
+@using HRM.DTOs.WorkPlanning
+@using HRM.WorkPlanning.Abstractions
+@using HRM.WorkPlanning.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Admin.Settings.Workplan.Components.ManualAssignment
+@using Microsoft.Extensions.Logging
+@using HRM.Services
+
+@inject IManualWorkAssignmentService ManualAssignmentService
+@inject IManualWorkAssignmentLookupService LookupService
+@inject IUserAccessService UserAccessService
+@inject ToastService ToastService
+
+
+<PageTitle>Manual Work Assignment</PageTitle>
+
+<div class="min-h-screen bg-slate-50">
+
+    <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+
+        <!-- Page heading -->
+        <div class="mb-6">
+
+            <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+
+                <div>
+                    <h1 class="text-2xl font-semibold text-slate-900">
+                        Manual Work Assignment
+                    </h1>
+
+                    <p class="mt-1 text-sm text-slate-500">
+                        Generate a work plan and assignment for an employee.
+                    </p>
+                </div>
+
+                <a href="/admin/work-planning"
+                class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+
+                    Back to Work Planning
+                </a>
+
+            </div>
+
+        </div>
+
+        @if (IsInitialLoading)
+        {
+            <div class="rounded-xl border border-slate-200 bg-white p-10 shadow-sm">
+
+                <div class="flex items-center justify-center gap-3 text-slate-500">
+
+                    <div class="h-5 w-5 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></div>
+
+                    <span>
+                        Loading manual assignment form...
+                    </span>
+
+                </div>
+
+            </div>
+        }
+        else
+        {
+            <ManualAssignmentAlert SuccessMessage="@SuccessMessage"
+            ErrorMessage="@ErrorMessage"
+            OnDismiss="@ClearMessages" />
+
+            <EditForm Model="@Model" OnValidSubmit="@GenerateAssignmentAsync">
+
+                <DataAnnotationsValidator />
+
+                <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
+
+                    <!-- Left side -->
+                    <div class="space-y-6 xl:col-span-2">
+
+                        <ManualAssignmentEmployeeSection Jobs="@Jobs"
+                        SelectedJobId="@Model.JobId"
+                        IsLoading="@IsJobsLoading"
+                        IsDisabled="@IsSubmitting"
+                        OnSearchChanged="@SearchJobsAsync"
+                        OnJobChanged="@HandleJobChangedAsync" />
+
+                        <ManualAssignmentScheduleSection Model="@Model"
+                        Templates="@Templates"
+                        IsLoadingTemplates="@IsTemplatesLoading"
+                        IsDisabled="@IsSubmitting"
+                        OnWorkDateChanged="@HandleWorkDateChangedAsync"
+                        OnTemplateChanged="@HandleTemplateChangedAsync" />
+
+                        <ManualAssignmentOptionsSection Model="@Model"
+                        IsDisabled="@IsSubmitting" />
+
+                    </div>
+
+                    <!-- Right side preview -->
+                    <div class="xl:col-span-1">
+
+                        <div class="xl:sticky xl:top-6">
+
+                            <ManualAssignmentPreview Model="@Model"
+                            SelectedJob="@SelectedJob"
+                            SelectedTemplate="@SelectedTemplate"
+                            Preview="@Preview"
+                            IsLoading="@IsPreviewLoading" />
+
+                            <div class="mt-4">
+
+                                <button type="submit"
+                                disabled="@(!CanGenerate)"
+                                class="@GenerateButtonCss">
+
+                                    @if (IsSubmitting)
+                                    {
+                                        <span class="inline-flex items-center gap-2">
+
+                                            <span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>
+
+                                            Generating...
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="inline-flex items-center gap-2">
+
+                                            <svg xmlns="http://www.w3.org/2000/svg"
+                                            fill="none"
+                                            viewBox="0 0 24 24"
+                                            stroke-width="1.5"
+                                            stroke="currentColor"
+                                            class="h-5 w-5">
+
+                                                <path stroke-linecap="round"
+                                                stroke-linejoin="round"
+                                                d="M12 4.5v15m7.5-7.5h-15" />
+                                            </svg>
+
+                                            Generate Assignment
+                                        </span>
+                                    }
+
+                                </button>
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </EditForm>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    private ManualWorkAssignmentRequest Model { get; set; } =
+        CreateDefaultModel();
+
+    private IReadOnlyList<ManualAssignmentJobDto> Jobs { get; set; } =
+        [];
+
+    private IReadOnlyList<AssignedWorkTemplateDto> Templates { get; set; } =
+        [];
+
+    private WorkAssignmentPreviewDto? Preview { get; set; }
+
+    private ManualAssignmentJobDto? SelectedJob =>
+        Jobs.FirstOrDefault(x => x.JobId == Model.JobId);
+
+    private AssignedWorkTemplateDto? SelectedTemplate =>
+        Templates.FirstOrDefault(
+            x => x.WorkTemplateId == Model.WorkTemplateId);
+
+    private bool IsInitialLoading { get; set; } = true;
+
+    private bool IsJobsLoading { get; set; }
+
+    private bool IsTemplatesLoading { get; set; }
+
+    private bool IsPreviewLoading { get; set; }
+
+    private bool IsSubmitting { get; set; }
+
+    private int CurrentUserId { get; set; }
+
+    private string? SuccessMessage { get; set; }
+
+    private string? ErrorMessage { get; set; }
+
+    private CancellationTokenSource? _searchCancellationTokenSource;
+
+    private bool CanGenerate =>
+        !IsSubmitting &&
+        !IsTemplatesLoading &&
+        !IsPreviewLoading &&
+        Model.IndividualId > 0 &&
+        Model.JobId > 0 &&
+        Model.OrganisationBusinessEntityId > 0 &&
+        Model.WorkTemplateId > 0 &&
+        Model.WorkDate != default &&
+        Preview is not null;
+
+    private string GenerateButtonCss =>
+        CanGenerate
+            ? "w-full rounded-lg bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+            : "w-full cursor-not-allowed rounded-lg bg-slate-300 px-5 py-3 text-sm font-semibold text-white";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var userContext = await UserAccessService.RequireContextAsync();
+
+            if (userContext is null ||
+                userContext.UserId <= 0)
+            {
+                ErrorMessage =
+                    "The current user could not be identified.";
+
+                return;
+            }
+
+            CurrentUserId =
+                userContext.UserId;
+
+            await LoadInitialJobsAsync();
+        }
+        catch (Exception)
+        {
+            ErrorMessage =
+                "The manual assignment page could not be loaded.";
+        }
+        finally
+        {
+            IsInitialLoading = false;
+        }
+    }
+
+    private async Task LoadInitialJobsAsync()
+    {
+        IsJobsLoading = true;
+
+        try
+        {
+            Jobs =
+                await LookupService.SearchActiveJobsAsync(
+                    searchText: null,
+                    organisationId: null);
+        }
+        catch (Exception)
+        {
+            Jobs = [];
+
+            ErrorMessage =
+                "Active employee jobs could not be loaded.";
+        }
+        finally
+        {
+            IsJobsLoading = false;
+        }
+    }
+
+    private async Task SearchJobsAsync(
+      string searchText)
+    {
+        _searchCancellationTokenSource?.Cancel();
+        _searchCancellationTokenSource?.Dispose();
+
+        _searchCancellationTokenSource =
+            new CancellationTokenSource();
+
+        var cancellationToken =
+            _searchCancellationTokenSource.Token;
+
+        IsJobsLoading = true;
+
+        try
+        {
+            await Task.Delay(
+                300,
+                cancellationToken);
+
+            var searchResults =
+                await LookupService.SearchActiveJobsAsync(
+                    searchText,
+                    organisationId: null,
+                    cancellationToken);
+
+            var selectedJob =
+                Jobs.FirstOrDefault(x =>
+                    x.JobId == Model.JobId);
+
+            if (selectedJob is not null &&
+                searchResults.All(x =>
+                    x.JobId != selectedJob.JobId))
+            {
+                Jobs =
+                    new[] { selectedJob }
+                        .Concat(searchResults)
+                        .ToList();
+            }
+            else
+            {
+                Jobs =
+                    searchResults;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer search replaced this search.
+        }
+        catch (Exception exception)
+        {
+            ErrorMessage =
+                "Employee search could not be completed." + exception ;
+
+
+            ToastService.Error(ErrorMessage);
+
+
+            // Logger.LogError(
+            //     exception,
+            //     "Failed to search active employee jobs.");
+        }
+        finally
+        {
+            if (!cancellationToken.IsCancellationRequested)
+            {
+                IsJobsLoading = false;
+            }
+        }
+    }
+
+    private async Task HandleJobChangedAsync(
+     int jobId)
+    {
+        ClearMessages();
+
+        Model.JobId =
+            jobId;
+
+        Model.WorkTemplateId =
+            0;
+
+        Templates = [];
+        Preview = null;
+
+        var selectedJob =
+            Jobs.FirstOrDefault(x =>
+                x.JobId == jobId);
+
+        if (selectedJob is null)
+        {
+            Model.IndividualId = 0;
+            Model.OrganisationBusinessEntityId = 0;
+
+            ErrorMessage =
+                "The selected employee job could not be found.";
+
+            return;
+        }
+
+        Model.IndividualId =
+            selectedJob.IndividualId;
+
+        Model.OrganisationBusinessEntityId =
+            selectedJob.OrganisationId;
+
+        await LoadTemplatesAsync();
+    }
+
+    private async Task HandleWorkDateChangedAsync(DateTime workDate)
+    {
+        Model.WorkDate =
+            workDate.Date;
+
+        Model.WorkTemplateId = 0;
+
+        Preview = null;
+        Templates = [];
+
+        if (Model.JobId > 0)
+        {
+            await LoadTemplatesAsync();
+        }
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        Templates = [];
+        Preview = null;
+        Model.WorkTemplateId = 0;
+
+        if (Model.JobId <= 0 ||
+            Model.OrganisationBusinessEntityId <= 0)
+        {
+            return;
+        }
+
+        IsTemplatesLoading = true;
+
+        try
+        {
+            Templates =
+                await LookupService.GetAvailableTemplatesAsync(
+                    Model.OrganisationBusinessEntityId,
+                    Model.WorkDate);
+
+            if (Templates.Count == 0)
+            {
+                ErrorMessage =
+                    "No active work templates are available.";
+
+                return;
+            }
+
+            if (Templates.Count == 1)
+            {
+                Model.WorkTemplateId =
+                    Templates[0].WorkTemplateId;
+
+                await LoadPreviewAsync();
+            }
+        }
+        catch (Exception exception)
+        {
+            Templates = [];
+
+            ErrorMessage =
+                "The available work templates could not be loaded.";
+
+            ErrorMessage +=
+                exception +
+                "Failed to load work templates for organisation " +
+                "{OrganisationId} and date {WorkDate}." +
+                Model.OrganisationBusinessEntityId +
+                Model.WorkDate;
+
+
+            ToastService.Error(ErrorMessage);
+        }
+        finally
+        {
+            IsTemplatesLoading = false;
+        }
+    }
+
+    private async Task HandleTemplateChangedAsync(
+        int workTemplateId)
+    {
+        Model.WorkTemplateId =
+            workTemplateId;
+
+        Preview = null;
+
+        if (workTemplateId > 0)
+        {
+            await LoadPreviewAsync();
+        }
+    }
+
+    private async Task LoadPreviewAsync()
+    {
+        if (Model.JobId <= 0 ||
+            Model.WorkTemplateId <= 0 ||
+            Model.WorkDate == default)
+        {
+            Preview = null;
+            return;
+        }
+
+        IsPreviewLoading = true;
+
+        try
+        {
+            Preview =
+                await LookupService.GetAssignmentPreviewAsync(
+                    Model.JobId,
+                    Model.WorkTemplateId,
+                    Model.WorkDate);
+        }
+        catch (Exception)
+        {
+            Preview = null;
+
+            ErrorMessage =
+                "The work-assignment preview could not be loaded.";
+        }
+        finally
+        {
+            IsPreviewLoading = false;
+        }
+    }
+
+    private async Task GenerateAssignmentAsync()
+    {
+        if (!CanGenerate)
+        {
+            ErrorMessage =
+                "Complete all required assignment information.";
+
+            return;
+        }
+
+        ClearMessages();
+
+        IsSubmitting = true;
+
+        try
+        {
+            var result =
+                await ManualAssignmentService.GenerateAsync(
+                    Model,
+                    CurrentUserId);
+
+            if (!result.Success)
+            {
+                ErrorMessage =
+                    result.Message;
+
+                return;
+            }
+
+            SuccessMessage =
+                $"{result.Message} " +
+                $"Work plan ID: {result.WorkPlanId}. " +
+                $"Assignment ID: {result.WorkAssignmentId}.";
+
+            ResetAfterSuccess();
+        }
+        catch (OperationCanceledException)
+        {
+            ErrorMessage =
+                "Manual assignment generation was cancelled.";
+        }
+        catch (Exception)
+        {
+            ErrorMessage =
+                "An unexpected error occurred while generating " +
+                "the assignment.";
+        }
+        finally
+        {
+            IsSubmitting = false;
+        }
+    }
+
+    private void ResetAfterSuccess()
+    {
+        Model = CreateDefaultModel();
+
+        Templates = [];
+        Preview = null;
+    }
+
+    private void ClearMessages()
+    {
+        SuccessMessage = null;
+        ErrorMessage = null;
+    }
+
+    private static ManualWorkAssignmentRequest CreateDefaultModel()
+    {
+        return new ManualWorkAssignmentRequest
+        {
+            WorkDate =
+                DateTime.Today,
+
+            RequiresAttendance =
+                true,
+
+            RequiresCheckout =
+                true,
+
+            Priority =
+                0,
+
+            AssignmentSource =
+                "Manual"
+        };
+    }
+
+    public void Dispose()
+    {
+        _searchCancellationTokenSource?.Cancel();
+        _searchCancellationTokenSource?.Dispose();
+    }
+}

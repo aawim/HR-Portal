@@ -1,0 +1,583 @@
+﻿@using HRM.DTOs.StaffSchedule
+
+<div class="overflow-hidden rounded-xl border border-slate-200
+            bg-white shadow-sm">
+
+    <!-- Header -->
+    <div class="flex flex-col gap-4 border-b border-slate-200
+                px-5 py-4 sm:flex-row sm:items-center
+                sm:justify-between">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-10 w-10 shrink-0 items-center
+                        justify-center rounded-lg bg-amber-50
+                        text-amber-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M12 6v6h4.5m4.5 0a9 9 0
+                             1 1-18 0 9 9 0 0 1 18 0Z" />
+                </svg>
+
+            </div>
+
+            <div>
+
+                <h3 class="text-sm font-semibold text-slate-900">
+                    Manual Work Assignments
+                </h3>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Assign a schedule for a specific date or exception.
+                </p>
+
+            </div>
+
+        </div>
+
+        <button type="button"
+                disabled="@IsDisabled"
+                @onclick="HandleAssignRequestedAsync"
+                class="inline-flex items-center justify-center gap-2
+                       rounded-lg bg-amber-600 px-3.5 py-2
+                       text-sm font-medium text-white transition
+                       hover:bg-amber-700
+                       disabled:cursor-not-allowed
+                       disabled:bg-slate-300">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke-width="1.5"
+                 stroke="currentColor"
+                 class="h-4 w-4">
+
+                <path stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 4.5v15m7.5-7.5h-15" />
+            </svg>
+
+            Assign Work
+
+        </button>
+
+    </div>
+
+    <!-- Information -->
+    @if (CurrentTemplate is null)
+    {
+        <div class="border-b border-amber-200 bg-amber-50 px-5 py-3">
+
+            <div class="flex items-start gap-3">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="mt-0.5 h-4 w-4 shrink-0 text-amber-600">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M12 9v3.75m9-.75a9 9 0 1
+                             1-18 0 9 9 0 0 1 18 0Zm-9
+                             3.75h.008v.008H12v-.008Z" />
+                </svg>
+
+                <div>
+
+                    <p class="text-sm font-medium text-amber-800">
+                        No recurring work template assigned
+                    </p>
+
+                    <p class="mt-0.5 text-xs leading-5 text-amber-700">
+                        You can still create a manual assignment, but the
+                        staff member currently has no default recurring
+                        template.
+                    </p>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+    <!-- Filters -->
+    <div class="flex flex-col gap-3 border-b border-slate-200
+                bg-slate-50/60 px-5 py-3 sm:flex-row
+                sm:items-center sm:justify-between">
+
+        <div class="inline-flex rounded-lg border border-slate-200
+                    bg-white p-1">
+
+            <button type="button"
+                    @onclick="() => SetFilter(ManualAssignmentFilter.Upcoming)"
+                    class="@GetFilterButtonClass(
+                        ManualAssignmentFilter.Upcoming)">
+                Upcoming
+            </button>
+
+            <button type="button"
+                    @onclick="() => SetFilter(ManualAssignmentFilter.Past)"
+                    class="@GetFilterButtonClass(
+                        ManualAssignmentFilter.Past)">
+                Past
+            </button>
+
+            <button type="button"
+                    @onclick="() => SetFilter(ManualAssignmentFilter.All)"
+                    class="@GetFilterButtonClass(
+                        ManualAssignmentFilter.All)">
+                All
+            </button>
+
+        </div>
+
+        <p class="text-xs text-slate-500">
+            @FilteredAssignments.Count assignment(s)
+        </p>
+
+    </div>
+
+    <!-- Content -->
+    <div class="p-5">
+
+        @if (FilteredAssignments.Count == 0)
+        {
+            <div class="rounded-lg border border-dashed
+                        border-slate-300 bg-slate-50 p-8 text-center">
+
+                <div class="mx-auto flex h-12 w-12 items-center
+                            justify-center rounded-full bg-white
+                            text-slate-400 shadow-sm">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M6.75 3v2.25M17.25 3v2.25M3.75
+                                 18.75V7.5A2.25 2.25 0 0 1 6
+                                 5.25h12a2.25 2.25 0 0 1 2.25
+                                 2.25v11.25m-16.5 0A2.25 2.25
+                                 0 0 0 6 21h12a2.25 2.25 0 0
+                                 0 2.25-2.25m-16.5 0v-7.5A2.25
+                                 2.25 0 0 1 6 9h12a2.25 2.25
+                                 0 0 1 2.25 2.25v7.5" />
+                    </svg>
+
+                </div>
+
+                <p class="mt-3 text-sm font-medium text-slate-700">
+                    @EmptyStateTitle
+                </p>
+
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                    Manual assignments are useful for special duties,
+                    temporary schedule changes, training, events, and
+                    other date-specific work.
+                </p>
+
+                <button type="button"
+                        disabled="@IsDisabled"
+                        @onclick="HandleAssignRequestedAsync"
+                        class="mt-4 rounded-lg border border-amber-200
+                               bg-white px-3.5 py-2 text-sm
+                               font-medium text-amber-700
+                               hover:bg-amber-50
+                               disabled:cursor-not-allowed
+                               disabled:opacity-50">
+                    Create Manual Assignment
+                </button>
+
+            </div>
+        }
+        else
+        {
+            <div class="space-y-3">
+
+                @foreach (var assignment in FilteredAssignments)
+                {
+                    <div class="rounded-lg border border-slate-200
+                                bg-white p-4 transition
+                                hover:border-slate-300
+                                hover:shadow-sm">
+
+                        <div class="flex flex-col gap-4
+                                    sm:flex-row sm:items-start
+                                    sm:justify-between">
+
+                            <div class="flex min-w-0 items-start gap-3">
+
+                                <div class="flex h-11 w-11 shrink-0
+                                            flex-col items-center
+                                            justify-center rounded-lg
+                                            bg-slate-100">
+
+                                    <span class="text-[10px] font-medium
+                                                 uppercase text-slate-500">
+                                        @assignment.WorkDate.ToString("MMM")
+                                    </span>
+
+                                    <span class="text-base font-semibold
+                                                 leading-none text-slate-800">
+                                        @assignment.WorkDate.ToString("dd")
+                                    </span>
+
+                                </div>
+
+                                <div class="min-w-0">
+
+                                    <div class="flex flex-wrap
+                                                items-center gap-2">
+
+                                        <p class="truncate text-sm
+                                                  font-semibold
+                                                  text-slate-900">
+                                            @GetAssignmentName(assignment)
+                                        </p>
+
+                                        <span class="@GetStatusClass(
+                                            assignment)">
+                                            @assignment.Status
+                                        </span>
+
+                                    </div>
+
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        @FormatAssignmentPeriod(assignment)
+                                    </p>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                   assignment.WorkTemplateName))
+                                    {
+                                        <p class="mt-1 text-xs
+                                                  text-slate-500">
+                                            Template:
+                                            <span class="font-medium
+                                                         text-slate-700">
+                                                @assignment.WorkTemplateName
+                                            </span>
+                                        </p>
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                   assignment.Remarks))
+                                    {
+                                        <p class="mt-2 line-clamp-2
+                                                  text-xs leading-5
+                                                  text-slate-500">
+                                            @assignment.Remarks
+                                        </p>
+                                    }
+
+                                </div>
+
+                            </div>
+
+                            <div class="flex shrink-0 items-center gap-2">
+
+                                <button type="button"
+                                        @onclick="() =>
+                                            HandleViewRequestedAsync(
+                                                assignment)"
+                                        class="rounded-lg border
+                                               border-slate-200 bg-white
+                                               px-3 py-2 text-xs
+                                               font-medium text-slate-700
+                                               hover:bg-slate-50">
+                                    View
+                                </button>
+
+                                @if (CanModify(assignment))
+                                {
+                                    <button type="button"
+                                            disabled="@IsDisabled"
+                                            @onclick="() =>
+                                                HandleEditRequestedAsync(
+                                                    assignment)"
+                                            class="rounded-lg border
+                                                   border-blue-200 bg-white
+                                                   px-3 py-2 text-xs
+                                                   font-medium text-blue-700
+                                                   hover:bg-blue-50
+                                                   disabled:cursor-not-allowed
+                                                   disabled:opacity-50">
+                                        Edit
+                                    </button>
+
+                                    <button type="button"
+                                            disabled="@IsDisabled"
+                                            @onclick="() =>
+                                                HandleRemoveRequestedAsync(
+                                                    assignment)"
+                                            class="rounded-lg border
+                                                   border-red-200 bg-white
+                                                   px-3 py-2 text-xs
+                                                   font-medium text-red-700
+                                                   hover:bg-red-50
+                                                   disabled:cursor-not-allowed
+                                                   disabled:opacity-50">
+                                        Remove
+                                    </button>
+                                }
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public int JobId { get; set; }
+
+    [Parameter]
+    public int OrganisationBusinessEntityId { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ManualWorkAssignmentListDto> Assignments
+    {
+        get;
+        set;
+    } = Array.Empty<ManualWorkAssignmentListDto>();
+
+    [Parameter]
+    public CurrentWorkTemplateAssignmentDto? CurrentTemplate
+    {
+        get;
+        set;
+    }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnAssignRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<ManualWorkAssignmentListDto>
+        OnViewRequested
+    { get; set; }
+
+    [Parameter]
+    public EventCallback<ManualWorkAssignmentListDto>
+        OnEditRequested
+    { get; set; }
+
+    [Parameter]
+    public EventCallback<ManualWorkAssignmentListDto>
+        OnRemoveRequested
+    { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private ManualAssignmentFilter selectedFilter =
+        ManualAssignmentFilter.Upcoming;
+
+    private List<ManualWorkAssignmentListDto> FilteredAssignments =>
+        selectedFilter switch
+        {
+            ManualAssignmentFilter.Upcoming =>
+                Assignments
+                    .Where(x =>
+                        x.IsValid &&
+                        x.EndDateTime >= DateTime.Today)
+                    .OrderBy(x => x.StartDateTime)
+                    .ToList(),
+
+            ManualAssignmentFilter.Past =>
+                Assignments
+                    .Where(x =>
+                        x.EndDateTime < DateTime.Today)
+                    .OrderByDescending(x => x.StartDateTime)
+                    .ToList(),
+
+            _ =>
+                Assignments
+                    .OrderByDescending(x => x.StartDateTime)
+                    .ToList()
+        };
+
+    private string EmptyStateTitle =>
+        selectedFilter switch
+        {
+            ManualAssignmentFilter.Upcoming =>
+                "No upcoming manual assignments",
+
+            ManualAssignmentFilter.Past =>
+                "No past manual assignments",
+
+            _ =>
+                "No manual assignments"
+        };
+
+    private void SetFilter(
+        ManualAssignmentFilter filter)
+    {
+        selectedFilter = filter;
+    }
+
+    private async Task HandleAssignRequestedAsync()
+    {
+        if (IsDisabled)
+            return;
+
+        if (OnAssignRequested.HasDelegate)
+        {
+            await OnAssignRequested.InvokeAsync();
+        }
+    }
+
+    private async Task HandleViewRequestedAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (OnViewRequested.HasDelegate)
+        {
+            await OnViewRequested.InvokeAsync(assignment);
+        }
+    }
+
+    private async Task HandleEditRequestedAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (IsDisabled || !CanModify(assignment))
+            return;
+
+        if (OnEditRequested.HasDelegate)
+        {
+            await OnEditRequested.InvokeAsync(assignment);
+        }
+    }
+
+    private async Task HandleRemoveRequestedAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (IsDisabled || !CanModify(assignment))
+            return;
+
+        if (OnRemoveRequested.HasDelegate)
+        {
+            await OnRemoveRequested.InvokeAsync(assignment);
+        }
+    }
+
+    private static bool CanModify(
+        ManualWorkAssignmentListDto assignment)
+    {
+        return assignment.IsValid &&
+               !assignment.IsFinalized &&
+               assignment.StartDateTime > DateTime.Now;
+    }
+
+    private static string GetAssignmentName(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (!string.IsNullOrWhiteSpace(
+            assignment.AssignmentName))
+        {
+            return assignment.AssignmentName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+            assignment.WorkTemplateName))
+        {
+            return assignment.WorkTemplateName;
+        }
+
+        return "Manual Work Assignment";
+    }
+
+    private static string FormatAssignmentPeriod(
+        ManualWorkAssignmentListDto assignment)
+    {
+        var start =
+            assignment.StartDateTime.ToString("dd MMM yyyy, HH:mm");
+
+        var endFormat =
+            assignment.StartDateTime.Date ==
+            assignment.EndDateTime.Date
+                ? "HH:mm"
+                : "dd MMM yyyy, HH:mm";
+
+        var end =
+            assignment.EndDateTime.ToString(endFormat);
+
+        return $"{start} – {end}";
+    }
+
+    private static string GetStatusClass(
+        ManualWorkAssignmentListDto assignment)
+    {
+        const string baseClass =
+            "inline-flex rounded-full px-2 py-0.5 " +
+            "text-[11px] font-medium ";
+
+        if (!assignment.IsValid)
+        {
+            return baseClass +
+                   "bg-slate-100 text-slate-600";
+        }
+
+        if (assignment.IsFinalized)
+        {
+            return baseClass +
+                   "bg-blue-100 text-blue-700";
+        }
+
+        if (assignment.EndDateTime <
+            DateTime.Now)
+        {
+            return baseClass +
+                   "bg-slate-100 text-slate-600";
+        }
+
+        return baseClass +
+               "bg-emerald-100 text-emerald-700";
+    }
+
+    private string GetFilterButtonClass(
+        ManualAssignmentFilter filter)
+    {
+        const string baseClass =
+            "rounded-md px-3 py-1.5 text-xs font-medium transition ";
+
+        return selectedFilter == filter
+            ? baseClass +
+              "bg-slate-900 text-white shadow-sm"
+            : baseClass +
+              "text-slate-600 hover:bg-slate-100";
+    }
+
+    private enum ManualAssignmentFilter
+    {
+        Upcoming,
+        Past,
+        All
+    }
+}

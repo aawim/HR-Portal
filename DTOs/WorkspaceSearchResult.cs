@@ -1,9 +1,10 @@
 ﻿using HRM.Enum;
-using HRM.Models;
+ 
+ 
 
 namespace HRM.DTOs
 {
-    public class WorkspaceSearchResult
+    public partial class WorkspaceSearchResult
     {
 
         public int Id { get; set; }
@@ -17,7 +18,7 @@ namespace HRM.DTOs
         public int BusinessEntityId { get; set; }
         public int IndividualId { get; set; }
         public int? JobId { get; set; }
-        public virtual Job Job { get; set; } = null!;
+        public virtual Models.Job? Job { get; set; }
 
     }
 }

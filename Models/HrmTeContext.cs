@@ -2659,10 +2659,20 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
             entity.Property(e => e.TerminatedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Individual).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.IndividualID)
+            entity.HasOne(d => d.Staff)
+                .WithMany(p => p.Jobs)
+                .HasForeignKey(d => d.IndividualID) // Pointing to your FK
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_Staffs");
+
+            // Job has one Individual (Reference navigation for queries)
+            entity.HasOne(d => d.Individual)
+                .WithMany() // Leave empty since Individual does not have an ICollection<Job>
+                .HasForeignKey(d => d.IndividualID)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_Jobs_Individuals");
+
+
 
             entity.HasOne(d => d.JobState).WithMany(p => p.Jobs)
                 .HasForeignKey(d => d.JobStateId)
@@ -7127,6 +7137,14 @@ public partial class HrmTeContext : DbContext
             entity.Property(x => x.PlanningProviderId)
                 .HasColumnName("PlanningProviderID");
 
+
+            entity.HasIndex(e => new {
+                e.OrganisationBusinessEntityID,
+                e.Code
+            }).IsUnique();
+
+
+
             entity.Property(x => x.Name)
                 .HasMaxLength(100)
                 .IsRequired();
@@ -7144,6 +7162,15 @@ public partial class HrmTeContext : DbContext
             entity.HasIndex(x => x.Code)
                 .IsUnique()
                 .HasDatabaseName("UQ_PlanningProviders_Code");
+
+
+            entity.HasOne(e => e.OrganisationBusinessEntity)
+                .WithMany()
+                .HasForeignKey(e => e.OrganisationBusinessEntityID)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_PlanningProviders_Organisations");
+
+
         });
     }
 
@@ -7165,10 +7192,10 @@ public partial class HrmTeContext : DbContext
             entity.Property(x => x.PlanningProviderId)
                 .HasColumnName("PlanningProviderID");
 
-            entity.Property(x => x.EffectiveFromDate)
+            entity.Property(x => x.EffectiveFrom)
                 .HasColumnType("date");
 
-            entity.Property(x => x.EffectiveToDate)
+            entity.Property(x => x.EffectiveTo)
                 .HasColumnType("date");
 
             entity.Property(x => x.IsActive)

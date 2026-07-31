@@ -416,6 +416,9 @@ namespace HRM.Components.Shared
             public const int WORK_PLAN_CREATE_ARCHIVE = 291;
 
 
+            public const int WORK_ASSIGNMENT_CREATE = 293;
+
+
 
 
         }

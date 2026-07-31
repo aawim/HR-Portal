@@ -14,9 +14,7 @@ namespace HRM.DTOs.WorkPlanning
 
         public DateTime WorkDate { get; set; }
 
-        public TimeOnly ScheduledStartTime { get; set; }
-
-        public int? PlanningProviderId { get; set; }
+        public DateTime ScheduledStartTime { get; set; }
 
         public WorkPlanGenerationSource GenerationSource { get; set; }
 

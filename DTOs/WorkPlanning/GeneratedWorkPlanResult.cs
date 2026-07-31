@@ -29,7 +29,7 @@
         //public int? RequestId { get; set; }
 
   
-
+        public int JobID { get; set; }
         public string? TemplateName { get; set; }
 
         public string? AssignmentTitle { get; set; }
@@ -43,5 +43,27 @@
         public int OwnerCount { get; set; }
 
         public int Version {  get; set; }
+
+
+        public static GeneratedWorkPlanResult Failure(string errorMessage)
+        {
+            return new GeneratedWorkPlanResult
+            {
+                Success = false,
+                ErrorMessage = errorMessage
+            };
+        }
+
+        public static GeneratedWorkPlanResult Successful(
+            int workPlanId,
+            int workAssignmentId)
+        {
+            return new GeneratedWorkPlanResult
+            {
+                Success = true,
+                WorkPlanId = workPlanId,
+                WorkAssignmentId = workAssignmentId
+            };
+        }
     }
 }

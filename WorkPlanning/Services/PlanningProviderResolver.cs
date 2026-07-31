@@ -22,17 +22,19 @@ namespace HRM.WorkPlanning.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync(cancellationToken);
 
+            var workDateTime = workDate.ToDateTime(TimeOnly.MinValue);
+
             var setting = await db.OrganisationWorkPlanningSettings
                 .AsNoTracking()
                 .Where(x =>
                     x.OrganisationBusinessEntityId ==
                         organisationBusinessEntityId &&
                     x.IsActive &&
-                    (!x.EffectiveFromDate.HasValue ||
-                     x.EffectiveFromDate.Value <= workDate) &&
-                    (!x.EffectiveToDate.HasValue ||
-                     x.EffectiveToDate.Value >= workDate))
-                .OrderByDescending(x => x.EffectiveFromDate)
+                   (!x.EffectiveFrom.HasValue ||
+                     x.EffectiveFrom.Value.Date <= workDateTime.Date) &&
+                    (!x.EffectiveTo.HasValue ||
+                     x.EffectiveTo.Value.Date >= workDateTime.Date))
+                            .OrderByDescending(x => x.EffectiveFrom)
                 .Select(x => new
                 {
                     x.PlanningProviderId,

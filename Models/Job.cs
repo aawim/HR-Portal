@@ -34,7 +34,9 @@ public partial class Job
 
     public virtual ICollection<AssignedWorkType> AssignedWorkTypes { get; set; } = new List<AssignedWorkType>();
 
-    public virtual Staff Individual { get; set; } = null!;
+    public virtual Staff Staff { get; set; } = null!;
+
+    public virtual Individual Individual { get; set; } = null!;
 
     public virtual ICollection<JobLeaveType> JobLeaveTypes { get; set; } = new List<JobLeaveType>();
 

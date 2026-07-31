@@ -1,0 +1,277 @@
+﻿@using HRM.DTOs.WorkPlanning
+
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm">
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
+
+            </div>
+
+            <div>
+                <h2 class="font-semibold text-slate-900">
+                    Employee and Job
+                </h2>
+
+                <p class="text-sm text-slate-500">
+                    Select the employee receiving the assignment.
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="space-y-4 p-5">
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Search employee
+            </label>
+
+            <div class="relative">
+
+                <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="m21 21-4.35-4.35m1.6-5.4a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+
+                </div>
+
+                <input type="search"
+                       value="@SearchText"
+                       disabled="@IsDisabled"
+                       placeholder="Search by name, employee number or position..."
+                       @oninput="@HandleSearchInput"
+                       class="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100" />
+
+            </div>
+
+        </div>
+
+        <div>
+
+            <label class="mb-1.5 block text-sm font-medium text-slate-700">
+                Employee job
+                <span class="text-red-500">*</span>
+            </label>
+
+            <div class="relative">
+
+                <select value="@SelectedJobId"
+                        disabled="@(IsDisabled || IsLoading)"
+                        @onchange="@HandleJobChanged"
+                        class="w-full appearance-none rounded-lg border border-slate-300 bg-white px-3 py-2.5 pr-10 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100">
+
+                    <option value="0">
+                        Select an employee job
+                    </option>
+
+                    @foreach (var job in Jobs)
+                    {
+                        <option value="@job.JobId">
+                            @GetJobDisplay(job)
+                        </option>
+                    }
+
+                </select>
+
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3 text-slate-400">
+
+                    @if (IsLoading)
+                    {
+                        <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
+                    }
+                    else
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-4 w-4">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+                        </svg>
+                    }
+
+                </div>
+
+            </div>
+
+            @if (!IsLoading && Jobs.Count == 0)
+            {
+                <p class="mt-2 text-sm text-amber-600">
+                    No active employee jobs were found.
+                </p>
+            }
+
+        </div>
+
+        @if (SelectedJob is not null)
+        {
+            <div class="rounded-lg border border-blue-100 bg-blue-50 p-4">
+
+                <div class="flex items-start gap-3">
+
+                    <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white font-semibold text-blue-700 shadow-sm">
+                        @GetInitials(SelectedJob.EmployeeName)
+                    </div>
+
+                    <div class="min-w-0">
+
+                        <p class="truncate font-medium text-slate-900">
+                            @SelectedJob.EmployeeName
+                        </p>
+
+                        <p class="mt-0.5 text-sm text-slate-600">
+                            @SelectedJob.PositionName
+                        </p>
+
+                        <div class="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+
+                            @if (!string.IsNullOrWhiteSpace(
+                           SelectedJob.EmployeeNumber))
+                            {
+                                <span>
+                                    Employee:
+                                    @SelectedJob.EmployeeNumber
+                                </span>
+                            }
+
+                            <span>
+                                Job ID:
+                                @SelectedJob.JobId
+                            </span>
+
+                            <span>
+                                Organisation:
+                                @SelectedJob.OrganisationName
+                            </span>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ManualAssignmentJobDto> Jobs { get; set; } =
+            [];
+
+    [Parameter]
+    public int SelectedJobId { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnSearchChanged { get; set; }
+
+    [Parameter]
+    public EventCallback<int> OnJobChanged { get; set; }
+
+    private string SearchText { get; set; } =
+        string.Empty;
+
+    private ManualAssignmentJobDto? SelectedJob =>
+        Jobs.FirstOrDefault(x => x.JobId == SelectedJobId);
+
+    private async Task HandleSearchInput(
+        ChangeEventArgs args)
+    {
+        SearchText =
+            args.Value?.ToString() ?? string.Empty;
+
+        await OnSearchChanged.InvokeAsync(
+            SearchText);
+    }
+
+    private async Task HandleJobChanged(
+        ChangeEventArgs args)
+    {
+        var jobId =
+            int.TryParse(
+                args.Value?.ToString(),
+                out var parsedJobId)
+                ? parsedJobId
+                : 0;
+
+        await OnJobChanged.InvokeAsync(
+            jobId);
+    }
+
+    private static string GetJobDisplay(
+        ManualAssignmentJobDto job)
+    {
+        var position =
+            string.IsNullOrWhiteSpace(job.PositionName)
+                ? "No position"
+                : job.PositionName;
+
+        return $"{job.EmployeeName} — {position}";
+    }
+
+    private static string GetInitials(
+        string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return "?";
+        }
+
+        var words =
+            name.Split(
+                ' ',
+                StringSplitOptions.RemoveEmptyEntries);
+
+        if (words.Length == 1)
+        {
+            return words[0][0]
+                .ToString()
+                .ToUpperInvariant();
+        }
+
+        return string.Concat(
+            words[0][0],
+            words[^1][0])
+            .ToUpperInvariant();
+    }
+}

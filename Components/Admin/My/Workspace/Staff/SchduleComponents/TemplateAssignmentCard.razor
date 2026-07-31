@@ -1,0 +1,425 @@
+﻿@using HRM.DTOs.WorkPlanning
+@using HRM.DTOs.StaffSchedule
+<div class="overflow-hidden rounded-xl border border-slate-200
+            bg-white shadow-sm">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between border-b
+                border-slate-200 px-5 py-4">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-10 w-10 items-center justify-center
+                        rounded-lg bg-blue-50 text-blue-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M6.75 3v2.25M17.25 3v2.25M3.75
+                             18.75V7.5A2.25 2.25 0 0 1 6
+                             5.25h12a2.25 2.25 0 0 1 2.25
+                             2.25v11.25m-16.5 0A2.25 2.25
+                             0 0 0 6 21h12a2.25 2.25 0 0
+                             0 2.25-2.25m-16.5 0v-7.5A2.25
+                             2.25 0 0 1 6 9h12a2.25 2.25
+                             0 0 1 2.25 2.25v7.5" />
+
+                </svg>
+
+            </div>
+
+            <div>
+
+                <h3 class="text-sm font-semibold text-slate-900">
+                    Work Template
+                </h3>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Default recurring schedule for this job.
+                </p>
+
+            </div>
+
+        </div>
+
+        <button type="button"
+                disabled="@IsDisabled"
+                @onclick="@HandleAssignOrChangeAsync"
+                class="rounded-lg bg-blue-600 px-3.5 py-2
+                       text-sm font-medium text-white transition
+                       hover:bg-blue-700
+                       disabled:cursor-not-allowed
+                       disabled:bg-slate-300">
+
+            @(CurrentAssignment is null
+                ? "Assign Template"
+                : "Change Template")
+
+        </button>
+
+    </div>
+
+    <!-- Content -->
+    <div class="p-5">
+
+        @if (CurrentAssignment is null)
+        {
+            <div class="rounded-lg border border-dashed
+                        border-slate-300 bg-slate-50 p-6 text-center">
+
+                <div class="mx-auto flex h-11 w-11 items-center
+                            justify-center rounded-full bg-white
+                            text-slate-400 shadow-sm">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-5 w-5">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M12 6v6h4.5m4.5 0a9 9 0
+                                 1 1-18 0 9 9 0 0 1 18 0Z" />
+
+                    </svg>
+
+                </div>
+
+                <p class="mt-3 text-sm font-medium text-slate-700">
+                    No work template assigned
+                </p>
+
+                <p class="mt-1 text-xs leading-5 text-slate-500">
+                    Assign a template before generating recurring
+                    work plans for this staff member.
+                </p>
+
+            </div>
+        }
+        else
+        {
+            <div class="rounded-lg border border-blue-100
+                        bg-blue-50/60 p-4">
+
+                <div class="flex flex-col gap-4
+                            sm:flex-row sm:items-start
+                            sm:justify-between">
+
+                    <div>
+
+                        <p class="text-xs font-medium uppercase
+                                  tracking-wide text-blue-600">
+                            Current Template
+                        </p>
+
+                        <p class="mt-1 text-base font-semibold
+                                  text-slate-900">
+                            @CurrentAssignment.TemplateName
+                        </p>
+
+                        <div class="mt-2 flex flex-wrap gap-2">
+
+                            @if (!string.IsNullOrWhiteSpace(
+                           CurrentAssignment.TemplateCode))
+                            {
+                                <span class="rounded-full bg-white
+                                             px-2.5 py-1 text-xs
+                                             font-medium text-slate-600">
+                                    @CurrentAssignment.TemplateCode
+                                </span>
+                            }
+
+                            @if (!string.IsNullOrWhiteSpace(
+                           CurrentAssignment.TemplateTypeName))
+                            {
+                                <span class="rounded-full bg-blue-100
+                                             px-2.5 py-1 text-xs
+                                             font-medium text-blue-700">
+                                    @CurrentAssignment.TemplateTypeName
+                                </span>
+                            }
+
+                        </div>
+
+                    </div>
+
+                    <span class="inline-flex w-fit items-center gap-1.5
+                                 rounded-full bg-emerald-100 px-2.5 py-1
+                                 text-xs font-medium text-emerald-700">
+
+                        <span class="h-1.5 w-1.5 rounded-full
+                                     bg-emerald-500">
+                        </span>
+
+                        Active
+
+                    </span>
+
+                </div>
+
+                <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                    <div>
+
+                        <dt class="text-xs text-slate-500">
+                            Effective From
+                        </dt>
+
+                        <dd class="mt-1 text-sm font-medium text-slate-800">
+                            @CurrentAssignment.EffectiveFrom.ToString(
+                                     "dd MMM yyyy")
+                        </dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt class="text-xs text-slate-500">
+                            Effective To
+                        </dt>
+
+                        <dd class="mt-1 text-sm font-medium text-slate-800">
+                            @(CurrentAssignment.EffectiveTo.HasValue
+                                ? CurrentAssignment.EffectiveTo.Value
+                                .ToString("dd MMM yyyy")
+                                : "No end date")
+                        </dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt class="text-xs text-slate-500">
+                            Default Start
+                        </dt>
+
+                        <dd class="mt-1 text-sm font-medium text-slate-800">
+                            @(CurrentAssignment.DefaultStartTime?.ToString("hh:mm tt"))
+                        </dd>
+
+                    </div>
+
+                    <div>
+
+                        <dt class="text-xs text-slate-500">
+                            Default End
+                        </dt>
+
+                        <dd class="mt-1 text-sm font-medium text-slate-800">
+                                @(CurrentAssignment.DefaultEndTime?.ToString("hh:mm tt"))
+                        </dd>
+
+                    </div>
+
+                </dl>
+
+                <div class="mt-5 flex flex-wrap gap-2">
+
+                    <button type="button"
+                            disabled="@IsDisabled"
+                            @onclick="@HandleAssignOrChangeAsync"
+                            class="rounded-lg border border-blue-200
+                                   bg-white px-3 py-2 text-sm
+                                   font-medium text-blue-700
+                                   hover:bg-blue-50
+                                   disabled:cursor-not-allowed
+                                   disabled:opacity-50">
+                        Change
+                    </button>
+
+                    <button type="button"
+                            disabled="@IsDisabled"
+                            @onclick="@HandleRemoveAsync"
+                            class="rounded-lg border border-red-200
+                                   bg-white px-3 py-2 text-sm
+                                   font-medium text-red-700
+                                   hover:bg-red-50
+                                   disabled:cursor-not-allowed
+                                   disabled:opacity-50">
+                        Remove
+                    </button>
+
+                    <button type="button"
+                            @onclick="@ToggleHistory"
+                            class="rounded-lg border border-slate-200
+                                   bg-white px-3 py-2 text-sm
+                                   font-medium text-slate-700
+                                   hover:bg-slate-50">
+                        @(showHistory
+                            ? "Hide History"
+                            : "View History")
+                    </button>
+
+                </div>
+
+            </div>
+        }
+
+        @if (showHistory)
+        {
+            <div class="mt-5 border-t border-slate-200 pt-5">
+
+                <h4 class="text-sm font-semibold text-slate-800">
+                    Assignment History
+                </h4>
+
+                @if (History.Count == 0)
+                {
+                    <p class="mt-3 text-sm text-slate-500">
+                        No template-assignment history is available.
+                    </p>
+                }
+                else
+                {
+                    <div class="mt-3 space-y-3">
+
+                        @foreach (var item in History)
+                        {
+                            <div class="flex items-start justify-between
+                                        gap-4 rounded-lg border
+                                        border-slate-200 p-3">
+
+                                <div>
+
+                                    <p class="text-sm font-medium text-slate-800">
+                                        @item.TemplateName
+                                    </p>
+
+                                    <p class="mt-1 text-xs text-slate-500">
+                                        @item.EffectiveFrom.ToString(
+                                                 "dd MMM yyyy")
+
+                                        <span class="px-1">
+                                            –
+                                        </span>
+
+                                        @(item.EffectiveTo.HasValue
+                                            ? item.EffectiveTo.Value
+                                            .ToString("dd MMM yyyy")
+                                            : "Present")
+                                    </p>
+
+                                </div>
+
+                                @if (item.IsCurrent)
+                                {
+                                    <span class="rounded-full
+                                                 bg-emerald-100 px-2 py-1
+                                                 text-xs font-medium
+                                                 text-emerald-700">
+                                        Current
+                                    </span>
+                                }
+                                else if (!item.IsActive)
+                                {
+                                    <span class="rounded-full
+                                                 bg-slate-100 px-2 py-1
+                                                 text-xs font-medium
+                                                 text-slate-600">
+                                        Removed
+                                    </span>
+                                }
+
+                            </div>
+                        }
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public int JobId { get; set; }
+
+    [Parameter]
+    public int OrganisationBusinessEntityId { get; set; }
+
+    [Parameter]
+    public CurrentWorkTemplateAssignmentDto? CurrentAssignment
+    {
+        get;
+        set;
+    }
+
+    [Parameter]
+    public IReadOnlyList<JobWorkTemplateAssignmentHistoryDto> History
+    {
+        get;
+        set;
+    } = Array.Empty<JobWorkTemplateAssignmentHistoryDto>();
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    [Parameter]
+    public EventCallback OnAssignRequested { get; set; }
+
+    [Parameter]
+    public EventCallback<CurrentWorkTemplateAssignmentDto>
+        OnRemoveRequested
+    { get; set; }
+
+    private bool showHistory;
+
+    private async Task HandleAssignOrChangeAsync()
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnAssignRequested.HasDelegate)
+        {
+            await OnAssignRequested.InvokeAsync();
+        }
+    }
+
+    private async Task HandleRemoveAsync()
+    {
+        if (IsDisabled ||
+            CurrentAssignment is null)
+        {
+            return;
+        }
+
+        if (OnRemoveRequested.HasDelegate)
+        {
+            await OnRemoveRequested.InvokeAsync(
+                CurrentAssignment);
+        }
+    }
+
+    private void ToggleHistory()
+    {
+        showHistory =
+            !showHistory;
+    }
+
+    private static string FormatTime(
+        TimeOnly? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("HH:mm")
+            : "Flexible";
+    }
+}

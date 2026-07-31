@@ -13,5 +13,16 @@ namespace HRM.DTOs.WorkPlanning
         public bool IsActive { get; set; }
 
         public string? TemplateType { get; set; }
+
+        public string? Code { get; set; }
+
+        public string TemplateTypeName { get; set; } = string.Empty;
+
+        // Add these
+        public TimeOnly? DefaultStartTime { get; set; }
+
+        public TimeOnly? DefaultEndTime { get; set; }
+
+        public bool EndsNextDay { get; set; }
     }
 }

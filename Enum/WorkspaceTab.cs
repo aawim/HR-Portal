@@ -36,6 +36,8 @@ namespace HRM.Enum
 
         Position,
 
+        Schedule,
+
         [Display(Name = "Leave Type")]
         LeaveType,
 

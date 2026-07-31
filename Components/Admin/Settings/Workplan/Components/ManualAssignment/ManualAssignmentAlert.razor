@@ -1,0 +1,103 @@
+﻿@if (!string.IsNullOrWhiteSpace(SuccessMessage))
+{
+    <div class="mb-6 flex items-start justify-between gap-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-emerald-800">
+
+        <div class="flex items-start gap-3">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke-width="1.5"
+                 stroke="currentColor"
+                 class="mt-0.5 h-5 w-5 shrink-0">
+
+                <path stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M9 12.75 11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+
+            <div>
+                <p class="font-medium">
+                    Assignment generated
+                </p>
+
+                <p class="mt-1 text-sm">
+                    @SuccessMessage
+                </p>
+            </div>
+
+        </div>
+
+        <button type="button"
+                @onclick="@Dismiss"
+                class="rounded p-1 hover:bg-emerald-100">
+
+            <span class="sr-only">
+                Dismiss
+            </span>
+
+            ×
+        </button>
+
+    </div>
+}
+
+@if (!string.IsNullOrWhiteSpace(ErrorMessage))
+{
+    <div class="mb-6 flex items-start justify-between gap-4 rounded-xl border border-red-200 bg-red-50 p-4 text-red-800">
+
+        <div class="flex items-start gap-3">
+
+            <svg xmlns="http://www.w3.org/2000/svg"
+                 fill="none"
+                 viewBox="0 0 24 24"
+                 stroke-width="1.5"
+                 stroke="currentColor"
+                 class="mt-0.5 h-5 w-5 shrink-0">
+
+                <path stroke-linecap="round"
+                      stroke-linejoin="round"
+                      d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+
+            <div>
+                <p class="font-medium">
+                    Assignment could not be generated
+                </p>
+
+                <p class="mt-1 text-sm">
+                    @ErrorMessage
+                </p>
+            </div>
+
+        </div>
+
+        <button type="button"
+                @onclick="@Dismiss"
+                class="rounded p-1 hover:bg-red-100">
+
+            <span class="sr-only">
+                Dismiss
+            </span>
+
+            ×
+        </button>
+
+    </div>
+}
+
+@code {
+    [Parameter]
+    public string? SuccessMessage { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public EventCallback OnDismiss { get; set; }
+
+    private async Task Dismiss()
+    {
+        await OnDismiss.InvokeAsync();
+    }
+}

@@ -1,0 +1,37 @@
+﻿
+@using HRM.DTOs.StaffSchedule
+
+<h3>Shift Assignment Card</h3>
+
+
+@code {
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public int JobId { get; set; }
+
+    [Parameter]
+    public int OrganisationBusinessEntityId { get; set; }
+
+    [Parameter]
+    public CurrentShiftAssignmentDto? CurrentAssignment { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<ShiftAssignmentHistoryDto> History { get; set; }
+        = Array.Empty<ShiftAssignmentHistoryDto>();
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
+    private async Task NotifyChangedAsync()
+    {
+        if (OnChanged.HasDelegate)
+        {
+            await OnChanged.InvokeAsync();
+        }
+    }
+}

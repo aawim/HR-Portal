@@ -43,9 +43,9 @@ namespace HRM.DTOs.WorkPlanning
 
         public bool IsActive { get; set; }
 
-        public DateOnly? EffectiveFrom { get; set; }
+        public DateTime? EffectiveFrom { get; set; }
 
-        public DateOnly? EffectiveTo { get; set; }
+        public DateTime? EffectiveTo { get; set; }
 
         public int? OperationLogId { get; set; }
 
