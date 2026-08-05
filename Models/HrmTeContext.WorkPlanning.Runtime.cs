@@ -249,37 +249,75 @@ public partial class HrmTeContext
         {
             entity.ToTable("WorkAssignmentSegments");
 
-            entity.HasKey(x => x.WorkAssignmentSegmentId);
+            entity.HasKey(e => e.WorkAssignmentSegmentId);
 
-            entity.Property(x => x.WorkAssignmentSegmentId)
+            entity.Property(e => e.WorkAssignmentSegmentId)
                 .HasColumnName("WorkAssignmentSegmentID")
                 .ValueGeneratedOnAdd();
 
-            entity.Property(x => x.WorkAssignmentId)
+            entity.Property(e => e.WorkAssignmentId)
                 .HasColumnName("WorkAssignmentID");
 
-            entity.Property(x => x.WorkTemplateSegmentId)
+            entity.Property(e => e.WorkTemplateSegmentId)
                 .HasColumnName("WorkTemplateSegmentID");
 
-            entity.Property(x => x.WorkSegmentTypeId)
+            entity.Property(e => e.WorkSegmentTypeId)
                 .HasColumnName("WorkSegmentTypeID");
 
-            entity.Property(x => x.OperationLogId)
+            entity.Property(e => e.Name)
+                .HasMaxLength(250)
+                .IsRequired();
+
+            entity.Property(e => e.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(e => e.SequenceNumber)
+                .HasColumnName("SequenceNumber");
+
+            entity.Property(e => e.StartDateTime)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.EndDateTime)
+                .HasColumnType("datetime2");
+
+            entity.Property(e => e.GraceBeforeMinutes)
+                .HasColumnName("GraceBeforeMinutes");
+
+            entity.Property(e => e.GraceAfterMinutes)
+                .HasColumnName("GraceAfterMinutes");
+
+            entity.Property(e => e.IsMandatory)
+                .HasColumnName("IsMandatory");
+
+            entity.Property(e => e.RequiresAttendance)
+                .HasColumnName("RequiresAttendance");
+
+            entity.Property(e => e.RequiresLocationValidation)
+                .HasColumnName("RequiresLocationValidation");
+
+            entity.Property(e => e.RequiresDeviceValidation)
+                .HasColumnName("RequiresDeviceValidation");
+
+            entity.Property(e => e.IsValid)
+                .HasColumnName("IsValid")
+                .HasDefaultValue(true);
+
+            entity.Property(e => e.OperationLogId)
                 .HasColumnName("OperationLogID");
 
-            entity.HasOne(x => x.WorkAssignment)
-                .WithMany(x => x.WorkAssignmentSegments)
-                .HasForeignKey(x => x.WorkAssignmentId)
+            entity.HasOne(e => e.WorkAssignment)
+                .WithMany(e => e.WorkAssignmentSegments)
+                .HasForeignKey(e => e.WorkAssignmentId)
                 .OnDelete(DeleteBehavior.Cascade);
 
-            entity.HasOne(x => x.WorkTemplateSegment)
-                .WithMany(x => x.WorkAssignmentSegments)
-                .HasForeignKey(x => x.WorkTemplateSegmentId)
+            entity.HasOne(e => e.WorkTemplateSegment)
+                .WithMany(e => e.WorkAssignmentSegments)
+                .HasForeignKey(e => e.WorkTemplateSegmentId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-            entity.HasOne(x => x.WorkSegmentType)
-                .WithMany(x => x.WorkAssignmentSegments)
-                .HasForeignKey(x => x.WorkSegmentTypeId)
+            entity.HasOne(e => e.WorkSegmentType)
+                .WithMany(e => e.WorkAssignmentSegments)
+                .HasForeignKey(e => e.WorkSegmentTypeId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
@@ -293,48 +331,64 @@ public partial class HrmTeContext
             entity.HasKey(e => e.WorkAssignmentOwnerId);
 
             entity.Property(e => e.WorkAssignmentOwnerId)
-                .HasColumnName("WorkAssignmentOwnerID");
+                .HasColumnName("WorkAssignmentOwnerID")
+                .ValueGeneratedOnAdd();
 
             entity.Property(e => e.WorkAssignmentId)
-                .HasColumnName("WorkAssignmentID");
+                .HasColumnName("WorkAssignmentID")
+                .IsRequired();
 
             entity.Property(e => e.IndividualId)
-                .HasColumnName("IndividualID");
+                .HasColumnName("IndividualID")
+                .IsRequired();
 
             entity.Property(e => e.JobId)
-                .HasColumnName("JobID");
+                .HasColumnName("JobID")
+                .IsRequired();
 
             entity.Property(e => e.OwnershipType)
-                .HasConversion<string>()
                 .HasColumnName("OwnershipType")
+                .HasConversion<string>()
+                .HasMaxLength(50)
                 .IsRequired();
 
             entity.Property(e => e.AssignedDate)
-                .HasColumnType("datetime2");
+                .HasColumnName("AssignedDate")
+                .HasColumnType("datetime2")
+                .IsRequired();
 
             entity.Property(e => e.AssignedByUserId)
                 .HasColumnName("AssignedByUserID");
 
             entity.Property(e => e.EffectiveFrom)
-                .HasColumnType("datetime2");
+                .HasColumnName("EffectiveFrom")
+                .HasColumnType("datetime2")
+                .IsRequired();
 
             entity.Property(e => e.EffectiveTo)
+                .HasColumnName("EffectiveTo")
                 .HasColumnType("datetime2");
 
             entity.Property(e => e.RelievedDate)
+                .HasColumnName("RelievedDate")
                 .HasColumnType("datetime2");
 
             entity.Property(e => e.RelievedByUserId)
                 .HasColumnName("RelievedByUserID");
 
             entity.Property(e => e.ReliefReason)
+                .HasColumnName("ReliefReason")
                 .HasMaxLength(1000);
 
             entity.Property(e => e.IsCurrentOwner)
-                .HasDefaultValue(true);
+                .HasColumnName("IsCurrentOwner")
+                .HasDefaultValue(true)
+                .IsRequired();
 
             entity.Property(e => e.IsValid)
-                .HasDefaultValue(true);
+                .HasColumnName("IsValid")
+                .HasDefaultValue(true)
+                .IsRequired();
 
             entity.Property(e => e.OperationLogId)
                 .HasColumnName("OperationLogID");
@@ -344,8 +398,8 @@ public partial class HrmTeContext
                 e.WorkAssignmentId,
                 e.IsCurrentOwner
             })
-                .HasDatabaseName(
-                    "IX_WorkAssignmentOwners_AssignmentID_CurrentOwner");
+            .HasDatabaseName(
+                "IX_WorkAssignmentOwners_AssignmentID_CurrentOwner");
 
             entity.HasIndex(e => new
             {
@@ -353,8 +407,8 @@ public partial class HrmTeContext
                 e.EffectiveFrom,
                 e.EffectiveTo
             })
-                .HasDatabaseName(
-                    "IX_WorkAssignmentOwners_IndividualID_EffectiveDates");
+            .HasDatabaseName(
+                "IX_WorkAssignmentOwners_IndividualID_EffectiveDates");
 
             entity.HasOne(e => e.WorkAssignment)
                 .WithMany(e => e.WorkAssignmentOwners)

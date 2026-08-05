@@ -267,6 +267,10 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             {
                 await RollbackSafelyAsync(
                     transaction);
+                var databaseError =
+                    exception.InnerException?.Message
+                    ?? exception.Message;
+
 
                 _logger.LogError(
                     exception,
@@ -283,9 +287,17 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     request.JobId,
                     request.WorkDate);
 
-                return Failure(
-                    "The work assignment could not be saved. " +
-                    "It may already exist or contain invalid data.");
+                //return Failure(
+                //    "The work assignment could not be saved. " +
+                //    "It may already exist or contain invalid data.");
+
+
+                return GeneratedWorkPlanResult.Failure(
+                     "The work assignment could not be saved. " +
+                     databaseError);
+
+
+
             }
             catch (Exception exception)
             {
@@ -508,8 +520,10 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             CreatedDate =
                 now,
 
-            CreatedByUserId =
-                request.GeneratedByUserId
+            
+
+            CreatedByUserId = request.GeneratedByUserId,
+            
         };
 
         db.WorkAssignments.Add(
@@ -528,13 +542,20 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 workAssignment,
                 assignmentPeriod.AssignmentBaseDateTime);
 
-        db.WorkAssignmentSegments.AddRange(
-            assignmentSegments);
+
+
+
+         db.WorkAssignmentSegments.AddRange(assignmentSegments);
+
+        //await db.SaveChangesAsync();
+
 
         var owner = new WorkAssignmentOwner
         {
-            WorkAssignmentId =
-                workAssignment.WorkAssignmentId,
+            //WorkAssignmentId =
+            //    workAssignment.WorkAssignmentId,
+
+            WorkAssignment = workAssignment,
 
             IndividualId =
                 request.IndividualId,
@@ -554,33 +575,26 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             EffectiveFrom =
                 assignmentPeriod.StartDateTime,
 
-            EffectiveTo =
-                assignmentPeriod.EndDateTime,
+            EffectiveTo = null,
 
-            RelievedDate =
-                null,
+            RelievedDate = null,
 
-            RelievedByUserId =
-                null,
+            RelievedByUserId = null,
 
-            ReliefReason =
-                null,
+            ReliefReason = null,
 
-            IsCurrentOwner =
-                true,
+            IsCurrentOwner = true,
 
-            IsValid =
-                true,
+            IsValid = true,
 
             OperationLogId =
                 request.OperationLogId
         };
 
-        db.WorkAssignmentOwners.Add(
-            owner);
+        db.WorkAssignmentOwners.Add(owner);
+  
 
-        await db.SaveChangesAsync(
-            cancellationToken);
+        await db.SaveChangesAsync(cancellationToken);
 
         return new GeneratedWorkPlanResult
         {
@@ -631,8 +645,10 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             var assignmentSegment =
                 new WorkAssignmentSegment
                 {
-                    WorkAssignmentId =
-                        workAssignment.WorkAssignmentId,
+                    WorkAssignment = workAssignment,
+
+                    //WorkAssignmentId =
+                    //    workAssignment.WorkAssignmentId,
 
                     WorkTemplateSegmentId =
                         templateSegment
@@ -679,6 +695,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     RequiresDeviceValidation =
                         templateSegment
                             .RequiresDeviceValidation,
+
+
 
                     IsValid =
                         true,
@@ -727,46 +745,31 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     .Select(segment =>
                         new TemplateSegmentGenerationModel
                         {
-                            WorkTemplateSegmentId =
-                                segment
-                                    .WorkTemplateSegmentId,
+                            WorkTemplateSegmentId = segment.WorkTemplateSegmentId,
 
-                            WorkSegmentTypeId =
-                                segment
-                                    .WorkSegmentTypeId,
+                            WorkSegmentTypeId = segment.WorkSegmentTypeId,
 
-                            Name =
-                                segment.Name,
+                            Name = segment.Name,
 
-                            Description =
-                                segment.Description,
+                            Description = segment.Description,
 
-                            SequenceNumber =
-                                segment.SequenceNumber,
+                            SequenceNumber = segment.SequenceNumber ,
 
-                            OffsetMinutes =
-                                segment.OffsetMinutes ?? 0,
+                            OffsetMinutes = segment.OffsetMinutes ?? 0,
 
-                            DurationMinutes =
-                                segment.DurationMinutes,
+                            DurationMinutes = segment.DurationMinutes ?? 0,
 
                             GraceBeforeMinutes = segment.GraceBeforeMinutes ?? 0,
 
                             GraceAfterMinutes = segment.GraceAfterMinutes ?? 0,
 
-                            IsMandatory =
-                                segment.IsMandatory,
+                            IsMandatory = segment.IsMandatory,
 
-                            RequiresAttendance =
-                                segment.RequiresAttendance,
+                            RequiresAttendance = segment.RequiresAttendance,
 
-                            RequiresLocationValidation =
-                                segment
-                                    .RequiresLocationValidation,
+                            RequiresLocationValidation = segment.RequiresLocationValidation,
 
-                            RequiresDeviceValidation =
-                                segment
-                                    .RequiresDeviceValidation
+                            RequiresDeviceValidation =segment.RequiresDeviceValidation
                         })
                     .ToList()
             })
@@ -847,91 +850,12 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
                 EffectiveTo = x.EffectiveTo.HasValue ? x.EffectiveTo.Value : null
             })
-            .FirstOrDefaultAsync(
-                cancellationToken);
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
-    //private static async Task<PlanningProvider?>
-    //    ResolvePlanningProviderAsync(
-    //        HrmTeContext db,
-    //        GenerateWorkPlanRequest request,
-    //        CancellationToken cancellationToken)
-    //{
-    //    /*
-    //     * When the request specifies a provider, validate that it is
-    //     * active and configured for the organisation.
-    //     */
-    //    //if (request.PlanningProviderId.HasValue &&
-    //    //    request.PlanningProviderId.Value > 0)
-    //    //{
-    //    //    var requestedProviderId =
-    //    //        request.PlanningProviderId.Value;
+   
 
-    //    //    var isConfiguredForOrganisation =
-    //    //        await db.OrganisationWorkPlanningSettings
-    //    //            .AsNoTracking()
-    //    //            .AnyAsync(
-    //    //                x =>
-    //    //                    x.OrganisationBusinessEntityId ==
-    //    //                    request
-    //    //                        .OrganisationBusinessEntityId &&
-    //    //                    x.PlanningProviderId ==
-    //    //                    requestedProviderId &&
-    //    //                    x.IsActive,
-    //    //                cancellationToken);
-
-    //    //    if (!isConfiguredForOrganisation)
-    //    //    {
-    //    //        return null;
-    //    //    }
-
-    //    //    return await db.PlanningProviders
-    //    //        .AsNoTracking()
-    //    //        .SingleOrDefaultAsync(
-    //    //            x =>
-    //    //                x.PlanningProviderId ==
-    //    //                    requestedProviderId &&
-    //    //                x.IsActive,
-    //    //            cancellationToken);
-    //    //}
-
-    //    /*
-    //     * Resolve the organisation's active configured provider.
-    //     */
-    //    var configuredProviderId =
-    //        await db.OrganisationWorkPlanningSettings
-    //            .AsNoTracking()
-    //            .Where(x =>
-    //                x.OrganisationBusinessEntityId ==
-    //                    request
-    //                        .OrganisationBusinessEntityId &&
-    //                x.IsActive)
-    //            .OrderByDescending(x =>
-    //                x.OrganisationWorkPlanningSettingId)
-    //            .Select(x =>
-    //                (int?)x.PlanningProviderId)
-    //            .FirstOrDefaultAsync(
-    //                cancellationToken);
-
-    //    if (!configuredProviderId.HasValue)
-    //    {
-    //        return null;
-    //    }
-
-    //    return await db.PlanningProviders
-    //        .AsNoTracking()
-    //        .SingleOrDefaultAsync(
-    //            x =>
-    //                x.PlanningProviderId ==
-    //                    configuredProviderId.Value &&
-    //                x.IsActive,
-    //            cancellationToken);
-    //}
-
-
-
-    private static async Task<PlanningProvider?>
-    ResolvePlanningProviderAsync(
+    private static async Task<PlanningProvider?>ResolvePlanningProviderAsync(
         HrmTeContext db,
         GenerateWorkPlanRequest request,
         CancellationToken cancellationToken)
@@ -975,8 +899,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 cancellationToken);
     }
 
-    private static async Task<ExistingPlanModel?>
-        FindExistingActivePlanAsync(
+    private static async Task<ExistingPlanModel?>FindExistingActivePlanAsync(
             HrmTeContext db,
             GenerateWorkPlanRequest request,
             CancellationToken cancellationToken)
@@ -1011,8 +934,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 cancellationToken);
     }
 
-    private static async Task<int>
-        GetNextVersionAsync(
+    private static async Task<int>GetNextVersionAsync(
             HrmTeContext db,
             GenerateWorkPlanRequest request,
             CancellationToken cancellationToken)
@@ -1040,8 +962,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
         return latestVersion + 1;
     }
 
-    private static string? ValidateRequest(
-        GenerateWorkPlanRequest request)
+    private static string? ValidateRequest(GenerateWorkPlanRequest request)
     {
         if (request.WorkTemplateId <= 0)
         {
@@ -1093,8 +1014,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
         return null;
     }
 
-    private static string? ValidateTemplateSegments(
-        IReadOnlyCollection<TemplateSegmentGenerationModel>
+    private static string? ValidateTemplateSegments(IReadOnlyCollection<TemplateSegmentGenerationModel>
             segments)
     {
         var duplicateSequence =
@@ -1127,12 +1047,19 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     "offset.";
             }
 
-            if (!segment.DurationMinutes.HasValue ||
-                segment.DurationMinutes.Value <= 0)
+            if (segment.DurationMinutes < 0 )
             {
+                //return
+                //    $"Segment '{segment.Name}' must have a " +
+                //    "duration greater than zero.";
+
                 return
-                    $"Segment '{segment.Name}' must have a " +
-                    "duration greater than zero.";
+                    $"Segment '{segment.Name}' " +
+                    $"(ID: {segment.WorkTemplateSegmentId}) " +
+                    $"has DurationMinutes = " +
+                    $"{segment.DurationMinutes.ToString() ?? "NULL"}";
+
+
             }
 
             if (segment.GraceBeforeMinutes < 0)
@@ -1242,8 +1169,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 "The segment offset cannot be negative.");
         }
 
-        if (!segment.DurationMinutes.HasValue ||
-            segment.DurationMinutes.Value <= 0)
+        if (segment.DurationMinutes < 0 )
         {
             return DateTimeCalculationResult.Fail(
                 "The segment duration must be greater than zero.");
@@ -1255,7 +1181,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
         var endDateTime =
             startDateTime.AddMinutes(
-                segment.DurationMinutes.Value);
+                segment.DurationMinutes);
 
         return DateTimeCalculationResult.Ok(
             assignmentBaseDateTime,
@@ -1342,7 +1268,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
         public int OffsetMinutes { get; init; }
 
-        public int? DurationMinutes { get; init; }
+        public int DurationMinutes { get; init; }
 
         public int GraceBeforeMinutes { get; init; }
 

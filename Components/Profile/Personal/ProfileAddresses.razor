@@ -1,0 +1,481 @@
+﻿@using HRM.DTOs.Profile
+
+<section class="w-full overflow-hidden rounded-2xl border
+                border-slate-200 bg-white shadow-sm">
+
+    <div class="flex flex-col gap-3 border-b border-slate-200
+                px-5 py-4 sm:flex-row sm:items-center
+                sm:justify-between">
+
+        <div class="flex min-w-0 items-center gap-3">
+
+            <div class="flex h-11 w-11 shrink-0 items-center
+                        justify-center rounded-xl bg-amber-50
+                        text-amber-600">
+
+                <span class="material-symbols-rounded">
+                    location_on
+                </span>
+
+            </div>
+
+            <div class="min-w-0">
+                <h2 class="text-sm font-semibold text-slate-900">
+                    Addresses
+                </h2>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Current, permanent and other registered addresses.
+                </p>
+            </div>
+
+        </div>
+
+        @if (ShowAddButton && !IsLoading)
+        {
+            <button type="button"
+                    disabled="@IsDisabled"
+                    @onclick="HandleAddAsync"
+                    class="inline-flex w-full items-center justify-center
+                           gap-2 rounded-xl bg-amber-600 px-4 py-2.5
+                           text-sm font-semibold text-white transition
+                           hover:bg-amber-700
+                           disabled:cursor-not-allowed
+                           disabled:bg-slate-300
+                           sm:w-auto">
+
+                <span class="material-symbols-rounded text-[18px]">
+                    add
+                </span>
+
+                Add address
+
+            </button>
+        }
+
+    </div>
+
+    <div class="p-4 sm:p-5">
+
+        @if (IsLoading)
+        {
+            <div class="space-y-3">
+
+                @for (var index = 0; index < 2; index++)
+                {
+                    <div class="animate-pulse rounded-xl border
+                                border-slate-200 p-4">
+
+                        <div class="flex items-start gap-3">
+
+                            <div class="h-10 w-10 rounded-lg bg-slate-200"></div>
+
+                            <div class="flex-1">
+                                <div class="h-4 w-32 rounded bg-slate-200"></div>
+                                <div class="mt-3 h-3 w-56 rounded bg-slate-100"></div>
+                                <div class="mt-2 h-3 w-40 rounded bg-slate-100"></div>
+                            </div>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+        else if (ValidAddresses.Count == 0)
+        {
+            <div class="rounded-xl border border-dashed
+                        border-slate-300 bg-slate-50
+                        px-5 py-10 text-center">
+
+                <div class="mx-auto flex h-12 w-12 items-center
+                            justify-center rounded-full bg-white
+                            text-slate-400 shadow-sm">
+
+                    <span class="material-symbols-rounded text-[24px]">
+                        location_off
+                    </span>
+
+                </div>
+
+                <p class="mt-3 text-sm font-semibold text-slate-700">
+                    No addresses available
+                </p>
+
+                <p class="mx-auto mt-1 max-w-md text-xs leading-5
+                          text-slate-500">
+                    No valid address records are available for this profile.
+                </p>
+
+                @if (ShowAddButton && !IsDisabled)
+                {
+                    <button type="button"
+                            @onclick="HandleAddAsync"
+                            class="mt-4 inline-flex items-center gap-2
+                                   rounded-xl bg-amber-600 px-4 py-2.5
+                                   text-sm font-semibold text-white
+                                   transition hover:bg-amber-700">
+
+                        <span class="material-symbols-rounded text-[18px]">
+                            add
+                        </span>
+
+                        Add address
+
+                    </button>
+                }
+
+            </div>
+        }
+        else
+        {
+            <div class="space-y-3">
+
+                @foreach (var address in OrderedAddresses)
+                {
+                    <article class="group rounded-xl border border-slate-200
+                                    bg-slate-50/40 p-4 transition
+                                    hover:border-amber-200
+                                    hover:bg-white hover:shadow-sm">
+
+                        <div class="flex flex-col gap-4
+                                    sm:flex-row sm:items-start
+                                    sm:justify-between">
+
+                            <div class="flex min-w-0 items-start gap-3">
+
+                                <div class="@GetIconContainerClass(address)">
+
+                                    <span class="material-symbols-rounded
+                                                 text-[20px]">
+                                        @GetAddressIcon(address)
+                                    </span>
+
+                                </div>
+
+                                <div class="min-w-0">
+
+                                    <div class="flex flex-wrap items-center gap-2">
+
+                                        <h3 class="text-sm font-semibold
+                                                   text-slate-900">
+                                            @GetAddressTypeName(address)
+                                        </h3>
+
+                                        @if (address.IsPrimary)
+                                        {
+                                            <span class="inline-flex items-center
+                                                         gap-1 rounded-full
+                                                         bg-emerald-100 px-2
+                                                         py-0.5 text-[10px]
+                                                         font-semibold uppercase
+                                                         tracking-wide
+                                                         text-emerald-700">
+
+                                                <span class="h-1.5 w-1.5
+                                                             rounded-full
+                                                             bg-emerald-500">
+                                                </span>
+
+                                                Primary
+                                            </span>
+                                        }
+
+                                    </div>
+
+                                    <p class="mt-2 break-words text-sm
+                                              leading-6 text-slate-700">
+                                        @BuildAddressText(address)
+                                    </p>
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                   address.Description))
+                                    {
+                                        <p class="mt-1 text-xs leading-5
+                                                  text-slate-500">
+                                            @address.Description
+                                        </p>
+                                    }
+
+                                    @if (address.EffectiveFrom.HasValue ||
+                                   address.EffectiveTo.HasValue)
+                                    {
+                                        <div class="mt-3 inline-flex items-center
+                                                    gap-1.5 text-xs
+                                                    text-slate-500">
+
+                                            <span class="material-symbols-rounded
+                                                         text-[16px]">
+                                                calendar_month
+                                            </span>
+
+                                            @GetEffectivePeriod(address)
+
+                                        </div>
+                                    }
+
+                                </div>
+
+                            </div>
+
+                            <button type="button"
+                                    disabled="@IsDisabled"
+                                    @onclick="() => HandleEditAsync(address)"
+                                    class="inline-flex w-full shrink-0
+                                           items-center justify-center gap-2
+                                           rounded-lg border border-slate-200
+                                           bg-white px-3 py-2 text-sm
+                                           font-medium text-slate-700
+                                           transition hover:bg-slate-50
+                                           disabled:cursor-not-allowed
+                                           disabled:opacity-50
+                                           sm:w-auto">
+
+                                <span class="material-symbols-rounded text-[17px]">
+                                    edit
+                                </span>
+
+                                Edit
+
+                            </button>
+
+                        </div>
+
+                    </article>
+                }
+
+            </div>
+        }
+
+    </div>
+
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ProfileAddressDto> Addresses { get; set; } =
+        Array.Empty<ProfileAddressDto>();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public bool ShowAddButton { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnAdd { get; set; }
+
+    [Parameter]
+    public EventCallback<ProfileAddressDto> OnEdit { get; set; }
+
+    private List<ProfileAddressDto> ValidAddresses =>
+        Addresses
+            .Where(address =>
+                address.IsValid)
+            .ToList();
+
+    private IEnumerable<ProfileAddressDto> OrderedAddresses =>
+        ValidAddresses
+            .OrderByDescending(address =>
+                address.IsPrimary)
+            .ThenBy(address =>
+                GetAddressOrder(address.AddressTypeName))
+            .ThenByDescending(address =>
+                address.EffectiveFrom)
+            .ThenByDescending(address =>
+                address.AddressId);
+
+    private async Task HandleAddAsync()
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnAdd.HasDelegate)
+        {
+            await OnAdd.InvokeAsync();
+        }
+    }
+
+    private async Task HandleEditAsync(
+        ProfileAddressDto address)
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnEdit.HasDelegate)
+        {
+            await OnEdit.InvokeAsync(address);
+        }
+    }
+
+    private static string GetAddressTypeName(
+        ProfileAddressDto address)
+    {
+        return string.IsNullOrWhiteSpace(
+            address.AddressTypeName)
+            ? "Address"
+            : address.AddressTypeName;
+    }
+
+    private static string GetAddressIcon(
+        ProfileAddressDto address)
+    {
+        var type =
+            address.AddressTypeName?
+                .Trim()
+                .ToUpperInvariant()
+            ?? string.Empty;
+
+        return type switch
+        {
+            "CURRENT" or
+            "CURRENT ADDRESS" =>
+                "home_pin",
+
+            "PERMANENT" or
+            "PERMANENT ADDRESS" =>
+                "home",
+
+            "WORK" or
+            "WORK ADDRESS" =>
+                "business",
+
+            "MAILING" or
+            "POSTAL" or
+            "MAILING ADDRESS" =>
+                "markunread_mailbox",
+
+            _ =>
+                "location_on"
+        };
+    }
+
+    private static string GetIconContainerClass(
+        ProfileAddressDto address)
+    {
+        const string baseClass =
+            "flex h-10 w-10 shrink-0 items-center " +
+            "justify-center rounded-lg ";
+
+        var type =
+            address.AddressTypeName?
+                .Trim()
+                .ToUpperInvariant()
+            ?? string.Empty;
+
+        return type switch
+        {
+            "CURRENT" or
+            "CURRENT ADDRESS" =>
+                baseClass +
+                "bg-blue-50 text-blue-600",
+
+            "PERMANENT" or
+            "PERMANENT ADDRESS" =>
+                baseClass +
+                "bg-emerald-50 text-emerald-600",
+
+            "WORK" or
+            "WORK ADDRESS" =>
+                baseClass +
+                "bg-indigo-50 text-indigo-600",
+
+            "MAILING" or
+            "POSTAL" or
+            "MAILING ADDRESS" =>
+                baseClass +
+                "bg-amber-50 text-amber-600",
+
+            _ =>
+                baseClass +
+                "bg-slate-100 text-slate-600"
+        };
+    }
+
+    private static string BuildAddressText(
+        ProfileAddressDto address)
+    {
+        var parts =
+            new[]
+            {
+                address.AddressLine1,
+                address.AddressLine2,
+                address.IslandName,
+                address.AtollName,
+                address.CityName,
+                address.CountryName,
+                address.PostalCode
+                }
+            .Where(value =>
+                !string.IsNullOrWhiteSpace(value))
+            .Select(value =>
+                value!.Trim())
+            .ToList();
+
+        return parts.Count > 0
+            ? string.Join(", ", parts)
+            : "Address details not available";
+    }
+
+    private static string GetEffectivePeriod(
+        ProfileAddressDto address)
+    {
+        if (address.EffectiveFrom.HasValue &&
+            address.EffectiveTo.HasValue)
+        {
+            return
+                $"{address.EffectiveFrom.Value:dd MMM yyyy} – " +
+                $"{address.EffectiveTo.Value:dd MMM yyyy}";
+        }
+
+        if (address.EffectiveFrom.HasValue)
+        {
+            return
+                $"{address.EffectiveFrom.Value:dd MMM yyyy} – Present";
+        }
+
+        if (address.EffectiveTo.HasValue)
+        {
+            return
+                $"Until {address.EffectiveTo.Value:dd MMM yyyy}";
+        }
+
+        return string.Empty;
+    }
+
+    private static int GetAddressOrder(
+        string? addressTypeName)
+    {
+        var type =
+            addressTypeName?
+                .Trim()
+                .ToUpperInvariant()
+            ?? string.Empty;
+
+        return type switch
+        {
+            "CURRENT" or
+            "CURRENT ADDRESS" => 1,
+
+            "PERMANENT" or
+            "PERMANENT ADDRESS" => 2,
+
+            "MAILING" or
+            "POSTAL" or
+            "MAILING ADDRESS" => 3,
+
+            "WORK" or
+            "WORK ADDRESS" => 4,
+
+            _ => 100
+        };
+    }
+}

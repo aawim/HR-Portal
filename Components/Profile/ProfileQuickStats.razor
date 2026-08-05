@@ -1,0 +1,132 @@
+﻿@using HRM.DTOs.Profile
+@using HRM.Enum
+
+<div class="grid w-full grid-cols-2 gap-3
+            lg:grid-cols-4 lg:gap-4">
+
+    <QuickStatCard
+        Label="Employment"
+        Value="@EmploymentStatus"
+        Description="@EmploymentDescription"
+        Icon="@EmploymentIcon"
+        Tone="@EmploymentTone" />
+
+    <QuickStatCard
+        Label="Service"
+        Value="@ServiceDuration"
+        Description="@JoinedDateText"
+        Icon="calendar_month"
+        Tone="blue" />
+
+    <QuickStatCard
+        Label="Positions"
+        Value="@ActivePositionCount.ToString()"
+        Description="@PositionDescription"
+        Icon="badge"
+        Tone="violet" />
+
+    <QuickStatCard
+        Label="Leave Types"
+        Value="@LeaveTypeCount.ToString()"
+        Description="@LeaveTypeDescription"
+        Icon="event_available"
+        Tone="amber" />
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProfileOverviewDto Profile { get; set; } = null!;
+
+    private int ActivePositionCount =>
+        Profile.ActivePositions?.Count ?? 0;
+
+    private int LeaveTypeCount =>
+        Profile.LeaveTypes?.Count ?? 0;
+
+    private string EmploymentStatus =>
+        Profile.ProfileType switch
+        {
+            ProfileType.Staff => "Active",
+            ProfileType.FormerStaff => "Former staff",
+            ProfileType.Individual => "Individual",
+            _ => "Unknown"
+        };
+
+    private string EmploymentDescription =>
+        Profile.ProfileType switch
+        {
+            ProfileType.Staff =>
+                FirstNotEmpty(
+                    Profile.ActiveJob?.PositionName,
+                    "Active employment"),
+
+            ProfileType.FormerStaff =>
+                "Employment history available",
+
+            ProfileType.Individual =>
+                "No employment record",
+
+            _ =>
+                "Status unavailable"
+        };
+
+    private string EmploymentIcon =>
+        Profile.ProfileType switch
+        {
+            ProfileType.Staff => "verified_user",
+            ProfileType.FormerStaff => "work_history",
+            ProfileType.Individual => "person",
+            _ => "help"
+        };
+
+    private string EmploymentTone =>
+        Profile.ProfileType switch
+        {
+            ProfileType.Staff => "emerald",
+            ProfileType.FormerStaff => "slate",
+            ProfileType.Individual => "cyan",
+            _ => "slate"
+        };
+
+    private string ServiceDuration =>
+        Profile.ActiveJob is not null &&
+        !string.IsNullOrWhiteSpace(
+            Profile.ActiveJob.ServiceDurationText)
+            ? Profile.ActiveJob.ServiceDurationText
+            : "-";
+
+    private string JoinedDateText =>
+        Profile.ActiveJob is not null
+            ? $"Joined {Profile.ActiveJob.JoinedDate:dd MMM yyyy}"
+            : "No active job";
+
+    private string PositionDescription =>
+        ActivePositionCount switch
+        {
+            0 => "No active positions",
+            1 => FirstNotEmpty(
+                Profile.ActivePositions?
+                    .FirstOrDefault()?
+                    .PositionName,
+                "1 active position"),
+            _ => $"{ActivePositionCount} active assignments"
+        };
+
+    private string LeaveTypeDescription =>
+        LeaveTypeCount switch
+        {
+            0 => "No assigned leave types",
+            1 => "1 assigned leave type",
+            _ => $"{LeaveTypeCount} assigned leave types"
+        };
+
+    private static string FirstNotEmpty(
+        params string?[] values)
+    {
+        return values.FirstOrDefault(
+                   value =>
+                       !string.IsNullOrWhiteSpace(value))
+               ?? string.Empty;
+    }
+}

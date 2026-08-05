@@ -10,6 +10,16 @@
 
         public int WorkSegmentTypeId { get; set; }
 
+        public int? ExpectedInOutModeId { get; set; }
+
+        public string? LocationName { get; set; }
+
+        public decimal? Latitude { get; set; }
+
+        public decimal? Longitude { get; set; }
+
+        public int? AllowedRadiusMeters { get; set; }
+
         public string Name { get; set; } = string.Empty;
 
         public string? Description { get; set; }
@@ -44,5 +54,11 @@
 
         public virtual ICollection<AttendanceLogResolution> AttendanceLogResolutions { get; set; }
             = new List<AttendanceLogResolution>();
+
+
+
+    
+
+
     }
 }

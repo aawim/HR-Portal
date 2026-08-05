@@ -866,11 +866,11 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_AttachedBreakTimes_OwnerTypes");
         });
 
-        // This forces EF Core to understand there is only ONE relationship
-        modelBuilder.Entity<Job>()
-            .HasOne(j => j.User)         // 1. A Job has one User
-            .WithMany(u => u.Jobs)       // 2. A User has many Jobs (Make sure 'Jobs' matches the exact name of the list in your User.cs file!)
-            .HasForeignKey(j => j.IndividualID); // 3. They are linked specifically by IndividualID
+        //// This forces EF Core to understand there is only ONE relationship
+        //modelBuilder.Entity<Job>()
+        //    .HasOne(j => j.User)         // 1. A Job has one User
+        //    .WithMany(u => u.Jobs)       // 2. A User has many Jobs (Make sure 'Jobs' matches the exact name of the list in your User.cs file!)
+        //    .HasForeignKey(j => j.IndividualID); // 3. They are linked specifically by IndividualID
 
         modelBuilder.Entity<AttachedBreakTimesDay>(entity =>
         {
@@ -2641,61 +2641,83 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<Job>(entity =>
         {
-            entity.HasKey(e => e.JobId).HasName("PK_Staffs");
+            entity.ToTable("Jobs");
 
-            entity.Property(e => e.JobId).HasColumnName("JobID");
-            entity.Property(e => e.BasicSalary).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.IndividualID).HasColumnName("IndividualID");
-            entity.Property(e => e.JobStateId).HasColumnName("JobStateID");
-            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
-            entity.Property(e => e.JoinedDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationID).HasColumnName("OrganisationID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
+            entity.HasKey(e => e.JobId)
+                .HasName("PK_Jobs");
+
+            entity.Property(e => e.JobId)
+                .HasColumnName("JobID")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(e => e.IndividualID)
+                .HasColumnName("IndividualID");
+
+            entity.Property(e => e.OrganisationID)
+                .HasColumnName("OrganisationID");
+
+            entity.Property(e => e.OrganisationStructureId)
+                .HasColumnName("OrganisationStructureID");
+
+            entity.Property(e => e.JobStateId)
+                .HasColumnName("JobStateID");
+
+            entity.Property(e => e.JobTypeId)
+                .HasColumnName("JobTypeID");
+
+            entity.Property(e => e.JoinedDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.TerminatedDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.BasicSalary)
+                .HasColumnType("decimal(38, 8)");
+
+            entity.Property(e => e.OperationLogId)
+                .HasColumnName("OperationLogID");
+
             entity.Property(e => e.Sapnumber)
                 .HasMaxLength(50)
                 .IsUnicode(false)
                 .HasColumnName("SAPNumber");
-            entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
-            entity.Property(e => e.TerminatedDate).HasColumnType("datetime");
 
-            entity.HasOne(d => d.Staff)
-                .WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.IndividualID) // Pointing to your FK
+            entity.Property(e => e.ServiceId)
+                .HasColumnName("ServiceID");
+
+            entity.HasOne(e => e.Staff)
+                .WithMany(e => e.Jobs)
+                .HasForeignKey(e => e.IndividualID)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_Staffs");
 
-            // Job has one Individual (Reference navigation for queries)
-            entity.HasOne(d => d.Individual)
-                .WithMany() // Leave empty since Individual does not have an ICollection<Job>
-                .HasForeignKey(d => d.IndividualID)
+            entity.HasOne(e => e.Individual)
+                .WithMany()
+                .HasForeignKey(e => e.IndividualID)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_Individuals");
 
-
-
-            entity.HasOne(d => d.JobState).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.JobStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Jobs_JobStates1");
-
-            entity.HasOne(d => d.JobType).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.JobTypeId)
+            entity.HasOne(e => e.JobType)
+                .WithMany(e => e.Jobs)
+                .HasForeignKey(e => e.JobTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_JobTypes");
 
-            entity.HasOne(d => d.Organisation).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.OrganisationID)
+            entity.HasOne(e => e.Organisation)
+                .WithMany(e => e.Jobs)
+                .HasForeignKey(e => e.OrganisationID)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_Organisations");
 
-            entity.HasOne(d => d.OrganisationStructure).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.OrganisationStructureId)
+            entity.HasOne(e => e.OrganisationStructure)
+                .WithMany(e => e.Jobs)
+                .HasForeignKey(e => e.OrganisationStructureId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Jobs_OrganisationStructure");
 
-            entity.HasOne(d => d.Service).WithMany(p => p.Jobs)
-                .HasForeignKey(d => d.ServiceId)
+            entity.HasOne(e => e.Service)
+                .WithMany(e => e.Jobs)
+                .HasForeignKey(e => e.ServiceId)
                 .HasConstraintName("FK_Jobs_Services");
         });
 

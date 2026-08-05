@@ -17,16 +17,7 @@
 
         public string? ErrorMessage { get; set; }
  
-
-        //public bool SkipExistingAssignments { get; set; }
-
-        //public bool ForceRegeneration { get; set; }
-
-        //public bool ValidateConflicts { get; set; }
-
-        //public bool PublishImmediately { get; set; }
-
-        //public int? RequestId { get; set; }
+ 
 
   
         public int JobID { get; set; }

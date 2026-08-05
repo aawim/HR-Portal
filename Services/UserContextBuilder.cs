@@ -14,7 +14,6 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly AuthenticationStateProvider _authenticationStateProvider;
         private readonly IRoleService _roleService;
-        //private readonly IJobService _jobService;
         private readonly IOrganisationService _organisationService;
         private IEffectivePermissionService _effectivePermissionService;
 
@@ -22,13 +21,11 @@ namespace HRM.Services
             IDbContextFactory<HrmTeContext> dbFactory,
             AuthenticationStateProvider authenticationStateProvider,
             IRoleService roleService,
-            //IJobService jobService,
             IOrganisationService organisationService, IEffectivePermissionService effectivePermissionService)
         {
             _dbFactory = dbFactory;
             _authenticationStateProvider = authenticationStateProvider;
             _roleService = roleService;
-            //_jobService = jobService;
             _organisationService = organisationService;
             _effectivePermissionService = effectivePermissionService;
 
@@ -329,43 +326,161 @@ namespace HRM.Services
 
 
 
-        private async Task<ActiveJobDto?> GetActiveJobAsync(int individualId)
+        private async Task<ActiveJobDto?> GetActiveJobAsync(
+       int individualId,
+       CancellationToken cancellationToken = default)
         {
+            if (individualId <= 0)
+            {
+                return null;
+            }
+
             await using var db =
-                await _dbFactory.CreateDbContextAsync();
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-            return await db.Jobs
-                .AsNoTracking()
-                .Where(x =>
-                    x.IndividualID == individualId &&
-                    x.JobStateId == SharedConfig.JobStates.APPROVED &&
-                    x.TerminatedDate == null)
-                .Select(x => new ActiveJobDto
+            var approvedStateId =
+                SharedConfig.JobStates.APPROVED;
+
+            var today =
+                DateTime.Today;
+
+            return await
+            (
+                from job in db.Jobs.AsNoTracking()
+
+                join organisation in db.Organisations.AsNoTracking()
+                    on job.OrganisationID equals organisation.BusinessEntityID
+                    into organisationGroup
+
+                from organisation in organisationGroup.DefaultIfEmpty()
+
+                join structure in db.OrganisationStructures.AsNoTracking()
+                    on job.OrganisationStructureId equals
+                        structure.OrganisationStructureId
+                    into structureGroup
+
+                from structure in structureGroup.DefaultIfEmpty()
+
+                join jobType in db.JobTypes.AsNoTracking()
+                    on job.JobTypeId equals jobType.JobTypeId
+                    into jobTypeGroup
+
+                from jobType in jobTypeGroup.DefaultIfEmpty()
+
+                where
+                    job.IndividualID == individualId &&
+                    job.JobStateId == approvedStateId &&
+                    job.TerminatedDate == null
+
+                let activePosition =
+                    (
+                        from jobPosition in db.JobPositions.AsNoTracking()
+
+                        join position in db.Positions.AsNoTracking()
+                            on jobPosition.PositionId equals position.PositionId
+
+                        where
+                            jobPosition.JobId == job.JobId &&
+                            jobPosition.FromDate <= today &&
+                            (
+                                jobPosition.ToDate == null ||
+                                jobPosition.ToDate >= today
+                            )
+
+                        orderby
+                            jobPosition.FromDate descending,
+                            jobPosition.JobPositionId descending
+
+                        select new
+                        {
+                            JobPositionId =
+                                jobPosition.JobPositionId,
+
+                            PositionId =
+                                position.PositionId,
+
+                            PositionName =
+                                position.Name
+                        }
+                    )
+                    .FirstOrDefault()
+
+                orderby
+                    job.JoinedDate descending,
+                    job.JobId descending
+
+                select new ActiveJobDto
                 {
-                    JobID = x.JobId,
+                    JobId =
+                        job.JobId,
 
-                    IndividualID = x.IndividualID,
+                    IndividualId =
+                        job.IndividualID,
 
-                    OrganisationID = x.OrganisationID,
+                    OrganisationId =
+                        job.OrganisationID,
 
-                    OrganisationStructureID =
-                        x.OrganisationStructureId,
+                    OrganisationName =
+                        organisation != null
+                            ? organisation.OrganisationName ?? string.Empty
+                            : string.Empty,
 
-                    JobStateID =
-                        x.JobStateId,
+                    OrganisationStructureId =
+                        job.OrganisationStructureId,
 
-                    JobTypeID =
-                        x.JobTypeId,
+                    OrganisationStructureName =
+                        structure != null
+                            ? structure.Name ?? string.Empty
+                            : string.Empty,
 
-                    JoinedDate =
-                        x.JoinedDate,
+                    JobStateId =
+                        job.JobStateId,
+
+                    JobStateName =
+                        job.JobState != null
+                            ? job.JobState.StateName ?? string.Empty
+                            : string.Empty,
+
+                    JobTypeId =
+                        job.JobTypeId,
+
+                    JobTypeName =
+                        jobType != null
+                            ? jobType.TypeName ?? string.Empty
+                            : string.Empty,
+
+                    PositionId =
+                        activePosition != null
+                            ? activePosition.PositionId
+                            : null,
+
+                    PositionName =
+                        activePosition != null
+                            ? activePosition.PositionName ?? string.Empty
+                            : string.Empty,
+
+                    EmployeeNumber =
+                        job.Staff != null
+                            ? job.Staff.EmployeeNumber ?? string.Empty
+                            : string.Empty,
+
+                    BasicSalary =
+                        job.BasicSalary,
 
                     SAPNumber =
-                        x.Sapnumber,
+                        job.Sapnumber,
 
-                    IsActive = true
-                })
-                .FirstOrDefaultAsync();
+                    JoinedDate =
+                        job.JoinedDate,
+
+                    TerminatedDate =
+                        job.TerminatedDate,
+
+                    IsActive =
+                        true
+                }
+            )
+            .FirstOrDefaultAsync(cancellationToken);
         }
 
 

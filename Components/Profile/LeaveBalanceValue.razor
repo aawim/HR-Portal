@@ -1,0 +1,35 @@
+﻿<div class="@ContainerClass">
+
+    <p class="text-[10px] font-medium uppercase tracking-wide
+              text-slate-500">
+        @Label
+    </p>
+
+    <p class="@ValueClass">
+        @Value
+    </p>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Label { get; set; } =
+        string.Empty;
+
+    [Parameter]
+    public string Value { get; set; } =
+        "0";
+
+    [Parameter]
+    public bool Emphasize { get; set; }
+
+    private string ContainerClass =>
+        Emphasize
+            ? "rounded-lg bg-emerald-50 px-2.5 py-2"
+            : "rounded-lg bg-slate-100 px-2.5 py-2";
+
+    private string ValueClass =>
+        Emphasize
+            ? "mt-1 text-sm font-bold text-emerald-700"
+            : "mt-1 text-sm font-semibold text-slate-800";
+}

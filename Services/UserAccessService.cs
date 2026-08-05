@@ -26,7 +26,7 @@ namespace HRM.Services
                 throw new InvalidOperationException(
                     "Current user has no Active Job.");
 
-            return context.ActiveJob.JobID;
+            return context.ActiveJob.JobId;
         }
 
         public async Task<int> GetCurrentOrganisationIdAsync()

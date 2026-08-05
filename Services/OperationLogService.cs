@@ -46,8 +46,8 @@ namespace HRM.Services
                 CreatedByUserId = userContext.UserId,
                 UpdatedByUserId = userContext.UserId,
 
-                CreatedByUserOrganisationId = userContext.ActiveJob!.OrganisationID,  
-                UpdatedByUserOrganisationId = userContext.ActiveJob!.OrganisationID,
+                CreatedByUserOrganisationId = userContext.ActiveJob!.OrganisationId,  
+                UpdatedByUserOrganisationId = userContext.ActiveJob!.OrganisationId,
 
                 CreatedByContextId = 1,
                 UpdatedContextId = 1,

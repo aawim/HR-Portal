@@ -1,4 +1,5 @@
 ﻿@using HRM.DTOs.StaffSchedule
+@using HRM.Enum
 @using HRM.WorkPlanning.Abstractions.Schedules
 @using HRM.Services
 @using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents
@@ -38,38 +39,41 @@
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
+            <AssignTemplateDrawer IsOpen="@IsTemplateDrawerOpen"
+                                  IsOpenChanged="@HandleTemplateDrawerVisibilityChanged"
+                                  StaffId="@schedule.IndividualId"
+                                  JobId="@schedule.JobId"
+                                  OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                                  CurrentAssignment="@schedule.CurrentTemplate"
+                                  OnSaved="@HandleTemplateAssignmentSavedAsync" />
 
-            <TemplateAssignmentCard StaffId="@schedule.IndividualId"
-            JobId="@schedule.JobId"
-            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-            CurrentAssignment="@schedule.CurrentTemplate"
-            History="@schedule.TemplateHistory"
-            IsDisabled="@(!schedule.HasActiveJob)"
-            OnAssignRequested="@OpenTemplateAssignmentDrawerAsync"
-            OnRemoveRequested="@OpenTemplateRemovalAsync"
-            OnChanged="@HandleScheduleChangedAsync" />
+            <RemoveTemplateAssignmentDialog IsOpen="@IsTemplateRemovalOpen"
+                                            IsOpenChanged="@HandleTemplateRemovalVisibilityChanged"
+                                            JobId="@schedule.JobId"
+                                            Assignment="@selectedTemplateAssignment"
+                                            OnRemoved="@HandleTemplateRemovedAsync" />
 
-
-            <RemoveTemplateAssignmentDialog
-            @bind-IsOpen="showTemplateRemovalDialog"
-            JobId="@schedule.JobId"
-            Assignment="@selectedTemplateAssignment"
-            OnRemoved="@HandleTemplateRemovedAsync" />
-
-
-            <ShiftAssignmentCard
-            StaffId="@schedule.IndividualId"
-            JobId="@schedule.JobId"
-            OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-            CurrentAssignment="@schedule.CurrentShift"
-            History="@schedule.ShiftHistory"
-            IsDisabled="@(!schedule.HasActiveJob)"
-            OnChanged="@LoadScheduleAsync" />
+            <ManualAssignmentDrawer IsOpen="@IsManualAssignmentDrawerOpen"
+                                    IsOpenChanged="@HandleManualDrawerVisibilityChanged"
+                                    StaffId="@schedule.IndividualId"
+                                    JobId="@schedule.JobId"
+                                    OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                                    Assignment="@selectedManualAssignment"
+                                    IsEditing="@(activePanel == SchedulePanel.EditManualAssignment)"
+                                    OnSaved="@HandleManualAssignmentSavedAsync" />
 
         </div>
 
-     
 
+        <TemplateAssignmentCard StaffId="@schedule.IndividualId"
+                                JobId="@schedule.JobId"
+                                OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
+                                CurrentAssignment="@schedule.CurrentTemplate"
+                                History="@schedule.TemplateHistory"
+                                IsDisabled="@(!schedule.HasActiveJob)"
+                                OnAssignRequested="@OpenTemplateAssignmentDrawerAsync"
+                                OnRemoveRequested="@OpenTemplateRemovalAsync"
+                                OnChanged="@HandleScheduleChangedAsync" />
 
         <ManualAssignmentCard StaffId="@schedule.IndividualId"
                               JobId="@schedule.JobId"
@@ -86,12 +90,6 @@
 
 
 
-        <AssignTemplateDrawer @bind-IsOpen="showTemplateAssignmentDrawer"
-                              StaffId="@schedule.IndividualId"
-                              JobId="@schedule.JobId"
-                              OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-                              CurrentAssignment="@schedule.CurrentTemplate"
-                              OnSaved="@HandleTemplateAssignmentSavedAsync" />
 
     }
 
@@ -109,76 +107,46 @@
 
     private int loadedStaffId;
 
-    private bool showTemplateAssignmentDrawer;
-
-    private bool showTemplateRemovalDialog;
+    private SchedulePanel activePanel =
+        SchedulePanel.None;
 
     private CurrentWorkTemplateAssignmentDto?
         selectedTemplateAssignment;
 
-
-    /// <summary>
-    /// Temporary methods
-    /// </summary>
-    /// <returns></returns>
-
-
-    private bool showManualAssignmentDrawer;
-
     private ManualWorkAssignmentListDto?
         selectedManualAssignment;
 
+    private bool IsTemplateDrawerOpen =>
+        activePanel ==
+        SchedulePanel.AssignTemplate;
 
-    private Task OpenManualAssignmentDrawerAsync()
-    {
-        if (schedule?.CurrentTemplate is null)
-        {
-            showTemplateAssignmentDrawer = true;
-            return Task.CompletedTask;
-        }
+    private bool IsTemplateRemovalOpen =>
+        activePanel ==
+        SchedulePanel.RemoveTemplate;
 
-        selectedManualAssignment = null;
-        showManualAssignmentDrawer = true;
+    private bool IsManualAssignmentDrawerOpen =>
+        activePanel ==
+            SchedulePanel.CreateManualAssignment ||
+        activePanel ==
+            SchedulePanel.EditManualAssignment;
 
-        return Task.CompletedTask;
-    }
+    private bool IsManualAssignmentDetailsOpen =>
+        activePanel ==
+        SchedulePanel.ViewManualAssignment;
 
+    private bool IsManualAssignmentRemovalOpen =>
+        activePanel ==
+        SchedulePanel.RemoveManualAssignment;
 
-
-    private Task OpenManualAssignmentDetailsAsync(
-        ManualWorkAssignmentListDto assignment)
-    {
-        selectedManualAssignment = assignment;
-
-        return Task.CompletedTask;
-    }
-
-    private Task OpenManualAssignmentEditAsync(
-        ManualWorkAssignmentListDto assignment)
-    {
-        selectedManualAssignment = assignment;
-        showManualAssignmentDrawer = true;
-
-        return Task.CompletedTask;
-    }
-
-    private Task OpenManualAssignmentRemovalAsync(
-        ManualWorkAssignmentListDto assignment)
-    {
-        selectedManualAssignment = assignment;
-
-        return Task.CompletedTask;
-    }
-
-
-
-    /// Temporary Methods ends
     protected override async Task OnParametersSetAsync()
     {
         if (StaffId <= 0)
         {
             schedule = null;
-            errorMessage = "A valid staff ID is required.";
+
+            errorMessage =
+                "A valid staff ID is required.";
+
             return;
         }
 
@@ -190,59 +158,23 @@
 
         loadedStaffId = StaffId;
 
-        await LoadScheduleAsync();
-    }
-
-
-    private async Task HandleTemplateAssignmentSavedAsync()
-{
-    showTemplateAssignmentDrawer = false;
-
-    await LoadScheduleAsync();
-}
-
-
-    private Task OpenTemplateAssignmentDrawerAsync()
-    {
-        showTemplateAssignmentDrawer = true;
-
-        return Task.CompletedTask;
-    }
-
-    private Task OpenTemplateRemovalAsync(
-     CurrentWorkTemplateAssignmentDto assignment)
-    {
-        selectedTemplateAssignment = assignment;
-
-        showTemplateRemovalDialog = true;
-
-        return Task.CompletedTask;
-    }
-
-   
-    private async Task HandleScheduleChangedAsync()
-    {
-        await LoadScheduleAsync();
-    }
-
-    private async Task HandleTemplateRemovedAsync()
-    {
-        selectedTemplateAssignment = null;
+        ClosePanel();
 
         await LoadScheduleAsync();
     }
-
-
-  
-
-    private async Task HandleTemplateSavedAsync()
-    {
-        await LoadScheduleAsync();
-    }
-
 
     private async Task LoadScheduleAsync()
     {
+        if (StaffId <= 0)
+        {
+            schedule = null;
+
+            errorMessage =
+                "A valid staff ID is required.";
+
+            return;
+        }
+
         try
         {
             isLoading = true;
@@ -250,7 +182,8 @@
             schedule = null;
 
             var result =
-                await StaffScheduleService.GetScheduleAsync(StaffId);
+                await StaffScheduleService.GetScheduleAsync(
+                    StaffId);
 
             if (!result.Success)
             {
@@ -258,16 +191,306 @@
                 return;
             }
 
+            if (result.Schedule is null)
+            {
+                errorMessage =
+                    "The staff schedule could not be loaded.";
+
+                return;
+            }
+
             schedule = result.Schedule;
         }
-        catch
+        catch (Exception exception)
         {
+            schedule = null;
+
             errorMessage =
-                "An unexpected error occurred while loading the staff schedule.";
+                "An unexpected error occurred while loading " +
+                "the staff schedule.";
+
+            Console.Error.WriteLine(exception);
         }
         finally
         {
             isLoading = false;
         }
+    }
+
+    private void OpenPanel(
+        SchedulePanel panel)
+    {
+        activePanel = panel;
+    }
+
+    private void ClosePanel()
+    {
+        activePanel = SchedulePanel.None;
+    }
+
+        /*
+         * Template assignment
+         */
+
+    private Task OpenTemplateAssignmentDrawerAsync()
+    {
+        if (schedule is null ||
+            !schedule.HasActiveJob)
+        {
+            return Task.CompletedTask;
+        }
+
+        selectedTemplateAssignment =
+            schedule.CurrentTemplate;
+
+        selectedManualAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.AssignTemplate);
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenTemplateRemovalAsync(
+        CurrentWorkTemplateAssignmentDto assignment)
+    {
+        if (schedule is null ||
+            !schedule.HasActiveJob)
+        {
+            return Task.CompletedTask;
+        }
+
+        selectedTemplateAssignment =
+            assignment;
+
+        selectedManualAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.RemoveTemplate);
+
+        return Task.CompletedTask;
+    }
+
+    private void HandleTemplateDrawerVisibilityChanged(
+        bool isOpen)
+    {
+        if (!isOpen &&
+            activePanel ==
+                SchedulePanel.AssignTemplate)
+        {
+            selectedTemplateAssignment =
+                null;
+
+            ClosePanel();
+        }
+    }
+
+    private void HandleTemplateRemovalVisibilityChanged(
+        bool isOpen)
+    {
+        if (!isOpen &&
+            activePanel ==
+                SchedulePanel.RemoveTemplate)
+        {
+            selectedTemplateAssignment =
+                null;
+
+            ClosePanel();
+        }
+    }
+
+    private async Task HandleTemplateAssignmentSavedAsync()
+    {
+        selectedTemplateAssignment =
+            null;
+
+        ClosePanel();
+
+        await LoadScheduleAsync();
+    }
+
+    private async Task HandleTemplateRemovedAsync()
+    {
+        selectedTemplateAssignment =
+            null;
+
+        ClosePanel();
+
+        await LoadScheduleAsync();
+    }
+
+        /*
+         * Manual assignment
+         */
+
+    private Task OpenManualAssignmentDrawerAsync()
+    {
+        if (schedule is null ||
+            !schedule.HasActiveJob)
+        {
+            return Task.CompletedTask;
+        }
+
+        /*
+        * A template must first be assigned to the job.
+             */
+        if (schedule.CurrentTemplate is null)
+        {
+            selectedTemplateAssignment =
+                null;
+
+            selectedManualAssignment =
+                null;
+
+            OpenPanel(
+                SchedulePanel.AssignTemplate);
+
+            return Task.CompletedTask;
+        }
+
+        selectedManualAssignment =
+            null;
+
+        selectedTemplateAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.CreateManualAssignment);
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentDetailsAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        selectedManualAssignment =
+            assignment;
+
+        selectedTemplateAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.ViewManualAssignment);
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentEditAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (schedule is null ||
+            !schedule.HasActiveJob)
+        {
+            return Task.CompletedTask;
+        }
+
+        selectedManualAssignment =
+            assignment;
+
+        selectedTemplateAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.EditManualAssignment);
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenManualAssignmentRemovalAsync(
+        ManualWorkAssignmentListDto assignment)
+    {
+        if (schedule is null ||
+            !schedule.HasActiveJob)
+        {
+            return Task.CompletedTask;
+        }
+
+        selectedManualAssignment =
+            assignment;
+
+        selectedTemplateAssignment =
+            null;
+
+        OpenPanel(
+            SchedulePanel.RemoveManualAssignment);
+
+        return Task.CompletedTask;
+    }
+
+    private void HandleManualDrawerVisibilityChanged(
+        bool isOpen)
+    {
+        if (!isOpen &&
+            (
+                activePanel ==
+                    SchedulePanel.CreateManualAssignment ||
+                activePanel ==
+                    SchedulePanel.EditManualAssignment
+            ))
+        {
+            selectedManualAssignment =
+                null;
+
+            ClosePanel();
+        }
+    }
+
+    private void HandleManualDetailsVisibilityChanged(
+        bool isOpen)
+    {
+        if (!isOpen &&
+            activePanel ==
+                SchedulePanel.ViewManualAssignment)
+        {
+            selectedManualAssignment =
+                null;
+
+            ClosePanel();
+        }
+    }
+
+    private void HandleManualRemovalVisibilityChanged(
+        bool isOpen)
+    {
+        if (!isOpen &&
+            activePanel ==
+                SchedulePanel.RemoveManualAssignment)
+        {
+            selectedManualAssignment =
+                null;
+
+            ClosePanel();
+        }
+    }
+
+    private async Task HandleManualAssignmentSavedAsync()
+    {
+        selectedManualAssignment =
+            null;
+
+        ClosePanel();
+
+        await LoadScheduleAsync();
+    }
+
+    private async Task HandleManualAssignmentRemovedAsync()
+    {
+        selectedManualAssignment =
+            null;
+
+        ClosePanel();
+
+        await LoadScheduleAsync();
+    }
+
+        /*
+         * Shared refresh callback used by child cards.
+         */
+
+    private async Task HandleScheduleChangedAsync()
+    {
+        await LoadScheduleAsync();
     }
 }

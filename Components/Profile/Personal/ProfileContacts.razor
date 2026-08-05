@@ -1,0 +1,320 @@
+﻿@using HRM.DTOs.Profile
+
+<section class="overflow-hidden rounded-2xl border border-slate-200
+                bg-white shadow-sm">
+
+    <div class="flex flex-col gap-3 border-b border-slate-200
+                px-5 py-4 sm:flex-row sm:items-center
+                sm:justify-between">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-11 w-11 shrink-0 items-center
+                        justify-center rounded-xl bg-violet-50
+                        text-violet-600">
+
+                <span class="material-symbols-rounded">
+                    contact_phone
+                </span>
+
+            </div>
+
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900">
+                    Contact Information
+                </h2>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Phone numbers, email addresses and online contacts.
+                </p>
+            </div>
+
+        </div>
+
+        @if (ShowEditButton && !IsLoading)
+        {
+            <button type="button"
+                    disabled="@IsDisabled"
+                    @onclick="HandleEditAsync"
+                    class="inline-flex items-center justify-center gap-2
+                           rounded-xl border border-slate-200 bg-white
+                           px-3.5 py-2 text-sm font-semibold
+                           text-slate-700 transition hover:bg-slate-50
+                           disabled:cursor-not-allowed
+                           disabled:opacity-50">
+
+                <span class="material-symbols-rounded text-[18px]">
+                    edit
+                </span>
+
+                Edit contacts
+
+            </button>
+        }
+
+    </div>
+
+    <div class="p-5">
+
+        @if (IsLoading)
+        {
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                @for (var index = 0; index < 4; index++)
+                {
+                    <div class="animate-pulse rounded-xl border
+                                border-slate-200 p-4">
+
+                        <div class="h-3 w-24 rounded bg-slate-100"></div>
+                        <div class="mt-3 h-5 w-44 rounded bg-slate-200"></div>
+
+                    </div>
+                }
+
+            </div>
+        }
+        else if (ValidContacts.Count == 0)
+        {
+            <div class="rounded-xl border border-dashed
+                        border-slate-300 bg-slate-50
+                        px-5 py-10 text-center">
+
+                <div class="mx-auto flex h-12 w-12 items-center
+                            justify-center rounded-full bg-white
+                            text-slate-400 shadow-sm">
+
+                    <span class="material-symbols-rounded text-[24px]">
+                        contact_page
+                    </span>
+
+                </div>
+
+                <p class="mt-3 text-sm font-semibold text-slate-700">
+                    No contact information
+                </p>
+
+                <p class="mt-1 text-xs text-slate-500">
+                    No valid contact details are available for this profile.
+                </p>
+
+            </div>
+        }
+        else
+        {
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+
+                @foreach (var contact in OrderedContacts)
+                {
+                    <div class="rounded-xl border border-slate-200
+                                bg-white p-4 transition
+                                hover:border-violet-200 hover:shadow-sm">
+
+                        <div class="flex items-start gap-3">
+
+                            <div class="@GetIconContainerClass(contact)">
+
+                                <span class="material-symbols-rounded text-[20px]">
+                                    @GetContactIcon(contact)
+                                </span>
+
+                            </div>
+
+                            <div class="min-w-0 flex-1">
+
+                                <p class="text-xs font-medium uppercase
+                                          tracking-wide text-slate-500">
+                                    @contact.ContactTypeName
+                                </p>
+
+                                @if (IsEmail(contact))
+                                {
+                                    <a href="@($"mailto:{contact.Value}")"
+                                       class="mt-1 block truncate text-sm
+                                              font-semibold text-slate-900
+                                              hover:text-violet-700">
+                                        @contact.Value
+                                    </a>
+                                }
+                                else if (IsPhone(contact))
+                                {
+                                    <a href="@($"tel:{NormalisePhone(contact.Value)}")"
+                                       class="mt-1 block truncate text-sm
+                                              font-semibold text-slate-900
+                                              hover:text-violet-700">
+                                        @contact.Value
+                                    </a>
+                                }
+                                else if (IsWebsite(contact))
+                                {
+                                    <a href="@GetWebsiteUrl(contact.Value)"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="mt-1 block truncate text-sm
+                                              font-semibold text-slate-900
+                                              hover:text-violet-700">
+                                        @contact.Value
+                                    </a>
+                                }
+                                else
+                                {
+                                    <p class="mt-1 break-words text-sm
+                                              font-semibold text-slate-900">
+                                        @contact.Value
+                                    </p>
+                                }
+
+                            </div>
+
+                        </div>
+
+                    </div>
+                }
+
+            </div>
+        }
+
+    </div>
+
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<ProfileContactDto> Contacts { get; set; } =
+        Array.Empty<ProfileContactDto>();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public bool ShowEditButton { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnEdit { get; set; }
+
+
+
+    private List<ProfileContactDto> ValidContacts =>
+        Contacts
+            .Where(x =>
+                x.IsValid &&
+                !string.IsNullOrWhiteSpace(x.Value))
+            .ToList();
+
+    private IEnumerable<ProfileContactDto> OrderedContacts =>
+        ValidContacts
+            .OrderBy(x =>
+                GetContactOrder(
+                    x.ContactInformationTypeId))
+            .ThenBy(x =>
+                x.ContactId);
+
+    private async Task HandleEditAsync()
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnEdit.HasDelegate)
+        {
+            await OnEdit.InvokeAsync();
+        }
+    }
+
+    private static string GetContactIcon(
+        ProfileContactDto contact)
+    {
+        return contact.ContactInformationTypeId switch
+        {
+            1 => "smartphone",
+            2 => "call",
+            3 => "fax",
+            4 => "mail",
+            5 => "language",
+            _ => "contact_phone"
+        };
+    }
+
+    private static string GetIconContainerClass(
+        ProfileContactDto contact)
+    {
+        const string baseClass =
+            "flex h-10 w-10 shrink-0 items-center justify-center " +
+            "rounded-lg ";
+
+        return contact.ContactInformationTypeId switch
+        {
+            1 => baseClass + "bg-emerald-50 text-emerald-600",
+            2 => baseClass + "bg-blue-50 text-blue-600",
+            3 => baseClass + "bg-slate-100 text-slate-600",
+            4 => baseClass + "bg-violet-50 text-violet-600",
+            5 => baseClass + "bg-cyan-50 text-cyan-700",
+            _ => baseClass + "bg-slate-100 text-slate-600"
+        };
+    }
+
+    private static bool IsPhone(
+        ProfileContactDto contact)
+    {
+        return contact.ContactInformationTypeId is 1 or 2 or 3;
+    }
+
+    private static bool IsEmail(
+        ProfileContactDto contact)
+    {
+        return contact.ContactInformationTypeId == 4;
+    }
+
+    private static bool IsWebsite(
+        ProfileContactDto contact)
+    {
+        return contact.ContactInformationTypeId == 5;
+    }
+
+    private static int GetContactOrder(
+        int contactTypeId)
+    {
+        return contactTypeId switch
+        {
+            1 => 1,
+            2 => 2,
+            4 => 3,
+            5 => 4,
+            3 => 5,
+            _ => 100
+        };
+    }
+
+    private static string NormalisePhone(
+        string value)
+    {
+        return new string(
+            value
+                .Where(character =>
+                    char.IsDigit(character) ||
+                    character == '+')
+                .ToArray());
+    }
+
+    private static string GetWebsiteUrl(
+        string value)
+    {
+        var trimmed =
+            value.Trim();
+
+        if (trimmed.StartsWith(
+                "http://",
+                StringComparison.OrdinalIgnoreCase) ||
+            trimmed.StartsWith(
+                "https://",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return trimmed;
+        }
+
+        return $"https://{trimmed}";
+    }
+}

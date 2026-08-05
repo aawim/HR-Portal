@@ -45,8 +45,5 @@ namespace HRM.Models.WorkPlanning
         public virtual User? RelievedByUser { get; set; }
 
         public virtual OperationLog? OperationLog { get; set; }
-
-
-
     }
 }

@@ -4,6 +4,7 @@ using HRM.DTOs.UserContext;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace HRM.Services
 {
@@ -82,38 +83,40 @@ namespace HRM.Services
         }
 
 
-        public async Task<ActiveJobDto?> GetActiveJobAsync(int individualId)
+        public async Task<ActiveJobDto?> GetActiveJobAsync(int individualId, CancellationToken cancellationToken = default)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
 
-
             return await db.Jobs
-                .AsNoTracking()
-                .Where(x =>
-                    x.IndividualID == individualId
-                    &&
-                    x.JobStateId == SharedConfig.JobStates.APPROVED
-                    &&
-                    x.TerminatedDate == null)
-                .Select(x => new ActiveJobDto
+                 .AsNoTracking()
+                 .Where(x =>
+                     x.IndividualID == individualId &&
+                     x.JobStateId == SharedConfig.JobStates.APPROVED &&
+                     x.TerminatedDate == null)
+                 .OrderByDescending(x => x.JoinedDate)
+                 .ThenByDescending(x => x.JobId)
+
+
+
+                 .Select(x => new ActiveJobDto
                 {
-                    JobID = x.JobId,
+                    JobId = x.JobId,
 
-                    IndividualID = x.IndividualID,
+                    IndividualId = x.IndividualID,
 
-                    OrganisationID = x.OrganisationID,
+                    OrganisationId = x.OrganisationID,
 
                     OrganisationName = x.Organisation.OrganisationName,
 
-                    OrganisationStructureID = x.OrganisationStructureId,
+                    OrganisationStructureId = x.OrganisationStructureId,
 
                     OrganisationStructureName = x.OrganisationStructure.Name,
 
                     JobTypeName = x.JobType.TypeName,
 
-                    JobStateID = x.JobStateId,
+                    JobStateId = x.JobStateId,
 
-                    JobTypeID = x.JobTypeId,
+                    JobTypeId = x.JobTypeId,
 
                     JoinedDate = x.JoinedDate,
 
@@ -121,7 +124,7 @@ namespace HRM.Services
 
                     IsActive = true
                 })
-                .FirstOrDefaultAsync();
+               .FirstOrDefaultAsync();
         }
 
         public async Task<ActiveJobDto> GetMyActiveJobAsync()
@@ -136,53 +139,6 @@ namespace HRM.Services
 
             return job;
         }
-
-       
-
-
-
-
-
-
-        //private readonly IJobDataLoader _loader;
-        //private readonly IJobStore _store;
-        //private readonly UserService _userService;
-
-        //public JobService(
-        //    IJobDataLoader loader,
-        //    IJobStore store,
-        //    UserService userService)
-        //{
-        //    _loader = loader;
-        //    _store = store;
-        //    _userService = userService;
-        //}
-
-        //public async Task<JobDto?> GetCurrentJobAsync()
-        //{
-        //    var jobId = await _userService.GetJobID();
-        //    if (jobId == null)
-        //        return null;
-        //    return await _loader.GetByIdAsync(jobId);
-        //}
-
-        //public async Task<JobDto?> GetActiveJobAsync(int individualId)
-        //{
-        //    var jobs = await _loader.GetByIndividualIdAsync(individualId);
-        //    return jobs.FirstOrDefault(x =>
-        //        x.JobStateID == 4 &&
-        //        x.TerminatedDate == null);
-        //}
-
-        //public async Task<List<JobDto>> GetActiveJobsAsync(int individualId)
-        //{
-        //    var jobs = await _loader.GetByIndividualIdAsync(individualId);
-        //    return jobs
-        //        .Where(x => x.JobStateID == 4 && x.TerminatedDate == null)
-        //        .ToList();
-        //}
-
-
 
     }
 }

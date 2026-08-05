@@ -76,7 +76,7 @@ namespace HRM.Services
             return await db.LeaveRequests
                 .AsNoTracking()
                 .Where(lr =>
-                    lr.Leave.JobId == context.ActiveJob!.JobID &&
+                    lr.Leave.JobId == context.ActiveJob!.JobId &&
                     lr.Request.RequestState.IsProcessingState)
                 .Select(lr => new ProcessingLeaveDto
                 {
@@ -109,7 +109,7 @@ namespace HRM.Services
                 if (context.ActiveJob == null)
                 return new List<JobLeaveType>();
 
-            return await GetJobLeaveBalancesAsync(context.ActiveJob.JobID,leaveTypeId);
+            return await GetJobLeaveBalancesAsync(context.ActiveJob.JobId,leaveTypeId);
         }
 
         public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId, int leaveTypeId = 0)
@@ -190,7 +190,7 @@ namespace HRM.Services
             return await db.JobLeaveTypes
                 .AsNoTracking()
                 .Where(x =>
-                    x.JobId == context.ActiveJob.JobID &&
+                    x.JobId == context.ActiveJob.JobId &&
                     x.IsValid)
                 .Include(x => x.LeaveType)
                 .OrderBy(x => x.LeaveType.Name)
@@ -407,7 +407,7 @@ namespace HRM.Services
 
             try
             {
-                int jobId = context.ActiveJob.JobID;
+                int jobId = context.ActiveJob.JobId;
 
                 if (jobId == 0)
                 {

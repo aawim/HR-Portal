@@ -107,9 +107,9 @@ namespace HRM.Services
                     ? null
                     : new JobDto
                     {
-                        JobID = context.ActiveJob.JobID,
+                        JobID = context.ActiveJob.JobId,
 
-                        OrganisationID = context.ActiveJob.OrganisationID,
+                        OrganisationID = context.ActiveJob.OrganisationId,
 
                         OrganisationName =
                         context.ActiveJob.OrganisationName,

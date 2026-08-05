@@ -1,0 +1,329 @@
+﻿@using HRM.DTOs.Profile
+@using HRM.Enum
+
+<header class="border-b border-slate-200 bg-white">
+
+    <div class="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
+
+        <!-- Breadcrumb -->
+        <nav class="mb-5 flex flex-wrap items-center gap-2 text-sm text-slate-500"
+             aria-label="Breadcrumb">
+
+            <a href="/admin/my/workspace"
+               class="transition hover:text-slate-900">
+                My Workspace
+            </a>
+
+            <span class="material-symbols-rounded text-[16px] text-slate-300">
+                chevron_right
+            </span>
+
+            <span>@GetProfileTypeLabel(Profile.ProfileType)</span>
+
+            <span class="material-symbols-rounded text-[16px] text-slate-300">
+                chevron_right
+            </span>
+
+            <span class="max-w-[220px] truncate font-medium text-slate-900 sm:max-w-md">
+                @Profile.FullName
+            </span>
+
+        </nav>
+
+        <div class="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+            <!-- Profile information -->
+            <div class="flex min-w-0 items-start gap-4 sm:items-center sm:gap-5">
+
+                <!-- Profile image -->
+                <div class="relative shrink-0">
+
+                    @if (!_imageLoadFailed &&
+                    !string.IsNullOrWhiteSpace(Profile.ImageUrl))
+                    {
+                        <img src="@Profile.ImageUrl"
+                             alt="@Profile.FullName"
+                             class="h-20 w-20 rounded-2xl object-cover ring-4 ring-slate-100 sm:h-24 sm:w-24"
+                             @onerror="HandleImageError" />
+                    }
+                    else
+                    {
+                        <div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-600 text-2xl font-bold text-white shadow-sm ring-4 ring-slate-100 sm:h-24 sm:w-24">
+                            @GetInitials(Profile.FullName)
+                        </div>
+                    }
+
+                    <span class="@GetStatusIndicatorClass()"
+                          title="@GetStatusLabel()">
+                    </span>
+
+                </div>
+
+                <!-- Identity details -->
+                <div class="min-w-0 flex-1">
+
+                    <div class="flex flex-wrap items-center gap-2">
+
+                        <h1 class="max-w-full truncate text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">
+                            @Profile.FullName
+                        </h1>
+
+                        <span class="@GetProfileTypeClass(Profile.ProfileType)">
+                            @GetProfileTypeLabel(Profile.ProfileType)
+                        </span>
+
+                        <span class="@GetAccountStatusClass()">
+                            @GetStatusLabel()
+                        </span>
+
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(Profile.FullNameDhivehi))
+                    {
+                        <p class="mt-1 truncate text-base text-slate-500"
+                           dir="rtl">
+                            @Profile.FullNameDhivehi
+                        </p>
+                    }
+
+                    <div class="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-600">
+
+                        @if (!string.IsNullOrWhiteSpace(Profile.IdentityCardNumber))
+                        {
+                            <div class="flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-[18px] text-slate-400">
+                                    id_card
+                                </span>
+
+                                <span>@Profile.IdentityCardNumber</span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Profile.ActiveJob?.EmployeeNumber))
+                        {
+                            <div class="flex items-center gap-1.5">
+                                <span class="material-symbols-rounded text-[18px] text-slate-400">
+                                    badge
+                                </span>
+
+                                <span>@Profile.ActiveJob.EmployeeNumber</span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Profile.ActiveJob?.OrganisationName))
+                        {
+                            <div class="flex min-w-0 items-center gap-1.5">
+                                <span class="material-symbols-rounded shrink-0 text-[18px] text-slate-400">
+                                    corporate_fare
+                                </span>
+
+                                <span class="max-w-[260px] truncate sm:max-w-md">
+                                    @Profile.ActiveJob.OrganisationName
+                                </span>
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrWhiteSpace(Profile.ActiveJob?.PositionName))
+                        {
+                            <div class="flex min-w-0 items-center gap-1.5">
+                                <span class="material-symbols-rounded shrink-0 text-[18px] text-slate-400">
+                                    work
+                                </span>
+
+                                <span class="max-w-[260px] truncate sm:max-w-md">
+                                    @Profile.ActiveJob.PositionName
+                                </span>
+                            </div>
+                        }
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Actions -->
+            <div class="flex flex-wrap items-center gap-2">
+
+                @if (ShowBackButton)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            @onclick="OnBack">
+                        <span class="material-symbols-rounded text-[19px]">
+                            arrow_back
+                        </span>
+
+                        Back
+                    </button>
+                }
+
+                @if (ShowPrintButton)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            @onclick="OnPrint">
+                        <span class="material-symbols-rounded text-[19px]">
+                            print
+                        </span>
+
+                        <span class="hidden sm:inline">
+                            Print
+                        </span>
+                    </button>
+                }
+
+                @if (ShowEditButton)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            @onclick="OnEdit">
+                        <span class="material-symbols-rounded text-[19px]">
+                            edit
+                        </span>
+
+                        Edit profile
+                    </button>
+                }
+
+                @if (ShowActionsButton)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                            @onclick="OnActions">
+                        <span class="material-symbols-rounded text-[19px]">
+                            more_horiz
+                        </span>
+
+                        Actions
+                    </button>
+                }
+
+            </div>
+
+        </div>
+
+    </div>
+
+</header>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProfileOverviewDto Profile { get; set; } = default!;
+
+    [Parameter]
+    public bool ShowBackButton { get; set; }
+
+    [Parameter]
+    public bool ShowPrintButton { get; set; } = true;
+
+    [Parameter]
+    public bool ShowEditButton { get; set; } = true;
+
+    [Parameter]
+    public bool ShowActionsButton { get; set; } = true;
+
+    [Parameter]
+    public EventCallback OnBack { get; set; }
+
+    [Parameter]
+    public EventCallback OnPrint { get; set; }
+
+    [Parameter]
+    public EventCallback OnEdit { get; set; }
+
+    [Parameter]
+    public EventCallback OnActions { get; set; }
+
+    private bool _imageLoadFailed;
+
+   
+
+    private void HandleImageError()
+    {
+        _imageLoadFailed = true;
+    }
+
+    private static string GetInitials(string? fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName))
+            return "--";
+
+        var nameParts = fullName
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Take(2)
+            .ToArray();
+
+        return string.Concat(
+            nameParts.Select(x =>
+                char.ToUpperInvariant(x[0])));
+    }
+
+    private static string GetProfileTypeLabel(ProfileType profileType)
+    {
+        return profileType switch
+        {
+            ProfileType.Staff => "Staff",
+            ProfileType.FormerStaff => "Former staff",
+            _ => "Individual"
+        };
+    }
+
+    private static string GetProfileTypeClass(ProfileType profileType)
+    {
+        return profileType switch
+        {
+            ProfileType.Staff =>
+                "inline-flex items-center rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20",
+
+            ProfileType.FormerStaff =>
+                "inline-flex items-center rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20",
+
+            _ =>
+                "inline-flex items-center rounded-full bg-blue-50 px-2.5 py-1 text-xs font-semibold text-blue-700 ring-1 ring-inset ring-blue-600/20"
+        };
+    }
+
+    private string GetStatusLabel()
+    {
+        if (Profile.ProfileType == ProfileType.Staff &&
+            Profile.ActiveJob is not null)
+        {
+            return "Active";
+        }
+
+        if (Profile.ProfileType == ProfileType.FormerStaff)
+        {
+            return "Not employed";
+        }
+
+        return Profile.IsIndividualActive
+            ? "Active"
+            : "Inactive";
+    }
+
+    private string GetAccountStatusClass()
+    {
+        if (Profile.ProfileType == ProfileType.FormerStaff)
+        {
+            return "inline-flex items-center rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 ring-1 ring-inset ring-slate-500/20";
+        }
+
+        return Profile.IsIndividualActive
+            ? "inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 ring-1 ring-inset ring-emerald-600/20"
+            : "inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-700 ring-1 ring-inset ring-red-600/20";
+    }
+
+    private string GetStatusIndicatorClass()
+    {
+        var colour = Profile.ProfileType switch
+        {
+            ProfileType.Staff => "bg-emerald-500",
+            ProfileType.FormerStaff => "bg-slate-400",
+            _ when Profile.IsIndividualActive => "bg-blue-500",
+            _ => "bg-red-500"
+        };
+
+        return $"absolute -bottom-1 -right-1 h-5 w-5 rounded-full border-4 border-white {colour}";
+    }
+}

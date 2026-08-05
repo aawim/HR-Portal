@@ -1,0 +1,379 @@
+﻿@using HRM.DTOs.UserContext
+
+<section class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+
+    <!-- Header -->
+    <div class="flex flex-col gap-3 border-b border-slate-200 px-5 py-4
+                sm:flex-row sm:items-center sm:justify-between">
+
+        <div class="flex items-center gap-3">
+
+            <div class="flex h-11 w-11 shrink-0 items-center justify-center
+                        rounded-xl bg-blue-50 text-blue-600">
+
+                <svg xmlns="http://www.w3.org/2000/svg"
+                     fill="none"
+                     viewBox="0 0 24 24"
+                     stroke-width="1.5"
+                     stroke="currentColor"
+                     class="h-5 w-5">
+
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          d="M20.25 14.15v4.073a2.25 2.25 0 0 1-2.25
+                             2.25H6a2.25 2.25 0 0 1-2.25-2.25V14.15m16.5
+                             0a2.25 2.25 0 0 0 1.007-1.868V9.348a2.25
+                             2.25 0 0 0-2.25-2.25h-3.375m4.618 7.052a12.45
+                             12.45 0 0 1-8.25 3.098 12.45 12.45 0 0
+                             1-8.25-3.098m0 0a2.25 2.25 0 0
+                             1-1.007-1.868V9.348a2.25 2.25 0 0
+                             1 2.25-2.25h3.375m7.5 0V5.473c0-1.117-.91-2.022
+                             -2.033-2.022h-3.934c-1.123 0-2.033.905-2.033
+                             2.022v1.625m7.5 0h-7.5" />
+
+                </svg>
+
+            </div>
+
+            <div>
+                <h2 class="text-sm font-semibold text-slate-900">
+                    Active Employment
+                </h2>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Current job, organisation and position information.
+                </p>
+            </div>
+
+        </div>
+
+        @if (!IsLoading && Job is not null)
+        {
+            <span class="@StatusBadgeClass">
+
+                <span class="@StatusDotClass"></span>
+
+                @StatusText
+
+            </span>
+        }
+
+    </div>
+
+    <!-- Content -->
+    <div class="p-5">
+
+        @if (IsLoading)
+        {
+            <div class="space-y-5">
+
+                <div class="h-20 animate-pulse rounded-xl bg-slate-100"></div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+
+                    @for (var index = 0; index < 6; index++)
+                    {
+                        <div class="rounded-xl border border-slate-200 p-4">
+                            <div class="h-3 w-24 animate-pulse rounded bg-slate-100"></div>
+                            <div class="mt-3 h-4 w-36 animate-pulse rounded bg-slate-200"></div>
+                        </div>
+                    }
+
+                </div>
+
+            </div>
+        }
+        else if (Job is null)
+        {
+            <div class="rounded-xl border border-dashed border-slate-300
+                        bg-slate-50 px-5 py-10 text-center">
+
+                <div class="mx-auto flex h-12 w-12 items-center justify-center
+                            rounded-full bg-white text-slate-400 shadow-sm">
+
+                    <svg xmlns="http://www.w3.org/2000/svg"
+                         fill="none"
+                         viewBox="0 0 24 24"
+                         stroke-width="1.5"
+                         stroke="currentColor"
+                         class="h-6 w-6">
+
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              d="M18.364 18.364A9 9 0 1 0 5.636
+                                 5.636m12.728 12.728L5.636 5.636" />
+
+                    </svg>
+
+                </div>
+
+                <p class="mt-3 text-sm font-semibold text-slate-700">
+                    No active job
+                </p>
+
+                <p class="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">
+                    @(string.IsNullOrWhiteSpace(Message)
+                        ? "This individual does not currently have an active approved job."
+                        : Message)
+                </p>
+
+            </div>
+        }
+        else
+        {
+            <!-- Main position summary -->
+            <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+
+                <div class="flex flex-col gap-4 sm:flex-row
+                            sm:items-start sm:justify-between">
+
+                    <div class="min-w-0">
+
+                        <p class="text-xs font-medium uppercase tracking-wide
+                                  text-blue-600">
+                            Current Position
+                        </p>
+
+                        <h3 class="mt-1 truncate text-lg font-semibold text-slate-900">
+                            @PositionName
+                        </h3>
+
+                        <p class="mt-1 text-sm text-slate-600">
+                            @OrganisationName
+                        </p>
+
+                        @if (!string.IsNullOrWhiteSpace(StructureName))
+                        {
+                            <p class="mt-1 text-xs text-slate-500">
+                                @StructureName
+                            </p>
+                        }
+
+                    </div>
+
+                    <div class="rounded-lg border border-blue-100 bg-white
+                                px-3 py-2 text-right">
+
+                        <p class="text-xs text-slate-500">
+                            Service
+                        </p>
+
+                        <p class="mt-1 text-sm font-semibold text-slate-800">
+                            @ServiceDurationText
+                        </p>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <!-- Employment details -->
+            <dl class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+
+                <ProfileDetailItem Label="Employee Number"
+                                   Value="@EmployeeNumber" />
+
+                <ProfileDetailItem Label="Job Type"
+                                   Value="@JobTypeName" />
+
+                <ProfileDetailItem Label="Joined Date"
+                                   Value="@JoinedDateText" />
+
+                <ProfileDetailItem Label="Organisation"
+                                   Value="@OrganisationName" />
+
+                <ProfileDetailItem Label="Department / Division"
+                                   Value="@StructureName" />
+
+                <ProfileDetailItem Label="Job ID"
+                                   Value="@JobIdText" />
+
+                @if (!string.IsNullOrWhiteSpace(SupervisorName))
+                {
+                    <ProfileDetailItem Label="Supervisor"
+                                       Value="@SupervisorName" />
+                }
+
+                @if (!string.IsNullOrWhiteSpace(EmploymentStatus))
+                {
+                    <ProfileDetailItem Label="Employment Status"
+                                       Value="@EmploymentStatus" />
+                }
+
+                @if (ConfirmedDate.HasValue)
+                {
+                    <ProfileDetailItem Label="Confirmed Date"
+                                       Value="@ConfirmedDate.Value.ToString("dd MMM yyyy")" />
+                }
+
+            </dl>
+        }
+
+    </div>
+
+</section>
+
+@code {
+    [Parameter]
+    public ActiveJobDto? Job { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public string? Message { get; set; }
+
+        /*
+         * Optional display values may be supplied by the parent when
+         * they are not included in JobDetailDto.
+         */
+
+    [Parameter]
+    public string? PositionNameOverride { get; set; }
+
+    [Parameter]
+    public string? SupervisorName { get; set; }
+
+    [Parameter]
+    public string? EmploymentStatus { get; set; }
+
+    [Parameter]
+    public DateTime? ConfirmedDate { get; set; }
+
+    private string PositionName =>
+        FirstNotEmpty(
+            PositionNameOverride,
+            Job?.PositionName,
+            "No active position");
+
+    private string OrganisationName =>
+        FirstNotEmpty(
+            Job?.OrganisationName,
+            "Not available");
+
+    private string StructureName =>
+        FirstNotEmpty(
+            Job?.OrganisationStructureName,
+            Job?.DepartmentName,
+            "Not assigned");
+
+    private string JobTypeName =>
+        FirstNotEmpty(
+            Job?.JobTypeName,
+            "Not specified");
+
+    private string EmployeeNumber =>
+        FirstNotEmpty(
+            Job?.EmployeeNumber,
+            "Not assigned");
+
+    private string JobIdText =>
+        Job is null || Job.JobId <= 0
+            ? "-"
+            : Job.JobId.ToString();
+
+    private DateTime? JoinedDate =>
+        Job?.JoinedDate;
+
+    private string JoinedDateText =>
+        JoinedDate.HasValue
+            ? JoinedDate.Value.ToString("dd MMM yyyy")
+            : "Not available";
+
+    private bool IsActive =>
+        Job is not null &&
+        !Job.TerminatedDate.HasValue;
+
+    private string StatusText =>
+        IsActive
+            ? "Active"
+            : "Inactive";
+
+    private string StatusBadgeClass =>
+        IsActive
+            ? "inline-flex w-fit items-center gap-2 rounded-full " +
+              "bg-emerald-100 px-3 py-1.5 text-xs font-medium text-emerald-700"
+            : "inline-flex w-fit items-center gap-2 rounded-full " +
+              "bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600";
+
+    private string StatusDotClass =>
+        IsActive
+            ? "h-1.5 w-1.5 rounded-full bg-emerald-500"
+            : "h-1.5 w-1.5 rounded-full bg-slate-400";
+
+    private string ServiceDurationText =>
+        JoinedDate.HasValue
+            ? CalculateServiceDuration(
+                JoinedDate.Value,
+                Job?.TerminatedDate ?? DateTime.Today)
+            : "Not available";
+
+    private static string CalculateServiceDuration(
+        DateTime joinedDate,
+        DateTime effectiveDate)
+    {
+        var start = joinedDate.Date;
+        var end = effectiveDate.Date;
+
+        if (start > end)
+        {
+            return "Not available";
+        }
+
+        var years =
+            end.Year - start.Year;
+
+        var months =
+            end.Month - start.Month;
+
+        if (end.Day < start.Day)
+        {
+            months--;
+        }
+
+        if (months < 0)
+        {
+            years--;
+            months += 12;
+        }
+
+        if (years <= 0 &&
+            months <= 0)
+        {
+            return "Less than one month";
+        }
+
+        var parts =
+            new List<string>();
+
+        if (years > 0)
+        {
+            parts.Add(
+                years == 1
+                    ? "1 year"
+                    : $"{years} years");
+        }
+
+        if (months > 0)
+        {
+            parts.Add(
+                months == 1
+                    ? "1 month"
+                    : $"{months} months");
+        }
+
+        return string.Join(
+            " ",
+            parts);
+    }
+
+    private static string FirstNotEmpty(
+        params string?[] values)
+    {
+        return values.FirstOrDefault(
+                   value =>
+                       !string.IsNullOrWhiteSpace(value))
+               ?? string.Empty;
+    }
+}

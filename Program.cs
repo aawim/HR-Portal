@@ -24,6 +24,8 @@ using HRM.WorkPlanning.Services.Schedules;
 using HRM.WorkPlanning.Abstractions.Schedules;
 using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment;
 using HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService;
+using HRM.Services.Interfaces.Profile;
+ 
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -56,6 +58,9 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+
+builder.Services.AddScoped<IProfileService, ProfileService>();
+
 builder.Services.AddScoped<IJobWorkTemplateAssignmentService,JobWorkTemplateAssignmentService>();
 
 builder.Services.AddScoped<IStaffScheduleService, StaffScheduleService>();

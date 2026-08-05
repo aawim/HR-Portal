@@ -1,0 +1,87 @@
+﻿@using HRM.Enum
+
+<ProfileSectionCard
+Title="Employment"
+Description="Employment and organisational assignment"
+Icon="work">
+
+    <ChildContent>
+
+        <div class="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
+
+            <div class="flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-slate-500 shadow-sm ring-1 ring-slate-200">
+                <span class="material-symbols-rounded text-[28px]">
+                    @GetIcon()
+                </span>
+            </div>
+
+            <h3 class="mt-4 font-semibold text-slate-900">
+                @GetTitle()
+            </h3>
+
+            <p class="mt-1 max-w-md text-sm leading-6 text-slate-500">
+                @GetDescription()
+            </p>
+
+            @if (ProfileType == ProfileType.Individual)
+            {
+                <button type="button"
+                class="mt-5 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-700"
+                @onclick="OnCreateJob">
+                    <span class="material-symbols-rounded text-[19px]">
+                        add
+                    </span>
+                    Create employment
+                </button>
+            }
+
+        </div>
+
+    </ChildContent>
+
+</ProfileSectionCard>
+
+@code {
+    [Parameter]
+    public ProfileType ProfileType { get; set; }
+
+    [Parameter]
+    public EventCallback OnCreateJob { get; set; }
+
+    [Parameter]
+    public string? Title  { get; set; }
+
+    [Parameter]
+    public string? Description  { get; set; }
+
+    [Parameter]
+    public string? Icon   { get; set; }
+
+
+ 
+
+
+
+
+
+    private string GetIcon()
+    {
+        return ProfileType == ProfileType.FormerStaff
+            ? "work_history"
+            : "person";
+    }
+
+    private string GetTitle()
+    {
+        return ProfileType == ProfileType.FormerStaff
+            ? "No active employment"
+            : "Individual profile";
+    }
+
+    private string GetDescription()
+    {
+        return ProfileType == ProfileType.FormerStaff
+            ? "This individual has previous employment history but does not currently have an active job."
+            : "This individual does not currently have an employment record. Personal information can still be managed from this profile.";
+    }
+}

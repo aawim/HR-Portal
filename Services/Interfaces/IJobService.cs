@@ -7,7 +7,7 @@ namespace HRM.Services.Interfaces
     public interface IJobService
     {
 
-        Task<ActiveJobDto?> GetActiveJobAsync(int individualId);
+        Task<ActiveJobDto?> GetActiveJobAsync(int individualId, CancellationToken cancellationToken = default);
 
         Task<ActiveJobDto?> GetMyActiveJobAsync();
 

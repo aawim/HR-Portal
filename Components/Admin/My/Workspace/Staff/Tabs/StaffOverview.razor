@@ -1,9 +1,373 @@
-﻿<h3>StaffOverview</h3>
-@StaffId
+﻿@page "/admin/my/workspace/profile/{IndividualId:int}"
+
+@using HRM.DTOs.Profile
+@using HRM.Enum
+@using HRM.Components.Profile
+@using HRM.Components.Profile.Personal
+@using HRM.Components.Profile.Employment
+@using Services.Interfaces.Profile
+
+@inject NavigationManager NavigationManager
+@inject IProfileService ProfileService
+
+<PageTitle>@(_profile?.FullName ?? "Profile")</PageTitle>
+
+<div class="min-h-screen w-full bg-slate-100">
+
+    @if (_loading)
+    {
+        <main class="w-full px-3 py-5 sm:px-5 lg:px-6 xl:px-8">
+            <ProfileOverviewSkeleton />
+        </main>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <main class="w-full px-3 py-8 sm:px-5 lg:px-6 xl:px-8">
+
+            <div class="mx-auto max-w-3xl rounded-2xl border
+                        border-red-200 bg-red-50 p-6 shadow-sm">
+
+                <div class="flex items-start gap-3">
+
+                    <span class="material-symbols-rounded mt-0.5 text-red-600">
+                        error
+                    </span>
+
+                    <div class="min-w-0 flex-1">
+
+                        <h2 class="font-semibold text-red-900">
+                            Unable to load profile
+                        </h2>
+
+                        <p class="mt-1 text-sm text-red-700">
+                            @_errorMessage
+                        </p>
+
+                        <div class="mt-4 flex flex-wrap gap-3">
+
+                            <button type="button"
+                                    class="inline-flex items-center gap-2
+                                           rounded-xl bg-red-700 px-4 py-2
+                                           text-sm font-medium text-white
+                                           transition hover:bg-red-800"
+                                    @onclick="LoadProfileAsync">
+
+                                <span class="material-symbols-rounded text-[18px]">
+                                    refresh
+                                </span>
+
+                                Try again
+                            </button>
+
+                            <button type="button"
+                                    class="inline-flex items-center gap-2
+                                           rounded-xl border border-red-300
+                                           bg-white px-4 py-2 text-sm
+                                           font-medium text-red-700 transition
+                                           hover:bg-red-100"
+                                    @onclick="GoBack">
+
+                                <span class="material-symbols-rounded text-[18px]">
+                                    arrow_back
+                                </span>
+
+                                Back
+                            </button>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </main>
+    }
+    else if (_profile is null)
+    {
+        <main class="w-full px-3 py-8 sm:px-5 lg:px-6 xl:px-8">
+
+            <ProfileEmptyState Icon="person_off"
+                               Title="Profile not found"
+                               Description="The requested individual could not be found." />
+
+        </main>
+    }
+    else
+    {
+        <ProfileHeader Profile="@_profile"
+                       ShowBackButton="true"
+                       ShowPrintButton="true"
+                       ShowEditButton="true"
+                       ShowActionsButton="true"
+                       OnBack="@GoBack"
+                       OnPrint="@PrintProfile"
+                       OnEdit="@EditProfile"
+                       OnActions="@OpenProfileActions" />
+
+        <main class="w-full px-3 py-5 sm:px-5 lg:px-6 xl:px-8">
+
+            <div class="w-full space-y-6">
+
+                <ProfileQuickStats Profile="@_profile" />
+
+                <div class="grid w-full grid-cols-1 gap-6
+                            2xl:grid-cols-12">
+
+                    <!-- Main profile content -->
+                    <section class="min-w-0 space-y-6
+                                    2xl:col-span-8">
+
+                        <ProfilePersonalDetails Profile="@_profile"
+                                                OnEdit="@EditPersonalDetails" />
+
+                        @if (_profile.HasActiveJob)
+                        {
+                            <ProfileActiveJob Job="@_profile.ActiveJob"
+                                              IsLoading="false"
+                                              Message="@_activeJobMessage" />
+
+                            <ProfilePositions Positions="@_profile.ActivePositions"
+                                              OnAdd="@AddPosition"
+                                              OnView="@ViewPositionAsync" />
+
+                            <ProfileLeaveTypes
+                                                LeaveTypes="@_profile.LeaveTypes"
+                                                IsLoading="false"
+                                                IsDisabled="false"
+                                                ShowAdjustButton="true"
+                                                OnViewHistory="@ViewLeaveHistoryAsync"
+                                                OnAdjust="@AdjustLeaveBalanceAsync" />
+
+
+                        }
+                        else
+                        {
+                            <ProfileEmploymentState ProfileType="@_profile.ProfileType"
+                                                    OnCreateJob="@CreateJob" />
+                        }
+
+                        @if (_profile.HasEmploymentHistory)
+                        {
+                            <ProfileJobHistory Jobs="@_profile.JobHistory"
+                                               OnView="@ViewJobAsync" />
+                        }
+
+                        <ProfileEducation EducationRecords="@_profile.Education"
+                                          OnAdd="@AddEducation"
+                                          OnEdit="@EditEducationAsync" />
+
+                    </section>
+
+                    <!-- Supporting profile information -->
+                    <aside class="min-w-0 space-y-6
+                                  2xl:col-span-4">
+
+                        <ProfileContacts Contacts="@_profile.Contacts"
+                                         IsLoading="false"
+                                         IsDisabled="false"
+                                         ShowEditButton="true"
+                                         OnEdit="@EditContactAsync" />
+
+             
+
+
+
+                        <ProfileAddresses Addresses="@_profile.Addresses"
+                                          IsLoading="false"
+                                          IsDisabled="false"
+                                          ShowAddButton="true"
+                                          OnAdd="@AddAddress"
+                                          OnEdit="@EditAddressAsync" />
+
+                        <ProfileDocuments Documents="@_profile.Documents"
+                                          OnUpload="@UploadDocument"
+                                          OnView="@ViewDocumentAsync" />
+
+                    </aside>
+
+                </div>
+
+            </div>
+
+        </main>
+    }
+
+</div>
 
 @code {
     [Parameter]
-    public int StaffId { get; set; }
+    public int IndividualId { get; set; }
+
     [Parameter]
-    public int JobId { get; set; }
+    public int StaffId { get; set; }
+
+    private ProfileOverviewDto? _profile;
+
+    private bool _loading = true;
+
+    private string? _errorMessage;
+
+    private string? _activeJobMessage;
+
+    private int _loadedStaffId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId <= 0)
+        {
+            _profile = null;
+            _loading = false;
+            _errorMessage =
+                "A valid individual ID is required.";
+
+            return;
+        }
+
+        if (_loadedStaffId == StaffId &&
+            _profile is not null)
+        {
+            return;
+        }
+
+        _loadedStaffId =
+            StaffId;
+
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            _loading = true;
+            _errorMessage = null;
+            _activeJobMessage = null;
+            _profile = null;
+
+            _profile =
+                await ProfileService.GetProfileAsync(StaffId);
+
+            if (_profile?.ActiveJob is null)
+            {
+                _activeJobMessage =
+                    "This individual does not have an active approved job.";
+            }
+        }
+        catch (Exception exception)
+        {
+            _profile = null;
+
+            _errorMessage =
+                "An unexpected error occurred while loading the profile.";
+
+            Console.Error.WriteLine(exception);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void GoBack()
+    {
+        NavigationManager.NavigateTo(
+            "/admin/my/workspace");
+    }
+
+    private void PrintProfile()
+    {
+    }
+
+    private void EditProfile()
+    {
+    }
+
+    private void OpenProfileActions()
+    {
+    }
+
+    private void EditPersonalDetails()
+    {
+    }
+
+    private Task CreateJob()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task AddPosition()
+    {
+        return Task.CompletedTask;
+    }
+
+ 
+
+    private Task ViewJobAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+
+
+    private Task EditContactAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task AddAddress()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task EditAddressAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task AddEducation()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task EditEducationAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task UploadDocument()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task ViewDocumentAsync()
+    {
+        return Task.CompletedTask;
+    }
+
+    private Task ViewPositionAsync(ProfilePositionDto position)
+    {
+        // Example:
+        // selectedPosition = position;
+        // activePanel = ProfilePanel.PositionDetails;
+
+        return Task.CompletedTask;
+    }
+    private Task ViewLeaveHistoryAsync(ProfileLeaveTypeDto leaveType)
+    {
+        // selectedLeaveType = leaveType;
+        // Open leave-history drawer.
+
+        return Task.CompletedTask;
+    }
+
+    private Task AdjustLeaveBalanceAsync(ProfileLeaveTypeDto leaveType)
+    {
+        // selectedLeaveType = leaveType;
+        // Open leave-balance adjustment drawer.
+
+        return Task.CompletedTask;
+    }
+  
 }
