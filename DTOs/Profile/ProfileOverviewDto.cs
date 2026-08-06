@@ -1,4 +1,6 @@
-﻿using HRM.DTOs.UserContext;
+﻿using HRM.DTOs.JobPosition;
+using HRM.DTOs.Leave;
+using HRM.DTOs.UserContext;
 using HRM.Enum;
 
 namespace HRM.DTOs.Profile
@@ -34,11 +36,13 @@ namespace HRM.DTOs.Profile
         public List<ProfileAddressDto> Addresses { get; set; } =
             [];
 
-        public List<ProfileLeaveTypeDto> LeaveTypes { get; set; } =
+        public List<JobLeaveTypeDto> LeaveTypes { get; set; } =
             [];
 
-        public List<ProfileJobHistoryDto> JobHistory { get; set; } =
+        public List<JobPositionHistoryDto> JobHistory { get; set; } =
             [];
+
+        public List<JobPositionHistoryDto> PositionHistory { get; set; } = [];
 
         public List<ProfileEducationDto> Education { get; set; } =
             [];
@@ -50,7 +54,7 @@ namespace HRM.DTOs.Profile
             ActiveJob?.IsActive == true;
 
         public bool HasEmploymentHistory =>
-            JobHistory.Count > 0 ||
+            PositionHistory.Count > 0 ||
             HasActiveJob;
 
         //public int IndividualId { get; set; }

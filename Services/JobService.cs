@@ -96,8 +96,6 @@ namespace HRM.Services
                  .OrderByDescending(x => x.JoinedDate)
                  .ThenByDescending(x => x.JobId)
 
-
-
                  .Select(x => new ActiveJobDto
                 {
                     JobId = x.JobId,

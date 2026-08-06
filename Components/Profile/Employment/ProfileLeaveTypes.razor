@@ -1,15 +1,21 @@
-﻿@using HRM.DTOs.Profile
+﻿@using HRM.DTOs.Leave
+@using HRM.Services.Interfaces.JobLeaveTypes
+@using Services.Interfaces
+
+@inject IJobService JobService
+@inject IJobLeaveTypeService JobLeaveTypeService
 
 <section class="w-full overflow-hidden rounded-2xl border
                 border-slate-200 bg-white shadow-sm">
 
+    <!-- Header -->
     <div class="flex flex-col gap-3 border-b border-slate-200
-                px-5 py-4 sm:flex-row sm:items-center
-                sm:justify-between">
+                px-4 py-4 sm:flex-row sm:items-center
+                sm:justify-between sm:px-5">
 
         <div class="flex min-w-0 items-center gap-3">
 
-            <div class="flex h-11 w-11 shrink-0 items-center
+         @*    <div class="flex h-11 w-11 shrink-0 items-center
                         justify-center rounded-xl bg-emerald-50
                         text-emerald-600">
 
@@ -17,7 +23,7 @@
                     event_available
                 </span>
 
-            </div>
+            </div> *@
 
             <div class="min-w-0">
 
@@ -33,14 +39,15 @@
 
         </div>
 
-        @if (!IsLoading && ActiveLeaveTypes.Count > 0)
+        @if (!EffectiveLoading &&
+        string.IsNullOrWhiteSpace(_loadError) &&
+        ActiveLeaveTypes.Count > 0)
         {
             <span class="inline-flex w-fit items-center gap-2
                          rounded-full bg-emerald-50 px-3 py-1.5
                          text-xs font-semibold text-emerald-700">
 
-                <span class="h-1.5 w-1.5 rounded-full
-                             bg-emerald-500">
+                <span class="h-1.5 w-1.5 rounded-full bg-emerald-500">
                 </span>
 
                 @ActiveLeaveTypes.Count active
@@ -50,12 +57,12 @@
 
     </div>
 
+    <!-- Content -->
     <div class="p-4 sm:p-5">
 
-        @if (IsLoading)
+        @if (EffectiveLoading)
         {
-            <div class="grid grid-cols-1 gap-4
-                        md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 
                 @for (var index = 0; index < 4; index++)
                 {
@@ -64,18 +71,30 @@
 
                         <div class="flex items-start gap-3">
 
-                            <div class="h-10 w-10 rounded-lg
+                            <div class="h-10 w-10 shrink-0 rounded-lg
                                         bg-slate-200">
                             </div>
 
-                            <div class="flex-1">
+                            <div class="min-w-0 flex-1">
 
-                                <div class="h-4 w-36 rounded
-                                            bg-slate-200">
+                                <div class="h-4 w-36 rounded bg-slate-200">
                                 </div>
 
                                 <div class="mt-3 h-3 w-24 rounded
                                             bg-slate-100">
+                                </div>
+
+                                <div class="mt-4 grid grid-cols-3 gap-2">
+
+                                    <div class="h-14 rounded-lg bg-slate-100">
+                                    </div>
+
+                                    <div class="h-14 rounded-lg bg-slate-100">
+                                    </div>
+
+                                    <div class="h-14 rounded-lg bg-slate-100">
+                                    </div>
+
                                 </div>
 
                                 <div class="mt-4 h-2 w-full rounded-full
@@ -88,6 +107,61 @@
 
                     </div>
                 }
+
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_loadError))
+        {
+            <div class="rounded-xl border border-amber-200
+                        bg-amber-50 p-5">
+
+                <div class="flex items-start gap-3">
+
+                    <div class="flex h-10 w-10 shrink-0 items-center
+                                justify-center rounded-lg bg-amber-100
+                                text-amber-700">
+
+                        <span class="material-symbols-rounded">
+                            warning
+                        </span>
+
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+
+                        <p class="text-sm font-semibold text-amber-900">
+                            Leave entitlements unavailable
+                        </p>
+
+                        <p class="mt-1 text-xs leading-5 text-amber-700">
+                            @_loadError
+                        </p>
+
+                        @if (StaffId > 0)
+                        {
+                            <button type="button"
+                                    disabled="@_isLoadingLeaveTypes"
+                                    @onclick="LoadLeaveTypesAsync"
+                                    class="mt-3 inline-flex items-center gap-2
+                                           rounded-lg bg-amber-700 px-3 py-2
+                                           text-xs font-semibold text-white
+                                           transition hover:bg-amber-800
+                                           disabled:cursor-not-allowed
+                                           disabled:opacity-60">
+
+                                <span class="material-symbols-rounded
+                                             text-[17px]">
+                                    refresh
+                                </span>
+
+                                Try again
+
+                            </button>
+                        }
+
+                    </div>
+
+                </div>
 
             </div>
         }
@@ -121,8 +195,7 @@
         }
         else
         {
-            <div class="grid grid-cols-1 gap-4
-                        md:grid-cols-2">
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
 
                 @foreach (var leaveType in OrderedLeaveTypes)
                 {
@@ -134,17 +207,29 @@
 
                         <div class="flex items-start gap-3">
 
-                            <div class="@GetIconContainerClass(leaveType)">
+                          @*   @{
+                                var leaveIcon =
+                                GetLeaveIcon(leaveType);
 
-                                <span class="material-symbols-rounded
-                                             text-[20px]">
-                                    @GetLeaveIcon(leaveType)
-                                </span>
+                                var leaveIconClass =
+                                GetIconContainerClass(leaveType);
+                            }
 
-                            </div>
+                            @if (!string.IsNullOrWhiteSpace(leaveIcon) &&
+                           !string.IsNullOrWhiteSpace(leaveIconClass))
+                            {
+                                <div class="@leaveIconClass">
+
+                                    <span class="material-symbols-rounded text-[20px]">
+                                        @leaveIcon
+                                    </span>
+
+                                </div>
+                            } *@
 
                             <div class="min-w-0 flex-1">
 
+                                <!-- Leave type heading -->
                                 <div class="flex flex-wrap items-start
                                             justify-between gap-2">
 
@@ -157,51 +242,49 @@
                                         </h3>
 
                                         @if (!string.IsNullOrWhiteSpace(
-                                            leaveType.LeaveTypeCode))
+                                       GetLeaveTypeCode(leaveType)))
                                         {
                                             <p class="mt-0.5 text-xs
                                                       text-slate-500">
-                                                @leaveType.LeaveTypeCode
+                                                @GetLeaveTypeCode(leaveType)
                                             </p>
                                         }
 
                                     </div>
 
                                     <span class="@GetStatusBadgeClass(leaveType)">
-                                        @(leaveType.IsActive
+                                        @(IsActive(leaveType)
                                             ? "Active"
                                             : "Inactive")
                                     </span>
 
                                 </div>
 
+                                <!-- Balance values -->
                                 <div class="mt-4 grid grid-cols-3 gap-2">
 
-                                    <LeaveBalanceValue
-                                        Label="Allocated"
-                                        Value="@FormatDays(
-                                            leaveType.AllocatedDays)" />
+                                    <LeaveBalanceValue Label="Allocated"
+                                                       Value="@FormatDays(
+                                            GetAllocatedDays(leaveType))" />
 
-                                    <LeaveBalanceValue
-                                        Label="Used"
-                                        Value="@FormatDays(
-                                            leaveType.UsedDays)" />
+                                    <LeaveBalanceValue Label="Used"
+                                                       Value="@FormatDays(
+                                            GetUsedDays(leaveType))" />
 
-                                    <LeaveBalanceValue
-                                        Label="Remaining"
-                                        Value="@FormatDays(
-                                            leaveType.RemainingDays)"
-                                        Emphasize="true" />
+                                    <LeaveBalanceValue Label="Remaining"
+                                                       Value="@FormatDays(
+                                            GetRemainingDays(leaveType))"
+                                                       Emphasize="true" />
 
                                 </div>
 
+                                <!-- Remaining balance progress -->
                                 <div class="mt-4">
 
                                     <div class="mb-1.5 flex items-center
                                                 justify-between gap-3">
 
-                                        <span class="text-xs
-                                                     text-slate-500">
+                                        <span class="text-xs text-slate-500">
                                             Balance remaining
                                         </span>
 
@@ -223,39 +306,39 @@
 
                                 </div>
 
-                                @if (!string.IsNullOrWhiteSpace(
-                                    leaveType.EffectivePeriodText))
+                                <!-- Effective dates -->
+                                <div class="mt-4 inline-flex items-center
+                                            gap-1.5 text-xs text-slate-500">
+
+                                    <span class="material-symbols-rounded
+                                                 text-[16px]">
+                                        calendar_month
+                                    </span>
+
+                                    @GetEffectivePeriod(leaveType)
+
+                                </div>
+
+                                <!-- Optional metadata -->
+                                @if (GetRenewedDate(leaveType).HasValue)
                                 {
-                                    <div class="mt-4 inline-flex
-                                                items-center gap-1.5
-                                                text-xs text-slate-500">
+                                    <div class="mt-2 inline-flex items-center
+                                                gap-1.5 text-xs
+                                                text-slate-500">
 
                                         <span class="material-symbols-rounded
                                                      text-[16px]">
-                                            calendar_month
+                                            autorenew
                                         </span>
 
-                                        @leaveType.EffectivePeriodText
-
-                                    </div>
-                                }
-                                else if (leaveType.EffectiveFrom.HasValue ||
-                                         leaveType.EffectiveTo.HasValue)
-                                {
-                                    <div class="mt-4 inline-flex
-                                                items-center gap-1.5
-                                                text-xs text-slate-500">
-
-                                        <span class="material-symbols-rounded
-                                                     text-[16px]">
-                                            calendar_month
-                                        </span>
-
-                                        @GetEffectivePeriod(leaveType)
+                                        Renewed
+                                        @GetRenewedDate(leaveType)!.Value
+                                        .ToString("dd MMM yyyy")
 
                                     </div>
                                 }
 
+                                <!-- Actions -->
                                 <div class="mt-4 flex flex-col gap-2
                                             border-t border-slate-200
                                             pt-4 sm:flex-row">
@@ -329,9 +412,11 @@
 </section>
 
 @code {
+        /*
+         * StaffId is the individual's BusinessEntityId.
+         */
     [Parameter]
-    public IReadOnlyList<ProfileLeaveTypeDto> LeaveTypes { get; set; } =
-        Array.Empty<ProfileLeaveTypeDto>();
+    public int StaffId { get; set; }
 
     [Parameter]
     public bool IsLoading { get; set; }
@@ -343,36 +428,147 @@
     public bool ShowAdjustButton { get; set; } = true;
 
     [Parameter]
-    public EventCallback<ProfileLeaveTypeDto>
-        OnViewHistory { get; set; }
+    public EventCallback<JobLeaveTypeDto>
+        OnViewHistory
+    { get; set; }
 
     [Parameter]
-    public EventCallback<ProfileLeaveTypeDto>
-        OnAdjust { get; set; }
+    public EventCallback<JobLeaveTypeDto>
+        OnAdjust
+    { get; set; }
 
-    private List<ProfileLeaveTypeDto> ValidLeaveTypes =>
-        LeaveTypes
+    private List<JobLeaveTypeDto> _jobLeaveTypes = [];
+
+    private bool _isLoadingLeaveTypes;
+
+    private string? _loadError;
+
+    private int _loadedStaffId;
+
+    private int _activeJobId;
+
+    private bool EffectiveLoading =>
+        IsLoading || _isLoadingLeaveTypes;
+
+    private List<JobLeaveTypeDto> ValidLeaveTypes =>
+        _jobLeaveTypes
             .Where(leaveType =>
-                leaveType.IsValid)
+                IsValid(leaveType))
             .ToList();
 
-    private List<ProfileLeaveTypeDto> ActiveLeaveTypes =>
+    private List<JobLeaveTypeDto> ActiveLeaveTypes =>
         ValidLeaveTypes
-            .Where(leaveType =>
-                leaveType.IsActive)
+            .Where(IsActive)
             .ToList();
 
-    private IEnumerable<ProfileLeaveTypeDto> OrderedLeaveTypes =>
+    private IEnumerable<JobLeaveTypeDto> OrderedLeaveTypes =>
         ValidLeaveTypes
-            .OrderByDescending(leaveType =>
-                leaveType.IsActive)
+            .OrderByDescending(IsActive)
             .ThenBy(leaveType =>
-                leaveType.LeaveTypeName)
+                GetLeaveTypeName(leaveType))
             .ThenBy(leaveType =>
                 leaveType.JobLeaveTypeId);
 
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId <= 0)
+        {
+            _loadedStaffId = 0;
+            _activeJobId = 0;
+            _jobLeaveTypes = [];
+
+            _loadError =
+                "A valid staff ID is required.";
+
+            return;
+        }
+
+        /*
+        * Do not reload the data when Blazor renders the component
+        * again with the same staff member.
+             */
+        if (_loadedStaffId == StaffId)
+        {
+            return;
+        }
+
+        _loadedStaffId =
+            StaffId;
+
+        await LoadLeaveTypesAsync();
+    }
+
+    private async Task LoadLeaveTypesAsync()
+    {
+        try
+        {
+            _isLoadingLeaveTypes = true;
+            _loadError = null;
+            _jobLeaveTypes = [];
+            _activeJobId = 0;
+
+            /*
+            * Resolve the approved, non-terminated active job from
+            * the supplied staff/individual ID.
+                 */
+                            var activeJob =
+                                await JobService.GetActiveJobAsync(
+                                    StaffId);
+
+            if (activeJob is null)
+            {
+                _loadError =
+                    "This staff member does not have an active job.";
+
+                return;
+            }
+
+            if (!activeJob.IsActive ||
+                activeJob.JobId <= 0)
+            {
+                _loadError =
+                    "This staff member does not have an active approved job.";
+
+                return;
+            }
+
+            _activeJobId =
+                activeJob.JobId;
+
+            /*
+            * JobLeaveTypeService expects the JobId,
+                 * not StaffId.
+                 */
+            var result =
+                await JobLeaveTypeService
+                    .GetJobLeaveTypeByJobId(
+                        StaffId);
+
+            _jobLeaveTypes =
+                result?.ToList() ?? [];
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            _jobLeaveTypes = [];
+
+            _loadError =
+                "An unexpected error occurred while loading " +
+                "the staff member's leave entitlements.";
+
+            Console.Error.WriteLine(exception);
+        }
+        finally
+        {
+            _isLoadingLeaveTypes = false;
+        }
+    }
+
     private async Task HandleHistoryAsync(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
         if (IsDisabled)
         {
@@ -387,7 +583,7 @@
     }
 
     private async Task HandleAdjustAsync(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
         if (IsDisabled)
         {
@@ -401,8 +597,44 @@
         }
     }
 
+    private static bool IsValid(
+        JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Replace this with:
+        *
+        * return leaveType.IsValid;
+        *
+        * when JobLeaveTypeDto contains an IsValid property.
+             */
+        return true;
+    }
+
+    private static bool IsActive(
+        JobLeaveTypeDto leaveType)
+    {
+        var today =
+            DateTime.Today;
+
+        var effectiveFrom =
+            GetEffectiveFromDate(leaveType);
+
+        var effectiveTo =
+            GetEffectiveToDate(leaveType);
+
+        return IsValid(leaveType) &&
+               (
+                   !effectiveFrom.HasValue ||
+                   effectiveFrom.Value.Date <= today
+               ) &&
+               (
+                   !effectiveTo.HasValue ||
+                   effectiveTo.Value.Date >= today
+               );
+    }
+
     private static string GetLeaveTypeName(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
         return string.IsNullOrWhiteSpace(
             leaveType.LeaveTypeName)
@@ -410,11 +642,24 @@
             : leaveType.LeaveTypeName;
     }
 
-    private static string GetLeaveIcon(
-        ProfileLeaveTypeDto leaveType)
+    private static string? GetLeaveTypeCode(
+        JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Replace this return value with:
+        *
+        * return leaveType.LeaveTypeCode;
+        *
+        * when your JobLeaveTypeDto contains the code property.
+             */
+        return null;
+    }
+
+    private static string? GetLeaveIcon(
+     JobLeaveTypeDto leaveType)
     {
         var name =
-            leaveType.LeaveTypeName
+            GetLeaveTypeName(leaveType)
                 .Trim()
                 .ToUpperInvariant();
 
@@ -428,8 +673,13 @@
             return "beach_access";
         }
 
-        if (name.Contains("MATERNITY") ||
-            name.Contains("PATERNITY") ||
+        if (name.Contains("MATERNITY"))
+        {
+            return "pregnant_woman";
+        }
+
+        if (name.Contains("PATERNITY") ||
+            name.Contains("PARENTAL") ||
             name.Contains("PARENT"))
         {
             return "family_restroom";
@@ -440,7 +690,8 @@
             return "emergency";
         }
 
-        if (name.Contains("STUDY"))
+        if (name.Contains("STUDY") ||
+            name.Contains("EDUCATION"))
         {
             return "school";
         }
@@ -450,22 +701,44 @@
             return "money_off";
         }
 
-        return "event_available";
+        if (name.Contains("FAMILY"))
+        {
+            return "diversity_1";
+        }
+
+        if (name.Contains("COMPASSIONATE") ||
+            name.Contains("BEREAVEMENT"))
+        {
+            return "volunteer_activism";
+        }
+
+        if (name.Contains("MEDICAL"))
+        {
+            return "health_and_safety";
+        }
+
+        if (name.Contains("SPECIAL"))
+        {
+            return "event_note";
+        }
+
+        return null;
     }
 
-    private static string GetIconContainerClass(
-        ProfileLeaveTypeDto leaveType)
+    private static string? GetIconContainerClass(
+    JobLeaveTypeDto leaveType)
     {
         const string baseClass =
             "flex h-10 w-10 shrink-0 items-center " +
             "justify-center rounded-lg ";
 
         var name =
-            leaveType.LeaveTypeName
+            GetLeaveTypeName(leaveType)
                 .Trim()
                 .ToUpperInvariant();
 
-        if (name.Contains("SICK"))
+        if (name.Contains("SICK") ||
+            name.Contains("MEDICAL"))
         {
             return baseClass +
                    "bg-red-50 text-red-600";
@@ -479,6 +752,7 @@
 
         if (name.Contains("MATERNITY") ||
             name.Contains("PATERNITY") ||
+            name.Contains("PARENTAL") ||
             name.Contains("PARENT"))
         {
             return baseClass +
@@ -491,30 +765,120 @@
                    "bg-orange-50 text-orange-600";
         }
 
-        if (name.Contains("STUDY"))
+        if (name.Contains("STUDY") ||
+            name.Contains("EDUCATION"))
         {
             return baseClass +
                    "bg-indigo-50 text-indigo-600";
         }
 
-        return baseClass +
-               "bg-emerald-50 text-emerald-600";
+        if (name.Contains("UNPAID"))
+        {
+            return baseClass +
+                   "bg-slate-100 text-slate-600";
+        }
+
+        if (name.Contains("FAMILY"))
+        {
+            return baseClass +
+                   "bg-pink-50 text-pink-600";
+        }
+
+        if (name.Contains("COMPASSIONATE") ||
+            name.Contains("BEREAVEMENT"))
+        {
+            return baseClass +
+                   "bg-rose-50 text-rose-600";
+        }
+
+        if (name.Contains("SPECIAL"))
+        {
+            return baseClass +
+                   "bg-cyan-50 text-cyan-700";
+        }
+
+        return null;
     }
 
+
+
+
+
     private static string GetStatusBadgeClass(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
-        return leaveType.IsActive
+        return IsActive(leaveType)
             ? "inline-flex shrink-0 rounded-full " +
               "bg-emerald-100 px-2 py-0.5 text-[10px] " +
-              "font-semibold uppercase tracking-wide text-emerald-700"
+              "font-semibold uppercase tracking-wide " +
+              "text-emerald-700"
             : "inline-flex shrink-0 rounded-full " +
               "bg-slate-100 px-2 py-0.5 text-[10px] " +
-              "font-semibold uppercase tracking-wide text-slate-600";
+              "font-semibold uppercase tracking-wide " +
+              "text-slate-600";
+    }
+
+    private static int GetAllocatedDays(JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Change this to your actual allocation property.
+             *
+        * Examples:
+             * return leaveType.TotalDays;
+        * return leaveType.AllocatedDays;
+        * return leaveType.MaximumDays;
+        */
+        return leaveType.RemainingDays;
+    }
+
+    private static decimal GetRemainingDays(JobLeaveTypeDto leaveType)
+    {
+        return leaveType.RemainingDays;
+    }
+
+    private static decimal GetUsedDays(
+        JobLeaveTypeDto leaveType)
+    {
+        var allocated =
+            GetAllocatedDays(leaveType);
+
+        var remaining =
+            GetRemainingDays(leaveType);
+
+        return Math.Max(
+            0m,
+            allocated - remaining);
+    }
+
+    private static int GetRemainingPercentage(
+        JobLeaveTypeDto leaveType)
+    {
+        var allocated =
+            GetAllocatedDays(leaveType);
+
+        var remaining =
+            GetRemainingDays(leaveType);
+
+        if (allocated <= 0)
+        {
+            return remaining > 0
+                ? 100
+                : 0;
+        }
+
+        var percentage =
+            remaining /
+            allocated *
+            100m;
+
+        return (int)Math.Clamp(
+            Math.Round(percentage),
+            0m,
+            100m);
     }
 
     private static string GetProgressClass(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
         var percentage =
             GetRemainingPercentage(leaveType);
@@ -528,71 +892,91 @@
             };
 
         return
-            $"h-full rounded-full transition-all duration-300 {tone}";
+            $"h-full rounded-full transition-all " +
+            $"duration-300 {tone}";
     }
 
     private static string GetProgressStyle(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
-        var percentage =
-            GetRemainingPercentage(leaveType);
-
-        return $"width: {percentage}%";
-    }
-
-    private static int GetRemainingPercentage(
-        ProfileLeaveTypeDto leaveType)
-    {
-        if (leaveType.AllocatedDays <= 0)
-        {
-            return leaveType.RemainingDays > 0
-                ? 100
-                : 0;
-        }
-
-        var percentage =
-            leaveType.RemainingDays /
-            leaveType.AllocatedDays *
-            100m;
-
-        return (int)Math.Clamp(
-            Math.Round(percentage),
-            0m,
-            100m);
+        return
+            $"width: {GetRemainingPercentage(leaveType)}%;";
     }
 
     private static string FormatDays(
         decimal value)
     {
-        if (value == decimal.Truncate(value))
-        {
-            return $"{value:0}";
-        }
+        return value == decimal.Truncate(value)
+            ? $"{value:0}"
+            : $"{value:0.##}";
+    }
 
-        return $"{value:0.##}";
+    private static DateTime? GetEffectiveFromDate(
+        JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Replace this with your actual DTO property:
+        *
+        * return leaveType.EffectiveFromDate;
+        * or
+        * return leaveType.FromDate;
+        */
+        return null;
+    }
+
+    private static DateTime? GetEffectiveToDate(
+        JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Replace this with your actual DTO property:
+        *
+        * return leaveType.EffectiveToDate;
+        * or
+        * return leaveType.ToDate;
+        */
+        return null;
+    }
+
+    private static DateTime? GetRenewedDate(
+        JobLeaveTypeDto leaveType)
+    {
+        /*
+        * Replace this with:
+        *
+        * return leaveType.RenewedDate;
+        *
+        * when your DTO contains that property.
+             */
+        return null;
     }
 
     private static string GetEffectivePeriod(
-        ProfileLeaveTypeDto leaveType)
+        JobLeaveTypeDto leaveType)
     {
-        if (leaveType.EffectiveFrom.HasValue &&
-            leaveType.EffectiveTo.HasValue)
+        var effectiveFrom =
+            GetEffectiveFromDate(leaveType);
+
+        var effectiveTo =
+            GetEffectiveToDate(leaveType);
+
+        if (effectiveFrom.HasValue &&
+            effectiveTo.HasValue)
         {
             return
-                $"{leaveType.EffectiveFrom.Value:dd MMM yyyy} – " +
-                $"{leaveType.EffectiveTo.Value:dd MMM yyyy}";
+                $"{effectiveFrom.Value:dd MMM yyyy} – " +
+                $"{effectiveTo.Value:dd MMM yyyy}";
         }
 
-        if (leaveType.EffectiveFrom.HasValue)
+        if (effectiveFrom.HasValue)
         {
             return
-                $"{leaveType.EffectiveFrom.Value:dd MMM yyyy} – Present";
+                $"{effectiveFrom.Value:dd MMM yyyy} – Present";
         }
 
-        if (leaveType.EffectiveTo.HasValue)
+        if (effectiveTo.HasValue)
         {
             return
-                $"Until {leaveType.EffectiveTo.Value:dd MMM yyyy}";
+                $"Until {effectiveTo.Value:dd MMM yyyy}";
         }
 
         return "No effective period";

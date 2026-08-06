@@ -1,6 +1,8 @@
 ﻿@page "/admin/my/workspace/profile/{IndividualId:int}"
 
+@using HRM.DTOs.JobPosition
 @using HRM.DTOs.Profile
+@using HRM.DTOs.Leave
 @using HRM.Enum
 @using HRM.Components.Profile
 @using HRM.Components.Profile.Personal
@@ -133,7 +135,7 @@
                                               OnView="@ViewPositionAsync" />
 
                             <ProfileLeaveTypes
-                                                LeaveTypes="@_profile.LeaveTypes"
+                                                StaffId="@StaffId"
                                                 IsLoading="false"
                                                 IsDisabled="false"
                                                 ShowAdjustButton="true"
@@ -150,7 +152,9 @@
 
                         @if (_profile.HasEmploymentHistory)
                         {
-                            <ProfileJobHistory Jobs="@_profile.JobHistory"
+                            <ProfileJobHistory PositionHistory="@_profile.PositionHistory"
+                                               IsLoading="false"
+                                               IsDisabled="false"
                                                OnView="@ViewJobAsync" />
                         }
 
@@ -169,11 +173,7 @@
                                          IsDisabled="false"
                                          ShowEditButton="true"
                                          OnEdit="@EditContactAsync" />
-
-             
-
-
-
+   
                         <ProfileAddresses Addresses="@_profile.Addresses"
                                           IsLoading="false"
                                           IsDisabled="false"
@@ -301,15 +301,7 @@
     {
         return Task.CompletedTask;
     }
-
  
-
-    private Task ViewJobAsync()
-    {
-        return Task.CompletedTask;
-    }
-
-
 
     private Task EditContactAsync()
     {
@@ -354,7 +346,7 @@
 
         return Task.CompletedTask;
     }
-    private Task ViewLeaveHistoryAsync(ProfileLeaveTypeDto leaveType)
+    private Task ViewLeaveHistoryAsync(JobLeaveTypeDto leaveType)
     {
         // selectedLeaveType = leaveType;
         // Open leave-history drawer.
@@ -362,10 +354,19 @@
         return Task.CompletedTask;
     }
 
-    private Task AdjustLeaveBalanceAsync(ProfileLeaveTypeDto leaveType)
+    private Task AdjustLeaveBalanceAsync(JobLeaveTypeDto leaveType)
     {
         // selectedLeaveType = leaveType;
         // Open leave-balance adjustment drawer.
+
+        return Task.CompletedTask;
+    }
+
+    private Task ViewJobAsync(
+       JobPositionHistoryDto historyItem)
+    {
+        // _selectedPositionHistory = historyItem;
+        // Open the position-history detail drawer.
 
         return Task.CompletedTask;
     }

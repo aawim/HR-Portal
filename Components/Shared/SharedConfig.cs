@@ -10,6 +10,23 @@ namespace HRM.Components.Shared
     {
 
 
+        #region Job Position States
+
+        public static class JobPositionStates
+        {
+            public const int INCOMPLETE = 1;
+            public const int PENDING_VERIFICATION = 2;
+            public const int PENDING_APPROVAL = 3;
+            public const int APPROVED = 4;
+            public const int CANCELLED = 5;
+            public const int REJECTED = 6;
+            public const int REMOVED = 7;
+        }
+
+        #endregion Job Position States
+
+
+
         #region Attendance Log States
 
         public static class AttendanceLogStates

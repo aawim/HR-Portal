@@ -3,18 +3,17 @@ using HRM.DTOs;
 using HRM.DTOs.Leave;
 using HRM.Models;
 using HRM.Services.Interfaces;
+using HRM.Services.Interfaces.JobLeaveTypes;
 using Microsoft.EntityFrameworkCore;
 
-namespace HRM.Services
+namespace HRM.Services.JobLeaveTypes
 {
     public class JobLeaveTypeService : IJobLeaveTypeService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _operationLogService;
 
-        public JobLeaveTypeService(
-            IDbContextFactory<HrmTeContext> dbFactory,
-            IOperationLogService operationLogService)
+        public JobLeaveTypeService(IDbContextFactory<HrmTeContext> dbFactory,IOperationLogService operationLogService)
         {
             _dbFactory = dbFactory;
             _operationLogService = operationLogService;
@@ -191,5 +190,59 @@ namespace HRM.Services
                 throw;
             }
         }
+
+
+        public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId)
+        {
+
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var jobId = await GetJobIdByStaffId(StaffId);
+
+
+            return await db.JobLeaveTypes
+                 .Include(x => x.LeaveType)
+                 .Where(x => x.JobId == jobId && x.IsValid)
+                 .Where(x => x.IsLeaveInfoUpdated == true)
+                 .Select(x => new JobLeaveTypeDto
+                 {
+                     JobLeaveTypeId = x.JobLeaveTypeId,
+
+                     JobId = x.JobId,
+
+                     LeaveTypeId = x.LeaveTypeId,
+
+                     LeaveTypeName = x.LeaveType.Name,
+
+                     RemainingDays = x.RemainingDays ?? 0,
+
+                     LastLeaveTakenDate = x.LastLeaveTakenDate,
+
+                     RenewedDate = x.RenewedDate,
+
+                     EffectiveFromDate = x.EffectiveFromDate,
+
+                     EffectiveToDate = x.EffectiveToDate,
+
+                     IsValid = x.IsValid,
+
+                     IsLeaveInfoUpdated = x.IsLeaveInfoUpdated
+                 })
+                  .OrderBy(x => x.LeaveTypeName)
+                 .ToListAsync();
+        }
+
+        private async Task<int> GetJobIdByStaffId(int StaffId)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            return await db.Jobs
+            .AsNoTracking()
+            .Where(x => x.IndividualID == StaffId && x.TerminatedDate == null)
+            .Select(x => x.JobId)
+            .FirstOrDefaultAsync();
+        }
+
+
     }
 }

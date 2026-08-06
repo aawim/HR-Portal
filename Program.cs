@@ -25,7 +25,13 @@ using HRM.WorkPlanning.Abstractions.Schedules;
 using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment;
 using HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService;
 using HRM.Services.Interfaces.Profile;
- 
+using HRM.Services.Interfaces.Leave;
+using HRM.Services.Leave;
+using HRM.Services.JobLeaveTypes;
+using HRM.Services.Interfaces.JobLeaveTypes;
+using HRM.Services.JobPosition;
+using HRM.Services.Interfaces.JobPosition;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -58,6 +64,13 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+
+
+
+
+
+
+builder.Services.AddScoped<IJobPosition, JobPositionService>();
 
 builder.Services.AddScoped<IProfileService, ProfileService>();
 

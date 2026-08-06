@@ -1,7 +1,9 @@
-﻿@using HRM.DTOs.Leave
-@using HRM.DTOs
+﻿@using HRM.DTOs
+@using HRM.DTOs.Leave
 @using HRM.Services
 @using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.JobLeaveTypes
+@using HRM.Services.Interfaces.Leave
 
 @inject ILeaveService LeaveService
 @inject IJobLeaveTypeService JobLeaveTypeService
@@ -537,7 +539,7 @@
             {
                 JobLeaveTypeId = selectedAssigned.JobLeaveTypeId,
 
-                RemainingDays = selectedAssigned.RemainingDays ?? 0,
+                RemainingDays = selectedAssigned.RemainingDays,
 
                 EffectiveFromDate =
                 selectedAssigned.EffectiveFromDate,
@@ -590,7 +592,7 @@
 
         // assigned = await LeaveService.GetAssignedLeaveTypesAsync(JobId);
 
-        assigned = await LeaveService.GetJobLeaveTypeByJobId(StaffId);
+        assigned = await JobLeaveTypeService.GetJobLeaveTypeByJobId(StaffId);
 
         available = await LeaveService.GetAvailableLeaveTypesAsync(StaffId);
 

@@ -1,11 +1,14 @@
 ﻿using HRM.Components.Shared;
+using HRM.DTOs.JobPosition;
 using HRM.DTOs.Profile;
 using HRM.DTOs.Team;
 using HRM.DTOs.UserContext;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Interfaces;
+using HRM.Services.Interfaces.JobPosition;
 using HRM.Services.Interfaces.Profile;
+using HRM.Services.JobPosition;
 using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services
@@ -16,15 +19,17 @@ namespace HRM.Services
         private readonly IUserAccessService _userAccessService;
         private readonly IJobService _jobService;
         private readonly ILogger<ProfileService> _logger;
+        private readonly IJobPosition _jobPositionService;
 
         public ProfileService(
         IDbContextFactory<HrmTeContext> dbFactory,
-        IUserAccessService userAccessService, IJobService jobService, ILogger<ProfileService> logger)
+        IUserAccessService userAccessService, IJobService jobService, ILogger<ProfileService> logger, IJobPosition jobPositionService)
         {
             _dbFactory = dbFactory;
             _userAccessService = userAccessService;
             _jobService = jobService;
             _logger = logger;
+            _jobPositionService = jobPositionService;
         }
 
         public async Task<ProfileOverviewDto?> GetProfileAsync(int individualId,CancellationToken cancellationToken = default)
@@ -70,6 +75,10 @@ namespace HRM.Services
 
                 List<ProfilePositionDto> activePositions = [];
 
+                List<JobPositionHistoryDto> positionHistory = [];
+
+
+
                 if (activeJob is not null &&
                     activeJob.IsActive)
                 {
@@ -82,6 +91,10 @@ namespace HRM.Services
                     ApplyPrimaryPosition(
                         activeJob,
                         activePositions);
+
+                    positionHistory =
+                      await _jobPositionService
+                          .GetPositionHistoryByJobAsync(activeJob.JobId,cancellationToken);
 
                     activeJob.Teams =
                         await LoadActiveTeamsAsync(
@@ -96,6 +109,11 @@ namespace HRM.Services
                     SetServiceDuration(
                         activeJob);
                 }
+ 
+
+
+
+
 
                 var contacts =
                     await LoadContactsAsync(
@@ -151,6 +169,7 @@ namespace HRM.Services
                     Contacts =
                         contacts,
 
+                    JobHistory =[],
                     /*
                      * Populate these as their loaders are implemented.
                      */
@@ -159,9 +178,7 @@ namespace HRM.Services
 
                     LeaveTypes =
                         [],
-
-                    JobHistory =
-                        [],
+                    PositionHistory = positionHistory,
 
                     Education =
                         [],
@@ -228,43 +245,40 @@ namespace HRM.Services
         }
 
 
-        private static async Task<List<ProfilePositionDto>>LoadActivePositionsAsync(
-          HrmTeContext db,
-          int jobId,
-          CancellationToken cancellationToken)
+       
+        private static async Task<List<ProfilePositionDto>>
+    LoadActivePositionsAsync(
+        HrmTeContext db,
+        int jobId,
+        CancellationToken cancellationToken)
         {
             if (jobId <= 0)
             {
                 return [];
             }
 
-            var today =
-                DateTime.Today;
+            var today = DateTime.Today;
+            var approvedPositionStateId = SharedConfig.JobPositionStates.APPROVED;
 
             var positions =
                 await
                 (
-                    from jobPosition in
-                        db.JobPositions.AsNoTracking()
+                    from jobPosition in db.JobPositions.AsNoTracking()
 
-                    join position in
-                        db.Positions.AsNoTracking()
+                    join position in db.Positions.AsNoTracking()
                         on jobPosition.PositionId equals
                         position.PositionId
 
-                    join job in
-                        db.Jobs.AsNoTracking()
+                    join job in db.Jobs.AsNoTracking()
                         on jobPosition.JobId equals
                         job.JobId
 
-                    join structure in
-                        db.OrganisationStructures.AsNoTracking()
+                    join structure in db.OrganisationStructures.AsNoTracking()
                         on job.OrganisationStructureId equals
                         structure.OrganisationStructureId
                         into structureGroup
 
-                    from structure in
-                        structureGroup.DefaultIfEmpty()
+                    from structure in structureGroup.DefaultIfEmpty()
 
                     where
                         job.JobId == jobId &&
@@ -273,6 +287,9 @@ namespace HRM.Services
                             SharedConfig.JobStates.APPROVED &&
 
                         job.TerminatedDate == null &&
+
+                        jobPosition.JobPositionStateId ==
+                            approvedPositionStateId &&
 
                         jobPosition.FromDate <= today &&
 
@@ -297,18 +314,15 @@ namespace HRM.Services
                             jobPosition.PositionId,
 
                         PositionName =
-                            position.Name ??
-                            string.Empty,
+                            position.Name ?? string.Empty,
 
                         JobPositionStateId =
                             jobPosition.JobPositionStateId,
 
                         JobPositionStateName =
                             jobPosition.JobPositionState != null
-                                ? jobPosition
-                                    .JobPositionState
-                                    .StateName ??
-                                  string.Empty
+                                ? jobPosition.JobPositionState.StateName
+                                    ?? string.Empty
                                 : string.Empty,
 
                         FromDate =
@@ -318,28 +332,21 @@ namespace HRM.Services
                             jobPosition.ToDate,
 
                         IsCurrent =
-                            jobPosition.FromDate <= today &&
-                            (
-                                jobPosition.ToDate == null ||
-                                jobPosition.ToDate >= today
-                            ),
+                            true,
 
                         IsActive =
-                            jobPosition.ToDate == null ||
-                            jobPosition.ToDate >= today,
+                            true,
 
                         OrganisationStructureId =
                             job.OrganisationStructureId,
 
                         OrganisationStructureName =
                             structure != null
-                                ? structure.Name ??
-                                  string.Empty
+                                ? structure.Name ?? string.Empty
                                 : string.Empty
                     }
                 )
-                .ToListAsync(
-                    cancellationToken);
+                .ToListAsync(cancellationToken);
 
             foreach (var position in positions)
             {
@@ -352,35 +359,30 @@ namespace HRM.Services
 
             return positions;
         }
-
-        private static void ApplyPrimaryPosition(ActiveJobDto activeJob,IReadOnlyList<ProfilePositionDto> positions)
+        private static void ApplyPrimaryPosition(
+         ActiveJobDto activeJob,
+         IReadOnlyList<ProfilePositionDto> positions)
         {
-            var primaryPosition =
+            var currentPosition =
                 positions
                     .OrderByDescending(position =>
-                        position.IsCurrent)
-                    .ThenByDescending(position =>
                         position.FromDate)
                     .ThenByDescending(position =>
                         position.JobPositionId)
                     .FirstOrDefault();
 
-            if (primaryPosition is null)
+            if (currentPosition is null)
             {
-                activeJob.PositionId =
-                    null;
-
-                activeJob.PositionName =
-                    string.Empty;
-
+                activeJob.PositionId = null;
+                activeJob.PositionName = string.Empty;
                 return;
             }
 
             activeJob.PositionId =
-                primaryPosition.PositionId;
+                currentPosition.PositionId;
 
             activeJob.PositionName =
-                primaryPosition.PositionName;
+                currentPosition.PositionName;
         }
 
 

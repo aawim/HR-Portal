@@ -1,14 +1,14 @@
 ﻿using HRM.Models;
 using HRM.DTOs.Leave;
 using HRM.DTOs;
-using System.Threading.Tasks;
-namespace HRM.Services.Interfaces
+
+namespace HRM.Services.Interfaces.Leave
 {
     public interface ILeaveService
     {
 
         Task<int> GetJobIdByStaffId(int StaffId);
-        Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int jobId);
+        //Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int jobId);
         Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int leaveTypeId);
         Task<List<LeaveReasonDto>> GetReasonsByLeaveType();
    

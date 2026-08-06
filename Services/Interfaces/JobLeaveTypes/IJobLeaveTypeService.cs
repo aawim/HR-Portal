@@ -1,7 +1,7 @@
 ﻿using HRM.DTOs.Leave;
 using HRM.DTOs;
 
-namespace HRM.Services.Interfaces
+namespace HRM.Services.Interfaces.JobLeaveTypes
 {
     public interface IJobLeaveTypeService
     {
@@ -11,10 +11,8 @@ namespace HRM.Services.Interfaces
 
         //Task<ServiceResult> AssignAsync(int jobId, int leaveTypeId);
         Task<ServiceResult> AssignAsync(AssignLeaveTypeDto dto);
-
-
         Task<ServiceResult> UpdateAsync(JobLeaveTypeEditDto dto);
-
+        Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId);
 
 
         //Task<ServiceResult> RemoveAsync(int jobLeaveTypeId);

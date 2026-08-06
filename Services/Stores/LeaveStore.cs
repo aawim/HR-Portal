@@ -18,7 +18,7 @@ namespace HRM.Services.Stores
                 JobId = x.JobId,
                 LeaveTypeID = x.LeaveTypeId,
                 LeaveTypeName = x.LeaveType?.Name,
-                RemainingDays = x.RemainingDays,
+                RemainingDays = (int)x.RemainingDays,
             })
             .ToList();
 

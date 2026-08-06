@@ -1,14 +1,14 @@
-﻿
-using HRM.Components.Shared;
+﻿using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Leave;
 using HRM.DTOs.UserContext;
 using HRM.Models;
 using HRM.Services.Interfaces;
+using HRM.Services.Interfaces.Leave;
 using HRM.Services.Stores;
 using Microsoft.EntityFrameworkCore;
 
-namespace HRM.Services
+namespace HRM.Services.Leave
 {
     public class LeaveService : ILeaveService
     {
@@ -134,44 +134,44 @@ namespace HRM.Services
                 .ToListAsync();
         }
 
-        public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId)
-        {
+        //public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId)
+        //{
 
-            using var db = await _dbFactory.CreateDbContextAsync();
+        //    using var db = await _dbFactory.CreateDbContextAsync();
 
-            var jobId = await GetJobIdByStaffId(StaffId);
+        //    var jobId = await GetJobIdByStaffId(StaffId);
 
 
-           return await db.JobLeaveTypes
-                .Include(x => x.LeaveType)
-                .Where(x => x.JobId == jobId && x.IsValid)
-                .Select(x => new JobLeaveTypeDto
-                {
-                    JobLeaveTypeId = x.JobLeaveTypeId,
+        //   return await db.JobLeaveTypes
+        //        .Include(x => x.LeaveType)
+        //        .Where(x => x.JobId == jobId && x.IsValid)
+        //        .Select(x => new JobLeaveTypeDto
+        //        {
+        //            JobLeaveTypeId = x.JobLeaveTypeId,
 
-                    JobId = x.JobId,
+        //            JobId = x.JobId,
 
-                    LeaveTypeId = x.LeaveTypeId,
+        //            LeaveTypeId = x.LeaveTypeId,
 
-                    LeaveTypeName = x.LeaveType.Name,
+        //            LeaveTypeName = x.LeaveType.Name,
 
-                    RemainingDays = x.RemainingDays ?? 0,
+        //            RemainingDays = x.RemainingDays ?? 0,
 
-                    LastLeaveTakenDate = x.LastLeaveTakenDate,
+        //            LastLeaveTakenDate = x.LastLeaveTakenDate,
 
-                    RenewedDate = x.RenewedDate,
+        //            RenewedDate = x.RenewedDate,
 
-                    EffectiveFromDate = x.EffectiveFromDate,
+        //            EffectiveFromDate = x.EffectiveFromDate,
 
-                    EffectiveToDate = x.EffectiveToDate,
+        //            EffectiveToDate = x.EffectiveToDate,
 
-                    IsValid = x.IsValid,
+        //            IsValid = x.IsValid,
 
-                    IsLeaveInfoUpdated = x.IsLeaveInfoUpdated
-                })
-                 .OrderBy(x => x.LeaveTypeName)
-                .ToListAsync();
-        }
+        //            IsLeaveInfoUpdated = x.IsLeaveInfoUpdated
+        //        })
+        //         .OrderBy(x => x.LeaveTypeName)
+        //        .ToListAsync();
+        //}
 
 
 
