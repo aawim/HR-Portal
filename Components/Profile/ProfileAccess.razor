@@ -1,0 +1,287 @@
+﻿@using HRM.DTOs.Profile.ProfileAccess
+
+<section class="w-full overflow-hidden rounded-2xl
+                border border-slate-200 bg-white shadow-sm">
+
+    <div class="flex flex-col gap-3 border-b border-slate-200
+                px-4 py-4 sm:flex-row sm:items-center
+                sm:justify-between sm:px-5">
+
+        <div class="flex min-w-0 items-center gap-3">
+
+            <div class="flex h-11 w-11 shrink-0 items-center
+                        justify-center rounded-xl bg-indigo-50
+                        text-indigo-600">
+
+           @*      <span class="material-symbols-rounded">
+                    admin_panel_settings
+                </span> *@
+
+            </div>
+
+            <div class="min-w-0">
+
+                <h2 class="text-sm font-semibold text-slate-900">
+                    Access & Memberships
+                </h2>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Teams, groups, roles, permissions and supervision.
+                </p>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <div class="p-4 sm:p-5">
+
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-2">
+
+            <!-- Teams -->
+            <div class="rounded-xl border border-slate-200 p-4">
+
+                <div class="flex items-center justify-between gap-3">
+
+                    <div class="flex items-center gap-2">
+
+                        <span class="material-symbols-rounded
+                                     text-[19px] text-blue-600">
+                            groups
+                        </span>
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Teams
+                        </h3>
+
+                    </div>
+
+                    <span class="text-xs text-slate-500">
+                        @Access.Teams.Count
+                    </span>
+
+                </div>
+
+                @if (Access.Teams.Count == 0)
+                {
+                    <p class="mt-4 text-xs text-slate-500">
+                        No active team memberships.
+                    </p>
+                }
+                else
+                {
+                    <div class="mt-4 space-y-2">
+
+                        @foreach (var team in Access.Teams)
+                        {
+                            <div class="flex items-center justify-between
+                                        gap-3 rounded-lg bg-slate-50
+                                        px-3 py-2.5">
+
+                                <div class="min-w-0">
+
+                                    <p class="truncate text-sm font-medium
+                                              text-slate-800">
+                                        @team.TeamName
+                                    </p>
+
+                                    @if (team.IsSupervisor)
+                                    {
+                                        <p class="mt-0.5 text-xs
+                                                  text-indigo-600">
+                                            Supervisor
+                                        </p>
+                                    }
+
+                                </div>
+
+                                @if (team.IsActive)
+                                {
+                                    <span class="h-2 w-2 shrink-0
+                                                 rounded-full bg-emerald-500">
+                                    </span>
+                                }
+
+                            </div>
+                        }
+
+                    </div>
+                }
+
+            </div>
+
+            <!-- Supervising -->
+            <div class="rounded-xl border border-slate-200 p-4">
+
+                <div class="flex items-center justify-between gap-3">
+
+                    <div class="flex items-center gap-2">
+
+                      @*   <span class="material-symbols-rounded
+                                     text-[19px] text-violet-600">
+                            supervisor_account
+                        </span> *@
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            Supervising
+                        </h3>
+
+                    </div>
+
+                    <span class="text-xs text-slate-500">
+                        @Access.SupervisingGroups.Count
+                    </span>
+
+                </div>
+
+                @if (Access.SupervisingGroups.Count == 0)
+                {
+                    <p class="mt-4 text-xs text-slate-500">
+                        This staff member is not supervising any team.
+                    </p>
+                }
+                else
+                {
+                    <div class="mt-4 space-y-2">
+
+                        @foreach (var team in Access.SupervisingGroups)
+                        {
+                            <div class="rounded-lg bg-violet-50
+                                        px-3 py-2.5">
+
+                                <p class="text-sm font-medium
+                                          text-violet-900">
+                                    @team.TeamName
+                                </p>
+
+                                <p class="mt-0.5 text-xs
+                                          text-violet-600">
+                                    Team supervisor
+                                </p>
+
+                            </div>
+                        }
+
+                    </div>
+                }
+
+            </div>
+
+            <!-- Groups -->
+            <div class="rounded-xl border border-slate-200 p-4">
+
+                <div class="flex items-center justify-between gap-3">
+
+                    <div class="flex items-center gap-2">
+
+                     @*    <span class="material-symbols-rounded
+                                     text-[19px] text-amber-600">
+                            group_work
+                        </span> *@
+
+                        <h3 class="text-sm font-semibold text-slate-900">
+                            User Groups
+                        </h3>
+
+                    </div>
+
+                    <span class="text-xs text-slate-500">
+                        @Access.Groups.Count
+                    </span>
+
+                </div>
+
+                @if (Access.Groups.Count == 0)
+                {
+                    <p class="mt-4 text-xs text-slate-500">
+                        No user-group memberships.
+                    </p>
+                }
+                else
+                {
+                    <div class="mt-4 flex flex-wrap gap-2">
+
+                        @foreach (var group in Access.Groups)
+                        {
+                            <span class="inline-flex rounded-full
+                                         bg-amber-50 px-3 py-1.5
+                                         text-xs font-medium
+                                         text-amber-700">
+                                @group.GroupName
+                            </span>
+                        }
+
+                    </div>
+                }
+
+            </div>
+
+           
+        </div>
+
+        <!-- Permissions -->
+        <div class="mt-5 rounded-xl border border-slate-200 p-4">
+
+            <div class="flex items-center justify-between gap-3">
+
+                <div class="flex items-center gap-2">
+
+                    <span class="material-symbols-rounded
+                                 text-[19px] text-slate-600">
+                        key
+                    </span>
+
+                    <h3 class="text-sm font-semibold text-slate-900">
+                        Effective Permissions
+                    </h3>
+
+                </div>
+
+                <span class="text-xs text-slate-500">
+                    @Access.Permissions.Count
+                </span>
+
+            </div>
+
+            @if (Access.Permissions.Count == 0)
+            {
+                <p class="mt-4 text-xs text-slate-500">
+                    No effective permissions available.
+                </p>
+            }
+            else
+            {
+                <div class="mt-4 flex flex-wrap gap-2">
+
+                    @foreach (var permission in Access.Permissions)
+                    {
+                        <span class="inline-flex items-center gap-1.5
+                                     rounded-full border border-slate-200
+                                     bg-slate-50 px-3 py-1.5
+                                     text-xs font-medium text-slate-700">
+
+                            <span class="material-symbols-rounded
+                                         text-[14px] text-slate-400">
+                                key
+                            </span>
+
+                            @permission.PermissionName
+
+                        </span>
+                    }
+
+                </div>
+            }
+
+        </div>
+
+    </div>
+
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public ProfileAccessDto Access { get; set; } =
+        new();
+}

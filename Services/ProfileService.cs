@@ -1,6 +1,7 @@
 ﻿using HRM.Components.Shared;
 using HRM.DTOs.JobPosition;
 using HRM.DTOs.Profile;
+using HRM.DTOs.Profile.ProfileAccess;
 using HRM.DTOs.Team;
 using HRM.DTOs.UserContext;
 using HRM.Enum;
@@ -74,6 +75,21 @@ namespace HRM.Services
                         individualId,
                         cancellationToken);
 
+                ProfileAccessDto access = new();
+
+                if (activeJob is not null &&
+                    activeJob.IsActive)
+                {
+                    access =
+                        await LoadProfileAccessAsync(
+                            db,
+                            individualId,
+                            activeJob.OrganisationId,
+                            cancellationToken);
+                }
+
+
+
                 List<ProfilePositionDto> activePositions = [];
 
                 List<JobPositionHistoryDto> positionHistory = [];
@@ -110,9 +126,46 @@ namespace HRM.Services
                     SetServiceDuration(
                         activeJob);
                 }
- 
 
 
+                var supervisingTeams =
+                    await
+                    (
+                        from teamStaff in db.TeamStaffs.AsNoTracking()
+
+                        join team in db.Teams.AsNoTracking()
+                            on teamStaff.TeamId equals team.TeamId
+
+                        where
+                            teamStaff.StaffId == individualId &&
+                            teamStaff.IsSuperVisor &&
+                            teamStaff.IsValid == true &&
+                            team.IsValid == true
+
+                        orderby team.Name
+
+                        select new ProfileSupervisingGroupDto
+                        {
+                            TeamId = team.TeamId,
+
+                            TeamName =
+                                team.Name ?? string.Empty,
+
+                            OrganisationId =
+                                team.OrganisationId,
+
+                            StartDate =
+                                teamStaff.StartDate,
+
+                            EndDate =
+                                teamStaff.EndDate,
+
+                            IsActive =
+                                teamStaff.EndDate == null ||
+                                teamStaff.EndDate >= DateTime.Today
+                        }
+                    )
+                    .ToListAsync(cancellationToken);
 
 
 
@@ -195,7 +248,11 @@ namespace HRM.Services
 
                     Education = [],
 
-                    Documents = []
+                    Documents = [],
+
+                    SupervisingTeams = supervisingTeams,
+
+                    Access = access
                 };
             }
             catch (OperationCanceledException)
@@ -215,6 +272,191 @@ namespace HRM.Services
                 throw;
             }
         }
+        private static async Task<ProfileAccessDto>
+     LoadProfileAccessAsync(
+         HrmTeContext db,
+         int individualId,
+         int organisationId,
+         CancellationToken cancellationToken)
+        {
+            var today =
+                DateTime.Today;
+
+            var teams =
+                await
+                (
+                    from teamStaff in db.TeamStaffs.AsNoTracking()
+
+                    join team in db.Teams.AsNoTracking()
+                        on teamStaff.TeamId equals team.TeamId
+
+                    where
+                        teamStaff.StaffId == individualId &&
+                        teamStaff.IsValid == true &&
+                        team.IsValid == true &&
+                        team.OrganisationId == organisationId &&
+                        (
+                            teamStaff.StartDate == null ||
+                            teamStaff.StartDate <= today
+                        ) &&
+                        (
+                            teamStaff.EndDate == null ||
+                            teamStaff.EndDate >= today
+                        )
+
+                    orderby
+                        teamStaff.IsSuperVisor descending,
+                        team.Name
+
+                    select new ProfileTeamDto
+                    {
+                        TeamId =
+                            team.TeamId,
+
+                        TeamName =
+                            team.Name ?? string.Empty,
+
+                        OrganisationId =
+                            team.OrganisationId,
+
+                        IsSupervisor =
+                            teamStaff.IsSuperVisor,
+
+                        StartDate =
+                            teamStaff.StartDate,
+
+                        EndDate =
+                            teamStaff.EndDate,
+
+                        IsActive =
+                            true
+                    }
+                )
+                .ToListAsync(cancellationToken);
+
+            var supervisingGroups =
+                teams
+                    .Where(team =>
+                        team.IsSupervisor)
+                    .Select(team =>
+                        new ProfileSupervisingGroupDto
+                        {
+                            TeamId =
+                                team.TeamId,
+
+                            TeamName =
+                                team.TeamName,
+
+                            OrganisationId =
+                                team.OrganisationId,
+
+                            StartDate =
+                                team.StartDate,
+
+                            EndDate =
+                                team.EndDate,
+
+                            IsActive =
+                                team.IsActive
+                        })
+                    .ToList();
+
+            var organisationRoles =
+                await LoadOrganisationRolesAsync(
+                    db,
+                    individualId,
+                    organisationId,
+                    cancellationToken);
+
+            return new ProfileAccessDto
+            {
+                Teams =
+                    teams,
+
+                SupervisingGroups =
+                    supervisingGroups,
+
+                Roles =
+                    organisationRoles,
+
+                Groups =
+                    [],
+
+                Permissions =
+                    []
+            };
+        }
+
+        private static async Task<List<ProfileRoleDto>>
+    LoadOrganisationRolesAsync(
+        HrmTeContext db,
+        int individualId,
+        int organisationId,
+        CancellationToken cancellationToken)
+        {
+            if (individualId <= 0 ||
+                organisationId <= 0)
+            {
+                return [];
+            }
+
+            return await
+            (
+                from user in db.Users.AsNoTracking()
+
+                join userRole in db.UserRoles.AsNoTracking()
+                    on user.UserId equals userRole.UserId
+
+                join role in db.Roles.AsNoTracking()
+                    on userRole.RoleId equals role.RoleID
+
+                join userOrganisation in db.UserOrganisations.AsNoTracking()
+                    on userRole.UserOrganisationId equals
+                       userOrganisation.UserOrganisationID
+
+                where
+                    user.BusinessEntityID == individualId &&
+
+                    userRole.IsActive == true
+
+
+
+                   //&& userRole.UserOrganisationId != null 
+
+                   && userOrganisation.BusinessEntityID == organisationId
+
+                orderby
+                    role.Name
+
+                select new ProfileRoleDto
+                {
+                    RoleId =
+                        role.RoleID,
+
+                    RoleKey =
+                        role.RoleKey ?? string.Empty,
+
+                    RoleName =
+                        role.Name ?? string.Empty,
+
+                    OrganisationId =
+                        userOrganisation.UserOrganisationID,
+
+                    IsSystemRole = (bool)role.IsSystemRole,
+
+                    IsActive =
+                        userRole.IsActive,
+
+                    Source =
+                        "Organisation"
+                }
+            )
+            .Distinct()
+            .ToListAsync(cancellationToken);
+        }
+
+
+
 
 
         private static async Task<IndividualProfileModel?>LoadIndividualAsync(

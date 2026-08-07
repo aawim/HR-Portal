@@ -3,6 +3,7 @@
 @using HRM.DTOs.JobPosition
 @using HRM.DTOs.Profile
 @using HRM.DTOs.Leave
+@using HRM.DTOs.Profile.ProfileAccess
 @using HRM.Enum
 @using HRM.Components.Profile
 @using HRM.Components.Profile.Personal
@@ -127,6 +128,13 @@
                                                 ShowEditButton="true"
                                                 OnEdit="@EditPersonalDetails" />
 
+
+
+                        <ProfileAccess Access="@_profile.Access" />
+
+
+
+
                         @if (_profile.HasActiveJob)
                         {
                             <ProfileActiveJob Job="@_profile.ActiveJob"
@@ -170,6 +178,12 @@
                     <!-- Supporting profile information -->
                     <aside class="min-w-0 space-y-6
                                   2xl:col-span-4">
+
+
+                        <Permissions Access="@_profile.Access"
+                                       OnViewRole="@ViewRoleAsync" />
+
+
 
                         <ProfileContacts Contacts="@_profile.Contacts"
                                          IsLoading="false"
@@ -275,9 +289,19 @@
 
     private void GoBack()
     {
-        NavigationManager.NavigateTo(
-            "/admin/my/workspace");
+        NavigationManager.NavigateTo("/admin/my/workspace");
     }
+
+    private Task ViewRoleAsync(ProfileRoleDto role)
+{
+    // Later:
+    // _selectedRole = role;
+    // _showRoleDrawer = true;
+
+    return Task.CompletedTask;
+}
+
+
 
     private void PrintProfile()
     {
