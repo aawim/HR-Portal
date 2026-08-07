@@ -65,39 +65,57 @@
         <div class="grid grid-cols-1 gap-x-8 gap-y-5
                     sm:grid-cols-2 xl:grid-cols-3">
 
+@* 
             <DetailItem Icon="badge"
+                        Label="Full Name"
+                        Value="@DisplayValue(Profile.FullName)" /> *@
+
+            <DetailItem 
                 Label="Full Name"
                 Value="@DisplayValue(Profile.FullName)" />
 
-            <DetailItem Icon="translate"
+            <DetailItem 
+           
                 Label="Name in Dhivehi"
                 Value="@DisplayValue(Profile.FullNameDhivehi)"
                 IsDhivehi="true" />
 
-            <DetailItem Icon="id_card"
+            <DetailItem 
+             
                 Label="Identity Card"
                 Value="@DisplayValue(Profile.IdentityCardNumber)" />
 
-            <DetailItem Icon="cake"
+            <DetailItem 
+              
                 Label="Date of Birth"
                 Value="@DateOfBirthText" />
 
-            <DetailItem Icon="wc"
+            <DetailItem  
                 Label="Gender"
-                Value="@DisplayValue(Profile.GenderName)" />
+                        Value="@GenderTextClass" />
 
-            <DetailItem Icon="public"
+            <DetailItem 
+            
                 Label="Nationality"
                 Value="@DisplayValue(Profile.NationalityName)" />
 
-            <DetailItem Icon="fingerprint"
+            <DetailItem 
+             
                 Label="Individual ID"
                 Value="@Profile.IndividualId.ToString()" />
 
-            <DetailItem Icon="@StatusIcon"
+            <DetailItem 
+            
+                        Label="Staff Number"
+                        Value="@Profile.StaffNo.ToString()" />
+
+            <DetailItem 
+ 
                 Label="Individual Status"
                 Value="@StatusText"
                 ValueClass="@StatusTextClass" />
+
+
 
         </div>
 
@@ -136,10 +154,7 @@ public string? ImageUrl { get; set; }
     [Parameter]
     public EventCallback OnEdit { get; set; }
 
-    private string DateOfBirthText =>
-        Profile.DateOfBirth.HasValue
-            ? Profile.DateOfBirth.Value.ToString("dd MMM yyyy")
-            : "Not available";
+    private string DateOfBirthText => Profile?.DateOfBirth.ToString("dd MMM yyyy") ?? "Not available";
 
     private string StatusText =>
         Profile.IsIndividualActive
@@ -155,6 +170,17 @@ public string? ImageUrl { get; set; }
         Profile.IsIndividualActive
             ? "text-emerald-700"
             : "text-slate-500";
+
+
+
+    private string GenderTextClass =>
+      Profile?.GenderId == 1 ? "Male" :
+      Profile?.GenderId == 2 ? "Female" :
+      "Not Specified";
+
+
+
+ 
 
     private async Task HandleEditAsync()
     {

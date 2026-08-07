@@ -58,18 +58,19 @@ namespace HRM.DTOs.Profile
             HasActiveJob;
 
 
-        public DateTime? DateOfBirth { get; set; }
+        public DateTime DateOfBirth { get; set; }
 
-        public int? GenderId { get; set; }
+        public int GenderId { get; set; }
 
-        public string GenderName { get; set; } =
-            string.Empty;
+        //public string GenderName { get; set; } =
+        //    string.Empty;
 
         public int? NationalityId { get; set; }
 
-        public string NationalityName { get; set; } =
-            string.Empty;
- 
+        public string NationalityName { get; set; } = string.Empty;
+
+        public string StaffNo { get; set; } = string.Empty;
+
         //public int IndividualId { get; set; }
 
         //public int BusinessEntityId { get; set; }

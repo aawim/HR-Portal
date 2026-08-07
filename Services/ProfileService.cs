@@ -5,6 +5,7 @@ using HRM.DTOs.Team;
 using HRM.DTOs.UserContext;
 using HRM.Enum;
 using HRM.Models;
+using HRM.Models.Archives;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.JobPosition;
 using HRM.Services.Interfaces.Profile;
@@ -132,8 +133,19 @@ namespace HRM.Services
                         activeJob,
                         hasEmploymentHistory);
 
+
+                var StaffNo = await LoadStaffNumberAsync(db,
+                        individualId,
+                        cancellationToken);
+
                 return new ProfileOverviewDto
                 {
+                    //DateOfBirth = individual.DateOfBirth.Value.ToString("dd MMM yyyy") ?? "Not Available",
+
+                    DateOfBirth = individual.DateOfBirth ?? DateTime.MinValue,
+
+                    GenderId = individual.GenderId,
+
                     IndividualId =
                         individual.IndividualId,
 
@@ -168,23 +180,22 @@ namespace HRM.Services
 
                     Contacts =
                         contacts,
+    
+                    StaffNo = StaffNo?.StaffNo ?? "N/A",
+
 
                     JobHistory =[],
                     /*
                      * Populate these as their loaders are implemented.
                      */
-                    Addresses =
-                        [],
+                    Addresses = [],
 
-                    LeaveTypes =
-                        [],
+                    LeaveTypes = [],
                     PositionHistory = positionHistory,
 
-                    Education =
-                        [],
+                    Education = [],
 
-                    Documents =
-                        []
+                    Documents = []
                 };
             }
             catch (OperationCanceledException)
@@ -238,14 +249,38 @@ namespace HRM.Services
                             individual.MiddleNameDhivehi,
 
                         LastNameDhivehi =
-                            individual.LastNameDhivehi
+                            individual.LastNameDhivehi,
+
+                        DateOfBirth = individual.DateOfBirth,
+
+                        GenderId = individual.GenderTypeId,
+                        
                     })
                 .SingleOrDefaultAsync(
                     cancellationToken);
         }
 
+        private static async Task<StaffNumber?> LoadStaffNumberAsync(
+            HrmTeContext db,
+            int individualId,
+            CancellationToken cancellationToken)
+        {
+            return await db.Staffs
+                .AsNoTracking()
+                .Where(staff =>
+                    staff.IndividualId ==
+                    individualId)
+                .Select(staff =>
+                    new StaffNumber
+                    {
+                        IndividualId = staff.IndividualId,
+                        StaffNo = staff.EmployeeNumber
 
-       
+                    })
+                .SingleOrDefaultAsync(
+                    cancellationToken);
+        }
+
         private static async Task<List<ProfilePositionDto>>
     LoadActivePositionsAsync(
         HrmTeContext db,
@@ -682,25 +717,25 @@ namespace HRM.Services
 
 
         private static async Task<string?> LoadIdentityCardNumberAsync(
-    HrmTeContext db,
-    int individualId,
-    CancellationToken cancellationToken)
-        {
-            if (individualId <= 0)
-            {
-                return null;
-            }
+            HrmTeContext db,
+            int individualId,
+            CancellationToken cancellationToken)
+                {
+                    if (individualId <= 0)
+                    {
+                        return null;
+                    }
 
-            return await db.Idcards
-                .AsNoTracking()
-                .Where(card =>
-                    card.BusinessEntityId == individualId )
-                .OrderByDescending(card =>
-                    card.IdcardId)
-                .Select(card =>
-                    card.IdcardNumber)
-                .FirstOrDefaultAsync(cancellationToken);
-        }
+                    return await db.Idcards
+                        .AsNoTracking()
+                        .Where(card =>
+                            card.BusinessEntityId == individualId )
+                        .OrderByDescending(card =>
+                            card.IdcardId)
+                        .Select(card =>
+                            card.IdcardNumber)
+                        .FirstOrDefaultAsync(cancellationToken);
+                }
 
 
         private sealed class IndividualProfileModel
@@ -718,8 +753,22 @@ namespace HRM.Services
             public string? MiddleNameDhivehi { get; init; }
 
             public string? LastNameDhivehi { get; init; }
+
+            public DateTime? DateOfBirth { get; init; }
+
+            public int GenderId { get; set; }
+
         }
 
+
+
+
+        private sealed class StaffNumber
+        {
+            public int IndividualId { get; init; }
+            public string? StaffNo { get; init; }
+
+        }
 
         //private static void SetServiceDuration(ActiveJobDto job)
         //{
