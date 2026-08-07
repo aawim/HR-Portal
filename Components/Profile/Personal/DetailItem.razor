@@ -1,0 +1,50 @@
+﻿<div class="min-w-0">
+
+    <div class="flex items-center gap-2">
+
+        @if (!string.IsNullOrWhiteSpace(Icon))
+        {
+            <span class="material-symbols-rounded text-[17px] text-slate-400">
+                @Icon
+            </span>
+        }
+
+        <p class="text-xs font-medium uppercase tracking-wide text-slate-500">
+            @Label
+        </p>
+
+    </div>
+
+    <p class="@GetValueCss()"
+       dir="@(IsDhivehi ? "rtl" : null)">
+        @Value
+    </p>
+
+</div>
+
+@code {
+    [Parameter]
+    public string? Icon { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter]
+    public string Value { get; set; } = "Not available";
+
+    [Parameter]
+    public string? ValueClass { get; set; }
+
+    [Parameter]
+    public bool IsDhivehi { get; set; }
+
+    private string GetValueCss()
+    {
+        if (!string.IsNullOrWhiteSpace(ValueClass))
+        {
+            return $"mt-1.5 break-words text-sm font-semibold {ValueClass}";
+        }
+
+        return "mt-1.5 break-words text-sm font-semibold text-slate-900";
+    }
+}

@@ -57,6 +57,19 @@ namespace HRM.DTOs.Profile
             PositionHistory.Count > 0 ||
             HasActiveJob;
 
+
+        public DateTime? DateOfBirth { get; set; }
+
+        public int? GenderId { get; set; }
+
+        public string GenderName { get; set; } =
+            string.Empty;
+
+        public int? NationalityId { get; set; }
+
+        public string NationalityName { get; set; } =
+            string.Empty;
+ 
         //public int IndividualId { get; set; }
 
         //public int BusinessEntityId { get; set; }

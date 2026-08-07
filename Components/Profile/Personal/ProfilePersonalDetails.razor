@@ -1,18 +1,179 @@
 ﻿@using HRM.DTOs.Profile
-@using HRM.Components.Profile.Employment
-@using HRM.Components.Profile
-@using Services.Interfaces.Profile
 
-<h3>ProfilePersonalDetails</h3>
+<section class="w-full overflow-hidden rounded-2xl
+                border border-slate-200 bg-white shadow-sm">
+
+    <!-- Header -->
+    <div class="flex flex-col gap-3 border-b border-slate-200
+                px-4 py-4 sm:flex-row sm:items-center
+                sm:justify-between sm:px-5">
+
+        <div class="flex min-w-0 items-center gap-3">
+
+            <div class="flex h-11 w-11 shrink-0 items-center
+                        justify-center rounded-xl bg-blue-50
+                        text-blue-600">
+
+                <span class="material-symbols-rounded">
+                    person
+                </span>
+
+            </div>
+
+            <div class="min-w-0">
+
+                <h2 class="text-sm font-semibold text-slate-900">
+                    Personal Details
+                </h2>
+
+                <p class="mt-0.5 text-xs text-slate-500">
+                    Personal identity and demographic information.
+                </p>
+
+            </div>
+
+        </div>
+
+        @if (ShowEditButton)
+        {
+            <button type="button"
+                    disabled="@IsDisabled"
+                    @onclick="HandleEditAsync"
+                    class="inline-flex w-full items-center
+                           justify-center gap-2 rounded-xl border
+                           border-slate-200 bg-white px-3.5 py-2
+                           text-sm font-semibold text-slate-700
+                           transition hover:bg-slate-50
+                           disabled:cursor-not-allowed
+                           disabled:opacity-50
+                           sm:w-auto">
+
+                <span class="material-symbols-rounded text-[18px]">
+                    edit
+                </span>
+
+                Edit details
+
+            </button>
+        }
+
+    </div>
+
+    <!-- Body -->
+    <div class="p-4 sm:p-5">
+
+        <div class="grid grid-cols-1 gap-x-8 gap-y-5
+                    sm:grid-cols-2 xl:grid-cols-3">
+
+            <DetailItem Icon="badge"
+                Label="Full Name"
+                Value="@DisplayValue(Profile.FullName)" />
+
+            <DetailItem Icon="translate"
+                Label="Name in Dhivehi"
+                Value="@DisplayValue(Profile.FullNameDhivehi)"
+                IsDhivehi="true" />
+
+            <DetailItem Icon="id_card"
+                Label="Identity Card"
+                Value="@DisplayValue(Profile.IdentityCardNumber)" />
+
+            <DetailItem Icon="cake"
+                Label="Date of Birth"
+                Value="@DateOfBirthText" />
+
+            <DetailItem Icon="wc"
+                Label="Gender"
+                Value="@DisplayValue(Profile.GenderName)" />
+
+            <DetailItem Icon="public"
+                Label="Nationality"
+                Value="@DisplayValue(Profile.NationalityName)" />
+
+            <DetailItem Icon="fingerprint"
+                Label="Individual ID"
+                Value="@Profile.IndividualId.ToString()" />
+
+            <DetailItem Icon="@StatusIcon"
+                Label="Individual Status"
+                Value="@StatusText"
+                ValueClass="@StatusTextClass" />
+
+        </div>
+
+    </div>
+
+</section>
 
 @code {
 
-    [Parameter]
-    public ProfileOverviewDto Profile { get; set; } = default!;
+    public DateTime? DateOfBirth { get; set; }
 
+public int? GenderId { get; set; }
+
+public string GenderName { get; set; } =
+    string.Empty;
+
+public int? NationalityId { get; set; }
+
+public string NationalityName { get; set; } =
+    string.Empty;
+
+public bool IsIndividualActive { get; set; }
+
+public string? ImageUrl { get; set; }
+
+
+    [Parameter, EditorRequired]
+    public ProfileOverviewDto Profile { get; set; } = null!;
+
+    [Parameter]
+    public bool IsDisabled { get; set; }
+
+    [Parameter]
+    public bool ShowEditButton { get; set; } = true;
 
     [Parameter]
     public EventCallback OnEdit { get; set; }
 
+    private string DateOfBirthText =>
+        Profile.DateOfBirth.HasValue
+            ? Profile.DateOfBirth.Value.ToString("dd MMM yyyy")
+            : "Not available";
 
+    private string StatusText =>
+        Profile.IsIndividualActive
+            ? "Active"
+            : "Inactive";
+
+    private string StatusIcon =>
+        Profile.IsIndividualActive
+            ? "check_circle"
+            : "cancel";
+
+    private string StatusTextClass =>
+        Profile.IsIndividualActive
+            ? "text-emerald-700"
+            : "text-slate-500";
+
+    private async Task HandleEditAsync()
+    {
+        if (IsDisabled)
+        {
+            return;
+        }
+
+        if (OnEdit.HasDelegate)
+        {
+            await OnEdit.InvokeAsync();
+        }
+    }
+
+    private static string DisplayValue(
+        string? value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? "Not available"
+            : value;
+    }
 }
