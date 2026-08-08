@@ -1,0 +1,207 @@
+﻿@using HRM.DTOs.Leave
+@using HRM.DTOs.LeaveTypes
+
+<section class="overflow-hidden rounded-2xl
+                border border-slate-200
+                bg-white shadow-sm">
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+        <h2 class="text-sm font-semibold text-slate-900">
+            @(IsEdit
+                ? "Edit Leave Type"
+                : "Create Leave Type")
+        </h2>
+
+        <p class="mt-1 text-xs text-slate-500">
+            Define the identity of the leave type.
+            Rules and entitlement will be configured
+            separately through policies.
+        </p>
+
+    </div>
+
+    <EditForm Model="@Model"
+              OnValidSubmit="@SaveAsync">
+
+        <DataAnnotationsValidator />
+
+        <div class="space-y-5 p-5">
+
+            <div class="grid grid-cols-1 gap-5
+                        md:grid-cols-2">
+
+                <div>
+
+                    <label class="mb-1.5 block text-xs
+                                  font-semibold text-slate-700">
+                        Code
+                    </label>
+
+                    <InputText @bind-Value="Model.Code"
+                               disabled="@IsEdit"
+                               class="w-full rounded-xl border
+                               border-slate-300 px-3 py-2.5
+                               text-sm outline-none
+                               focus:border-indigo-500
+                               focus:ring-2
+                               focus:ring-indigo-100" />
+
+                </div>
+
+                <div>
+
+                    <label class="mb-1.5 block text-xs
+                                  font-semibold text-slate-700">
+                        Name
+                    </label>
+
+                    <InputText @bind-Value="Model.Name"
+                               class="w-full rounded-xl border
+                               border-slate-300 px-3 py-2.5
+                               text-sm outline-none
+                               focus:border-indigo-500
+                               focus:ring-2
+                               focus:ring-indigo-100" />
+
+                </div>
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-xs
+                              font-semibold text-slate-700">
+                    Name in Dhivehi
+                </label>
+
+                <InputText @bind-Value="Model.NameDhivehi"
+                           dir="rtl"
+                           class="w-full rounded-xl border
+                           border-slate-300 px-3 py-2.5
+                           text-sm outline-none" />
+
+            </div>
+
+            <div>
+
+                <label class="mb-1.5 block text-xs
+                              font-semibold text-slate-700">
+                    Description
+                </label>
+
+                <InputTextArea @bind-Value="Model.Description"
+                               rows="4"
+                               class="w-full rounded-xl border
+                           border-slate-300 px-3 py-2.5
+                           text-sm outline-none" />
+
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+
+                <label class="flex items-center gap-3
+                              rounded-xl border
+                              border-slate-200 p-3">
+
+                    <InputCheckbox @bind-Value="Model.IsActive" />
+
+                    <span class="text-sm font-medium
+                                 text-slate-700">
+                        Active
+                    </span>
+
+                </label>
+
+                <label class="flex items-center gap-3
+                              rounded-xl border
+                              border-slate-200 p-3">
+
+                    <InputCheckbox @bind-Value="Model.IsGlobal" />
+
+                    <span class="text-sm font-medium
+                                 text-slate-700">
+                        Global
+                    </span>
+
+                </label>
+
+                <label class="flex items-center gap-3
+                              rounded-xl border
+                              border-slate-200 p-3">
+
+                    <InputCheckbox @bind-Value="Model.IsSystemType" />
+
+                    <span class="text-sm font-medium
+                                 text-slate-700">
+                        System
+                    </span>
+
+                </label>
+
+            </div>
+
+        </div>
+
+        <div class="flex justify-end gap-3
+                    border-t border-slate-200
+                    bg-slate-50 px-5 py-4">
+
+            <button type="button"
+                    @onclick="CancelAsync"
+                    class="rounded-xl border
+                           border-slate-200 bg-white
+                           px-4 py-2.5 text-sm
+                           font-semibold text-slate-700">
+                Cancel
+            </button>
+
+            <button type="submit"
+                    disabled="@IsSaving"
+                    class="rounded-xl bg-indigo-600
+                           px-5 py-2.5 text-sm
+                           font-semibold text-white
+                           hover:bg-indigo-700
+                           disabled:bg-slate-300">
+
+                @(IsSaving
+                    ? "Saving..."
+                    : IsEdit
+                    ? "Save Changes"
+                    : "Create Leave Type")
+
+            </button>
+
+        </div>
+
+    </EditForm>
+
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public LeaveDefinitionSaveRequest Model { get; set; } =
+        new();
+
+    [Parameter]
+    public bool IsEdit { get; set; }
+
+    [Parameter]
+    public bool IsSaving { get; set; }
+
+    [Parameter]
+    public EventCallback OnSave { get; set; }
+
+    [Parameter]
+    public EventCallback OnCancel { get; set; }
+
+    private Task SaveAsync()
+    {
+        return OnSave.InvokeAsync();
+    }
+
+    private Task CancelAsync()
+    {
+        return OnCancel.InvokeAsync();
+    }
+}

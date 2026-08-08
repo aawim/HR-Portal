@@ -31,6 +31,8 @@ using HRM.Services.JobLeaveTypes;
 using HRM.Services.Interfaces.JobLeaveTypes;
 using HRM.Services.JobPosition;
 using HRM.Services.Interfaces.JobPosition;
+using HRM.Services.Interfaces.LeaveType;
+using HRM.Services.Interfaces.Policy;
 
 
 
@@ -67,8 +69,27 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 
 
+builder.Services.AddScoped<
+    ILeaveDefinitionService,
+    LeaveDefinitionService>();
+
+builder.Services.AddScoped<
+    ILeaveFrameworkResolver,
+    LeaveFrameworkResolver>();
+
+builder.Services.AddScoped<
+    ILeavePolicyService,
+    LeavePolicyService>();
+
+builder.Services.AddScoped<
+    ILeavePolicyAccrualRuleService,
+    LeavePolicyAccrualRuleService>();
 
 
+builder.Services.AddScoped<UserContext, UserContext>();
+
+
+builder.Services.AddScoped<ILeaveTypeService,LeaveTypeService>();
 
 builder.Services.AddScoped<IJobPosition, JobPositionService>();
 

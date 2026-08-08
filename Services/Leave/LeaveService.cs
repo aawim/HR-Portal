@@ -259,7 +259,7 @@ namespace HRM.Services.Leave
                 .OrderBy(x => x.Name)
                 .Select(x => new LeaveTypeDto
                 {
-                    LeaveTypeID = x.LeaveTypeId,
+                    LeaveTypeId = x.LeaveTypeId,
                     Name = x.Name,
                     NameDhivehi = x.NameDhivehi,
                     Duration = x.Duration,

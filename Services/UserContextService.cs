@@ -29,17 +29,7 @@ namespace HRM.Services
         public async Task<UserContextDto?> GetCurrentAsync()
         {
 
-
-            //var auth = await _authentication.GetAuthenticationStateAsync(); 
-
-            //Console.WriteLine(auth.User.Identity?.IsAuthenticated);
-
-            //foreach (var claim in auth.User.Claims)
-            //{
-            //    Console.WriteLine($"{claim.Type} = {claim.Value}");
-            //}
-
-
+ 
 
             if (Current != null)
                 return Current;
@@ -118,130 +108,6 @@ namespace HRM.Services
             if (Current?.UserId == userId)
                 Current = null;
         }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-        //private readonly IUserService _userService;
-        //private readonly IUserContextBuilder _builder;
-        //private readonly IUserContextCache _cache;
-        //private readonly AuthenticationStateProvider _auth;
-
-
-        //public UserContextService(
-        //IUserService userService,
-        //IUserContextBuilder builder,
-        //IUserContextCache cache,
-        //AuthenticationStateProvider auth)
-        //{
-        //    _userService = userService;
-        //    _builder = builder;
-        //    _cache = cache;
-        //    _auth = auth;
-        //}
-
-
-        //public UserContextDto? Current { get; private set; }
-
-        //public async Task<UserContextDto?> GetCurrentAsync()
-        //{
-        //    if (Current != null)
-        //        return Current;
-
-
-        //    var authState =
-        //        await _auth.GetAuthenticationStateAsync();
-
-
-        //    var username =
-        //        authState.User
-        //        .FindFirst("idnumber")
-        //        ?.Value;
-
-
-        //    if (string.IsNullOrEmpty(username))
-        //        return null;
-
-
-        //    var user =
-        //        await _userService.GetByUsernameAsync(username);
-
-
-        //    if (user == null)
-        //        return null;
-
-
-        //    var cached =
-        //        await _cache.GetAsync(user.UserID);
-
-
-        //    if (cached != null)
-        //    {
-        //        Current = cached;
-        //        return cached;
-        //    }
-
-
-
-        //    var context =
-        //        await _builder
-        //        .BuildAsync(user.UserID);
-
-
-        //    await _cache.SetAsync(
-        //        user.UserID,
-        //        context);
-
-
-        //    Current = context;
-
-
-        //    return context;
-        //}
-
-
-
-        //public async Task RefreshAsync()
-        //{
-        //    Current = null;
-
-
-        //    var authState =
-        //        await _auth.GetAuthenticationStateAsync();
-
-
-        //    var username =
-        //        authState.User
-        //        .FindFirst("idnumber")
-        //        ?.Value;
-
-
-        //    if (username == null)
-        //        return;
-
-
-        //    var user =
-        //        await _userService.GetByUsernameAsync(username);
-
-
-        //    if (user == null)
-        //        return;
-
-
-        //    await _cache.RemoveAsync(
-        //        user.UserID);
-        //}
-
 
     }
 }

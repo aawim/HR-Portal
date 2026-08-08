@@ -1,0 +1,145 @@
+﻿@using HRM.DTOs.Leave
+@using HRM.DTOs.LeaveTypes
+
+<section class="overflow-hidden rounded-2xl
+                border border-slate-200
+                bg-white shadow-sm">
+
+    <div class="border-b border-slate-200 px-5 py-4">
+
+        <h2 class="text-sm font-semibold text-slate-900">
+            Leave Definitions
+        </h2>
+
+        <p class="mt-1 text-xs text-slate-500">
+            New policy-based leave types.
+        </p>
+
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="p-5 text-sm text-slate-500">
+            Loading...
+        </div>
+    }
+    else if (Definitions.Count == 0)
+    {
+        <div class="p-10 text-center">
+
+           @*  <span class="material-symbols-rounded
+                         text-4xl text-slate-300">
+                event_busy
+            </span> *@
+
+            <p class="mt-2 text-sm font-medium
+                      text-slate-700">
+                No leave definitions
+            </p>
+
+        </div>
+    }
+    else
+    {
+        <div class="divide-y divide-slate-100">
+
+            @foreach (var item in Definitions)
+            {
+                <button type="button"
+                        @onclick="() => SelectAsync(item)"
+                        class="@GetItemClass(item)">
+
+                    <div class="min-w-0 flex-1">
+
+                        <div class="flex flex-wrap items-center gap-2">
+
+                            <p class="truncate text-sm font-semibold
+                                      text-slate-800">
+                                @item.Name
+                            </p>
+
+                            @if (item.IsGlobal)
+                            {
+                                <span class="rounded-full bg-blue-50
+                                             px-2 py-0.5 text-[10px]
+                                             font-semibold text-blue-700">
+                                    Global
+                                </span>
+                            }
+
+                            @if (item.IsSystemType)
+                            {
+                                <span class="rounded-full bg-violet-50
+                                             px-2 py-0.5 text-[10px]
+                                             font-semibold text-violet-700">
+                                    System
+                                </span>
+                            }
+
+                            @if (item.IsLegacyMapped)
+                            {
+                                <span class="rounded-full bg-amber-50
+                                             px-2 py-0.5 text-[10px]
+                                             font-semibold text-amber-700">
+                                    Legacy mapped
+                                </span>
+                            }
+
+                        </div>
+
+                        <p class="mt-1 font-mono text-[11px]
+                                  text-slate-400">
+                            @item.Code
+                        </p>
+
+                    </div>
+
+            @*         <span class="material-symbols-rounded
+                                 text-[18px] text-slate-300">
+                        chevron_right
+                    </span> *@
+
+                </button>
+            }
+
+        </div>
+    }
+
+</section>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<LeaveDefinitionDto>
+        Definitions
+    { get; set; } =
+            Array.Empty<LeaveDefinitionDto>();
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public int? SelectedId { get; set; }
+
+    [Parameter]
+    public EventCallback<LeaveDefinitionDto>
+        OnSelected
+    { get; set; }
+
+    private async Task SelectAsync(
+        LeaveDefinitionDto item)
+    {
+        await OnSelected.InvokeAsync(item);
+    }
+
+    private string GetItemClass(
+        LeaveDefinitionDto item)
+    {
+        var selected =
+            SelectedId ==
+            item.LeaveDefinitionId;
+
+        return selected
+            ? "flex w-full items-center gap-3 bg-indigo-50 px-4 py-3 text-left"
+            : "flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50";
+    }
+}

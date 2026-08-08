@@ -28,7 +28,7 @@ public partial class LeaveType
 
     public int OrganisationId { get; set; }
 
-    public int RequestTypeId { get; set; }
+    public int? RequestTypeId { get; set; }
 
     public bool IsSystemType { get; set; }
 

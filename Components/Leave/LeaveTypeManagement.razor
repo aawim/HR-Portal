@@ -1,0 +1,200 @@
+﻿@page "/admin/hr/leave/types"
+
+@using HRM.DTOs.Leave
+@using HRM.DTOs.LeaveTypes
+@using HRM.Services.Interfaces.LeaveType
+@using HRM.Services.Interfaces.Leave
+
+@inject ILeaveDefinitionService LeaveDefinitionService
+
+<PageTitle>Leave Types</PageTitle>
+
+<div class="min-h-screen bg-slate-50">
+
+    <div class="w-full px-4 py-6 sm:px-6 lg:px-8">
+
+        <div class="mb-6 flex flex-col gap-4
+                    sm:flex-row sm:items-center
+                    sm:justify-between">
+
+            <div>
+                <h1 class="text-xl font-bold text-slate-900">
+                    Leave Type Management
+                </h1>
+
+                <p class="mt-1 text-sm text-slate-500">
+                    Manage new policy-based leave definitions
+                    and migrate legacy leave types.
+                </p>
+            </div>
+
+            <button type="button"
+                    @onclick="StartCreate"
+                    class="inline-flex items-center justify-center
+                           gap-2 rounded-xl bg-indigo-600
+                           px-4 py-2.5 text-sm font-semibold
+                           text-white hover:bg-indigo-700">
+
+               @*  <span class="material-symbols-rounded text-[18px]">
+                    add
+                </span> *@
+
+                New Leave Type
+
+            </button>
+
+        </div>
+
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+
+            <!-- Form -->
+            <div class="xl:col-span-7">
+
+                <LeaveDefinitionForm
+                    Model="@_model"
+                    IsEdit="@_isEdit"
+                    IsSaving="@_saving"
+                    OnSave="@SaveAsync"
+                    OnCancel="@StartCreate" />
+
+            </div>
+
+            <!-- List -->
+            <div class="xl:col-span-5">
+
+                <LeaveDefinitionList
+                    Definitions="@_definitions"
+                    IsLoading="@_loading"
+                    SelectedId="@_selectedId"
+                    OnSelected="@SelectAsync" />
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    private List<LeaveDefinitionDto> _definitions = [];
+
+    private LeaveDefinitionSaveRequest _model = new();
+
+    private int? _selectedId;
+
+    private bool _loading;
+    private bool _saving;
+    private bool _isEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        StartCreate();
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _loading = true;
+
+            _definitions =
+                await LeaveDefinitionService
+                    .GetAvailableAsync();
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void StartCreate()
+    {
+        _selectedId = null;
+        _isEdit = false;
+
+        _model =
+            new LeaveDefinitionSaveRequest
+            {
+                IsActive = true
+            };
+    }
+
+    private async Task SelectAsync(
+        LeaveDefinitionDto definition)
+    {
+        var detail =
+            await LeaveDefinitionService
+                .GetByIdAsync(
+                    definition.LeaveDefinitionId);
+
+        if (detail is null)
+        {
+            return;
+        }
+
+        _selectedId =
+            detail.LeaveDefinitionId;
+
+        _isEdit = true;
+
+        _model =
+            new LeaveDefinitionSaveRequest
+            {
+                LeaveDefinitionId =
+                    detail.LeaveDefinitionId,
+
+                Code =
+                    detail.Code,
+
+                Name =
+                    detail.Name,
+
+                NameDhivehi =
+                    detail.NameDhivehi,
+
+                Description =
+                    detail.Description,
+
+                IsGlobal =
+                    detail.IsGlobal,
+
+                IsSystemType =
+                    detail.IsSystemType,
+
+                IsActive =
+                    detail.IsActive
+            };
+    }
+
+    private async Task SaveAsync()
+    {
+        try
+        {
+            _saving = true;
+
+            if (_isEdit)
+            {
+                await LeaveDefinitionService
+                    .UpdateAsync(
+                        _model);
+            }
+            else
+            {
+                await LeaveDefinitionService
+                    .CreateAsync(
+                        _model);
+            }
+
+            await LoadAsync();
+
+            StartCreate();
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

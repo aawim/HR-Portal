@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using HRM.Models.Archives;
+using HRM.Models.LeaveTypes;
 using HRM.Models.WorkPlanning;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,11 +13,26 @@ public partial class HrmTeContext : DbContext
     {
     }
 
-    public HrmTeContext(DbContextOptions<HrmTeContext> options)
-        : base(options)
+    public HrmTeContext(DbContextOptions<HrmTeContext> options) : base(options)
     {
     }
+    public virtual DbSet<LeaveDefinition> LeaveDefinitions { get; set; }
+
+    public virtual DbSet<LeavePolicy> LeavePolicies { get; set; }
+
+    public virtual DbSet<LeavePolicyAccrualRule> LeavePolicyAccrualRules { get; set; }
+
+    public virtual DbSet<LeaveFrameworkConfiguration> LeaveFrameworkConfigurations { get; set; }
+
+    public virtual DbSet<LeaveTypeMapping>LeaveTypeMappings{ get; set; }
+
+
+
+
     public virtual DbSet<PlanningProvider> PlanningProviders { get; set; }
+
+
+    
 
     public virtual DbSet<JobWorkTemplateAssignment> JobWorkTemplateAssignments { get; set; }
     public virtual DbSet<OrganisationWorkPlanningSetting>OrganisationWorkPlanningSettings{ get; set; }
@@ -7150,6 +7166,208 @@ public partial class HrmTeContext : DbContext
             .HasFilter("[IsValid] = 1")
             .HasDatabaseName("UX_WorkPlans_Job_WorkDate");
         });
+
+        modelBuilder.Entity<LeaveDefinition>(entity =>
+        {
+            entity.ToTable("LeaveDefinitions");
+
+            entity.HasKey(x =>
+                x.LeaveDefinitionId);
+
+            entity.Property(x =>
+                x.LeaveDefinitionId)
+                .HasColumnName("LeaveDefinitionID");
+
+            entity.Property(x =>
+                x.Code)
+                .HasMaxLength(50)
+                .IsUnicode(false);
+
+            entity.Property(x =>
+                x.Name)
+                .HasMaxLength(200);
+
+            entity.Property(x =>
+                x.NameDhivehi)
+                .HasMaxLength(200);
+
+            entity.Property(x =>
+                x.Description)
+                .HasMaxLength(1000);
+
+            entity.Property(x =>
+                x.OwnerOrganisationId)
+                .HasColumnName("OwnerOrganisationID");
+
+            entity.Property(x =>
+                x.OperationLogId)
+                .HasColumnName("OperationLogID");
+
+            entity.HasMany(x =>
+                x.LeavePolicies)
+                .WithOne(x =>
+                    x.LeaveDefinition)
+                .HasForeignKey(x =>
+                    x.LeaveDefinitionId);
+        });
+
+
+        modelBuilder.Entity<LeavePolicy>(entity =>
+        {
+            entity.ToTable("LeavePolicies");
+
+            entity.HasKey(x =>
+                x.LeavePolicyId);
+
+            entity.Property(x =>
+                x.LeavePolicyId)
+                .HasColumnName("LeavePolicyID");
+
+            entity.Property(x =>
+                x.LeaveDefinitionId)
+                .HasColumnName("LeaveDefinitionID");
+
+            entity.Property(x =>
+                x.OrganisationId)
+                .HasColumnName("OrganisationID");
+
+            entity.Property(x =>
+                x.RequestTypeId)
+                .HasColumnName("RequestTypeID");
+
+            entity.Property(x =>
+                x.OperationLogId)
+                .HasColumnName("OperationLogID");
+
+            entity.Property(x =>
+                x.DefaultEntitlementDays)
+                .HasColumnType("decimal(8,2)");
+
+            entity.Property(x =>
+                x.PayPercentage)
+                .HasColumnType("decimal(5,2)");
+        });
+
+
+        modelBuilder.Entity<LeavePolicyAccrualRule>(entity =>
+        {
+            entity.ToTable("LeavePolicyAccrualRules");
+
+            entity.HasKey(x =>
+                x.LeavePolicyAccrualRuleId);
+
+            entity.Property(x =>
+                x.LeavePolicyAccrualRuleId)
+                .HasColumnName("LeavePolicyAccrualRuleID");
+
+            entity.Property(x =>
+                x.LeavePolicyId)
+                .HasColumnName("LeavePolicyID");
+
+            entity.Property(x =>
+                x.AccrualType)
+                .HasConversion<string>();
+
+            entity.Property(x =>
+                x.AccrualAmount)
+                .HasColumnType("decimal(8,2)");
+
+            entity.Property(x =>
+                x.MaximumBalance)
+                .HasColumnType("decimal(8,2)");
+
+            entity.Property(x =>
+                x.MaximumCarryForward)
+                .HasColumnType("decimal(8,2)");
+
+            entity.HasOne(x =>
+                x.LeavePolicy)
+                .WithMany(x =>
+                    x.AccrualRules)
+                .HasForeignKey(x =>
+                    x.LeavePolicyId);
+        });
+
+        modelBuilder.Entity<LeaveFrameworkConfiguration>(entity =>
+        {
+            entity.ToTable("LeaveFrameworkConfigurations");
+
+            entity.HasKey(e =>
+                e.LeaveFrameworkConfigurationId);
+
+            entity.Property(e =>
+                e.LeaveFrameworkConfigurationId)
+                .HasColumnName("LeaveFrameworkConfigurationID");
+
+            entity.Property(e =>
+                e.OrganisationId)
+                .HasColumnName("OrganisationID");
+
+            entity.Property(e =>
+                e.FrameworkType)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(e =>
+                e.MigrationState)
+                .HasConversion<string>()
+                .HasMaxLength(30)
+                .IsRequired();
+
+            entity.Property(e =>
+                e.EffectiveFrom)
+                .HasColumnType("date");
+
+            entity.Property(e =>
+                e.EffectiveTo)
+                .HasColumnType("date");
+
+            entity.Property(e =>
+                e.IsActive)
+                .HasDefaultValue(true);
+
+            entity.Property(e =>
+                e.OperationLogId)
+                .HasColumnName("OperationLogID");
+
+            entity.HasIndex(e => new
+            {
+                e.OrganisationId,
+                e.IsActive,
+                e.EffectiveFrom
+            })
+            .HasDatabaseName(
+                "IX_LeaveFrameworkConfigurations_Organisation_Active_Effective");
+
+            /*
+             * Optional but recommended:
+             *
+             * Link OrganisationID to Organisations.BusinessEntityID.
+             */
+            entity.HasOne<Organisation>()
+                .WithMany()
+                .HasForeignKey(e =>
+                    e.OrganisationId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName(
+                    "FK_LeaveFrameworkConfigurations_Organisations");
+
+            /*
+             * Optional:
+             *
+             * Link OperationLogID if your OperationLog entity exists.
+             */
+            entity.HasOne<OperationLog>()
+                .WithMany()
+                .HasForeignKey(e =>
+                    e.OperationLogId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName(
+                    "FK_LeaveFrameworkConfigurations_OperationLogs");
+        });
+
+
     }
     
     private static void ConfigurePlanningProvider(ModelBuilder modelBuilder)
