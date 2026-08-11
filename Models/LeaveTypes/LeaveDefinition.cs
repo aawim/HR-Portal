@@ -33,5 +33,8 @@
 
         public virtual ICollection<LeaveTypeMapping> LeaveTypeMappings { get; set; } =
             new List<LeaveTypeMapping>();
+
+        public virtual ICollection<JobLeaveType> JobLeaveTypes { get; set; }
+    = new List<JobLeaveType>();
     }
 }

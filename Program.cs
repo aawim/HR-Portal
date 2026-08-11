@@ -103,6 +103,7 @@ builder.Services.AddScoped<IManualWorkAssignmentService,ManualWorkAssignmentServ
 
 builder.Services.AddScoped<IManualWorkAssignmentLookupService,ManualWorkAssignmentLookupService>();
 
+builder.Services.AddScoped<ILeaveTypeMappingService,LeaveTypeMappingService>();
 
 builder.Services.AddScoped<IWorkPlanService, WorkPlanService>();
 

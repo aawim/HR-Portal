@@ -2737,41 +2737,170 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_Jobs_Services");
         });
 
+        //modelBuilder.Entity<JobLeaveType>(entity =>
+        //{
+        //    entity.HasKey(e => e.JobLeaveTypeId).HasName("PK_JobLeaves");
+
+        //    entity.HasIndex(e => new { e.JobId, e.LeaveTypeId }, "IX_JobLeaveTypes");
+
+        //    entity.Property(e => e.JobLeaveTypeId).HasColumnName("JobLeaveTypeID");
+        //    entity.Property(e => e.AutoCorrectDate).HasColumnType("datetime");
+        //    entity.Property(e => e.AutoCorrectRemark).HasMaxLength(250);
+        //    entity.Property(e => e.EffectiveFromDate).HasColumnType("datetime");
+        //    entity.Property(e => e.EffectiveToDate).HasColumnType("datetime");
+        //    entity.Property(e => e.JobId).HasColumnName("JobID");
+        //    entity.Property(e => e.LastLeaveTakenDate).HasColumnType("datetime");
+        //    entity.Property(e => e.LeaveTypeId).HasColumnName("LeaveTypeID");
+        //    entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
+        //    entity.Property(e => e.RenewedDate).HasColumnType("datetime");
+
+        //    entity.HasOne(d => d.Job).WithMany(p => p.JobLeaveTypes)
+        //        .HasForeignKey(d => d.JobId)
+        //        .OnDelete(DeleteBehavior.ClientSetNull)
+        //        .HasConstraintName("FK_JobLeaves_Jobs");
+
+        //    entity.HasOne(d => d.LeaveType).WithMany(p => p.JobLeaveTypes)
+        //        .HasForeignKey(d => d.LeaveTypeId)
+        //        .OnDelete(DeleteBehavior.ClientSetNull)
+        //        .HasConstraintName("FK_JobLeaves_LeaveTypes");
+
+        //    entity.HasOne(x => x.LeaveDefinition)
+        //        .WithMany()
+        //        .HasForeignKey(x => x.LeaveDefinitionId)
+        //        .OnDelete(DeleteBehavior.Restrict);
+
+        //    entity.HasOne(d => d.OperationLog).WithMany(p => p.JobLeaveTypes)
+        //        .HasForeignKey(d => d.OperationLogId)
+        //        .OnDelete(DeleteBehavior.ClientSetNull)
+        //        .HasConstraintName("FK_JobLeaves_OperationLogs");
+
+        //    entity.HasOne(x => x.LeaveType)
+        //     .WithMany(x => x.JobLeaveTypes)
+        //     .HasForeignKey(x => x.LeaveTypeId)
+        //     .OnDelete(DeleteBehavior.Restrict)
+        //     .HasConstraintName("FK_JobLeaves_LeaveTypes");
+
+        //    entity.HasOne(x => x.LeaveDefinition)
+        //        .WithMany(x => x.JobLeaveTypes)
+        //        .HasForeignKey(x => x.LeaveDefinitionId)
+        //        .OnDelete(DeleteBehavior.Restrict)
+        //        .HasConstraintName("FK_JobLeaveTypes_LeaveDefinitions");
+
+
         modelBuilder.Entity<JobLeaveType>(entity =>
         {
-            entity.HasKey(e => e.JobLeaveTypeId).HasName("PK_JobLeaves");
+            entity.ToTable(
+                "JobLeaveTypes",
+                table =>
+                {
+                    table.HasCheckConstraint(
+                        "CK_JobLeaveTypes_ExactlyOneLeaveSource",
+                        """
+                (
+                    ([LeaveTypeID] IS NOT NULL
+                     AND [LeaveDefinitionID] IS NULL)
+                    OR
+                    ([LeaveTypeID] IS NULL
+                     AND [LeaveDefinitionID] IS NOT NULL)
+                )
+                """);
+                });
 
-            entity.HasIndex(e => new { e.JobId, e.LeaveTypeId }, "IX_JobLeaveTypes");
+            entity.HasKey(e => e.JobLeaveTypeId)
+                .HasName("PK_JobLeaves");
 
-            entity.Property(e => e.JobLeaveTypeId).HasColumnName("JobLeaveTypeID");
-            entity.Property(e => e.AutoCorrectDate).HasColumnType("datetime");
-            entity.Property(e => e.AutoCorrectRemark).HasMaxLength(250);
-            entity.Property(e => e.EffectiveFromDate).HasColumnType("datetime");
-            entity.Property(e => e.EffectiveToDate).HasColumnType("datetime");
-            entity.Property(e => e.JobId).HasColumnName("JobID");
-            entity.Property(e => e.LastLeaveTakenDate).HasColumnType("datetime");
-            entity.Property(e => e.LeaveTypeId).HasColumnName("LeaveTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.RenewedDate).HasColumnType("datetime");
+            // Legacy lookup index
+            entity.HasIndex(
+                    e => new
+                    {
+                        e.JobId,
+                        e.LeaveTypeId
+                    },
+                    "IX_JobLeaveTypes");
 
-            entity.HasOne(d => d.Job).WithMany(p => p.JobLeaveTypes)
-                .HasForeignKey(d => d.JobId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+            // New definition lookup index
+            entity.HasIndex(
+                    e => new
+                    {
+                        e.JobId,
+                        e.LeaveDefinitionId
+                    },
+                    "IX_JobLeaveTypes_JobID_LeaveDefinitionID");
+
+            entity.Property(e => e.JobLeaveTypeId)
+                .HasColumnName("JobLeaveTypeID");
+
+            entity.Property(e => e.JobId)
+                .HasColumnName("JobID");
+
+            entity.Property(e => e.LeaveTypeId)
+                .HasColumnName("LeaveTypeID");
+
+            entity.Property(e => e.LeaveDefinitionId)
+                .HasColumnName("LeaveDefinitionID");
+
+            entity.Property(e => e.RemainingDays);
+
+            entity.Property(e => e.LastLeaveTakenDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.RenewedDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.OperationLogId)
+                .HasColumnName("OperationLogID");
+
+            entity.Property(e => e.EffectiveFromDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.EffectiveToDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.AutoCorrectDate)
+                .HasColumnType("datetime");
+
+            entity.Property(e => e.AutoCorrectRemark)
+                .HasMaxLength(500);
+
+            // Job relationship
+            entity.HasOne(e => e.Job)
+                .WithMany(e => e.JobLeaveTypes)
+                .HasForeignKey(e => e.JobId)
+                .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_JobLeaves_Jobs");
 
-            entity.HasOne(d => d.LeaveType).WithMany(p => p.JobLeaveTypes)
-                .HasForeignKey(d => d.LeaveTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
+            // Temporary legacy relationship
+            entity.HasOne(e => e.LeaveType)
+                .WithMany(e => e.JobLeaveTypes)
+                .HasForeignKey(e => e.LeaveTypeId)
+                .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_JobLeaves_LeaveTypes");
 
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.JobLeaveTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_JobLeaves_OperationLogs");
+            // Permanent definition relationship
+            entity.Property(e => e.LeaveDefinitionId)
+      .HasColumnName("LeaveDefinitionID");
+
+            entity.HasOne(e => e.LeaveDefinition)
+                .WithMany(e => e.JobLeaveTypes)
+                .HasForeignKey(e => e.LeaveDefinitionId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName(
+                    "FK_JobLeaveTypes_LeaveDefinitions");
+
+
+            // Operation log relationship
+            entity.HasOne(e => e.OperationLog)
+                .WithMany(e => e.JobLeaveTypes)
+                .HasForeignKey(e => e.OperationLogId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName(
+                    "FK_JobLeaves_OperationLogs");
         });
 
+
+
         modelBuilder.Entity<JobPosition>(entity =>
-        {
+            {
             entity.HasIndex(e => new { e.FromDate, e.ToDate }, "IDX_JobPositions_FRDT_TODT").IsDescending();
 
             entity.HasIndex(e => e.PositionId, "IDX_JobPositions_PositionID");

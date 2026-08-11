@@ -1,6 +1,7 @@
 ﻿using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Leave;
+using HRM.DTOs.LeaveTypes;
 using HRM.DTOs.UserContext;
 using HRM.Models;
 using HRM.Services.Interfaces;
@@ -644,22 +645,9 @@ namespace HRM.Services.Leave
             }
         }
 
-
-      
-
-         
-
-
-
-
-
-
-
-
-
-
-
-
-
+        public Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId)
+        {
+            throw new NotImplementedException();
+        }
     }
 }

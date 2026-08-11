@@ -4,9 +4,10 @@
     {
         public int LeaveTypeId { get; set; }
 
-        public string Name { get; set; } =
-            string.Empty;
+        public int? LeaveDefinitionId { get; set; }
+        public string Name { get; set; } = string.Empty;
 
+        public DateTime? MappingEffectiveFrom { get; set; }
         public string? NameDhivehi { get; set; }
 
         public bool? IsSystemType { get; set; }

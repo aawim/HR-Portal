@@ -1,11 +1,16 @@
 ﻿@using HRM.Components.Shared
 @using HRM.DTOs.Leave
+@using HRM.DTOs.LeaveTypes
 @using HRM.Services.Interfaces.LeaveType
+@using HRM.Services.Interfaces.Leave
 @using HRM.Services.Interfaces
+@using HRM.Services
+
 @inject ILeaveTypeService LeaveTypeService
 @inject IUserAccessService UserAccessService
-
-
+@inject ILeaveDefinitionService LeaveDefinitionService
+@inject ILeaveTypeMappingService LeaveTypeMappingService
+@inject ToastService ToastService
 
 
 <div class="w-full">
@@ -37,8 +42,8 @@
 
                             <span class="material-symbols-rounded">
                                 @(_isEditMode
-                                    ? "edit_note"
-                                    : "add_circle")
+                                                    ? "edit_note"
+                                                    : "add_circle")
                             </span>
 
                         </div>
@@ -49,8 +54,8 @@
                                        text-slate-900">
 
                                 @(_isEditMode
-                                    ? "Edit Leave Type"
-                                    : "Create Leave Type")
+                                                    ? "Edit Leave Type"
+                                                    : "Create Leave Type")
 
                             </h2>
 
@@ -58,8 +63,8 @@
                                       text-slate-500">
 
                                 @(_isEditMode
-                                    ? "Update the selected leave type."
-                                    : "Create a new organisation leave type.")
+                                                    ? "Update the selected leave type."
+                                                    : "Create a new organisation leave type.")
 
                             </p>
 
@@ -70,9 +75,9 @@
                     @if (_isEditMode)
                     {
                         <button type="button"
-                                disabled="@_isSaving"
-                                @onclick="StartCreate"
-                                class="inline-flex items-center
+                        disabled="@_isSaving"
+                        @onclick="StartCreate"
+                        class="inline-flex items-center
                                        justify-center gap-2
                                        rounded-xl border
                                        border-slate-200
@@ -95,22 +100,22 @@
                 </div>
 
                 <EditForm Model="@_model"
-                          OnValidSubmit="@SaveAsync">
+                OnValidSubmit="@SaveAsync">
 
                     <DataAnnotationsValidator />
 
                     <div class="space-y-6 p-5">
 
                         @if (!string.IsNullOrWhiteSpace(
-                            _formMessage))
+                        _formMessage))
                         {
                             <div class="@GetMessageClass()">
 
                                 <span class="material-symbols-rounded
                                              text-[19px]">
                                     @(_saveSucceeded
-                                        ? "check_circle"
-                                        : "error")
+                                                        ? "check_circle"
+                                                        : "error")
                                 </span>
 
                                 <span>
@@ -133,9 +138,9 @@
                                 </label>
 
                                 <InputText
-                                    @bind-Value="_model.Name"
-                                    disabled="@FormDisabled"
-                                    class="w-full rounded-xl
+                                @bind-Value="_model.Name"
+                                disabled="@FormDisabled"
+                                class="w-full rounded-xl
                                            border border-slate-300
                                            px-3 py-2.5 text-sm
                                            outline-none transition
@@ -145,7 +150,7 @@
                                            disabled:bg-slate-100" />
 
                                 <ValidationMessage
-                                    For="@(() => _model.Name)" />
+                                For="@(() => _model.Name)" />
                             </div>
 
                             <div>
@@ -156,10 +161,10 @@
                                 </label>
 
                                 <InputText
-                                    @bind-Value="_model.NameDhivehi"
-                                    disabled="@FormDisabled"
-                                    dir="rtl"
-                                    class="w-full rounded-xl
+                                @bind-Value="_model.NameDhivehi"
+                                disabled="@FormDisabled"
+                                dir="rtl"
+                                class="w-full rounded-xl
                                            border border-slate-300
                                            px-3 py-2.5 text-sm
                                            outline-none transition
@@ -184,9 +189,9 @@
                                 </label>
 
                                 <InputNumber
-                                    @bind-Value="_model.Duration"
-                                    disabled="@FormDisabled"
-                                    class="w-full rounded-xl
+                                @bind-Value="_model.Duration"
+                                disabled="@FormDisabled"
+                                class="w-full rounded-xl
                                            border border-slate-300
                                            px-3 py-2.5 text-sm
                                            outline-none
@@ -203,9 +208,9 @@
                                 </label>
 
                                 <InputNumber
-                                    @bind-Value="_model.ServiceDurationMonths"
-                                    disabled="@FormDisabled"
-                                    class="w-full rounded-xl
+                                @bind-Value="_model.ServiceDurationMonths"
+                                disabled="@FormDisabled"
+                                class="w-full rounded-xl
                                            border border-slate-300
                                            px-3 py-2.5 text-sm
                                            outline-none
@@ -222,9 +227,9 @@
                                 </label>
 
                                 <InputNumber
-                                    @bind-Value="_model.RequestTypeId"
-                                    disabled="@FormDisabled"
-                                    class="w-full rounded-xl
+                                @bind-Value="_model.RequestTypeId"
+                                disabled="@FormDisabled"
+                                class="w-full rounded-xl
                                            border border-slate-300
                                            px-3 py-2.5 text-sm
                                            outline-none
@@ -243,9 +248,9 @@
                                     </label>
 
                                     <InputNumber
-                                        @bind-Value="_model.PayPercentage"
-                                        disabled="@FormDisabled"
-                                        class="w-full rounded-xl
+                                    @bind-Value="_model.PayPercentage"
+                                    disabled="@FormDisabled"
+                                    class="w-full rounded-xl
                                                border border-slate-300
                                                px-3 py-2.5 text-sm
                                                outline-none
@@ -270,7 +275,7 @@
                                         gap-3 sm:grid-cols-2
                                         xl:grid-cols-3">
 
-                            @*    <ToggleOption Title="Include Holidays"
+                                @*    <ToggleOption Title="Include Holidays"
                                     Description="Holidays count toward duration."
                                     @bind-Value="_model.IncludeHolidays"
                                     Disabled="@FormDisabled"
@@ -279,43 +284,43 @@
 
 
                                 <ToggleOption Title="Include Holidays"
-                                    Description="Holidays count toward duration."
-                                    @bind-Value="_model.IncludeHolidays"
- 
-                                    />
+                                Description="Holidays count toward duration."
+                                @bind-Value="_model.IncludeHolidays"
+
+                                />
 
                                 <ToggleOption Title="Include Pay"
-                                    Description="Leave is eligible for pay."
-                                    @bind-Value="_model.IncludePay"
-                                   
-                                    />
+                                Description="Leave is eligible for pay."
+                                @bind-Value="_model.IncludePay"
+
+                                />
 
                                 <ToggleOption Title="Public"
-                                    Description="Visible as a public leave type."
-                                    @bind-Value="_model.IsPublic"
-                                   
+                                Description="Visible as a public leave type."
+                                @bind-Value="_model.IsPublic"
 
-                                    />
+
+                                />
 
                                 <ToggleOption Title="Location Required"
-                                    Description="Location is required when applying."
-                                    @bind-Value="_model.IsLocationRequired"
-                                  
-                                    
-                                    />
+                                Description="Location is required when applying."
+                                @bind-Value="_model.IsLocationRequired"
+
+
+                                />
 
                                 <ToggleOption Title="Staff Wide"
-                                    Description="Available to all eligible staff."
-                                    @bind-Value="_model.IsStaffWideAvailable"
-                                   
+                                Description="Available to all eligible staff."
+                                @bind-Value="_model.IsStaffWideAvailable"
 
-                                    />
+
+                                />
 
                                 <ToggleOption Title="Renewed"
-                                    Description="Leave entitlement renews periodically."
-                                    @bind-Value="_model.IsRenewed"
-                                  
-                                    />
+                                Description="Leave entitlement renews periodically."
+                                @bind-Value="_model.IsRenewed"
+
+                                />
 
                             </div>
 
@@ -344,9 +349,9 @@
                                         </label>
 
                                         <InputNumber
-                                            @bind-Value="_model.StartInMonth"
-                                            disabled="@FormDisabled"
-                                            class="w-full rounded-xl
+                                        @bind-Value="_model.StartInMonth"
+                                        disabled="@FormDisabled"
+                                        class="w-full rounded-xl
                                                    border border-slate-300
                                                    bg-white px-3 py-2.5
                                                    text-sm outline-none" />
@@ -360,9 +365,9 @@
                                         </label>
 
                                         <InputNumber
-                                            @bind-Value="_model.RepeatedEveryInMonth"
-                                            disabled="@FormDisabled"
-                                            class="w-full rounded-xl
+                                        @bind-Value="_model.RepeatedEveryInMonth"
+                                        disabled="@FormDisabled"
+                                        class="w-full rounded-xl
                                                    border border-slate-300
                                                    bg-white px-3 py-2.5
                                                    text-sm outline-none" />
@@ -373,7 +378,170 @@
                             </div>
                         }
 
+                        <!-- New Framework Mapping -->
+                        <div class="rounded-xl border border-indigo-200
+                                bg-indigo-50/40 p-4">
+
+                            <div class="flex items-start gap-3">
+
+                                @*       <span class="material-symbols-rounded
+                     mt-0.5 text-indigo-600">
+                                    conversion_path
+                                </span> *@
+
+                                <div class="min-w-0 flex-1">
+
+                                    <h3 class="text-sm font-semibold
+                       text-indigo-900">
+                                        New Leave Framework
+                                    </h3>
+
+                                    <p class="mt-1 text-xs
+                      text-indigo-700">
+                                        Map this legacy leave type to a
+                                        new leave definition.
+                                    </p>
+
+                                    <div class="mt-4 grid grid-cols-1
+                        gap-4 lg:grid-cols-2">
+
+                                        <div>
+
+                                            <label class="mb-1.5 block
+                                  text-xs font-semibold
+                                  text-slate-700">
+                                                Leave Definition
+                                            </label>
+
+                                            <InputSelect @bind-Value="_model.LeaveDefinitionId"
+                                            disabled="@FormDisabled"
+                                            class="w-full rounded-xl
+                                                   border border-slate-300
+                                                   bg-white px-3 py-2.5
+                                                   text-sm outline-none
+                                                   focus:border-indigo-500
+                                                   focus:ring-2
+                                                   focus:ring-indigo-100">
+
+                                                <option value="">
+                                                    Not mapped
+                                                </option>
+
+                                                @foreach (var definition in
+                                                _definitions
+                                                .Where(x => x.IsActive)
+                                                .OrderBy(x => x.Name))
+                                                {
+                                                    <option value="@definition.LeaveDefinitionId">
+                                                        @definition.Name (@definition.Code)
+                                                    </option>
+                                                }
+
+                                            </InputSelect>
+
+                                        </div>
+
+                                        @if (_model.LeaveDefinitionId.HasValue &&
+                                        _model.LeaveDefinitionId.Value > 0)
+                                        {
+                                            <div>
+
+                                                <label class="mb-1.5 block
+                                      text-xs font-semibold
+                                      text-slate-700">
+                                                    Mapping Effective From
+                                                </label>
+
+                                                <InputDate @bind-Value="_model.MappingEffectiveFrom"
+                                                disabled="@FormDisabled"
+                                                class="w-full rounded-xl
+                                   border border-slate-300
+                                   bg-white px-3 py-2.5
+                                   text-sm outline-none
+                                   focus:border-indigo-500
+                                   focus:ring-2
+                                   focus:ring-indigo-100" />
+
+                                            </div>
+                                        }
+
+                                    </div>
+
+                                    @if (_model.LeaveDefinitionId.HasValue)
+                                    {
+                                        var selectedDefinition =
+                                        _definitions.FirstOrDefault(x =>
+                                        x.LeaveDefinitionId ==
+                                        _model.LeaveDefinitionId.Value);
+
+                                        if (selectedDefinition is not null)
+                                        {
+                                            <div class="mt-4 flex flex-wrap
+                                items-center gap-2
+                                rounded-lg border
+                                border-indigo-100
+                                bg-white px-3 py-2.5">
+
+                                                @*                             <span class="material-symbols-rounded
+                                     text-[17px]
+                                     text-indigo-500">
+                                                    link
+                                                </span> *@
+
+                                                <span class="text-xs
+                                     text-slate-500">
+                                                    Maps to
+                                                </span>
+
+                                                <span class="text-sm font-semibold
+                                     text-slate-800">
+                                                    @selectedDefinition.Name
+                                                </span>
+
+                                                <span class="rounded bg-slate-100
+                                     px-2 py-0.5
+                                     font-mono text-[10px]
+                                     text-slate-600">
+                                                    @selectedDefinition.Code
+                                                </span>
+
+                                                @if (selectedDefinition.IsGlobal)
+                                                {
+                                                    <span class="rounded-full
+                                         bg-blue-50
+                                         px-2 py-0.5
+                                         text-[10px]
+                                         font-semibold
+                                         text-blue-700">
+                                                        Global
+                                                    </span>
+                                                }
+
+                                            </div>
+                                        }
+                                    }
+
+                                </div>
+
+                            </div>
+
+                        </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                     </div>
+
 
                     <!-- Footer -->
                     <div class="flex flex-col-reverse gap-3
@@ -383,9 +551,9 @@
                                 sm:justify-end">
 
                         <button type="button"
-                                disabled="@_isSaving"
-                                @onclick="ResetForm"
-                                class="rounded-xl border
+                        disabled="@_isSaving"
+                        @onclick="ResetForm"
+                        class="rounded-xl border
                                        border-slate-200 bg-white
                                        px-4 py-2.5 text-sm
                                        font-semibold text-slate-700
@@ -394,8 +562,8 @@
                         </button>
 
                         <button type="submit"
-                                disabled="@FormDisabled"
-                                class="inline-flex items-center
+                        disabled="@FormDisabled"
+                        class="inline-flex items-center
                                        justify-center gap-2
                                        rounded-xl bg-indigo-600
                                        px-5 py-2.5 text-sm
@@ -425,8 +593,8 @@
 
                                 <span>
                                     @(_isEditMode
-                                        ? "Save Changes"
-                                        : "Create Leave Type")
+                                                        ? "Save Changes"
+                                                        : "Create Leave Type")
                                 </span>
                             }
 
@@ -468,15 +636,15 @@
                         </div>
 
                         <button type="button"
-                                @onclick="StartCreate"
-                                class="flex h-9 w-9
+                        @onclick="StartCreate"
+                        class="flex h-9 w-9
                                        items-center
                                        justify-center
                                        rounded-lg
                                        bg-indigo-600
                                        text-white
                                        hover:bg-indigo-700"
-                                title="Add leave type">
+                        title="Add leave type">
 
                             <span class="material-symbols-rounded
                                          text-[19px]">
@@ -498,10 +666,10 @@
                         </span>
 
                         <input type="text"
-                               value="@_searchText"
-                               @oninput="HandleSearch"
-                               placeholder="Search leave types..."
-                               class="w-full rounded-xl
+                        value="@_searchText"
+                        @oninput="HandleSearch"
+                        placeholder="Search leave types..."
+                        class="w-full rounded-xl
                                       border border-slate-200
                                       bg-slate-50 py-2.5
                                       pl-10 pr-3 text-sm
@@ -563,13 +731,13 @@
                                     divide-slate-100">
 
                             @foreach (var leaveType
-                                in FilteredLeaveTypes)
+                            in FilteredLeaveTypes)
                             {
                                 <button type="button"
-                                        @onclick="() =>
+                                @onclick="() =>
                                             SelectLeaveTypeAsync(
                                                 leaveType)"
-                                        class="@GetLeaveTypeItemClass(
+                                class="@GetLeaveTypeItemClass(
                                             leaveType)">
 
                                     <div class="min-w-0 flex-1">
@@ -612,12 +780,12 @@
                                         </div>
 
                                         @if (!string.IsNullOrWhiteSpace(
-                                            leaveType.NameDhivehi))
+                                        leaveType.NameDhivehi))
                                         {
                                             <p class="mt-1 truncate
                                                       text-xs
                                                       text-slate-500"
-                                               dir="rtl">
+                                            dir="rtl">
                                                 @leaveType.NameDhivehi
                                             </p>
                                         }
@@ -677,6 +845,7 @@
 
 @code {
     private List<LeaveTypeDto> _leaveTypes = [];
+    private List<LeaveDefinitionDto> _definitions = [];
 
     private LeaveTypeSaveRequest _model =
         new();
@@ -735,7 +904,7 @@
                  * system/global leave types.
                  */
             return selected.IsSystemType ||
-                   selected.IsGlobal;
+       selected.IsGlobal;
         }
     }
 
@@ -800,6 +969,8 @@
             _leaveTypes =
                 await LeaveTypeService
                     .GetOrganisationLeaveTypesAsync();
+
+            _definitions = await LeaveDefinitionService.GetAvailableAsync();
         }
         finally
         {
@@ -846,8 +1017,7 @@
             false;
 
         var detail =
-            await LeaveTypeService.GetByIdAsync(
-                leaveType.LeaveTypeId);
+            await LeaveTypeService.GetByIdAsync(leaveType.LeaveTypeId);
 
         if (detail is null)
         {
@@ -902,6 +1072,20 @@
                 RepeatedEveryInMonth =
                     detail.RepeatedEveryInMonth
             };
+
+        var mapping = await LeaveTypeMappingService
+            .GetByLegacyLeaveTypeAsync(leaveType.LeaveTypeId);
+
+        _model.LeaveDefinitionId =
+            mapping?.LeaveDefinitionId;
+
+        _model.MappingEffectiveFrom =
+            mapping?.EffectiveFrom ??
+            DateTime.Today;
+
+
+
+
     }
 
     private async Task SaveAsync()
@@ -923,35 +1107,47 @@
                 false;
 
             LeaveTypeSaveResult result;
+            var msg = string.Empty;
+
+
 
             if (_isEditMode)
             {
-                result =
-                    await LeaveTypeService
-                        .UpdateAsync(
-                            _model);
+                result = await LeaveTypeService.UpdateAsync(_model);
+
+                if (!result.Success)
+                {
+                    msg = "Unable to Update Leave Type";
+                }
+                msg = "Leave Type Updated Successfully";
             }
             else
             {
-                result =
-                    await LeaveTypeService
-                        .CreateAsync(
-                            _model);
+                result = await LeaveTypeService.CreateAsync(_model);
+
+                if (!result.Success)
+                {
+                   msg = "Unable to Create Leave Type";
+    
+                }
+
+                msg = "Leave Type Created Successfully";
             }
 
-            _formMessage =
-                result.Message;
 
-            _saveSucceeded =
-                result.Success;
+            _formMessage = result.Message;
+
+            _saveSucceeded = result.Success;
 
             if (!result.Success)
             {
+                ToastService.Error(msg +" " +_formMessage);
+
                 return;
             }
-
+ 
+            ToastService.Success(msg);
             await LoadAsync();
-
             if (result.LeaveTypeId.HasValue)
             {
                 var saved =
@@ -969,8 +1165,7 @@
         }
         finally
         {
-            _isSaving =
-                false;
+            _isSaving = false;
         }
     }
 

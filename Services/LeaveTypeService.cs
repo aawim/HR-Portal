@@ -1,5 +1,6 @@
 ﻿using HRM.DTOs.Leave;
 using HRM.Models;
+using HRM.Models.LeaveTypes;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.LeaveType;
 using Microsoft.EntityFrameworkCore;
@@ -210,15 +211,11 @@ namespace HRM.Services
                 var organisationId =
                     await GetCurrentOrganisationIdAsync();
 
-                await using var db =
-                    await _dbFactory.CreateDbContextAsync(
-                        cancellationToken);
+                await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-                var name =
-                    request.Name.Trim();
+                var name = request.Name.Trim();
 
-                var alreadyExists =
-                    await db.LeaveTypes
+                var alreadyExists = await db.LeaveTypes 
                         .AsNoTracking()
                         .AnyAsync(
                             x =>
@@ -313,31 +310,204 @@ namespace HRM.Services
             }
         }
 
+        //public async Task<LeaveTypeSaveResult> UpdateAsync(
+        //    LeaveTypeSaveRequest request,
+        //    CancellationToken cancellationToken = default)
+        //{
+
+
+        //    var context =
+        //    await _userAccessService.GetContextAsync();
+
+        //    var isSuperAdmin =
+        //        context?.IsSuperAdministrator == true;
+
+
+
+        //    //if (!isSuperAdmin &&
+        //    //    (request.IsSystemType == true || request.IsGlobal == true ))
+        //    //{
+        //    //    return LeaveTypeSaveResult.Failure(
+        //    //        "You do not have permission to edit this leave type.");
+        //    //}
+
+
+
+
+        //    if (request.LeaveTypeId == 0|| request.LeaveTypeId <= 0)
+        //    {
+        //        return LeaveTypeSaveResult.Failure(
+        //            "A valid leave type ID is required.");
+        //    }
+
+        //    var validationMessage =
+        //        Validate(request);
+
+        //    if (validationMessage is not null)
+        //    {
+        //        return LeaveTypeSaveResult.Failure(
+        //            validationMessage);
+        //    }
+
+        //    try
+        //    {
+        //        var organisationId =
+        //            await GetCurrentOrganisationIdAsync();
+
+        //        await using var db =
+        //            await _dbFactory.CreateDbContextAsync(
+        //                cancellationToken);
+
+
+
+        //        //var userOrg = await db.UserOrganisations
+        //        //      .Where(x => x.BusinessEntityID == organisationId)
+        //        //      .FirstOrDefaultAsync();
+
+        //        //// 2. Safely extract the ID. Falls back to 0 (or null) if no record exists.
+        //        //int userOrganisationId = userOrg?.UserOrganisationID ?? 0;
+
+
+        //        var leaveType =
+        //            await db.LeaveTypes
+        //                .FirstOrDefaultAsync(
+        //                    x =>
+        //                        x.LeaveTypeId ==
+        //                            request.LeaveTypeId &&
+        //                        x.OrganisationId ==
+        //                            organisationId,
+        //                    cancellationToken);
+
+        //        if (leaveType is null)
+        //        {
+        //            return LeaveTypeSaveResult.Failure(
+        //                "The leave type could not be found.");
+        //        }
+
+        //        /*
+        //         * Organisation users should not modify
+        //         * system/global leave types.
+        //         */
+        //        if (leaveType.IsSystemType ||
+        //            leaveType.IsGlobal)
+        //        {
+        //            return LeaveTypeSaveResult.Failure(
+        //                "System or global leave types cannot be edited here.");
+        //        }
+
+        //        var name =
+        //            request.Name.Trim();
+
+        //        var duplicateName =
+        //            await db.LeaveTypes
+        //                .AsNoTracking()
+        //                .AnyAsync(
+        //                    x =>
+        //                        x.LeaveTypeId !=
+        //                            leaveType.LeaveTypeId &&
+        //                        x.OrganisationId ==
+        //                            organisationId &&
+        //                        x.Name == name,
+        //                    cancellationToken);
+
+        //        if (duplicateName)
+        //        {
+        //            return LeaveTypeSaveResult.Failure(
+        //                "Another leave type with this name already exists.");
+        //        }
+
+        //        leaveType.Name =
+        //            name;
+
+        //        leaveType.NameDhivehi =
+        //            Clean(request.NameDhivehi);
+
+        //        leaveType.Duration =
+        //            request.Duration;
+
+        //        leaveType.IncludeHolidays =
+        //            request.IncludeHolidays;
+
+        //        leaveType.IncludePay =
+        //            request.IncludePay;
+
+        //        leaveType.IsPublic =
+        //            request.IsPublic;
+
+        //        leaveType.IsLocationRequired =
+        //            request.IsLocationRequired;
+
+        //        leaveType.ServiceDurationMonths =
+        //            request.ServiceDurationMonths;
+
+        //        leaveType.RequestTypeId =
+        //            request.RequestTypeId;
+
+        //        leaveType.IsRenewed =
+        //            request.IsRenewed;
+
+        //        leaveType.IsStaffWideAvailable =
+        //            request.IsStaffWideAvailable;
+
+        //        leaveType.PayPercentage =
+        //            request.IncludePay
+        //                ? request.PayPercentage
+        //                : 0;
+
+        //        leaveType.StartInMonth =
+        //            request.IsRenewed
+        //                ? request.StartInMonth : 0;
+
+        //        leaveType.RepeatedEveryInMonth =
+        //            request.IsRenewed
+        //                ? request.RepeatedEveryInMonth
+        //                : 0;
+
+        //        await db.SaveChangesAsync(
+        //            cancellationToken);
+
+        //        return LeaveTypeSaveResult.Successful(
+        //            leaveType.LeaveTypeId,
+        //            "Leave type updated successfully.");
+        //    }
+        //    catch (Exception exception)
+        //    {
+        //        _logger.LogError(
+        //            exception,
+        //            "Unable to update leave type {LeaveTypeId}.",
+        //            request.LeaveTypeId);
+
+        //        return LeaveTypeSaveResult.Failure(
+        //            "The leave type could not be updated.");
+        //    }
+        //}
+
+        //private async Task<int> GetCurrentOrganisationIdAsync()
+        //{
+        //    var context =
+        //        await _userAccessService.GetContextAsync();
+
+        //    if (context?.ActiveJob is null ||
+        //        context.ActiveJob.OrganisationId <= 0)
+        //    {
+        //        throw new InvalidOperationException(
+        //            "The current organisation could not be resolved.");
+        //    }
+
+        //    return context.ActiveJob.OrganisationId;
+        //}
+
+
         public async Task<LeaveTypeSaveResult> UpdateAsync(
             LeaveTypeSaveRequest request,
             CancellationToken cancellationToken = default)
         {
-
-
             var context =
-    await _userAccessService.GetContextAsync();
+                await _userAccessService.GetContextAsync();
 
-            var isSuperAdmin =
-                context?.IsSuperAdministrator == true;
+            var isSuperAdmin = context?.IsSuperAdministrator == false;
 
-
-
-            //if (!isSuperAdmin &&
-            //    (request.IsSystemType == true || request.IsGlobal == true ))
-            //{
-            //    return LeaveTypeSaveResult.Failure(
-            //        "You do not have permission to edit this leave type.");
-            //}
-
-
-
-
-            if (request.LeaveTypeId == 0|| request.LeaveTypeId <= 0)
+            if (request.LeaveTypeId <= 0)
             {
                 return LeaveTypeSaveResult.Failure(
                     "A valid leave type ID is required.");
@@ -352,51 +522,78 @@ namespace HRM.Services
                     validationMessage);
             }
 
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
+
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    cancellationToken);
+
             try
             {
                 var organisationId =
-                    await GetCurrentOrganisationIdAsync();
+                    await GetCurrentOrganisationIdAsync(
+                        cancellationToken);
 
-                await using var db =
-                    await _dbFactory.CreateDbContextAsync(
+                // =========================================================
+                // 1. LOAD LEGACY LEAVE TYPE
+                // =========================================================
+
+                //var leaveType =
+                //    await db.LeaveTypes
+                //        .FirstOrDefaultAsync(
+                //            x =>
+                //                x.LeaveTypeId ==
+                //                    request.LeaveTypeId &&
+                //                x.OrganisationId ==
+                //                    organisationId,
+                //                        cancellationToken);
+
+                //var isSuperAdmin = await _userAccessService.IsSuperAdministratorAsync();
+
+                var leaveType = await db.LeaveTypes
+                    .FirstOrDefaultAsync(
+                        x => x.LeaveTypeId == request.LeaveTypeId &&
+                             (isSuperAdmin || x.OrganisationId == organisationId),
                         cancellationToken);
 
 
 
-                //var userOrg = await db.UserOrganisations
-                //      .Where(x => x.BusinessEntityID == organisationId)
-                //      .FirstOrDefaultAsync();
-
-                //// 2. Safely extract the ID. Falls back to 0 (or null) if no record exists.
-                //int userOrganisationId = userOrg?.UserOrganisationID ?? 0;
 
 
-                var leaveType =
-                    await db.LeaveTypes
-                        .FirstOrDefaultAsync(
-                            x =>
-                                x.LeaveTypeId ==
-                                    request.LeaveTypeId &&
-                                x.OrganisationId ==
-                                    organisationId,
-                            cancellationToken);
+
+
 
                 if (leaveType is null)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return LeaveTypeSaveResult.Failure(
                         "The leave type could not be found.");
                 }
 
-                /*
-                 * Organisation users should not modify
-                 * system/global leave types.
-                 */
-                if (leaveType.IsSystemType ||
-                    leaveType.IsGlobal)
+                // =========================================================
+                // 2. ACCESS CHECK
+                // =========================================================
+
+                if (!isSuperAdmin && ( leaveType.IsSystemType || leaveType.IsGlobal ))
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return LeaveTypeSaveResult.Failure(
-                        "System or global leave types cannot be edited here.");
+                        "You do not have permission to edit system or global leave types.");
                 }
+
+
+
+
+
+                // =========================================================
+                // 3. DUPLICATE NAME CHECK
+                // =========================================================
 
                 var name =
                     request.Name.Trim();
@@ -415,9 +612,16 @@ namespace HRM.Services
 
                 if (duplicateName)
                 {
+                    await transaction.RollbackAsync(
+                        cancellationToken);
+
                     return LeaveTypeSaveResult.Failure(
                         "Another leave type with this name already exists.");
                 }
+
+                // =========================================================
+                // 4. UPDATE LEGACY LEAVE TYPE
+                // =========================================================
 
                 leaveType.Name =
                     name;
@@ -459,22 +663,207 @@ namespace HRM.Services
 
                 leaveType.StartInMonth =
                     request.IsRenewed
-                        ? request.StartInMonth : 0;
+                        ? request.StartInMonth
+                        : 0;
 
                 leaveType.RepeatedEveryInMonth =
                     request.IsRenewed
                         ? request.RepeatedEveryInMonth
                         : 0;
 
+                // =========================================================
+                // 5. HANDLE NEW FRAMEWORK MAPPING
+                // =========================================================
+
+                var existingMapping =
+                    await db.LeaveTypeMappings
+                        .Where(x =>
+                            x.LegacyLeaveTypeId ==
+                                leaveType.LeaveTypeId &&
+                            x.OrganisationId ==
+                                organisationId &&
+                            x.IsActive)
+                        .OrderByDescending(x =>
+                            x.EffectiveFrom)
+                        .ThenByDescending(x =>
+                            x.LeaveTypeMappingId)
+                        .FirstOrDefaultAsync(
+                            cancellationToken);
+
+                /*
+                 * User selected a LeaveDefinition.
+                 */
+                if (request.LeaveDefinitionId.HasValue &&
+                    request.LeaveDefinitionId.Value > 0)
+                {
+                    var definitionId =
+                        request.LeaveDefinitionId.Value;
+
+                    // Make sure selected definition is valid
+                    // for the current organisation.
+                    var definitionExists =
+                        await db.LeaveDefinitions
+                            .AsNoTracking()
+                            .AnyAsync(
+                                x =>
+                                    x.LeaveDefinitionId ==
+                                        definitionId &&
+                                    x.IsActive &&
+                                    (
+                                        x.IsGlobal ||
+                                        x.OwnerOrganisationId ==
+                                            organisationId
+                                    ),
+                                cancellationToken);
+
+                    if (!definitionExists)
+                    {
+                        await transaction.RollbackAsync(
+                            cancellationToken);
+
+                        return LeaveTypeSaveResult.Failure(
+                            "The selected leave definition is not available for this organisation.");
+                    }
+
+                    var effectiveFrom =
+                        request.MappingEffectiveFrom?.Date ??
+                        DateTime.Today;
+
+                    /*
+                     * No mapping exists yet.
+                     */
+                    if (existingMapping is null)
+                    {
+                        var newMapping =
+                            new LeaveTypeMapping
+                            {
+                                LegacyLeaveTypeId =
+                                    leaveType.LeaveTypeId,
+
+                                LeaveDefinitionId =
+                                    definitionId,
+
+                                OrganisationId =
+                                    organisationId,
+
+                                EffectiveFrom =
+                                    effectiveFrom,
+
+                                EffectiveTo =
+                                    null,
+
+                                IsActive =
+                                    true
+                            };
+
+                        db.LeaveTypeMappings.Add(
+                            newMapping);
+                    }
+
+                    /*
+                     * Same definition is already mapped.
+                     *
+                     * Just update effective date if required.
+                     */
+                    else if (
+                        existingMapping.LeaveDefinitionId ==
+                            definitionId)
+                    {
+                        existingMapping.EffectiveFrom =
+                            effectiveFrom;
+
+                        existingMapping.EffectiveTo =
+                            null;
+
+                        existingMapping.IsActive =
+                            true;
+                    }
+
+                    /*
+                     * Mapping changed to another definition.
+                     *
+                     * Keep the old mapping for history and
+                     * create a new mapping.
+                     */
+                    else
+                    {
+                        existingMapping.IsActive =
+                            false;
+
+                        existingMapping.EffectiveTo =
+                            effectiveFrom.AddDays(-1);
+
+                        var newMapping =
+                            new LeaveTypeMapping
+                            {
+                                LegacyLeaveTypeId =
+                                    leaveType.LeaveTypeId,
+
+                                LeaveDefinitionId =
+                                    definitionId,
+
+                                OrganisationId =
+                                    organisationId,
+
+                                EffectiveFrom =
+                                    effectiveFrom,
+
+                                EffectiveTo =
+                                    null,
+
+                                IsActive =
+                                    true
+                            };
+
+                        db.LeaveTypeMappings.Add(
+                            newMapping);
+                    }
+                }
+                else
+                {
+                    /*
+                     * "Not mapped" selected.
+                     *
+                     * Do not delete the old mapping.
+                     * Close it so migration history is preserved.
+                     */
+                    if (existingMapping is not null)
+                    {
+                        existingMapping.IsActive =
+                            false;
+
+                        existingMapping.EffectiveTo =
+                            DateTime.Today;
+                    }
+                }
+
+                // =========================================================
+                // 6. SAVE EVERYTHING
+                // =========================================================
+
                 await db.SaveChangesAsync(
+                    cancellationToken);
+
+                // =========================================================
+                // 7. COMMIT TRANSACTION
+                // =========================================================
+
+                await transaction.CommitAsync(
                     cancellationToken);
 
                 return LeaveTypeSaveResult.Successful(
                     leaveType.LeaveTypeId,
-                    "Leave type updated successfully.");
+                    "Leave type and migration mapping updated successfully.");
             }
             catch (Exception exception)
             {
+                // =========================================================
+                // 8. ROLLBACK
+                // =========================================================
+
+                await transaction.RollbackAsync(
+                    cancellationToken);
+
                 _logger.LogError(
                     exception,
                     "Unable to update leave type {LeaveTypeId}.",
@@ -485,20 +874,7 @@ namespace HRM.Services
             }
         }
 
-        //private async Task<int> GetCurrentOrganisationIdAsync()
-        //{
-        //    var context =
-        //        await _userAccessService.GetContextAsync();
 
-        //    if (context?.ActiveJob is null ||
-        //        context.ActiveJob.OrganisationId <= 0)
-        //    {
-        //        throw new InvalidOperationException(
-        //            "The current organisation could not be resolved.");
-        //    }
-
-        //    return context.ActiveJob.OrganisationId;
-        //}
 
         private async Task<int> GetCurrentOrganisationIdAsync(
            CancellationToken cancellationToken = default)

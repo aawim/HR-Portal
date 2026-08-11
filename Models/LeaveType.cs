@@ -44,6 +44,8 @@ public partial class LeaveType
 
     public int RepeatedEveryInMonth { get; set; }
 
+    public int? MigratedLeaveDefinitionID { get; set; } 
+
     public virtual ICollection<JobLeaveType> JobLeaveTypes { get; set; } = new List<JobLeaveType>();
 
     public virtual ICollection<LeaveSetLeaveType> LeaveSetLeaveTypes { get; set; } = new List<LeaveSetLeaveType>();

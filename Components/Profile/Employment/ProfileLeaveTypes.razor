@@ -818,7 +818,7 @@
               "text-slate-600";
     }
 
-    private static int GetAllocatedDays(JobLeaveTypeDto leaveType)
+    private static decimal GetAllocatedDays(JobLeaveTypeDto leaveType)
     {
         /*
         * Change this to your actual allocation property.
@@ -836,7 +836,7 @@
         return leaveType.RemainingDays;
     }
 
-    private static decimal GetUsedDays(
+ @*    private static decimal GetUsedDays(
         JobLeaveTypeDto leaveType)
     {
         var allocated =
@@ -845,10 +845,19 @@
         var remaining =
             GetRemainingDays(leaveType);
 
-        return Math.Max(
-            0m,
-            allocated - remaining);
-    }
+        return Math.Max(allocated - remaining);
+    } *@
+
+    private static decimal GetUsedDays(JobLeaveTypeDto leaveType)
+{
+    var allocated = GetAllocatedDays(leaveType);
+    var remaining = GetRemainingDays(leaveType);
+
+    // Compares the subtraction result against 0 and returns the higher number
+    return  allocated - remaining;
+}
+
+
 
     private static int GetRemainingPercentage(
         JobLeaveTypeDto leaveType)
@@ -861,15 +870,10 @@
 
         if (allocated <= 0)
         {
-            return remaining > 0
-                ? 100
-                : 0;
+            return remaining > 0 ? 100 : 0;
         }
 
-        var percentage =
-            remaining /
-            allocated *
-            100m;
+        var percentage = remaining / allocated * 100m;
 
         return (int)Math.Clamp(
             Math.Round(percentage),

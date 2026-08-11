@@ -1,0 +1,141 @@
+﻿@using HRM.DTOs.LeaveTypes
+<div class="rounded-xl border border-blue-200 bg-white shadow-sm overflow-hidden">
+
+    <!-- Header -->
+    <div class="p-4 border-b border-blue-100 bg-blue-50">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="font-semibold text-slate-800">
+                    New Leave Definitions
+                </h3>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    @FilteredDefinitions.Count() available
+                </p>
+            </div>
+
+            <span class="rounded-full bg-blue-100 px-2.5 py-1
+                         text-xs font-medium text-blue-700">
+                New
+            </span>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="p-3 border-b border-slate-100">
+        <input class="w-full rounded-lg border border-slate-300
+                      px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-blue-500"
+               placeholder="Search new definitions..."
+               @bind="_search"
+               @bind:event="oninput" />
+    </div>
+
+    <!-- List -->
+    <div class="max-h-[560px] overflow-y-auto p-3">
+
+        @if (!FilteredDefinitions.Any())
+        {
+            <div class="py-8 text-center text-sm text-slate-500">
+                No new leave definitions are available.
+            </div>
+        }
+        else
+        {
+            @foreach (var definition in FilteredDefinitions)
+            {
+                <button type="button"
+                        class="w-full text-left p-3 rounded-lg border mb-2
+                               transition-colors
+                               @GetButtonClass(definition)"
+                        @onclick="() => SelectDefinition(definition)">
+
+                    <div class="font-semibold text-slate-800">
+                        @definition.Name
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(definition.NameDhivehi))
+                    {
+                        <div class="text-xs text-slate-500 mt-0.5">
+                            @definition.NameDhivehi
+                        </div>
+                    }
+
+                    <div class="text-xs text-slate-500 mt-1">
+                        @* @definition.Duration days *@
+                    </div>
+                </button>
+            }
+        }
+    </div>
+
+    <!-- Footer -->
+    <div class="border-t border-slate-100 p-4">
+        <button type="button"
+                class="btn btn-primary w-full"
+                disabled="@(_selectedDefinition is null || IsProcessing)"
+                @onclick="AssignDefinitionAsync">
+
+            @if (IsProcessing)
+            {
+                <span>Assigning...</span>
+            }
+            else
+            {
+                <span>Assign New Leave Definition</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<LeaveDefinitionDto> Definitions { get; set; }
+        = Array.Empty<LeaveDefinitionDto>();
+
+    [Parameter]
+    public EventCallback<LeaveDefinitionDto> OnAssign { get; set; }
+
+    [Parameter]
+    public bool IsProcessing { get; set; }
+
+    private string _search = string.Empty;
+
+    private LeaveDefinitionDto? _selectedDefinition;
+
+    private IEnumerable<LeaveDefinitionDto> FilteredDefinitions =>
+        Definitions
+            .Where(x =>
+                string.IsNullOrWhiteSpace(_search) ||
+                x.Name.Contains(
+                    _search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.NameDhivehi) &&
+                 x.NameDhivehi.Contains(
+                     _search,
+                     StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(x => x.Name);
+
+    private void SelectDefinition(LeaveDefinitionDto definition)
+    {
+        _selectedDefinition = definition;
+    }
+
+    private async Task AssignDefinitionAsync()
+    {
+        if (_selectedDefinition is null || IsProcessing)
+        {
+            return;
+        }
+
+        await OnAssign.InvokeAsync(_selectedDefinition);
+    }
+
+    private string GetButtonClass(LeaveDefinitionDto definition)
+    {
+        return _selectedDefinition?.LeaveDefinitionId ==
+               definition.LeaveDefinitionId
+            ? "bg-blue-50 border-blue-500"
+            : "border-slate-200 hover:bg-slate-50";
+    }
+}

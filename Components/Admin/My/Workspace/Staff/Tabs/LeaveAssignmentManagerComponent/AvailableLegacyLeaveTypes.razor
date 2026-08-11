@@ -1,0 +1,142 @@
+﻿ 
+@using HRM.DTOs.Leave
+
+<div class="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+
+    <!-- Header -->
+    <div class="p-4 border-b border-slate-100 bg-slate-50">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="font-semibold text-slate-800">
+                    Legacy Leave Types
+                </h3>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    @FilteredLeaveTypes.Count() available
+                </p>
+            </div>
+
+            <span class="rounded-full bg-slate-200 px-2.5 py-1
+                         text-xs font-medium text-slate-600">
+                Legacy
+            </span>
+        </div>
+    </div>
+
+    <!-- Search -->
+    <div class="p-3 border-b border-slate-100">
+        <input class="w-full rounded-lg border border-slate-300
+                      px-3 py-2 text-sm
+                      focus:outline-none focus:ring-2 focus:ring-slate-500"
+               placeholder="Search legacy leave types..."
+               @bind="_search"
+               @bind:event="oninput" />
+    </div>
+
+    <!-- List -->
+    <div class="max-h-[560px] overflow-y-auto p-3">
+
+        @if (!FilteredLeaveTypes.Any())
+        {
+            <div class="py-8 text-center text-sm text-slate-500">
+                No legacy leave types are available.
+            </div>
+        }
+        else
+        {
+            @foreach (var leaveType in FilteredLeaveTypes)
+            {
+                <button type="button"
+                        class="w-full text-left p-3 rounded-lg border mb-2
+                               transition-colors
+                               @GetButtonClass(leaveType)"
+                        @onclick="() => SelectLeaveType(leaveType)">
+
+                    <div class="font-semibold text-slate-800">
+                        @leaveType.Name
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(leaveType.NameDhivehi))
+                    {
+                        <div class="text-xs text-slate-500 mt-0.5">
+                            @leaveType.NameDhivehi
+                        </div>
+                    }
+
+                    <div class="text-xs text-slate-500 mt-1">
+                        @leaveType.Duration days
+                    </div>
+                </button>
+            }
+        }
+    </div>
+
+    <!-- Footer -->
+    <div class="border-t border-slate-100 p-4">
+        <button type="button"
+                class="btn btn-secondary w-full"
+                disabled="@(_selectedLeaveType is null || IsProcessing)"
+                @onclick="AssignLeaveTypeAsync">
+
+            @if (IsProcessing)
+            {
+                <span>Assigning...</span>
+            }
+            else
+            {
+                <span>Assign Legacy Leave Type</span>
+            }
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<LeaveTypeDto> LeaveTypes { get; set; }
+        = Array.Empty<LeaveTypeDto>();
+
+    [Parameter]
+    public EventCallback<LeaveTypeDto> OnAssign { get; set; }
+
+    [Parameter]
+    public bool IsProcessing { get; set; }
+
+    private string _search = string.Empty;
+
+    private LeaveTypeDto? _selectedLeaveType;
+
+    private IEnumerable<LeaveTypeDto> FilteredLeaveTypes =>
+        LeaveTypes
+            .Where(x =>
+                string.IsNullOrWhiteSpace(_search) ||
+                x.Name.Contains(
+                    _search,
+                    StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrWhiteSpace(x.NameDhivehi) &&
+                 x.NameDhivehi.Contains(
+                     _search,
+                     StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(x => x.Name);
+
+    private void SelectLeaveType(LeaveTypeDto leaveType)
+    {
+        _selectedLeaveType = leaveType;
+    }
+
+    private async Task AssignLeaveTypeAsync()
+    {
+        if (_selectedLeaveType is null || IsProcessing)
+        {
+            return;
+        }
+
+        await OnAssign.InvokeAsync(_selectedLeaveType);
+    }
+
+    private string GetButtonClass(LeaveTypeDto leaveType)
+    {
+        return _selectedLeaveType?.LeaveTypeId == leaveType.LeaveTypeId
+            ? "bg-slate-100 border-slate-500"
+            : "border-slate-200 hover:bg-slate-50";
+    }
+}

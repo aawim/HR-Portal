@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HRM.Models.LeaveTypes;
+using System;
 using System.Collections.Generic;
 
 namespace HRM.Models;
@@ -7,6 +8,7 @@ public partial class JobLeaveType
 {
     public int JobLeaveTypeId { get; set; }
 
+    public int? LeaveDefinitionId { get; set; }
     public int JobId { get; set; }
 
     public int LeaveTypeId { get; set; }
@@ -36,4 +38,8 @@ public partial class JobLeaveType
     public virtual LeaveType LeaveType { get; set; } = null!;
 
     public virtual OperationLog OperationLog { get; set; } = null!;
+
+ 
+
+    public virtual LeaveDefinition? LeaveDefinition { get; set; }
 }

@@ -4,8 +4,7 @@ namespace HRM.Services.Interfaces.LeaveType
 {
     public interface ILeaveDefinitionService
     {
-        Task<List<LeaveDefinitionDto>> GetAvailableAsync(
-        CancellationToken cancellationToken = default);
+        Task<List<LeaveDefinitionDto>> GetAvailableAsync(CancellationToken cancellationToken = default);
 
         Task<LeaveDefinitionDto?> GetByIdAsync(
             int leaveDefinitionId,

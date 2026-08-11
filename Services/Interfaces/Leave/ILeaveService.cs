@@ -1,6 +1,7 @@
 ﻿using HRM.Models;
 using HRM.DTOs.Leave;
 using HRM.DTOs;
+using HRM.DTOs.LeaveTypes;
 
 namespace HRM.Services.Interfaces.Leave
 {
@@ -33,6 +34,10 @@ namespace HRM.Services.Interfaces.Leave
         //Task<List<JobLeaveTypeDto>> GetAssignedLeaveTypesAsync(int jobId);
 
         Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId);
+
+        Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId);
+
+
 
         //Task<JobLeaveTypeDto?> GetJobLeaveTypeAsync(int jobLeaveTypeId);
 

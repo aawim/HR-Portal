@@ -1,14 +1,17 @@
-﻿@using HRM.DTOs
+﻿@using HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManagerComponent
+@using HRM.DTOs
 @using HRM.DTOs.Leave
+@using HRM.DTOs.LeaveTypes
 @using HRM.Services
 @using HRM.Services.Interfaces
 @using HRM.Services.Interfaces.JobLeaveTypes
+@using HRM.Services.Interfaces.LeaveType
 @using HRM.Services.Interfaces.Leave
 
 @inject ILeaveService LeaveService
 @inject IJobLeaveTypeService JobLeaveTypeService
 @inject ToastService ToastService
-
+@inject ILeaveDefinitionService leaveDefinitionService;
 <div class="grid grid-cols-12 gap-6">
 
     <!-- Assigned -->
@@ -389,8 +392,6 @@
 
             <div class="border-t border-slate-100 p-4">
 
-
-
                 @if (selectedAvailable != null)
                 {
                     <div class="mt-4 border-t pt-4">
@@ -422,6 +423,11 @@
 
             </div>
 
+            <AvailableLeaveDefinitions
+                    Definitions="@availableDefinitions"
+                    IsProcessing="@assigningDefinition"
+                    OnAssign="AssignLeaveDefinitionAsync" />
+
         </div>
 
     </div>
@@ -432,6 +438,10 @@
 
 
 @code {
+
+    private List<LeaveDefinitionDto> availableDefinitions = new();
+
+    private bool assigningDefinition;
 
     [Parameter]
     public int StaffId { get; set; }
@@ -449,7 +459,7 @@
 
     private JobLeaveTypeDto? selectedAssigned;
 
-    private AssignLeaveTypeDto assignModel = new();
+    private AssignLegacyLeaveTypeDto assignModel = new();
 
     private LeaveTypeDto? selectedAvailable;
 
@@ -473,7 +483,7 @@
         selectedAvailable = null;
     }
 
-   
+
 
     private void SelectAvailable(LeaveTypeDto leaveType)
     {
@@ -484,7 +494,7 @@
 
         selectedAvailable = leaveType;
 
-        assignModel = new AssignLeaveTypeDto
+        assignModel = new AssignLegacyLeaveTypeDto
             {
                 JobId = JobId,
 
@@ -498,14 +508,18 @@
 
                 IsValid = true
             };
+
+
+
+
+
     }
 
 
 
     private async Task AssignLeaveType()
     {
-        var result =
-            await JobLeaveTypeService.AssignAsync(assignModel);
+        var result = await JobLeaveTypeService.AssignLegacyAsync(assignModel);
 
         if (!result.Success)
         {
@@ -513,16 +527,12 @@
             return;
         }
 
-
-
         ToastService.Success("Leave Type Assigned!.");
 
         selectedAvailable = null;
 
         await LoadAsync();
     }
-
-
 
 
 
@@ -556,7 +566,7 @@
 
         var result =
             await JobLeaveTypeService.UpdateAsync(dto);
-           
+
 
         if (!result.Success)
         {
@@ -573,6 +583,10 @@
                 x.JobLeaveTypeId == dto.JobLeaveTypeId);
     }
 
+
+
+
+
     private async Task RemoveSelected()
     {
         if (selectedAssigned == null)
@@ -582,13 +596,65 @@
     }
 
 
-     
- 
+    private async Task AssignLeaveDefinitionAsync(
+        LeaveDefinitionDto definition)
+    {
+        if (assigningDefinition)
+            return;
 
+        try
+        {
+            assigningDefinition = true;
+
+            var dto = new AssignLeaveDefinitionDto
+                {
+                    JobId = JobId,
+                    LeaveDefinitionId =
+                        definition.LeaveDefinitionId,
+
+                    EffectiveFromDate = DateTime.Today,
+                    EffectiveToDate = null
+                };
+
+            var result =
+                await JobLeaveTypeService.AssignDefinitionAsync(dto);
+
+            if (!result.Success)
+            {
+                ToastService.Error(
+                    result.Message ??
+                    "Unable to assign leave definition.");
+
+                return;
+            }
+
+            ToastService.Success(
+                "Leave definition assigned successfully.");
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                "An unexpected error occurred while assigning " +
+                "the leave definition.");
+
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            assigningDefinition = false;
+        }
+    }
+ 
+    // var result = await JobLeaveTypeService.AssignAsync(assignModel);
 
     private async Task LoadAsync()
     {
         isLoading = true;
+
+        try
+        {
 
         // assigned = await LeaveService.GetAssignedLeaveTypesAsync(JobId);
 
@@ -596,7 +662,28 @@
 
         available = await LeaveService.GetAvailableLeaveTypesAsync(StaffId);
 
+        // availableDefinitions = await LeaveService.GetAvailableLeaveDefinitionsAsync(JobId);
+
+            availableDefinitions = await leaveDefinitionService.GetAvailableAsync();
+
+            
+             
+
         isLoading = false;
+
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                "Unable to load staff leave information.");
+
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+
     }
 
 
