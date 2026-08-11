@@ -20,7 +20,7 @@ public class LeaveResource : ResourceBase
     /// <summary>
     /// Leave Type.
     /// </summary>
-    public int LeaveTypeID { get; set; }
+    public int? LeaveTypeID { get; set; }
 
     /// <summary>
     /// Current Leave State.

@@ -10,11 +10,11 @@ namespace HRM.Services.Interfaces.Leave
 
         Task<int> GetJobIdByStaffId(int StaffId);
         //Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int jobId);
-        Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int leaveTypeId);
+        Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int? leaveTypeId);
         Task<List<LeaveReasonDto>> GetReasonsByLeaveType();
    
-        Task<List<JobLeaveType>> GetMyLeaveBalancesAsync(int leaveTypeId = 0);
-        Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId,int leaveTypeId = 0);
+        Task<List<JobLeaveType>> GetMyLeaveBalancesAsync(int? leaveTypeId = 0);
+        Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId,int? leaveTypeId = 0);
 
         Task<List<Leaf>>GetLeaveRequestsAsync(int jobId);
         Task<List<JobLeaveType>> GetJobLeaveTypesAsync();
@@ -24,7 +24,7 @@ namespace HRM.Services.Interfaces.Leave
 
         Task<ServiceResult> SubmitLeave(LeaveApplicationDto model);
         Task<ServiceResult> CancelLeaveAsync(int leaveId);
-        Task<ServiceResult> ShowDetailLeaveAsync(int leaveId);
+        Task<ServiceResult> ShowDetailLeaveAsync(int? leaveId);
         Task<List<ProcessingLeaveDto>> GetMyProcessingLeavesAsync();
 
 
@@ -35,7 +35,7 @@ namespace HRM.Services.Interfaces.Leave
 
         Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId);
 
-        Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId);
+        //Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId);
 
 
 

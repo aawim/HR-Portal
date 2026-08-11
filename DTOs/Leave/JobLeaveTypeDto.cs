@@ -8,7 +8,7 @@ namespace HRM.DTOs.Leave
 
         public int JobId { get; set; }
 
-        public int LeaveTypeID { get; set; }
+   
 
         public bool IsLeaveInfoUpdated { get; set; }
 
@@ -18,7 +18,7 @@ namespace HRM.DTOs.Leave
   
         public bool IsValid { get; set; }
 
-        public int LeaveTypeId { get; set; }
+        public int? LeaveTypeId { get; set; }
 
         public DateTime? LastLeaveTakenDate { get; set; }
 

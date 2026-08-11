@@ -2807,7 +2807,7 @@ public partial class HrmTeContext : DbContext
                 });
 
             entity.HasKey(e => e.JobLeaveTypeId)
-                .HasName("PK_JobLeaves");
+                .HasName("PK_JobLeaveTypes");
 
             // Legacy lookup index
             entity.HasIndex(

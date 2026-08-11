@@ -11,7 +11,7 @@ public partial class JobLeaveType
     public int? LeaveDefinitionId { get; set; }
     public int JobId { get; set; }
 
-    public int LeaveTypeId { get; set; }
+    public int? LeaveTypeId { get; set; }
 
     public int? RemainingDays { get; set; }
 

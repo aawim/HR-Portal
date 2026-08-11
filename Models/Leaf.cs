@@ -18,7 +18,7 @@ public partial class Leaf
 
     public string? ChitNo { get; set; }
 
-    public int LeaveTypeId { get; set; }
+    public int? LeaveTypeId { get; set; }
 
     public int OperationLogId { get; set; }
 

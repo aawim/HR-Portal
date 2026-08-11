@@ -103,7 +103,7 @@ namespace HRM.Services.Leave
         }
 
 
-        public async Task<List<JobLeaveType>> GetMyLeaveBalancesAsync(int leaveTypeId = 0)
+        public async Task<List<JobLeaveType>> GetMyLeaveBalancesAsync(int? leaveTypeId = 0)
         {
             var context = await _access.RequireContextAsync();
 
@@ -113,7 +113,7 @@ namespace HRM.Services.Leave
             return await GetJobLeaveBalancesAsync(context.ActiveJob.JobId,leaveTypeId);
         }
 
-        public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId, int leaveTypeId = 0)
+        public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId, int? leaveTypeId = 0)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
 
@@ -215,7 +215,7 @@ namespace HRM.Services.Leave
 
 
 
-        public async Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int typeId)
+        public async Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int? typeId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
 
@@ -235,7 +235,7 @@ namespace HRM.Services.Leave
         }
 
        
-        public Task<ServiceResult> ShowDetailLeaveAsync(int leaveId)
+        public Task<ServiceResult> ShowDetailLeaveAsync(int? leaveId)
         {
             throw new NotImplementedException();
         }
@@ -281,9 +281,6 @@ namespace HRM.Services.Leave
 
 
 
-
-
-
         public async Task<int> GetJobIdByStaffId(int StaffId)
         {
             await using var db =
@@ -315,84 +312,7 @@ namespace HRM.Services.Leave
                 })
                 .FirstOrDefaultAsync();
         }
-
-
-        //public async Task<List<JobLeaveType>> GetJobLeaveTypesAsync()
-        //{
-        //    using var db = await _dbFactory.CreateDbContextAsync();
-        //    int jobId = await _userService.GetJobID();
-        //    return await db.JobLeaveTypes
-        //        .Where(x => x.JobId == jobId && x.IsValid == true && x.IsLeaveInfoUpdated == 1)
-        //        .Include(x => x.LeaveType)
-        //        .OrderBy(x => x.LeaveType.Name)
-        //        .ToListAsync();
-        //}
-
-
-        //public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int jobId)
-        //{
-
-        //    using var context = _context.CreateDbContext();
-        //    return await context.JobLeaveTypes
-        //        .Include(x => x.LeaveType)
-        //        .Where(x => x.JobId == jobId && x.IsValid)
-        //        .Select(x => new JobLeaveTypeDto
-        //        {
-        //            JobId = x.JobId,
-        //            LeaveTypeID = x.LeaveTypeId,
-        //            LeaveTypeName = x.LeaveType.Name,
-        //            RemainingDays = x.RemainingDays ?? 0
-        //        })
-        //        .ToListAsync();
-        //}
-
-        //public async Task<List<Leaf>> GetLeaveRequestsAsync(int jobId)
-        //{
-        //    using var context = _context.CreateDbContext();
-        //      return await context.Leaves
-        //        .Include(l => l.LeaveType)
-        //        .Include(ls => ls.LeaveState)
-        //        .Where(x => x.JobId == jobId)
-        //        .OrderByDescending(l => l.LeaveId)
-        //        .ToListAsync();
-        //}
-
-        //// Reasons
-        //public async Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int typeId)
-        //{
-        //    using var context = _context.CreateDbContext();
-
-        //    return await context.LeaveReasons
-        //        .Where(x => x.LeaveTypeReasonTypeId == typeId)
-        //        .Select(x => new LeaveReasonDto
-        //        {
-        //            Id = x.LeaveId,
-        //            Name = x.Reason
-        //        })
-        //        .ToListAsync();
-        //}
-
-        //public async Task<List<LeaveReasonDto>> GetReasonsByLeaveType()
-        //{
-        //    using var context = _context.CreateDbContext();
-
-        //    return await context.LeaveReasons
-        //          .Select(x => new LeaveReasonDto
-        //        {
-        //            Id = x.LeaveId,
-        //            Name = x.Reason
-        //        })
-        //        .ToListAsync();
-        //}
-
-        //public async Task<List<JobLeaveType>> GetUserLeaveBalancesAsync(int jobId, int typeId)
-        //{
-        //    using var context = _context.CreateDbContext();
-        //    return await context.JobLeaveTypes
-        //        .Include(x => x.LeaveType)
-        //        .Where(x => x.JobId == jobId && x.JobLeaveTypeId == typeId)
-        //        .ToListAsync();
-        //}
+ 
 
         //// SUBMIT LEAVE (MAIN PART)
 
@@ -645,9 +565,7 @@ namespace HRM.Services.Leave
             }
         }
 
-        public Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId)
-        {
-            throw new NotImplementedException();
-        }
+       
+ 
     }
 }

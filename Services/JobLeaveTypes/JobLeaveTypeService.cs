@@ -7,6 +7,7 @@ using HRM.Models;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.JobLeaveTypes;
 using Microsoft.EntityFrameworkCore;
+using System.Linq;
 
 namespace HRM.Services.JobLeaveTypes
 {
@@ -304,19 +305,25 @@ namespace HRM.Services.JobLeaveTypes
                  * This prevents assigning the definition when the staff
                  * already has its legacy equivalent.
                  */
-                var mappedLegacyTypeIds = db.LeaveTypes
-                    .Where(x =>
-                        x.MigratedLeaveDefinitionID == dto.LeaveDefinitionId)
-                    .Select(x => x.LeaveTypeId);
+                var mappedLegacyTypeIds =
+                  db.LeaveTypeMappings
+                      .Where(x =>
+                          x.LeaveDefinitionId ==
+                              dto.LeaveDefinitionId &&
+                          x.IsActive)
+                      .Select(x =>
+                          x.LegacyLeaveTypeId);
 
-                var mappedLegacyTypeAssigned =
-                    await db.JobLeaveTypes.AnyAsync(
-                        x => x.JobId == dto.JobId &&
-                             x.IsValid  &&
-                             x.LeaveTypeId > 0 &&
-                             mappedLegacyTypeIds.Contains(
-                                 x.LeaveTypeId),
-                        cancellationToken);
+                            var mappedLegacyTypeAssigned =
+                                await db.JobLeaveTypes
+                                    .AnyAsync(
+                                        x =>
+                                            x.JobId == dto.JobId &&
+                                            x.IsValid &&
+                                            x.LeaveTypeId.HasValue &&
+                                            mappedLegacyTypeIds.Contains(
+                                                x.LeaveTypeId.Value),
+                                        cancellationToken);
 
                 if (mappedLegacyTypeAssigned)
                 {
@@ -341,7 +348,7 @@ namespace HRM.Services.JobLeaveTypes
                     JobId = dto.JobId,
 
                     // New source
-                    LeaveTypeId = 0,
+                    LeaveTypeId = null,
                     LeaveDefinitionId =
                         dto.LeaveDefinitionId,
 

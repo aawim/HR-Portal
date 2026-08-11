@@ -122,7 +122,7 @@
     {
         var selected = LeaveState.JobLeaveTypes
             .FirstOrDefault(x =>
-                x.LeaveTypeID == LeaveState.Model.LeaveTypeId);
+                x.LeaveTypeId == LeaveState.Model.LeaveTypeId);
 
 
         if (selected == null)
@@ -149,7 +149,7 @@
     // ===== EVENTS =====
      private async Task OnLeaveTypeChanged()
     {
-        var selected = LeaveState.JobLeaveTypes.FirstOrDefault(x => x.LeaveTypeID == LeaveState.Model.LeaveTypeId);
+        var selected = LeaveState.JobLeaveTypes.FirstOrDefault(x => x.LeaveTypeId == LeaveState.Model.LeaveTypeId);
 
         if (selected != null)
         {
@@ -168,9 +168,9 @@
 
    private async Task ApplyLeaveType(JobLeaveTypeDto leave)
    {
-        LeaveState.Model.LeaveTypeId = leave.LeaveTypeID;
+        LeaveState.Model.LeaveTypeId = leave.LeaveTypeId;
         LeaveState.RemainingDays = (int)leave.RemainingDays;
-        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType(leave.LeaveTypeID);
+        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType(leave.LeaveTypeId);
         LeaveState.Model.LeaveReasonId = 0;
         
          LoadLeaveForm();

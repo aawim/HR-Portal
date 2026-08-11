@@ -16,7 +16,7 @@ namespace HRM.Services.Stores
             .Select(x => new JobLeaveTypeDto
             {
                 JobId = x.JobId,
-                LeaveTypeID = x.LeaveTypeId,
+                LeaveTypeId = x.LeaveTypeId,
                 LeaveTypeName = x.LeaveType?.Name,
                 RemainingDays = (int)x.RemainingDays,
             })
