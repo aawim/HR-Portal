@@ -1,11 +1,15 @@
 ﻿using Azure.Core;
+using HRM.Components.Admin.Settings.Users;
+using HRM.Components.Pages;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Leave;
 using HRM.DTOs.LeaveTypes;
+using HRM.DTOs.Profile;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.JobLeaveTypes;
+using HRM.Services.Interfaces.Profile;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 
@@ -16,12 +20,22 @@ namespace HRM.Services.JobLeaveTypes
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _operationLogService;
         private readonly IUserAccessService _userAccessService;
-
-        public JobLeaveTypeService(IDbContextFactory<HrmTeContext> dbFactory,IOperationLogService operationLogService, IUserAccessService userAccessService )
+        private readonly IProfileService _profileService;
+        private readonly IJobService _jobService;
+ 
+        public JobLeaveTypeService(
+                IDbContextFactory<HrmTeContext> dbFactory
+                ,IOperationLogService operationLogService
+                ,IUserAccessService userAccessService
+                ,IProfileService profileService
+                ,IJobService jobService 
+            )
         {
             _dbFactory = dbFactory;
             _operationLogService = operationLogService;
             _userAccessService = userAccessService;
+            _jobService = jobService;
+            _profileService = profileService;
         }
         //public async Task<ServiceResult> AssignAsync(AssignLeaveTypeDto dto)
         //{
@@ -119,18 +133,31 @@ namespace HRM.Services.JobLeaveTypes
                         "The current user does not have an active organisation.");
                 }
 
-                var jobExists = await db.Jobs
-                    .AnyAsync(
-                        x => x.JobId == dto.JobId &&
-                             x.OrganisationID ==
-                                 currentOrganisationId.Value,
-                        cancellationToken);
+           
+                var individualId = await _jobService.GetIndividualIdByJobIdAsync(dto.JobId);
 
-                if (!jobExists)
+                if (individualId <= 0)
                 {
                     return ServiceResult.Fail(
-                        "The selected job does not belong to your organisation.");
+                        "No active individual was found for the selected job.");
                 }
+
+                var profile = await _profileService.GetProfileAsync(
+                    individualId,
+                    cancellationToken);
+
+
+                if (profile?.ActiveJob?.OrganisationId != currentOrganisationId)
+                {
+                    return ServiceResult.Fail(
+                       $"{profile?.FullName} Does Not Belong To The Current Organisation");
+                }
+
+                //if (!jobExists)
+                //{
+                //    return ServiceResult.Fail(
+                //        "The selected job does not belong to your organisation.");
+                //}
 
                 var leaveType = await db.LeaveTypes
                     .AsNoTracking()
@@ -233,6 +260,41 @@ namespace HRM.Services.JobLeaveTypes
             }
         }
 
+
+
+        public async Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
+            var assignedLeaveTypeIds = await db.JobLeaveTypes
+                .Where(x => x.JobId == jobId && x.IsValid)
+                .Select(x => x.LeaveTypeId)
+                .ToListAsync();
+
+            return await db.LeaveTypes
+                .AsNoTracking()
+                .Where(x => !assignedLeaveTypeIds.Contains(x.LeaveTypeId))
+                .OrderBy(x => x.Name)
+                .Select(x => new LeaveTypeDto
+                {
+                    LeaveTypeId = x.LeaveTypeId,
+                    Name = x.Name,
+                    NameDhivehi = x.NameDhivehi,
+                    Duration = x.Duration,
+                    IncludeHolidays = x.IncludeHolidays,
+                    IncludePay = x.IncludePay,
+                    IsPublic = x.IsPublic,
+                    IsGlobal = x.IsGlobal,
+                    IsLocationRequired = x.IsLocationRequired,
+                    ServiceDurationMonths = x.ServiceDurationMonths,
+                    IsRenewed = x.IsRenewed,
+                    IsStaffWideAvailable = x.IsStaffWideAvailable,
+                    PayPercentage = x.PayPercentage,
+                    StartInMonth = x.StartInMonth,
+                    RepeatedEveryInMonth = x.RepeatedEveryInMonth
+                })
+                .ToListAsync();
+        }
         public async Task<ServiceResult> AssignDefinitionAsync(AssignLeaveDefinitionDto dto,
             CancellationToken cancellationToken = default)
         {

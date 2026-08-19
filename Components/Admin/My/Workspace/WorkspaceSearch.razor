@@ -1,13 +1,15 @@
 ﻿@using HRM.DTOs
 @using HRM.Enum
 @using HRM.Models
+@using HRM.Services
 @using Microsoft.EntityFrameworkCore
-
-@* @inject HrmTeContext Db *@
+@using HRM.Services.Interfaces
 
 @inject IDbContextFactory<HrmTeContext> _dbFactory;
+@inject IUserAccessService userAccessService;
 
 @rendermode RenderMode.InteractiveServer
+@inject ToastService ToastService
 
 <div class="relative w-full max-w-xl">
 
@@ -113,7 +115,7 @@
                 }
 
                 @if (!StaffResults.Any() &&
-         !OrganisationResults.Any())
+        !OrganisationResults.Any())
                 {
                     <div class="p-5 text-center text-slate-500">
                         No results found.
@@ -134,7 +136,6 @@
     [Parameter]
     public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
 
-    
     private string _searchText = "";
 
     private string SearchText
@@ -158,7 +159,7 @@
     private List<WorkspaceSearchResult> StaffResults = new();
 
     private List<WorkspaceSearchResult> OrganisationResults = new();
-    
+
     private async Task Select(WorkspaceSearchResult item)
     {
         SearchText = "";
@@ -167,113 +168,352 @@
         await OnSelected.InvokeAsync(item);
     }
 
+
     private async Task SearchAsync()
+{
+
+     if (string.IsNullOrWhiteSpace(SearchText))
+    {
+        StaffResults = new();
+        OrganisationResults = new();
+        Loading = false;
+        return;
+
+
+
+    }
+    Loading = true;
+        // StaffResults.Clear();
+        // OrganisationResults.Clear();
+    try
     {
 
+       var user = await userAccessService.RequireContextAsync();
+     
+        
         await using var Db = await _dbFactory.CreateDbContextAsync();
+        var searchText = SearchText.Trim();
+        var searchPattern = $"%{searchText}%";
 
-        StaffResults.Clear();
-        OrganisationResults.Clear();
 
-        if (string.IsNullOrWhiteSpace(SearchText))
-        {
-            await InvokeAsync(StateHasChanged);
-            return;
-        }
 
-        Loading = true;
-        StaffResults =
-        await
+        var isSuperAdministrator =
+            user.IsSuperAdministrator;
+
+
+            // Never use nullable.Value inside the EF query
+            var currentOrganisationId =
+                user.ActiveJob?.OrganisationId ?? 0;
+
+            if (!isSuperAdministrator &&
+                    currentOrganisationId == 0)
+            {
+                StaffResults = new();
+                OrganisationResults = new();
+
+                ToastService.Error(
+                    "You are not attached to an active organisation.");
+
+                return;
+            }
+
+
+
+    
+
+      
+
+        // =====================================================
+        // STAFF AND INDIVIDUAL SEARCH
+        // =====================================================
+        StaffResults = await
         (
-            from i in Db.Individuals
+            from i in Db.Individuals.AsNoTracking()
 
-            join c in Db.Idcards
+            join c in Db.Idcards.AsNoTracking()
                 on i.BusinessEntityId equals c.BusinessEntityId
                 into cards
 
             from card in cards.DefaultIfEmpty()
 
-            join j in Db.Jobs
+            join j in Db.Jobs.AsNoTracking()
                 on i.BusinessEntityId equals j.IndividualID
                 into jobs
 
             from job in jobs.DefaultIfEmpty()
 
-            join os in Db.OrganisationStructures
-                on job.OrganisationStructureId equals os.OrganisationStructureId
+            join os in Db.OrganisationStructures.AsNoTracking()
+                on job.OrganisationStructureId
+                equals os.OrganisationStructureId
                 into structures
 
-            from organisationStructure in structures.DefaultIfEmpty()
+            from organisationStructure
+                in structures.DefaultIfEmpty()
 
             let fullName =
                 (i.FirstNameEnglish ?? "") + " " +
                 (i.MiddleNameEnglish ?? "") + " " +
                 (i.LastNameEnglish ?? "")
 
-          let fullNameDV = i.FirstNameDhivehi + (i.LastNameDhivehi != null ? " " + i.LastNameDhivehi : "")
-           
+            let fullNameDv =
+                (i.FirstNameDhivehi ?? "") +
+                (i.LastNameDhivehi != null
+                    ? " " + i.LastNameDhivehi
+                    : "")
+
             where
-                EF.Functions.Like(
-                    fullName,
-                    $"%{SearchText}%"
+                // Super Administrator: all organisations.
+                // Other users: only their active-job organisation.
+                (
+                    isSuperAdministrator ||
+                    (
+                        job != null &&
+                        job.OrganisationID ==
+                            currentOrganisationId
+                    )
                 )
 
-                ||
-                 (i.FirstNameEnglish != null &&
-                EF.Functions.Like(i.FirstNameEnglish, $"%{SearchText}%"))
+                &&
 
-            ||
-                (card != null &&
-                 EF.Functions.Like(
-                     card.IdcardNumber,
-                     $"%{SearchText}%"
-                 ))
+                (
+                    EF.Functions.Like(
+                        fullName,
+                        $"%{searchText}%")
 
-                ||
+                    ||
 
-                (organisationStructure != null &&
-                 EF.Functions.Like(
-                     organisationStructure.Name,
-                     $"%{SearchText}%"
-                 ))
+                    (
+                        i.FirstNameEnglish != null &&
+                        EF.Functions.Like(
+                            i.FirstNameEnglish,
+                            $"%{searchText}%")
+                    )
+
+                    ||
+
+                    (
+                        card != null &&
+                        card.IdcardNumber != null &&
+                        EF.Functions.Like(
+                            card.IdcardNumber,
+                            $"%{searchText}%")
+                    )
+
+                    ||
+
+                    (
+                        organisationStructure != null &&
+                        organisationStructure.Name != null &&
+                        EF.Functions.Like(
+                            organisationStructure.Name,
+                            $"%{searchText}%")
+                    )
+                )
 
             select new WorkspaceSearchResult
             {
                 Id = i.BusinessEntityId,
-                JobId = job.JobId,
                 IndividualId = i.BusinessEntityId,
-                Name = fullName.ToString(),
-                NameDv = fullNameDV.ToString(),
-                IDCard = card != null && card.IdcardNumber != null ? card.IdcardNumber : "",
-                    Description = job == null ? "Individual"  : "Staff" +  (organisationStructure != null ? " | " + organisationStructure.Name : ""),
-                EntityType = job == null ? WorkspaceEntityType.Individual : WorkspaceEntityType.Staff
-                    // $"JobId={job.JobId}, Individual={i.BusinessEntityId}",
-             }
+
+                JobId = job != null
+                    ? job.JobId
+                    : null,
+
+                Name = fullName,
+                NameDv = fullNameDv,
+
+                IDCard =
+                    card != null &&
+                    card.IdcardNumber != null
+                        ? card.IdcardNumber
+                        : "",
+
+                Description = job == null
+                    ? "Individual"
+                    : "Staff" +
+                      (
+                          organisationStructure != null
+                              ? " | " +
+                                organisationStructure.Name
+                              : ""
+                      ),
+
+                EntityType = job == null
+                    ? WorkspaceEntityType.Individual
+                    : WorkspaceEntityType.Staff
+            }
         )
         .Distinct()
         .OrderBy(x => x.Name)
         .Take(10)
         .ToListAsync();
-        OrganisationResults =
-            await Db.Organisations
 
+        // =====================================================
+        // ORGANISATION SEARCH
+        // =====================================================
+        var organisationQuery = Db.Organisations
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (!isSuperAdministrator)
+        {
+            var organisationId =
+                currentOrganisationId!;
+
+            organisationQuery =
+                organisationQuery.Where(x =>
+                    x.BusinessEntityID == organisationId);
+        }
+
+        OrganisationResults = await organisationQuery
             .Where(x =>
+                x.OrganisationName != null &&
                 EF.Functions.Like(
                     x.OrganisationName,
-                    $"%{SearchText}%"
-                ))
-
+                    $"%{searchText}%"))
+            .OrderBy(x => x.OrganisationName)
             .Take(10)
             .Select(x => new WorkspaceSearchResult
             {
                 Id = x.BusinessEntityID,
                 Name = x.OrganisationName,
-                EntityType = WorkspaceEntityType.Organisation
-                })
-
+                EntityType =
+                    WorkspaceEntityType.Organisation
+            })
             .ToListAsync();
-        Loading = false;
-        await InvokeAsync(StateHasChanged);
     }
+    catch (Exception ex)
+    {
+        StaffResults = new List<WorkspaceSearchResult>();
+        OrganisationResults = new List<WorkspaceSearchResult>();
+
+        ToastService.Error(
+            "Unable to search the workspace.");
+
+        // Add your logger here
+        // Logger.LogError(ex, "Workspace search failed.");
+    }
+    finally
+    {
+        Loading = false;
+            await InvokeAsync(StateHasChanged);
+    }
+}
+
+
+
+    // private async Task SearchAsync()
+    // {
+
+    //     var user = await userAccessService.RequireContextAsync();
+     
+        
+    //     await using var Db = await _dbFactory.CreateDbContextAsync();
+
+    //     StaffResults.Clear();
+    //     OrganisationResults.Clear();
+
+    //     if (string.IsNullOrWhiteSpace(SearchText))
+    //     {
+    //         await InvokeAsync(StateHasChanged);
+    //         return;
+    //     }
+
+    //     Loading = true;
+    //     StaffResults =
+    //     await
+    //     (
+    //         from i in Db.Individuals
+
+    //         join c in Db.Idcards
+    //             on i.BusinessEntityId equals c.BusinessEntityId
+    //             into cards
+
+    //         from card in cards.DefaultIfEmpty()
+
+    //         join j in Db.Jobs
+    //             on i.BusinessEntityId equals j.IndividualID
+    //             into jobs
+
+    //         from job in jobs.DefaultIfEmpty()
+
+    //         join os in Db.OrganisationStructures
+    //             on job.OrganisationStructureId equals os.OrganisationStructureId
+    //             into structures
+
+    //         from organisationStructure in structures.DefaultIfEmpty()
+
+    //         let fullName =
+    //             (i.FirstNameEnglish ?? "") + " " +
+    //             (i.MiddleNameEnglish ?? "") + " " +
+    //             (i.LastNameEnglish ?? "")
+
+    //       let fullNameDV = i.FirstNameDhivehi + (i.LastNameDhivehi != null ? " " + i.LastNameDhivehi : "")
+           
+    //         where
+    //             EF.Functions.Like(
+    //                 fullName,
+    //                 $"%{SearchText}%"
+    //             )
+
+    //             ||
+
+    //             (i.FirstNameEnglish != null &&
+    //                 EF.Functions.Like(i.FirstNameEnglish, $"%{SearchText}%"))
+
+    //             ||
+
+    //             (card != null &&
+    //                  EF.Functions.Like(
+    //                      card.IdcardNumber,
+    //                      $"%{SearchText}%"
+    //                  ))
+
+    //             ||
+
+    //             (organisationStructure != null &&
+    //                  EF.Functions.Like(
+    //                      organisationStructure.Name,
+    //                      $"%{SearchText}%"
+    //                  ))
+
+    //         select new WorkspaceSearchResult
+    //         {
+    //             Id = i.BusinessEntityId,
+    //             JobId = job.JobId,
+    //             IndividualId = i.BusinessEntityId,
+    //             Name = fullName.ToString(),
+    //             NameDv = fullNameDV.ToString(),
+    //             IDCard = card != null && card.IdcardNumber != null ? card.IdcardNumber : "",
+    //             Description = job == null ? "Individual"  : "Staff" +  (organisationStructure != null ? " | " + organisationStructure.Name : ""),
+    //             EntityType = job == null ? WorkspaceEntityType.Individual : WorkspaceEntityType.Staff
+ 
+    //          }
+    //     )
+    //     .Distinct()
+    //     .OrderBy(x => x.Name)
+    //     .Take(10)
+    //     .ToListAsync();
+    //     OrganisationResults =
+    //         await Db.Organisations
+
+    //         .Where(x =>
+    //             EF.Functions.Like(
+    //                 x.OrganisationName,
+    //                 $"%{SearchText}%"
+    //             ))
+
+    //         .Take(10)
+    //         .Select(x => new WorkspaceSearchResult
+    //         {
+    //             Id = x.BusinessEntityID,
+    //             Name = x.OrganisationName,
+    //             EntityType = WorkspaceEntityType.Organisation
+    //             })
+
+    //         .ToListAsync();
+    //     Loading = false;
+    //     await InvokeAsync(StateHasChanged);
+    // }
 
 }

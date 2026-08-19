@@ -28,11 +28,20 @@ namespace HRM.Services
         }
 
         public async Task<List<LeaveTypeDto>>
-       GetOrganisationLeaveTypesAsync(
-           CancellationToken cancellationToken = default)
+     GetOrganisationLeaveTypesAsync(
+         CancellationToken cancellationToken = default)
         {
+            var user =
+                await _userAccessService.GetContextAsync();
+
             var organisationId =
-                await GetCurrentOrganisationIdAsync();
+                user.ActiveJob?.OrganisationId;
+
+            if (!organisationId.HasValue ||
+                organisationId.Value <= 0)
+            {
+                return new List<LeaveTypeDto>();
+            }
 
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
@@ -41,71 +50,25 @@ namespace HRM.Services
             return await db.LeaveTypes
                 .AsNoTracking()
                 .Where(x =>
-                    x.OrganisationId == organisationId ||
-                    x.IsGlobal)
-                .OrderByDescending(x =>
-                    x.IsSystemType)
-                .ThenBy(x =>
-                    x.Name)
-                .Select(x =>
-                    new LeaveTypeDto
-                    {
-                        LeaveTypeId =
-                            x.LeaveTypeId,
+                    x.OrganisationId ==
+                        organisationId.Value)
+                .OrderBy(x => x.Name)
+                .Select(x => new LeaveTypeDto
+                {
+                    LeaveTypeId = x.LeaveTypeId,
 
-                        Name =
-                            x.Name ?? string.Empty,
+                    OrganisationId =
+                        x.OrganisationId,
 
-                        NameDhivehi =
-                            x.NameDhivehi,
+                    Name = x.Name,
 
-                        Duration =
-                            x.Duration,
+                    NameDhivehi =
+                        x.NameDhivehi,
 
-                        IncludeHolidays =
-                            x.IncludeHolidays,
-
-                        IncludePay =
-                            x.IncludePay,
-
-                        IsPublic =
-                            x.IsPublic,
-
-                        IsGlobal =
-                            x.IsGlobal,
-
-                        IsLocationRequired =
-                            x.IsLocationRequired,
-
-                        ServiceDurationMonths =
-                            x.ServiceDurationMonths,
-
-                        OrganisationId =
-                            x.OrganisationId,
-
-                        RequestTypeId =
-                            x.RequestTypeId,
-
-                        IsSystemType =
-                            x.IsSystemType,
-
-                        IsRenewed =
-                            x.IsRenewed,
-
-                        IsStaffWideAvailable =
-                            x.IsStaffWideAvailable,
-
-                        PayPercentage =
-                            x.PayPercentage,
-
-                        StartInMonth =
-                            x.StartInMonth,
-
-                        RepeatedEveryInMonth =
-                            x.RepeatedEveryInMonth
-                    })
-                .ToListAsync(
-                    cancellationToken);
+                    Duration =
+                        x.Duration
+                })
+                .ToListAsync(cancellationToken);
         }
 
         public async Task<LeaveTypeDto?> GetByIdAsync(
@@ -310,193 +273,7 @@ namespace HRM.Services
             }
         }
 
-        //public async Task<LeaveTypeSaveResult> UpdateAsync(
-        //    LeaveTypeSaveRequest request,
-        //    CancellationToken cancellationToken = default)
-        //{
-
-
-        //    var context =
-        //    await _userAccessService.GetContextAsync();
-
-        //    var isSuperAdmin =
-        //        context?.IsSuperAdministrator == true;
-
-
-
-        //    //if (!isSuperAdmin &&
-        //    //    (request.IsSystemType == true || request.IsGlobal == true ))
-        //    //{
-        //    //    return LeaveTypeSaveResult.Failure(
-        //    //        "You do not have permission to edit this leave type.");
-        //    //}
-
-
-
-
-        //    if (request.LeaveTypeId == 0|| request.LeaveTypeId <= 0)
-        //    {
-        //        return LeaveTypeSaveResult.Failure(
-        //            "A valid leave type ID is required.");
-        //    }
-
-        //    var validationMessage =
-        //        Validate(request);
-
-        //    if (validationMessage is not null)
-        //    {
-        //        return LeaveTypeSaveResult.Failure(
-        //            validationMessage);
-        //    }
-
-        //    try
-        //    {
-        //        var organisationId =
-        //            await GetCurrentOrganisationIdAsync();
-
-        //        await using var db =
-        //            await _dbFactory.CreateDbContextAsync(
-        //                cancellationToken);
-
-
-
-        //        //var userOrg = await db.UserOrganisations
-        //        //      .Where(x => x.BusinessEntityID == organisationId)
-        //        //      .FirstOrDefaultAsync();
-
-        //        //// 2. Safely extract the ID. Falls back to 0 (or null) if no record exists.
-        //        //int userOrganisationId = userOrg?.UserOrganisationID ?? 0;
-
-
-        //        var leaveType =
-        //            await db.LeaveTypes
-        //                .FirstOrDefaultAsync(
-        //                    x =>
-        //                        x.LeaveTypeId ==
-        //                            request.LeaveTypeId &&
-        //                        x.OrganisationId ==
-        //                            organisationId,
-        //                    cancellationToken);
-
-        //        if (leaveType is null)
-        //        {
-        //            return LeaveTypeSaveResult.Failure(
-        //                "The leave type could not be found.");
-        //        }
-
-        //        /*
-        //         * Organisation users should not modify
-        //         * system/global leave types.
-        //         */
-        //        if (leaveType.IsSystemType ||
-        //            leaveType.IsGlobal)
-        //        {
-        //            return LeaveTypeSaveResult.Failure(
-        //                "System or global leave types cannot be edited here.");
-        //        }
-
-        //        var name =
-        //            request.Name.Trim();
-
-        //        var duplicateName =
-        //            await db.LeaveTypes
-        //                .AsNoTracking()
-        //                .AnyAsync(
-        //                    x =>
-        //                        x.LeaveTypeId !=
-        //                            leaveType.LeaveTypeId &&
-        //                        x.OrganisationId ==
-        //                            organisationId &&
-        //                        x.Name == name,
-        //                    cancellationToken);
-
-        //        if (duplicateName)
-        //        {
-        //            return LeaveTypeSaveResult.Failure(
-        //                "Another leave type with this name already exists.");
-        //        }
-
-        //        leaveType.Name =
-        //            name;
-
-        //        leaveType.NameDhivehi =
-        //            Clean(request.NameDhivehi);
-
-        //        leaveType.Duration =
-        //            request.Duration;
-
-        //        leaveType.IncludeHolidays =
-        //            request.IncludeHolidays;
-
-        //        leaveType.IncludePay =
-        //            request.IncludePay;
-
-        //        leaveType.IsPublic =
-        //            request.IsPublic;
-
-        //        leaveType.IsLocationRequired =
-        //            request.IsLocationRequired;
-
-        //        leaveType.ServiceDurationMonths =
-        //            request.ServiceDurationMonths;
-
-        //        leaveType.RequestTypeId =
-        //            request.RequestTypeId;
-
-        //        leaveType.IsRenewed =
-        //            request.IsRenewed;
-
-        //        leaveType.IsStaffWideAvailable =
-        //            request.IsStaffWideAvailable;
-
-        //        leaveType.PayPercentage =
-        //            request.IncludePay
-        //                ? request.PayPercentage
-        //                : 0;
-
-        //        leaveType.StartInMonth =
-        //            request.IsRenewed
-        //                ? request.StartInMonth : 0;
-
-        //        leaveType.RepeatedEveryInMonth =
-        //            request.IsRenewed
-        //                ? request.RepeatedEveryInMonth
-        //                : 0;
-
-        //        await db.SaveChangesAsync(
-        //            cancellationToken);
-
-        //        return LeaveTypeSaveResult.Successful(
-        //            leaveType.LeaveTypeId,
-        //            "Leave type updated successfully.");
-        //    }
-        //    catch (Exception exception)
-        //    {
-        //        _logger.LogError(
-        //            exception,
-        //            "Unable to update leave type {LeaveTypeId}.",
-        //            request.LeaveTypeId);
-
-        //        return LeaveTypeSaveResult.Failure(
-        //            "The leave type could not be updated.");
-        //    }
-        //}
-
-        //private async Task<int> GetCurrentOrganisationIdAsync()
-        //{
-        //    var context =
-        //        await _userAccessService.GetContextAsync();
-
-        //    if (context?.ActiveJob is null ||
-        //        context.ActiveJob.OrganisationId <= 0)
-        //    {
-        //        throw new InvalidOperationException(
-        //            "The current organisation could not be resolved.");
-        //    }
-
-        //    return context.ActiveJob.OrganisationId;
-        //}
-
+        
 
         public async Task<LeaveTypeSaveResult> UpdateAsync(
             LeaveTypeSaveRequest request,

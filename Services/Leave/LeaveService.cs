@@ -245,39 +245,7 @@ namespace HRM.Services.Leave
 
 
 
-        public async Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId)
-        {
-            await using var db = await _dbFactory.CreateDbContextAsync();
-
-            var assignedLeaveTypeIds = await db.JobLeaveTypes
-                .Where(x => x.JobId == jobId && x.IsValid)
-                .Select(x => x.LeaveTypeId)
-                .ToListAsync();
-
-            return await db.LeaveTypes
-                .AsNoTracking()
-                .Where(x => !assignedLeaveTypeIds.Contains(x.LeaveTypeId))
-                .OrderBy(x => x.Name)
-                .Select(x => new LeaveTypeDto
-                {
-                    LeaveTypeId = x.LeaveTypeId,
-                    Name = x.Name,
-                    NameDhivehi = x.NameDhivehi,
-                    Duration = x.Duration,
-                    IncludeHolidays = x.IncludeHolidays,
-                    IncludePay = x.IncludePay,
-                    IsPublic = x.IsPublic,
-                    IsGlobal = x.IsGlobal,
-                    IsLocationRequired = x.IsLocationRequired,
-                    ServiceDurationMonths = x.ServiceDurationMonths,
-                    IsRenewed = x.IsRenewed,
-                    IsStaffWideAvailable = x.IsStaffWideAvailable,
-                    PayPercentage = x.PayPercentage,
-                    StartInMonth = x.StartInMonth,
-                    RepeatedEveryInMonth = x.RepeatedEveryInMonth
-                })
-                .ToListAsync();
-        }
+      
 
 
 

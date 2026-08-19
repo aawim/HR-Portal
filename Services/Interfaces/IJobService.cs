@@ -14,5 +14,8 @@ namespace HRM.Services.Interfaces
         Task<List<JobDto>> GetMyJobHistoryAsync();
 
         Task<int?> GetOrganisationIdByIndividualAsync(int individualId);
+
+        Task<int> GetIndividualIdByJobIdAsync(int jobId);
+
     }
 }

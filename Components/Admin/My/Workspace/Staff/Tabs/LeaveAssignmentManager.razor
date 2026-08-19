@@ -9,6 +9,7 @@
 @using HRM.Services.Interfaces.Leave
 
 @inject ILeaveService LeaveService
+@inject ILeaveTypeService LeaveTypeService
 @inject IJobLeaveTypeService JobLeaveTypeService
 @inject ToastService ToastService
 @inject ILeaveDefinitionService leaveDefinitionService;
@@ -310,118 +311,16 @@
 
     <!-------------------------------------Details-------------------------------------------- -->
     <!-- Available Leave Types -->
-    <div class="col-span-3">
+    <div class="col-span-3 gap-2">
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full">
 
-            <!-- Header -->
-            <div class="px-4 py-3 border-b border-slate-100">
-
-                <h3 class="font-semibold text-slate-800">
-                    Available Leave Types
-                </h3>
-
-                <p class="text-xs text-slate-500 mt-1">
-                    @available.Count available
-                </p>
-
-            </div>
-
-            <!-- Search -->
-
-            <div class="p-3 border-b border-slate-100">
-
-                <input class="w-full rounded-lg border border-slate-300
-                           px-3 py-2 text-sm
-                           focus:outline-none
-                           focus:ring-2
-                           focus:ring-blue-500"
-                placeholder="Search..."
-                @bind="availableSearch"
-                @bind:event="oninput" />
-
-            </div>
-
-            <!-- List -->
-
-            <div class="max-h-[560px] overflow-y-auto">
-
-                @*      @foreach (var item in available
-                .Where(x => string.IsNullOrWhiteSpace(availableSearch)
-                || x.Name.Contains(availableSearch,
-                StringComparison.OrdinalIgnoreCase)))
-                {
-                    <div class="p-3 border-b border-slate-100
-                            cursor-pointer transition
-                            @(selectedAvailable?.LeaveTypeID == item.LeaveTypeID
-                                ? "bg-green-50 border-l-4 border-green-600"
-                                : "hover:bg-slate-50")"
-                         @onclick="() => SelectAvailable(item)">
-
-                        <div class="font-medium text-slate-800">
-
-                            @GetLeaveIcon(item.Name)
-
-                            @item.Name
-
-                        </div>
-
-                    </div>
-                } *@
-                @foreach (var leave in available)
-                {
-                    <button class="w-full text-left p-3 rounded-lg border mb-2
-                   @(selectedAvailable?.LeaveTypeId == leave.LeaveTypeId
-                       ? "bg-blue-50 border-blue-500"
-                       : "hover:bg-slate-50")"
-                    @onclick="() => SelectAvailable(leave)">
-
-                        <div class="font-semibold">
-                            @leave.Name
-                        </div>
-
-                        <div class="text-xs text-slate-500">
-                            @leave.Duration days
-                        </div>
-
-                    </button>
-                }
-            </div>
-
-            <!-- Footer -->
-
-            <div class="border-t border-slate-100 p-4">
-
-                @if (selectedAvailable != null)
-                {
-                    <div class="mt-4 border-t pt-4">
-
-                        <button class="btn btn-primary w-full"
-                        @onclick="AssignLeaveType">
-
-                            Assign Leave Type
-
-                        </button>
-
-                    </div>
-                }
+             <AvailableLegacyLeaveTypes 
+                     LeaveTypes="@availableLegacyTypes"
+                     IsProcessing="@assigningLegacy"
+                    OnAssign="AssignLegacyLeaveType" />
 
 
-
-                @*    <button class="w-full rounded-lg
-                           bg-green-600
-                           hover:bg-green-700
-                           text-white
-                           py-2
-                           disabled:bg-slate-300"
-                        disabled="@(selectedAvailable == null)"
-                        @onclick="AssignSelected">
-
-                    + Assign Leave Type
-
-                </button> *@
-
-            </div>
 
             <AvailableLeaveDefinitions
                     Definitions="@availableDefinitions"
@@ -440,9 +339,11 @@
 @code {
 
     private List<LeaveDefinitionDto> availableDefinitions = new();
+    private List<LeaveTypeDto> availableLegacyTypes = new();
+
 
     private bool assigningDefinition;
-
+    private bool assigningLegacy;
     [Parameter]
     public int StaffId { get; set; }
 
@@ -521,9 +422,19 @@
     {
         var result = await JobLeaveTypeService.AssignLegacyAsync(assignModel);
 
+        // if (!result.Success)
+        // {
+        //     ToastService.Error("Uanble to assign leave Type!.");
+        //     return;
+        // }
+
         if (!result.Success)
         {
-            ToastService.Error("Uanble to assign leave Type!.");
+            var errorMessage = result.Message?.Any() == true
+                ? string.Join(" ", result.Message)
+                : "Unable to assign leave type.";
+
+            ToastService.Error(errorMessage);
             return;
         }
 
@@ -596,8 +507,9 @@
     }
 
 
+
     private async Task AssignLeaveDefinitionAsync(
-        LeaveDefinitionDto definition)
+       LeaveDefinitionDto definition)
     {
         if (assigningDefinition)
             return;
@@ -610,7 +522,7 @@
                 {
                     JobId = JobId,
                     LeaveDefinitionId =
-                        definition.LeaveDefinitionId,
+                            definition.LeaveDefinitionId,
 
                     EffectiveFromDate = DateTime.Today,
                     EffectiveToDate = null
@@ -646,8 +558,63 @@
             assigningDefinition = false;
         }
     }
+
+
+
+    private async Task AssignLegacyLeaveType(
+        LeaveTypeDto leaveType)
+    {
+        if (assigningDefinition)
+            return;
+
+        try
+        {
+            assigningDefinition = true;
+
+            var dto = new AssignLegacyLeaveTypeDto
+                {
+                    JobId = JobId,
+                    LeaveTypeId =
+                            leaveType.LeaveTypeId,
+
+                    EffectiveFromDate = DateTime.Today,
+                    EffectiveToDate = null
+                };
+
+            var result =
+                await JobLeaveTypeService.AssignLegacyAsync(dto);
+
+            if (!result.Success)
+            {
+                ToastService.Error(
+                    result.Message ??
+                    "Unable to assign leave definition.");
+
+                return;
+            }
+
+            ToastService.Success(
+                "Leave definition assigned successfully.");
+
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error(
+                "An unexpected error occurred while assigning " +
+                "the leave definition.");
+
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            assigningDefinition = false;
+        }
+    }
  
-    // var result = await JobLeaveTypeService.AssignAsync(assignModel);
+
+
+ 
 
     private async Task LoadAsync()
     {
@@ -656,16 +623,15 @@
         try
         {
 
-        // assigned = await LeaveService.GetAssignedLeaveTypesAsync(JobId);
+  
 
         assigned = await JobLeaveTypeService.GetJobLeaveTypeByJobId(StaffId);
 
-        available = await LeaveService.GetAvailableLeaveTypesAsync(StaffId);
+        available = await JobLeaveTypeService.GetAvailableLeaveTypesAsync(StaffId);
+ 
+        availableDefinitions = await leaveDefinitionService.GetAvailableAsync();
 
-        // availableDefinitions = await LeaveService.GetAvailableLeaveDefinitionsAsync(JobId);
-
-            availableDefinitions = await leaveDefinitionService.GetAvailableAsync();
-
+        availableLegacyTypes = await LeaveTypeService.GetOrganisationLeaveTypesAsync();
             
              
 

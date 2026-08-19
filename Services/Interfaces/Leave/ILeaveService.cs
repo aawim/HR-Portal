@@ -33,7 +33,7 @@ namespace HRM.Services.Interfaces.Leave
 
         //Task<List<JobLeaveTypeDto>> GetAssignedLeaveTypesAsync(int jobId);
 
-        Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId);
+       
 
         //Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId);
 

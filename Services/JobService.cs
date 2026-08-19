@@ -12,25 +12,19 @@ namespace HRM.Services
     {
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
-            private readonly IUserAccessService _access;
+        private readonly IUserAccessService _access;
         public JobService(IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService userAccessService )
         {
             _dbFactory = dbFactory;
             _access = userAccessService;
 
         }
-
-
         public async Task<List<JobDto>> GetMyJobHistoryAsync()
         {
             var context = await _access.RequireContextAsync();
 
             return await GetJobHistoryAsync(context.IndividualId);
         }
-
-
-
-
         public async Task<List<JobDto>> GetJobHistoryAsync(int individualId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
@@ -64,11 +58,7 @@ namespace HRM.Services
                 })
                 .ToListAsync();
         }
-
-
-
-        public async Task<int?> GetOrganisationIdByIndividualAsync(
-    int individualId)
+        public async Task<int?> GetOrganisationIdByIndividualAsync(int individualId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
 
@@ -81,8 +71,6 @@ namespace HRM.Services
                 .Select(x => (int?)x.OrganisationID)
                 .FirstOrDefaultAsync();
         }
-
-
         public async Task<ActiveJobDto?> GetActiveJobAsync(int individualId, CancellationToken cancellationToken = default)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -124,7 +112,6 @@ namespace HRM.Services
                 })
                .FirstOrDefaultAsync();
         }
-
         public async Task<ActiveJobDto> GetMyActiveJobAsync()
         {
             var context = await _access.RequireContextAsync();
@@ -137,6 +124,27 @@ namespace HRM.Services
 
             return job;
         }
+        public async Task<int> GetIndividualIdByJobIdAsync(int jobId)
+        {
+            if (jobId <= 0)
+            {
+                return 0; // 1. Return zero instead of null
+            }
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            // 2. Removed the (int?) cast so it returns a normal int default (0) if not found
+            return await db.Jobs
+                .AsNoTracking()
+                .Where(x =>
+                    x.JobId == jobId &&
+                    x.JobStateId == SharedConfig.JobStates.APPROVED &&
+                    x.TerminatedDate == null)
+                .Select(x => x.IndividualID)
+                .FirstOrDefaultAsync();
+        }
+
 
     }
 }

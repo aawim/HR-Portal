@@ -43,68 +43,65 @@
             }
             @foreach (var log in jobTypes)
             {
+                // If the data is invalid, skip this loop iteration safely without breaking HTML
+                if (log?.LeaveType?.LeaveTypeId == null)
+                {
+                    continue;
+                }
+
                 @foreach (var pro in processingLeaves)
                 {
-                @* var time = GetDateTime(log); *@
-                @* px - 5 py - 4 *@
-                <div class="flex items-center justify-between px-4 p-2 hover:bg-slate-50 hover:bg-slate-100 odd:bg-slate-100  transition">
-                    <!-- Left -->
-                    <div class="flex items-center gap-4">
-                        <!-- Icon -->
-                        <div class="w-auto h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                            <div class="w-10 h-10 rounded-lg
-                                bg-slate-100
-                                flex items-center justify-center
-                                text-sm font-semibold text-slate-700">
-                                @count
+                    <div class="flex items-center justify-between px-4 p-2 hover:bg-slate-50 hover:bg-slate-100 odd:bg-slate-100 transition">
+                        <!-- Left -->
+                        <div class="flex items-center gap-4">
+                            <!-- Icon -->
+                            <div class="w-auto h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                                <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-700">
+                                    @count
+                                </div>
                             </div>
-                        </div>  
-                        <!-- Details -->
-                        <div>
-                            
+                            <!-- Details -->
+                            <div>
                                 @if (log.LeaveType.LeaveTypeId == pro.LeaveTypeId)
                                 {
-                                <div class="text-sm text-slate-500 mt-0.5">
-                                    <span class="inline-flex px-2 py-1  text-xs bg-amber-100 text-amber-700">
-                                        ⏳ Processing: <br/>
+                                    <div class="text-sm text-slate-500 mt-0.5">
+                                        <span class="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-700">
+                                            ⏳ Processing: <br />
                                             @pro.FromDate?.ToString("dd MM yyyy")
-                                        -
+                                            -
                                             @pro.ToDate?.ToString("dd MM yyyy")
-                                        (@pro.StateName)
-                                    </span>
-                                </div>
-                                    
+                                            (@pro.StateName)
+                                        </span>
+                                    </div>
                                 }
-                            
-                            <div class="text-sm font-semibold text-slate-800">
-                                @log.LeaveType.Name (Remaining: @log.RemainingDays )
-                            </div>
-                            <div class="text-sm text-slate-500 mt-0.5">
-                              Last Taken: @(log.LastLeaveTakenDate?.ToString("dd MMMM yyyy") ?? "Never") | 
-                              On: @(log.RenewedDate?.ToString("dd MMMM yyyy") ?? "N/A") 
-                            </div>
+
+                                <div class="text-sm font-semibold text-slate-800">
+                                    @log.LeaveType.Name (Remaining: @log.RemainingDays)
+                                </div>
+                                <div class="text-sm text-slate-500 mt-0.5">
+                                    Last Taken: @(log.LastLeaveTakenDate?.ToString("dd MMMM yyyy") ?? "Never") |
+                                    On: @(log.RenewedDate?.ToString("dd MMMM yyyy") ?? "N/A")
+                                </div>
 
                                 @if (log.IsLeaveInfoUpdated != true)
                                 {
-                                    <span class="inline-flex px-2 py-1  text-xs bg-amber-100 text-amber-700">
+                                    <span class="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-700">
                                         Leave Information Needs To Be Updated!
                                     </span>
-                              
                                 }
-                                
+                            </div>
                         </div>
 
-                    </div>
-
-                    <!-- Right -->
-                    <div class="text-right">
-                        <div class="text-xs text-slate-400 mt-2">
-                            @(log.IsValid == true ? "Active" : "In-active")
+                        <!-- Right -->
+                        <div class="text-right">
+                            <div class="text-xs text-slate-400 mt-2">
+                                @(log.IsValid == true ? "Active" : "In-active")
+                            </div>
                         </div>
                     </div>
-                </div>
-                count++;
-            }
+
+                    count++;
+                }
             }
         </div>
     }

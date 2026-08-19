@@ -16,6 +16,8 @@ namespace HRM.Services.Interfaces.JobLeaveTypes
         Task<ServiceResult> UpdateAsync(JobLeaveTypeEditDto dto);
         Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId);
 
+        Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId);
+
 
         //Task<ServiceResult> RemoveAsync(int jobLeaveTypeId);
 

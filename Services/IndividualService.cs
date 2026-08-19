@@ -17,6 +17,7 @@ namespace HRM.Services
             _dbFactory = dbFactory;
             _authProvider = authProvider;
         }
+
         //public async Task<int> GetIndividualID()
         //{
         //    await using var context = await _dbFactory.CreateDbContextAsync();

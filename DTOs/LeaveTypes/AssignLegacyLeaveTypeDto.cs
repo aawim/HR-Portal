@@ -6,13 +6,9 @@
 
         public int LeaveTypeId { get; set; }
 
-
-
         public int? MigratedLeaveDefinitionId { get; set; }
-
         
-        public DateTime EffectiveFromDate { get; set; }
-            = DateTime.Today;
+        public DateTime EffectiveFromDate { get; set; } = DateTime.Today;
 
         public DateTime? EffectiveToDate { get; set; }
 
