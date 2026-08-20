@@ -260,7 +260,7 @@ namespace HRM.Services.JobLeaveTypes
             }
         }
 
-
+ 
 
         public async Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId)
         {
@@ -547,17 +547,24 @@ namespace HRM.Services.JobLeaveTypes
         }
 
 
-        public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId)
+
+
+        public async Task<List<JobLeaveTypeDto>> GetJobLeaveType()
+        {
+            var jobId = await _userAccessService.GetCurrentJobIdAsync();
+
+            return await GetJobLeaveType(jobId);
+        }
+        public async Task<List<JobLeaveTypeDto>> GetJobLeaveType(int JobId)
         {
 
             using var db = await _dbFactory.CreateDbContextAsync();
-
-            var jobId = await GetJobIdByStaffId(StaffId);
+ 
 
 
             return await db.JobLeaveTypes
                  .Include(x => x.LeaveType)
-                 .Where(x => x.JobId == jobId && x.IsValid)
+                 .Where(x => x.JobId == JobId && x.IsValid)
                  .Where(x => x.IsLeaveInfoUpdated == true)
                  .Select(x => new JobLeaveTypeDto
                  {
@@ -599,5 +606,6 @@ namespace HRM.Services.JobLeaveTypes
         }
 
 
+ 
     }
 }

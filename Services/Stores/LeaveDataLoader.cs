@@ -22,7 +22,7 @@ namespace HRM.Services.Stores
         }
         public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypes(int jobId)
         {
-            return await _JobLeaveTypes.GetJobLeaveTypeByJobId(jobId);
+            return await _JobLeaveTypes.GetJobLeaveType(jobId);
         }
 
         public async Task<List<LeaveReasonDto>> GetReasons()

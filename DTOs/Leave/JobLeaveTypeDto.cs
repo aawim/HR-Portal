@@ -8,11 +8,11 @@ namespace HRM.DTOs.Leave
 
         public int JobId { get; set; }
 
-   
-
         public bool IsLeaveInfoUpdated { get; set; }
 
         public string LeaveTypeName { get; set; } = "";
+
+        public string LeaveTypeNameDv { get; set; } = "";
 
         public int RemainingDays { get; set; }
   
