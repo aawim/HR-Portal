@@ -33,6 +33,7 @@ using HRM.Services.JobPosition;
 using HRM.Services.Interfaces.JobPosition;
 using HRM.Services.Interfaces.LeaveType;
 using HRM.Services.Interfaces.Policy;
+using HRM.Services.Attendance.AttendancePlan;
 
 
 
@@ -118,7 +119,16 @@ builder.Services.AddScoped<IAttendanceDuplicateValidator,AttendanceDuplicateVali
 
 builder.Services.AddScoped<IAttendanceLogProcessor,AttendanceLogProcessor>();
 
-builder.Services.AddScoped<IAttendanceLogResolutionRepository,AttendanceLogResolutionRepository>();
+
+
+
+//builder.Services.AddScoped<IAttendancePlanService, AttendancePlanService>();
+
+
+builder.Services.AddScoped<IAttendancePlanService,AttendancePlanService>();
+
+
+builder.Services.AddScoped<IAttendanceLogResolutionRepository, AttendanceLogResolutionRepository>();
 
 builder.Services.AddScoped<IWorkAssignmentGenerator, WorkAssignmentGeneratorService>();
 

@@ -1,0 +1,349 @@
+﻿@using HRM.Components.Tools
+@using HRM.DTOs.Attendance
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Attendance.AttendancePlan
+@using HRM.Services.Interfaces
+
+@inject IUserAccessService UserAccessService
+@* @inject IAttendance AttendanceLogService *@
+@inject IAttendanceService AttendanceService
+
+@inject AttendanceLogService AttendanceLogService
+
+@inject IAttendancePlanService AttendancePlanService
+
+<div class="bg-white rounded-xl shadow-sm border p-6">
+
+    <h3 class="text-lg font-semibold mb-5">
+        Time Clock
+    </h3>
+
+
+
+    @* Only for testing  *@
+
+    <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
+
+        <div class="flex items-center justify-between gap-3">
+            <div>
+                <div class="font-semibold text-amber-700">
+                    Test Attendance Time
+                </div>
+
+                <div class="text-xs text-slate-500">
+                    Use a custom date/time instead of the current time.
+                </div>
+            </div>
+
+            <label class="flex items-center gap-2 text-sm font-medium text-slate-700">
+                <input type="checkbox"
+                @bind="_useTestTime"
+                class="rounded border-slate-300" />
+
+                Enable
+            </label>
+        </div>
+
+        @if (_useTestTime)
+        {
+            <div class="mt-4 grid gap-3 sm:grid-cols-2">
+
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-slate-600">
+                        Date
+                    </label>
+
+                    <InputDate @bind-Value="_testDate"
+                    class="w-full rounded-lg border border-slate-300
+                                  bg-white px-3 py-2 text-sm" />
+
+
+
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-xs font-medium text-slate-600">
+                        Time
+                    </label>
+                    <input type="time"
+                    step="1"
+                    @bind="_testTime"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm" />
+
+
+
+
+                </div>
+
+
+                <div class="flex gap-1">
+
+                    <button class="flex-1 rounded-lg bg-green-600 px-5 py-2 w-100 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    @onclick="HandleCheckInTest"
+                    >
+
+                        <span>Check In</span>
+
+
+                    </button>
+
+                    <button class="flex-1 rounded-lg bg-red-600 px-5 py-2 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                    @onclick="HandleCheckOutTest"  >
+
+                        <span>Check Out</span>
+
+
+                    </button>
+
+                </div>
+
+
+
+
+            </div>
+        }
+
+
+
+
+      
+
+
+    </div>
+
+
+    @if (_attendancePlan != null)
+    {
+        <div class="mt-5 rounded-xl border border-slate-200
+                bg-white overflow-hidden">
+
+            <div class="border-b border-slate-200 px-5 py-4">
+
+                <div class="font-semibold text-slate-800">
+                    Today's Work Plan
+                </div>
+
+                <div class="mt-1 text-xs text-slate-500">
+                    Work Plan #@_attendancePlan.WorkPlanId
+                    ·
+                    @_attendancePlan.WorkDate.ToString("dd MMM yyyy")
+                </div>
+
+            </div>
+
+            @if (_attendancePlan.Segments.Count == 0)
+            {
+                <div class="p-5 text-sm text-amber-700">
+                    No work segments found.
+                </div>
+            }
+            else
+            {
+                <div class="divide-y divide-slate-100">
+
+                    @foreach (var segment in
+                   _attendancePlan.Segments
+                   .OrderBy(x =>
+                   x.SequenceNumber))
+                    {
+                        <div class="flex items-center
+                                justify-between gap-4
+                                px-5 py-4">
+
+                            <div>
+                                <div class="font-medium text-slate-800">
+                                    @segment.Name
+                                </div>
+
+                                <div class="mt-1 text-xs text-slate-500">
+
+                                    @segment.StartDateTime
+                                    .ToString("hh:mm tt")
+
+                                    -
+
+                                    @segment.EndDateTime
+                                    .ToString("hh:mm tt")
+
+                                    · @segment.PlannedMinutes min
+
+                                </div>
+                            </div>
+
+                            <div>
+                                @if (segment.RequiresAttendance)
+                                {
+                                    <span class="rounded-full
+                                             bg-green-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-green-700">
+                                        Attendance
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="rounded-full
+                                             bg-slate-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-slate-600">
+                                        No Punch
+                                    </span>
+                                }
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+        </div>
+    }
+    else
+    {
+        <p>No Segments</p>
+    }
+    @* Only for testing ends *@
+
+
+
+   
+
+</div>
+
+@code {
+
+
+
+
+    // Only for tetsing
+    private bool _useTestTime = false;
+
+    private DateTime _testDate = DateTime.Today;
+
+    private TimeOnly? _testTime =
+        TimeOnly.FromDateTime(DateTime.Now);
+
+    private DateTime GetAttendanceTimestamp()
+    {
+        if (!_useTestTime)
+            return DateTime.Now;
+
+        if (!_testTime.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Please select a test time.");
+        }
+
+        var time = _testTime.Value;
+
+        return new DateTime(
+            _testDate.Year,
+            _testDate.Month,
+            _testDate.Day,
+            time.Hour,
+            time.Minute,
+            time.Second);
+    }
+
+
+
+    // only for testing ends
+
+    private AttendanceWorkPlanDto? _attendancePlan;
+
+    [Parameter]
+    public AttendanceLogDto? TodayCheckIn { get; set; }
+
+    [Parameter]
+    public AttendanceLogDto? TodayCheckOut { get; set; }
+
+    [Parameter]
+    public EventCallback OnClockIn { get; set; }
+
+    [Parameter]
+    public EventCallback OnClockOut { get; set; }
+
+
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        var context = await UserAccessService.RequireContextAsync();
+        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
+
+        TodayCheckIn = result.checkIn;
+        TodayCheckOut = result.checkOut;
+    }
+
+
+
+    // only for testing 
+
+    private async Task HandleCheckInTest()
+    {
+
+
+        try
+        {
+            var context =
+                await UserAccessService
+                    .RequireContextAsync();
+
+            var timestamp =
+                GetAttendanceTimestamp();
+
+            await AttendanceLogService
+                    .AddAttendanceTestCheckAsync(
+                    context.IndividualId,
+                    1,
+                    timestamp);
+
+            if (OnClockIn.HasDelegate)
+                await OnClockIn.InvokeAsync();
+        }
+        finally
+        {
+            
+        }
+
+}
+
+
+
+
+    private async Task HandleCheckOutTest()
+    {
+       
+
+        try
+        {
+            var context =
+                await UserAccessService
+                    .RequireContextAsync();
+
+            var timestamp =
+                GetAttendanceTimestamp();
+
+            await AttendanceLogService
+                .AddAttendanceTestCheckAsync(
+                    context.IndividualId,
+                    2,
+                    timestamp);
+
+            if (OnClockOut.HasDelegate)
+                await OnClockOut.InvokeAsync();
+        }
+        finally
+        {
+
+        }
+       
+    }
+
+    // only for testing ends
+
+}

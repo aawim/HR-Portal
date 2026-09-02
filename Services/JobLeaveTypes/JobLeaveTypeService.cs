@@ -546,9 +546,6 @@ namespace HRM.Services.JobLeaveTypes
             }
         }
 
-
-
-
         public async Task<List<JobLeaveTypeDto>> GetJobLeaveType()
         {
             var jobId = await _userAccessService.GetCurrentJobIdAsync();
