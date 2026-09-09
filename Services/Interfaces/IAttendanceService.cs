@@ -14,6 +14,12 @@ namespace HRM.Services.Interfaces
       
         Task AddAttendanceCheckAsync(int individualId, DateTime checkTime, int checkType);
 
+
+        Task<List<AttendanceRawLogDto>> GetLogsAsync(
+      int individualId,
+      DateTime checkTime,
+      CancellationToken cancellationToken = default);
+
         Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId);
 
         Task<List<AttendanceLogDto>> GetMyUnevenLogsAsync();

@@ -753,15 +753,15 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
                             Description = segment.Description,
 
-                            SequenceNumber = segment.SequenceNumber ,
+                            SequenceNumber = segment.SequenceNumber,
 
-                            OffsetMinutes = segment.OffsetMinutes ?? 0,
+                            OffsetMinutes = segment.OffsetMinutes,
 
-                            DurationMinutes = segment.DurationMinutes ?? 0,
+                            DurationMinutes = segment.DurationMinutes,
 
-                            GraceBeforeMinutes = segment.GraceBeforeMinutes ?? 0,
+                            GraceBeforeMinutes = segment.GraceBeforeMinutes,
 
-                            GraceAfterMinutes = segment.GraceAfterMinutes ?? 0,
+                            GraceAfterMinutes = segment.GraceAfterMinutes,
 
                             IsMandatory = segment.IsMandatory,
 

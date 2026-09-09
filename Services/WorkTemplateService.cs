@@ -657,13 +657,13 @@ namespace HRM.Services
                       //GraceAfterMinutes =
                       //    x.GraceAfterMinutes,
 
-                      OffsetMinutes = x.OffsetMinutes ?? 0,
+                      OffsetMinutes = x.OffsetMinutes,
 
-                      DurationMinutes = x.DurationMinutes ?? 0,
+                      DurationMinutes = x.DurationMinutes,
 
-                      GraceBeforeMinutes = x.GraceBeforeMinutes ?? 0,
+                      GraceBeforeMinutes = x.GraceBeforeMinutes ,
 
-                      GraceAfterMinutes = x.GraceAfterMinutes ?? 0,
+                      GraceAfterMinutes = x.GraceAfterMinutes ,
 
                       IsMandatory =
                           x.IsMandatory,
@@ -948,11 +948,11 @@ namespace HRM.Services
                 segment.WorkTemplateId,
                 segment.WorkTemplateSegmentId,
                 segment.WorkSegmentTypeId,
-                 segment.SequenceNumber,
-                 (int)segment.OffsetMinutes,
-                 (int)segment.DurationMinutes,
-                 (int)segment.GraceAfterMinutes,
-                 (int)segment.GraceBeforeMinutes
+                segment.SequenceNumber,
+                dto.OffsetMinutes,
+                dto.DurationMinutes,
+                dto.GraceAfterMinutes,
+                dto.GraceBeforeMinutes
                        
                    );
 
@@ -985,8 +985,11 @@ namespace HRM.Services
             segment.SequenceNumber =
                 dto.SequenceNumber;
 
-            segment.IsActive =
-                dto.IsActive;
+            segment.IsActive = dto.IsActive;
+            segment.OffsetMinutes = dto.OffsetMinutes;
+            segment.DurationMinutes = dto.DurationMinutes;
+            segment.GraceAfterMinutes = dto.GraceAfterMinutes;
+            segment.GraceBeforeMinutes = dto.GraceBeforeMinutes;
 
             segment.UpdatedAt = DateTime.UtcNow;
 
@@ -1087,7 +1090,7 @@ namespace HRM.Services
                     "Offset minutes cannot be negative.");
             }
 
-            if (durationMinutes <= 0)
+            if (durationMinutes < 0)
             {
                 return ServiceResult.Failed(
                     "Duration must be greater than zero.");

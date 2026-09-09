@@ -2,6 +2,7 @@
 using HRM.Models;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
 namespace HRM.Services
 {
@@ -44,9 +45,6 @@ namespace HRM.Services
 
             return await GetUnevenLogsAsync(individualId);
         }
-
-
-
 
         public async Task<List<AttendanceLogDto>> GetUnevenLogsAsync(int individualId)
         {
@@ -116,42 +114,6 @@ namespace HRM.Services
 
             return uneven;
         }
-
-
-
-        //public async Task<List<AttendanceLog>> GetWeeklyAttendanceAsync()
-        //{
-        //    // 1. Get the user's IndividualID directly from their active Job
-        //    var username = await _userContext.GetUsernameAsync();
-
-        //    if (string.IsNullOrWhiteSpace(username))
-        //        return null;
-
-
-        //    await using var context = await _dbFactory.CreateDbContextAsync();
-
-        //    individualId = await context.Users
-        //        .Where(u => u.Username == username)
-        //        .SelectMany(u => u.Jobs)
-        //        .Select(j => j.IndividualID)
-        //        .FirstOrDefaultAsync();
-
-        //    if (individualId == 0)
-        //    {
-        //        return new List<AttendanceLog>();
-        //    }
-
-        //    // 2. Define the 7-day window
-        //    var startOfWeek = DateTime.Today.AddDays(-7);
-
-        //    // 3. Fetch the logs for that specific IndividualID
-        //    return await context.AttendanceLogs
-        //        .Where(a => a.IndividualId == individualId && a.Date >= startOfWeek)
-        //        .OrderBy(a => a.Date)
-        //        .ToListAsync();
-        //}
-
-
         public async Task<List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync()
         {
             var context = await _userAccessService.RequireContextAsync();
@@ -210,6 +172,47 @@ namespace HRM.Services
                         a.ActualInOutMode
                 })
                 .ToListAsync();
+        }
+
+  
+
+        public async Task<List<AttendanceRawLogDto>> GetLogsAsync(
+            int individualId,
+            DateTime checkTime,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+            var date = checkTime.Date;
+            var nextDate = date.AddDays(1);
+
+            var logs =
+                await db.AttendanceLogs
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.IndividualId == individualId &&
+                        x.Date >= date &&
+                        x.Date < nextDate)
+                    .OrderBy(x => x.Date)
+                    .Select(x =>
+                        new AttendanceRawLogDto
+                        {
+                            AttendanceLogId =
+                                x.AttendanceLogId,
+
+                            IndividualId =
+                                x.IndividualId,
+
+                            InOutModeId =
+                                x.InOutModeId,
+
+                            LogDateTime =
+                                x.Date
+                        })
+                    .ToListAsync(cancellationToken);
+
+            return logs;
         }
     }
 }

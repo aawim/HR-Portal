@@ -195,16 +195,16 @@ namespace HRM.WorkPlanning.Services
                                 x.SequenceNumber,
 
                             OffsetMinutes =
-                                x.OffsetMinutes ?? 0,
+                                x.OffsetMinutes,
 
                             DurationMinutes =
-                                x.DurationMinutes ?? 0,
+                                x.DurationMinutes,
 
                             GraceBeforeMinutes =
-                                x.GraceBeforeMinutes ?? 0,
+                                x.GraceBeforeMinutes,
 
                             GraceAfterMinutes =
-                                x.GraceAfterMinutes ?? 0,
+                                x.GraceAfterMinutes,
 
                             IsMandatory =
                                 x.IsMandatory,

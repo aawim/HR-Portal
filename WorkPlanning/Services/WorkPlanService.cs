@@ -340,10 +340,10 @@ namespace HRM.WorkPlanning.Services
                 foreach (var templateSegment in templateSegments)
                 {
                     var offsetMinutes =
-                        templateSegment.OffsetMinutes ?? 0;
+                        templateSegment.OffsetMinutes;
 
                     var durationMinutes =
-                        templateSegment.DurationMinutes ?? 0;
+                        templateSegment.DurationMinutes;
 
                     if (offsetMinutes < 0)
                     {
@@ -398,10 +398,10 @@ namespace HRM.WorkPlanning.Services
                             segmentEndDateTime,
 
                         GraceBeforeMinutes =
-                            templateSegment.GraceBeforeMinutes ?? 0,
+                            templateSegment.GraceBeforeMinutes,
 
                         GraceAfterMinutes =
-                            templateSegment.GraceAfterMinutes ?? 0,
+                            templateSegment.GraceAfterMinutes,
 
                         IsMandatory =
                             templateSegment.IsMandatory,
