@@ -29,5 +29,5 @@
         OfficialDuty,
 
         ManualCorrection
-        }
+    }
 }

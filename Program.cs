@@ -86,6 +86,16 @@ builder.Services.AddScoped<
     ILeavePolicyAccrualRuleService,
     LeavePolicyAccrualRuleService>();
 
+builder.Services.AddScoped<
+    IAttendanceResolver,
+    AttendanceResolver>();
+
+
+
+
+
+ 
+
 
 builder.Services.AddScoped<UserContext, UserContext>();
 

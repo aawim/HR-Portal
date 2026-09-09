@@ -1,5 +1,6 @@
 ﻿using HRM.DTOs.Attendance;
 using HRM.Models;
+using HRM.Services.Attendance.AttendancePlan;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Threading;
@@ -11,13 +12,15 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IAttendanceLogDataLoader _loader;
         private readonly IUserAccessService _userAccessService;
- 
+        private readonly IAttendancePlanService _attendancePlanService;
 
-        public AttendanceService(IDbContextFactory<HrmTeContext> factory, IAttendanceLogDataLoader loader, IUserAccessService userAccessService )
+
+        public AttendanceService(IDbContextFactory<HrmTeContext> factory, IAttendanceLogDataLoader loader, IUserAccessService userAccessService, IAttendancePlanService attendancePlanService)
         {
             _dbFactory = factory;
             _loader = loader;
             _userAccessService = userAccessService;
+            _attendancePlanService = attendancePlanService;
         }
 
         public async Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId)
@@ -174,18 +177,64 @@ namespace HRM.Services
                 .ToListAsync();
         }
 
-  
 
-        public async Task<List<AttendanceRawLogDto>> GetLogsAsync(
-            int individualId,
-            DateTime checkTime,
-            CancellationToken cancellationToken = default)
+
+        //public async Task<List<AttendanceRawLogDto>> GetLogsAsync(
+        //    int individualId,
+        //    DateTime checkTime,
+        //    CancellationToken cancellationToken = default)
+        //{
+        //    await using var db =
+        //        await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        //    var date = checkTime.Date;
+        //    var nextDate = date.AddDays(1);
+
+        //    var logs =
+        //        await db.AttendanceLogs
+        //            .AsNoTracking()
+        //            .Where(x =>
+        //                x.IndividualId == individualId &&
+        //                x.Date >= date &&
+        //                x.Date < nextDate)
+        //            .OrderBy(x => x.Date)
+        //            .Select(x =>
+        //                new AttendanceRawLogDto
+        //                {
+        //                    AttendanceLogId =
+        //                        x.AttendanceLogId,
+
+        //                    IndividualId =
+        //                        x.IndividualId,
+
+        //                    InOutModeId =
+        //                        x.InOutModeId,
+
+        //                    LogDateTime =
+        //                        x.Date
+        //                })
+        //            .ToListAsync(cancellationToken);
+
+        //    return logs;
+        //}
+
+
+        public async Task<List<AttendanceRawLogDto>>
+         GetLogsAsync(
+             int individualId,
+             int jobId,
+             DateTime checkTime,
+             CancellationToken cancellationToken = default)
         {
             await using var db =
-                await _dbFactory.CreateDbContextAsync(cancellationToken);
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
 
-            var date = checkTime.Date;
-            var nextDate = date.AddDays(1);
+            var date =
+                checkTime.Date;
+
+            var nextDate =
+                date.AddDays(1);
 
             var logs =
                 await db.AttendanceLogs
@@ -194,7 +243,8 @@ namespace HRM.Services
                         x.IndividualId == individualId &&
                         x.Date >= date &&
                         x.Date < nextDate)
-                    .OrderBy(x => x.Date)
+                    .OrderBy(x =>
+                        x.Date)
                     .Select(x =>
                         new AttendanceRawLogDto
                         {
@@ -210,9 +260,88 @@ namespace HRM.Services
                             LogDateTime =
                                 x.Date
                         })
-                    .ToListAsync(cancellationToken);
+                    .ToListAsync(
+                        cancellationToken);
+
+            var attendancePlan =
+                await _attendancePlanService
+                    .GetPlanAsync(
+                        individualId,
+                        jobId,
+                        checkTime,
+                        cancellationToken);
+
+            if (attendancePlan != null)
+            {
+                MatchLogsToSegments(
+                    logs,
+                    attendancePlan);
+            }
 
             return logs;
         }
+
+        private static void MatchLogsToSegments(
+    List<AttendanceRawLogDto> logs,
+    AttendanceWorkPlanDto attendancePlan)
+        {
+            foreach (var log in logs)
+            {
+                var segment =
+                    attendancePlan.Segments
+                        .Where(x =>
+                            x.RequiresAttendance)
+                        .Where(x =>
+                            log.LogDateTime >=
+                                x.StartDateTime.AddMinutes(
+                                    -x.GraceBeforeMinutes) &&
+                            log.LogDateTime <=
+                                x.EndDateTime.AddMinutes(
+                                    x.GraceAfterMinutes))
+                        .OrderBy(x =>
+                            GetDistanceToSegment(
+                                log.LogDateTime,
+                                x))
+                        .FirstOrDefault();
+
+                if (segment == null)
+                {
+                    continue;
+                }
+
+                log.WorkPlanSegmentId =
+                    segment.WorkPlanSegmentId;
+
+                log.SegmentName =
+                    segment.Name;
+            }
+        }
+
+        private static double GetDistanceToSegment(
+    DateTime clockTime,
+    AttendanceWorkSegmentDto segment)
+        {
+            var distanceToStart =
+                Math.Abs(
+                    (clockTime -
+                     segment.StartDateTime)
+                    .TotalMinutes);
+
+            var distanceToEnd =
+                Math.Abs(
+                    (clockTime -
+                     segment.EndDateTime)
+                    .TotalMinutes);
+
+            return Math.Min(
+                distanceToStart,
+                distanceToEnd);
+        }
+
+
+
+
+
+
     }
 }

@@ -22,7 +22,7 @@ namespace HRM.Services
         }
 
 
-        public async Task<AttendanceWorkPlanDto?> GetPlanAsync(
+       public async Task<AttendanceWorkPlanDto?> GetPlanAsync(
        int individualId,
        int jobId,
        DateTime workDate,
@@ -33,6 +33,8 @@ namespace HRM.Services
                     cancellationToken);
 
             var date = workDate.Date;
+            var nextDate = date.AddDays(1);
+
 
             var plan =
                 await db.WorkPlans

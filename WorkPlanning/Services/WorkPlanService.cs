@@ -180,7 +180,9 @@ namespace HRM.WorkPlanning.Services
                     .Select(x => new
                     {
                         x.WorkTemplateId,
-                        x.Name
+                        x.Name,
+                        x.DefaultStartTime,
+                        x.DefaultEndTime
                     })
                     .SingleOrDefaultAsync();
 
@@ -325,7 +327,8 @@ namespace HRM.WorkPlanning.Services
 
                     IsGenerated = false,
 
-                    IsManual = request.IsManual
+                    IsManual = request.IsManual,
+                 
                 };
 
                 db.WorkPlans.Add(workPlan);
@@ -333,7 +336,10 @@ namespace HRM.WorkPlanning.Services
                 await db.SaveChangesAsync();
 
                 // 6. Generate actual dated segments.
-                var assignmentBaseDateTime = workDate;
+                //var assignmentBaseDateTime = workDate;
+
+    
+                var assignmentBaseDateTime = workDate.Date.Add(template.DefaultStartTime.GetValueOrDefault().ToTimeSpan());
 
                 var generatedSegments = new List<WorkPlanSegment>();
 
@@ -363,13 +369,9 @@ namespace HRM.WorkPlanning.Services
                         return result;
                     }
 
-                    var segmentStartDateTime =
-                        assignmentBaseDateTime.AddMinutes(
-                            offsetMinutes);
+                    var segmentStartDateTime = assignmentBaseDateTime.AddMinutes(offsetMinutes);
 
-                    var segmentEndDateTime =
-                        segmentStartDateTime.AddMinutes(
-                            durationMinutes);
+                    var segmentEndDateTime = segmentStartDateTime.AddMinutes(durationMinutes);
 
                     var workPlanSegment = new WorkPlanSegment
                     {
@@ -391,11 +393,9 @@ namespace HRM.WorkPlanning.Services
                         SequenceNumber =
                             templateSegment.SequenceNumber,
 
-                        StartDateTime =
-                            segmentStartDateTime,
+                        StartDateTime = segmentStartDateTime,
 
-                        EndDateTime =
-                            segmentEndDateTime,
+                        EndDateTime = segmentEndDateTime,
 
                         GraceBeforeMinutes =
                             templateSegment.GraceBeforeMinutes,
