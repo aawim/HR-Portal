@@ -5,7 +5,7 @@ namespace HRM.Models.Archives;
 
 public partial class AdditionDeductionTypeDependencyTimePeriodAmount
 {
-    public int PayrollItemTypeDependencyTimePeriodAmountId { get; set; }
+    public int PayrollItemTypeDependencyTimePeriodAmountID { get; set; }
 
     public double Amount { get; set; }
 

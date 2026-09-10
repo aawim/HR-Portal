@@ -21,5 +21,15 @@ namespace HRM.DTOs.Job.JobWorkTemplateAssignment
             DateTime.Today;
 
         public DateTime? EffectiveTo { get; set; }
+ 
+        public bool Monday { get; set; } = true;
+        public bool Tuesday { get; set; } = true;
+        public bool Wednesday { get; set; } = true;
+        public bool Thursday { get; set; } = true;
+        public bool Friday { get; set; } = true;
+        public bool Saturday { get; set; }
+        public bool Sunday { get; set; }
+        public int Priority { get; set; }
+        public long? OperationLogId { get; set; }
     }
 }

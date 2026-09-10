@@ -69,6 +69,7 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 ///
 
 
+builder.Services.AddScoped<IJobWorkTemplateService, JobWorkTemplateService>();
 
 builder.Services.AddScoped<
     ILeaveDefinitionService,

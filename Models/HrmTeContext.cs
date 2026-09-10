@@ -27,7 +27,7 @@ public partial class HrmTeContext : DbContext
     public virtual DbSet<LeaveTypeMapping>LeaveTypeMappings{ get; set; }
 
 
-
+    public DbSet<JobWorkTemplate> JobWorkTemplates { get; set; }
 
     public virtual DbSet<PlanningProvider> PlanningProviders { get; set; }
 
@@ -685,12 +685,44 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HrmTeContext).Assembly);
 
+        modelBuilder.Entity<JobWorkTemplate>(entity =>
+        {
+            entity.ToTable("JobWorkTemplates");
+
+            entity.HasKey(x => x.JobWorkTemplateId);
+
+            entity.Property(x => x.EffectiveFrom)
+                .HasColumnType("date");
+
+            entity.Property(x => x.EffectiveTo)
+                .HasColumnType("date");
+
+            entity.HasOne(x => x.Job)
+                .WithMany()
+                .HasForeignKey(x => x.JobId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(x => x.WorkTemplate)
+                .WithMany()
+                .HasForeignKey(x => x.WorkTemplateId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasIndex(x => new
+            {
+                x.JobId,
+                x.IsActive,
+                x.EffectiveFrom,
+                x.EffectiveTo
+            });
+        });
+
+
 
         modelBuilder.Entity<AdditionDeductionTypeDependencyTimePeriodAmount>(entity =>
         {
-            entity.HasKey(e => e.PayrollItemTypeDependencyTimePeriodAmountId);
+            entity.HasKey(e => e.PayrollItemTypeDependencyTimePeriodAmountID);
 
-            entity.Property(e => e.PayrollItemTypeDependencyTimePeriodAmountId).HasColumnName("PayrollItemTypeDependencyTimePeriodAmountID");
+            entity.Property(e => e.PayrollItemTypeDependencyTimePeriodAmountID).HasColumnName("PayrollItemTypeDependencyTimePeriodAmountID");
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
         });
