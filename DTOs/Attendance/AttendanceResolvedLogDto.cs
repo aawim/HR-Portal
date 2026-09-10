@@ -17,5 +17,7 @@ namespace HRM.DTOs.Attendance
         public AttendanceClockType ClockType { get; set; }
 
         public double DistanceMinutes { get; set; }
+
+     
     }
 }

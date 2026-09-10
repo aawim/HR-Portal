@@ -12,6 +12,8 @@ namespace HRM.DTOs.WorkPlanning
 
         public int WorkTemplateTypeId { get; set; }
 
+        public int OranisationBisnessEntityID { get; set; }
+
         //public virtual WorkTemplateType? TemplateType { get; set; } = null!;
 
         public TimeSpan? DefaultStartTime { get; set; }
@@ -26,6 +28,7 @@ namespace HRM.DTOs.WorkPlanning
 
         public string Icon { get; set; } = "📋";
 
+        public bool IsGlobal { get; set; } = false;
         public bool IsActive { get; set; } 
     }
 }

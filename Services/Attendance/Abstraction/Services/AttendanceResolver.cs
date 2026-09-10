@@ -1,8 +1,10 @@
 ﻿using HRM.DTOs.Attendance;
 using HRM.Enum;
+using HRM.Models;
 
 namespace HRM.Services.Attendance.Abstraction.Services
 {
+
     public class AttendanceResolver : IAttendanceResolver
     {
         public Task<List<AttendanceResolvedLogDto>> ResolveAsync(
@@ -13,11 +15,20 @@ namespace HRM.Services.Attendance.Abstraction.Services
             var results =
                 new List<AttendanceResolvedLogDto>();
 
+            if (plan == null)
+            {
+                throw new InvalidOperationException(
+                    $"No attendance work plan found");
+            }
+
             var segments =
                 plan.Segments
                     .Where(x => x.RequiresAttendance)
                     .OrderBy(x => x.SequenceNumber)
                     .ToList();
+
+
+
 
             foreach (var log in logs.OrderBy(x => x.LogDateTime))
             {

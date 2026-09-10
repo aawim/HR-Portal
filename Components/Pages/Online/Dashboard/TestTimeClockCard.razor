@@ -387,44 +387,34 @@
     {
         var attendanceTime = GetAttendanceTimestamp();
 
-
         var context = await UserAccessService.RequireContextAsync();
-        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
 
+        var result = await AttendanceService.GetTodayStatusAsync(
+            context.IndividualId);
 
-        _attendancePlan =
-      await AttendancePlanService.GetPlanAsync(
-          context.IndividualId,
-          context.ActiveJob.JobId,
-          attendanceTime);
+        _attendancePlan = await AttendancePlanService.GetPlanAsync(
+            context.IndividualId,
+            context.ActiveJob.JobId,
+            attendanceTime);
 
-        _attendanceLogs =
-            await AttendanceService.GetLogsAsync(
-                context.IndividualId,
-                context.ActiveJob.JobId,
-                attendanceTime);
-
-
-        _resolvedLogs = await AttendanceResolver.ResolveAsync(_attendancePlan!,_attendanceLogs);
-
+        _attendanceLogs = await AttendanceService.GetLogsAsync(
+            context.IndividualId,
+            context.ActiveJob.JobId,
+            attendanceTime);
 
         if (_attendancePlan != null)
         {
-            _resolvedLogs =
-                await AttendanceResolver.ResolveAsync(
-                    _attendancePlan,
-                    _attendanceLogs);
+            _resolvedLogs = await AttendanceResolver.ResolveAsync(
+                _attendancePlan,
+                _attendanceLogs ?? []);
         }
         else
         {
-            _resolvedLogs.Clear();
+            _resolvedLogs = [];
         }
-
 
         TodayCheckIn = result.checkIn;
         TodayCheckOut = result.checkOut;
-
-      
     }
 
  
@@ -455,69 +445,6 @@
         }
     }
 
-    // only for testing 
-
-//     private async Task HandleCheckInTest()
-//     {
-
-
-//         try
-//         {
-//             var context =
-//                 await UserAccessService
-//                     .RequireContextAsync();
-
-//             var timestamp =
-//                 GetAttendanceTimestamp();
-
-//             await AttendanceLogService
-//                     .AddAttendanceTestCheckAsync(
-//                     context.IndividualId,
-//                     1,
-//                     timestamp);
-
-//             if (OnClockIn.HasDelegate)
-//                 await OnClockIn.InvokeAsync();
-//         }
-//         finally
-//         {
-            
-//         }
-
-// }
-
-
-
-
-//     private async Task HandleCheckOutTest()
-//     {
-       
-
-//         try
-//         {
-//             var context =
-//                 await UserAccessService
-//                     .RequireContextAsync();
-
-//             var timestamp =
-//                 GetAttendanceTimestamp();
-
-//             await AttendanceLogService
-//                 .AddAttendanceTestCheckAsync(
-//                     context.IndividualId,
-//                     2,
-//                     timestamp);
-
-//             if (OnClockOut.HasDelegate)
-//                 await OnClockOut.InvokeAsync();
-//         }
-//         finally
-//         {
-
-//         }
-       
-//     }
-
-    // only for testing ends
+ 
 
 }

@@ -182,7 +182,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                         x.IsActive &&
                         (
                             x.IsGlobal ||
-                            x.OrganisationBusinessEntityId ==
+                            x.OrganisationBusinessEntityId == 
                                 organisationBusinessEntityId
                         ));
 

@@ -55,6 +55,12 @@
                       IsDisabled="@IsDisabled" 
                       />
 
+        <ToggleOption Title="Is Global"
+                      Description="Make this template available for all organisations."
+                      Value="@Model.IsGlobal"
+                      ValueChanged="@HandleGlobalChangedAsync"
+                      IsDisabled="@IsDisabled" />
+
     </div>
 
     @if (!Model.RequiresAttendance)
@@ -168,6 +174,10 @@
     [Parameter]
     public EventCallback<bool> ActiveChanged { get; set; }
 
+
+    [Parameter]
+    public EventCallback<bool> IsGlobalChanged { get; set; }
+
     private async Task HandleAttendanceChangedAsync(
         bool value)
     {
@@ -255,4 +265,19 @@
             await ActiveChanged.InvokeAsync(value);
         }
     }
+
+
+    private async Task HandleGlobalChangedAsync(
+     bool value)
+    {
+        Model.IsGlobal = value;
+
+        if (IsGlobalChanged.HasDelegate)
+        {
+            await IsGlobalChanged.InvokeAsync(value);
+        }
+    }
+
+
+    
 }

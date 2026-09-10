@@ -13,12 +13,13 @@ namespace HRM.Services
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _logService;
-
+        private readonly IUserAccessService _userAccessService;
         public WorkTemplateService(
-            IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService)
+            IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService, IUserAccessService userAccessService    )
         {
             _dbFactory = dbFactory;
             _logService = logService;
+            _userAccessService = userAccessService;
         }
 
 
@@ -227,6 +228,18 @@ namespace HRM.Services
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
 
+            var context = await _userAccessService.RequireContextAsync();
+
+            var organisationBusinessEntityId = context.ActiveJob?.OrganisationId;
+
+            //var organisationBusinessEntityId = dto.IsGlobal ? null : dto.OrganisationBusinessEntityId;
+
+            if (!dto.IsGlobal && !organisationBusinessEntityId.HasValue)
+            {
+                return ServiceResult.Failed(
+                    "Please select an organisation for a non-global work template.");
+            }
+
             var name = dto.Name.Trim();
             var code = string.IsNullOrWhiteSpace(dto.Code)
                 ? null
@@ -237,7 +250,7 @@ namespace HRM.Services
                     x.IsActive &&
                     x.Name == name &&
                     x.OrganisationBusinessEntityId ==
-                        dto.OrganisationBusinessEntityId);
+                        organisationBusinessEntityId);
 
             if (duplicateNameExists)
             {
@@ -252,7 +265,7 @@ namespace HRM.Services
                         x.IsActive &&
                         x.Code == code &&
                         x.OrganisationBusinessEntityId ==
-                            dto.OrganisationBusinessEntityId);
+                            organisationBusinessEntityId);
 
                 if (duplicateCodeExists)
                 {
@@ -318,7 +331,7 @@ namespace HRM.Services
             {
                 var organisationExists = await db.Organisations
                     .AnyAsync(x =>
-                        x.BusinessEntityID == dto.OrganisationBusinessEntityId.Value);
+                        x.BusinessEntityID == organisationBusinessEntityId);
 
                 if (!organisationExists)
                 {
@@ -330,8 +343,7 @@ namespace HRM.Services
             var entity = new WorkTemplate
             {
                 WorkTemplateTypeId = dto.WorkTemplateTypeId,
-                OrganisationBusinessEntityId =
-                    dto.OrganisationBusinessEntityId,
+                OrganisationBusinessEntityId = organisationBusinessEntityId,
 
                 Name = name,
                 Code = code,
@@ -374,6 +386,14 @@ namespace HRM.Services
                 .FirstOrDefaultAsync(x =>
                     x.WorkTemplateId == dto.WorkTemplateId);
 
+
+            var context = await _userAccessService.RequireContextAsync();
+
+            var organisationBusinessEntityId = context.ActiveJob?.OrganisationId;
+
+
+ 
+
             if (entity == null)
             {
                 return ServiceResult.Failed(
@@ -391,7 +411,7 @@ namespace HRM.Services
                     x.IsActive &&
                     x.Name == name &&
                     x.OrganisationBusinessEntityId ==
-                        dto.OrganisationBusinessEntityId);
+                       organisationBusinessEntityId);
 
             if (duplicateNameExists)
             {
@@ -407,7 +427,7 @@ namespace HRM.Services
                         x.IsActive &&
                         x.Code == code &&
                         x.OrganisationBusinessEntityId ==
-                            dto.OrganisationBusinessEntityId);
+                          organisationBusinessEntityId);
 
                 if (duplicateCodeExists)
                 {
@@ -441,7 +461,7 @@ namespace HRM.Services
                 var organisationExists = await db.Organisations
                     .AnyAsync(x =>
                         x.BusinessEntityID ==
-                        dto.OrganisationBusinessEntityId.Value);
+                        organisationBusinessEntityId);
 
                 if (!organisationExists)
                 {
@@ -450,8 +470,13 @@ namespace HRM.Services
                 }
             }
 
+
+           
+
+
+
             entity.WorkTemplateTypeId = dto.WorkTemplateTypeId;
-            entity.OrganisationBusinessEntityId = dto.OrganisationBusinessEntityId;
+            entity.OrganisationBusinessEntityId = organisationBusinessEntityId;
 
             entity.Name = name;
             entity.Code = code;
@@ -1009,8 +1034,7 @@ namespace HRM.Services
 
 
 
-        public async Task<ServiceResult> ArchiveSegmentAsync(
-    int workTemplateSegmentId)
+        public async Task<ServiceResult> ArchiveSegmentAsync(int workTemplateSegmentId)
 {
     await using var db =
         await _dbFactory.CreateDbContextAsync();

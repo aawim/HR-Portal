@@ -957,7 +957,8 @@
                     template.IsValid,
 
                 IsActive =
-                    template.IsActive
+                    template.IsActive,
+                IsGlobal = template.IsGlobal,
             };
     }
 
@@ -1003,12 +1004,13 @@
                 IsValid = true,
 
                 IsActive =
-                    preset.IsActive
+                    preset.IsActive,
+
+                IsGlobal = preset.IsGlobal,
             };
     }
 
-    private static CreateWorkTemplateDto MapToCreateDto(
-        UpdateWorkTemplateDto model)
+    private static CreateWorkTemplateDto MapToCreateDto(UpdateWorkTemplateDto model)
     {
         return new CreateWorkTemplateDto
             {
@@ -1023,6 +1025,7 @@
 
                 WorkTemplateTypeId =
                     model.WorkTemplateTypeId,
+                OrganisationBusinessEntityId = model.OrganisationBusinessEntityId,
 
                 TemplateType =
                     model.TemplateType,
@@ -1052,7 +1055,9 @@
                     model.IsValid,
 
                 IsActive =
-                    model.IsActive
+                    model.IsActive,
+
+                IsGlobal = model.IsGlobal
             };
     }
 
@@ -1118,8 +1123,7 @@
             };
     }
 
-    private static SaveWorkTemplateSegmentDto
-        MapToSaveSegmentDto(
+    private static SaveWorkTemplateSegmentDto MapToSaveSegmentDto(
             WorkTemplateSegmentEditViewModel model)
     {
         return new SaveWorkTemplateSegmentDto
@@ -1177,8 +1181,7 @@
             };
     }
 
-    private static UpdateWorkTemplateDto
-        CreateEmptyEditModel()
+    private static UpdateWorkTemplateDto CreateEmptyEditModel()
     {
         return new UpdateWorkTemplateDto
             {
@@ -1186,6 +1189,7 @@
 
                 Name = string.Empty,
                 Description = string.Empty,
+
 
                 TemplateType = string.Empty,
                 WorkTemplateTypeId = 0,
