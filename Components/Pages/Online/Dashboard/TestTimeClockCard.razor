@@ -392,9 +392,15 @@
         var result = await AttendanceService.GetTodayStatusAsync(
             context.IndividualId);
 
-        _attendancePlan = await AttendancePlanService.GetPlanAsync(
+        // _attendancePlan = await AttendancePlanService.GetPlanAsync(
+        //     context.IndividualId,
+        //     context.ActiveJob.JobId,
+        //     attendanceTime);
+
+        _attendancePlan = await AttendancePlanService.GetOrGenerateAsync(
             context.IndividualId,
             context.ActiveJob.JobId,
+            context.ActiveJob.OrganisationId,
             attendanceTime);
 
         _attendanceLogs = await AttendanceService.GetLogsAsync(

@@ -46,6 +46,10 @@ namespace HRM.Services.Attendance.Abstraction.Services
         }
 
 
+
+
+
+
         private static AttendanceResolvedLogDto ResolveLog(
             AttendanceRawLogDto log,
             List<AttendanceWorkSegmentDto> segments)

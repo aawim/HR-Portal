@@ -30,6 +30,6 @@ namespace HRM.DTOs.Job.JobWorkTemplateAssignment
         public bool Saturday { get; set; }
         public bool Sunday { get; set; }
         public int Priority { get; set; }
-        public long? OperationLogId { get; set; }
+        public int? OperationLogId { get; set; }
     }
 }

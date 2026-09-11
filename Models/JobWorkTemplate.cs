@@ -27,7 +27,7 @@ namespace HRM.Models
 
         public bool IsActive { get; set; } = true;
 
-        public long? OperationLogId { get; set; }
+        public int? OperationLogId { get; set; }
 
         public virtual Job Job { get; set; } = null!;
 

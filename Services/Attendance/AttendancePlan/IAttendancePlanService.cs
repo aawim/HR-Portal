@@ -9,5 +9,13 @@ namespace HRM.Services.Attendance.AttendancePlan
         int jobId,
         DateTime workDate,
         CancellationToken cancellationToken = default);
+
+        Task<AttendanceWorkPlanDto?> GetOrGenerateAsync(
+        int individualId,
+        int jobId,
+        int organisationBusinessEntityId,
+        DateTime attendanceTime,
+        CancellationToken cancellationToken = default);
+
     }
 }
