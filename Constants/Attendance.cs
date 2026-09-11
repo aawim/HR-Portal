@@ -12,5 +12,6 @@
         public const int Manual = 8;
         public const int NoWorkPlan = 9;
         public const int OutsideResolutionWindow = 10;
+        public const int DuplicatePunch = 11;
     }
 }

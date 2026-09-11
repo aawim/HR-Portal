@@ -1,4 +1,6 @@
 ﻿
+using HRM.Constants;
+using HRM.Enum;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
 namespace HRM.Services.Attendance.Repositories
@@ -11,6 +13,32 @@ namespace HRM.Services.Attendance.Repositories
         {
             _dbFactory = dbFactory;
         }
+
+        public async Task<AttendanceLogResolution?> GetResolvedBoundaryAsync(
+            long workPlanId,
+            long workPlanSegmentId,
+            AttendanceClockType clockType,
+            CancellationToken cancellationToken = default)
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
+
+            return await db.AttendanceLogResolutions
+                .AsNoTracking()
+                .Where(x =>
+                    x.WorkPlanId == workPlanId &&
+                    x.WorkPlanSegmentId == workPlanSegmentId &&
+                    x.AttendanceClockTypeId == (int)clockType &&
+                    x.AttendanceResolutionStatusId ==
+                        AttendanceResolutionStatusIds.Resolved &&
+                    x.IsValid)
+                .OrderBy(x => x.CreatedDate)
+                .FirstOrDefaultAsync(
+                    cancellationToken);
+        }
+
+
 
 
         public async Task<AttendanceLogResolution?>

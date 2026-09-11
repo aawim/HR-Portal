@@ -144,7 +144,53 @@ namespace HRM.Services.Attendance.Abstraction.Services
                                     planResult.Message);
                 }
 
+                var existingBoundaryResolution =
+                    await _resolutionRepository
+                        .GetResolvedBoundaryAsync(
+                            planResult.WorkPlanId!.Value,
+                            planResult.WorkPlanSegmentId!.Value,
+                            planResult.ClockType,
+                            cancellationToken);
 
+
+
+
+
+                if (existingBoundaryResolution is not null)
+                {
+                    var duplicateMessage =
+                        $"Attendance event was resolved to " +
+                        $"'{planResult.SegmentName}' as " +
+                        $"{planResult.ClockType}, but that boundary " +
+                        $"already has attendance log " +
+                        $"{existingBoundaryResolution.AttendanceLogId}.";
+
+                    var duplicateResolution =
+                        CreateResolution(
+                            attendanceLog,
+                            AttendanceResolutionStatusIds.DuplicatePunch,
+                            duplicateMessage,
+                            workPlanId:
+                                planResult.WorkPlanId,
+                            workPlanSegmentId:
+                                planResult.WorkPlanSegmentId,
+                            jobId:
+                                planResult.JobId,
+                            clockType:
+                                planResult.ClockType);
+
+                    var savedDuplicate =
+                        await _resolutionRepository.AddAsync(
+                            duplicateResolution,
+                            cancellationToken);
+
+                    return AttendanceProcessingResult.Recorded(
+                        savedDuplicate,
+                        duplicateMessage);
+
+
+
+                }
 
                 var resolvedMessage =
                 $"Attendance event resolved to " +
@@ -155,16 +201,19 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
 
                 var resolvedRecord =
-                    CreateResolution(
-                        attendanceLog,
-                        AttendanceResolutionStatusIds.Resolved,
-                        resolvedMessage,
-                        workPlanId: planResult.WorkPlanId,
-                        workPlanSegmentId:
-                            planResult.WorkPlanSegmentId,
-                        jobId:
-                            planResult.JobId,
-                        clockType: planResult.ClockType);
+                     CreateResolution(
+                         attendanceLog,
+                         AttendanceResolutionStatusIds.Resolved,
+                         resolvedMessage,
+                         workPlanId:
+                             planResult.WorkPlanId,
+                         workPlanSegmentId:
+                             planResult.WorkPlanSegmentId,
+                         jobId:
+                             planResult.JobId,
+                         clockType:
+                             planResult.ClockType);
+
 
 
 

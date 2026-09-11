@@ -1,4 +1,5 @@
-﻿using HRM.Models;
+﻿using HRM.Enum;
+using HRM.Models;
 
 namespace HRM.Services.Attendance.Repositories
 {
@@ -24,6 +25,12 @@ namespace HRM.Services.Attendance.Repositories
 
         Task InvalidateAsync(
             long attendanceLogResolutionId,
+            CancellationToken cancellationToken = default);
+
+        Task<AttendanceLogResolution?> GetResolvedBoundaryAsync(
+            long workPlanId,
+            long workPlanSegmentId,
+            AttendanceClockType clockType,
             CancellationToken cancellationToken = default);
     }
 }
