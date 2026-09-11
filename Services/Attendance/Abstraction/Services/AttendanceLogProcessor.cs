@@ -145,12 +145,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 }
 
                 var existingBoundaryResolution =
-                    await _resolutionRepository
-                        .GetResolvedBoundaryAsync(
-                            planResult.WorkPlanId!.Value,
-                            planResult.WorkPlanSegmentId!.Value,
-                            planResult.ClockType,
-                            cancellationToken);
+                 await _resolutionRepository
+                     .GetResolvedBoundaryAsync(
+                         planResult.WorkPlanId!.Value,
+                         planResult.WorkPlanSegmentId!.Value,
+                         planResult.ClockType,
+                         cancellationToken);
 
 
 
@@ -158,14 +158,36 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 if (existingBoundaryResolution is not null)
                 {
-                    var duplicateMessage =
-                        $"Attendance event was resolved to " +
-                        $"'{planResult.SegmentName}' as " +
-                        $"{planResult.ClockType}, but that boundary " +
-                        $"already has attendance log " +
-                        $"{existingBoundaryResolution.AttendanceLogId}.";
 
-                    var duplicateResolution =
+
+
+                    var boundaryTime =
+                        planResult.BoundaryTime!.Value;
+
+                    var existingLogTime =
+                        existingBoundaryResolution.AttendanceLog.Date;
+
+                    var existingDistance =
+                        Math.Abs(
+                            (existingLogTime - boundaryTime)
+                            .TotalMinutes);
+
+                    var newDistance =
+                        Math.Abs(
+                            (attendanceLog.Date - boundaryTime)
+                            .TotalMinutes);
+
+                    if (existingDistance <= newDistance)
+                    {
+
+                        var duplicateMessage =
+                           $"Attendance event matched " +
+                           $"'{planResult.SegmentName}' " +
+                           $"{planResult.ClockType}, but attendance log " +
+                           $"{existingBoundaryResolution.AttendanceLogId} " +
+                           $"is closer to the scheduled boundary.";
+
+                        var duplicateResolution =
                         CreateResolution(
                             attendanceLog,
                             AttendanceResolutionStatusIds.DuplicatePunch,
@@ -179,23 +201,31 @@ namespace HRM.Services.Attendance.Abstraction.Services
                             clockType:
                                 planResult.ClockType);
 
-                    var savedDuplicate =
-                        await _resolutionRepository.AddAsync(
-                            duplicateResolution,
+                        var savedDuplicate =
+                            await _resolutionRepository.AddAsync(
+                                duplicateResolution,
+                                cancellationToken);
+
+                        return AttendanceProcessingResult.Recorded(
+                            savedDuplicate,
+                            duplicateMessage);
+
+                    }
+
+                    await _resolutionRepository
+                        .MarkAsDuplicateAsync(
+                            existingBoundaryResolution.AttendanceLogResolutionId,
+                            $"Replaced by attendance log " +
+                            $"{attendanceLog.AttendanceLogId}, which is closer " +
+                            $"to the scheduled boundary.",
                             cancellationToken);
-
-                    return AttendanceProcessingResult.Recorded(
-                        savedDuplicate,
-                        duplicateMessage);
-
-
 
                 }
 
                 var resolvedMessage =
-                $"Attendance event resolved to " +
-                $"'{planResult.SegmentName}' as " +
-                $"{planResult.ClockType}.";
+                    $"Attendance event resolved to " +
+                    $"'{planResult.SegmentName}' as " +
+                    $"{planResult.ClockType}.";
 
 
 
@@ -307,35 +337,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 message);
         }
 
-        //private static AttendanceLogResolution CreateResolution(
-        //    AttendanceLog attendanceLog,
-        //    int resolutionStatusId,
-        //    string message,
-        //    long? workPlanId = null,
-        //    long? workAssignmentId = null,
-        //    long? workAssignmentSegmentId = null)
-        //{
-        //    return new AttendanceLogResolution
-        //    {
-        //        AttendanceLogId = attendanceLog.AttendanceLogId,
-
-        //        WorkPlanId = workPlanId,
-
-        //        WorkAssignmentId = workAssignmentId,
-
-        //        WorkAssignmentSegmentId = workAssignmentSegmentId,
-
-        //        AttendanceResolutionStatusId = resolutionStatusId,
-
-        //        ResolutionDate = DateTime.Now,
-
-        //        ResolutionMessage = message,
-
-        //        IsValid = true,
-
-        //        CreatedDate = DateTime.Now
-        //    };
-        //}
+      
 
         private static AttendanceLogResolution CreateResolution(
     AttendanceLog attendanceLog,
@@ -389,22 +391,6 @@ namespace HRM.Services.Attendance.Abstraction.Services
             };
         }
 
-        private static string BuildResolvedMessage(
-         string? assignmentName,
-         string? segmentName,
-         bool isInsideScheduledPeriod,
-         bool isInsideGracePeriod)
-        {
-            var periodDescription =
-                isInsideScheduledPeriod
-                    ? "inside the scheduled period"
-                    : isInsideGracePeriod
-                        ? "inside the allowed grace period"
-                        : "outside the scheduled period";
-
-            return
-                $"Attendance event resolved to assignment '{assignmentName ?? "Unknown"}' " +
-                $"and segment '{segmentName ?? "Unknown"}', {periodDescription}.";
-        }
+    
     }
 }

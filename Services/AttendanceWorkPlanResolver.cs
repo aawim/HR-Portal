@@ -212,11 +212,14 @@ namespace HRM.Services
                             DistanceMinutes =
                     bestCandidate.DistanceMinutes,
 
-                            Message =
+                Message =
                     $"Attendance event resolved to " +
                     $"'{bestCandidate.SegmentName}' as " +
                     $"{bestCandidate.ClockType}."
-                        };
+
+
+
+            };
         }
 
         private sealed class BoundaryCandidate

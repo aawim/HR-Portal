@@ -4,7 +4,7 @@ namespace HRM.Models
 {
     public partial class AttendanceLogResolution
     {
-        public long AttendanceLogResolutionId { get; set; }
+        public int AttendanceLogResolutionId { get; set; }
 
         public int AttendanceLogId { get; set; }
 

@@ -32,5 +32,11 @@ namespace HRM.Services.Attendance.Repositories
             long workPlanSegmentId,
             AttendanceClockType clockType,
             CancellationToken cancellationToken = default);
+
+
+        Task MarkAsDuplicateAsync(
+            int attendanceLogResolutionId,
+            string message,
+            CancellationToken cancellationToken = default);
     }
 }

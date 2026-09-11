@@ -16,6 +16,7 @@ namespace HRM.DTOs.Attendance
 
         public AttendancePlanResolutionState State { get; set; }
 
+        public DateTime? BoundaryTime { get; set; }
         public double DistanceMinutes { get; set; }
 
         public bool IsResolved =>

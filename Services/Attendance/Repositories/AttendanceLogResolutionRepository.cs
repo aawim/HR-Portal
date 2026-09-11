@@ -26,6 +26,7 @@ namespace HRM.Services.Attendance.Repositories
 
             return await db.AttendanceLogResolutions
                 .AsNoTracking()
+                .Include(x => x.AttendanceLog)
                 .Where(x =>
                     x.WorkPlanId == workPlanId &&
                     x.WorkPlanSegmentId == workPlanSegmentId &&
@@ -175,5 +176,46 @@ namespace HRM.Services.Attendance.Repositories
 
             await db.SaveChangesAsync(cancellationToken);
         }
+
+
+        public async Task MarkAsDuplicateAsync(
+    int attendanceLogResolutionId,
+    string message,
+    CancellationToken cancellationToken = default)
+        {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
+
+            var resolution =
+                await db.AttendanceLogResolutions
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.AttendanceLogResolutionId ==
+                            attendanceLogResolutionId,
+                        cancellationToken);
+
+            if (resolution == null)
+            {
+                throw new InvalidOperationException(
+                    $"Attendance resolution " +
+                    $"{attendanceLogResolutionId} was not found.");
+            }
+
+            resolution.AttendanceResolutionStatusId =
+                AttendanceResolutionStatusIds.DuplicatePunch;
+
+            resolution.ResolutionMessage =
+                message;
+
+            resolution.ResolutionDate =
+                DateTime.Now;
+
+            await db.SaveChangesAsync(
+                cancellationToken);
+        }
+
+
+
     }
 }
