@@ -7,6 +7,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
     public class AttendanceResolver : IAttendanceResolver
     {
+
+        private const int CheckInResolutionBeforeMinutes = 120;
+        private const int CheckOutResolutionAfterMinutes = 120;
+        
+
+
         public Task<List<AttendanceResolvedLogDto>> ResolveAsync(
         AttendanceWorkPlanDto plan,
         List<AttendanceRawLogDto> logs,
@@ -50,70 +56,202 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
 
 
+        //private static AttendanceResolvedLogDto ResolveLog(
+        //    AttendanceRawLogDto log,
+        //    List<AttendanceWorkSegmentDto> segments)
+        //{
+        //    AttendanceWorkSegmentDto? bestSegment = null;
+
+        //    AttendanceClockType bestType =
+        //        AttendanceClockType.Unresolved;
+
+        //    double bestDistance =
+        //        double.MaxValue;
+
+
+        //    foreach (var segment in segments)
+        //    {
+        //        var distanceToStart =
+        //            Math.Abs(
+        //                (log.LogDateTime -
+        //                 segment.StartDateTime)
+        //                .TotalMinutes);
+
+        //        var distanceToEnd =
+        //            Math.Abs(
+        //                (log.LogDateTime -
+        //                 segment.EndDateTime)
+        //                .TotalMinutes);
+
+
+        //        // -------------------------------
+        //        // Candidate: Check In
+        //        // -------------------------------
+
+        //        if (distanceToStart < bestDistance)
+        //        {
+        //            bestDistance =
+        //                distanceToStart;
+
+        //            bestSegment =
+        //                segment;
+
+        //            bestType =
+        //                AttendanceClockType.CheckIn;
+        //        }
+
+
+        //        // -------------------------------
+        //        // Candidate: Check Out
+        //        // -------------------------------
+
+        //        if (distanceToEnd < bestDistance)
+        //        {
+        //            bestDistance =
+        //                distanceToEnd;
+
+        //            bestSegment =
+        //                segment;
+
+        //            bestType =
+        //                AttendanceClockType.CheckOut;
+        //        }
+        //    }
+
+
+        //    if (bestSegment == null)
+        //    {
+        //        return new AttendanceResolvedLogDto
+        //        {
+        //            AttendanceLogId =
+        //                log.AttendanceLogId,
+
+        //            IndividualId =
+        //                log.IndividualId,
+
+        //            LogDateTime =
+        //                log.LogDateTime,
+
+        //            ClockType =
+        //                AttendanceClockType.Unresolved
+        //        };
+        //    }
+
+
+        //    return new AttendanceResolvedLogDto
+        //    {
+        //        AttendanceLogId =
+        //            log.AttendanceLogId,
+
+        //        IndividualId =
+        //            log.IndividualId,
+
+        //        LogDateTime =
+        //            log.LogDateTime,
+
+        //        WorkPlanSegmentId =
+        //            bestSegment.WorkPlanSegmentId,
+
+        //        SegmentName =
+        //            bestSegment.Name,
+
+        //        ClockType =
+        //            bestType,
+
+        //        DistanceMinutes =
+        //            bestDistance
+        //    };
+        //}
+
+
         private static AttendanceResolvedLogDto ResolveLog(
             AttendanceRawLogDto log,
             List<AttendanceWorkSegmentDto> segments)
         {
-            AttendanceWorkSegmentDto? bestSegment = null;
-
-            AttendanceClockType bestType =
-                AttendanceClockType.Unresolved;
-
-            double bestDistance =
-                double.MaxValue;
-
+            var candidates =
+                new List<AttendanceBoundaryCandidate>();
 
             foreach (var segment in segments)
             {
-                var distanceToStart =
-                    Math.Abs(
-                        (log.LogDateTime -
-                         segment.StartDateTime)
-                        .TotalMinutes);
-
-                var distanceToEnd =
-                    Math.Abs(
-                        (log.LogDateTime -
-                         segment.EndDateTime)
-                        .TotalMinutes);
+                var midpoint =
+                    segment.StartDateTime.AddTicks(
+                        (segment.EndDateTime -
+                         segment.StartDateTime).Ticks / 2);
 
 
-                // -------------------------------
-                // Candidate: Check In
-                // -------------------------------
+                // ========================================
+                // CHECK IN WINDOW
+                // ========================================
 
-                if (distanceToStart < bestDistance)
+                var checkInFrom =
+                     segment.StartDateTime.AddMinutes(
+                         -CheckInResolutionBeforeMinutes);
+
+                var checkInTo =
+                    midpoint;
+
+                if (log.LogDateTime >= checkInFrom &&
+                    log.LogDateTime <= checkInTo)
                 {
-                    bestDistance =
-                        distanceToStart;
+                    candidates.Add(
+                        new AttendanceBoundaryCandidate
+                        {
+                            Segment =
+                                segment,
 
-                    bestSegment =
-                        segment;
+                            ClockType =
+                                AttendanceClockType.CheckIn,
 
-                    bestType =
-                        AttendanceClockType.CheckIn;
+                            TargetTime =
+                                segment.StartDateTime,
+
+                            DistanceMinutes =
+                                Math.Abs(
+                                    (log.LogDateTime -
+                                     segment.StartDateTime)
+                                    .TotalMinutes)
+                        });
                 }
 
 
-                // -------------------------------
-                // Candidate: Check Out
-                // -------------------------------
+                // ========================================
+                // CHECK OUT WINDOW
+                // ========================================
 
-                if (distanceToEnd < bestDistance)
+                var checkOutFrom =
+                    midpoint;
+
+                var checkOutTo =
+                    segment.EndDateTime.AddMinutes(
+                        CheckOutResolutionAfterMinutes);
+
+                if (log.LogDateTime >= checkOutFrom &&
+                    log.LogDateTime <= checkOutTo)
                 {
-                    bestDistance =
-                        distanceToEnd;
+                    candidates.Add(
+                        new AttendanceBoundaryCandidate
+                        {
+                            Segment =
+                                segment,
 
-                    bestSegment =
-                        segment;
+                            ClockType =
+                                AttendanceClockType.CheckOut,
 
-                    bestType =
-                        AttendanceClockType.CheckOut;
+                            TargetTime =
+                                segment.EndDateTime,
+
+                            DistanceMinutes =
+                                Math.Abs(
+                                    (log.LogDateTime -
+                                     segment.EndDateTime)
+                                    .TotalMinutes)
+                        });
                 }
             }
 
 
-            if (bestSegment == null)
+            // Nothing matched a valid range.
+            if (candidates.Count == 0)
             {
                 return new AttendanceResolvedLogDto
                 {
@@ -132,6 +270,15 @@ namespace HRM.Services.Attendance.Abstraction.Services
             }
 
 
+            // If more than one segment/window matches,
+            // choose the nearest actual boundary.
+            var best =
+                candidates
+                    .OrderBy(x =>
+                        x.DistanceMinutes)
+                    .First();
+
+
             return new AttendanceResolvedLogDto
             {
                 AttendanceLogId =
@@ -144,19 +291,38 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     log.LogDateTime,
 
                 WorkPlanSegmentId =
-                    bestSegment.WorkPlanSegmentId,
+                    best.Segment.WorkPlanSegmentId,
 
                 SegmentName =
-                    bestSegment.Name,
+                    best.Segment.Name,
 
                 ClockType =
-                    bestType,
+                    best.ClockType,
 
                 DistanceMinutes =
-                    bestDistance
+                    best.DistanceMinutes
             };
         }
 
-    
+
+        private sealed class AttendanceBoundaryCandidate
+        {
+            public AttendanceWorkSegmentDto Segment { get; set; }
+                = null!;
+
+            public AttendanceClockType ClockType { get; set; }
+
+            public DateTime TargetTime { get; set; }
+
+            public double DistanceMinutes { get; set; }
+        }
+
+
+
+
+
+
+
+
     }
 }

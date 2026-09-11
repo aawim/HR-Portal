@@ -1,11 +1,11 @@
 ﻿using HRM.Constants;
-using HRM.Models.WorkPlanning;
 using HRM.Models;
 using HRM.Services.Attendance.Processing;
 using HRM.Services.Attendance.Repositories;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
-using HRM.Services.Attendance.Abstraction;
+using HRM.Enum;
+using HRM.Services.Attendance.AttendancePlan;
 
 namespace HRM.Services.Attendance.Abstraction.Services
 {
@@ -13,29 +13,33 @@ namespace HRM.Services.Attendance.Abstraction.Services
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
 
-        private readonly IAttendanceDuplicateValidator
-            _duplicateValidator;
+        private readonly IAttendanceDuplicateValidator _duplicateValidator;
 
-        private readonly IWorkAssignmentResolver
-            _workAssignmentResolver;
+        private readonly IWorkAssignmentResolver _workAssignmentResolver;
 
-        private readonly IAttendanceLogResolutionRepository
-            _resolutionRepository;
+        private readonly IAttendanceLogResolutionRepository _resolutionRepository;
 
         private readonly ILogger<AttendanceLogProcessor> _logger;
+
+        private readonly IAttendanceWorkPlanResolver _workPlanResolver;
 
         public AttendanceLogProcessor(
             IDbContextFactory<HrmTeContext> dbFactory,
             IAttendanceDuplicateValidator duplicateValidator,
             IWorkAssignmentResolver workAssignmentResolver,
             IAttendanceLogResolutionRepository resolutionRepository,
-            ILogger<AttendanceLogProcessor> logger)
+            ILogger<AttendanceLogProcessor> logger,
+               IAttendanceWorkPlanResolver workPlanResolver
+
+
+            )
         {
             _dbFactory = dbFactory;
             _duplicateValidator = duplicateValidator;
             _workAssignmentResolver = workAssignmentResolver;
             _resolutionRepository = resolutionRepository;
             _logger = logger;
+            _workPlanResolver = workPlanResolver;
         }
 
         
@@ -53,10 +57,8 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
             try
             {
-                /*
-                 * Step 1:
-                 * Prevent the same attendance event from being processed twice.
-                 */
+        
+
                 var duplicateResult =
                     await _duplicateValidator.ValidateAsync(
                         attendanceLogId,
@@ -69,10 +71,8 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         duplicateResult.ExistingResolution);
                 }
 
-                /*
-                 * Step 2:
-                 * Load the original attendance event.
-                 */
+            
+
                 var attendanceLog = await LoadAttendanceLogAsync(attendanceLogId,cancellationToken);
 
                 if (attendanceLog is null)
@@ -98,110 +98,87 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         cancellationToken);
                 }
 
-                /*
-                 * Step 3:
-                 * Resolve the event against the employee's work assignment.
-                 */
-                var assignmentResult =
-                    await _workAssignmentResolver.ResolveAsync(
+                  var planResult =
+                    await _workPlanResolver.ResolveAsync(
                         attendanceLog.IndividualId,
                         attendanceLog.Date,
                         cancellationToken);
 
-                /*
-                 * Step 4:
-                 * No assignment was found.
-                 */
-                if (assignmentResult.WorkAssignmentId is null)
+
+
+                if (!planResult.IsResolved)
                 {
-                    var noAssignmentResolution =
-                        CreateResolution(
-                            attendanceLog,
-                            AttendanceResolutionStatusIds.NoAssignment,
-                            assignmentResult.Message.Length > 0
-                                ? assignmentResult.Message
-                                : "No active work assignment matched the attendance event.");
 
-                    var savedResolution =
-                        await _resolutionRepository.AddAsync(
-                            noAssignmentResolution,
-                            cancellationToken);
+                    var resolutionStatusId =
+                          planResult.State switch
+                          {
+                              AttendancePlanResolutionState.NoWorkPlan
+                                  => AttendanceResolutionStatusIds.NoWorkPlan,
 
-                    return AttendanceProcessingResult.Recorded(
-                        savedResolution,
-                        savedResolution.ResolutionMessage ??
-                        "No matching work assignment was found.");
+                              AttendancePlanResolutionState.NoSegment
+                                  => AttendanceResolutionStatusIds.NoSegment,
+
+                              AttendancePlanResolutionState.OutsideResolutionWindow
+                                  => AttendanceResolutionStatusIds.OutsideResolutionWindow,
+
+                              _ => AttendanceResolutionStatusIds.Invalid
+                          };
+
+
+                    var unresolvedResolution =
+                   CreateResolution(
+                       attendanceLog,
+                       resolutionStatusId,
+                       planResult.Message,
+                       workPlanId: planResult.WorkPlanId,
+                       jobId: planResult.JobId,
+                       clockType: AttendanceClockType.Unresolved);
+
+                                var savedResolution =
+                                    await _resolutionRepository.AddAsync(
+                                        unresolvedResolution,
+                                        cancellationToken);
+
+                                return AttendanceProcessingResult.Recorded(
+                                    savedResolution,
+                                    planResult.Message);
                 }
 
-                /*
-                 * Step 5:
-                 * An assignment exists, but no segment matched.
-                 */
-                if (assignmentResult.SegmentName is null)
-                {
-                    var noSegmentResolution =
-                        CreateResolution(
-                            attendanceLog,
-                            AttendanceResolutionStatusIds.NoSegment,
-                            assignmentResult.Message.Length > 0
-                                ? assignmentResult.Message
-                                : "A work assignment was found, but no segment matched the attendance event.",
-                            assignmentResult.WorkPlanId,
-                            assignmentResult.WorkAssignmentId);
 
-                    var savedResolution =
-                        await _resolutionRepository.AddAsync(
-                            noSegmentResolution,
-                            cancellationToken);
 
-                    return AttendanceProcessingResult.Recorded(
-                        savedResolution,
-                        savedResolution.ResolutionMessage ??
-                        "No matching assignment segment was found.");
-                }
-
-                /*
-                 * Step 6:
-                 * Assignment and segment were successfully resolved.
-                 */
                 var resolvedMessage =
-                   BuildResolvedMessage(
-                       assignmentResult.AssignmentName,
-                       assignmentResult.SegmentName,
-                       assignmentResult.IsInsideScheduledPeriod,
-                       assignmentResult.IsInsideGracePeriod);
-
+                $"Attendance event resolved to " +
+                $"'{planResult.SegmentName}' as " +
+                $"{planResult.ClockType}.";
 
 
 
 
                 var resolvedRecord =
-                     CreateResolution(
-                         attendanceLog,
-                         AttendanceResolutionStatusIds.Resolved,
-                         resolvedMessage,
-                         assignmentResult.WorkPlanId,
-                         assignmentResult.WorkAssignmentId,
-                         assignmentResult.WorkAssignmentSegmentId);
+                    CreateResolution(
+                        attendanceLog,
+                        AttendanceResolutionStatusIds.Resolved,
+                        resolvedMessage,
+                        workPlanId: planResult.WorkPlanId,
+                        workPlanSegmentId:
+                            planResult.WorkPlanSegmentId,
+                        jobId:
+                            planResult.JobId,
+                        clockType: planResult.ClockType);
+
+
+
 
                 var savedResolvedRecord =
-                    await _resolutionRepository.AddAsync(
-                        resolvedRecord,
-                        cancellationToken);
+                await _resolutionRepository.AddAsync(
+                    resolvedRecord,
+                    cancellationToken);
 
-                _logger.LogInformation(
-                    "Attendance log {AttendanceLogId} for individual " +
-                    "{IndividualId} resolved to assignment " +
-                    "{WorkAssignmentId} and segment " +
-                    "{WorkAssignmentSegmentId}.",
-                    attendanceLog.AttendanceLogId,
-                    attendanceLog.IndividualId,
-                    assignmentResult.WorkAssignmentId,
-                    assignmentResult.WorkAssignmentSegmentId);
+                            return AttendanceProcessingResult.Completed(
+                                savedResolvedRecord,
+                                resolvedMessage);
 
-                return AttendanceProcessingResult.Completed(
-                    savedResolvedRecord,
-                    resolvedMessage);
+        
             }
             catch (InvalidOperationException exception)
             {
@@ -281,41 +258,93 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 message);
         }
 
+        //private static AttendanceLogResolution CreateResolution(
+        //    AttendanceLog attendanceLog,
+        //    int resolutionStatusId,
+        //    string message,
+        //    long? workPlanId = null,
+        //    long? workAssignmentId = null,
+        //    long? workAssignmentSegmentId = null)
+        //{
+        //    return new AttendanceLogResolution
+        //    {
+        //        AttendanceLogId = attendanceLog.AttendanceLogId,
+
+        //        WorkPlanId = workPlanId,
+
+        //        WorkAssignmentId = workAssignmentId,
+
+        //        WorkAssignmentSegmentId = workAssignmentSegmentId,
+
+        //        AttendanceResolutionStatusId = resolutionStatusId,
+
+        //        ResolutionDate = DateTime.Now,
+
+        //        ResolutionMessage = message,
+
+        //        IsValid = true,
+
+        //        CreatedDate = DateTime.Now
+        //    };
+        //}
+
         private static AttendanceLogResolution CreateResolution(
-            AttendanceLog attendanceLog,
-            int resolutionStatusId,
-            string message,
-            long? workPlanId = null,
-            long? workAssignmentId = null,
-            long? workAssignmentSegmentId = null)
+    AttendanceLog attendanceLog,
+    int resolutionStatusId,
+    string message,
+    long? workPlanId = null,
+    long? workAssignmentId = null,
+    long? workAssignmentSegmentId = null,
+    int? workPlanSegmentId = null,
+    int? jobId = null,
+    AttendanceClockType clockType =
+        AttendanceClockType.Unresolved)
         {
             return new AttendanceLogResolution
             {
-                AttendanceLogId = attendanceLog.AttendanceLogId,
+                AttendanceLogId =
+                    attendanceLog.AttendanceLogId,
 
-                WorkPlanId = workPlanId,
+                WorkPlanId =
+                    workPlanId,
 
-                WorkAssignmentId = workAssignmentId,
+                WorkAssignmentId =
+                    workAssignmentId,
 
-                WorkAssignmentSegmentId = workAssignmentSegmentId,
+                WorkAssignmentSegmentId =
+                    workAssignmentSegmentId,
 
-                AttendanceResolutionStatusId = resolutionStatusId,
+                WorkPlanSegmentId =
+                    workPlanSegmentId,
 
-                ResolutionDate = DateTime.Now,
+                JobId =
+                    jobId,
 
-                ResolutionMessage = message,
+                AttendanceResolutionStatusId =
+                    resolutionStatusId,
 
-                IsValid = true,
+                AttendanceClockTypeId =
+                    (int)clockType,
 
-                CreatedDate = DateTime.Now
+                ResolutionDate =
+                    DateTime.Now,
+
+                ResolutionMessage =
+                    message,
+
+                IsValid =
+                    true,
+
+                CreatedDate =
+                    DateTime.Now
             };
         }
 
         private static string BuildResolvedMessage(
-     string? assignmentName,
-     string? segmentName,
-     bool isInsideScheduledPeriod,
-     bool isInsideGracePeriod)
+         string? assignmentName,
+         string? segmentName,
+         bool isInsideScheduledPeriod,
+         bool isInsideGracePeriod)
         {
             var periodDescription =
                 isInsideScheduledPeriod

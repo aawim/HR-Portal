@@ -35,6 +35,7 @@ using HRM.Services.Interfaces.LeaveType;
 using HRM.Services.Interfaces.Policy;
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.WorkPlanning;
+using HRM.Models.Archives;
 
 
 
@@ -68,6 +69,11 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 ////////////////////////////////////////////////////////////////////////////////
 ///
+
+builder.Services.AddScoped<
+    IAttendanceWorkPlanResolver,
+    AttendanceWorkPlanResolver>();
+
 builder.Services.AddScoped<IWorkPlanGenerator, WorkPlanGenerator>();
 
 builder.Services.AddScoped<IJobWorkTemplateService, JobWorkTemplateService>();

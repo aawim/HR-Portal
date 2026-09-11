@@ -32,6 +32,10 @@ namespace HRM.Models
 
         public bool? IsDeviceValidated { get; set; }
 
+        public int? AttendanceClockTypeId { get; set; }
+
+        public int? WorkPlanSegmentId { get; set; }
+        
         public int? OperationLogId { get; set; }
 
         public bool IsValid { get; set; }

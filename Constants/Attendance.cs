@@ -10,5 +10,7 @@
         public const int Invalid = 6;
         public const int Ignored = 7;
         public const int Manual = 8;
+        public const int NoWorkPlan = 9;
+        public const int OutsideResolutionWindow = 10;
     }
 }
