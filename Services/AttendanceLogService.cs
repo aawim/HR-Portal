@@ -288,40 +288,7 @@ namespace HRM.Services
 
 
         }
-
-
-
-        //public async Task AddAttendanceTestCheckAsync(int individualId, int mode, DateTime? attendanceTime = null)
-        //{
-        //    var logTime = attendanceTime ?? DateTime.Now;
-
-
-          
-        //    // Fetch job context
-        //    var job = await _context.Jobs.FirstOrDefaultAsync(j => j.IndividualID == individualId);
-        //    if (job == null) throw new Exception("Job profile not found.");
-        //    var newLog = new AttendanceLog
-        //    {
-        //        IndividualId = individualId,
-        //        OrganisationId = job.OrganisationID,
-        //        InOutModeId = mode,
-        //        Date = logTime,
-        //        Year = logTime.Year,
-        //        Month = logTime.Month,
-        //        Day = logTime.Day,
-        //        Hour = logTime.Hour,
-        //        Minute = logTime.Minute,
-        //        Second = logTime.Second,
-        //        Uidstamp = $"{individualId}{mode:D2}{logTime:yyyyMMddHHmmss}",
-        //        AttendanceLogStateId = 1,
-        //        AttendanceLogModeId = mode,
-        //        OrganisationStructureId = job.OrganisationStructureId,
-        //        OperationLogId = 1 //_operationLogService.CreateAndSaveLogAsync("New Attendance Log remotely", SharedConfig.OperationLogActionTypes.ATTENDANCE_LOG_CREATE),
-        //    };
-        //    _context.ChangeTracker.Clear();
-        //    await _context.AttendanceLogs.AddAsync(newLog);
-        //    await _context.SaveChangesAsync();
-        //}
+ 
 
         public async Task AddAttendanceCheckAsync(int individualId, int mode)
         {

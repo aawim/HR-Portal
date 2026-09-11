@@ -179,7 +179,7 @@ namespace HRM.Services.Attendance.Repositories
 
 
         public async Task MarkAsDuplicateAsync(
-    int attendanceLogResolutionId,
+    long attendanceLogResolutionId,
     string message,
     CancellationToken cancellationToken = default)
         {
@@ -215,7 +215,6 @@ namespace HRM.Services.Attendance.Repositories
                 cancellationToken);
         }
 
-
-
+        
     }
 }

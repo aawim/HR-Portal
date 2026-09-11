@@ -1,4 +1,5 @@
 ﻿using HRM.DTOs.Attendance;
+using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.Services.Interfaces;
@@ -179,48 +180,9 @@ namespace HRM.Services
 
 
 
-        //public async Task<List<AttendanceRawLogDto>> GetLogsAsync(
-        //    int individualId,
-        //    DateTime checkTime,
-        //    CancellationToken cancellationToken = default)
-        //{
-        //    await using var db =
-        //        await _dbFactory.CreateDbContextAsync(cancellationToken);
+        
 
-        //    var date = checkTime.Date;
-        //    var nextDate = date.AddDays(1);
-
-        //    var logs =
-        //        await db.AttendanceLogs
-        //            .AsNoTracking()
-        //            .Where(x =>
-        //                x.IndividualId == individualId &&
-        //                x.Date >= date &&
-        //                x.Date < nextDate)
-        //            .OrderBy(x => x.Date)
-        //            .Select(x =>
-        //                new AttendanceRawLogDto
-        //                {
-        //                    AttendanceLogId =
-        //                        x.AttendanceLogId,
-
-        //                    IndividualId =
-        //                        x.IndividualId,
-
-        //                    InOutModeId =
-        //                        x.InOutModeId,
-
-        //                    LogDateTime =
-        //                        x.Date
-        //                })
-        //            .ToListAsync(cancellationToken);
-
-        //    return logs;
-        //}
-
-
-        public async Task<List<AttendanceRawLogDto>>
-         GetLogsAsync(
+        public async Task<List<AttendanceRawLogDto>>GetLogsAsync(
              int individualId,
              int jobId,
              DateTime checkTime,
@@ -237,106 +199,101 @@ namespace HRM.Services
                 date.AddDays(1);
 
             var logs =
-                await db.AttendanceLogs
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.IndividualId == individualId &&
-                        x.Date >= date &&
-                        x.Date < nextDate)
-                    .OrderBy(x =>
-                        x.Date)
-                    .Select(x =>
-                        new AttendanceRawLogDto
-                        {
-                            AttendanceLogId =
-                                x.AttendanceLogId,
+        await (
+            from log in db.AttendanceLogs.AsNoTracking()
 
-                            IndividualId =
-                                x.IndividualId,
+            where
+                log.IndividualId == individualId &&
+                log.Date >= date &&
+                log.Date < nextDate
 
-                            InOutModeId =
-                                x.InOutModeId,
+            join resolution in
+                db.AttendanceLogResolutions.AsNoTracking()
+                .Where(x => x.IsValid)
 
-                            LogDateTime =
-                                x.Date
-                        })
-                    .ToListAsync(
-                        cancellationToken);
+                on log.AttendanceLogId
+                equals resolution.AttendanceLogId
+                into resolutionGroup
 
-            var attendancePlan =
-                await _attendancePlanService
-                    .GetPlanAsync(
-                        individualId,
-                        jobId,
-                        checkTime,
-                        cancellationToken);
+            from resolution in
+                resolutionGroup.DefaultIfEmpty()
 
-            if (attendancePlan != null)
+            join segment in
+                db.WorkPlanSegments.AsNoTracking()
+
+                on resolution.WorkPlanSegmentId
+                equals segment.WorkPlanSegmentId
+                into segmentGroup
+
+            from segment in
+                segmentGroup.DefaultIfEmpty()
+
+            orderby log.Date
+
+            select new AttendanceRawLogDto
             {
-                MatchLogsToSegments(
-                    logs,
-                    attendancePlan);
-            }
+                AttendanceLogId =
+                    log.AttendanceLogId,
+
+                IndividualId =
+                    log.IndividualId,
+
+                LogDateTime =
+                    log.Date,
+
+                AttendanceLogResolutionId =
+                    resolution != null
+                        ? resolution.AttendanceLogResolutionId
+                        : null,
+
+                WorkPlanId =
+                        resolution != null
+                            ? resolution.WorkPlanId
+                            : null,
+
+                WorkPlanSegmentId =
+                        resolution != null
+                            ? resolution.WorkPlanSegmentId
+                            : null,
+
+                SegmentName =
+                    segment != null
+                        ? segment.Name
+                        : null,
+
+                ClockType =
+                    resolution != null &&
+                    resolution.AttendanceClockTypeId.HasValue
+
+                        ? (AttendanceClockType)
+                            resolution.AttendanceClockTypeId.Value
+
+                        : AttendanceClockType.Unresolved,
+
+                ResolutionStatusId =
+                    resolution != null
+                        ? resolution.AttendanceResolutionStatusId
+                        : null,
+
+                ResolutionMessage =
+                    resolution != null
+                        ? resolution.ResolutionMessage
+                        : null,
+
+                ResolutionDate =
+                    resolution != null
+                        ? resolution.ResolutionDate
+                        : null
+            })
+            .ToListAsync(cancellationToken);
 
             return logs;
+
+
         }
 
-        private static void MatchLogsToSegments(
-    List<AttendanceRawLogDto> logs,
-    AttendanceWorkPlanDto attendancePlan)
-        {
-            foreach (var log in logs)
-            {
-                var segment =
-                    attendancePlan.Segments
-                        .Where(x =>
-                            x.RequiresAttendance)
-                        .Where(x =>
-                            log.LogDateTime >=
-                                x.StartDateTime.AddMinutes(
-                                    -x.GraceBeforeMinutes) &&
-                            log.LogDateTime <=
-                                x.EndDateTime.AddMinutes(
-                                    x.GraceAfterMinutes))
-                        .OrderBy(x =>
-                            GetDistanceToSegment(
-                                log.LogDateTime,
-                                x))
-                        .FirstOrDefault();
+   
 
-                if (segment == null)
-                {
-                    continue;
-                }
-
-                log.WorkPlanSegmentId =
-                    segment.WorkPlanSegmentId;
-
-                log.SegmentName =
-                    segment.Name;
-            }
-        }
-
-        private static double GetDistanceToSegment(
-    DateTime clockTime,
-    AttendanceWorkSegmentDto segment)
-        {
-            var distanceToStart =
-                Math.Abs(
-                    (clockTime -
-                     segment.StartDateTime)
-                    .TotalMinutes);
-
-            var distanceToEnd =
-                Math.Abs(
-                    (clockTime -
-                     segment.EndDateTime)
-                    .TotalMinutes);
-
-            return Math.Min(
-                distanceToStart,
-                distanceToEnd);
-        }
 
 
 
