@@ -71,6 +71,11 @@ builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 ///
 
 builder.Services.AddScoped<
+    IAttendanceSegmentEvaluator,
+    AttendanceSegmentEvaluator>();
+
+
+builder.Services.AddScoped<
     IAttendanceWorkPlanResolver,
     AttendanceWorkPlanResolver>();
 

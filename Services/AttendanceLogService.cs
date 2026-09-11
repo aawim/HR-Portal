@@ -3,6 +3,8 @@ using HRM.Models; // Adjust this if your models are in a different folder
 using HRM.DTOs; // For SharedConfig.OperationLogActionTypes
 using HRM.Services.Interfaces;
 using HRM.DTOs.Attendance;
+using System.Threading;
+using HRM.Services.Attendance.Abstraction;
 namespace HRM.Services
 {
     public class AttendanceLogService
@@ -12,13 +14,17 @@ namespace HRM.Services
         private readonly IOperationLogService _operationLogService;
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IUserAccessService _access;
-
-        public AttendanceLogService(HrmTeContext context, IOperationLogService operationLogService, IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access)
+        private readonly IAttendanceLogProcessor _attendanceLogProcessor;
+        public AttendanceLogService(HrmTeContext context,
+            IAttendanceLogProcessor attendanceLogProcessor,
+            IOperationLogService operationLogService, 
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access)
         {
             _context = context;
             _operationLogService = operationLogService;
             _dbFactory = dbFactory;
             _access = access;
+            _attendanceLogProcessor = attendanceLogProcessor;
         }
        public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
         {
@@ -264,23 +270,23 @@ namespace HRM.Services
                     Second =
                         clockTime.Second,
 
-                    Uidstamp =
-                        $"{individualId}-{clockTime:yyyyMMddHHmmssfff}",
+                    Uidstamp = $"{individualId}-{clockTime:yyyyMMddHHmmssfff}",
 
-                    AttendanceLogStateId =
-                        attendanceLogStateId,
+                    AttendanceLogStateId = attendanceLogStateId,
 
-                    AttendanceLogModeId =
-                        attendanceLogModeId,
+                    AttendanceLogModeId = attendanceLogModeId,
 
-                    OperationLogId =
-                        1
+                    OperationLogId = 1
                 };
 
-            await _context.AttendanceLogs
-                .AddAsync(log);
+            await _context.AttendanceLogs.AddAsync(log);
 
             await _context.SaveChangesAsync();
+
+
+            var processingResult = await _attendanceLogProcessor.ProcessAsync(log.AttendanceLogId);
+
+
         }
 
 

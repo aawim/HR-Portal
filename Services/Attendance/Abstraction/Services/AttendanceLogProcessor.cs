@@ -14,8 +14,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
 
         private readonly IAttendanceDuplicateValidator _duplicateValidator;
-
-        private readonly IWorkAssignmentResolver _workAssignmentResolver;
+ 
 
         private readonly IAttendanceLogResolutionRepository _resolutionRepository;
 
@@ -26,7 +25,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
         public AttendanceLogProcessor(
             IDbContextFactory<HrmTeContext> dbFactory,
             IAttendanceDuplicateValidator duplicateValidator,
-            IWorkAssignmentResolver workAssignmentResolver,
+ 
             IAttendanceLogResolutionRepository resolutionRepository,
             ILogger<AttendanceLogProcessor> logger,
                IAttendanceWorkPlanResolver workPlanResolver
@@ -36,7 +35,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
         {
             _dbFactory = dbFactory;
             _duplicateValidator = duplicateValidator;
-            _workAssignmentResolver = workAssignmentResolver;
+ 
             _resolutionRepository = resolutionRepository;
             _logger = logger;
             _workPlanResolver = workPlanResolver;
