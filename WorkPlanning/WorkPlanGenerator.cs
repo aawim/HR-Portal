@@ -28,7 +28,7 @@ namespace HRM.WorkPlanning
             int organisationBusinessEntityId,
             DateOnly workDate,
             CancellationToken cancellationToken = default)
-        {
+      {
             var provider = await _providerResolver.ResolveAsync(
                 organisationBusinessEntityId,
                 workDate,
@@ -45,37 +45,82 @@ namespace HRM.WorkPlanning
             var workDateTime = workDate.ToDateTime(TimeOnly.MinValue);
 
             // A manually created plan always takes precedence.
+   
+
+            var nextWorkDate =
+                workDateTime.AddDays(1);
+
             var existingPlan = await db.WorkPlans
                 .Include(x => x.WorkPlanSegments)
+                .Include(x => x.WorkAssignments)
                 .Where(x =>
-                    x.IndividualId == individualId &&
                     x.JobId == jobId &&
-                    x.OrganisationBusinessEntityId == organisationBusinessEntityId &&
-                    x.PlanningProviderId == provider.PlanningProviderId &&
-                    x.WorkDate.Date == workDateTime.Date &&
+                    x.WorkDate >= workDateTime &&
+                    x.WorkDate < nextWorkDate &&
                     x.IsValid)
                 .OrderByDescending(x => x.IsManual)
                 .ThenByDescending(x => x.Version)
+                .ThenByDescending(x => x.CreatedDate)
                 .FirstOrDefaultAsync(cancellationToken);
 
+
+
+            //var nextWorkDate = workDateTime.AddDays(1);
+            //var existingPlan = await db.WorkPlans
+            // .Include(x => x.WorkPlanSegments)
+            // .Include(x => x.WorkAssignments)
+            // .Where(x =>
+            //     x.JobId == jobId &&
+            //     x.WorkDate >= workDateTime &&
+            //     x.WorkDate < nextWorkDate)
+            // .FirstOrDefaultAsync(cancellationToken);
             if (existingPlan != null)
             {
+                if (existingPlan.IndividualId != individualId)
+                {
+                    throw new InvalidOperationException(
+                        $"WorkPlan {existingPlan.WorkPlanId} belongs to " +
+                        $"Individual {existingPlan.IndividualId}, but Job {jobId} " +
+                        $"was requested for Individual {individualId}.");
+                }
+
+                if (existingPlan.OrganisationBusinessEntityId !=
+                    organisationBusinessEntityId)
+                {
+                    throw new InvalidOperationException(
+                        $"WorkPlan {existingPlan.WorkPlanId} belongs to Organisation " +
+                        $"{existingPlan.OrganisationBusinessEntityId}, but Organisation " +
+                        $"{organisationBusinessEntityId} was requested.");
+                }
+
                 return MapToDto(existingPlan);
             }
+            //if (existingPlan != null)
+            //{
+            //    return MapToDto(existingPlan);
+            //}
+
+
+
+
+            //if (existingPlan != null)
+            //{
+            //    return MapToDto(existingPlan);
+            //}
 
             var assignmentsQuery = db.JobWorkTemplates
-         .AsNoTracking()
-         .Include(x => x.WorkTemplate)
-             .ThenInclude(x => x.WorkTemplateSegments)
-         .Where(x =>
-             x.JobId == jobId &&
-             x.IsActive &&
-             x.EffectiveFrom.Date <= workDateTime.Date &&
-             (
-                 !x.EffectiveTo.HasValue ||
-                 x.EffectiveTo.Value.Date >= workDateTime.Date
-             ) &&
-             x.WorkTemplate.IsActive);
+                 .AsNoTracking()
+                 .Include(x => x.WorkTemplate)
+                     .ThenInclude(x => x.WorkTemplateSegments)
+                 .Where(x =>
+                     x.JobId == jobId &&
+                     x.IsActive &&
+                     x.EffectiveFrom.Date <= workDateTime.Date &&
+                     (
+                         !x.EffectiveTo.HasValue ||
+                         x.EffectiveTo.Value.Date >= workDateTime.Date
+                     ) &&
+                     x.WorkTemplate.IsActive);
 
             assignmentsQuery = workDateTime.DayOfWeek switch
             {
@@ -98,6 +143,13 @@ namespace HRM.WorkPlanning
             if (assignment == null)
             {
                 return null;
+
+                //throw new InvalidOperationException(
+                //  $"No JobWorkTemplate found. " +
+                //  $"JobId={jobId}, " +
+                //  $"OrganisationId={organisationBusinessEntityId}, " +
+                //  $"WorkDate={workDateTime:yyyy-MM-dd}, " +
+                //  $"Day={workDateTime.DayOfWeek}.");
             }
 
             var template = assignment.WorkTemplate;

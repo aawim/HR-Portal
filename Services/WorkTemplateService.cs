@@ -23,8 +23,7 @@ namespace HRM.Services
         }
 
 
-        public async Task<List<WorkTemplateTypeDto>>
-    GetAllTemplateTypesAsync()
+        public async Task<List<WorkTemplateTypeDto>>GetAllTemplateTypesAsync()
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
@@ -108,8 +107,6 @@ namespace HRM.Services
             })
             .ToListAsync();
             }
-
-
         public async Task<List<WorkTemplateDto>> GetAvailableAsync()
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -161,8 +158,6 @@ namespace HRM.Services
                 })
                 .ToListAsync();
         }
-
-
         public async Task<WorkTemplateDto?> GetByIdAsync(int workTemplateId)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -222,8 +217,6 @@ namespace HRM.Services
 
                 .FirstOrDefaultAsync();
         }
-
-
         public async Task<ServiceResult> CreateAsync(CreateWorkTemplateDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -374,10 +367,6 @@ namespace HRM.Services
 
             return ServiceResult.Ok("Work template created successfully.");
         }
-
-
-
-
         public async Task<ServiceResult> UpdateAsync(UpdateWorkTemplateDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -504,8 +493,6 @@ namespace HRM.Services
 
             return ServiceResult.Ok("Work template updated successfully.");
         }
-
-
         public async Task<ServiceResult> ArchiveAsync(int workTemplateId)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -526,115 +513,7 @@ namespace HRM.Services
         }
 
 
-
-        //public async Task<ServiceResult> ActivateAsync(int workTemplateId)
-        //{
-        //    await using var db = await _dbFactory.CreateDbContextAsync();
-
-        //    var template = await db.WorkTemplates
-        //        .FirstOrDefaultAsync(x => x.WorkTemplateId == workTemplateId);
-
-        //    if (template == null)
-        //    {
-        //        return ServiceResult.Ok("Work template not found.");
-        //    }
-
-        //    if (template.IsActive)
-        //    {
-        //        return ServiceResult.Ok("Work template is already active.");
-        //    }
-
-        //    // Check for duplicate active name
-        //    var duplicateNameExists = await db.WorkTemplates
-        //        .AnyAsync(x =>
-        //            x.WorkTemplateId != workTemplateId &&
-        //            x.IsActive &&
-        //            x.OrganisationBusinessEntityId == template.OrganisationBusinessEntityId &&
-        //            x.Name == template.Name);
-
-        //    if (duplicateNameExists)
-        //    {
-        //        return ServiceResult.Failed(
-        //            "Another active work template with the same name already exists.");
-        //    }
-
-        //    // Check for duplicate active code (if one exists)
-        //    if (!string.IsNullOrWhiteSpace(template.Code))
-        //    {
-        //        var duplicateCodeExists = await db.WorkTemplates
-        //            .AnyAsync(x =>
-        //                x.WorkTemplateId != workTemplateId &&
-        //                x.IsActive &&
-        //                x.OrganisationBusinessEntityId == template.OrganisationBusinessEntityId &&
-        //                x.Code == template.Code);
-
-        //        if (duplicateCodeExists)
-        //        {
-        //            return ServiceResult.Failed(
-        //                "Another active work template with the same code already exists.");
-        //        }
-        //    }
-
-        //    template.IsActive = true;
-        //    //template. = DateTime.UtcNow;
-
-        //    await db.SaveChangesAsync();
-
-        //    return ServiceResult.Ok("Work template activated successfully.");
-        //}
-
-
-
-
-
-
-        private static ServiceResult ValidateTemplateDatesAndTimes(
-            TimeOnly? defaultStartTime,
-            TimeOnly? defaultEndTime,
-            bool endsNextDay,
-            DateTime? effectiveFrom,
-            DateTime? effectiveTo)
-        {
-            // Start and end times should either both exist or both be empty.
-            if (defaultStartTime.HasValue != defaultEndTime.HasValue)
-            {
-                return ServiceResult.Failed(
-                    "Both default start time and default end time must be provided.");
-            }
-
-            if (defaultStartTime.HasValue &&
-                defaultEndTime.HasValue)
-            {
-                var startTime = defaultStartTime.Value;
-                var endTime = defaultEndTime.Value;
-
-                // Same-day shift: end time must be later.
-                if (!endsNextDay && endTime <= startTime)
-                {
-                    return ServiceResult.Failed(
-                        "The end time must be later than the start time unless the template ends on the next day.");
-                }
-
-                // Overnight shift: end time should be earlier than or equal to start.
-                if (endsNextDay && endTime > startTime)
-                {
-                    return ServiceResult.Failed(
-                        "For an overnight template, the end time should be earlier than or equal to the start time.");
-                }
-            }
-
-            if (effectiveFrom.HasValue &&
-                effectiveTo.HasValue &&
-                effectiveTo.Value < effectiveFrom.Value)
-            {
-                return ServiceResult.Failed(
-                    "The effective-to date cannot be earlier than the effective-from date.");
-            }
-
-            return ServiceResult.Ok();
-        }
-
-
+    
 
         /// Segment related methods
         ///  Load Segments 
@@ -713,8 +592,6 @@ namespace HRM.Services
                   })
                   .ToListAsync();
         }
-
-
         public async Task<List<WorkSegmentTypeDto>> GetAllSegmentTypesAsync()
         {
             await using var db =
@@ -731,9 +608,6 @@ namespace HRM.Services
                 })
                 .ToListAsync();
         }
-
-
-
         public async Task<List<WorkTemplateSegmentDto>> GetAllSegmentsAsync(int workTemplateId)
         {
             await using var db =
@@ -783,11 +657,8 @@ namespace HRM.Services
         }
 
 
-
         // Create Segments
-
-
-        public async Task<ServiceResult> CreateSegmentAsync(SaveWorkTemplateSegmentDto dto)
+       public async Task<ServiceResult> CreateSegmentAsync(SaveWorkTemplateSegmentDto dto)
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
@@ -906,9 +777,7 @@ namespace HRM.Services
                 "Work template segment created successfully.");
         }
 
-
         // update Segments
-
         public async Task<ServiceResult> UpdateSegmentAsync(SaveWorkTemplateSegmentDto dto)
         {
             await using var db =
@@ -1028,12 +897,8 @@ namespace HRM.Services
                 "Work template segment updated successfully.");
         }
 
-
         /// Archive segment
         /// 
-
-
-
         public async Task<ServiceResult> ArchiveSegmentAsync(int workTemplateSegmentId)
 {
     await using var db =
@@ -1064,8 +929,6 @@ namespace HRM.Services
     return ServiceResult.Ok(
         "Work template segment archived successfully.");
     }
-
-
 
         public string FormatTime(DateOnly? time)
         {
@@ -1271,5 +1134,56 @@ namespace HRM.Services
 
         }
 
+
+
+
+        private static ServiceResult ValidateTemplateDatesAndTimes(
+               TimeOnly? defaultStartTime,
+               TimeOnly? defaultEndTime,
+               bool endsNextDay,
+               DateTime? effectiveFrom,
+               DateTime? effectiveTo)
+        {
+            // Start and end times should either both exist or both be empty.
+            if (defaultStartTime.HasValue != defaultEndTime.HasValue)
+            {
+                return ServiceResult.Failed(
+                    "Both default start time and default end time must be provided.");
+            }
+
+            if (defaultStartTime.HasValue &&
+                defaultEndTime.HasValue)
+            {
+                var startTime = defaultStartTime.Value;
+                var endTime = defaultEndTime.Value;
+
+                // Same-day shift: end time must be later.
+                if (!endsNextDay && endTime <= startTime)
+                {
+                    return ServiceResult.Failed(
+                        "The end time must be later than the start time unless the template ends on the next day.");
+                }
+
+                // Overnight shift: end time should be earlier than or equal to start.
+                if (endsNextDay && endTime > startTime)
+                {
+                    return ServiceResult.Failed(
+                        "For an overnight template, the end time should be earlier than or equal to the start time.");
+                }
+            }
+
+            if (effectiveFrom.HasValue &&
+                effectiveTo.HasValue &&
+                effectiveTo.Value < effectiveFrom.Value)
+            {
+                return ServiceResult.Failed(
+                    "The effective-to date cannot be earlier than the effective-from date.");
+            }
+
+            return ServiceResult.Ok();
+        }
+
+
+      
     }
 }

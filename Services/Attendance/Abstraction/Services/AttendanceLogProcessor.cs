@@ -47,6 +47,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
             int attendanceLogId,
             CancellationToken cancellationToken = default)
         {
+
+
+            using var context = _dbFactory.CreateDbContext();
+
+
+
             if (attendanceLogId <= 0)
             {
                 return AttendanceProcessingResult.Failed(
@@ -97,11 +103,47 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         cancellationToken);
                 }
 
-                  var planResult =
-                    await _workPlanResolver.ResolveAsync(
-                        attendanceLog.IndividualId,
-                        attendanceLog.Date,
-                        cancellationToken);
+
+              
+                    var jobId =
+                    await context.Jobs
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.IndividualID == attendanceLog.IndividualId &&
+                            x.OrganisationID == attendanceLog.OrganisationId &&
+                            x.OrganisationStructureId ==
+                                attendanceLog.OrganisationStructureId &&
+                            x.TerminatedDate == null)
+                        .OrderByDescending(x => x.JobId)
+                        .Select(x => (int?)x.JobId)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!jobId.HasValue)
+                {
+                    var resolution =
+                        CreateResolution(
+                            attendanceLog,
+                            AttendanceResolutionStatusIds.Invalid,
+                            "No active job was found for this attendance event.");
+
+                    var savedResolution =
+                        await _resolutionRepository.AddAsync(
+                            resolution,
+                            cancellationToken);
+
+                    return AttendanceProcessingResult.Recorded(
+                        savedResolution,
+                        "No active job was found for this attendance event.");
+                }
+
+
+                var planResult =
+                   await _workPlanResolver.ResolveAsync(
+                       attendanceLog.IndividualId,
+                       jobId.Value,
+                       attendanceLog.OrganisationId,
+                       attendanceLog.Date,
+                       cancellationToken);
 
 
 
@@ -314,8 +356,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     cancellationToken);
         }
 
-        private async Task<AttendanceProcessingResult>
-            SaveInvalidResolutionAsync(
+        private async Task<AttendanceProcessingResult>SaveInvalidResolutionAsync(
                 AttendanceLog attendanceLog,
                 string message,
                 CancellationToken cancellationToken)
@@ -339,16 +380,15 @@ namespace HRM.Services.Attendance.Abstraction.Services
       
 
         private static AttendanceLogResolution CreateResolution(
-    AttendanceLog attendanceLog,
-    int resolutionStatusId,
-    string message,
-    long? workPlanId = null,
-    long? workAssignmentId = null,
-    long? workAssignmentSegmentId = null,
-    int? workPlanSegmentId = null,
-    int? jobId = null,
-    AttendanceClockType clockType =
-        AttendanceClockType.Unresolved)
+            AttendanceLog attendanceLog,
+            int resolutionStatusId,
+            string message,
+            long? workPlanId = null,
+            long? workAssignmentId = null,
+            long? workAssignmentSegmentId = null,
+            int? workPlanSegmentId = null,
+            int? jobId = null,
+            AttendanceClockType clockType = AttendanceClockType.Unresolved)
         {
             return new AttendanceLogResolution
             {
