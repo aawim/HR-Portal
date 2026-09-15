@@ -164,14 +164,9 @@
             {
                 <div class="divide-y divide-slate-100">
 
-                    @foreach (var segment in
-                 _attendancePlan.Segments
-                 .OrderBy(x =>
-                 x.StartDateTime))
+                    @foreach (var segment in _attendancePlan.Segments .OrderBy(x => x.StartDateTime))
                     {
-                        <div class="flex items-center
-            justify-between gap-4
-            px-5 py-4">
+                        <div class="flex items-center justify-between gap-4 px-5 py-4">
 
                             <div>
                                 <div class="font-medium text-slate-800">
@@ -191,20 +186,80 @@
                                 @if (segment.RequiresAttendance)
                                 {
                                     <span class="rounded-full
-                         bg-green-100
-                         px-2.5 py-1
-                         text-xs font-medium
-                         text-green-700">
+                                             bg-green-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-green-700">
                                         Attendance
                                     </span>
                                 }
                                 else
                                 {
                                     <span class="rounded-full
-                         bg-slate-100
-                         px-2.5 py-1
-                         text-xs font-medium
-                         text-slate-600">
+                                             bg-slate-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-slate-600">
+                                        No Punch
+                                    </span>
+                                }
+                            </div>
+
+                        </div>
+                    }
+
+                </div>
+            }
+
+
+
+
+            @if (_attendancePlan.Assignments.Count == 0)
+            {
+                <div class="p-5 text-sm text-amber-700">
+                    No work Assignments found.
+                </div>
+            }
+            else
+            {
+                <div class="divide-y divide-slate-100">
+
+                    @foreach (var segment in _attendancePlan.Assignments.OrderBy(x => x.StartDateTime))
+                    {
+                        <div class="flex items-center justify-between gap-4 px-5 py-4">
+
+                            <div>
+                                <div class="font-medium text-slate-800">
+                                    @segment.Name
+                                </div>
+
+                                <div class="mt-1 text-xs text-slate-500">
+                                    @(segment.StartDateTime.ToString("hh:mm tt"))
+                                    -
+                                    @(segment.EndDateTime.ToString("hh:mm tt"))
+                                    ·
+                                 
+                                </div>
+                            </div>
+
+                            <div>
+                                @if (segment.RequiresAttendance)
+                                {
+                                    <span class="rounded-full
+                                             bg-green-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-green-700">
+                                        Attendance
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="rounded-full
+                                             bg-slate-100
+                                             px-2.5 py-1
+                                             text-xs font-medium
+                                             text-slate-600">
                                         No Punch
                                     </span>
                                 }
@@ -220,7 +275,7 @@
     }
     else
     {
-        <p>No Segments</p>
+        <p>No Assignments</p>
     }
 
     <div class="mt-5 rounded-xl border border-slate-200 bg-white overflow-hidden">

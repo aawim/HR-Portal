@@ -268,7 +268,30 @@ namespace HRM.WorkPlanning
             var assignmentEnd = plan.WorkPlanSegments
                 .Max(x => x.EndDateTime);
 
-            plan.WorkAssignments.Add(new WorkAssignment
+            //plan.WorkAssignments.Add(new WorkAssignment
+            //{
+            //    WorkTemplateId = template.WorkTemplateId,
+            //    WorkTemplateTypeId = template.WorkTemplateTypeId,
+            //    WorkAssignmentStateId = plannedStateId.Value,
+
+            //    Name = template.Name,
+            //    Code = template.Code,
+            //    Description = template.Description,
+
+            //    StartDateTime = assignmentStart,
+            //    EndDateTime = assignmentEnd,
+
+            //    GraceMinutes = template.DefaultGraceMinutes,
+            //    RequiresAttendance = template.RequiresAttendance,
+            //    RequiresCheckOut = template.RequiresCheckOut,
+
+            //    Priority = assignment.Priority,
+            //    AssignmentSource = WorkAssignmentSource.Template,
+
+            //    IsValid = true,
+            //    CreatedDate = generatedAt
+            //});
+            var workAssignment = new WorkAssignment
             {
                 WorkTemplateId = template.WorkTemplateId,
                 WorkTemplateTypeId = template.WorkTemplateTypeId,
@@ -290,7 +313,35 @@ namespace HRM.WorkPlanning
 
                 IsValid = true,
                 CreatedDate = generatedAt
-            });
+            };
+
+            workAssignment.WorkAssignmentOwners.Add(
+               new WorkAssignmentOwner
+               {
+                   IndividualId = individualId,
+                   JobId = jobId,
+
+                   OwnershipType = WorkOwnershipType.Original,
+
+                   AssignedDate = generatedAt,
+
+                   EffectiveFrom = assignmentStart,
+
+                   // Must be NULL while this is the current owner.
+                   EffectiveTo = null,
+
+                   RelievedDate = null,
+                   RelievedByUserId = null,
+                   ReliefReason = null,
+
+                   IsCurrentOwner = true,
+                   IsValid = true
+               });
+
+            plan.WorkAssignments.Add(workAssignment);
+
+
+
 
             db.WorkPlans.Add(plan);
 
