@@ -29,101 +29,188 @@
 
     </div>
 
-
-    @if (jobTypes == null || !jobTypes.Any())
+    @if (isLoading)
     {
-        <div class="py-10 text-center text-slate-500">
-            No attendance logs found.
+        <div class="py-10 text-center text-sm text-slate-500">
+            Loading leave balances...
+        </div>
+    }
+    else if (jobTypes == null || !jobTypes.Any())
+    {
+        <div class="py-10 text-center text-sm text-slate-500">
+            No leave balances found.
         </div>
     }
     else
     {
         <div class="divide-y divide-slate-100 max-h-[720px] overflow-y-auto">
+
             @{
                 var count = 1;
             }
+
             @foreach (var log in jobTypes)
             {
-                // If the data is invalid, skip this loop iteration safely without breaking HTML
-                if (log?.LeaveTypeId == null)
-                {
-                    continue;
-                }
+                var processing = processingLeaves
+                .Where(x =>
+                x.LeaveTypeId == log.LeaveTypeId)
+                .ToList();
 
-                @foreach (var pro in processingLeaves)
-                {
-                    <div class="flex items-center justify-between px-4 p-2 hover:bg-slate-50 hover:bg-slate-100 odd:bg-slate-100 transition">
-                        <!-- Left -->
-                        <div class="flex items-center gap-4">
-                            <!-- Icon -->
-                            <div class="w-auto h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
-                                <div class="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-sm font-semibold text-slate-700">
-                                    @count
-                                </div>
-                            </div>
-                            <!-- Details -->
-                            <div>
-                                @if (log.LeaveTypeId == pro.LeaveTypeId)
-                                {
-                                    <div class="text-sm text-slate-500 mt-0.5">
-                                        <span class="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-700">
-                                            ⏳ Processing: <br />
-                                            @pro.FromDate?.ToString("dd MM yyyy")
-                                            -
-                                            @pro.ToDate?.ToString("dd MM yyyy")
-                                            (@pro.StateName)
-                                        </span>
-                                    </div>
-                                }
+                <div class="flex items-center justify-between
+                            px-4 py-3
+                            hover:bg-slate-50
+                            transition">
 
-                                <div class="text-sm font-semibold text-slate-800">
-                                    @log.LeaveTypeName (Remaining: @log.RemainingDays)
-                                </div>
-                                <div class="text-sm text-slate-500 mt-0.5">
-                                    Last Taken: @(log.LastLeaveTakenDate?.ToString("dd MMMM yyyy") ?? "Never") |
-                                    On: @(log.RenewedDate?.ToString("dd MMMM yyyy") ?? "N/A")
-                                </div>
+                    <!-- Left -->
+                    <div class="flex items-center gap-4 min-w-0">
 
-                                @if (log.IsLeaveInfoUpdated != true)
-                                {
-                                    <span class="inline-flex px-2 py-1 text-xs bg-amber-100 text-amber-700">
-                                        Leave Information Needs To Be Updated!
-                                    </span>
-                                }
-                            </div>
+                        <!-- Number -->
+                        <div class="w-10 h-10 rounded-lg
+                                    bg-slate-100
+                                    flex items-center justify-center
+                                    text-sm font-semibold text-slate-700
+                                    shrink-0">
+                            @count
                         </div>
 
-                        <!-- Right -->
-                        <div class="text-right">
-                            <div class="text-xs text-slate-400 mt-2">
-                                @(log.IsValid == true ? "Active" : "In-active")
+                        <!-- Details -->
+                        <div class="min-w-0">
+
+                            <!-- Leave Type -->
+                            <div class="flex items-center gap-2">
+
+                                <span class="text-sm font-semibold text-slate-800">
+                                    @log.LeaveTypeName
+                                </span>
+
+                                <span class="inline-flex items-center
+                                             rounded-full
+                                             bg-blue-50
+                                             px-2 py-0.5
+                                             text-xs font-medium
+                                             text-blue-700">
+                                    @log.RemainingDays days
+                                </span>
+
                             </div>
+
+                            <!-- Processing Leave -->
+                            @if (processing.Any())
+                            {
+                                <div class="mt-2 space-y-1">
+
+                                    @foreach (var pro in processing)
+                                    {
+                                        <div class="inline-flex items-center
+                                                    rounded-md
+                                                    bg-amber-50
+                                                    px-2 py-1
+                                                    text-xs text-amber-700">
+
+                                            <i class="fas fa-clock mr-1.5"></i>
+
+                                            <span>
+                                                Processing:
+                                                @pro.FromDate?.ToString("dd MMM yyyy")
+                                                -
+                                                @pro.ToDate?.ToString("dd MMM yyyy")
+
+                                                @if (!string.IsNullOrWhiteSpace(pro.StateName))
+                                                {
+                                                    <span>
+                                                        (@pro.StateName)
+                                                    </span>
+                                                }
+                                            </span>
+
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                            <!-- Leave Information -->
+                            <div class="mt-1 text-xs text-slate-500">
+
+                                Last Taken:
+                                <span class="font-medium text-slate-600">
+                                    @(log.LastLeaveTakenDate?.ToString("dd MMM yyyy")
+                                        ?? "Never")
+                                </span>
+
+                                <span class="mx-1">·</span>
+
+                                Renewed:
+                                <span class="font-medium text-slate-600">
+                                    @(log.RenewedDate?.ToString("dd MMM yyyy")
+                                        ?? "N/A")
+                                </span>
+
+                            </div>
+
                         </div>
                     </div>
 
-                    count++;
-                }
+                    <!-- Right -->
+                    <div class="shrink-0 ml-4">
+
+                        <span class="inline-flex items-center
+                                     rounded-full
+                                     bg-green-50
+                                     px-2 py-1
+                                     text-xs font-medium
+                                     text-green-700">
+
+                            <span class="mr-1.5 h-1.5 w-1.5 rounded-full bg-green-500">
+                            </span>
+
+                            Active
+
+                        </span>
+
+                    </div>
+
+                </div>
+
+                count++;
             }
+
         </div>
     }
 
 </div>
-@code {
-    // [Parameter]
-    // public List<JobLeaveType>? LeaveBalances { get; set; }
-    private List<JobLeaveTypeDto> jobTypes = new();
-    private List<ProcessingLeaveDto> processingLeaves = new();
 
+@code {
+
+    private List<JobLeaveTypeDto> jobTypes = new();
+
+    private List<ProcessingLeaveDto> processingLeaves = new();
 
     private bool isLoading = true;
 
+
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            var balances =
+                await JobLeaveTypeService.GetJobLeaveType();
 
-         jobTypes = await JobLeaveTypeService.GetJobLeaveType();
-         // jobTypes = await LeaveService.GetMyLeaveBalancesAsync();
-         processingLeaves = await LeaveService.GetMyProcessingLeavesAsync();
+            // Only show active balances where
+            // leave information has been updated.
+            jobTypes = balances
+                .Where(x =>
+                    x.IsValid == true &&
+                    x.IsLeaveInfoUpdated == true)
+                .ToList();
 
-        isLoading = false;
+
+            processingLeaves =
+                await LeaveService.GetMyProcessingLeavesAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
     }
 }

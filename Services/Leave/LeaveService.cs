@@ -113,68 +113,59 @@ namespace HRM.Services.Leave
             return await GetJobLeaveBalancesAsync(context.ActiveJob.JobId,leaveTypeId);
         }
 
-        public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId, int? leaveTypeId = 0)
-        {
-            using var db = await _dbFactory.CreateDbContextAsync();
-
-            IQueryable<JobLeaveType> query = db.JobLeaveTypes
-                .AsNoTracking()
-                .Include(x => x.LeaveType)
-                .Where(x =>
-                    x.JobId == jobId &&
-                    x.IsValid &&
-                    x.IsLeaveInfoUpdated == true);
-
-            if (leaveTypeId > 0)
-            {
-                query = query.Where(x => x.LeaveTypeId == leaveTypeId);
-            }
-
-            return await query
-                .OrderBy(x => x.LeaveType.Name)
-                .ToListAsync();
-        }
-
-        //public async Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int StaffId)
+        //public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(int jobId, int? leaveTypeId = 0)
         //{
-
         //    using var db = await _dbFactory.CreateDbContextAsync();
 
-        //    var jobId = await GetJobIdByStaffId(StaffId);
-
-
-        //   return await db.JobLeaveTypes
+        //    IQueryable<JobLeaveType> query = db.JobLeaveTypes
+        //        .AsNoTracking()
         //        .Include(x => x.LeaveType)
-        //        .Where(x => x.JobId == jobId && x.IsValid)
-        //        .Select(x => new JobLeaveTypeDto
-        //        {
-        //            JobLeaveTypeId = x.JobLeaveTypeId,
+        //        .Where(x =>
+        //            x.JobId == jobId &&
+        //            x.IsValid &&
+        //            x.IsLeaveInfoUpdated == true);
 
-        //            JobId = x.JobId,
+        //    if (leaveTypeId > 0)
+        //    {
+        //        query = query.Where(x => x.LeaveTypeId == leaveTypeId);
+        //    }
 
-        //            LeaveTypeId = x.LeaveTypeId,
-
-        //            LeaveTypeName = x.LeaveType.Name,
-
-        //            RemainingDays = x.RemainingDays ?? 0,
-
-        //            LastLeaveTakenDate = x.LastLeaveTakenDate,
-
-        //            RenewedDate = x.RenewedDate,
-
-        //            EffectiveFromDate = x.EffectiveFromDate,
-
-        //            EffectiveToDate = x.EffectiveToDate,
-
-        //            IsValid = x.IsValid,
-
-        //            IsLeaveInfoUpdated = x.IsLeaveInfoUpdated
-        //        })
-        //         .OrderBy(x => x.LeaveTypeName)
+        //    return await query
+        //        .OrderBy(x => x.LeaveType.Name)
         //        .ToListAsync();
         //}
 
+        public async Task<List<JobLeaveType>> GetJobLeaveBalancesAsync(
+          int jobId,
+          int? leaveTypeId = null)
+            {
+                await using var db =
+                    await _dbFactory.CreateDbContextAsync();
 
+                IQueryable<JobLeaveType> query = db.JobLeaveTypes
+                    .AsNoTracking()
+                    .Include(x => x.LeaveType)
+                    .Include(x => x.LeaveDefinition)
+                    .Where(x =>
+                        x.JobId == jobId &&
+                        x.IsValid &&
+                        x.IsLeaveInfoUpdated == true);
+
+                if (leaveTypeId.HasValue && leaveTypeId.Value > 0)
+                {
+                    query = query.Where(x =>
+                        x.LeaveTypeId == leaveTypeId.Value);
+                }
+
+                var balances = await query.ToListAsync();
+
+                return balances
+                    .OrderBy(x =>
+                        x.LeaveDefinition?.Name ??
+                        x.LeaveType?.Name ??
+                        string.Empty)
+                    .ToList();
+            }
 
 
         public async Task<List<JobLeaveType>> GetJobLeaveTypesAsync()

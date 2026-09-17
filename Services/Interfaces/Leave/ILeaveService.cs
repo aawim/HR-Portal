@@ -27,25 +27,7 @@ namespace HRM.Services.Interfaces.Leave
         Task<ServiceResult> ShowDetailLeaveAsync(int? leaveId);
         Task<List<ProcessingLeaveDto>> GetMyProcessingLeavesAsync();
 
-
-        /// Leave Assignment
-
-
-        //Task<List<JobLeaveTypeDto>> GetAssignedLeaveTypesAsync(int jobId);
-
-       
-
-        //Task<List<LeaveDefinitionDto>> GetAvailableLeaveDefinitionsAsync(int jobId);
-
-
-
-        //Task<JobLeaveTypeDto?> GetJobLeaveTypeAsync(int jobLeaveTypeId);
-
-        //Task<ServiceResult> UpdateJobLeaveTypeAsync(JobLeaveTypeDto dto);
-
-        //Task<ServiceResult> AssignLeaveTypeAsync(int jobId, int leaveTypeId);
-
-        //Task<ServiceResult> RemoveLeaveTypeAsync(int jobLeaveTypeId);
+ 
 
 
 

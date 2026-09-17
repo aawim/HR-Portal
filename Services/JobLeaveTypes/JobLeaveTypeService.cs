@@ -552,17 +552,47 @@ namespace HRM.Services.JobLeaveTypes
 
             return await GetJobLeaveType(jobId);
         }
+
+
+
+        //public async Task<List<JobLeaveTypeDto>> GetJobLeaveType(int jobId)
+        //{
+        //    await using var db =
+        //        await _dbFactory.CreateDbContextAsync();
+
+        //    var balances = await db.JobLeaveTypes
+        //        .AsNoTracking()
+        //        .Include(x => x.LeaveType)
+        //        .Include(x => x.LeaveDefinition)
+        //        .Where(x =>
+        //            x.JobId == jobId &&
+        //            x.IsValid &&
+        //            x.IsLeaveInfoUpdated == true)
+        //        .ToListAsync();
+
+
+        //    return balances
+        //        .OrderBy(x =>
+        //            x.LeaveDefinition?.Name ??
+        //            x.LeaveType?.Name ??
+        //            string.Empty)
+        //        .ToList();
+
+
+
+        //}
+
+
+
         public async Task<List<JobLeaveTypeDto>> GetJobLeaveType(int JobId)
         {
 
             using var db = await _dbFactory.CreateDbContextAsync();
- 
-
 
             return await db.JobLeaveTypes
                  .Include(x => x.LeaveType)
-                 .Where(x => x.JobId == JobId && x.IsValid)
-                 .Where(x => x.IsLeaveInfoUpdated == true)
+                 .Where(x => x.JobId == JobId )
+                 .Where(x => x.IsLeaveInfoUpdated == true && x.IsValid == true)
                  .Select(x => new JobLeaveTypeDto
                  {
                      JobLeaveTypeId = x.JobLeaveTypeId,

@@ -1,4 +1,5 @@
-﻿using HRM.DTOs.Leave;
+﻿using HRM.Components.Shared;
+using HRM.DTOs.Leave;
 using HRM.Models;
 using HRM.Models.LeaveTypes;
 using HRM.Services.Interfaces;
@@ -14,17 +15,21 @@ namespace HRM.Services
         private readonly IUserAccessService _userAccessService;
         private readonly ILogger<LeaveTypeService> _logger;
         private readonly UserContext _userContext;
+        private readonly IOperationLogService _logService;
 
         public LeaveTypeService(
             IDbContextFactory<HrmTeContext> dbFactory,
             IUserAccessService userAccessService,
             ILogger<LeaveTypeService> logger,
-            UserContext userContext)
+            UserContext userContext,
+            IOperationLogService logService
+            )
         {
             _dbFactory = dbFactory;
             _userAccessService = userAccessService;
             _logger = logger;
             _userContext = userContext;
+            _logService = logService;
         }
 
         public async Task<List<LeaveTypeDto>>
@@ -34,7 +39,7 @@ namespace HRM.Services
             var user =
                 await _userAccessService.GetContextAsync();
 
-            var organisationId =
+            var organisationId = 
                 user.ActiveJob?.OrganisationId;
 
             if (!organisationId.HasValue ||
@@ -160,8 +165,7 @@ namespace HRM.Services
             LeaveTypeSaveRequest request,
             CancellationToken cancellationToken = default)
         {
-            var validationMessage =
-                Validate(request);
+            var validationMessage = Validate(request);
 
             if (validationMessage is not null)
             {
@@ -192,6 +196,14 @@ namespace HRM.Services
                     return LeaveTypeSaveResult.Failure(
                         "A leave type with this name already exists.");
                 }
+
+                var operationLog = await _logService.CreateAsync(
+                db,
+                actionId: OperationLogActionTypes.LEAVE_TYPE_CREATE,
+                remarks: "Leave type Create");
+
+
+
 
                 var leaveType =
                     new LeaveType
@@ -245,6 +257,8 @@ namespace HRM.Services
                                
 
                         RepeatedEveryInMonth = request.IsRenewed ? request.RepeatedEveryInMonth : 0,
+
+                        OperationLogId = operationLog.OperationLogId,
 
                         /*
                          * Set your OperationLogId here when the
