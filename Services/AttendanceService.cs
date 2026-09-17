@@ -118,69 +118,212 @@ namespace HRM.Services
 
             return uneven;
         }
+        //public async Task<List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync()
+        //{
+        //    var context = await _userAccessService.RequireContextAsync();
+
+        //    await using var db = await _dbFactory.CreateDbContextAsync();
+
+        //    var startOfWeek = DateTime.Today.AddDays(-7);
+
+
+        //    var logs = await db.AttendanceLogs
+        //    .AsNoTracking()
+        //    .Include(x => x.AttendanceLogResolutions)
+        //    .Where(x =>
+        //        x.IndividualId == context.IndividualId &&
+        //          x.Date >= startOfWeek)
+        //    .OrderBy(x => x.Date)
+        //    .ToListAsync();
+
+
+
+
+        //    //return await db.AttendanceLogs
+        //    //    .AsNoTracking()
+        //    //    .Where(a =>
+        //    //        a.IndividualId == context.IndividualId &&
+        //    //        a.Date >= startOfWeek)
+        //    //    .OrderBy(a => a.Date)
+        //    //    .Select(a => new AttendanceLogDto
+        //    //    {
+        //    //        AttendanceLogID = a.AttendanceLogId,
+
+        //    //        IndividualID = a.IndividualId,
+
+        //    //        OrganisationID = a.OrganisationId,
+
+        //    //        OrganisationStructureID =
+        //    //            a.OrganisationStructureId,
+
+        //    //        //InOutModeID = a.InOutModeId,
+
+        //    //        Year = a.Year,
+
+        //    //        Month = a.Month,
+
+        //    //        Day = a.Day,
+
+        //    //        Hour = a.Hour,
+
+        //    //        Minute = a.Minute,
+
+        //    //        Second = a.Second,
+
+        //    //        Date = a.Date,
+
+        //    //        AttendanceLogModeID =
+        //    //            a.AttendanceLogModeId,
+
+        //    //        AttendanceLogStateID =
+        //    //            a.AttendanceLogStateId,
+
+        //    //        OperationLogID =
+        //    //            a.OperationLogId,
+
+        //    //        RelatedAttendanceLogID =
+        //    //            a.RelatedAttendanceLogId,
+
+        //    //        ActualInOutMode =
+        //    //            a.ActualInOutMode
+        //    //    })
+        //    //    .ToListAsync();
+        //}
+
         public async Task<List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync()
         {
-            var context = await _userAccessService.RequireContextAsync();
+            var context =
+                await _userAccessService.RequireContextAsync();
 
-            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
 
-            var startOfWeek = DateTime.Today.AddDays(-7);
+            // Today + previous 6 days = 7 days total
+            var startDate =
+                DateTime.Today.AddDays(-6);
 
-            return await db.AttendanceLogs
+            var endDate =
+                DateTime.Today.AddDays(1);
+
+            // ---------------------------------------------------------
+            // Load raw logs together with their resolutions
+            // ---------------------------------------------------------
+            var logs = await db.AttendanceLogs
                 .AsNoTracking()
-                .Where(a =>
-                    a.IndividualId == context.IndividualId &&
-                    a.Date >= startOfWeek)
-                .OrderBy(a => a.Date)
-                .Select(a => new AttendanceLogDto
-                {
-                    AttendanceLogID = a.AttendanceLogId,
-
-                    IndividualID = a.IndividualId,
-
-                    OrganisationID = a.OrganisationId,
-
-                    OrganisationStructureID =
-                        a.OrganisationStructureId,
-
-                    InOutModeID =
-                        a.InOutModeId,
-
-                    Year = a.Year,
-
-                    Month = a.Month,
-
-                    Day = a.Day,
-
-                    Hour = a.Hour,
-
-                    Minute = a.Minute,
-
-                    Second = a.Second,
-
-                    Date = a.Date,
-
-                    AttendanceLogModeID =
-                        a.AttendanceLogModeId,
-
-                    AttendanceLogStateID =
-                        a.AttendanceLogStateId,
-
-                    OperationLogID =
-                        a.OperationLogId,
-
-                    RelatedAttendanceLogID =
-                        a.RelatedAttendanceLogId,
-
-                    ActualInOutMode =
-                        a.ActualInOutMode
-                })
+                .Include(x => x.AttendanceLogResolutions)
+                .Where(x =>
+                    x.IndividualId == context.IndividualId &&
+                    x.Date >= startDate &&
+                    x.Date < endDate)
+                .OrderBy(x => x.Date)
                 .ToListAsync();
+
+            // ---------------------------------------------------------
+            // Map entities -> DTOs
+            // ---------------------------------------------------------
+            var result = logs
+                .Select(log =>
+                {
+                    // Get the latest resolution for this clock event.
+                    //
+                    // This is important because later a clock event may
+                    // be reprocessed and receive a newer resolution.
+                    var resolution = log.AttendanceLogResolutions
+                        .OrderByDescending(x =>
+                            x.AttendanceLogResolutionId)
+                        .FirstOrDefault();
+
+                    return new AttendanceLogDto
+                    {
+                        AttendanceLogID =
+                            log.AttendanceLogId,
+
+                        AttendanceDeviceID =
+                            log.AttendanceDeviceId,
+
+                        IndividualID =
+                            log.IndividualId,
+
+                        OrganisationID =
+                            log.OrganisationId,
+
+                        OrganisationStructureID =
+                            log.OrganisationStructureId,
+
+                        // Keep original physical/device value.
+                        // Do NOT use this for CheckIn/CheckOut.
+                        InOutModeID =
+                            log.InOutModeId,
+
+                        Year =
+                            log.Year,
+
+                        Month =
+                            log.Month,
+
+                        Day =
+                            log.Day,
+
+                        Hour =
+                            log.Hour,
+
+                        Minute =
+                            log.Minute,
+
+                        Second =
+                            log.Second,
+
+                        Date =
+                            log.Date,
+
+                        AttendanceLogModeID =
+                            log.AttendanceLogModeId,
+
+                        AttendanceLogStateID =
+                            log.AttendanceLogStateId,
+
+                        OperationLogID =
+                            log.OperationLogId,
+
+                        RelatedAttendanceLogID =
+                            log.RelatedAttendanceLogId,
+
+                        ActualInOutMode =
+                            log.ActualInOutMode,
+
+                        // ---------------------------------------------
+                        // WorkPlanning / Resolution
+                        // ---------------------------------------------
+
+                        AttendanceLogResolutionID =
+                            resolution?.AttendanceLogResolutionId,
+
+                        WorkPlanID =
+                            resolution?.WorkPlanId,
+
+                        WorkAssignmentID =
+                            resolution?.WorkAssignmentId,
+
+                        WorkAssignmentSegmentID =
+                            resolution?.WorkAssignmentSegmentId,
+
+                        WorkPlanSegmentID =
+                            resolution?.WorkPlanSegmentId,
+
+                        JobID =
+                            resolution?.JobId,
+
+                        ResolvedClockType =
+                            resolution == null
+                                ? null
+                                : (AttendanceClockType?)
+                                    resolution.AttendanceClockTypeId
+                    };
+                })
+                .ToList();
+
+            return result;
         }
-
-
-
-        
 
         public async Task<List<AttendanceRawLogDto>>GetLogsAsync(
              int individualId,

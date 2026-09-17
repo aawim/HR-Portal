@@ -98,8 +98,20 @@
 
                         <TimeClockCard TodayCheckIn="TodayCheckIn"
                             TodayCheckOut="TodayCheckOut"
-                            OnClockIn="LoadAttendance"
-                            OnClockOut="LoadAttendance" />
+                             OnClock="LoadAttendance" />
+
+                        <TestTimeClockCard 
+                            
+                            TodayCheckIn="TodayCheckIn"
+                            TodayCheckOut="TodayCheckOut"
+                                           
+                                           />
+
+
+
+
+
+
                     </div>
 
                     <!-- CENTER -->
@@ -108,14 +120,9 @@
 
                         <AttendanceSummaryCard WeeklyLogs="weeklyLogs" />
 
-                        <TestTimeClockCard TodayCheckIn="TodayCheckIn"
-                                           TodayCheckOut="TodayCheckOut"
-                                
-                                           />
-                   @*      <TestTimeClockCard TodayCheckIn="TodayCheckIn"
-                                           TodayCheckOut="TodayCheckOut"
-                                           OnClockIn="LoadAttendance"
-                                           OnClockOut="LoadAttendance" /> *@
+                        <TodaysAttendanceLogCard OnClock="LoadAttendance"
+                                          />
+          
 
                         <ActiveJobCard  />
 
@@ -326,21 +333,7 @@
         loading = false;
     }
 
-    // protected override async Task OnAfterRenderAsync(bool firstRender)
-    // {
-    //     if (firstRender)
-    //     {
-    //         var auth = await AuthState!;
-
-    //         Console.WriteLine($"Authenticated: {auth.User.Identity?.IsAuthenticated}");
-
-    //         foreach (var claim in auth.User.Claims)
-    //         {
-    //             Console.WriteLine($"{claim.Type} = {claim.Value}");
-    //         }
-    //     }
-    // }
-
+ 
 
     private async Task RefreshDashboardAsync()
     {
@@ -384,8 +377,6 @@
         TodayCheckIn = result.checkIn;
         TodayCheckOut = result.checkOut;
 
-
-
         if (context.ActiveJob != null)
         {
             _attendancePlan =
@@ -395,10 +386,6 @@
                         context.ActiveJob.JobId,
                         DateTime.Today);
         }
-
-
-
-
 
         StateHasChanged(); // IMPORTANT
 

@@ -1,0 +1,207 @@
+﻿@using HRM.Components.Tools
+@using HRM.DTOs.Attendance
+@using HRM.Enum
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Attendance.Abstraction
+@using HRM.Services.Attendance.AttendancePlan
+@using HRM.Services.Interfaces
+
+@inject IUserAccessService UserAccessService
+@* @inject IAttendance AttendanceLogService *@
+@inject IAttendanceService AttendanceService
+
+@inject IAttendanceResolver AttendanceResolver
+
+
+@inject AttendanceLogService AttendanceLogService
+
+@inject IAttendancePlanService AttendancePlanService
+
+<div class="bg-white rounded-xl shadow-sm border p-2">
+
+ 
+
+        @if (_attendanceLogs.Count == 0)
+        {
+            <div class="p-5 text-sm text-slate-500">
+                No attendance logs found.
+            </div>
+        }
+        else
+        {
+            <div class="divide-y divide-slate-100">
+
+                @if (_attendanceLogs.Count > 0)
+                {
+                    <div class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
+
+                        <div class="border-b border-slate-200 px-4 py-2">
+
+                            <div class="font-semibold text-slate-800">
+                                Attendance Logs
+                            </div>
+
+                            <div class="mt-1 text-xs text-slate-500">
+                                @_attendanceLogs.Count event(s)
+                            </div>
+
+                        </div>
+
+                        <div class="divide-y divide-slate-100">
+
+                            @foreach (var log in _attendanceLogs)
+                            {
+                                <div class="px-4 py-2">
+
+                                    <div class="flex items-center justify-between gap-2">
+
+                                        <div>
+
+                                            <div class="font-medium text-slate-800">
+                                                @log.LogDateTime.ToString("hh:mm:ss tt")
+                                            </div>
+
+                                            <div class="mt-1 text-xs text-slate-500">
+
+                                                @if (!string.IsNullOrWhiteSpace(log.SegmentName))
+                                                {
+                                                    <span>@log.SegmentName</span>
+                                                }
+                                                else
+                                                {
+                                                    <span>No matching segment</span>
+                                                }
+
+                                            </div>
+
+                                        </div>
+
+
+                                        <div>
+
+                                            @if (log.ClockType ==
+                                           AttendanceClockType.CheckIn)
+                                            {
+                                                <span class="rounded-full bg-green-100   text-xs
+                                             font-medium text-green-700">
+                                                    Check In
+                                                </span>
+                                            }
+                                            else if (log.ClockType ==
+                                            AttendanceClockType.CheckOut)
+                                            {
+                                                <span class="rounded-full bg-blue-100
+                                              text-xs
+                                             font-medium text-blue-700">
+                                                    Check Out
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="rounded-full bg-slate-100
+                                              text-xs
+                                             font-medium text-slate-600">
+                                                    Unresolved
+                                                </span>
+                                            }
+
+                                        </div>
+
+                                    </div>
+
+
+                                    @if (!string.IsNullOrWhiteSpace(
+                                   log.ResolutionMessage))
+                                    {
+                                        <div class="mt-2 text-xs text-slate-500">
+                                            @log.ResolutionMessage
+                                        </div>
+                                    }
+
+                                </div>
+                            }
+
+                        </div>
+
+                    </div>
+                }
+
+               
+
+            </div>
+        }
+
+    </div>
+    @* Only for testing ends *@
+
+
+ 
+
+@code {
+
+
+
+
+    // Only for tetsing
+    private bool _useTestTime = false;
+
+    private DateTime _testDate = DateTime.Today;
+
+    private TimeOnly? _testTime = TimeOnly.FromDateTime(DateTime.Now);
+
+    private DateTime GetAttendanceTimestamp()
+    {
+        if (!_useTestTime)
+            return DateTime.Now;
+
+        if (!_testTime.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Please select a test time.");
+        }
+
+        var time = _testTime.Value;
+
+        return new DateTime(
+            _testDate.Year,
+            _testDate.Month,
+            _testDate.Day,
+            time.Hour,
+            time.Minute,
+            time.Second);
+    }
+
+
+ 
+
+    private List<AttendanceRawLogDto> _attendanceLogs = [];
+
+ 
+
+    [Parameter]
+    public EventCallback OnClock { get; set; }
+ 
+
+    private bool ProcessingClock;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var attendanceTime = GetAttendanceTimestamp();
+
+        var context = await UserAccessService.RequireContextAsync();
+
+ 
+        _attendanceLogs = await AttendanceService.GetLogsAsync(
+            context.IndividualId,
+            context.ActiveJob.JobId,
+            attendanceTime);
+ 
+    }
+
+ 
+ 
+
+ 
+
+}

@@ -1,4 +1,5 @@
 ﻿using HRM.DTOs.Attendance;
+using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.Services.Interfaces;
@@ -24,6 +25,160 @@ namespace HRM.Services
             _planningProviderResolver = planningProviderResolver;
         }
 
+        //public async Task<AttendanceWorkPlanDto?> GetPlanAsync(
+        //    int individualId,
+        //    int jobId,
+        //    DateTime workDate,
+        //    CancellationToken cancellationToken = default)
+        //{
+        //    await using var db =
+        //        await _dbFactory.CreateDbContextAsync(
+        //            cancellationToken);
+
+        //    var date = workDate.Date;
+        //    var nextDate = date.AddDays(1);
+
+        //    var plan =
+        //        await db.WorkPlans
+        //            .AsNoTracking()
+        //            .Where(x =>
+        //                x.IndividualId == individualId &&
+        //                x.JobId == jobId &&
+        //                x.WorkDate >= date &&
+        //                x.WorkDate < nextDate &&
+        //                x.IsValid)
+        //            .OrderByDescending(x =>
+        //                x.IsManual)
+        //            .ThenByDescending(x =>
+        //                x.Version)
+        //            .ThenByDescending(x =>
+        //                x.CreatedDate)
+        //            .Select(x => new
+        //            {
+        //                x.WorkPlanId,
+        //                x.IndividualId,
+        //                x.JobId,
+
+        //                OrganisationId =
+        //                    x.OrganisationBusinessEntityId,
+
+        //                x.WorkDate,
+        //                x.WorkTemplateId,
+        //                x.IsFinalized,
+        //                x.IsGenerated,
+        //                x.IsManual
+        //            })
+        //            .FirstOrDefaultAsync(
+        //                cancellationToken);
+
+        //    if (plan == null)
+        //        return null;
+
+        //    var segments =
+        //        await db.WorkPlanSegments
+        //            .AsNoTracking()
+        //            .Where(x =>
+        //                x.WorkPlanId == plan.WorkPlanId &&
+        //                x.IsValid)
+        //            .OrderBy(x =>
+        //                x.SequenceNumber)
+        //            .Select(x =>
+        //                new AttendanceWorkSegmentDto
+        //                {
+        //                    WorkPlanSegmentId =
+        //                        x.WorkPlanSegmentId,
+
+        //                    WorkPlanId =
+        //                        x.WorkPlanId,
+
+        //                    WorkTemplateSegmentId =
+        //                        x.WorkTemplateSegmentId,
+
+        //                    WorkSegmentTypeId =
+        //                        x.WorkSegmentTypeId,
+
+        //                    Name =
+        //                        x.Name,
+
+        //                    Description =
+        //                        x.Description,
+
+        //                    SequenceNumber =
+        //                        x.SequenceNumber,
+
+        //                    StartDateTime =
+        //                        x.StartDateTime,
+
+        //                    EndDateTime =
+        //                        x.EndDateTime,
+
+        //                    GraceBeforeMinutes =
+        //                        x.GraceBeforeMinutes,
+
+        //                    GraceAfterMinutes =
+        //                        x.GraceAfterMinutes,
+
+        //                    IsMandatory =
+        //                        x.IsMandatory,
+
+        //                    RequiresAttendance =
+        //                        x.RequiresAttendance,
+
+        //                    RequiresLocationValidation =
+        //                        x.RequiresLocationValidation,
+
+        //                    RequiresDeviceValidation =
+        //                        x.RequiresDeviceValidation,
+
+        //                    IsPaid =
+        //                        x.IsPaid,
+
+        //                    IsCompleted =
+        //                        x.IsCompleted,
+
+        //                    AttendanceId =
+        //                        x.AttendanceId
+        //                })
+        //            .ToListAsync(
+        //                cancellationToken);
+
+        //    return new AttendanceWorkPlanDto
+        //    {
+        //        WorkPlanId =
+        //            plan.WorkPlanId,
+
+        //        IndividualId =
+        //            plan.IndividualId,
+
+        //        JobId =
+        //            plan.JobId,
+
+        //        OrganisationId =
+        //            plan.OrganisationId,
+
+        //        WorkDate =
+        //            plan.WorkDate,
+
+        //        WorkTemplateId =
+        //            plan.WorkTemplateId,
+
+        //        IsFinalized =
+        //            plan.IsFinalized,
+
+        //        IsGenerated =
+        //            plan.IsGenerated,
+
+        //        IsManual =
+        //            plan.IsManual,
+
+        //        Segments =
+        //            segments
+        //    };
+
+
+        //}
+
+
         public async Task<AttendanceWorkPlanDto?> GetPlanAsync(
     int individualId,
     int jobId,
@@ -31,116 +186,208 @@ namespace HRM.Services
     CancellationToken cancellationToken = default)
         {
             await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
 
             var date = workDate.Date;
             var nextDate = date.AddDays(1);
 
-            var plan =
-                await db.WorkPlans
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.IndividualId == individualId &&
-                        x.JobId == jobId &&
-                        x.WorkDate >= date &&
-                        x.WorkDate < nextDate &&
-                        x.IsValid)
-                    .OrderByDescending(x =>
-                        x.IsManual)
-                    .ThenByDescending(x =>
-                        x.Version)
-                    .ThenByDescending(x =>
-                        x.CreatedDate)
-                    .Select(x => new
-                    {
-                        x.WorkPlanId,
-                        x.IndividualId,
-                        x.JobId,
+            // ---------------------------------------------------------
+            // 1. Get current valid WorkPlan
+            // ---------------------------------------------------------
+            var plan = await db.WorkPlans
+                .AsNoTracking()
+                .Where(x =>
+                    x.IndividualId == individualId &&
+                    x.JobId == jobId &&
+                    x.WorkDate >= date &&
+                    x.WorkDate < nextDate &&
+                    x.IsValid)
+                .OrderByDescending(x => x.IsManual)
+                .ThenByDescending(x => x.Version)
+                .ThenByDescending(x => x.CreatedDate)
+                .Select(x => new
+                {
+                    x.WorkPlanId,
+                    x.IndividualId,
+                    x.JobId,
 
-                        OrganisationId =
-                            x.OrganisationBusinessEntityId,
+                    OrganisationId =
+                        x.OrganisationBusinessEntityId,
 
-                        x.WorkDate,
-                        x.WorkTemplateId,
-                        x.IsFinalized,
-                        x.IsGenerated,
-                        x.IsManual
-                    })
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
+                    x.WorkDate,
+                    x.WorkTemplateId,
+                    x.IsFinalized,
+                    x.IsGenerated,
+                    x.IsManual
+                })
+                .FirstOrDefaultAsync(cancellationToken);
 
             if (plan == null)
                 return null;
 
-            var segments =
-                await db.WorkPlanSegments
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkPlanId == plan.WorkPlanId &&
-                        x.IsValid)
-                    .OrderBy(x =>
-                        x.SequenceNumber)
-                    .Select(x =>
-                        new AttendanceWorkSegmentDto
-                        {
-                            WorkPlanSegmentId =
-                                x.WorkPlanSegmentId,
 
-                            WorkPlanId =
-                                x.WorkPlanId,
+            // ---------------------------------------------------------
+            // 2. Get WorkPlan segments
+            // ---------------------------------------------------------
+            var segments = await db.WorkPlanSegments
+                .AsNoTracking()
+                .Where(x =>
+                    x.WorkPlanId == plan.WorkPlanId &&
+                    x.IsValid)
+                .OrderBy(x => x.SequenceNumber)
+                .Select(x => new AttendanceWorkSegmentDto
+                {
+                    WorkPlanSegmentId =
+                        x.WorkPlanSegmentId,
 
-                            WorkTemplateSegmentId =
-                                x.WorkTemplateSegmentId,
+                    WorkPlanId =
+                        x.WorkPlanId,
 
-                            WorkSegmentTypeId =
-                                x.WorkSegmentTypeId,
+                    WorkTemplateSegmentId =
+                        x.WorkTemplateSegmentId,
 
-                            Name =
-                                x.Name,
+                    WorkSegmentTypeId =
+                        x.WorkSegmentTypeId,
 
-                            Description =
-                                x.Description,
+                    Name =
+                        x.Name,
 
-                            SequenceNumber =
-                                x.SequenceNumber,
+                    Description =
+                        x.Description,
 
-                            StartDateTime =
-                                x.StartDateTime,
+                    SequenceNumber =
+                        x.SequenceNumber,
 
-                            EndDateTime =
-                                x.EndDateTime,
+                    StartDateTime =
+                        x.StartDateTime,
 
-                            GraceBeforeMinutes =
-                                x.GraceBeforeMinutes,
+                    EndDateTime =
+                        x.EndDateTime,
 
-                            GraceAfterMinutes =
-                                x.GraceAfterMinutes,
+                    GraceBeforeMinutes =
+                        x.GraceBeforeMinutes,
 
-                            IsMandatory =
-                                x.IsMandatory,
+                    GraceAfterMinutes =
+                        x.GraceAfterMinutes,
 
-                            RequiresAttendance =
-                                x.RequiresAttendance,
+                    IsMandatory =
+                        x.IsMandatory,
 
-                            RequiresLocationValidation =
-                                x.RequiresLocationValidation,
+                    RequiresAttendance =
+                        x.RequiresAttendance,
 
-                            RequiresDeviceValidation =
-                                x.RequiresDeviceValidation,
+                    RequiresLocationValidation =
+                        x.RequiresLocationValidation,
 
-                            IsPaid =
-                                x.IsPaid,
+                    RequiresDeviceValidation =
+                        x.RequiresDeviceValidation,
 
-                            IsCompleted =
-                                x.IsCompleted,
+                    IsPaid =
+                        x.IsPaid,
 
-                            AttendanceId =
-                                x.AttendanceId
-                        })
-                    .ToListAsync(
-                        cancellationToken);
+                    IsCompleted =
+                        x.IsCompleted,
 
+                    AttendanceId =
+                        x.AttendanceId
+                })
+                .ToListAsync(cancellationToken);
+
+
+            // ---------------------------------------------------------
+            // 3. Get WorkAssignments
+            //
+            // Load entities first instead of projecting enum values
+            // directly through EF.
+            // ---------------------------------------------------------
+            var assignmentEntities = await db.WorkAssignments
+                .AsNoTracking()
+                .Include(x => x.WorkAssignmentOwners)
+                .Where(x =>
+                    x.WorkPlanId == plan.WorkPlanId &&
+                    x.IsValid)
+                .OrderBy(x => x.StartDateTime)
+                .ThenByDescending(x => x.Priority)
+                .ToListAsync(cancellationToken);
+
+
+            // ---------------------------------------------------------
+            // 4. Map assignments in memory
+            // ---------------------------------------------------------
+            var assignments = assignmentEntities
+                .Select(x =>
+                {
+                    var owner = x.WorkAssignmentOwners
+                        .Where(o =>
+                            o.IndividualId == individualId &&
+                            o.JobId == jobId &&
+                            o.IsValid &&
+                            o.IsCurrentOwner)
+                        .OrderByDescending(o => o.AssignedDate)
+                        .FirstOrDefault();
+
+                    return new AttendanceWorkAssignmentDto
+                    {
+                        WorkAssignmentId =
+                            x.WorkAssignmentId,
+
+                        WorkPlanId =
+                            x.WorkPlanId,
+
+                        WorkTemplateId =
+                            x.WorkTemplateId,
+
+                        WorkTemplateTypeId =
+                            x.WorkTemplateTypeId,
+
+                        WorkAssignmentStateId =
+                            x.WorkAssignmentStateId,
+
+                        Name =
+                            x.Name,
+
+                        Code =
+                            x.Code,
+
+                        Description =
+                            x.Description,
+
+                        StartDateTime =
+                            x.StartDateTime,
+
+                        EndDateTime =
+                            x.EndDateTime,
+
+                        GraceMinutes =
+                            x.GraceMinutes,
+
+                        RequiresAttendance =
+                            x.RequiresAttendance,
+
+                        RequiresCheckOut =
+                            x.RequiresCheckOut,
+
+                        Priority =
+                            x.Priority,
+
+                        // Already mapped as enum on WorkAssignment
+                        AssignmentSource =
+                            x.AssignmentSource,
+
+                        // Nullable because an assignment could theoretically
+                        // exist before an owner has been assigned.
+                        OwnershipType = owner?.OwnershipType,
+
+                        IsValid =
+                            x.IsValid
+                    };
+                })
+                .ToList();
+
+
+            // ---------------------------------------------------------
+            // 5. Return complete Today's WorkPlan
+            // ---------------------------------------------------------
             return new AttendanceWorkPlanDto
             {
                 WorkPlanId =
@@ -170,156 +417,13 @@ namespace HRM.Services
                 IsManual =
                     plan.IsManual,
 
+                Assignments =
+                    assignments,
+
                 Segments =
                     segments
             };
         }
-        //public async Task<AttendanceWorkPlanDto?> GetPlanAsync(
-        //    int individualId,
-        //    int jobId,
-        //    DateTime workDate,
-        //    CancellationToken cancellationToken = default)
-        // {
-        //     await using var db =
-        //         await _dbFactory.CreateDbContextAsync(
-        //             cancellationToken);
-
-        //     var date = workDate.Date;
-        //     var nextDate = date.AddDays(1);
-
-
-        //     var plan =
-        //         await db.WorkPlans
-        //             .AsNoTracking()
-        //             .Where(x =>
-        //                 x.IndividualId == individualId &&
-        //                 x.JobId == jobId &&
-        //                 x.WorkDate.Date == date &&
-        //                 x.IsValid)
-        //             .OrderByDescending(x =>
-        //                 x.Version)
-        //             .ThenByDescending(x =>
-        //                 x.CreatedDate)
-        //             .Select(x => new
-        //             {
-        //                 x.WorkPlanId,
-        //                 x.IndividualId,
-        //                 x.JobId,
-
-        //                 OrganisationId =
-        //                     x.OrganisationBusinessEntityId,
-
-        //                 x.WorkDate,
-        //                 x.WorkTemplateId,
-        //                 x.IsFinalized,
-        //                 x.IsGenerated,
-        //                 x.IsManual
-        //             })
-        //             .FirstOrDefaultAsync(
-        //                 cancellationToken);
-
-        //     if (plan == null)
-        //         return null;
-
-        //     var segments =
-        //         await db.WorkPlanSegments
-        //             .AsNoTracking()
-        //             .Where(x =>
-        //                 x.WorkPlanId == plan.WorkPlanId &&
-        //                 x.IsValid)
-        //             .OrderBy(x =>
-        //                 x.SequenceNumber)
-        //             .Select(x =>
-        //                 new AttendanceWorkSegmentDto
-        //                 {
-        //                     WorkPlanSegmentId =
-        //                         x.WorkPlanSegmentId,
-
-        //                     WorkPlanId = x.WorkPlanId,
-
-        //                     WorkTemplateSegmentId =
-        //                         x.WorkTemplateSegmentId,
-
-        //                     WorkSegmentTypeId =
-        //                         x.WorkSegmentTypeId,
-
-        //                     Name =
-        //                         x.Name,
-
-        //                     Description =
-        //                         x.Description,
-
-        //                     SequenceNumber =
-        //                         x.SequenceNumber,
-
-        //                     StartDateTime =
-        //                         x.StartDateTime,
-
-        //                     EndDateTime =
-        //                         x.EndDateTime,
-
-        //                     GraceBeforeMinutes =
-        //                         x.GraceBeforeMinutes,
-
-        //                     GraceAfterMinutes =
-        //                         x.GraceAfterMinutes,
-
-        //                     IsMandatory =
-        //                         x.IsMandatory,
-
-        //                     RequiresAttendance =
-        //                         x.RequiresAttendance,
-
-        //                     RequiresLocationValidation =
-        //                         x.RequiresLocationValidation,
-
-        //                     RequiresDeviceValidation =
-        //                         x.RequiresDeviceValidation,
-
-        //                     IsPaid =
-        //                         x.IsPaid,
-
-        //                     IsCompleted =
-        //                         x.IsCompleted,
-
-        //                     AttendanceId =
-        //                         x.AttendanceId
-        //                 })
-        //             .ToListAsync(
-        //                 cancellationToken);
-
-        //     return new AttendanceWorkPlanDto
-        //     {
-        //         WorkPlanId = plan.WorkPlanId,
-
-        //         IndividualId =
-        //             plan.IndividualId,
-
-        //         JobId =
-        //             plan.JobId,
-
-        //         OrganisationId =
-        //             plan.OrganisationId,
-
-        //         WorkDate =
-        //             plan.WorkDate,
-
-        //         WorkTemplateId =
-        //             plan.WorkTemplateId,
-
-        //         IsFinalized =
-        //             plan.IsFinalized,
-
-        //         IsGenerated =
-        //             plan.IsGenerated,
-
-        //         IsManual =
-        //             plan.IsManual,
-
-        //         Segments =
-        //             segments
-        //     };
-        // }
 
 
         public async Task<AttendanceWorkPlanDto?> GetOrGenerateAsync(

@@ -62,7 +62,7 @@
 
     <div class="flex gap-3">
 
-        <button class="flex-1 rounded-lg bg-green-600 px-5 py-3 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+  @*       <button class="flex-1 rounded-lg bg-green-600 px-5 py-3 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         @onclick="HandleCheckIn"
         disabled="@DisableCheckIn">
 
@@ -99,9 +99,9 @@
                 <span>Check In</span>
             }
 
-        </button>
+        </button> *@
 
-        <button class="flex-1 rounded-lg bg-red-600 px-5 py-3 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
+@*         <button class="flex-1 rounded-lg bg-red-600 px-5 py-3 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
         @onclick="HandleCheckOut"
         disabled="@DisableCheckOut">
 
@@ -138,6 +138,24 @@
                 <span>Check Out</span>
             }
 
+        </button> *@
+
+
+        <button @onclick="HandleClock"
+                disabled="@ProcessingClock"
+                class="w-full rounded-lg bg-blue-600 px-4 py-3
+                       font-semibold text-white hover:bg-blue-700
+                       disabled:opacity-50">
+
+            @if (ProcessingClock)
+            {
+                <span>Processing...</span>
+            }
+            else
+            {
+                <span>Clock</span>
+            }
+
         </button>
 
     </div>
@@ -152,20 +170,29 @@
     [Parameter]
     public AttendanceLogDto? TodayCheckOut { get; set; }
 
-    [Parameter]
-    public EventCallback OnClockIn { get; set; }
 
     [Parameter]
-    public EventCallback OnClockOut { get; set; }
+    public EventCallback OnClock { get; set; }
 
 
-    private bool DisableCheckIn => ProcessingCheckIn || ProcessingCheckOut;
 
-    private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
+    // [Parameter]
+    // public EventCallback OnClockIn { get; set; }
+
+    // [Parameter]
+    // public EventCallback OnClockOut { get; set; }
 
 
-    private bool ProcessingCheckIn;
-    private bool ProcessingCheckOut;
+    // private bool DisableCheckIn => ProcessingCheckIn || ProcessingCheckOut;
+
+    // private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
+
+    private bool ProcessingClock;
+    private bool _useTime = false;
+
+
+    // private bool ProcessingCheckIn;
+    // private bool ProcessingCheckOut;
 
     protected override async Task OnInitializedAsync()
     {
@@ -177,42 +204,96 @@
         TodayCheckOut = result.checkOut;
     }
 
+    private DateTime _Date = DateTime.Today;
+    private TimeOnly? _Time = TimeOnly.FromDateTime(DateTime.Now);
 
-
-
-    private async Task HandleCheckIn()
+    private DateTime GetAttendanceTimestamp()
     {
-        ProcessingCheckIn = true;
-        var context = await UserAccessService.RequireContextAsync();
+        if (!_useTime)
+            return DateTime.Now;
+
+        if (!_Time.HasValue)
+        {
+            throw new InvalidOperationException(
+                "Please select a test time.");
+        }
+
+        var time = _Time.Value;
+
+        return new DateTime(
+            _Date.Year,
+            _Date.Month,
+            _Date.Day,
+            time.Hour,
+            time.Minute,
+            time.Second);
+    }
+
+    private async Task HandleClock()
+    {
+        ProcessingClock = true;
+
         try
         {
-            await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId,1);
+            var context =
+                await UserAccessService.RequireContextAsync();
+
+            var timestamp = GetAttendanceTimestamp();
+
+            await AttendanceLogService.AddClockEventAsync(
+                context.IndividualId,
+                timestamp);
+
+            if (OnClock.HasDelegate)
+            {
+                await OnClock.InvokeAsync();
+            }
+        }
+        finally
+        {
+            ProcessingClock = false;
+        }
+    }
+
+
+
+
+
+
+
+    // private async Task HandleCheckIn()
+    // {
+    //     ProcessingCheckIn = true;
+    //     var context = await UserAccessService.RequireContextAsync();
+    //     try
+    //     {
+    //         await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId,1);
         
 
-            if (OnClockIn.HasDelegate)
-                await OnClockIn.InvokeAsync();
-        }
-        finally
-        {
-            ProcessingCheckIn = false;
-        }
-    }
+    //         if (OnClockIn.HasDelegate)
+    //             await OnClockIn.InvokeAsync();
+    //     }
+    //     finally
+    //     {
+    //         ProcessingCheckIn = false;
+    //     }
+    // }
 
-    private async Task HandleCheckOut()
-    {
-        ProcessingCheckOut = true;
-        var context = await UserAccessService.RequireContextAsync();
-        try
-        {
-            await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId, 2);
+    // private async Task HandleCheckOut()
+    // {
+    //     ProcessingCheckOut = true;
+    //     var context = await UserAccessService.RequireContextAsync();
+    //     try
+    //     {
+    //         await AttendanceLogService.AddAttendanceCheckAsync(context.IndividualId, 2);
 
-            if (OnClockOut.HasDelegate)
-                await OnClockOut.InvokeAsync();
-        }
-        finally
-        {
-            ProcessingCheckOut = false;
-        }
-    }
+    //         if (OnClockOut.HasDelegate)
+    //             await OnClockOut.InvokeAsync();
+    //     }
+    //     finally
+    //     {
+    //         ProcessingCheckOut = false;
+    //     }
+    // }
 
 }

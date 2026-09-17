@@ -194,9 +194,25 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 .ThenByDescending(x => x.EffectiveFrom)
                 .ToListAsync();
 
-            return assignments.FirstOrDefault(x =>
-                AppliesOnDay(x, date.DayOfWeek));
+            return assignments.FirstOrDefault(x =>AppliesOnDay(x, date.DayOfWeek));
         }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         private static bool AppliesOnDay(
             JobWorkTemplate assignment,

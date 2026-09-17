@@ -21,8 +21,6 @@
         public bool IsManual { get; set; }
 
         public List<AttendanceWorkSegmentDto> Segments { get; set; } = [];
-
-
         public List<AttendanceWorkAssignmentDto> Assignments { get; set; } = [];
 
        

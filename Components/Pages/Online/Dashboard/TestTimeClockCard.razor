@@ -20,15 +20,7 @@
 
 <div class="bg-white rounded-xl shadow-sm border p-6">
 
-    <h3 class="text-lg font-semibold mb-5">
-        Time Clock
-    </h3>
 
-
-
-    @* Only for testing  *@
-
-    <div class="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-4">
 
         <div class="flex items-center justify-between gap-3">
             <div>
@@ -84,22 +76,7 @@
 
                 <div class="flex gap-1">
 
-                    @*      <button class="flex-1 rounded-lg bg-green-600 px-5 py-2 w-100 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    @onclick="HandleCheckInTest"
-                    >
-
-                        <span>Check In</span>
-
-
-                    </button>
-
-                    <button class="flex-1 rounded-lg bg-red-600 px-5 py-2 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-                    @onclick="HandleCheckOutTest"  >
-
-                        <span>Check Out</span>
-
-
-                    </button> *@
+         
 
                     <button @onclick="HandleClock"
                     disabled="@ProcessingClock"
@@ -129,18 +106,11 @@
 
 
 
-
-
-
-    </div>
-
-
     @if (_attendancePlan != null)
     {
-        <div class="mt-5 rounded-xl border border-slate-200
-                bg-white overflow-hidden">
+        <div class="mt-2 bg-white overflow-hidden">
 
-            <div class="border-b border-slate-200 px-5 py-4">
+            <div class="flex items-center justify-between gap-3" style=" border-bottom: 2px solid #ccc;">
 
                 <div class="font-semibold text-slate-800">
                     Today's Work Plan
@@ -154,9 +124,40 @@
 
             </div>
 
+
+
+            @if (_attendancePlan?.Assignments?.Any() == true)
+            {
+                <div class="space-y-2">
+                    @foreach (var assignment in _attendancePlan.Assignments)
+                    {
+                        <div class="mt-2" style="border-bottom: 2px solid #ccc;">
+                            <div class="font-semibold text-slate-800">
+                                @assignment.Name
+                            </div>
+
+                            <div class="mt-1 text-sm text-slate-600">
+                                @assignment.StartDateTime.ToString("hh:mm tt")
+                                -
+                                @assignment.EndDateTime.ToString("hh:mm tt")
+                            </div>
+
+                            <div class="mt-1 text-xs text-slate-500">
+                                Source: @assignment.AssignmentSource
+                                · Owner: @assignment.OwnershipType
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div>No work assignments found.</div>
+            }
+
             @if (_attendancePlan.Segments.Count == 0)
             {
-                <div class="p-5 text-sm text-amber-700">
+                <div class="p-2 text-sm text-amber-700">
                     No work segments found.
                 </div>
             }
@@ -166,7 +167,7 @@
 
                     @foreach (var segment in _attendancePlan.Segments .OrderBy(x => x.StartDateTime))
                     {
-                        <div class="flex items-center justify-between gap-4 px-5 py-4">
+                        <div class="flex items-center justify-between gap-2">
 
                             <div>
                                 <div class="font-medium text-slate-800">
@@ -212,64 +213,9 @@
             }
 
 
+ 
 
-
-            @if (_attendancePlan.Assignments.Count == 0)
-            {
-                <div class="p-5 text-sm text-amber-700">
-                    No work Assignments found.
-                </div>
-            }
-            else
-            {
-                <div class="divide-y divide-slate-100">
-
-                    @foreach (var segment in _attendancePlan.Assignments.OrderBy(x => x.StartDateTime))
-                    {
-                        <div class="flex items-center justify-between gap-4 px-5 py-4">
-
-                            <div>
-                                <div class="font-medium text-slate-800">
-                                    @segment.Name
-                                </div>
-
-                                <div class="mt-1 text-xs text-slate-500">
-                                    @(segment.StartDateTime.ToString("hh:mm tt"))
-                                    -
-                                    @(segment.EndDateTime.ToString("hh:mm tt"))
-                                    ·
-                                 
-                                </div>
-                            </div>
-
-                            <div>
-                                @if (segment.RequiresAttendance)
-                                {
-                                    <span class="rounded-full
-                                             bg-green-100
-                                             px-2.5 py-1
-                                             text-xs font-medium
-                                             text-green-700">
-                                        Attendance
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="rounded-full
-                                             bg-slate-100
-                                             px-2.5 py-1
-                                             text-xs font-medium
-                                             text-slate-600">
-                                        No Punch
-                                    </span>
-                                }
-                            </div>
-
-                        </div>
-                    }
-
-                </div>
-            }
+         
 
         </div>
     }
@@ -278,131 +224,7 @@
         <p>No Assignments</p>
     }
 
-    <div class="mt-5 rounded-xl border border-slate-200 bg-white overflow-hidden">
-
-        <div class="border-b border-slate-200 px-5 py-4">
-            <div class="font-semibold text-slate-800">
-                Raw Attendance Logs
-            </div>
-
-            <div class="mt-1 text-xs text-slate-500">
-                @_attendanceLogs.Count log(s)
-            </div>
-        </div>
-
-        @if (_attendanceLogs.Count == 0)
-        {
-            <div class="p-5 text-sm text-slate-500">
-                No attendance logs found.
-            </div>
-        }
-        else
-        {
-            <div class="divide-y divide-slate-100">
-
-                @if (_attendanceLogs.Count > 0)
-                {
-                    <div class="mt-6 overflow-hidden rounded-xl
-                border border-slate-200 bg-white">
-
-                        <div class="border-b border-slate-200 px-5 py-4">
-
-                            <div class="font-semibold text-slate-800">
-                                Attendance Logs
-                            </div>
-
-                            <div class="mt-1 text-xs text-slate-500">
-                                @_attendanceLogs.Count event(s)
-                            </div>
-
-                        </div>
-
-                        <div class="divide-y divide-slate-100">
-
-                            @foreach (var log in _attendanceLogs)
-                            {
-                                <div class="px-5 py-4">
-
-                                    <div class="flex items-center justify-between gap-4">
-
-                                        <div>
-
-                                            <div class="font-medium text-slate-800">
-                                                @log.LogDateTime.ToString("hh:mm:ss tt")
-                                            </div>
-
-                                            <div class="mt-1 text-xs text-slate-500">
-
-                                                @if (!string.IsNullOrWhiteSpace(log.SegmentName))
-                                                {
-                                                    <span>@log.SegmentName</span>
-                                                }
-                                                else
-                                                {
-                                                    <span>No matching segment</span>
-                                                }
-
-                                            </div>
-
-                                        </div>
-
-
-                                        <div>
-
-                                            @if (log.ClockType ==
-                                           AttendanceClockType.CheckIn)
-                                            {
-                                                <span class="rounded-full bg-green-100
-                                             px-2.5 py-1 text-xs
-                                             font-medium text-green-700">
-                                                    Check In
-                                                </span>
-                                            }
-                                            else if (log.ClockType ==
-                                            AttendanceClockType.CheckOut)
-                                            {
-                                                <span class="rounded-full bg-blue-100
-                                             px-2.5 py-1 text-xs
-                                             font-medium text-blue-700">
-                                                    Check Out
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="rounded-full bg-slate-100
-                                             px-2.5 py-1 text-xs
-                                             font-medium text-slate-600">
-                                                    Unresolved
-                                                </span>
-                                            }
-
-                                        </div>
-
-                                    </div>
-
-
-                                    @if (!string.IsNullOrWhiteSpace(
-                                   log.ResolutionMessage))
-                                    {
-                                        <div class="mt-2 text-xs text-slate-500">
-                                            @log.ResolutionMessage
-                                        </div>
-                                    }
-
-                                </div>
-                            }
-
-                        </div>
-
-                    </div>
-                }
-
-               
-
-            </div>
-        }
-
-    </div>
+    
     @* Only for testing ends *@
 
 
@@ -421,8 +243,7 @@
 
     private DateTime _testDate = DateTime.Today;
 
-    private TimeOnly? _testTime =
-        TimeOnly.FromDateTime(DateTime.Now);
+    private TimeOnly? _testTime = TimeOnly.FromDateTime(DateTime.Now);
 
     private DateTime GetAttendanceTimestamp()
     {
@@ -452,7 +273,7 @@
 
     private AttendanceWorkPlanDto? _attendancePlan;
 
-    private List<AttendanceRawLogDto> _attendanceLogs = [];
+ 
 
  
 
@@ -480,24 +301,9 @@
         var attendanceTime = GetAttendanceTimestamp();
 
         var context = await UserAccessService.RequireContextAsync();
-
-            if (context.ActiveJob == null)
-            {
-                _attendancePlan = null;
-                _attendanceLogs = [];
-                return;
-            }
-
-
-
-        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
-
  
 
-        // _attendancePlan = await AttendancePlanService.GetPlanAsync(
-        //     context.IndividualId,
-        //     context.ActiveJob.JobId,
-        //      attendanceTime);
+        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
              _attendancePlan =
                 await AttendancePlanService.GetOrGenerateAsync(
                     context.IndividualId,
@@ -505,12 +311,7 @@
                     context.ActiveJob.OrganisationId,
                     attendanceTime);
 
-
-
-        _attendanceLogs = await AttendanceService.GetLogsAsync(
-            context.IndividualId,
-            context.ActiveJob.JobId,
-            attendanceTime);
+ 
 
     
 

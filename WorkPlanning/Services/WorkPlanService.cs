@@ -808,6 +808,10 @@ namespace HRM.WorkPlanning.Services
                 })
                 .ToListAsync();
         }
+
+
+
+
         public async Task<List<WorkTemplateLookupDto>>GetActiveTemplatesAsync()
         {
             await using var db =

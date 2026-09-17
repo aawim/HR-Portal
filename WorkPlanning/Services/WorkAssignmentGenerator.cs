@@ -361,6 +361,37 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
     {
         var now = DateTime.UtcNow;
 
+        var workDate =
+           DateOnly.FromDateTime(request.WorkDate);
+
+        if (!template.DefaultStartTime.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"Work template '{template.Name}' does not have a default start time.");
+        }
+
+        if (!template.DefaultEndTime.HasValue)
+        {
+            throw new InvalidOperationException(
+                $"Work template '{template.Name}' does not have a default end time.");
+        }
+
+        var assignmentStart =
+            workDate.ToDateTime(
+                template.DefaultStartTime.Value);
+
+        var assignmentEnd =
+            workDate.ToDateTime(
+                template.DefaultEndTime.Value);
+
+        if (template.EndsNextDay ||
+            assignmentEnd <= assignmentStart)
+        {
+            assignmentEnd =
+                assignmentEnd.AddDays(1);
+        }
+
+
         var workPlan = new WorkPlan
         {
             IndividualId =
@@ -434,6 +465,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
         await db.SaveChangesAsync(
             cancellationToken);
 
+
         var workAssignment = new WorkAssignment
         {
             WorkPlanId =
@@ -463,11 +495,10 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     ? template.Description
                     : request.AssignmentDescription.Trim(),
 
-            StartDateTime =
-                assignmentPeriod.StartDateTime,
+            StartDateTime = assignmentStart,
 
-            EndDateTime =
-                assignmentPeriod.EndDateTime,
+            EndDateTime = assignmentEnd,
+
 
             GraceMinutes =
                 0,
@@ -572,8 +603,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             AssignedByUserId =
                 request.GeneratedByUserId,
 
-            EffectiveFrom =
-                assignmentPeriod.StartDateTime,
+            EffectiveFrom = assignmentStart,
 
             EffectiveTo = null,
 
@@ -718,6 +748,65 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             int workTemplateId,
             CancellationToken cancellationToken)
     {
+        //return await db.WorkTemplates
+        //    .AsNoTracking()
+        //    .Where(x =>
+        //        x.WorkTemplateId == workTemplateId &&
+        //        x.IsActive)
+        //    .Select(x => new TemplateGenerationModel
+        //    {
+        //        WorkTemplateId =
+        //            x.WorkTemplateId,
+
+        //        WorkTemplateTypeId =
+        //            x.WorkTemplateTypeId,
+
+        //        Name =
+        //            x.Name,
+
+        //        Description =
+        //            x.Description,
+
+        //        Segments = x.WorkTemplateSegments
+        //            .Where(segment =>
+        //                segment.IsActive)
+        //            .OrderBy(segment =>
+        //                segment.SequenceNumber)
+        //            .Select(segment =>
+        //                new TemplateSegmentGenerationModel
+        //                {
+        //                    WorkTemplateSegmentId = segment.WorkTemplateSegmentId,
+
+        //                    WorkSegmentTypeId = segment.WorkSegmentTypeId,
+
+        //                    Name = segment.Name,
+
+        //                    Description = segment.Description,
+
+        //                    SequenceNumber = segment.SequenceNumber,
+
+        //                    OffsetMinutes = segment.OffsetMinutes,
+
+        //                    DurationMinutes = segment.DurationMinutes,
+
+        //                    GraceBeforeMinutes = segment.GraceBeforeMinutes,
+
+        //                    GraceAfterMinutes = segment.GraceAfterMinutes,
+
+        //                    IsMandatory = segment.IsMandatory,
+
+        //                    RequiresAttendance = segment.RequiresAttendance,
+
+        //                    RequiresLocationValidation = segment.RequiresLocationValidation,
+
+        //                    RequiresDeviceValidation =segment.RequiresDeviceValidation
+        //                })
+        //            .ToList()
+        //    })
+        //    .SingleOrDefaultAsync(
+        //        cancellationToken);
+
+
         return await db.WorkTemplates
             .AsNoTracking()
             .Where(x =>
@@ -737,44 +826,65 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 Description =
                     x.Description,
 
+                DefaultStartTime =
+                    x.DefaultStartTime,
+
+                DefaultEndTime =
+                    x.DefaultEndTime,
+
+                EndsNextDay =
+                    x.EndsNextDay,
+
                 Segments = x.WorkTemplateSegments
-                    .Where(segment =>
-                        segment.IsActive)
-                    .OrderBy(segment =>
-                        segment.SequenceNumber)
+                    .Where(segment => segment.IsActive)
+                    .OrderBy(segment => segment.SequenceNumber)
                     .Select(segment =>
                         new TemplateSegmentGenerationModel
                         {
-                            WorkTemplateSegmentId = segment.WorkTemplateSegmentId,
+                            WorkTemplateSegmentId =
+                                segment.WorkTemplateSegmentId,
 
-                            WorkSegmentTypeId = segment.WorkSegmentTypeId,
+                            WorkSegmentTypeId =
+                                segment.WorkSegmentTypeId,
 
-                            Name = segment.Name,
+                            Name =
+                                segment.Name,
 
-                            Description = segment.Description,
+                            Description =
+                                segment.Description,
 
-                            SequenceNumber = segment.SequenceNumber,
+                            SequenceNumber =
+                                segment.SequenceNumber,
 
-                            OffsetMinutes = segment.OffsetMinutes,
+                            OffsetMinutes =
+                                segment.OffsetMinutes,
 
-                            DurationMinutes = segment.DurationMinutes,
+                            DurationMinutes =
+                                segment.DurationMinutes,
 
-                            GraceBeforeMinutes = segment.GraceBeforeMinutes,
+                            GraceBeforeMinutes =
+                                segment.GraceBeforeMinutes,
 
-                            GraceAfterMinutes = segment.GraceAfterMinutes,
+                            GraceAfterMinutes =
+                                segment.GraceAfterMinutes,
 
-                            IsMandatory = segment.IsMandatory,
+                            IsMandatory =
+                                segment.IsMandatory,
 
-                            RequiresAttendance = segment.RequiresAttendance,
+                            RequiresAttendance =
+                                segment.RequiresAttendance,
 
-                            RequiresLocationValidation = segment.RequiresLocationValidation,
+                            RequiresLocationValidation =
+                                segment.RequiresLocationValidation,
 
-                            RequiresDeviceValidation =segment.RequiresDeviceValidation
+                            RequiresDeviceValidation =
+                                segment.RequiresDeviceValidation
                         })
                     .ToList()
             })
-            .SingleOrDefaultAsync(
-                cancellationToken);
+            .SingleOrDefaultAsync(cancellationToken);
+
+
     }
 
     private static async Task<JobGenerationModel?>
@@ -1251,6 +1361,18 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
         public List<TemplateSegmentGenerationModel>
             Segments
         { get; init; } = [];
+
+
+  
+
+        public TimeOnly? DefaultStartTime { get; init; }
+
+        public TimeOnly? DefaultEndTime { get; init; }
+
+        public bool EndsNextDay { get; init; }
+ 
+
+
     }
 
     private sealed class TemplateSegmentGenerationModel

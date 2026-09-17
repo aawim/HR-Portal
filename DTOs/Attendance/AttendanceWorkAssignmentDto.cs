@@ -18,7 +18,7 @@ namespace HRM.DTOs.Attendance
 
         public WorkAssignmentSource AssignmentSource { get; set; }
 
-        public WorkOwnershipType OwnershipType { get; set; }
+        public WorkOwnershipType? OwnershipType { get; set; }
 
         public bool RequiresAttendance { get; set; }
 
@@ -27,5 +27,17 @@ namespace HRM.DTOs.Attendance
         public int Priority { get; set; }
 
         public bool IsValid { get; set; }
+
+        public long WorkPlanId { get; set; }
+
+        public int WorkTemplateId { get; set; }
+
+        public int WorkAssignmentStateId { get; set; }
+
+         public string? Description { get; set; }
+
+        public int GraceMinutes { get; set; }
+
+       public int PlannedMinutes => (int)(EndDateTime - StartDateTime).TotalMinutes;
     }
 }

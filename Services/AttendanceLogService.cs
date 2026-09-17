@@ -278,9 +278,8 @@ namespace HRM.Services
 
                     OperationLogId = 1
                 };
-
+            _context.ChangeTracker.Clear();
             await _context.AttendanceLogs.AddAsync(log);
-
             await _context.SaveChangesAsync();
 
 

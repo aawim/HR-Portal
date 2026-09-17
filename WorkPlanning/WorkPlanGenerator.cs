@@ -62,18 +62,7 @@ namespace HRM.WorkPlanning
                 .ThenByDescending(x => x.Version)
                 .ThenByDescending(x => x.CreatedDate)
                 .FirstOrDefaultAsync(cancellationToken);
-
-
-
-            //var nextWorkDate = workDateTime.AddDays(1);
-            //var existingPlan = await db.WorkPlans
-            // .Include(x => x.WorkPlanSegments)
-            // .Include(x => x.WorkAssignments)
-            // .Where(x =>
-            //     x.JobId == jobId &&
-            //     x.WorkDate >= workDateTime &&
-            //     x.WorkDate < nextWorkDate)
-            // .FirstOrDefaultAsync(cancellationToken);
+ 
             if (existingPlan != null)
             {
                 if (existingPlan.IndividualId != individualId)
@@ -95,18 +84,7 @@ namespace HRM.WorkPlanning
 
                 return MapToDto(existingPlan);
             }
-            //if (existingPlan != null)
-            //{
-            //    return MapToDto(existingPlan);
-            //}
-
-
-
-
-            //if (existingPlan != null)
-            //{
-            //    return MapToDto(existingPlan);
-            //}
+      
 
             var assignmentsQuery = db.JobWorkTemplates
                  .AsNoTracking()
@@ -268,29 +246,7 @@ namespace HRM.WorkPlanning
             var assignmentEnd = plan.WorkPlanSegments
                 .Max(x => x.EndDateTime);
 
-            //plan.WorkAssignments.Add(new WorkAssignment
-            //{
-            //    WorkTemplateId = template.WorkTemplateId,
-            //    WorkTemplateTypeId = template.WorkTemplateTypeId,
-            //    WorkAssignmentStateId = plannedStateId.Value,
-
-            //    Name = template.Name,
-            //    Code = template.Code,
-            //    Description = template.Description,
-
-            //    StartDateTime = assignmentStart,
-            //    EndDateTime = assignmentEnd,
-
-            //    GraceMinutes = template.DefaultGraceMinutes,
-            //    RequiresAttendance = template.RequiresAttendance,
-            //    RequiresCheckOut = template.RequiresCheckOut,
-
-            //    Priority = assignment.Priority,
-            //    AssignmentSource = WorkAssignmentSource.Template,
-
-            //    IsValid = true,
-            //    CreatedDate = generatedAt
-            //});
+ 
             var workAssignment = new WorkAssignment
             {
                 WorkTemplateId = template.WorkTemplateId,
@@ -314,6 +270,9 @@ namespace HRM.WorkPlanning
                 IsValid = true,
                 CreatedDate = generatedAt
             };
+
+
+
 
             workAssignment.WorkAssignmentOwners.Add(
                new WorkAssignmentOwner
@@ -350,7 +309,60 @@ namespace HRM.WorkPlanning
             return MapToDto(plan);
         }
 
- 
+
+
+        //private static AttendanceWorkPlanDto MapToDto(WorkPlan plan)
+        //{
+        //    return new AttendanceWorkPlanDto
+        //    {
+        //        WorkPlanId = plan.WorkPlanId,
+        //        IndividualId = plan.IndividualId,
+        //        JobId = plan.JobId,
+        //        OrganisationId = plan.OrganisationBusinessEntityId,
+        //        WorkDate = plan.WorkDate,
+        //        WorkTemplateId = plan.WorkTemplateId,
+
+        //        IsFinalized = plan.IsFinalized,
+        //        IsGenerated = plan.IsGenerated,
+        //        IsManual = plan.IsManual,
+
+        //        Segments = plan.WorkPlanSegments
+        //            .OrderBy(x => x.SequenceNumber)
+        //            .Select(x => new AttendanceWorkSegmentDto
+        //            {
+        //                WorkPlanSegmentId = x.WorkPlanSegmentId,
+        //                WorkPlanId = x.WorkPlanId,
+        //                WorkTemplateSegmentId = x.WorkTemplateSegmentId,
+        //                WorkSegmentTypeId = x.WorkSegmentTypeId,
+
+        //                Name = x.Name,
+        //                Description = x.Description,
+        //                SequenceNumber = x.SequenceNumber,
+
+        //                StartDateTime = x.StartDateTime,
+        //                EndDateTime = x.EndDateTime,
+
+        //                GraceBeforeMinutes = x.GraceBeforeMinutes,
+        //                GraceAfterMinutes = x.GraceAfterMinutes,
+
+        //                IsMandatory = x.IsMandatory,
+        //                RequiresAttendance = x.RequiresAttendance,
+
+        //                RequiresLocationValidation =
+        //                    x.RequiresLocationValidation,
+
+        //                RequiresDeviceValidation =
+        //                    x.RequiresDeviceValidation,
+
+        //                IsPaid = x.IsPaid,
+        //                IsCompleted = x.IsCompleted,
+        //                AttendanceId = x.AttendanceId
+        //            })
+        //            .ToList()
+        //    };
+        //}
+
+
 
         private static AttendanceWorkPlanDto MapToDto(WorkPlan plan)
         {
@@ -367,40 +379,84 @@ namespace HRM.WorkPlanning
                 IsGenerated = plan.IsGenerated,
                 IsManual = plan.IsManual,
 
-                Segments = plan.WorkPlanSegments
-                    .OrderBy(x => x.SequenceNumber)
-                    .Select(x => new AttendanceWorkSegmentDto
+                Assignments = plan.WorkAssignments
+                    .Where(x => x.IsValid)
+                    .OrderBy(x => x.StartDateTime)
+                    .ThenByDescending(x => x.Priority)
+                    .Select(x => new AttendanceWorkAssignmentDto
                     {
-                        WorkPlanSegmentId = x.WorkPlanSegmentId,
+                        WorkAssignmentId = x.WorkAssignmentId,
                         WorkPlanId = x.WorkPlanId,
-                        WorkTemplateSegmentId = x.WorkTemplateSegmentId,
-                        WorkSegmentTypeId = x.WorkSegmentTypeId,
+
+                        WorkTemplateId = x.WorkTemplateId,
+                        WorkTemplateTypeId = x.WorkTemplateTypeId,
+                        WorkAssignmentStateId = x.WorkAssignmentStateId,
 
                         Name = x.Name,
+                        Code = x.Code,
                         Description = x.Description,
-                        SequenceNumber = x.SequenceNumber,
 
                         StartDateTime = x.StartDateTime,
                         EndDateTime = x.EndDateTime,
 
-                        GraceBeforeMinutes = x.GraceBeforeMinutes,
-                        GraceAfterMinutes = x.GraceAfterMinutes,
+                        GraceMinutes = x.GraceMinutes,
 
-                        IsMandatory = x.IsMandatory,
                         RequiresAttendance = x.RequiresAttendance,
+                        RequiresCheckOut = x.RequiresCheckOut,
 
-                        RequiresLocationValidation =
-                            x.RequiresLocationValidation,
+                        Priority = x.Priority,
 
-                        RequiresDeviceValidation =
-                            x.RequiresDeviceValidation,
+                        AssignmentSource = x.AssignmentSource,
 
-                        IsPaid = x.IsPaid,
-                        IsCompleted = x.IsCompleted,
-                        AttendanceId = x.AttendanceId
+                        OwnershipType = x.WorkAssignmentOwners
+                            .Where(o =>
+                                o.IndividualId == plan.IndividualId &&
+                                o.JobId == plan.JobId &&
+                                o.IsValid &&
+                                o.IsCurrentOwner)
+                            .Select(o => (WorkOwnershipType?)o.OwnershipType)
+                            .FirstOrDefault(),
+
+                        IsValid = x.IsValid
                     })
+                    .ToList(),
+
+                    Segments = plan.WorkPlanSegments
+                        .Where(x => x.IsValid)
+                        .OrderBy(x => x.SequenceNumber)
+                        .Select(x => new AttendanceWorkSegmentDto
+                        {
+                            WorkPlanSegmentId = x.WorkPlanSegmentId,
+                            WorkPlanId = x.WorkPlanId,
+                            WorkTemplateSegmentId = x.WorkTemplateSegmentId,
+                            WorkSegmentTypeId = x.WorkSegmentTypeId,
+
+                            Name = x.Name,
+                            Description = x.Description,
+
+                            SequenceNumber = x.SequenceNumber,
+
+                            StartDateTime = x.StartDateTime,
+                            EndDateTime = x.EndDateTime,
+
+                            GraceBeforeMinutes = x.GraceBeforeMinutes,
+                            GraceAfterMinutes = x.GraceAfterMinutes,
+
+                            IsMandatory = x.IsMandatory,
+                            RequiresAttendance = x.RequiresAttendance,
+                            RequiresLocationValidation = x.RequiresLocationValidation,
+                            RequiresDeviceValidation = x.RequiresDeviceValidation,
+
+                            IsPaid = x.IsPaid,
+                            IsCompleted = x.IsCompleted,
+                            AttendanceId = x.AttendanceId
+                        })
                     .ToList()
             };
         }
+
+
+
+
     }
 }
