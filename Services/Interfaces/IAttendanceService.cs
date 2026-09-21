@@ -30,6 +30,8 @@ namespace HRM.Services.Interfaces
 
         Task<List<AttendanceLogDto>> GetMyUnevenLogsAsync();
 
+        Task<WeeklyWorkedHoursDto>GetMyWeeklyWorkedHoursAsync();
+
 
     }
 }

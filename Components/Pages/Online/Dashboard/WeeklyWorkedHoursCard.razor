@@ -1,0 +1,304 @@
+﻿@using HRM.DTOs.Attendance
+@using HRM.Services.Interfaces
+
+@inject IAttendanceService AttendanceService
+
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+
+    <!-- Header -->
+    <div class="flex items-center justify-between
+                px-5 py-4 border-b border-slate-100">
+
+        <div>
+            <h2 class="text-base font-semibold text-slate-800">
+                Worked Hours
+            </h2>
+
+            <p class="text-xs text-slate-500 mt-0.5">
+                Weekly attendance hours
+            </p>
+        </div>
+
+        <div class="w-10 h-10 rounded-lg
+                    bg-blue-50
+                    flex items-center justify-center">
+
+            <i class="fas fa-clock text-blue-600"></i>
+
+        </div>
+
+    </div>
+
+
+    @if (isLoading)
+    {
+        <!-- Loading -->
+        <div class="flex items-center justify-center py-12">
+
+            <i class="fas fa-spinner fa-spin
+                      text-blue-600 mr-2">
+            </i>
+
+            <span class="text-sm text-slate-500">
+                Calculating worked hours...
+            </span>
+
+        </div>
+    }
+    else if (workedHours == null)
+    {
+        <!-- Empty -->
+        <div class="py-10 text-center text-sm text-slate-500">
+            No attendance information available.
+        </div>
+    }
+    else
+    {
+        <div class="p-5">
+
+            <!-- Current Week -->
+            <div class="rounded-xl
+                        border border-blue-100
+                        bg-blue-50/50
+                        p-4">
+
+                <div class="flex items-center justify-between">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="w-10 h-10 rounded-lg
+                                    bg-blue-100
+                                    flex items-center justify-center">
+
+                            <i class="fas fa-calendar-week
+                                      text-blue-600">
+                            </i>
+
+                        </div>
+
+                        <div>
+                            <div class="text-xs font-medium text-slate-500">
+                                This Week
+                            </div>
+
+                            <div class="mt-0.5 text-2xl
+                                        font-bold text-slate-900">
+
+                                @FormatHours(
+                                         workedHours.CurrentWeekHours)
+
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="text-right">
+
+                        <div class="text-xs text-slate-400">
+                            Total
+                        </div>
+
+                        <div class="text-sm font-medium text-blue-600">
+                            @workedHours.CurrentWeekHours.ToString("0.00") hrs
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Comparison -->
+            <div class="flex items-center justify-center my-3">
+
+                <div class="h-px flex-1 bg-slate-100"></div>
+
+                <span class="px-3 text-[10px]
+                             uppercase tracking-wide
+                             text-slate-400">
+                    Compared with
+                </span>
+
+                <div class="h-px flex-1 bg-slate-100"></div>
+
+            </div>
+
+
+            <!-- Previous Week -->
+            <div class="rounded-xl
+                        border border-slate-200
+                        bg-slate-50
+                        p-4">
+
+                <div class="flex items-center justify-between">
+
+                    <div class="flex items-center gap-3">
+
+                        <div class="w-10 h-10 rounded-lg
+                                    bg-white border border-slate-200
+                                    flex items-center justify-center">
+
+                            <i class="fas fa-history text-slate-500"></i>
+
+                        </div>
+
+                        <div>
+
+                            <div class="text-xs font-medium text-slate-500">
+                                Last Week
+                            </div>
+
+                            <div class="mt-0.5 text-xl
+                                        font-semibold text-slate-800">
+
+                                @FormatHours(
+                                         workedHours.PreviousWeekHours)
+
+                            </div>
+
+                        </div>
+
+                    </div>
+
+                    <div class="text-right">
+
+                        <div class="text-xs text-slate-400">
+                            Total
+                        </div>
+
+                        <div class="text-sm font-medium text-slate-600">
+                            @workedHours.PreviousWeekHours.ToString("0.00") hrs
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- Difference -->
+            <div class="mt-4 pt-4 border-t border-slate-100">
+
+                <div class="flex items-center justify-between">
+
+                    <span class="text-xs text-slate-500">
+                        Weekly difference
+                    </span>
+
+                    <div class="flex items-center gap-1.5">
+
+                        <i class="@GetDifferenceIcon()"></i>
+
+                        <span class="@GetDifferenceClass()">
+
+                            @GetDifferencePrefix()
+                            @FormatHours(
+                                     Math.Abs(workedHours.DifferenceHours))
+
+                        </span>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+
+@code {
+
+    private WeeklyWorkedHoursDto? workedHours;
+
+    private bool isLoading = true;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isLoading = true;
+
+            workedHours =
+                await AttendanceService
+                    .GetMyWeeklyWorkedHoursAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    private static string FormatHours(decimal hours)
+    {
+        var totalMinutes =
+            (int)Math.Round(hours * 60);
+
+        var hour =
+            totalMinutes / 60;
+
+        var minute =
+            totalMinutes % 60;
+
+        return $"{hour}h {minute}m";
+    }
+
+
+    private string GetDifferencePrefix()
+    {
+        if (workedHours == null)
+            return "";
+
+        if (workedHours.DifferenceHours > 0)
+            return "+";
+
+        if (workedHours.DifferenceHours < 0)
+            return "-";
+
+        return "";
+    }
+
+
+    private string GetDifferenceClass()
+    {
+        if (workedHours == null)
+            return "text-sm font-semibold text-slate-500";
+
+        if (workedHours.DifferenceHours > 0)
+        {
+            return "text-sm font-semibold text-green-600";
+        }
+
+        if (workedHours.DifferenceHours < 0)
+        {
+            return "text-sm font-semibold text-red-600";
+        }
+
+        return "text-sm font-semibold text-slate-500";
+    }
+
+
+    private string GetDifferenceIcon()
+    {
+        if (workedHours == null)
+            return "fas fa-minus text-slate-400 text-xs";
+
+        if (workedHours.DifferenceHours > 0)
+        {
+            return "fas fa-arrow-up text-green-500 text-xs";
+        }
+
+        if (workedHours.DifferenceHours < 0)
+        {
+            return "fas fa-arrow-down text-red-500 text-xs";
+        }
+
+        return "fas fa-minus text-slate-400 text-xs";
+    }
+}

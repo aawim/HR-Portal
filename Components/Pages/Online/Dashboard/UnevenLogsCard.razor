@@ -1,154 +1,384 @@
 ﻿@using HRM.DTOs.Attendance
-@using HRM.Models
 @using HRM.Services.Interfaces
+@using HRM.Enum
 
 @inject IAttendanceService AttendanceService
 
-
-
-<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+<div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
 
     <!-- Header -->
     <div class="flex items-center justify-between px-5 py-4 border-b border-slate-100">
 
         <div>
             <h2 class="text-base font-semibold text-slate-800">
-                Uneven Logs
+                Uneven Attendance
             </h2>
 
-            <p class="text-xs text-slate-500">
-                Recent device punch records
+            <p class="text-xs text-slate-500 mt-0.5">
+                Attendance exceptions for the current salary period
             </p>
         </div>
 
-        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center">
-            <i class="fas fa-fingerprint text-blue-600"></i>
+        <div class="w-10 h-10 rounded-lg
+                    bg-amber-50
+                    flex items-center justify-center">
+
+            <i class="fas fa-exclamation-triangle text-amber-600"></i>
+
         </div>
 
     </div>
 
 
-    @if (Logs == null || !Logs.Any())
+    <!-- Loading -->
+    @if (isLoading)
     {
-        <div class="py-10 text-center text-slate-500">
-            No attendance logs found.
+        <div class="flex flex-col items-center justify-center py-12">
+
+            <div class="w-10 h-10 rounded-full
+                        bg-blue-50
+                        flex items-center justify-center">
+
+                <i class="fas fa-spinner fa-spin text-blue-600"></i>
+
+            </div>
+
+            <div class="mt-3 text-sm text-slate-500">
+                Loading attendance...
+            </div>
+
         </div>
+    }
+    else if (Logs == null || !Logs.Any())
+    {
+    <div class="flex flex-col items-center justify-center py-12 px-5">
+
+        <div class="w-12 h-12 rounded-full
+                        bg-green-50
+                        flex items-center justify-center">
+
+            <i class="fas fa-check text-green-600"></i>
+
+        </div>
+
+        <div class="mt-3 text-sm font-semibold text-slate-700">
+            No uneven attendance
+        </div>
+
+        <div class="mt-1 text-xs text-slate-500 text-center">
+            No attendance exceptions found for this salary period.
+        </div>
+
+    </div>
     }
     else
     {
-        <div class="divide-y divide-slate-100 max-h-[820px] overflow-y-auto">
+    <div class="divide-y divide-slate-100
+                    max-h-[520px]
+                    overflow-y-auto">
 
-            @foreach (var log in Logs)
-            {
-                var time = GetDateTime(log);
-                @* px - 5 py - 4 *@
-                <div class="flex items-center justify-between px-4 p-2 hover:bg-slate-50 transition">
+        @foreach (var log in Logs.OrderByDescending(x => x.Date))
+        {
+            <div class="group px-4 py-3
+                            hover:bg-slate-50
+                            transition">
 
-                    <!-- Left -->
-                    <div class="flex items-center gap-4">
+                <div class="flex items-start justify-between gap-4">
+
+                    <!-- LEFT -->
+                    <div class="flex items-start gap-3 min-w-0">
 
                         <!-- Icon -->
-                        <div class="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center shrink-0">
+                        <div class="@GetIconContainerClass(log)">
 
-                            @if (log.InOutModeID == 1)
-                            {
-                                <i class="fas fa-sign-in-alt text-green-600"></i>
-                            }
-                            else
-                            {
-                                <i class="fas fa-sign-out-alt text-red-500"></i>
-                            }
+                            <i class="@GetIconClass(log)"></i>
 
                         </div>
 
                         <!-- Details -->
-                        <div>
+                        <div class="min-w-0">
 
-                            <div class="text-sm font-semibold text-slate-800">
-                                @time.ToString("dd MMM yyyy")
+                            <!-- Date -->
+                            <div class="flex items-center gap-2">
+
+                                <span class="text-sm font-semibold text-slate-800">
+                                    @log.Date.ToString("dd MMM yyyy")
+                                </span>
+
+                                <span class="text-[10px] text-slate-400">
+                                    @log.Date.ToString("ddd")
+                                </span>
+
                             </div>
 
-                            <div class="text-xs text-slate-500 mt-0.5">
-                                @time.ToString("hh:mm:ss tt")
+                            <!-- Time -->
+                            <div class="mt-1 flex items-center gap-1.5
+                                            text-xs text-slate-500">
+
+                                <i class="far fa-clock text-slate-400"></i>
+
+                                <span class="font-medium text-slate-700">
+                                    @log.Date.ToString("hh:mm:ss tt")
+                                </span>
+
                             </div>
 
-                            <div class="text-xs text-slate-400 mt-1">
-                                UID: @log.UIDStamp
-                            </div>
+                            <!-- Segment -->
+                            @if (log.WorkPlanSegmentID.HasValue)
+                            {
+                                <div class="mt-1.5 flex items-center gap-1.5
+                                                text-xs text-slate-500">
+
+                                    <i class="fas fa-calendar-check
+                                                  text-slate-400">
+                                    </i>
+
+                                    <span>
+                                        @(string.IsNullOrWhiteSpace(log.SegmentName)
+                                            ? "Work Plan Segment"
+                                            : log.SegmentName)
+                                    </span>
+
+                                </div>
+                            }
 
                         </div>
 
                     </div>
 
 
-                    <!-- Right -->
-                    <div class="text-right">
+                    <!-- RIGHT -->
+                    <div class="shrink-0 flex flex-col items-end gap-2">
 
-                        <span class="@GetBadgeClass(log.AttendanceLogStateID)">
-                            @GetStateLabel(log.AttendanceLogStateID)
+                        <span class="@GetStatusBadgeClass(log)">
+
+                            <span class="@GetStatusDotClass(log)">
+                            </span>
+
+                            @GetStatusLabel(log)
+
                         </span>
 
-                        <div class="text-xs text-slate-400 mt-2">
-                            @(log.InOutModeID == 1 ? "Check In" : "Check Out")
-                        </div>
+                        @if (log.WorkPlanID.HasValue)
+                        {
+                            <span class="text-[10px] text-slate-400">
+                                Plan #@log.WorkPlanID
+                            </span>
+                        }
 
                     </div>
 
                 </div>
-            }
+
+            </div>
+        }
+
+    </div>
+
+
+    <!-- Footer -->
+    <div class="flex items-center justify-between
+                    px-5 py-3
+                    border-t border-slate-100
+                    bg-slate-50">
+
+        <div class="flex items-center gap-2 text-xs text-slate-500">
+
+            <i class="far fa-calendar"></i>
+
+            <span>
+                Current salary period
+            </span>
 
         </div>
+
+        <span class="inline-flex items-center
+                         rounded-full
+                         bg-amber-100
+                         px-2.5 py-1
+                         text-xs font-semibold
+                         text-amber-700">
+
+            @Logs.Count
+            @(Logs.Count == 1 ? "exception" : "exceptions")
+
+        </span>
+
+    </div>
     }
 
 </div>
 
+
 @code {
 
-    [Parameter]
-    public List<AttendanceLogDto> Logs { get; set; } = new();
+    private List<AttendanceLogDto> Logs { get; set; } = new();
+
+    private bool isLoading = true;
 
 
-
-    protected override async Task OnParametersSetAsync()
+    protected override async Task OnInitializedAsync()
     {
-        // Logs = await AttendanceService.GetJobIdByStaffId(StaffId);
-        Logs = await AttendanceService.GetMyUnevenLogsAsync();
-        
-    }
-
-
-
-    private DateTime GetDateTime(AttendanceLogDto log)
-    {
-        return new DateTime(
-            log.Year,
-            log.Month,
-            log.Day,
-            log.Hour,
-            log.Minute,
-            log.Second);
-    }
-
-    private string GetBadgeClass(int stateId)
-    {
-        return stateId switch
+        try
         {
-            1 => "inline-flex px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700",
-            2 => "inline-flex px-3 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700",
-            3 => "inline-flex px-3 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700",
-            _ => "inline-flex px-3 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600"
+            isLoading = true;
+
+            Logs =
+                await AttendanceService
+                    .GetMyUnevenLogsAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+
+    // ---------------------------------------------------------
+    // Status Label
+    // ---------------------------------------------------------
+    private string GetStatusLabel(
+        AttendanceLogDto log)
+    {
+        if (!log.ResolvedClockType.HasValue)
+        {
+            return "Unresolved";
+        }
+
+        return log.ResolvedClockType.Value switch
+        {
+            AttendanceClockType.CheckIn =>
+                "Check In",
+
+            AttendanceClockType.CheckOut =>
+                "Check Out",
+
+            AttendanceClockType.Ignored =>
+                "Ignored",
+
+            AttendanceClockType.Unresolved =>
+                "Unresolved",
+
+            _ =>
+                "Unresolved"
         };
     }
 
-    private string GetStateLabel(int stateId)
+
+    // ---------------------------------------------------------
+    // Badge
+    // ---------------------------------------------------------
+    private string GetStatusBadgeClass(
+        AttendanceLogDto log)
     {
-        return stateId switch
+        if (!log.ResolvedClockType.HasValue ||
+            log.ResolvedClockType ==
+                AttendanceClockType.Unresolved)
         {
-            1 => "Present",
-            2 => "Late",
-            3 => "Absent",
-            _ => "Unknown"
-        };
+            return
+                "inline-flex items-center gap-1.5 " +
+                "px-2.5 py-1 rounded-full " +
+                "text-xs font-medium " +
+                "bg-amber-100 text-amber-700";
+        }
+
+        if (log.ResolvedClockType ==
+            AttendanceClockType.Ignored)
+        {
+            return
+                "inline-flex items-center gap-1.5 " +
+                "px-2.5 py-1 rounded-full " +
+                "text-xs font-medium " +
+                "bg-slate-100 text-slate-600";
+        }
+
+        return
+            "inline-flex items-center gap-1.5 " +
+            "px-2.5 py-1 rounded-full " +
+            "text-xs font-medium " +
+            "bg-blue-100 text-blue-700";
     }
 
+
+    // ---------------------------------------------------------
+    // Badge Dot
+    // ---------------------------------------------------------
+    private string GetStatusDotClass(
+        AttendanceLogDto log)
+    {
+        if (!log.ResolvedClockType.HasValue ||
+            log.ResolvedClockType ==
+                AttendanceClockType.Unresolved)
+        {
+            return "w-1.5 h-1.5 rounded-full bg-amber-500";
+        }
+
+        if (log.ResolvedClockType ==
+            AttendanceClockType.Ignored)
+        {
+            return "w-1.5 h-1.5 rounded-full bg-slate-400";
+        }
+
+        return "w-1.5 h-1.5 rounded-full bg-blue-500";
+    }
+
+
+    // ---------------------------------------------------------
+    // Icon Container
+    // ---------------------------------------------------------
+    private string GetIconContainerClass(
+        AttendanceLogDto log)
+    {
+        if (!log.ResolvedClockType.HasValue ||
+            log.ResolvedClockType ==
+                AttendanceClockType.Unresolved)
+        {
+            return
+                "w-10 h-10 rounded-lg " +
+                "bg-amber-50 " +
+                "flex items-center justify-center shrink-0";
+        }
+
+        if (log.ResolvedClockType ==
+            AttendanceClockType.Ignored)
+        {
+            return
+                "w-10 h-10 rounded-lg " +
+                "bg-slate-100 " +
+                "flex items-center justify-center shrink-0";
+        }
+
+        return
+            "w-10 h-10 rounded-lg " +
+            "bg-blue-50 " +
+            "flex items-center justify-center shrink-0";
+    }
+
+
+    // ---------------------------------------------------------
+    // Icon
+    // ---------------------------------------------------------
+    private string GetIconClass(
+        AttendanceLogDto log)
+    {
+        if (!log.ResolvedClockType.HasValue)
+        {
+            return "fas fa-exclamation-triangle text-amber-600";
+        }
+
+        return log.ResolvedClockType.Value switch
+        {
+            AttendanceClockType.CheckIn =>
+                "fas fa-sign-in-alt text-blue-600",
+
+            AttendanceClockType.CheckOut =>
+                "fas fa-sign-out-alt text-blue-600",
+
+            AttendanceClockType.Ignored =>
+                "fas fa-minus-circle text-slate-500",
+
+            _ =>
+                "fas fa-exclamation-triangle text-amber-600"
+        };
+    }
 }

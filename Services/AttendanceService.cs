@@ -50,145 +50,256 @@ namespace HRM.Services
             return await GetUnevenLogsAsync(individualId);
         }
 
+        
+
         public async Task<List<AttendanceLogDto>> GetUnevenLogsAsync(int individualId)
         {
-            using var context = _dbFactory.CreateDbContext();
+ 
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
 
-            // Define the salary period dates (15th and 16th of current month)
-            int year = DateTime.Today.Year;
-            int month = DateTime.Today.Month;
-            //DateTime start = new DateTime(year, month, 15);
-            //DateTime end = new DateTime(year, month, 16);
+            var today = DateTime.Today;
 
-            DateTime start = new DateTime(year, 4, 15);
-            DateTime end = new DateTime(year, 5, 16);
+            // ---------------------------------------------------------
+            // Current salary period
+            // 15th -> 16th of following month inclusive
+            // ---------------------------------------------------------
+            DateTime periodStart;
 
-            // Fetch all logs for this specific period
-            var logs = await context.AttendanceLogs
+            if (today.Day >= 15)
+            {
+                periodStart =
+                    new DateTime(
+                        today.Year,
+                        today.Month,
+                        15);
+            }
+            else
+            {
+                periodStart =
+                    new DateTime(
+                        today.Year,
+                        today.Month,
+                        15)
+                    .AddMonths(-1);
+            }
+
+            var periodEndExclusive =
+                periodStart
+                    .AddMonths(1)
+                    .AddDays(2);
+
+            // ---------------------------------------------------------
+            // Load logs
+            // ---------------------------------------------------------
+            var logs = await db.AttendanceLogs
                 .AsNoTracking()
-                .Where(a =>
-                    a.IndividualId == individualId &&
-                    a.Date >= start &&
-                    a.Date <= end)
-                .Select(a => new AttendanceLogDto
-                {
-                    AttendanceLogID = a.AttendanceLogId,
-                    AttendanceDeviceID = a.AttendanceDeviceId,
-                    IndividualID = a.IndividualId,
-                    OrganisationID = a.OrganisationId,
-                    OrganisationStructureID = a.OrganisationStructureId,
-                    InOutModeID = a.InOutModeId,
-                    Year = a.Year,
-                    Month = a.Month,
-                    Day = a.Day,
-                    Hour = a.Hour,
-                    Minute = a.Minute,
-                    Second = a.Second,
-                    Date = a.Date,
-                    AttendanceLogModeID = a.AttendanceLogModeId,
-                    AttendanceLogStateID = a.AttendanceLogStateId,
-                    OperationLogID = a.OperationLogId,
-                    RelatedAttendanceLogID = a.RelatedAttendanceLogId,
-                    ActualInOutMode = a.ActualInOutMode
-                })
+                .Include(x => x.AttendanceLogResolutions)
+                .Where(x =>
+                    x.IndividualId == individualId &&
+                    x.Date >= periodStart &&
+                    x.Date < periodEndExclusive)
+                .OrderBy(x => x.Date)
                 .ToListAsync();
 
-            var uneven = new List<AttendanceLogDto>();
+            // ---------------------------------------------------------
+            // Load work plans
+            // ---------------------------------------------------------
+            var plans = await db.WorkPlans
+                .AsNoTracking()
+                .Include(x => x.WorkPlanSegments)
+                .Where(x =>
+                    x.IndividualId == individualId &&
+                    x.IsValid &&
+                    x.WorkDate >= periodStart &&
+                    x.WorkDate < periodEndExclusive)
+                .ToListAsync();
 
-            // Logic: Group by date to check for daily anomalies
-            var dailyGroups = logs.GroupBy(l => l.Date.Date);
+            var unevenLogIds = new HashSet<int>();
 
-            foreach (var group in dailyGroups)
+            // ---------------------------------------------------------
+            // Process one WorkPlan/day at a time
+            // ---------------------------------------------------------
+            foreach (var plan in plans)
             {
-                var checkIn = group.FirstOrDefault(l => l.InOutModeID == 1);
-                var checkOut = group.FirstOrDefault(l => l.InOutModeID == 2);
+                var dayLogs = logs
+                    .Where(x =>
+                        x.Date.Date == plan.WorkDate.Date)
+                    .OrderBy(x => x.Date)
+                    .ToList();
 
-                // Condition 1: Late check-in (later than 08:00:00)
-                if (checkIn != null && (checkIn.Hour > 8 || (checkIn.Hour == 8 && checkIn.Minute > 0)))
+                var requiredSegments = plan.WorkPlanSegments
+                    .Where(x =>
+                        x.RequiresAttendance)
+                    .OrderBy(x => x.StartDateTime)
+                    .ToList();
+
+                if (!requiredSegments.Any())
                 {
-                    uneven.Add(checkIn);
+                    continue;
                 }
 
-                // Condition 2: Missing check-in OR missing check-out
-                if (checkIn == null || checkOut == null)
+                // -----------------------------------------------------
+                // Find the final required attendance boundary.
+                //
+                // Anything AFTER this has been satisfied should not
+                // automatically become uneven.
+                // -----------------------------------------------------
+                var finalSegment =
+                    requiredSegments.Last();
+
+                var finalResolution = dayLogs
+                    .SelectMany(x =>
+                        x.AttendanceLogResolutions)
+                    .Where(x =>
+                        x.WorkPlanSegmentId ==
+                            finalSegment.WorkPlanSegmentId)
+                    .OrderByDescending(x =>
+                        x.AttendanceLogResolutionId)
+                    .FirstOrDefault();
+
+                DateTime? finalClockTime = null;
+
+                if (finalResolution != null)
                 {
-                    uneven.AddRange(group);
+                    finalClockTime = dayLogs
+                        .Where(x =>
+                            x.AttendanceLogId ==
+                            finalResolution.AttendanceLogId)
+                        .Select(x => (DateTime?)x.Date)
+                        .FirstOrDefault();
+                }
+
+                // -----------------------------------------------------
+                // Check every required segment
+                // -----------------------------------------------------
+                foreach (var segment in requiredSegments)
+                {
+                    var resolvedLog = dayLogs
+                        .Where(log =>
+                            log.AttendanceLogResolutions.Any(r =>
+                                r.WorkPlanSegmentId ==
+                                    segment.WorkPlanSegmentId))
+                        .OrderBy(log => log.Date)
+                        .FirstOrDefault();
+
+                    // Expected clock exists.
+                    if (resolvedLog != null)
+                    {
+                        continue;
+                    }
+
+                    // -------------------------------------------------
+                    // No resolved log for required segment.
+                    //
+                    // Look for unmatched clocks around this required
+                    // attendance window.
+                    // -------------------------------------------------
+                    var candidate = dayLogs
+                        .Where(log =>
+                        {
+                            // Already belongs to another valid segment.
+                            var hasResolution =
+                                log.AttendanceLogResolutions.Any(r =>
+                                    r.WorkPlanSegmentId.HasValue);
+
+                            if (hasResolution)
+                            {
+                                return false;
+                            }
+
+                            // Anything after successful final checkout
+                            // isn't an uneven clock for this work plan.
+                            if (finalClockTime.HasValue &&
+                                log.Date > finalClockTime.Value)
+                            {
+                                return false;
+                            }
+
+                            return true;
+                        })
+                        .OrderBy(log =>
+                            Math.Abs(
+                                (log.Date -
+                                 segment.StartDateTime)
+                                .TotalMinutes))
+                        .FirstOrDefault();
+
+                    if (candidate != null)
+                    {
+                        unevenLogIds.Add(
+                            candidate.AttendanceLogId);
+                    }
                 }
             }
 
-            return uneven;
+            // ---------------------------------------------------------
+            // Convert only uneven logs to DTO
+            // ---------------------------------------------------------
+            return logs
+                .Where(x =>
+                    unevenLogIds.Contains(
+                        x.AttendanceLogId))
+                .Select(x => new AttendanceLogDto
+                {
+                    AttendanceLogID =
+                        x.AttendanceLogId,
+
+                    AttendanceDeviceID =
+                        x.AttendanceDeviceId,
+
+                    IndividualID =
+                        x.IndividualId,
+
+                    OrganisationID =
+                        x.OrganisationId,
+
+                    OrganisationStructureID =
+                        x.OrganisationStructureId,
+
+                    InOutModeID =
+                        x.InOutModeId,
+
+                    Year =
+                        x.Year,
+
+                    Month =
+                        x.Month,
+
+                    Day =
+                        x.Day,
+
+                    Hour =
+                        x.Hour,
+
+                    Minute =
+                        x.Minute,
+
+                    Second =
+                        x.Second,
+
+                    Date =
+                        x.Date,
+
+                    AttendanceLogModeID =
+                        x.AttendanceLogModeId,
+
+                    AttendanceLogStateID =
+                        x.AttendanceLogStateId,
+
+                    OperationLogID =
+                        x.OperationLogId,
+
+                    RelatedAttendanceLogID =
+                        x.RelatedAttendanceLogId,
+
+                    ActualInOutMode =
+                        x.ActualInOutMode
+                })
+                .OrderBy(x => x.Date)
+                .ToList();
         }
-        //public async Task<List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync()
-        //{
-        //    var context = await _userAccessService.RequireContextAsync();
 
-        //    await using var db = await _dbFactory.CreateDbContextAsync();
-
-        //    var startOfWeek = DateTime.Today.AddDays(-7);
-
-
-        //    var logs = await db.AttendanceLogs
-        //    .AsNoTracking()
-        //    .Include(x => x.AttendanceLogResolutions)
-        //    .Where(x =>
-        //        x.IndividualId == context.IndividualId &&
-        //          x.Date >= startOfWeek)
-        //    .OrderBy(x => x.Date)
-        //    .ToListAsync();
-
-
-
-
-        //    //return await db.AttendanceLogs
-        //    //    .AsNoTracking()
-        //    //    .Where(a =>
-        //    //        a.IndividualId == context.IndividualId &&
-        //    //        a.Date >= startOfWeek)
-        //    //    .OrderBy(a => a.Date)
-        //    //    .Select(a => new AttendanceLogDto
-        //    //    {
-        //    //        AttendanceLogID = a.AttendanceLogId,
-
-        //    //        IndividualID = a.IndividualId,
-
-        //    //        OrganisationID = a.OrganisationId,
-
-        //    //        OrganisationStructureID =
-        //    //            a.OrganisationStructureId,
-
-        //    //        //InOutModeID = a.InOutModeId,
-
-        //    //        Year = a.Year,
-
-        //    //        Month = a.Month,
-
-        //    //        Day = a.Day,
-
-        //    //        Hour = a.Hour,
-
-        //    //        Minute = a.Minute,
-
-        //    //        Second = a.Second,
-
-        //    //        Date = a.Date,
-
-        //    //        AttendanceLogModeID =
-        //    //            a.AttendanceLogModeId,
-
-        //    //        AttendanceLogStateID =
-        //    //            a.AttendanceLogStateId,
-
-        //    //        OperationLogID =
-        //    //            a.OperationLogId,
-
-        //    //        RelatedAttendanceLogID =
-        //    //            a.RelatedAttendanceLogId,
-
-        //    //        ActualInOutMode =
-        //    //            a.ActualInOutMode
-        //    //    })
-        //    //    .ToListAsync();
-        //}
 
         public async Task<List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync()
         {
@@ -435,13 +546,152 @@ namespace HRM.Services
 
         }
 
-   
+
+
+        public async Task<WeeklyWorkedHoursDto> GetMyWeeklyWorkedHoursAsync()
+        {
+            var userContext =
+                await _userAccessService.RequireContextAsync();
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync();
+
+            var today = DateTime.Today;
+
+            // ---------------------------------------------------------
+            // Current week: Sunday -> Saturday
+            // ---------------------------------------------------------
+            var currentWeekStart =
+                today.AddDays(-(int)today.DayOfWeek);
+
+            var currentWeekEnd =
+                currentWeekStart.AddDays(7);
+
+            // ---------------------------------------------------------
+            // Previous week
+            // ---------------------------------------------------------
+            var previousWeekStart =
+                currentWeekStart.AddDays(-7);
+
+            var previousWeekEnd =
+                currentWeekStart;
+
+            // We only need two weeks of logs.
+            var logs = await db.AttendanceLogs
+                .AsNoTracking()
+                .Include(x => x.AttendanceLogResolutions)
+                .Where(x =>
+                    x.IndividualId == userContext.IndividualId &&
+                    x.Date >= previousWeekStart &&
+                    x.Date < currentWeekEnd)
+                .OrderBy(x => x.Date)
+                .ToListAsync();
+
+            var currentWeekHours =
+                CalculateWorkedHours(
+                    logs,
+                    currentWeekStart,
+                    currentWeekEnd);
+
+            var previousWeekHours =
+                CalculateWorkedHours(
+                    logs,
+                    previousWeekStart,
+                    previousWeekEnd);
+
+            return new WeeklyWorkedHoursDto
+            {
+                CurrentWeekHours =
+                    Math.Round(currentWeekHours, 2),
+
+                PreviousWeekHours =
+                    Math.Round(previousWeekHours, 2)
+            };
+        }
 
 
 
+        private static decimal CalculateWorkedHours(
+    List<AttendanceLog> logs,
+    DateTime fromDate,
+    DateTime toDate)
+        {
+            var periodLogs = logs
+                .Where(x =>
+                    x.Date >= fromDate &&
+                    x.Date < toDate)
+                .OrderBy(x => x.Date)
+                .ToList();
 
+            decimal totalHours = 0;
 
+            // ---------------------------------------------------------
+            // Process each day independently
+            // ---------------------------------------------------------
+            var days = periodLogs
+                .GroupBy(x => x.Date.Date);
 
+            foreach (var day in days)
+            {
+                var resolvedLogs = day
+                    .Select(log =>
+                    {
+                        // Latest resolution wins
+                        var resolution =
+                            log.AttendanceLogResolutions
+                                .OrderByDescending(x =>
+                                    x.AttendanceLogResolutionId)
+                                .FirstOrDefault();
+
+                        return new
+                        {
+                            Log = log,
+                            Resolution = resolution
+                        };
+                    })
+                    .Where(x => x.Resolution != null)
+                    .OrderBy(x => x.Log.Date)
+                    .ToList();
+
+                // -----------------------------------------------------
+                // Find resolved CheckIn
+                // -----------------------------------------------------
+                var checkIn = resolvedLogs
+                    .FirstOrDefault(x =>
+                        x.Resolution!.AttendanceClockTypeId ==
+                        (int)AttendanceClockType.CheckIn);
+
+                // -----------------------------------------------------
+                // Find resolved CheckOut
+                // -----------------------------------------------------
+                var checkOut = resolvedLogs
+                    .LastOrDefault(x =>
+                        x.Resolution!.AttendanceClockTypeId ==
+                        (int)AttendanceClockType.CheckOut);
+
+                if (checkIn == null ||
+                    checkOut == null)
+                {
+                    // Incomplete day.
+                    // Don't invent worked hours.
+                    continue;
+                }
+
+                if (checkOut.Log.Date <= checkIn.Log.Date)
+                {
+                    continue;
+                }
+
+                var worked =
+                    checkOut.Log.Date -
+                    checkIn.Log.Date;
+
+                totalHours +=
+                    (decimal)worked.TotalHours;
+            }
+
+            return totalHours;
+        }
 
     }
 }
