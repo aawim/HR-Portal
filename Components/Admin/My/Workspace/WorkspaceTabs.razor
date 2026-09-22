@@ -3,7 +3,7 @@
 
 <div class="border-b border-slate-200">
 
-    <nav class="flex gap-6">
+    <nav class="flex items-end gap-1 px-2">
 
         @foreach (var tab in AvailableTabs)
         {
@@ -20,7 +20,6 @@
 
             </button>
         }
-
 
     </nav>
 
@@ -108,11 +107,30 @@
 
     private string TabClass(WorkspaceTab tab)
     {
-        return ActiveTab == tab
+        var baseClass =
+            "relative px-5 py-2.5 " +
+            "rounded-t-xl border border-b-0 " +
+            "text-sm font-medium " +
+            "transition-all duration-200 " +
+            "focus:outline-none ";
 
-            ? "px-4 py-2 border-b-2 border-blue-600 text-blue-600 font-medium"
+        if (ActiveTab == tab)
+        {
+            return baseClass +
+                   "bg-white " +
+                   "border-slate-200 " +
+                   "text-blue-600 " +
+                   "shadow-[0_-3px_8px_rgba(0,0,0,0.06)] " +
+                   "-mb-px";
+        }
 
-            : "px-4 py-2 text-slate-500 hover:text-slate-700";
+        return baseClass +
+               "bg-slate-50 " +
+               "border-slate-200 " +
+               "text-slate-500 " +
+               "hover:bg-white " +
+               "hover:text-slate-700 " +
+               "hover:shadow-[0_-2px_6px_rgba(0,0,0,0.04)]";
     }
 
      private string GetTabText(WorkspaceTab tab)

@@ -1,0 +1,785 @@
+﻿@using HRM.DTOs.Attendance
+@using HRM.Enum
+
+<div class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+    <div class="flex flex-wrap items-center justify-between gap-3
+                border-b border-slate-100 px-5 py-4">
+
+        <div>
+            <h3 class="text-base font-semibold text-slate-800">
+                Attendance Overview
+            </h3>
+
+            <p class="mt-0.5 text-xs text-slate-500">
+                Attendance activity for @Year
+            </p>
+        </div>
+
+
+        <!-- YEAR SELECTOR -->
+        <div class="flex items-center gap-2">
+
+            <button type="button"
+                    @onclick="PreviousYear"
+                    class="flex h-8 w-8 items-center justify-center
+                           rounded-lg border border-slate-200
+                           text-slate-500 transition
+                           hover:bg-slate-50 hover:text-slate-700">
+
+                ‹
+
+            </button>
+
+
+            <span class="min-w-16 text-center text-sm font-semibold text-slate-700">
+                @Year
+            </span>
+
+
+            <button type="button"
+                    @onclick="NextYear"
+                    disabled="@(Year >= DateTime.Today.Year)"
+                    class="flex h-8 w-8 items-center justify-center
+                           rounded-lg border border-slate-200
+                           text-slate-500 transition
+                           hover:bg-slate-50 hover:text-slate-700
+                           disabled:cursor-not-allowed
+                           disabled:opacity-40">
+
+                ›
+
+            </button>
+
+        </div>
+
+    </div>
+
+    <!-- ============================================================
+     YEAR GRID
+     ============================================================ -->
+    <div class="w-full p-4">
+
+        <!-- Month labels -->
+        <div class="mb-2 flex">
+
+            <!-- Space for weekday labels -->
+            <div class="w-8 shrink-0"></div>
+
+            <div class="relative flex-1">
+
+                <div class="grid"
+                     style="@WeekGridStyle">
+
+                    @foreach (var month in MonthHeaders)
+                    {
+                        <div style="grid-column:@month.StartColumn;"
+                             class="text-[10px] font-medium text-slate-500">
+
+                            @month.Name
+
+                        </div>
+                    }
+
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- Calendar -->
+        <div class="flex w-full">
+
+            <div class="mr-2 grid w-8 shrink-0 grid-rows-7 gap-1">
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Sun
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Mon
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Tue
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Wed
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Thu
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Fri
+                </div>
+
+                <div class="flex items-center text-[9px] text-slate-400">
+                    Sat
+                </div>
+
+            </div>
+
+
+            <!-- ====================================================
+                 WEEK COLUMNS
+                 ==================================================== -->
+            <div class="grid flex-1 gap-1"
+                 style="@WeekGridStyle">
+
+                @foreach (var week in Weeks)
+                {
+                    <div class="grid min-w-0 grid-rows-7 gap-1">
+
+                        @foreach (var day in week.Days)
+                        {
+                            @if (day == null)
+                            {
+                                <div class="aspect-square w-full">
+                                </div>
+                            }
+                            else
+                            {
+                                var status =
+                                GetDayStatus(day.Value);
+
+                                <div class="group relative
+                                        aspect-square w-full">
+
+                                    <!-- Day Square -->
+                                    <div class="
+                                    h-full w-full
+                                    rounded-[2px]
+                                    border border-black/5
+                                    @GetDayClass(status)
+                                    transition
+                                    hover:ring-2
+                                    hover:ring-slate-400
+                                    hover:ring-offset-1">
+                                    </div>
+
+
+                                    <!-- Tooltip -->
+                                    <div class="
+                                    pointer-events-none
+                                    absolute bottom-full left-1/2
+                                    z-50 mb-2 hidden
+                                    -translate-x-1/2
+                                    whitespace-nowrap
+                                    rounded-md bg-slate-900
+                                    px-2.5 py-1.5
+                                    text-[10px] text-white
+                                    shadow-lg
+                                    group-hover:block">
+
+                                        <div class="font-medium">
+                                            @day.Value.ToString(
+                                                     "dddd, dd MMM yyyy")
+                                        </div>
+
+                                        <div class="mt-0.5 text-slate-300">
+                                            @GetStatusText(status)
+                                        </div>
+
+                                    </div>
+
+                                </div>
+                            }
+                        }
+
+                    </div>
+                }
+
+            </div>
+
+        </div>
+
+ 
+</div>
+
+
+
+
+
+
+    <!-- ============================================================
+         YEAR SUMMARY
+         ============================================================ -->
+    <div class="grid grid-cols-2 gap-4
+            border-t border-slate-100 p-4
+            sm:grid-cols-4">
+
+        <!-- Present -->
+        <div>
+            <div class="text-xl font-semibold text-slate-800">
+                @PresentDays
+            </div>
+
+            <div class="mt-1 flex items-center gap-1.5
+                    text-xs text-slate-500">
+                <span class="h-2.5 w-2.5 rounded-sm bg-green-500"></span>
+                Present
+            </div>
+        </div>
+
+
+        <!-- Absent -->
+        <div>
+            <div class="text-xl font-semibold text-slate-800">
+                @AbsentDays
+            </div>
+
+            <div class="mt-1 flex items-center gap-1.5
+                    text-xs text-slate-500">
+                <span class="h-2.5 w-2.5 rounded-sm bg-red-400"></span>
+                Absent
+            </div>
+        </div>
+
+
+        <!-- Unresolved -->
+        <div>
+            <div class="text-xl font-semibold text-slate-800">
+                @UnresolvedDays
+            </div>
+
+            <div class="mt-1 flex items-center gap-1.5
+                    text-xs text-slate-500">
+                <span class="h-2.5 w-2.5 rounded-sm bg-amber-400"></span>
+                Unresolved
+            </div>
+        </div>
+
+
+        <!-- Attendance Rate -->
+        <div>
+            <div class="text-xl font-semibold text-slate-800">
+                @AttendanceRate.ToString("0.0")%
+            </div>
+
+            <div class="mt-1 text-xs text-slate-500">
+                Attendance Rate
+            </div>
+        </div>
+
+    </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- ============================================================
+     LEGEND
+     ============================================================ -->
+<div class="mt-2 flex flex-wrap items-center justify-end gap-x-4 gap-y-2
+            border-t border-slate-100 pt-2 p-4
+            text-[11px] text-slate-500">
+
+    <!-- Present -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-green-500">
+        </span>
+
+        <span>Present</span>
+    </div>
+
+    <!-- Absent -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-red-400">
+        </span>
+
+        <span>Absent</span>
+    </div>
+
+    <!-- Unresolved -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-amber-400">
+        </span>
+
+        <span>Unresolved</span>
+    </div>
+
+    <!-- Leave -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-blue-400">
+        </span>
+
+        <span>Leave</span>
+    </div>
+
+    <!-- Holiday -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-purple-400">
+        </span>
+
+        <span>Holiday</span>
+    </div>
+
+    <!-- Rest Day -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-black/5 bg-slate-300">
+        </span>
+
+        <span>Rest Day</span>
+    </div>
+
+    <!-- No Data -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-slate-200 bg-slate-100">
+        </span>
+
+        <span>No Data</span>
+    </div>
+
+    <!-- Future -->
+    <div class="flex items-center gap-1.5">
+        <span class="h-3 w-3 rounded-[2px]
+                     border border-slate-200 bg-white">
+        </span>
+
+        <span>Future</span>
+    </div>
+
+</div>
+
+
+
+</div>
+@code {
+
+    // ==============================================================
+    // PARAMETERS
+    // ==============================================================
+
+    [Parameter]
+    public List<YearlyAttendanceDayDto>? Days { get; set; }
+
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+
+    [Parameter]
+    public EventCallback<int> YearChanged { get; set; }
+
+    private string WeekGridStyle => $"grid-template-columns: repeat({Weeks.Count}, minmax(0, 1fr));";
+
+
+    // ==============================================================
+    // STATE
+    // ==============================================================
+
+    private int Year = DateTime.Today.Year;
+
+
+    // ==============================================================
+    // YEAR NAVIGATION
+    // ==============================================================
+
+    private async Task PreviousYear()
+    {
+        Year--;
+
+        if (YearChanged.HasDelegate)
+        {
+            await YearChanged.InvokeAsync(Year);
+        }
+    }
+
+
+    private async Task NextYear()
+    {
+        if (Year >= DateTime.Today.Year)
+            return;
+
+        Year++;
+
+        if (YearChanged.HasDelegate)
+        {
+            await YearChanged.InvokeAsync(Year);
+        }
+    }
+
+
+    // ==============================================================
+    // WEEK GRID
+    //
+    // Sunday -> Saturday
+    // ==============================================================
+
+    private List<AttendanceWeek> Weeks
+    {
+        get
+        {
+            var result =
+                new List<AttendanceWeek>();
+
+            var firstDay =
+                new DateTime(Year, 1, 1);
+
+            var lastDay =
+                new DateTime(Year, 12, 31);
+
+
+            // Go backwards to the Sunday containing January 1
+            var gridStart =
+                firstDay.AddDays(
+                    -(int)firstDay.DayOfWeek);
+
+
+            // Go forward to the Saturday containing December 31
+            var daysUntilSaturday =
+                6 - (int)lastDay.DayOfWeek;
+
+            var gridEnd =
+                lastDay.AddDays(daysUntilSaturday);
+
+
+            var current =
+                gridStart;
+
+
+            while (current <= gridEnd)
+            {
+                var week =
+                    new AttendanceWeek();
+
+                for (var i = 0; i < 7; i++)
+                {
+                    var date =
+                        current.AddDays(i);
+
+                    if (date.Year == Year)
+                    {
+                        week.Days.Add(date);
+                    }
+                    else
+                    {
+                        week.Days.Add(null);
+                    }
+                }
+
+                result.Add(week);
+
+                current =
+                    current.AddDays(7);
+            }
+
+
+            return result;
+        }
+    }
+
+
+    // ==============================================================
+    // MONTH HEADERS
+    // ==============================================================
+
+    private List<MonthHeader> MonthHeaders
+    {
+        get
+        {
+            var weeks = Weeks;
+
+            var result = new List<MonthHeader>();
+
+            for (var month = 1; month <= 12; month++)
+            {
+                var firstDay =
+                    new DateTime(Year, month, 1);
+
+                var weekIndex = weeks.FindIndex(week =>
+                    week.Days.Any(day =>
+                        day.HasValue &&
+                        day.Value.Date == firstDay.Date));
+
+                if (weekIndex < 0)
+                    continue;
+
+                result.Add(new MonthHeader
+                    {
+                        Name = firstDay.ToString("MMM"),
+                        StartColumn = weekIndex + 1
+                    });
+            }
+
+            return result;
+        }
+    }
+
+
+    // ==============================================================
+    // DAY STATUS
+    // ==============================================================
+
+    private AttendanceDayStatus GetDayStatus(
+     DateTime date)
+    {
+        if (date.Date > DateTime.Today)
+        {
+            return AttendanceDayStatus.Future;
+        }
+
+        var day = Days?
+            .FirstOrDefault(x =>
+                x.Date.Date == date.Date);
+
+        if (day == null)
+        {
+            return AttendanceDayStatus.NoData;
+        }
+
+        if (day.IsOnLeave)
+        {
+            return AttendanceDayStatus.Leave;
+        }
+
+        if (day.IsHoliday)
+        {
+            return AttendanceDayStatus.Holiday;
+        }
+
+        if (day.IsRestDay)
+        {
+            return AttendanceDayStatus.RestDay;
+        }
+
+        if (day.IsPresent)
+        {
+            return AttendanceDayStatus.Present;
+        }
+
+        if (day.IsUnresolved)
+        {
+            return AttendanceDayStatus.Unresolved;
+        }
+
+        if (day.IsAbsent)
+        {
+            return AttendanceDayStatus.Absent;
+        }
+
+        return AttendanceDayStatus.NoData;
+    }
+
+
+    // ==============================================================
+    // STATUS CSS
+    // ==============================================================
+
+    private static string GetDayClass(
+        AttendanceDayStatus status)
+    {
+        return status switch
+        {
+            AttendanceDayStatus.Present =>
+                "bg-green-500",
+
+            AttendanceDayStatus.Absent =>
+                "bg-red-400",
+
+            AttendanceDayStatus.Unresolved =>
+                "bg-amber-400",
+
+            AttendanceDayStatus.Leave =>
+                "bg-blue-400",
+
+            AttendanceDayStatus.Holiday =>
+                "bg-purple-400",
+
+            AttendanceDayStatus.RestDay =>
+                "bg-slate-300",
+
+            AttendanceDayStatus.Future =>
+                "bg-white",
+
+            AttendanceDayStatus.NoData =>
+                "bg-slate-100",
+
+            _ =>
+                "bg-slate-100"
+        };
+    }
+
+
+    // ==============================================================
+    // STATUS TEXT
+    // ==============================================================
+
+    private static string GetStatusText(
+     AttendanceDayStatus status)
+    {
+        return status switch
+        {
+            AttendanceDayStatus.Present =>
+                "Present",
+
+            AttendanceDayStatus.Absent =>
+                "Absent",
+
+            AttendanceDayStatus.Unresolved =>
+                "Unresolved attendance",
+
+            AttendanceDayStatus.Leave =>
+                "On Leave",
+
+            AttendanceDayStatus.Holiday =>
+                "Holiday",
+
+            AttendanceDayStatus.RestDay =>
+                "Rest Day",
+
+            AttendanceDayStatus.Future =>
+                "Upcoming",
+
+            AttendanceDayStatus.NoData =>
+                "No attendance data",
+
+            _ =>
+                "No attendance data"
+        };
+    }
+
+
+    // ==============================================================
+    // PRESENT DAYS
+    // ==============================================================
+
+    private int PresentDays =>
+        GetYearDays()
+            .Count(x =>
+                GetDayStatus(x) ==
+                AttendanceDayStatus.Present);
+
+
+    // ==============================================================
+    // ABSENT DAYS
+    // ==============================================================
+
+    private int AbsentDays =>
+        GetYearDays()
+            .Count(x =>
+                GetDayStatus(x) ==
+                AttendanceDayStatus.Absent);
+
+
+    // ==============================================================
+    // UNRESOLVED DAYS
+    // ==============================================================
+
+    private int UnresolvedDays =>
+        GetYearDays()
+            .Count(x =>
+                GetDayStatus(x) ==
+                AttendanceDayStatus.Unresolved);
+
+
+    // ==============================================================
+    // ATTENDANCE RATE
+    // ==============================================================
+
+    private decimal AttendanceRate
+    {
+        get
+        {
+            var total =
+                PresentDays +
+                AbsentDays +
+                UnresolvedDays;
+
+            if (total == 0)
+                return 0;
+
+            return
+                (decimal)PresentDays /
+                total *
+                100m;
+        }
+    }
+
+
+    // ==============================================================
+    // DAYS IN SELECTED YEAR
+    // ==============================================================
+
+    private IEnumerable<DateTime> GetYearDays()
+    {
+        var start =
+            new DateTime(
+                Year,
+                1,
+                1);
+
+        var end =
+            Year == DateTime.Today.Year
+                ? DateTime.Today
+                : new DateTime(
+                    Year,
+                    12,
+                    31);
+
+
+        for (var date = start;
+             date <= end;
+             date = date.AddDays(1))
+        {
+            yield return date;
+        }
+    }
+
+
+    // ==============================================================
+    // INTERNAL MODELS
+    // ==============================================================
+
+    private sealed class AttendanceWeek
+    {
+        public List<DateTime?> Days { get; set; } = [];
+    }
+
+
+    private sealed class MonthHeader
+    {
+        public string Name { get; set; } = string.Empty;
+
+        public int StartColumn { get; set; }
+    }
+
+
+    private enum AttendanceDayStatus
+    {
+        NoData = 0,
+        Present = 1,
+        Absent = 2,
+        Unresolved = 3,
+        Future = 4,
+        Leave = 5,
+        Holiday = 6,
+        RestDay = 7
+    }
+
+
+ }

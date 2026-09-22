@@ -6,7 +6,7 @@
     <!-- ============================================================
          HEADER
          ============================================================ -->
-    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+    <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2">
 
         <div>
             <h3 class="text-base font-semibold text-slate-800">
@@ -14,7 +14,7 @@
             </h3>
 
             <p class="mt-0.5 text-xs text-slate-500">
-                Your attendance activity for the last 7 days
+                @WeekStart.ToString("dd MMM") - @WeekEnd.ToString("dd MMM yyyy")
             </p>
         </div>
 
@@ -30,6 +30,12 @@
                 Absent
             </span>
 
+              <span class="flex items-center gap-1">
+                <span class="h-2.5 w-2.5 rounded-full bg-gray-300"></span>
+                Upcomming
+            </span>
+
+
             <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-gray-600"></span>
                 Unresolved
@@ -43,22 +49,25 @@
     <!-- ============================================================
          BODY
          ============================================================ -->
-    <div class="p-5">
+    <div class="p-4">
 
         @if (WeeklyLogs == null)
         {
             <!-- Loading -->
-            <div class="flex min-h-28 items-center justify-center text-sm text-slate-500">
+            <div class="flex   items-center justify-center text-sm text-slate-500">
                 Loading attendance...
             </div>
         }
         else
         {
+            <!-- ====================================================
+                 SUNDAY -> SATURDAY
+                 ==================================================== -->
             <div class="grid grid-cols-7 gap-2">
 
-                @for (int i = 6; i >= 0; i--)
+                @for (int i = 0; i < 7; i++)
                 {
-                    var day = DateTime.Today.AddDays(-i);
+                    var day = WeekStart.AddDays(i);
 
                     var dayLogs = WeeklyLogs
                     .Where(x => x.Date.Date == day.Date)
@@ -83,53 +92,43 @@
                     .OrderByDescending(x => x.Date)
                     .FirstOrDefault();
 
-                    var hasResolvedAttendance =
-                        checkIn != null ||
-                        checkOut != null;
 
+                    // ------------------------------------------------
+                    // Attendance state
+                    // ------------------------------------------------
+                    var hasResolvedAttendance =
+                    checkIn != null ||
+                    checkOut != null;
 
                     var hasLogs =
                     dayLogs.Count > 0;
 
-                    // Only call the DAY unresolved when there are logs,
-                    // but none of them produced useful resolved attendance.
                     var isUnresolvedDay =
-                        hasLogs &&
-                        !hasResolvedAttendance;
+                    hasLogs &&
+                    !hasResolvedAttendance;
 
-
-
-                    // ------------------------------------------------
-                    // Resolution information
-                    // ------------------------------------------------
-                    var unresolvedCount = dayLogs
-                    .Count(x =>
-                    !x.IsResolved &&
-                    !x.IsIgnored);
-
-
-                    var ignoredCount = dayLogs
-                    .Count(x => x.IsIgnored);
-
-
-                    // Presence is based on a successfully resolved
-                    // Check In, NOT the old InOutModeID.
                     var isPresent =
                     checkIn != null;
 
 
                     // ------------------------------------------------
-                    // Determine display state
-                    //
-                    // Late/On-Time will later come from WorkPlan.
-                    // Do NOT hard-code 08:00 here.
+                    // Future day
+                    // ------------------------------------------------
+                    var isFutureDay =
+                    day.Date > DateTime.Today;
+
+
+                    // ------------------------------------------------
+                    // Display state
                     // ------------------------------------------------
                     var stateClass =
-                        isPresent
-                        ? "bg-green-500 text-white"
-                        : dayLogs.Count > 0
-                        ? "bg-slate-500 text-white"
-                        : "bg-red-500 text-white";
+                    isFutureDay
+                    ? "bg-slate-100 text-slate-400"
+                    : isPresent
+                    ? "bg-green-500 text-white"
+                    : isUnresolvedDay
+                    ? "bg-slate-500 text-white"
+                    : "bg-red-500 text-white";
 
 
                     <div class="flex min-w-0 flex-col items-center">
@@ -150,9 +149,23 @@
                             </div>
 
 
-                            @if (isPresent)
+                            @if (isFutureDay)
                             {
+                                <!-- Future day -->
+
+                                <span class="text-sm font-semibold">
+                                    --
+                                </span>
+
+                                <span class="mt-1 text-[10px] opacity-80">
+                                    Upcoming
+                                </span>
+                            }
+                            else if (isPresent)
+                            {
+                                <!-- Check In -->
                                 <div class="flex items-center justify-center gap-1">
+
                                     <span class="text-[10px] uppercase opacity-75">
                                         In
                                     </span>
@@ -160,9 +173,13 @@
                                     <span class="text-sm font-semibold">
                                         @checkIn!.Date.ToString("HH:mm")
                                     </span>
+
                                 </div>
 
+
+                                <!-- Check Out -->
                                 <div class="mt-1 flex items-center justify-center gap-1">
+
                                     <span class="text-[10px] uppercase opacity-75">
                                         Out
                                     </span>
@@ -179,28 +196,15 @@
                                             --
                                         </span>
                                     }
+
                                 </div>
-
-
-                                <!-- Unresolved indicator -->
-                                @if (isUnresolvedDay)
-                                {
-                                    <span class="text-sm font-semibold">
-                                        Unresolved
-                                    </span>
-
-                                    <span class="mt-1 text-[10px] opacity-80">
-                                        No resolved attendance
-                                    </span>
-                                }
                             }
-                            else if (dayLogs.Count > 0)
+                            else if (isUnresolvedDay)
                             {
-                                <!-- Logs exist but none resolved as Check In -->
+                                <!-- Logs exist but no useful resolution -->
 
                                 <span class="text-sm font-semibold">
                                     Unresolved
-
                                 </span>
 
                                 <span class="mt-1 text-[10px] opacity-80">
@@ -228,7 +232,9 @@
                             mt-2 text-xs font-medium
                             @(day.Date == DateTime.Today
                                 ? "text-blue-600"
-                                : "text-slate-600")">
+                                : isFutureDay
+                                    ? "text-slate-400"
+                                    : "text-slate-600")">
 
                             @day.ToString("ddd")
 
@@ -242,6 +248,13 @@
                                 Today
                             </span>
                         }
+                        else
+                        {
+                            <!-- Keeps row height consistent -->
+                            <span class="mt-0.5 text-[10px]">
+                                &nbsp;
+                            </span>
+                        }
 
                     </div>
                 }
@@ -252,7 +265,7 @@
             <!-- ====================================================
                  WEEK SUMMARY
                  ==================================================== -->
-            <div class="mt-6 grid grid-cols-3 divide-x divide-slate-200
+            @* <div class="mt-6 grid grid-cols-3 divide-x divide-slate-200
                         rounded-lg border border-slate-200 bg-slate-50 py-3">
 
                 <!-- Present -->
@@ -296,7 +309,7 @@
 
                 </div>
 
-            </div>
+            </div> *@
         }
 
     </div>
@@ -315,9 +328,33 @@
 
 
     // ==============================================================
+    // CURRENT WEEK
+    //
+    // Sunday -> Saturday
+    // ==============================================================
+
+    private DateTime WeekStart
+    {
+        get
+        {
+            var today = DateTime.Today;
+
+            return today.AddDays(
+                -(int)today.DayOfWeek);
+        }
+    }
+
+
+    private DateTime WeekEnd =>
+        WeekStart.AddDays(6);
+
+
+    // ==============================================================
     // PRESENT DAYS
     //
-    // A day is Present only when there is a resolved Check In.
+    // Present only when there is a resolved Check In.
+    //
+    // Future days are ignored.
     // ==============================================================
 
     private int PresentDays
@@ -329,8 +366,9 @@
 
             return Enumerable
                 .Range(0, 7)
-                .Select(i =>
-                    DateTime.Today.AddDays(-i).Date)
+                .Select(i => WeekStart.AddDays(i).Date)
+                .Where(day =>
+                    day <= DateTime.Today)
                 .Count(day =>
                     WeeklyLogs.Any(x =>
                         x.Date.Date == day &&
@@ -340,27 +378,9 @@
 
 
     // ==============================================================
-    // ABSENT DAYS
+    // UNRESOLVED DAYS
     //
-    // Currently:
-    // No resolved Check In = absent.
-    //
-    // IMPORTANT:
-    // Later this should use WorkPlan so OFF DAYS / REST DAYS
-    // are not incorrectly counted as absent.
-    // ==============================================================
-
-    private int AbsentDays
-    {
-        get
-        {
-            return 7 - PresentDays;
-        }
-    }
-
-
-    // ==============================================================
-    // UNRESOLVED CLOCK EVENTS
+    // Logs exist, but no resolved CheckIn or CheckOut.
     // ==============================================================
 
     private int UnresolvedDays
@@ -372,11 +392,14 @@
 
             return Enumerable
                 .Range(0, 7)
-                .Select(i => DateTime.Today.AddDays(-i).Date)
+                .Select(i => WeekStart.AddDays(i).Date)
+                .Where(day =>
+                    day <= DateTime.Today)
                 .Count(day =>
                 {
                     var logs = WeeklyLogs
-                        .Where(x => x.Date.Date == day)
+                        .Where(x =>
+                            x.Date.Date == day)
                         .ToList();
 
                     if (logs.Count == 0)
@@ -385,6 +408,53 @@
                     return !logs.Any(x =>
                         x.IsCheckIn ||
                         x.IsCheckOut);
+                });
+        }
+    }
+
+
+    // ==============================================================
+    // ABSENT DAYS
+    //
+    // Only count days from Sunday through today.
+    //
+    // Future days are NOT counted as absent.
+    //
+    // IMPORTANT:
+    // Eventually this should use WorkPlan so OFF / REST days
+    // are not counted as absent.
+    // ==============================================================
+
+    private int AbsentDays
+    {
+        get
+        {
+            if (WeeklyLogs == null)
+                return 0;
+
+            return Enumerable
+                .Range(0, 7)
+                .Select(i => WeekStart.AddDays(i).Date)
+                .Where(day =>
+                    day <= DateTime.Today)
+                .Count(day =>
+                {
+                    var logs = WeeklyLogs
+                        .Where(x =>
+                            x.Date.Date == day)
+                        .ToList();
+
+                    // Unresolved is handled separately.
+                    if (logs.Count > 0 &&
+                        !logs.Any(x =>
+                            x.IsCheckIn ||
+                            x.IsCheckOut))
+                    {
+                        return false;
+                    }
+
+                    return !logs.Any(x =>
+                        x.IsCheckIn);
                 });
         }
     }

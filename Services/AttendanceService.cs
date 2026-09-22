@@ -15,13 +15,17 @@ namespace HRM.Services
         private readonly IUserAccessService _userAccessService;
         private readonly IAttendancePlanService _attendancePlanService;
 
+        private readonly ILogger<AttendanceService> _logger;
 
-        public AttendanceService(IDbContextFactory<HrmTeContext> factory, IAttendanceLogDataLoader loader, IUserAccessService userAccessService, IAttendancePlanService attendancePlanService)
+
+        public AttendanceService(IDbContextFactory<HrmTeContext> factory, IAttendanceLogDataLoader loader, IUserAccessService userAccessService, IAttendancePlanService attendancePlanService, ILogger<AttendanceService> logger)
         {
             _dbFactory = factory;
             _loader = loader;
             _userAccessService = userAccessService;
             _attendancePlanService = attendancePlanService;
+            _logger = logger;
+
         }
 
         public async Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId)
@@ -565,39 +569,64 @@ namespace HRM.Services
                 today.AddDays(-(int)today.DayOfWeek);
 
             var currentWeekEnd =
+                currentWeekStart.AddDays(6);
+
+            // Exclusive boundary for database queries
+            var currentWeekEndExclusive =
                 currentWeekStart.AddDays(7);
 
             // ---------------------------------------------------------
-            // Previous week
+            // Previous week: Sunday -> Saturday
             // ---------------------------------------------------------
             var previousWeekStart =
                 currentWeekStart.AddDays(-7);
 
             var previousWeekEnd =
+                currentWeekStart.AddDays(-1);
+
+            // Exclusive boundary
+            var previousWeekEndExclusive =
                 currentWeekStart;
 
-            // We only need two weeks of logs.
+
             var logs = await db.AttendanceLogs
-                .AsNoTracking()
-                .Include(x => x.AttendanceLogResolutions)
-                .Where(x =>
-                    x.IndividualId == userContext.IndividualId &&
-                    x.Date >= previousWeekStart &&
-                    x.Date < currentWeekEnd)
-                .OrderBy(x => x.Date)
-                .ToListAsync();
+            .AsNoTracking()
+            .Include(x => x.AttendanceLogResolutions)
+            .Where(x =>
+                x.IndividualId == userContext.IndividualId &&
+                x.Date >= previousWeekStart &&
+                x.Date < currentWeekEndExclusive)
+            .OrderBy(x => x.Date)
+            .ToListAsync();
+
+
+
+
+            foreach (var log in logs)
+            {
+                var resolution = log.AttendanceLogResolutions
+                    .OrderByDescending(x =>
+                        x.AttendanceLogResolutionId)
+                    .FirstOrDefault();
+ 
+            }
+
 
             var currentWeekHours =
                 CalculateWorkedHours(
                     logs,
                     currentWeekStart,
-                    currentWeekEnd);
+                    DateTime.Now);
 
             var previousWeekHours =
                 CalculateWorkedHours(
                     logs,
                     previousWeekStart,
-                    previousWeekEnd);
+                    previousWeekEndExclusive);
+
+
+
+
 
             return new WeeklyWorkedHoursDto
             {
@@ -610,33 +639,230 @@ namespace HRM.Services
         }
 
 
-
-        private static decimal CalculateWorkedHours(
-    List<AttendanceLog> logs,
-    DateTime fromDate,
-    DateTime toDate)
+        private decimal CalculateWorkedHours(
+            List<AttendanceLog> logs,
+            DateTime fromDate,
+            DateTime toDate)
         {
-            var periodLogs = logs
+            decimal totalMinutes = 0;
+
+            // ---------------------------------------------------------
+            // Get all resolved events in the requested period
+            // ---------------------------------------------------------
+            var resolvedEvents = logs
                 .Where(x =>
                     x.Date >= fromDate &&
-                    x.Date < toDate)
-                .OrderBy(x => x.Date)
+                    x.Date <= toDate)
+                .SelectMany(log =>
+                {
+                    var resolution = log.AttendanceLogResolutions
+                        .OrderByDescending(x =>
+                            x.AttendanceLogResolutionId)
+                        .Take(1);
+
+                    return resolution.Select(r => new
+                    {
+                        Log = log,
+                        Resolution = r
+                    });
+                })
+                .Where(x =>
+                    x.Resolution.WorkPlanId > 0)
+                .OrderBy(x => x.Log.Date)
                 .ToList();
 
-            decimal totalHours = 0;
-
             // ---------------------------------------------------------
-            // Process each day independently
+            // Group by WorkPlan instead of calendar date
             // ---------------------------------------------------------
-            var days = periodLogs
-                .GroupBy(x => x.Date.Date);
+            var workPlans = resolvedEvents
+                .GroupBy(x => x.Resolution.WorkPlanId)
+                .ToList();
 
-            foreach (var day in days)
+            foreach (var workPlan in workPlans)
             {
-                var resolvedLogs = day
+                var events = workPlan
+                    .OrderBy(x => x.Log.Date)
+                    .ToList();
+
+                // -----------------------------------------------------
+                // First valid CheckIn
+                // -----------------------------------------------------
+                var checkIn = events
+                    .FirstOrDefault(x =>
+                        x.Resolution.AttendanceClockTypeId ==
+                        (int)AttendanceClockType.CheckIn);
+
+                if (checkIn == null)
+                {
+                    continue;
+                }
+
+                // -----------------------------------------------------
+                // Last CheckOut AFTER CheckIn
+                // -----------------------------------------------------
+                var checkOut = events
+                    .Where(x =>
+                        x.Resolution.AttendanceClockTypeId ==
+                            (int)AttendanceClockType.CheckOut &&
+                        x.Log.Date > checkIn.Log.Date)
+                    .OrderByDescending(x => x.Log.Date)
+                    .FirstOrDefault();
+
+                if (checkOut == null)
+                {
+                    continue;
+                }
+
+                // -----------------------------------------------------
+                // Calculate duration
+                // -----------------------------------------------------
+                var workedMinutes =
+                    (checkOut.Log.Date - checkIn.Log.Date)
+                    .TotalMinutes;
+
+                if (workedMinutes <= 0)
+                {
+                    continue;
+                }
+
+                totalMinutes +=
+                    (decimal)workedMinutes;
+            }
+
+            return totalMinutes / 60m;
+        }
+
+
+
+
+        public async Task<List<YearlyAttendanceDayDto>>
+        GetMyYearlyAttendanceAsync(
+            int year,
+            CancellationToken cancellationToken = default)
+        {
+            // ---------------------------------------------------------
+            // Validate year
+            // ---------------------------------------------------------
+            if (year < 2000 || year > DateTime.Today.Year)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(year),
+                    "Invalid attendance year.");
+            }
+
+
+            // ---------------------------------------------------------
+            // Current user
+            // ---------------------------------------------------------
+            var userContext =
+                await _userAccessService.RequireContextAsync();
+
+
+            // ---------------------------------------------------------
+            // Database
+            // ---------------------------------------------------------
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(
+                    cancellationToken);
+
+
+            // ---------------------------------------------------------
+            // Year boundaries
+            //
+            // Inclusive start
+            // Exclusive end
+            // ---------------------------------------------------------
+            var yearStart =
+                new DateTime(
+                    year,
+                    1,
+                    1);
+
+            var yearEndExclusive =
+                yearStart.AddYears(1);
+
+
+            // ---------------------------------------------------------
+            // Do not include future attendance
+            // ---------------------------------------------------------
+            var queryEnd =
+                year == DateTime.Today.Year
+                    ? DateTime.Now
+                    : yearEndExclusive;
+
+
+            // ---------------------------------------------------------
+            // Load attendance logs
+            // ---------------------------------------------------------
+            var logs = await db.AttendanceLogs
+                .AsNoTracking()
+                .Include(x =>
+                    x.AttendanceLogResolutions)
+                .Where(x =>
+                    x.IndividualId ==
+                        userContext.IndividualId &&
+
+                    x.Date >= yearStart &&
+
+                    x.Date < queryEnd)
+                .OrderBy(x => x.Date)
+                .ToListAsync(cancellationToken);
+
+
+            // ---------------------------------------------------------
+            // Group logs by calendar date
+            //
+            // NOTE:
+            // For the yearly overview, calendar-date grouping is fine.
+            //
+            // Worked-hour calculations may later need WorkPlan grouping
+            // for overnight assignments.
+            // ---------------------------------------------------------
+            var logsByDate = logs
+                .GroupBy(x => x.Date.Date)
+                .ToDictionary(
+                    x => x.Key,
+                    x => x
+                        .OrderBy(log => log.Date)
+                        .ToList());
+
+
+            // ---------------------------------------------------------
+            // Determine last date to generate
+            // ---------------------------------------------------------
+            var lastDate =
+                year == DateTime.Today.Year
+                    ? DateTime.Today
+                    : new DateTime(
+                        year,
+                        12,
+                        31);
+
+
+            var result =
+                new List<YearlyAttendanceDayDto>();
+
+
+            // ---------------------------------------------------------
+            // Generate one DTO per calendar day
+            // ---------------------------------------------------------
+            for (var date = yearStart.Date;
+                 date <= lastDate.Date;
+                 date = date.AddDays(1))
+            {
+                logsByDate.TryGetValue(
+                    date,
+                    out var dayLogs);
+
+                dayLogs ??= [];
+
+
+                // -----------------------------------------------------
+                // Get effective resolution for every physical log
+                // -----------------------------------------------------
+                var events = dayLogs
                     .Select(log =>
                     {
-                        // Latest resolution wins
                         var resolution =
                             log.AttendanceLogResolutions
                                 .OrderByDescending(x =>
@@ -649,49 +875,239 @@ namespace HRM.Services
                             Resolution = resolution
                         };
                     })
-                    .Where(x => x.Resolution != null)
                     .OrderBy(x => x.Log.Date)
                     .ToList();
 
-                // -----------------------------------------------------
-                // Find resolved CheckIn
-                // -----------------------------------------------------
-                var checkIn = resolvedLogs
-                    .FirstOrDefault(x =>
-                        x.Resolution!.AttendanceClockTypeId ==
-                        (int)AttendanceClockType.CheckIn);
 
                 // -----------------------------------------------------
-                // Find resolved CheckOut
+                // Resolved Check Ins
                 // -----------------------------------------------------
-                var checkOut = resolvedLogs
-                    .LastOrDefault(x =>
-                        x.Resolution!.AttendanceClockTypeId ==
-                        (int)AttendanceClockType.CheckOut);
+                var checkIns = events
+                    .Where(x =>
+                        x.Resolution != null &&
 
-                if (checkIn == null ||
-                    checkOut == null)
+                        x.Resolution
+                            .AttendanceClockTypeId ==
+                        (int)AttendanceClockType.CheckIn)
+                    .OrderBy(x =>
+                        x.Log.Date)
+                    .ToList();
+
+
+                // -----------------------------------------------------
+                // Resolved Check Outs
+                // -----------------------------------------------------
+                var checkOuts = events
+                    .Where(x =>
+                        x.Resolution != null &&
+
+                        x.Resolution
+                            .AttendanceClockTypeId ==
+                        (int)AttendanceClockType.CheckOut)
+                    .OrderBy(x =>
+                        x.Log.Date)
+                    .ToList();
+
+
+                // -----------------------------------------------------
+                // Ignored events
+                // -----------------------------------------------------
+                var ignoredEvents = events
+                    .Where(x =>
+                        x.Resolution != null &&
+
+                        x.Resolution
+                            .AttendanceClockTypeId ==
+                        (int)AttendanceClockType.Ignored)
+                    .ToList();
+
+
+                // -----------------------------------------------------
+                // Useful resolved events
+                // -----------------------------------------------------
+                var resolvedEvents = events
+                    .Where(x =>
+                        x.Resolution != null &&
+                        (
+                            x.Resolution
+                                .AttendanceClockTypeId ==
+                            (int)AttendanceClockType.CheckIn
+                            ||
+                            x.Resolution
+                                .AttendanceClockTypeId ==
+                            (int)AttendanceClockType.CheckOut
+                        ))
+                    .ToList();
+
+
+                // -----------------------------------------------------
+                // Unresolved events
+                //
+                // No resolution OR resolution has not produced a
+                // meaningful attendance clock type.
+                //
+                // Ignored events are not considered unresolved.
+                // -----------------------------------------------------
+                var unresolvedEvents = events
+                    .Where(x =>
+                        x.Resolution == null ||
+                        (
+                            x.Resolution
+                                .AttendanceClockTypeId !=
+                            (int)AttendanceClockType.CheckIn
+                            &&
+                            x.Resolution
+                                .AttendanceClockTypeId !=
+                            (int)AttendanceClockType.CheckOut
+                            &&
+                            x.Resolution
+                                .AttendanceClockTypeId !=
+                            (int)AttendanceClockType.Ignored
+                        ))
+                    .ToList();
+
+
+                // -----------------------------------------------------
+                // First Check In
+                // -----------------------------------------------------
+                var firstCheckIn =
+                    checkIns.FirstOrDefault();
+
+
+                // -----------------------------------------------------
+                // Last Check Out
+                // -----------------------------------------------------
+                var lastCheckOut =
+                    checkOuts.LastOrDefault();
+
+
+                // -----------------------------------------------------
+                // Worked hours
+                //
+                // Temporary/simple calculation:
+                //
+                // First CheckIn -> Last CheckOut
+                //
+                // We will later replace this with WorkPlan/segment
+                // calculation so breaks and overnight work are handled
+                // properly.
+                // -----------------------------------------------------
+                decimal workedHours = 0;
+
+                if (firstCheckIn != null &&
+                    lastCheckOut != null &&
+                    lastCheckOut.Log.Date >
+                    firstCheckIn.Log.Date)
                 {
-                    // Incomplete day.
-                    // Don't invent worked hours.
-                    continue;
+                    var worked =
+                        lastCheckOut.Log.Date -
+                        firstCheckIn.Log.Date;
+
+                    workedHours =
+                        Math.Round(
+                            (decimal)worked.TotalHours,
+                            2);
                 }
 
-                if (checkOut.Log.Date <= checkIn.Log.Date)
-                {
-                    continue;
-                }
 
-                var worked =
-                    checkOut.Log.Date -
-                    checkIn.Log.Date;
+                // -----------------------------------------------------
+                // Attendance state
+                // -----------------------------------------------------
 
-                totalHours +=
-                    (decimal)worked.TotalHours;
+                // Presence is determined by successfully resolved
+                // CheckIn.
+                var isPresent =
+                    firstCheckIn != null;
+
+
+                // There were physical clock events but none of them
+                // resulted in useful attendance.
+                var isUnresolved =
+                    dayLogs.Count > 0 &&
+                    !isPresent &&
+                    resolvedEvents.Count == 0 &&
+                    unresolvedEvents.Count > 0;
+
+
+                /*
+                 * TEMPORARY ABSENCE RULE
+                 *
+                 * At this stage we do not yet know whether the employee
+                 * was actually scheduled to work.
+                 *
+                 * Eventually absence MUST come from WorkPlan:
+                 *
+                 * Has required attendance WorkPlan
+                 *        +
+                 * no valid CheckIn
+                 *        =
+                 * absent
+                 *
+                 * For now this preserves the behaviour of the existing
+                 * attendance summary.
+                 */
+                var isAbsent =
+                    !isPresent &&
+                    !isUnresolved;
+
+
+                // -----------------------------------------------------
+                // Add day
+                // -----------------------------------------------------
+                result.Add(
+                    new YearlyAttendanceDayDto
+                    {
+                        Date =
+                            date,
+
+                        HasAttendanceLogs =
+                            dayLogs.Count > 0,
+
+                        ClockEventCount =
+                            dayLogs.Count,
+
+                        ResolvedEventCount =
+                            resolvedEvents.Count,
+
+                        UnresolvedEventCount =
+                            unresolvedEvents.Count,
+
+                        FirstCheckIn =
+                            firstCheckIn?.Log.Date,
+
+                        LastCheckOut =
+                            lastCheckOut?.Log.Date,
+
+                        WorkedHours =
+                            workedHours,
+
+                        IsPresent =
+                            isPresent,
+
+                        IsAbsent =
+                            isAbsent,
+
+                        IsUnresolved =
+                            isUnresolved,
+
+                        // These will be implemented from the
+                        // appropriate modules later.
+                        IsRestDay =
+                            false,
+
+                        IsOnLeave =
+                            false,
+
+                        IsHoliday =
+                            false
+                    });
             }
 
-            return totalHours;
+
+            return result;
         }
+
+
 
     }
 }

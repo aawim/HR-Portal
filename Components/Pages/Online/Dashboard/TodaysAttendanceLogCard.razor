@@ -1,207 +1,433 @@
-﻿@using HRM.Components.Tools
-@using HRM.DTOs.Attendance
+﻿@using HRM.DTOs.Attendance
 @using HRM.Enum
-@using HRM.Models
-@using HRM.Services
 @using HRM.Services.Attendance.Abstraction
-@using HRM.Services.Attendance.AttendancePlan
 @using HRM.Services.Interfaces
 
 @inject IUserAccessService UserAccessService
-@* @inject IAttendance AttendanceLogService *@
 @inject IAttendanceService AttendanceService
 
-@inject IAttendanceResolver AttendanceResolver
+
+<div class="h-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+
+    <!-- ============================================================
+         HEADER
+         ============================================================ -->
+    <div class="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+
+        <div>
+            <h3 class="text-base font-semibold text-slate-800">
+                Today's Attendance
+            </h3>
+
+            <p class="mt-0.5 text-xs text-slate-500">
+                @DateTime.Today.ToString("dddd, dd MMMM yyyy")
+            </p>
+        </div>
 
 
-@inject AttendanceLogService AttendanceLogService
+        <!-- Event Count -->
+        <span class="rounded-full bg-slate-100 px-2.5 py-1
+                     text-xs font-medium text-slate-600">
 
-@inject IAttendancePlanService AttendancePlanService
+            @_attendanceLogs.Count
+            event@(_attendanceLogs.Count == 1 ? "" : "s")
 
-<div class="bg-white rounded-xl shadow-sm border p-2">
+        </span>
 
- 
+    </div>
 
-        @if (_attendanceLogs.Count == 0)
+
+    <!-- ============================================================
+         BODY
+         ============================================================ -->
+    <div class="p-5">
+
+        @if (_isLoading)
         {
-            <div class="p-5 text-sm text-slate-500">
-                No attendance logs found.
+            <!-- Loading -->
+
+            <div class="flex min-h-36 items-center justify-center">
+
+                <div class="text-center">
+
+                    <div class="mx-auto h-5 w-5 animate-spin
+                                rounded-full border-2 border-slate-300
+                                border-t-blue-600">
+                    </div>
+
+                    <div class="mt-2 text-xs text-slate-500">
+                        Loading attendance...
+                    </div>
+
+                </div>
+
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <!-- Error -->
+
+            <div class="rounded-lg border border-red-200
+                        bg-red-50 p-4">
+
+                <div class="text-sm font-medium text-red-700">
+                    Unable to load attendance
+                </div>
+
+                <div class="mt-1 text-xs text-red-600">
+                    @_errorMessage
+                </div>
+
+            </div>
+        }
+        else if (_attendanceLogs.Count == 0)
+        {
+            <!-- No Attendance -->
+
+            <div class="flex min-h-36 items-center justify-center">
+
+                <div class="text-center">
+
+                    <div class="mx-auto flex h-10 w-10
+                                items-center justify-center
+                                rounded-full bg-slate-100">
+
+                        <svg xmlns="http://www.w3.org/2000/svg"
+                             fill="none"
+                             viewBox="0 0 24 24"
+                             stroke-width="1.5"
+                             stroke="currentColor"
+                             class="h-5 w-5 text-slate-400">
+
+                            <path stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0
+                                     9 9 0 0 1 18 0Z" />
+
+                        </svg>
+
+                    </div>
+
+                    <div class="mt-3 text-sm font-medium text-slate-700">
+                        No attendance yet
+                    </div>
+
+                    <div class="mt-1 text-xs text-slate-500">
+                        Your clock events will appear here.
+                    </div>
+
+                </div>
+
             </div>
         }
         else
         {
-            <div class="divide-y divide-slate-100">
+            <!-- ====================================================
+                 ATTENDANCE EVENTS
+                 ==================================================== -->
 
-                @if (_attendanceLogs.Count > 0)
+            <div class="space-y-2">
+
+                @foreach (var log in _attendanceLogs
+               .OrderByDescending(x => x.LogDateTime))
                 {
-                    <div class="mt-2 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <div class="rounded-lg border border-slate-200
+                                bg-slate-50 px-4 py-3">
 
-                        <div class="border-b border-slate-200 px-4 py-2">
+                        <div class="flex items-start justify-between gap-4">
 
-                            <div class="font-semibold text-slate-800">
-                                Attendance Logs
-                            </div>
+                            <!-- LEFT -->
+                            <div class="min-w-0">
 
-                            <div class="mt-1 text-xs text-slate-500">
-                                @_attendanceLogs.Count event(s)
-                            </div>
+                                <!-- Time -->
+                                <div class="flex items-center gap-2">
 
-                        </div>
+                                    <span class="text-base font-semibold text-slate-800">
+                                        @log.LogDateTime.ToString("hh:mm:ss tt")
+                                    </span>
 
-                        <div class="divide-y divide-slate-100">
-
-                            @foreach (var log in _attendanceLogs)
-                            {
-                                <div class="px-4 py-2">
-
-                                    <div class="flex items-center justify-between gap-2">
-
-                                        <div>
-
-                                            <div class="font-medium text-slate-800">
-                                                @log.LogDateTime.ToString("hh:mm:ss tt")
-                                            </div>
-
-                                            <div class="mt-1 text-xs text-slate-500">
-
-                                                @if (!string.IsNullOrWhiteSpace(log.SegmentName))
-                                                {
-                                                    <span>@log.SegmentName</span>
-                                                }
-                                                else
-                                                {
-                                                    <span>No matching segment</span>
-                                                }
-
-                                            </div>
-
-                                        </div>
+                                </div>
 
 
-                                        <div>
+                                <!-- Segment -->
+                                <div class="mt-1 text-xs text-slate-500">
 
-                                            @if (log.ClockType ==
-                                           AttendanceClockType.CheckIn)
-                                            {
-                                                <span class="rounded-full bg-green-100   text-xs
-                                             font-medium text-green-700">
-                                                    Check In
-                                                </span>
-                                            }
-                                            else if (log.ClockType ==
-                                            AttendanceClockType.CheckOut)
-                                            {
-                                                <span class="rounded-full bg-blue-100
-                                              text-xs
-                                             font-medium text-blue-700">
-                                                    Check Out
-                                                </span>
-                                            }
-                                            else
-                                            {
-                                                <span class="rounded-full bg-slate-100
-                                              text-xs
-                                             font-medium text-slate-600">
-                                                    Unresolved
-                                                </span>
-                                            }
-
-                                        </div>
-
-                                    </div>
-
-
-                                    @if (!string.IsNullOrWhiteSpace(
-                                   log.ResolutionMessage))
+                                    @if (!string.IsNullOrWhiteSpace(log.SegmentName))
                                     {
-                                        <div class="mt-2 text-xs text-slate-500">
-                                            @log.ResolutionMessage
-                                        </div>
+                                        <span>
+                                            @log.SegmentName
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="italic text-slate-400">
+                                            No matching segment
+                                        </span>
                                     }
 
                                 </div>
-                            }
+
+
+                                <!-- Resolution Message -->
+                                @if (!string.IsNullOrWhiteSpace(log.ResolutionMessage))
+                                {
+                                    <div class="mt-2 text-xs text-slate-500">
+                                        @log.ResolutionMessage
+                                    </div>
+                                }
+
+                            </div>
+
+
+                            <!-- RIGHT / STATUS -->
+                            <div class="shrink-0">
+
+                                @if (log.ClockType == AttendanceClockType.CheckIn)
+                                {
+                                    <span class="inline-flex items-center gap-1.5
+                                                 rounded-full bg-green-100
+                                                 px-2.5 py-1
+                                                 text-xs font-medium
+                                                 text-green-700">
+
+                                        <span class="h-1.5 w-1.5 rounded-full
+                                                     bg-green-500">
+                                        </span>
+
+                                        Check In
+
+                                    </span>
+                                }
+                                else if (log.ClockType == AttendanceClockType.CheckOut)
+                                {
+                                    <span class="inline-flex items-center gap-1.5
+                                                 rounded-full bg-blue-100
+                                                 px-2.5 py-1
+                                                 text-xs font-medium
+                                                 text-blue-700">
+
+                                        <span class="h-1.5 w-1.5 rounded-full
+                                                     bg-blue-500">
+                                        </span>
+
+                                        Check Out
+
+                                    </span>
+                                }
+                                else if (log.ClockType == AttendanceClockType.Ignored)
+                                {
+                                    <span class="inline-flex items-center gap-1.5
+                                                 rounded-full bg-amber-100
+                                                 px-2.5 py-1
+                                                 text-xs font-medium
+                                                 text-amber-700">
+
+                                        <span class="h-1.5 w-1.5 rounded-full
+                                                     bg-amber-500">
+                                        </span>
+
+                                        Ignored
+
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex items-center gap-1.5
+                                                 rounded-full bg-slate-100
+                                                 px-2.5 py-1
+                                                 text-xs font-medium
+                                                 text-slate-600">
+
+                                        <span class="h-1.5 w-1.5 rounded-full
+                                                     bg-slate-400">
+                                        </span>
+
+                                        Unresolved
+
+                                    </span>
+                                }
+
+                            </div>
 
                         </div>
 
                     </div>
                 }
 
-               
-
             </div>
         }
 
     </div>
-    @* Only for testing ends *@
 
 
- 
+    <!-- ============================================================
+         FOOTER
+         ============================================================ -->
+    @if (!_isLoading &&
+    string.IsNullOrWhiteSpace(_errorMessage) &&
+    _attendanceLogs.Count > 0)
+    {
+        <div class="border-t border-slate-100 bg-slate-50
+                    px-5 py-3">
+
+            <div class="flex items-center justify-between text-xs">
+
+                <span class="text-slate-500">
+                    First clock
+                </span>
+
+                <span class="font-medium text-slate-700">
+                    @FirstClockTime
+                </span>
+
+            </div>
+
+
+            <div class="mt-1.5 flex items-center justify-between text-xs">
+
+                <span class="text-slate-500">
+                    Latest clock
+                </span>
+
+                <span class="font-medium text-slate-700">
+                    @LatestClockTime
+                </span>
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
 
 @code {
 
+    // ==============================================================
+    // PARAMETERS
+    // ==============================================================
+
+    [Parameter]
+    public int RefreshKey { get; set; }
 
 
-
-    // Only for tetsing
-    private bool _useTestTime = false;
-
-    private DateTime _testDate = DateTime.Today;
-
-    private TimeOnly? _testTime = TimeOnly.FromDateTime(DateTime.Now);
-
-    private DateTime GetAttendanceTimestamp()
-    {
-        if (!_useTestTime)
-            return DateTime.Now;
-
-        if (!_testTime.HasValue)
-        {
-            throw new InvalidOperationException(
-                "Please select a test time.");
-        }
-
-        var time = _testTime.Value;
-
-        return new DateTime(
-            _testDate.Year,
-            _testDate.Month,
-            _testDate.Day,
-            time.Hour,
-            time.Minute,
-            time.Second);
-    }
-
-
- 
+    // ==============================================================
+    // STATE
+    // ==============================================================
 
     private List<AttendanceRawLogDto> _attendanceLogs = [];
 
- 
+    private bool _isLoading = true;
 
-    [Parameter]
-    public EventCallback OnClock { get; set; }
- 
+    private string? _errorMessage;
 
-    private bool ProcessingClock;
+    private int _lastRefreshKey = -1;
 
-    protected override async Task OnInitializedAsync()
+
+    // ==============================================================
+    // COMPONENT LIFECYCLE
+    //
+    // Do NOT also load in OnInitializedAsync.
+    //
+    // OnParametersSetAsync runs during the initial render and whenever
+    // RefreshKey changes.
+    // ==============================================================
+
+    protected override async Task OnParametersSetAsync()
     {
-        var attendanceTime = GetAttendanceTimestamp();
+        if (_lastRefreshKey == RefreshKey)
+            return;
 
-        var context = await UserAccessService.RequireContextAsync();
+        _lastRefreshKey = RefreshKey;
 
- 
-        _attendanceLogs = await AttendanceService.GetLogsAsync(
-            context.IndividualId,
-            context.ActiveJob.JobId,
-            attendanceTime);
- 
+        await LoadAttendanceAsync();
     }
 
- 
- 
 
- 
+    // ==============================================================
+    // LOAD TODAY'S ATTENDANCE
+    // ==============================================================
 
+    private async Task LoadAttendanceAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = null;
+
+            var context =
+                await UserAccessService.RequireContextAsync();
+
+            /*
+            * This card represents TODAY.
+                 *
+            * Do not use the TimeClockCard test timestamp here.
+                 * The TimeClockCard is responsible for creating clock events.
+                 * This component only displays today's attendance.
+            */
+                            var attendanceTime = DateTime.Now;
+
+            var logs =
+                                await AttendanceService.GetLogsAsync(
+                                    context.IndividualId,
+                                    context.ActiveJob.JobId,
+                                    attendanceTime);
+
+            _attendanceLogs = logs?
+                                .OrderBy(x => x.LogDateTime)
+                                .ToList()
+                                ?? [];
+        }
+        catch (Exception ex)
+        {
+            _attendanceLogs = [];
+
+            _errorMessage =
+                ex.Message;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+
+    // ==============================================================
+    // FIRST CLOCK
+    // ==============================================================
+
+    private string FirstClockTime
+    {
+        get
+        {
+            if (_attendanceLogs.Count == 0)
+                return "--";
+
+            return _attendanceLogs
+                .MinBy(x => x.LogDateTime)?
+                .LogDateTime
+                .ToString("hh:mm:ss tt")
+                ?? "--";
+        }
+    }
+
+
+    // ==============================================================
+    // LATEST CLOCK
+    // ==============================================================
+
+    private string LatestClockTime
+    {
+        get
+        {
+            if (_attendanceLogs.Count == 0)
+                return "--";
+
+            return _attendanceLogs
+                .MaxBy(x => x.LogDateTime)?
+                .LogDateTime
+                .ToString("hh:mm:ss tt")
+                ?? "--";
+        }
+    }
 }

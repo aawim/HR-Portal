@@ -8,8 +8,8 @@ namespace HRM.Services.Interfaces
     public interface IAttendanceService
     {
 
-
-       Task <List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync();
+        Task<List<YearlyAttendanceDayDto>>GetMyYearlyAttendanceAsync(int year, CancellationToken cancellationToken = default);
+        Task <List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync();
 
       
         Task AddAttendanceCheckAsync(int individualId, DateTime checkTime, int checkType);

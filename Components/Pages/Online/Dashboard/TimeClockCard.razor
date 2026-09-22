@@ -62,85 +62,6 @@
 
     <div class="flex gap-3">
 
-  @*       <button class="flex-1 rounded-lg bg-green-600 px-5 py-3 font-medium text-white transition hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-        @onclick="HandleCheckIn"
-        disabled="@DisableCheckIn">
-
-            @if (ProcessingCheckIn)
-            {
-                <span class="flex items-center justify-center gap-2">
-
-                    <svg class="animate-spin h-5 w-5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24">
-
-                        <circle class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4">
-                        </circle>
-
-                        <path class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4A10 10 0 002 12h2z">
-                        </path>
-
-                    </svg>
-
-                    Checking In...
-
-                </span>
-            }
-            else
-            {
-                <span>Check In</span>
-            }
-
-        </button> *@
-
-@*         <button class="flex-1 rounded-lg bg-red-600 px-5 py-3 font-medium text-white transition hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-        @onclick="HandleCheckOut"
-        disabled="@DisableCheckOut">
-
-            @if (ProcessingCheckOut)
-            {
-                <span class="flex items-center justify-center gap-2">
-
-                    <svg class="animate-spin h-5 w-5"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 24 24">
-
-                        <circle class="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        stroke-width="4">
-                        </circle>
-
-                        <path class="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8v4l3-3-3-3v4A10 10 0 002 12h2z">
-                        </path>
-
-                    </svg>
-
-                    Checking Out...
-
-                </span>
-            }
-            else
-            {
-                <span>Check Out</span>
-            }
-
-        </button> *@
-
-
         <button @onclick="HandleClock"
                 disabled="@ProcessingClock"
                 class="w-full rounded-lg bg-blue-600 px-4 py-3
@@ -173,6 +94,9 @@
 
     [Parameter]
     public EventCallback OnClock { get; set; }
+
+    // [Parameter]
+    // public EventCallback AttendanceLog { get; set; }
 
 
 
@@ -235,14 +159,11 @@
 
         try
         {
-            var context =
-                await UserAccessService.RequireContextAsync();
+            var context = await UserAccessService.RequireContextAsync();
 
             var timestamp = GetAttendanceTimestamp();
 
-            await AttendanceLogService.AddClockEventAsync(
-                context.IndividualId,
-                timestamp);
+            await AttendanceLogService.AddClockEventAsync(context.IndividualId,timestamp);
 
             if (OnClock.HasDelegate)
             {

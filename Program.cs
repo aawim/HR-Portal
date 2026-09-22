@@ -42,6 +42,10 @@ using HRM.Models.Archives;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
 
+builder.Logging.AddDebug();
+builder.Logging.AddConsole();
+
+
 builder.Services.AddServerSideBlazor()
     .AddCircuitOptions(options =>
     {

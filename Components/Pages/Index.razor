@@ -79,12 +79,19 @@
 
                     <div class="xl:col-span-7 space-y-2">
 
+                            <YearlyAttendanceGridCard 
+                                Days="yearlyAttendanceDays"
+                                IsLoading="loadingYearlyAttendance"
+                                YearChanged="LoadYearlyAttendance" />
+
+
+
                         <AttendanceSummaryCard WeeklyLogs="weeklyLogs" />
 
                         <!-- Attendance Cards -->
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2">
 
-                            <TodaysAttendanceLogCard OnClock="LoadAttendance" />
+                            <TodaysAttendanceLogCard RefreshKey="attendanceRefreshKey" />
 
                             <WeeklyWorkedHoursCard />
 
@@ -249,11 +256,20 @@
     private AttendanceLogDto? TodayCheckIn;
     private AttendanceLogDto? TodayCheckOut;
 
+    private int attendanceRefreshKey = 0;
+
+
     private bool loading = true;
 
     private bool isProcessing;
 
     private string UserName = "";
+
+    private List<YearlyAttendanceDayDto> yearlyAttendanceDays = [];
+
+    private bool loadingYearlyAttendance;
+
+
 
     private List<JobLeaveType>? leaveBalances;
 
@@ -284,13 +300,36 @@
             // User isn't authenticated yet.
             return;
         }
-        await RefreshDashboardAsync();
+        // await RefreshDashboardAsync();
         await LoadAttendance();
-
+        await LoadYearlyAttendance(DateTime.Today.Year);
         loading = false;
     }
 
- 
+    private async Task LoadYearlyAttendance(int year)
+    {
+        try
+        {
+            loadingYearlyAttendance = true;
+
+            yearlyAttendanceDays =
+                await AttendanceService
+                    .GetMyYearlyAttendanceAsync(year);
+        }
+        finally
+        {
+            loadingYearlyAttendance = false;
+        }
+   
+
+
+    }
+    private Task HandleAttendanceChanged()
+    {
+        attendanceRefreshKey++;
+
+        return Task.CompletedTask;
+    }
 
     private async Task RefreshDashboardAsync()
     {
