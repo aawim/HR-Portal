@@ -1,16 +1,15 @@
-﻿using HRM.Constants;
-using HRM.Data;
+﻿using HRM.Data;
 using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Models.WorkPlanning;
-using HRM.Services.Attendance.Abstraction;
+using HRM.Services.Attendance.Evaluation;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
 
-namespace HRM.Services.Attendance.Evaluation
+namespace HRM.Services.Attendance
 {
-    public sealed class AttendanceEvaluationService : IAttendanceEvaluationService
+    public sealed class AttendanceEvaluationService
+        : IAttendanceEvaluationService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
 
@@ -20,48 +19,43 @@ namespace HRM.Services.Attendance.Evaluation
             _dbFactory = dbFactory;
         }
 
-
-        // ============================================================
-        // DAILY EVALUATION
-        // ============================================================
-
         public async Task<AttendanceDailyEvaluationDto> EvaluateAsync(
-            int individualId,
-            int jobId,
-            DateTime workDate,
-            CancellationToken cancellationToken = default)
+                  int individualId,
+                  int jobId,
+                  DateTime workDate,
+                  CancellationToken cancellationToken = default)
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
-            var date = workDate.Date;
-            var evaluationTime = DateTime.Now;
+            var date =
+                workDate.Date;
+
+            var evaluationTime =
+                DateTime.Now;
 
 
             // ========================================================
             // LOAD WORK PLAN
             // ========================================================
 
-            var workPlan = await db.WorkPlans
-                .AsNoTracking()
-
-                .Include(x => x.WorkPlanSegments)
-                    .ThenInclude(x => x.WorkSegmentType)
-
-                .Include(x => x.AttendanceLogResolutions)
-                    .ThenInclude(x => x.AttendanceLog)
-
-                .Where(x =>
-                    x.IndividualId == individualId &&
-                    x.JobId == jobId &&
-                    x.WorkDate.Date == date &&
-                    x.IsValid)
-
-                .OrderByDescending(x => x.IsManual)
-                .ThenByDescending(x => x.Version)
-
-                .FirstOrDefaultAsync(cancellationToken);
+            var workPlan =
+                await db.WorkPlans
+                    .AsNoTracking()
+                    .Include(x => x.WorkPlanSegments)
+                        .ThenInclude(x => x.WorkSegmentType)
+                    .Include(x => x.AttendanceLogResolutions)
+                        .ThenInclude(x => x.AttendanceLog)
+                    .Where(x =>
+                        x.IndividualId == individualId &&
+                        x.JobId == jobId &&
+                        x.WorkDate.Date == date &&
+                        x.IsValid)
+                    .OrderByDescending(x => x.IsManual)
+                    .ThenByDescending(x => x.Version)
+                    .FirstOrDefaultAsync(
+                        cancellationToken);
 
 
             // ========================================================
@@ -72,41 +66,72 @@ namespace HRM.Services.Attendance.Evaluation
             {
                 return new AttendanceDailyEvaluationDto
                 {
-                    IndividualId = individualId,
-                    JobId = jobId,
-                    WorkDate = date,
+                    IndividualId =
+                        individualId,
 
-                    HasWorkPlan = false,
-                    RequiresAttendance = false,
-                    RequiresCheckOut = false,
+                    JobId =
+                        jobId,
+
+                    WorkDate =
+                        date,
+
+                    HasWorkPlan =
+                        false,
+
+                    RequiresAttendance =
+                        false,
 
                     Status =
-                        date > DateTime.Today
+                        date > evaluationTime.Date
                             ? AttendanceDailyStatus.Future
                             : AttendanceDailyStatus.Unknown,
 
-                    IsComplete = false,
-                    HasException = false
+                    IsComplete =
+                        false,
+
+                    HasException =
+                        date <= evaluationTime.Date,
+
+                    Issues =
+                    [
+                        new AttendanceEvaluationIssueDto
+                        {
+                            Type =
+                                AttendanceEvaluationIssueType
+                                    .NoWorkPlan,
+
+                            Severity =
+                                AttendanceEvaluationIssueSeverity
+                                    .Warning,
+
+                            Message =
+                                "No work plan was found."
+                        }
+                    ]
                 };
             }
 
 
             // ========================================================
-            // VALID SEGMENTS
+            // SEGMENTS
             // ========================================================
 
-            var segments = workPlan.WorkPlanSegments
-                .Where(x => x.IsValid)
-                .OrderBy(x => x.SequenceNumber)
-                .ThenBy(x => x.StartDateTime)
-                .ToList();
+            var segments =
+                workPlan.WorkPlanSegments
+                    .Where(x => x.IsValid)
+                    .OrderBy(x => x.SequenceNumber)
+                    .ThenBy(x => x.StartDateTime)
+                    .ToList();
 
 
-            // These are segments that participate in physical
-            // attendance processing.
-            var attendanceSegments = segments
-                .Where(x => x.RequiresAttendance)
-                .ToList();
+            var attendanceSegments =
+                segments
+                    .Where(x => x.RequiresAttendance)
+                    .ToList();
+
+
+            var requiresAttendance =
+                attendanceSegments.Any();
 
 
             // ========================================================
@@ -115,40 +140,25 @@ namespace HRM.Services.Attendance.Evaluation
 
             var resolvedEvents =
                 workPlan.AttendanceLogResolutions
-                    .Where(x => x.JobId == jobId)
-
                     .Where(x =>
-                        x.WorkPlanId.HasValue &&
-                        x.WorkPlanSegmentId.HasValue &&
-                        x.AttendanceClockTypeId.HasValue)
-
-                    .Where(x =>
-                        x.AttendanceLog != null)
-
-                    .Where(x =>
-                        x.AttendanceResolutionStatusId ==
-                        AttendanceResolutionStatusIds.Resolved)
-
-                    .Where(x =>
-                        x.AttendanceClockTypeId ==
-                            (int)AttendanceClockType.CheckIn ||
-                        x.AttendanceClockTypeId ==
-                            (int)AttendanceClockType.CheckOut)
-
+                        x.IsValid &&
+                        x.AttendanceLog != null &&
+                        x.AttendanceClockTypeId.HasValue &&
+                        (
+                            x.AttendanceClockTypeId.Value ==
+                                (int)AttendanceClockType.CheckIn
+                            ||
+                            x.AttendanceClockTypeId.Value ==
+                                (int)AttendanceClockType.CheckOut
+                        ))
                     .Select(x =>
                         new ResolvedAttendanceEvent
                         {
                             AttendanceLogId =
                                 x.AttendanceLogId,
 
-                            AttendanceLogResolutionId =
-                                x.AttendanceLogResolutionId,
-
-                            WorkPlanId =
-                                x.WorkPlanId!.Value,
-
                             WorkPlanSegmentId =
-                                x.WorkPlanSegmentId!.Value,
+                                x.WorkPlanSegmentId,
 
                             ClockType =
                                 (AttendanceClockType)
@@ -157,18 +167,49 @@ namespace HRM.Services.Attendance.Evaluation
                             LogDateTime =
                                 x.AttendanceLog.Date
                         })
-
                     .OrderBy(x => x.LogDateTime)
                     .ToList();
 
 
             // ========================================================
-            // RESOLUTION COUNTS
+            // EFFECTIVE CHECK-IN
+            //
+            // EARLIEST valid CheckIn wins.
+            // ========================================================
+
+            var effectiveCheckIn =
+                resolvedEvents
+                    .Where(x =>
+                        x.ClockType ==
+                        AttendanceClockType.CheckIn)
+                    .OrderBy(x => x.LogDateTime)
+                    .FirstOrDefault();
+
+
+            // ========================================================
+            // EFFECTIVE CHECK-OUT
+            //
+            // LATEST valid CheckOut wins.
+            // ========================================================
+
+            var effectiveCheckOut =
+                resolvedEvents
+                    .Where(x =>
+                        x.ClockType ==
+                        AttendanceClockType.CheckOut)
+                    .OrderByDescending(x => x.LogDateTime)
+                    .FirstOrDefault();
+
+
+            // ========================================================
+            // RAW CLOCK COUNTS
             // ========================================================
 
             var allResolutions =
                 workPlan.AttendanceLogResolutions
-                    .Where(x => x.JobId == jobId)
+                    .Where(x =>
+                        x.IsValid &&
+                        x.AttendanceLog != null)
                     .ToList();
 
 
@@ -180,62 +221,24 @@ namespace HRM.Services.Attendance.Evaluation
 
 
             var resolvedClockCount =
-                resolvedEvents.Count;
+                allResolutions
+                    .Count(x =>
+                        x.AttendanceClockTypeId.HasValue &&
+                        x.AttendanceClockTypeId.Value !=
+                            (int)AttendanceClockType.Unresolved);
 
 
             var unresolvedClockCount =
-                allResolutions.Count(x =>
-                    x.AttendanceClockTypeId ==
-                    (int)AttendanceClockType.Unresolved);
+                allResolutions
+                    .Count(x =>
+                        !x.AttendanceClockTypeId.HasValue ||
+                        x.AttendanceClockTypeId.Value ==
+                            (int)AttendanceClockType.Unresolved);
 
 
             // ========================================================
-            // EVALUATE SEGMENTS
+            // PLANNED START
             // ========================================================
-
-            var evaluatedSegments =
-                new List<AttendanceEvaluatedSegmentDto>();
-
-
-            foreach (var segment in segments)
-            {
-                var evaluated =
-                    EvaluateSegment(
-                        segment,
-                        resolvedEvents,
-                        evaluationTime);
-
-                evaluatedSegments.Add(evaluated);
-            }
-
-
-            // ========================================================
-            // ONLY ATTENDANCE-REQUIRED SEGMENTS
-            // ========================================================
-
-            var requiredEvaluations =
-                evaluatedSegments
-                    .Where(x => x.RequiresAttendance)
-                    .ToList();
-
-
-            var requiresAttendance =
-                attendanceSegments.Count > 0;
-
-
-            // Does the day contain an actual checkout boundary?
-            var requiresCheckOut =
-                attendanceSegments.Any(x =>
-                    RequiresCheckOut(
-                        x.WorkSegmentType?.Code));
-
-
-            // ========================================================
-            // PLANNED TIMES
-            // ========================================================
-
-            DateTime? plannedStart = null;
-            DateTime? plannedEnd = null;
 
             var checkInBoundary =
                 attendanceSegments
@@ -245,124 +248,98 @@ namespace HRM.Services.Attendance.Evaluation
                     .OrderBy(x => x.StartDateTime)
                     .FirstOrDefault();
 
+
+            // ========================================================
+            // PLANNED END
+            //
+            // IMPORTANT:
+            //
+            // CHECK_OUT.StartDateTime = expected checkout
+            // CHECK_OUT.EndDateTime   = latest allowed checkout
+            // ========================================================
+
             var checkOutBoundary =
-               attendanceSegments
-                   .Where(x =>
-                       RequiresCheckOut(
-                           x.WorkSegmentType?.Code))
-                   .OrderByDescending(x => x.StartDateTime)
-                   .FirstOrDefault();
+                attendanceSegments
+                    .Where(x =>
+                        RequiresCheckOut(
+                            x.WorkSegmentType?.Code))
+                    .OrderByDescending(
+                        x => x.StartDateTime)
+                    .FirstOrDefault();
 
-            var expectedDutyEnd =
+
+            DateTime? plannedStart =
+                checkInBoundary?.StartDateTime;
+
+
+            DateTime? plannedEnd =
                 checkOutBoundary?.StartDateTime;
-
-
-
-
-
-
-            if (checkInBoundary != null)
-            {
-                plannedStart =
-                    checkInBoundary.StartDateTime;
-            }
-
-            if (checkOutBoundary != null)
-            {
-                // Expected checkout time.
-                // EndDateTime is the end of the allowed checkout window.
-                plannedEnd =
-                    checkOutBoundary.StartDateTime;
-            }
 
 
             // ========================================================
             // PLANNED MINUTES
             // ========================================================
 
-            var plannedMinutes =
-                attendanceSegments
-                    .Where(x =>
-                        IsDurationSegment(
-                            x.WorkSegmentType?.Code))
-                    .Sum(x =>
-                        CalculateMinutes(
-                            x.StartDateTime,
-                            x.EndDateTime));
+            var plannedMinutes = 0;
 
-
-            // ========================================================
-            // ACTUAL FIRST CHECK IN
-            // ========================================================
-
-            var checkIns =
-                resolvedEvents
-                    .Where(x =>
-                        x.ClockType ==
-                        AttendanceClockType.CheckIn)
-                    .Select(x => x.LogDateTime)
-                    .ToList();
-
-
-            DateTime? firstCheckIn =
-                checkIns.Count > 0
-                    ? checkIns.Min()
-                    : null;
-
-
-            // ========================================================
-            // ACTUAL LAST CHECK OUT
-            // ========================================================
-
-            var checkOuts =
-                resolvedEvents
-                    .Where(x =>
-                        x.ClockType ==
-                        AttendanceClockType.CheckOut)
-                    .Select(x => x.LogDateTime)
-                    .ToList();
-
-
-            DateTime? lastCheckOut =
-                checkOuts.Count > 0
-                    ? checkOuts.Max()
-                    : null;
-
-
-            // ========================================================
-            // WORKED MINUTES
-            // ========================================================
-
-            var workedMinutes = 0;
-
-
-            if (firstCheckIn.HasValue &&
-                lastCheckOut.HasValue &&
-                lastCheckOut.Value > firstCheckIn.Value)
+            if (plannedStart.HasValue &&
+                plannedEnd.HasValue &&
+                plannedEnd.Value > plannedStart.Value)
             {
-                workedMinutes =
+                plannedMinutes =
                     CalculateMinutes(
-                        firstCheckIn.Value,
-                        lastCheckOut.Value);
+                        plannedStart.Value,
+                        plannedEnd.Value);
             }
 
 
             // ========================================================
-            // LATE / EARLY
+            // WORKED MINUTES
+            //
+            // For now:
+            //
+            // First CheckIn -> Last CheckOut
+            //
+            // Break deduction can be introduced later.
             // ========================================================
 
-            var lateMinutes =
-                evaluatedSegments.Sum(
-                    x => x.LateMinutes);
+            var workedMinutes = 0;
 
-
-            var earlyDepartureMinutes =
-                evaluatedSegments.Sum(
-                    x => x.EarlyDepartureMinutes);
+            if (effectiveCheckIn != null &&
+                effectiveCheckOut != null &&
+                effectiveCheckOut.LogDateTime >
+                effectiveCheckIn.LogDateTime)
+            {
+                workedMinutes =
+                    CalculateMinutes(
+                        effectiveCheckIn.LogDateTime,
+                        effectiveCheckOut.LogDateTime);
+            }
 
 
             // ========================================================
-            // ISSUES
+            // EVALUATE INDIVIDUAL SEGMENTS
+            // ========================================================
+
+            var evaluatedSegments =
+                new List<AttendanceEvaluatedSegmentDto>();
+
+
+            foreach (var segment in segments)
+            {
+                var evaluatedSegment =
+                    EvaluateSegment(
+                        segment,
+                        resolvedEvents,
+                        evaluationTime);
+
+                evaluatedSegments.Add(
+                    evaluatedSegment);
+            }
+
+
+            // ========================================================
+            // COLLECT ISSUES
             // ========================================================
 
             var issues =
@@ -372,52 +349,51 @@ namespace HRM.Services.Attendance.Evaluation
 
 
             // ========================================================
-            // UNRESOLVED CLOCK ISSUES
+            // DAILY LATE MINUTES
             // ========================================================
 
-            foreach (var resolution in
-                     allResolutions.Where(x =>
-                         x.AttendanceClockTypeId ==
-                         (int)AttendanceClockType.Unresolved))
-            {
-                issues.Add(
-                    new AttendanceEvaluationIssueDto
-                    {
-                        Type =
-                            AttendanceEvaluationIssueType
-                                .UnresolvedClock,
-
-                        Severity =
-                            AttendanceEvaluationIssueSeverity
-                                .Warning,
-
-                        Message =
-                            string.IsNullOrWhiteSpace(
-                                resolution.ResolutionMessage)
-                                ? "Attendance clock could not be resolved."
-                                : resolution.ResolutionMessage,
-
-                        AttendanceLogId =
-                            resolution.AttendanceLogId,
-
-                        ActualTime =
-                            resolution.AttendanceLog?.Date
-                    });
-            }
+            var lateMinutes =
+                evaluatedSegments
+                    .Sum(x => x.LateMinutes);
 
 
             // ========================================================
-            // COMPLETION
+            // DAILY EARLY DEPARTURE
             // ========================================================
+
+            var earlyDepartureMinutes =
+                evaluatedSegments
+                    .Sum(x =>
+                        x.EarlyDepartureMinutes);
+
+
+            // ========================================================
+            // COMPLETE
+            //
+            // Only attendance boundary segments determine whether
+            // physical attendance is complete.
+            // ========================================================
+
+            var requiredBoundarySegments =
+                attendanceSegments
+                    .Where(x =>
+                        IsClockBoundary(
+                            x.WorkSegmentType?.Code))
+                    .ToList();
+
 
             var isComplete =
                 !requiresAttendance ||
-                requiredEvaluations.All(
-                    x => x.IsComplete);
-
-
-            var hasException =
-                issues.Count > 0;
+                (
+                    requiredBoundarySegments.Any() &&
+                    requiredBoundarySegments.All(
+                        segment =>
+                            evaluatedSegments
+                                .First(x =>
+                                    x.WorkPlanSegmentId ==
+                                    segment.WorkPlanSegmentId)
+                                .IsComplete)
+                );
 
 
             // ========================================================
@@ -425,14 +401,27 @@ namespace HRM.Services.Attendance.Evaluation
             // ========================================================
 
             var status =
-             DetermineDailyStatus(
-                 date,
-                 evaluationTime,
-                 attendanceSegments,
-                 evaluatedSegments,
-                 resolvedEvents,
-                 requiresAttendance,
-                 isComplete);
+                DetermineDailyStatus(
+                    date,
+                    evaluationTime,
+                    attendanceSegments,
+                    evaluatedSegments,
+                    resolvedEvents,
+                    requiresAttendance,
+                    isComplete);
+
+
+            // ========================================================
+            // EXCEPTION
+            // ========================================================
+
+            var hasException =
+                issues.Any(x =>
+                    x.Severity ==
+                        AttendanceEvaluationIssueSeverity.Warning
+                    ||
+                    x.Severity ==
+                        AttendanceEvaluationIssueSeverity.Error);
 
 
             // ========================================================
@@ -463,7 +452,7 @@ namespace HRM.Services.Attendance.Evaluation
                     requiresAttendance,
 
                 RequiresCheckOut =
-                    requiresCheckOut,
+                    checkOutBoundary != null,
 
                 PlannedStart =
                     plannedStart,
@@ -475,10 +464,10 @@ namespace HRM.Services.Attendance.Evaluation
                     plannedMinutes,
 
                 FirstCheckIn =
-                    firstCheckIn,
+                    effectiveCheckIn?.LogDateTime,
 
                 LastCheckOut =
-                    lastCheckOut,
+                    effectiveCheckOut?.LogDateTime,
 
                 WorkedMinutes =
                     workedMinutes,
@@ -489,7 +478,6 @@ namespace HRM.Services.Attendance.Evaluation
                 EarlyDepartureMinutes =
                     earlyDepartureMinutes,
 
-                // Do not calculate approved OT here.
                 OvertimeMinutes =
                     0,
 
@@ -521,7 +509,7 @@ namespace HRM.Services.Attendance.Evaluation
 
 
         // ============================================================
-        // SEGMENT EVALUATION
+        // EVALUATE SEGMENT
         // ============================================================
 
         private static AttendanceEvaluatedSegmentDto EvaluateSegment(
@@ -529,20 +517,6 @@ namespace HRM.Services.Attendance.Evaluation
             IReadOnlyCollection<ResolvedAttendanceEvent> events,
             DateTime evaluationTime)
         {
-            var code =
-                segment.WorkSegmentType?.Code?
-                    .Trim()
-                    .ToUpperInvariant();
-
-
-            var requiresCheckIn =
-                RequiresCheckIn(code);
-
-
-            var requiresCheckOut =
-                RequiresCheckOut(code);
-
-
             var result =
                 new AttendanceEvaluatedSegmentDto
                 {
@@ -583,11 +557,9 @@ namespace HRM.Services.Attendance.Evaluation
                         segment.GraceAfterMinutes,
 
                     PlannedMinutes =
-                        IsDurationSegment(code)
-                            ? CalculateMinutes(
-                                segment.StartDateTime,
-                                segment.EndDateTime)
-                            : 0
+                        CalculateMinutes(
+                            segment.StartDateTime,
+                            segment.EndDateTime)
                 };
 
 
@@ -598,14 +570,39 @@ namespace HRM.Services.Attendance.Evaluation
             if (!segment.RequiresAttendance)
             {
                 result.IsComplete = true;
-                result.HasException = false;
+                return result;
+            }
 
+
+            var code =
+                segment.WorkSegmentType?.Code;
+
+
+            var requiresCheckIn =
+                RequiresCheckIn(code);
+
+
+            var requiresCheckOut =
+                RequiresCheckOut(code);
+
+
+            // ========================================================
+            // WORK / ACTIVITY SEGMENT
+            //
+            // WORK, LUNCH, MEETING, etc. are not themselves
+            // physical clock boundaries.
+            // ========================================================
+
+            if (!requiresCheckIn &&
+                !requiresCheckOut)
+            {
+                result.IsComplete = true;
                 return result;
             }
 
 
             // ========================================================
-            // EVENTS BELONGING TO THIS SEGMENT
+            // EVENTS RESOLVED TO THIS SEGMENT
             // ========================================================
 
             var segmentEvents =
@@ -613,34 +610,40 @@ namespace HRM.Services.Attendance.Evaluation
                     .Where(x =>
                         x.WorkPlanSegmentId ==
                         segment.WorkPlanSegmentId)
-
-                    .OrderBy(x => x.LogDateTime)
+                    .OrderBy(x =>
+                        x.LogDateTime)
                     .ToList();
 
 
             // ========================================================
             // CHECK IN
+            //
+            // EARLIEST CheckIn for the boundary.
             // ========================================================
 
-            var checkInEvent =
+            ResolvedAttendanceEvent? checkInEvent =
                 segmentEvents
                     .Where(x =>
                         x.ClockType ==
                         AttendanceClockType.CheckIn)
-                    .OrderBy(x => x.LogDateTime)
+                    .OrderBy(x =>
+                        x.LogDateTime)
                     .FirstOrDefault();
 
 
             // ========================================================
             // CHECK OUT
+            //
+            // LATEST CheckOut for the boundary.
             // ========================================================
 
-            var checkOutEvent =
+            ResolvedAttendanceEvent? checkOutEvent =
                 segmentEvents
                     .Where(x =>
                         x.ClockType ==
                         AttendanceClockType.CheckOut)
-                    .OrderByDescending(x => x.LogDateTime)
+                    .OrderByDescending(x =>
+                        x.LogDateTime)
                     .FirstOrDefault();
 
 
@@ -661,22 +664,30 @@ namespace HRM.Services.Attendance.Evaluation
 
 
             // ========================================================
-            // CHECK-IN BOUNDARY
+            // CHECK-IN EVALUATION
             // ========================================================
 
             if (requiresCheckIn)
             {
-                var deadline =
-                    segment.StartDateTime
-                        .AddMinutes(
-                            segment.GraceAfterMinutes);
+                var expectedCheckIn =
+                    segment.StartDateTime;
 
+
+                // ----------------------------------------------------
+                // No CheckIn
+                // ----------------------------------------------------
 
                 if (!checkIn.HasValue)
                 {
-                    // Only become missing once the allowed
-                    // check-in window has passed.
-                    if (evaluationTime > deadline)
+                    // The configured segment end represents the
+                    // permitted resolution window.
+
+                    var latestAllowedCheckIn =
+                        segment.EndDateTime;
+
+
+                    if (evaluationTime >
+                        latestAllowedCheckIn)
                     {
                         result.Issues.Add(
                             new AttendanceEvaluationIssueDto
@@ -697,21 +708,29 @@ namespace HRM.Services.Attendance.Evaluation
                                     segment.WorkPlanSegmentId,
 
                                 ExpectedTime =
-                                    segment.StartDateTime
+                                    expectedCheckIn
                             });
                     }
                 }
+
+                // ----------------------------------------------------
+                // CheckIn exists
+                // ----------------------------------------------------
+
                 else
                 {
-                    // -----------------------------------------------
-                    // LATE CHECK IN
-                    // -----------------------------------------------
+                    var latestOnTime =
+                        expectedCheckIn
+                            .AddMinutes(
+                                segment.GraceAfterMinutes);
 
-                    if (checkIn.Value > deadline)
+
+                    if (checkIn.Value >
+                        latestOnTime)
                     {
                         result.LateMinutes =
                             CalculateMinutes(
-                                deadline,
+                                latestOnTime,
                                 checkIn.Value);
 
 
@@ -735,10 +754,11 @@ namespace HRM.Services.Attendance.Evaluation
                                     segment.WorkPlanSegmentId,
 
                                 AttendanceLogId =
-                                    checkInEvent?.AttendanceLogId,
+                                    checkInEvent?
+                                        .AttendanceLogId,
 
                                 ExpectedTime =
-                                    segment.StartDateTime,
+                                    expectedCheckIn,
 
                                 ActualTime =
                                     checkIn.Value,
@@ -752,30 +772,35 @@ namespace HRM.Services.Attendance.Evaluation
 
 
             // ========================================================
-            // CHECK-OUT BOUNDARY
+            // CHECK-OUT EVALUATION
+            //
+            // IMPORTANT:
+            //
+            // StartDateTime = expected checkout
+            // EndDateTime   = latest permitted checkout
             // ========================================================
 
             if (requiresCheckOut)
             {
-                var deadline =
-                    segment.EndDateTime
-                        .AddMinutes(
-                            segment.GraceAfterMinutes);
-
-                result.IsComplete = checkOut.HasValue || evaluationTime <= deadline;
-
-                var expectedCheckOut = segment.StartDateTime;
-
-                var latestAllowedCheckOut = segment.EndDateTime;
+                var expectedCheckOut =
+                    segment.StartDateTime;
 
 
+                var latestAllowedCheckOut =
+                    segment.EndDateTime;
 
+
+                // ----------------------------------------------------
+                // No CheckOut
+                // ----------------------------------------------------
 
                 if (!checkOut.HasValue)
                 {
-                    // Only call it missing once the entire permitted
-                    // checkout window has passed.
-                    if (evaluationTime > latestAllowedCheckOut)
+                    // Do not mark missing while the permitted
+                    // checkout window is still open.
+
+                    if (evaluationTime >
+                        latestAllowedCheckOut)
                     {
                         result.Issues.Add(
                             new AttendanceEvaluationIssueDto
@@ -801,22 +826,26 @@ namespace HRM.Services.Attendance.Evaluation
                     }
                 }
 
+                // ----------------------------------------------------
+                // CheckOut exists
+                // ----------------------------------------------------
+
                 else
                 {
-                    // Early checkout is measured against the expected
-                    // checkout boundary, not EndDateTime.
-
                     var earliestAllowed =
                         expectedCheckOut
                             .AddMinutes(
                                 -segment.GraceBeforeMinutes);
 
-                    if (checkOut.Value < earliestAllowed)
+
+                    if (checkOut.Value <
+                        earliestAllowed)
                     {
                         result.EarlyDepartureMinutes =
                             CalculateMinutes(
                                 checkOut.Value,
                                 earliestAllowed);
+
 
                         result.Issues.Add(
                             new AttendanceEvaluationIssueDto
@@ -838,7 +867,8 @@ namespace HRM.Services.Attendance.Evaluation
                                     segment.WorkPlanSegmentId,
 
                                 AttendanceLogId =
-                                    checkOutEvent?.AttendanceLogId,
+                                    checkOutEvent?
+                                        .AttendanceLogId,
 
                                 ExpectedTime =
                                     expectedCheckOut,
@@ -851,16 +881,13 @@ namespace HRM.Services.Attendance.Evaluation
                             });
                     }
                 }
-
-
-
-
-
             }
 
 
             // ========================================================
             // WORKED MINUTES FOR SEGMENT
+            //
+            // Usually 0 for standalone boundary segments.
             // ========================================================
 
             if (checkIn.HasValue &&
@@ -875,44 +902,45 @@ namespace HRM.Services.Attendance.Evaluation
 
 
             // ========================================================
-            // COMPLETION
+            // COMPLETE
             // ========================================================
 
-            if (requiresCheckIn)
+            if (requiresCheckIn &&
+                requiresCheckOut)
             {
-                var deadline =
-                    segment.StartDateTime
-                        .AddMinutes(
-                            segment.GraceAfterMinutes);
-
-
-                // Upcoming boundary should not make the
-                // whole day incomplete.
                 result.IsComplete =
-                    checkIn.HasValue ||
-                    evaluationTime <= deadline;
+                    checkIn.HasValue &&
+                    checkOut.HasValue;
+            }
+            else if (requiresCheckIn)
+            {
+                result.IsComplete =
+                    checkIn.HasValue;
             }
             else if (requiresCheckOut)
             {
-                var latestAllowedCheckOut = segment.EndDateTime;
+                // While the checkout window is open,
+                // this boundary is not yet an exception.
 
                 result.IsComplete =
                     checkOut.HasValue ||
-                    evaluationTime <= latestAllowedCheckOut;
+                    evaluationTime <=
+                        segment.EndDateTime;
             }
             else
             {
-                // WORK, WORK_PERIOD, MEETING, TRAINING,
-                // TRAVEL, INFORMATIONAL, etc.
-                //
-                // These segments do not independently require
-                // a physical clock event.
-                result.IsComplete = true;
+                result.IsComplete =
+                    true;
             }
 
 
             result.HasException =
-                result.Issues.Count > 0;
+                result.Issues.Any(x =>
+                    x.Severity ==
+                        AttendanceEvaluationIssueSeverity.Warning
+                    ||
+                    x.Severity ==
+                        AttendanceEvaluationIssueSeverity.Error);
 
 
             return result;
@@ -920,31 +948,32 @@ namespace HRM.Services.Attendance.Evaluation
 
 
         // ============================================================
-        // DAILY STATUS
+        // DETERMINE DAILY STATUS
         // ============================================================
 
         private static AttendanceDailyStatus DetermineDailyStatus(
-         DateTime workDate,
-         DateTime evaluationTime,
-         IReadOnlyCollection<WorkPlanSegment> attendanceSegments,
-         IReadOnlyCollection<AttendanceEvaluatedSegmentDto> evaluatedSegments,
-         IReadOnlyCollection<ResolvedAttendanceEvent> events,
-         bool requiresAttendance,
-         bool isComplete)
+            DateTime workDate,
+            DateTime evaluationTime,
+            IReadOnlyCollection<WorkPlanSegment> attendanceSegments,
+            IReadOnlyCollection<AttendanceEvaluatedSegmentDto> evaluatedSegments,
+            IReadOnlyCollection<ResolvedAttendanceEvent> events,
+            bool requiresAttendance,
+            bool isComplete)
         {
-            // ============================================================
+            // ========================================================
             // FUTURE DATE
-            // ============================================================
+            // ========================================================
 
-            if (workDate.Date > evaluationTime.Date)
+            if (workDate.Date >
+                evaluationTime.Date)
             {
                 return AttendanceDailyStatus.Future;
             }
 
 
-            // ============================================================
+            // ========================================================
             // NO ATTENDANCE REQUIRED
-            // ============================================================
+            // ========================================================
 
             if (!requiresAttendance)
             {
@@ -952,47 +981,33 @@ namespace HRM.Services.Attendance.Evaluation
             }
 
 
-            // ============================================================
-            // FIND CHECK-IN BOUNDARY
-            // ============================================================
+            // ========================================================
+            // BOUNDARIES
+            // ========================================================
 
             var checkInBoundary =
                 attendanceSegments
                     .Where(x =>
                         RequiresCheckIn(
                             x.WorkSegmentType?.Code))
-                    .OrderBy(x => x.StartDateTime)
+                    .OrderBy(x =>
+                        x.StartDateTime)
                     .FirstOrDefault();
 
-
-            // ============================================================
-            // FIND CHECK-OUT BOUNDARY
-            // ============================================================
 
             var checkOutBoundary =
                 attendanceSegments
                     .Where(x =>
                         RequiresCheckOut(
                             x.WorkSegmentType?.Code))
-                    .OrderByDescending(x => x.StartDateTime)
+                    .OrderByDescending(x =>
+                        x.StartDateTime)
                     .FirstOrDefault();
 
 
-            // ============================================================
-            // BEFORE EXPECTED CHECK-IN
-            // ============================================================
-
-            if (workDate.Date == evaluationTime.Date &&
-                checkInBoundary != null &&
-                evaluationTime < checkInBoundary.StartDateTime)
-            {
-                return AttendanceDailyStatus.Future;
-            }
-
-
-            var hasResolvedAttendance =
-                events.Any();
-
+            // ========================================================
+            // EVENT FLAGS
+            // ========================================================
 
             var hasCheckIn =
                 events.Any(x =>
@@ -1006,36 +1021,66 @@ namespace HRM.Services.Attendance.Evaluation
                     AttendanceClockType.CheckOut);
 
 
-            // ============================================================
+            // ========================================================
             // TODAY
-            // ============================================================
+            // ========================================================
 
-            if (workDate.Date == evaluationTime.Date)
+            if (workDate.Date ==
+                evaluationTime.Date)
             {
-                var expectedDutyEnd =
-                    checkOutBoundary?.StartDateTime;
+                // ----------------------------------------------------
+                // BEFORE EXPECTED CHECK-IN
+                // ----------------------------------------------------
 
-                var latestCheckOutTime =
-                    checkOutBoundary?.EndDateTime;
-
-
-                // --------------------------------------------------------
-                // STILL WITHIN PLANNED WORKING TIME
-                // Example: planned 08:00 - 14:00
-                // --------------------------------------------------------
-
-                if (expectedDutyEnd.HasValue &&
-                    evaluationTime <= expectedDutyEnd.Value)
+                if (checkInBoundary != null &&
+                    evaluationTime <
+                    checkInBoundary.StartDateTime)
                 {
-                    return AttendanceDailyStatus.InProgress;
+                    return AttendanceDailyStatus.Future;
                 }
 
 
-                // --------------------------------------------------------
-                // EMPLOYEE HAS CHECKED IN AND CHECKED OUT
-                // --------------------------------------------------------
+                // ----------------------------------------------------
+                // EXPECTED DUTY END
+                //
+                // CHECK_OUT.StartDateTime
+                // ----------------------------------------------------
 
-                if (hasCheckIn && hasCheckOut)
+                var expectedDutyEnd =
+                    checkOutBoundary?
+                        .StartDateTime;
+
+
+                // ----------------------------------------------------
+                // LATEST CHECKOUT
+                //
+                // CHECK_OUT.EndDateTime
+                // ----------------------------------------------------
+
+                var latestCheckOutTime =
+                    checkOutBoundary?
+                        .EndDateTime;
+
+
+                // ----------------------------------------------------
+                // WITHIN PLANNED DUTY
+                // ----------------------------------------------------
+
+                if (expectedDutyEnd.HasValue &&
+                    evaluationTime <=
+                    expectedDutyEnd.Value)
+                {
+                    return AttendanceDailyStatus
+                        .InProgress;
+                }
+
+
+                // ----------------------------------------------------
+                // BOTH BOUNDARIES COMPLETE
+                // ----------------------------------------------------
+
+                if (hasCheckIn &&
+                    hasCheckOut)
                 {
                     return isComplete
                         ? AttendanceDailyStatus.Present
@@ -1043,52 +1088,53 @@ namespace HRM.Services.Attendance.Evaluation
                 }
 
 
-                // --------------------------------------------------------
-                // PLANNED DUTY HAS ENDED,
-                // BUT CHECKOUT WINDOW IS STILL OPEN
-                //
-                // Example:
-                // Expected checkout = 14:00
-                // Allowed until     = 23:59
-                // --------------------------------------------------------
+                // ----------------------------------------------------
+                // DUTY ENDED, CHECKOUT WINDOW STILL OPEN
+                // ----------------------------------------------------
 
                 if (latestCheckOutTime.HasValue &&
-                    evaluationTime <= latestCheckOutTime.Value)
+                    evaluationTime <=
+                    latestCheckOutTime.Value)
                 {
                     if (hasCheckIn)
                     {
-                        return AttendanceDailyStatus.InProgress;
+                        return AttendanceDailyStatus
+                            .InProgress;
                     }
 
-                    // Employee never checked in.
-                    //
-                    // We don't need to wait until 23:59 to know that
-                    // the expected CHECK_IN boundary was missed.
-                    return AttendanceDailyStatus.Absent;
+
+                    return AttendanceDailyStatus
+                        .Absent;
                 }
 
 
-                // --------------------------------------------------------
-                // CHECKOUT WINDOW HAS CLOSED
-                // --------------------------------------------------------
+                // ----------------------------------------------------
+                // CHECKOUT WINDOW CLOSED
+                // ----------------------------------------------------
 
                 if (!hasCheckIn)
                 {
-                    return AttendanceDailyStatus.Absent;
+                    return AttendanceDailyStatus
+                        .Absent;
                 }
+
 
                 if (!hasCheckOut)
                 {
-                    return AttendanceDailyStatus.Incomplete;
+                    return AttendanceDailyStatus
+                        .Incomplete;
                 }
+
 
                 return isComplete
                     ? AttendanceDailyStatus.Present
                     : AttendanceDailyStatus.Incomplete;
             }
-            // ============================================================
+
+
+            // ========================================================
             // HISTORICAL DATE
-            // ============================================================
+            // ========================================================
 
             if (!hasCheckIn)
             {
@@ -1109,27 +1155,33 @@ namespace HRM.Services.Attendance.Evaluation
 
 
         // ============================================================
-        // SEGMENT TYPE SEMANTICS
+        // CLOCK BOUNDARY HELPERS
         // ============================================================
 
         private static bool RequiresCheckIn(
             string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
-                return false;
-
-
-            return code.Trim().ToUpperInvariant() switch
             {
-                "CHECK_IN" => true,
+                return false;
+            }
 
-                "DUTY_CHECK_IN" => true,
 
-                // Returning from a break means the employee
-                // clocks back into duty.
-                "BREAK_END" => true,
+            return code
+                .Trim()
+                .ToUpperInvariant() switch
+            {
+                "CHECK_IN" =>
+                    true,
 
-                _ => false
+                "DUTY_CHECK_IN" =>
+                    true,
+
+                "BREAK_END" =>
+                    true,
+
+                _ =>
+                    false
             };
         }
 
@@ -1138,20 +1190,26 @@ namespace HRM.Services.Attendance.Evaluation
             string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
-                return false;
-
-
-            return code.Trim().ToUpperInvariant() switch
             {
-                "CHECK_OUT" => true,
+                return false;
+            }
 
-                "DUTY_CHECK_OUT" => true,
 
-                // Starting a break means the employee
-                // clocks out of the active work period.
-                "BREAK_START" => true,
+            return code
+                .Trim()
+                .ToUpperInvariant() switch
+            {
+                "CHECK_OUT" =>
+                    true,
 
-                _ => false
+                "DUTY_CHECK_OUT" =>
+                    true,
+
+                "BREAK_START" =>
+                    true,
+
+                _ =>
+                    false
             };
         }
 
@@ -1166,50 +1224,25 @@ namespace HRM.Services.Attendance.Evaluation
 
 
         // ============================================================
-        // DURATION SEGMENTS
-        // ============================================================
-
-        private static bool IsDurationSegment(
-            string? code)
-        {
-            if (string.IsNullOrWhiteSpace(code))
-                return false;
-
-
-            return code.Trim().ToUpperInvariant() switch
-            {
-                "WORK_PERIOD" => true,
-                "WORK" => true,
-                "BREAK" => true,
-                "LUNCH" => true,
-                "MEETING" => true,
-                "TRAINING" => true,
-                "TRAVEL" => true,
-                "ON_CALL" => true,
-
-                _ => false
-            };
-        }
-
-
-        // ============================================================
         // MINUTE CALCULATION
         // ============================================================
 
         private static int CalculateMinutes(
-            DateTime from,
-            DateTime to)
+            DateTime start,
+            DateTime end)
         {
-            if (to <= from)
+            if (end <= start)
+            {
                 return 0;
+            }
 
 
-            return (int)Math.Round(
-                (to - from).TotalMinutes,
-                MidpointRounding.AwayFromZero);
+            return Math.Max(
+                0,
+                (int)Math.Round(
+                    (end - start)
+                    .TotalMinutes));
         }
-
- 
 
 
         // ============================================================
@@ -1218,17 +1251,13 @@ namespace HRM.Services.Attendance.Evaluation
 
         private sealed class ResolvedAttendanceEvent
         {
-            public int AttendanceLogId { get; init; }
+            public int AttendanceLogId { get; set; }
 
-            public long AttendanceLogResolutionId { get; init; }
+            public int? WorkPlanSegmentId { get; set; }
 
-            public long WorkPlanId { get; init; }
+            public AttendanceClockType ClockType { get; set; }
 
-            public int WorkPlanSegmentId { get; init; }
-
-            public AttendanceClockType ClockType { get; init; }
-
-            public DateTime LogDateTime { get; init; }
+            public DateTime LogDateTime { get; set; }
         }
     }
 }
