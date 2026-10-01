@@ -6,6 +6,7 @@ using HRM.Models;
 using HRM.Models.WorkPlanning;
 using HRM.Services.Attendance.Abstraction;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace HRM.Services.Attendance.Evaluation
 {
@@ -245,12 +246,20 @@ namespace HRM.Services.Attendance.Evaluation
                     .FirstOrDefault();
 
             var checkOutBoundary =
-                attendanceSegments
-                    .Where(x =>
-                        RequiresCheckOut(
-                            x.WorkSegmentType?.Code))
-                    .OrderByDescending(x => x.StartDateTime)
-                    .FirstOrDefault();
+               attendanceSegments
+                   .Where(x =>
+                       RequiresCheckOut(
+                           x.WorkSegmentType?.Code))
+                   .OrderByDescending(x => x.StartDateTime)
+                   .FirstOrDefault();
+
+            var expectedDutyEnd =
+                checkOutBoundary?.StartDateTime;
+
+
+
+
+
 
             if (checkInBoundary != null)
             {
@@ -416,14 +425,14 @@ namespace HRM.Services.Attendance.Evaluation
             // ========================================================
 
             var status =
-                DetermineDailyStatus(
-                    date,
-                    evaluationTime,
-                    attendanceSegments,
-                    evaluatedSegments,
-                    resolvedEvents,
-                    requiresAttendance,
-                    isComplete);
+             DetermineDailyStatus(
+                 date,
+                 evaluationTime,
+                 attendanceSegments,
+                 evaluatedSegments,
+                 resolvedEvents,
+                 requiresAttendance,
+                 isComplete);
 
 
             // ========================================================
@@ -753,12 +762,20 @@ namespace HRM.Services.Attendance.Evaluation
                         .AddMinutes(
                             segment.GraceAfterMinutes);
 
+                result.IsComplete = checkOut.HasValue || evaluationTime <= deadline;
+
+                var expectedCheckOut = segment.StartDateTime;
+
+                var latestAllowedCheckOut = segment.EndDateTime;
+
+
+
 
                 if (!checkOut.HasValue)
                 {
-                    // Do not report missing checkout while
-                    // the employee is still working.
-                    if (evaluationTime > deadline)
+                    // Only call it missing once the entire permitted
+                    // checkout window has passed.
+                    if (evaluationTime > latestAllowedCheckOut)
                     {
                         result.Issues.Add(
                             new AttendanceEvaluationIssueDto
@@ -779,21 +796,20 @@ namespace HRM.Services.Attendance.Evaluation
                                     segment.WorkPlanSegmentId,
 
                                 ExpectedTime =
-                                    segment.EndDateTime
+                                    expectedCheckOut
                             });
                     }
                 }
+
                 else
                 {
-                    // -----------------------------------------------
-                    // EARLY CHECK OUT
-                    // -----------------------------------------------
+                    // Early checkout is measured against the expected
+                    // checkout boundary, not EndDateTime.
 
                     var earliestAllowed =
-                        segment.EndDateTime
+                        expectedCheckOut
                             .AddMinutes(
                                 -segment.GraceBeforeMinutes);
-
 
                     if (checkOut.Value < earliestAllowed)
                     {
@@ -801,7 +817,6 @@ namespace HRM.Services.Attendance.Evaluation
                             CalculateMinutes(
                                 checkOut.Value,
                                 earliestAllowed);
-
 
                         result.Issues.Add(
                             new AttendanceEvaluationIssueDto
@@ -817,8 +832,7 @@ namespace HRM.Services.Attendance.Evaluation
                                 Message =
                                     $"Early check out for " +
                                     $"'{segment.Name}' by " +
-                                    $"{result.EarlyDepartureMinutes} " +
-                                    $"minute(s).",
+                                    $"{result.EarlyDepartureMinutes} minute(s).",
 
                                 WorkPlanSegmentId =
                                     segment.WorkPlanSegmentId,
@@ -827,7 +841,7 @@ namespace HRM.Services.Attendance.Evaluation
                                     checkOutEvent?.AttendanceLogId,
 
                                 ExpectedTime =
-                                    segment.EndDateTime,
+                                    expectedCheckOut,
 
                                 ActualTime =
                                     checkOut.Value,
@@ -837,6 +851,11 @@ namespace HRM.Services.Attendance.Evaluation
                             });
                     }
                 }
+
+
+
+
+
             }
 
 
@@ -875,15 +894,11 @@ namespace HRM.Services.Attendance.Evaluation
             }
             else if (requiresCheckOut)
             {
-                var deadline =
-                    segment.EndDateTime
-                        .AddMinutes(
-                            segment.GraceAfterMinutes);
-
+                var latestAllowedCheckOut = segment.EndDateTime;
 
                 result.IsComplete =
                     checkOut.HasValue ||
-                    evaluationTime <= deadline;
+                    evaluationTime <= latestAllowedCheckOut;
             }
             else
             {
@@ -909,99 +924,187 @@ namespace HRM.Services.Attendance.Evaluation
         // ============================================================
 
         private static AttendanceDailyStatus DetermineDailyStatus(
-            DateTime workDate,
-            DateTime evaluationTime,
-            IReadOnlyCollection<WorkPlanSegment> attendanceSegments,
-            IReadOnlyCollection<AttendanceEvaluatedSegmentDto>
-                evaluatedSegments,
-            IReadOnlyCollection<ResolvedAttendanceEvent> events,
-            bool requiresAttendance,
-            bool isComplete)
+         DateTime workDate,
+         DateTime evaluationTime,
+         IReadOnlyCollection<WorkPlanSegment> attendanceSegments,
+         IReadOnlyCollection<AttendanceEvaluatedSegmentDto> evaluatedSegments,
+         IReadOnlyCollection<ResolvedAttendanceEvent> events,
+         bool requiresAttendance,
+         bool isComplete)
         {
-            // Future calendar date
+            // ============================================================
+            // FUTURE DATE
+            // ============================================================
+
             if (workDate.Date > evaluationTime.Date)
             {
                 return AttendanceDailyStatus.Future;
             }
 
 
-            // No physical attendance required
+            // ============================================================
+            // NO ATTENDANCE REQUIRED
+            // ============================================================
+
             if (!requiresAttendance)
             {
                 return AttendanceDailyStatus.RestDay;
             }
 
 
-            var firstBoundary =
+            // ============================================================
+            // FIND CHECK-IN BOUNDARY
+            // ============================================================
+
+            var checkInBoundary =
                 attendanceSegments
                     .Where(x =>
-                        IsClockBoundary(
+                        RequiresCheckIn(
                             x.WorkSegmentType?.Code))
                     .OrderBy(x => x.StartDateTime)
                     .FirstOrDefault();
 
 
-            var lastBoundary =
+            // ============================================================
+            // FIND CHECK-OUT BOUNDARY
+            // ============================================================
+
+            var checkOutBoundary =
                 attendanceSegments
                     .Where(x =>
-                        IsClockBoundary(
+                        RequiresCheckOut(
                             x.WorkSegmentType?.Code))
-                    .OrderByDescending(x => x.EndDateTime)
+                    .OrderByDescending(x => x.StartDateTime)
                     .FirstOrDefault();
 
 
-            // Before today's first expected attendance boundary
+            // ============================================================
+            // BEFORE EXPECTED CHECK-IN
+            // ============================================================
+
             if (workDate.Date == evaluationTime.Date &&
-                firstBoundary != null &&
-                evaluationTime < firstBoundary.StartDateTime)
+                checkInBoundary != null &&
+                evaluationTime < checkInBoundary.StartDateTime)
             {
                 return AttendanceDailyStatus.Future;
             }
 
 
-            // Has employee produced any resolved physical
-            // attendance event?
             var hasResolvedAttendance =
                 events.Any();
 
 
-            // --------------------------------------------------------
-            // TODAY - STILL IN PROGRESS
-            // --------------------------------------------------------
+            var hasCheckIn =
+                events.Any(x =>
+                    x.ClockType ==
+                    AttendanceClockType.CheckIn);
 
-            if (workDate.Date == evaluationTime.Date &&
-                lastBoundary != null)
+
+            var hasCheckOut =
+                events.Any(x =>
+                    x.ClockType ==
+                    AttendanceClockType.CheckOut);
+
+
+            // ============================================================
+            // TODAY
+            // ============================================================
+
+            if (workDate.Date == evaluationTime.Date)
             {
-                var finalDeadline =
-                    lastBoundary.EndDateTime
-                        .AddMinutes(
-                            lastBoundary.GraceAfterMinutes);
+                var expectedDutyEnd =
+                    checkOutBoundary?.StartDateTime;
+
+                var latestCheckOutTime =
+                    checkOutBoundary?.EndDateTime;
 
 
-                if (evaluationTime <= finalDeadline)
+                // --------------------------------------------------------
+                // STILL WITHIN PLANNED WORKING TIME
+                // Example: planned 08:00 - 14:00
+                // --------------------------------------------------------
+
+                if (expectedDutyEnd.HasValue &&
+                    evaluationTime <= expectedDutyEnd.Value)
                 {
                     return AttendanceDailyStatus.InProgress;
                 }
+
+
+                // --------------------------------------------------------
+                // EMPLOYEE HAS CHECKED IN AND CHECKED OUT
+                // --------------------------------------------------------
+
+                if (hasCheckIn && hasCheckOut)
+                {
+                    return isComplete
+                        ? AttendanceDailyStatus.Present
+                        : AttendanceDailyStatus.Incomplete;
+                }
+
+
+                // --------------------------------------------------------
+                // PLANNED DUTY HAS ENDED,
+                // BUT CHECKOUT WINDOW IS STILL OPEN
+                //
+                // Example:
+                // Expected checkout = 14:00
+                // Allowed until     = 23:59
+                // --------------------------------------------------------
+
+                if (latestCheckOutTime.HasValue &&
+                    evaluationTime <= latestCheckOutTime.Value)
+                {
+                    if (hasCheckIn)
+                    {
+                        return AttendanceDailyStatus.InProgress;
+                    }
+
+                    // Employee never checked in.
+                    //
+                    // We don't need to wait until 23:59 to know that
+                    // the expected CHECK_IN boundary was missed.
+                    return AttendanceDailyStatus.Absent;
+                }
+
+
+                // --------------------------------------------------------
+                // CHECKOUT WINDOW HAS CLOSED
+                // --------------------------------------------------------
+
+                if (!hasCheckIn)
+                {
+                    return AttendanceDailyStatus.Absent;
+                }
+
+                if (!hasCheckOut)
+                {
+                    return AttendanceDailyStatus.Incomplete;
+                }
+
+                return isComplete
+                    ? AttendanceDailyStatus.Present
+                    : AttendanceDailyStatus.Incomplete;
             }
+            // ============================================================
+            // HISTORICAL DATE
+            // ============================================================
 
-
-            // --------------------------------------------------------
-            // SHIFT/DAY FINISHED
-            // --------------------------------------------------------
-
-            if (!hasResolvedAttendance)
+            if (!hasCheckIn)
             {
                 return AttendanceDailyStatus.Absent;
             }
 
 
-            if (isComplete)
+            if (!hasCheckOut)
             {
-                return AttendanceDailyStatus.Present;
+                return AttendanceDailyStatus.Incomplete;
             }
 
 
-            return AttendanceDailyStatus.Incomplete;
+            return isComplete
+                ? AttendanceDailyStatus.Present
+                : AttendanceDailyStatus.Incomplete;
         }
 
 

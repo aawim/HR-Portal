@@ -303,15 +303,15 @@ namespace HRM.Services
 
 
             var containingSegment =
-    segments
-        .Where(x =>
-            IsNonBoundarySegment(
-                x.WorkSegmentTypeCode))
-        .Where(x =>
-            clockTime >= x.StartDateTime &&
-            clockTime <= x.EndDateTime)
-        .OrderBy(x => x.SequenceNumber)
-        .FirstOrDefault();
+            segments
+                .Where(x =>
+                    IsNonBoundarySegment(
+                        x.WorkSegmentTypeCode))
+                .Where(x =>
+                    clockTime >= x.StartDateTime &&
+                    clockTime <= x.EndDateTime)
+                .OrderBy(x => x.SequenceNumber)
+                .FirstOrDefault();
 
             if (containingSegment != null)
             {
