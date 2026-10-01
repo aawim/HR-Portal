@@ -236,16 +236,34 @@ namespace HRM.Services.Attendance.Evaluation
             DateTime? plannedStart = null;
             DateTime? plannedEnd = null;
 
+            var checkInBoundary =
+                attendanceSegments
+                    .Where(x =>
+                        RequiresCheckIn(
+                            x.WorkSegmentType?.Code))
+                    .OrderBy(x => x.StartDateTime)
+                    .FirstOrDefault();
 
-            if (attendanceSegments.Count > 0)
+            var checkOutBoundary =
+                attendanceSegments
+                    .Where(x =>
+                        RequiresCheckOut(
+                            x.WorkSegmentType?.Code))
+                    .OrderByDescending(x => x.StartDateTime)
+                    .FirstOrDefault();
+
+            if (checkInBoundary != null)
             {
                 plannedStart =
-                    attendanceSegments.Min(
-                        x => x.StartDateTime);
+                    checkInBoundary.StartDateTime;
+            }
 
+            if (checkOutBoundary != null)
+            {
+                // Expected checkout time.
+                // EndDateTime is the end of the allowed checkout window.
                 plannedEnd =
-                    attendanceSegments.Max(
-                        x => x.EndDateTime);
+                    checkOutBoundary.StartDateTime;
             }
 
 

@@ -277,21 +277,76 @@ namespace HRM.Services
                 generatedPlan.WorkPlanId;
 
             var segments =
-                await db.WorkPlanSegments
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkPlanId == workPlanId &&
-                        x.IsValid &&
-                        x.RequiresAttendance)
-                    .OrderBy(x => x.SequenceNumber)
-                    .Select(x => new
-                    {
-                        x.WorkPlanSegmentId,
-                        x.Name,
-                        x.StartDateTime,
-                        x.EndDateTime
-                    })
-                    .ToListAsync(cancellationToken);
+               await db.WorkPlanSegments
+                   .AsNoTracking()
+                   .Where(x =>
+                       x.WorkPlanId == workPlanId &&
+                       x.IsValid)
+                   .OrderBy(x => x.SequenceNumber)
+                   .Select(x => new
+                   {
+                       x.WorkPlanSegmentId,
+                       x.Name,
+                       x.SequenceNumber,
+
+                       WorkSegmentTypeCode =
+                           x.WorkSegmentType.Code,
+
+                       x.StartDateTime,
+                       x.EndDateTime,
+
+                       x.RequiresAttendance,
+                       x.GraceBeforeMinutes,
+                       x.GraceAfterMinutes
+                   })
+                   .ToListAsync(cancellationToken);
+
+
+            var containingSegment =
+    segments
+        .Where(x =>
+            IsNonBoundarySegment(
+                x.WorkSegmentTypeCode))
+        .Where(x =>
+            clockTime >= x.StartDateTime &&
+            clockTime <= x.EndDateTime)
+        .OrderBy(x => x.SequenceNumber)
+        .FirstOrDefault();
+
+            if (containingSegment != null)
+            {
+                return new AttendancePlanResolutionResult
+                {
+                    WorkPlanId =
+                        workPlanId,
+
+                    WorkPlanSegmentId =
+                        containingSegment.WorkPlanSegmentId,
+
+                    JobId =
+                        jobId,
+
+                    SegmentName =
+                        containingSegment.Name,
+
+                    ClockType =
+                        AttendanceClockType.Ignored,
+
+                    State =
+                        AttendancePlanResolutionState.Resolved,
+
+                    BoundaryTime =
+                        clockTime,
+
+                    DistanceMinutes =
+                        0,
+
+                    Message =
+                        $"Attendance event occurred during " +
+                        $"'{containingSegment.Name}'."
+                };
+            }
+
 
             if (segments.Count == 0)
             {
@@ -313,63 +368,114 @@ namespace HRM.Services
             }
 
             var candidates =
-                new List<BoundaryCandidate>();
+      new List<BoundaryCandidate>();
 
             foreach (var segment in segments)
             {
-                var distanceToStart =
-                    Math.Abs(
-                        (clockTime - segment.StartDateTime)
-                        .TotalMinutes);
+                var code =
+                    segment.WorkSegmentTypeCode?
+                        .Trim()
+                        .ToUpperInvariant();
 
-                var distanceToEnd =
-                    Math.Abs(
-                        (clockTime - segment.EndDateTime)
-                        .TotalMinutes);
 
-                candidates.Add(
-                    new BoundaryCandidate
-                    {
-                        WorkPlanSegmentId =
-                            segment.WorkPlanSegmentId,
+                // =========================================================
+                // CHECK-IN BOUNDARIES
+                // =========================================================
 
-                        SegmentName =
-                            segment.Name,
+                if (IsCheckInBoundary(code))
+                {
+                    var boundaryTime =
+                        segment.StartDateTime;
 
-                        ClockType =
-                            AttendanceClockType.CheckIn,
+                    var distance =
+                        Math.Abs(
+                            (clockTime - boundaryTime)
+                            .TotalMinutes);
 
-                        BoundaryTime =
-                            segment.StartDateTime,
+                    candidates.Add(
+                        new BoundaryCandidate
+                        {
+                            WorkPlanSegmentId =
+                                segment.WorkPlanSegmentId,
 
-                        DistanceMinutes =
-                            distanceToStart
-                    });
+                            SegmentName =
+                                segment.Name,
 
-                candidates.Add(
-                    new BoundaryCandidate
-                    {
-                        WorkPlanSegmentId =
-                            segment.WorkPlanSegmentId,
+                            ClockType =
+                                AttendanceClockType.CheckIn,
 
-                        SegmentName =
-                            segment.Name,
+                            BoundaryTime =
+                                boundaryTime,
 
-                        ClockType =
-                            AttendanceClockType.CheckOut,
+                            DistanceMinutes =
+                                distance
+                        });
+                }
 
-                        BoundaryTime =
-                            segment.EndDateTime,
 
-                        DistanceMinutes =
-                            distanceToEnd
-                    });
+                // =========================================================
+                // CHECK-OUT BOUNDARIES
+                // =========================================================
+
+                if (IsCheckOutBoundary(code))
+                {
+                    var boundaryTime =
+                        segment.EndDateTime;
+
+                    var distance =
+                        Math.Abs(
+                            (clockTime - boundaryTime)
+                            .TotalMinutes);
+
+                    candidates.Add(
+                        new BoundaryCandidate
+                        {
+                            WorkPlanSegmentId =
+                                segment.WorkPlanSegmentId,
+
+                            SegmentName =
+                                segment.Name,
+
+                            ClockType =
+                                AttendanceClockType.CheckOut,
+
+                            BoundaryTime =
+                                boundaryTime,
+
+                            DistanceMinutes =
+                                distance
+                        });
+                }
             }
+            if (candidates.Count == 0)
+            {
+                return new AttendancePlanResolutionResult
+                {
+                    WorkPlanId =
+                        workPlanId,
+
+                    JobId =
+                        jobId,
+
+                    State =
+                        AttendancePlanResolutionState.NoSegment,
+
+                    ClockType =
+                        AttendanceClockType.Unresolved,
+
+                    Message =
+                        "The work plan does not contain an applicable " +
+                        "attendance clock boundary."
+                };
+            }
+
 
             var bestCandidate =
                 candidates
                     .OrderBy(x => x.DistanceMinutes)
                     .First();
+
+
 
             if (bestCandidate.DistanceMinutes >
                 MaximumResolutionDistanceMinutes)
@@ -431,7 +537,59 @@ namespace HRM.Services
             };
         }
 
-    
+        private static bool IsCheckInBoundary(
+        string? code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            return code.Trim().ToUpperInvariant() switch
+            {
+                "CHECK_IN" => true,
+                "DUTY_CHECK_IN" => true,
+                "BREAK_END" => true,
+
+                _ => false
+            };
+        }
+
+
+        private static bool IsCheckOutBoundary(
+            string? code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            return code.Trim().ToUpperInvariant() switch
+            {
+                "CHECK_OUT" => true,
+                "DUTY_CHECK_OUT" => true,
+                "BREAK_START" => true,
+
+                _ => false
+            };
+        }
+
+
+        private static bool IsNonBoundarySegment(string? code)
+        {
+            if (string.IsNullOrWhiteSpace(code))
+                return false;
+
+            return code.Trim().ToUpperInvariant() switch
+            {
+                "BREAK" => true,
+                "LUNCH" => true,
+                "MEETING" => true,
+                "TRAINING" => true,
+                "TRAVEL" => true,
+                "ON_CALL" => true,
+                "INFORMATIONAL" => true,
+
+                _ => false
+            };
+        }
+
 
         private sealed class BoundaryCandidate
         {
