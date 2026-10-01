@@ -6591,9 +6591,16 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
+            entity.HasKey(e => e.UserId);
+
+            entity.Property(e => e.UserId)
+                .HasColumnName("UserID")
+                .ValueGeneratedOnAdd();
+
+
             entity.HasIndex(e => e.Username, "IX_UserName").IsUnique();
 
-            entity.Property(e => e.UserId).HasColumnName("UserID");
+            //entity.Property(e => e.UserId).HasColumnName("UserID");
             entity.Property(e => e.ApplicationName).HasMaxLength(255);
             entity.Property(e => e.BusinessEntityID).HasColumnName("BusinessEntityID");
             entity.Property(e => e.Comment).HasMaxLength(255);

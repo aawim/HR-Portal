@@ -1,6 +1,10 @@
 ﻿@page "/online"
 @page "/"
 
+@implements IDisposable
+
+
+
 @using HRM.DTOs
 @using HRM.Models
 @using HRM.Services
@@ -18,11 +22,25 @@
 @inject ILeaveService LeaveService
 @inject IAttendanceService AttendanceService
 @inject IAttendancePlanService AttendancePlanService
-
+@inject IHttpContextAccessor HttpContextAccessor
+@inject PersistentComponentState ApplicationState
 
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Dashboard</PageTitle>
+
+@if (_showAccessDeniedMessage)
+{
+    <div class="alert alert-warning mt-4">
+        <h4 class="alert-heading">Access denied</h4>
+
+        <p class="mb-0">
+            You are not registered as an active employee in this system.
+            Please contact your organisation administrator for access.
+        </p>
+    </div>
+}
+
 
 <AuthorizeView>
 
@@ -249,7 +267,14 @@
 
 </AuthorizeView>
 
+
+
 @code{
+    private const string AccessDeniedStateKey = "AccessDeniedMessage";
+    private bool _showAccessDeniedMessage;
+    private PersistingComponentStateSubscription? _persistingSubscription;
+
+
 
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
@@ -293,6 +318,32 @@
     protected override async Task OnInitializedAsync()
     {
 
+        // During interactive render, use the value saved from prerendering.
+        if (!ApplicationState.TryTakeFromJson(
+                AccessDeniedStateKey,
+                out _showAccessDeniedMessage))
+        {
+            // During the first server render, read it from Session.
+            var session = HttpContextAccessor.HttpContext?.Session;
+
+            _showAccessDeniedMessage =
+                session?.GetString(AccessDeniedStateKey) == "1";
+
+            // Remove it only after reading it once.
+            session?.Remove(AccessDeniedStateKey);
+        }
+
+        _persistingSubscription =
+            ApplicationState.RegisterOnPersisting(() =>
+            {
+                ApplicationState.PersistAsJson(
+                    AccessDeniedStateKey,
+                    _showAccessDeniedMessage);
+
+                return Task.CompletedTask;
+            });
+
+
        var auth = await AuthState!;
 
         if (!auth.User.Identity?.IsAuthenticated ?? true)
@@ -304,6 +355,11 @@
         await LoadAttendance();
         await LoadYearlyAttendance(DateTime.Today.Year);
         loading = false;
+    }
+
+    public void Dispose()
+    {
+        _persistingSubscription?.Dispose();
     }
 
     private async Task LoadYearlyAttendance(int year)

@@ -1,18 +1,20 @@
 ﻿using HRM.DTOs.UserContext;
 using HRM.Enum;
 using HRM.Services.Interfaces;
+using Microsoft.AspNetCore.Components;
 
 namespace HRM.Services
 {
     public class UserAccessService : IUserAccessService
     {
         private readonly IUserContextService _userContextService;
-
+        private readonly NavigationManager _navigation;
 
         public UserAccessService(
-            IUserContextService userContextService)
+            IUserContextService userContextService, NavigationManager navigation)
         {
             _userContextService = userContextService;
+            _navigation = navigation;
         }
 
  
@@ -64,11 +66,28 @@ namespace HRM.Services
                     .GetCurrentAsync();
 
 
+
             if (context == null)
             {
+                _navigation.NavigateTo(
+                    "/Online/Auth/NoAccessLogout",
+                    forceLoad: true,
+                    replace: true);
+
                 throw new UnauthorizedAccessException(
-                    "User context is not available.");
+                    "Authenticated eFaas user does not have local system access.");
             }
+
+
+
+
+            //if (context == null)
+            //{
+            //    throw new UnauthorizedAccessException(
+            //        "User context is not available.");
+
+            //    //throw new UserContextMissingException("User context is not available.");
+            //}
 
 
             return context;

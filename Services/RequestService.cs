@@ -114,18 +114,7 @@ namespace HRM.Services
             return true;
         }
 
-        private async Task<string> GenerateReferenceNumberAsync(
-            HrmTeContext db,
-            int requestTypeId)
-        {
-            var year = DateTime.Now.Year;
-
-            var count = await db.Requests.CountAsync(x =>
-                x.RequestTypeId == requestTypeId &&
-                x.ApplicationDate.Year == year);
-
-            return $"{requestTypeId}-{year}-{(count + 1):D6}";
-        }
+    
 
     }
 }
