@@ -14,12 +14,6 @@ namespace HRM.Services.Interfaces
       
         Task AddAttendanceCheckAsync(int individualId, DateTime checkTime, int checkType);
 
-
-      //  Task<List<AttendanceRawLogDto>> GetLogsAsync(
-      //int individualId,
-      //DateTime checkTime,
-      //CancellationToken cancellationToken = default);
-
         Task<List<AttendanceRawLogDto>> GetLogsAsync(
             int individualId,
             int jobId,
@@ -32,6 +26,12 @@ namespace HRM.Services.Interfaces
 
         Task<WeeklyWorkedHoursDto>GetMyWeeklyWorkedHoursAsync();
 
+        Task<AttendanceDailyEvaluationDto> GetEvaluationAsync(
+            int individualId,
+            int jobId,
+            int organisationBusinessEntityId,
+            DateTime workDate,
+            CancellationToken cancellationToken = default);
 
     }
 }

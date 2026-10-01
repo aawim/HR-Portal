@@ -2,6 +2,7 @@
 using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
+using HRM.Services.Attendance.Evaluation;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 using System.Threading;
@@ -13,18 +14,24 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IAttendanceLogDataLoader _loader;
         private readonly IUserAccessService _userAccessService;
-        private readonly IAttendancePlanService _attendancePlanService;
-
+        //private readonly IAttendancePlanService _attendancePlanService;
+        private readonly IAttendanceEvaluationService _attendanceEvaluationService;
         private readonly ILogger<AttendanceService> _logger;
 
 
-        public AttendanceService(IDbContextFactory<HrmTeContext> factory, IAttendanceLogDataLoader loader, IUserAccessService userAccessService, IAttendancePlanService attendancePlanService, ILogger<AttendanceService> logger)
+        public AttendanceService(IDbContextFactory<HrmTeContext> factory,
+            IAttendanceEvaluationService attendanceEvaluationService
+,           IAttendanceLogDataLoader loader, 
+            IUserAccessService userAccessService, 
+            IAttendancePlanService attendancePlanService, 
+            ILogger<AttendanceService> logger)
         {
             _dbFactory = factory;
             _loader = loader;
             _userAccessService = userAccessService;
-            _attendancePlanService = attendancePlanService;
+            //_attendancePlanService = attendancePlanService;
             _logger = logger;
+            _attendanceEvaluationService = attendanceEvaluationService;
 
         }
 
@@ -551,7 +558,19 @@ namespace HRM.Services
         }
 
 
-
+        public async Task<AttendanceDailyEvaluationDto> GetEvaluationAsync(
+            int individualId,
+            int jobId,
+            int organisationBusinessEntityId,
+            DateTime workDate,
+            CancellationToken cancellationToken = default)
+        {
+            return await _attendanceEvaluationService.EvaluateAsync(
+                individualId,
+                jobId,
+                workDate,
+                cancellationToken);
+        }
         public async Task<WeeklyWorkedHoursDto> GetMyWeeklyWorkedHoursAsync()
         {
             var userContext =

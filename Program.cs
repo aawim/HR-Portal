@@ -36,6 +36,7 @@ using HRM.Services.Interfaces.Policy;
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.WorkPlanning;
 using HRM.Models.Archives;
+using HRM.Services.Attendance.Evaluation;
 
 
 
@@ -112,10 +113,12 @@ builder.Services.AddScoped<
     AttendanceResolver>();
 
 
+builder.Services.AddScoped<
+    IAttendanceEvaluationService,
+    AttendanceEvaluationService>();
 
 
 
- 
 
 
 builder.Services.AddScoped<UserContext, UserContext>();
