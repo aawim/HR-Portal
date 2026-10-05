@@ -5,6 +5,7 @@
         Resolved = 1,
         NoWorkPlan = 2,
         NoSegment = 3,
-        OutsideResolutionWindow = 4
+        OutsideResolutionWindow = 4,
+        Unresolved = 5,
     }
 }

@@ -22,6 +22,11 @@
 
         IncompleteAttendance = 9,
 
-        NoWorkPlan = 10
+        NoWorkPlan = 10,
+
+        LateBreakReturn = 11,
+        EarlyBreakStart = 12,
+        LateBreakStart = 13,
+        ExceededBreakDuration = 14
     }
 }

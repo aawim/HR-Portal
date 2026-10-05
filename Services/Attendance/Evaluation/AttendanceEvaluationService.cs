@@ -1,4 +1,5 @@
-﻿using HRM.Data;
+﻿using HRM.Components.Admin.Settings.Workplan;
+using HRM.Data;
 using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
@@ -34,6 +35,9 @@ namespace HRM.Services.Attendance
 
             var evaluationTime =
                 DateTime.Now;
+
+
+
 
 
             // ========================================================
@@ -122,17 +126,9 @@ namespace HRM.Services.Attendance
                     .OrderBy(x => x.SequenceNumber)
                     .ThenBy(x => x.StartDateTime)
                     .ToList();
-
-
-            var attendanceSegments =
-                segments
-                    .Where(x => x.RequiresAttendance)
-                    .ToList();
-
-
-            var requiresAttendance =
-                attendanceSegments.Any();
-
+            var attendanceSegments = segments.ToList();
+            var requiresAttendance = attendanceSegments.Any();
+ 
 
             // ========================================================
             // RESOLVED ATTENDANCE EVENTS
@@ -169,6 +165,34 @@ namespace HRM.Services.Attendance
                         })
                     .OrderBy(x => x.LogDateTime)
                     .ToList();
+
+ 
+
+
+        //    var lunchCheckOut =
+        //        resolvedEvents
+        //      .Where(x =>
+        //    x.ClockType == AttendanceClockType.CheckOut)
+        //.OrderBy(x => x.AttendanceLogId)
+        //.FirstOrDefault();
+
+
+
+        //    var lunchCheckIn =
+        //        resolvedEvents
+        //      .Where(x =>
+        //    x.ClockType == AttendanceClockType.CheckIn)
+        //.OrderBy(x => x.AttendanceLogId)
+        //.FirstOrDefault();
+
+ 
+
+
+
+
+
+
+
 
 
             // ========================================================
@@ -303,18 +327,7 @@ namespace HRM.Services.Attendance
             // Break deduction can be introduced later.
             // ========================================================
 
-            var workedMinutes = 0;
-
-            if (effectiveCheckIn != null &&
-                effectiveCheckOut != null &&
-                effectiveCheckOut.LogDateTime >
-                effectiveCheckIn.LogDateTime)
-            {
-                workedMinutes =
-                    CalculateMinutes(
-                        effectiveCheckIn.LogDateTime,
-                        effectiveCheckOut.LogDateTime);
-            }
+            var workedMinutes = CalculateWorkedMinutes(resolvedEvents);
 
 
             // ========================================================
@@ -1259,5 +1272,86 @@ namespace HRM.Services.Attendance
 
             public DateTime LogDateTime { get; set; }
         }
+
+
+        private static int CalculateWorkedMinutes(
+    IReadOnlyCollection<ResolvedAttendanceEvent> events)
+        {
+            var orderedEvents =
+                events
+                    .Where(x =>
+                        x.ClockType ==
+                            AttendanceClockType.CheckIn
+                        ||
+                        x.ClockType ==
+                            AttendanceClockType.CheckOut)
+                    .OrderBy(x => x.LogDateTime)
+                    .ToList();
+
+
+            if (orderedEvents.Count == 0)
+                return 0;
+
+
+            DateTime? currentCheckIn = null;
+
+            var totalWorkedMinutes = 0;
+
+
+            foreach (var attendanceEvent in orderedEvents)
+            {
+                // ========================================================
+                // CHECK IN
+                // ========================================================
+
+                if (attendanceEvent.ClockType ==
+                    AttendanceClockType.CheckIn)
+                {
+                    // Only open a working period when we are currently OUT.
+                    //
+                    // Duplicate CheckIns do not restart the period.
+                    if (!currentCheckIn.HasValue)
+                    {
+                        currentCheckIn =
+                            attendanceEvent.LogDateTime;
+                    }
+
+                    continue;
+                }
+
+
+                // ========================================================
+                // CHECK OUT
+                // ========================================================
+
+                if (attendanceEvent.ClockType ==
+                    AttendanceClockType.CheckOut)
+                {
+                    // Cannot close a period if we were not IN.
+                    if (!currentCheckIn.HasValue)
+                        continue;
+
+
+                    if (attendanceEvent.LogDateTime >
+                        currentCheckIn.Value)
+                    {
+                        totalWorkedMinutes +=
+                            CalculateMinutes(
+                                currentCheckIn.Value,
+                                attendanceEvent.LogDateTime);
+                    }
+
+
+                    // Employee is now OUT.
+                    currentCheckIn = null;
+                }
+            }
+
+
+            return totalWorkedMinutes;
+        }
+
+
+
     }
 }
