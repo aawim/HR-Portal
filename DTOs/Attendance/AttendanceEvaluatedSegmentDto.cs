@@ -61,5 +61,11 @@
         // Segment-specific problems
 
         public List<AttendanceEvaluationIssueDto> Issues { get; set; } = [];
+
+
+
+        public int BreakMinutes { get; set; }
+
+        public int LateBreakReturnMinutes { get; set; }
     }
 }

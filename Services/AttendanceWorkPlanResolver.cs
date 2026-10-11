@@ -12,7 +12,9 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
  
         private readonly IWorkPlanGenerator _workPlanGenerator;
- 
+
+        private const int EarlyCheckInResolutionMinutes = 180;
+
 
         public AttendanceWorkPlanResolver(
             IDbContextFactory<HrmTeContext> dbFactory, 
@@ -277,14 +279,13 @@ namespace HRM.Services
                     var expectedTime =
                         segment.StartDateTime;
 
+                    // Resolution window is independent of attendance grace.
                     var windowStart =
-                        segment.StartDateTime
-                            .AddMinutes(
-                                -segment.GraceBeforeMinutes);
+                        expectedTime.AddMinutes(
+                            -EarlyCheckInResolutionMinutes);
 
                     var windowEnd =
                         segment.EndDateTime;
-
 
                     if (clockTime >= windowStart &&
                         clockTime <= windowEnd)
@@ -317,7 +318,6 @@ namespace HRM.Services
                             });
                     }
                 }
-
 
                 // ========================================================
                 // CHECK-OUT BOUNDARY
@@ -421,6 +421,31 @@ namespace HRM.Services
                     .OrderBy(x =>
                         x.DistanceMinutes)
                     .First();
+
+
+            var earlyCandidates = candidates
+            .Where(x =>
+                x.ClockType == AttendanceClockType.CheckIn &&
+                clockTime < x.BoundaryTime)
+            .ToList();
+
+            foreach (var earlyCandidate in earlyCandidates)
+            {
+                var hasCompetingSegment = segments.Any(x =>
+                    x.WorkPlanSegmentId !=
+                        earlyCandidate.WorkPlanSegmentId &&
+
+                    x.RequiresAttendance &&
+
+                    clockTime >= x.StartDateTime &&
+                    clockTime <= x.EndDateTime);
+
+                if (hasCompetingSegment)
+                {
+                    candidates.Remove(earlyCandidate);
+                }
+            }
+
 
 
             return new AttendancePlanResolutionResult

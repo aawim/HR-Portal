@@ -337,6 +337,9 @@ namespace HRM.Services.Attendance
             var evaluatedSegments =
                 new List<AttendanceEvaluatedSegmentDto>();
 
+       
+
+
 
             foreach (var segment in segments)
             {
@@ -346,8 +349,7 @@ namespace HRM.Services.Attendance
                         resolvedEvents,
                         evaluationTime);
 
-                evaluatedSegments.Add(
-                    evaluatedSegment);
+                evaluatedSegments.Add(evaluatedSegment);
             }
 
 
@@ -628,6 +630,21 @@ namespace HRM.Services.Attendance
                     .ToList();
 
 
+
+
+            if (IsPairedBreakSegment(segment.WorkSegmentType.Code))
+            {
+                EvaluateLunchBreak(
+                    result,
+                    segment,
+                    segmentEvents,
+                    evaluationTime);
+
+                return result;
+
+
+
+            }
             // ========================================================
             // CHECK IN
             //
@@ -1351,7 +1368,220 @@ namespace HRM.Services.Attendance
             return totalWorkedMinutes;
         }
 
+        private static bool IsPairedBreakSegment(string? code)
+        {
+            return string.Equals(
+                code,
+                "LUNCH",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static void EvaluateLunchBreak(
+     AttendanceEvaluatedSegmentDto result,
+     WorkPlanSegment segment,
+     List<ResolvedAttendanceEvent> segmentEvents,
+     DateTime evaluationTime)
+        {
+            // ========================================================
+            // LUNCH OUT
+            // ========================================================
+
+            var lunchCheckOut =
+                segmentEvents
+                    .Where(x =>
+                        x.ClockType ==
+                            AttendanceClockType.CheckOut)
+                    .OrderBy(x =>
+                        x.LogDateTime)
+                    .FirstOrDefault();
 
 
+            // ========================================================
+            // LUNCH IN
+            // Must be after Lunch OUT
+            // ========================================================
+
+            var lunchCheckIn =
+                segmentEvents
+                    .Where(x =>
+                        x.ClockType ==
+                            AttendanceClockType.CheckIn &&
+                        (
+                            lunchCheckOut == null ||
+                            x.LogDateTime >
+                                lunchCheckOut.LogDateTime
+                        ))
+                    .OrderBy(x =>
+                        x.LogDateTime)
+                    .FirstOrDefault();
+
+
+            DateTime? lunchOutTime =
+                lunchCheckOut?.LogDateTime;
+
+            DateTime? lunchInTime =
+                lunchCheckIn?.LogDateTime;
+
+
+            // ========================================================
+            // STORE ACTUAL TIMES
+            // ========================================================
+
+            result.CheckOut =
+                lunchOutTime;
+
+            result.CheckIn =
+                lunchInTime;
+
+
+            // ========================================================
+            // ACTUAL BREAK DURATION
+            // ========================================================
+
+            if (lunchOutTime.HasValue &&
+                lunchInTime.HasValue &&
+                lunchInTime.Value >
+                    lunchOutTime.Value)
+            {
+                result.BreakMinutes =
+                    CalculateMinutes(
+                        lunchOutTime.Value,
+                        lunchInTime.Value);
+            }
+
+
+            // ========================================================
+            // MISSING LUNCH OUT
+            // ========================================================
+
+            if (!lunchOutTime.HasValue &&
+                evaluationTime >
+                    segment.StartDateTime)
+            {
+                result.Issues.Add(
+                    new AttendanceEvaluationIssueDto
+                    {
+                        Type =
+                            AttendanceEvaluationIssueType
+                                .MissingBreakOut,
+
+                        Severity =
+                            AttendanceEvaluationIssueSeverity.Warning,
+
+                        Message =
+                            $"No check-out was recorded for " +
+                            $"'{segment.Name}'.",
+
+                        WorkPlanSegmentId =
+                            segment.WorkPlanSegmentId,
+
+                        ExpectedTime =
+                            segment.StartDateTime
+                    });
+            }
+
+
+            // ========================================================
+            // MISSING LUNCH IN
+            // ========================================================
+
+            var expectedReturn =
+                segment.EndDateTime;
+
+            var allowedReturn =
+                expectedReturn.AddMinutes(
+                    segment.GraceAfterMinutes);
+
+
+            if (lunchOutTime.HasValue &&
+                !lunchInTime.HasValue &&
+                evaluationTime > allowedReturn)
+            {
+                result.Issues.Add(
+                    new AttendanceEvaluationIssueDto
+                    {
+                        Type =
+                            AttendanceEvaluationIssueType
+                                .MissingBreakIn,
+
+                        Severity =
+                            AttendanceEvaluationIssueSeverity.Warning,
+
+                        Message =
+                            $"No return check-in was recorded for " +
+                            $"'{segment.Name}'.",
+
+                        WorkPlanSegmentId =
+                            segment.WorkPlanSegmentId,
+
+                        AttendanceLogId =
+                            lunchCheckOut?.AttendanceLogId,
+
+                        ExpectedTime =
+                            expectedReturn
+                    });
+            }
+
+
+            // ========================================================
+            // LATE RETURN FROM LUNCH
+            // ========================================================
+
+            if (lunchInTime.HasValue &&
+                lunchInTime.Value > allowedReturn)
+            {
+                var lateMinutes =
+                    CalculateMinutes(
+                        allowedReturn,
+                        lunchInTime.Value);
+
+
+                result.LateBreakReturnMinutes =
+                    lateMinutes;
+
+
+                result.Issues.Add(
+                    new AttendanceEvaluationIssueDto
+                    {
+                        Type =
+                            AttendanceEvaluationIssueType
+                                .LateBreakReturn,
+
+                        Severity =
+                            AttendanceEvaluationIssueSeverity.Warning,
+
+                        Message =
+                            $"Late return from '{segment.Name}' " +
+                            $"by {lateMinutes} minute(s).",
+
+                        WorkPlanSegmentId =
+                            segment.WorkPlanSegmentId,
+
+                        AttendanceLogId =
+                            lunchCheckIn?.AttendanceLogId,
+
+                        ExpectedTime =
+                            expectedReturn,
+
+                        ActualTime =
+                            lunchInTime.Value,
+
+                        DifferenceMinutes =
+                            lateMinutes
+                    });
+            }
+
+
+            // ========================================================
+            // COMPLETE
+            // ========================================================
+
+            result.IsComplete =
+                lunchOutTime.HasValue &&
+                lunchInTime.HasValue;
+
+            result.HasException =
+                result.Issues.Count > 0;
+        }
     }
 }
