@@ -38,6 +38,7 @@ using HRM.WorkPlanning;
 using HRM.Models.Archives;
 using HRM.Services.Attendance.Evaluation;
 using HRM.Services.Attendance;
+using HRM.Services.Interfaces.AppovalWF;
 
 
 
@@ -119,8 +120,13 @@ builder.Services.AddScoped<
     AttendanceEvaluationService>();
 
 
+builder.Services.AddScoped<
+    IWorkflowDefinitionService,
+    WorkflowDefinitionService>();
 
-
+builder.Services.AddScoped<
+    IWorkflowApproverResolver,
+    WorkflowApproverResolver>();
 
 builder.Services.AddScoped<UserContext, UserContext>();
 

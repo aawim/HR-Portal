@@ -1,4 +1,5 @@
 ﻿using HRM.Models.Archives;
+using HRM.Models.Workflow;
 using System;
 using System.Collections.Generic;
 
@@ -33,4 +34,6 @@ public partial class JobType
     public virtual ICollection<PayrollItemsProcessingWhiteList> PayrollItemsProcessingWhiteLists { get; set; } = new List<PayrollItemsProcessingWhiteList>();
 
     public virtual ICollection<SalaryRateDefinition> SalaryRateDefinitions { get; set; } = new List<SalaryRateDefinition>();
+
+    public virtual ICollection<WfWorkflowDefinition> WorkflowDefinitions { get; set; } = new List<WfWorkflowDefinition>();
 }

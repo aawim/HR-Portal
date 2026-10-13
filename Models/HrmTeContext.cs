@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using HRM.Models.Archives;
 using HRM.Models.LeaveTypes;
+using HRM.Models.Workflow;
 using HRM.Models.WorkPlanning;
 using Microsoft.EntityFrameworkCore;
 
@@ -16,6 +17,37 @@ public partial class HrmTeContext : DbContext
     public HrmTeContext(DbContextOptions<HrmTeContext> options) : base(options)
     {
     }
+
+    public DbSet<WfWorkflowDefinition> WfWorkflowDefinitions
+    => Set<WfWorkflowDefinition>();
+
+    public DbSet<WfWorkflowStage> WfWorkflowStages
+        => Set<WfWorkflowStage>();
+
+    public DbSet<WfStageApprover> WfStageApprovers
+        => Set<WfStageApprover>();
+
+    public DbSet<WfRequestInstance> WfRequestInstances
+        => Set<WfRequestInstance>();
+
+    public DbSet<WfRequestStageInstance> WfRequestStageInstances
+        => Set<WfRequestStageInstance>();
+
+    public DbSet<WfRequestApproval> WfRequestApprovals
+        => Set<WfRequestApproval>();
+
+    public DbSet<WfRequestAction> WfRequestActions
+        => Set<WfRequestAction>();
+
+
+    public virtual DbSet<WfWorkflowJobType> WfWorkflowJobTypes
+    { get; set; }
+
+
+
+
+
+
     public virtual DbSet<LeaveDefinition> LeaveDefinitions { get; set; }
 
     public virtual DbSet<LeavePolicy> LeavePolicies { get; set; }
@@ -7181,7 +7213,7 @@ public partial class HrmTeContext : DbContext
         });
 
 
-
+        modelBuilder.ConfigureWorkflow();
 
         ConfigurePlanningProvider(modelBuilder);
         ConfigureOrganisationWorkPlanningSetting(modelBuilder);
@@ -7192,7 +7224,8 @@ public partial class HrmTeContext : DbContext
         //ConfigureWorkPlan(modelBuilder);
         ConfigureWorkAssignment(modelBuilder);
 
-
+        ConfigureWorkflowJobType(modelBuilder);
+        ConfigureWorkflowDefinition(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
         //ConfigureWorkPlanningConfiguration(modelBuilder);
         ConfigureWorkPlanningRuntime(modelBuilder);
@@ -7783,6 +7816,113 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }
+
+
+    private static void ConfigureWorkflowDefinition(
+    ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<WfWorkflowDefinition>(entity =>
+        {
+            entity.ToTable("WF_WorkflowDefinitions");
+
+            entity.HasKey(x => x.WorkflowDefinitionId);
+
+            entity.Property(x => x.WorkflowDefinitionId)
+                .HasColumnName("WorkflowDefinitionID")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(x => x.RequestTypeId)
+                .HasColumnName("RequestTypeID")
+                .IsRequired();
+
+            entity.Property(x => x.OrganisationBusinessEntityId)
+                .HasColumnName("OrganisationBusinessEntityID");
+
+            entity.Property(x => x.VersionNumber)
+                .HasColumnName("VersionNumber")
+                .IsRequired();
+
+            entity.Property(x => x.Name)
+                .HasColumnName("Name")
+                .IsRequired();
+
+            entity.Property(x => x.IsActive)
+                .HasColumnName("IsActive")
+                .HasDefaultValue(true);
+
+            entity.Property(x => x.EffectiveFrom)
+                .HasColumnName("EffectiveFrom")
+                .HasColumnType("date");
+
+            entity.Property(x => x.EffectiveTo)
+                .HasColumnName("EffectiveTo")
+                .HasColumnType("date");
+
+            entity.Property(x => x.CreatedAt)
+                .HasColumnName("CreatedAt")
+                .HasColumnType("datetime2");
+
+            entity.HasOne(x => x.RequestType)
+                .WithMany()
+                .HasForeignKey(x => x.RequestTypeId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasMany(x => x.WorkflowJobTypes)
+                .WithOne(x => x.WorkflowDefinition)
+                .HasForeignKey(x => x.WorkflowDefinitionId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+
+
+    private static void ConfigureWorkflowJobType(ModelBuilder modelBuilder)
+    {
+        modelBuilder.Entity<WfWorkflowJobType>(entity =>
+        {
+            entity.ToTable("WF_WorkflowJobTypes");
+
+            entity.HasKey(x => x.WorkflowJobTypeId);
+
+            entity.Property(x => x.WorkflowJobTypeId)
+                .HasColumnName("WorkflowJobTypeID")
+                .ValueGeneratedOnAdd();
+
+            entity.Property(x => x.WorkflowDefinitionId)
+                .HasColumnName("WorkflowDefinitionID")
+                .IsRequired();
+
+            entity.Property(x => x.JobTypeId)
+                .HasColumnName("JobTypeID")
+                .IsRequired();
+
+            entity.Property(x => x.IsActive)
+                .HasColumnName("IsActive")
+                .HasDefaultValue(true)
+                .IsRequired();
+
+            entity.HasIndex(x => new
+            {
+                x.WorkflowDefinitionId,
+                x.JobTypeId
+            })
+            .IsUnique();
+
+            entity.HasOne(x => x.WorkflowDefinition)
+                .WithMany(x => x.WorkflowJobTypes)
+                .HasForeignKey(x => x.WorkflowDefinitionId)
+                .OnDelete(DeleteBehavior.NoAction);
+
+            entity.HasOne(x => x.JobType)
+                .WithMany()
+                .HasForeignKey(x => x.JobTypeId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+    }
+
+
+
+
 
 
 
