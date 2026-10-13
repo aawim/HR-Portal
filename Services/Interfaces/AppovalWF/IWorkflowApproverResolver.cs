@@ -1,11 +1,13 @@
-﻿namespace HRM.Services.Interfaces.AppovalWF
+﻿using HRM.DTOs.ApprovalFlow;
+
+namespace HRM.Services.Interfaces.AppovalWF
 {
     public interface IWorkflowApproverResolver
     {
         Task<IReadOnlyList<WorkflowApproverCandidate>>
         ResolveAsync(
             int workflowStageId,
-            int organisationBusinessEntityId,
+            WorkflowRequestContextDto context,
             CancellationToken cancellationToken = default);
     }
 

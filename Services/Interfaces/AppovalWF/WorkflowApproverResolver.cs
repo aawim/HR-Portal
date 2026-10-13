@@ -1,4 +1,5 @@
-﻿using HRM.Models;
+﻿using HRM.DTOs.ApprovalFlow;
+using HRM.Models;
 using HRM.Models.Workflow;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +19,7 @@ namespace HRM.Services.Interfaces.AppovalWF
         public async Task<IReadOnlyList<WorkflowApproverCandidate>>
        ResolveAsync(
            int workflowStageId,
-           int organisationBusinessEntityId,
+           WorkflowRequestContextDto context,
            CancellationToken cancellationToken = default)
         {
             await using var db =
@@ -57,8 +58,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                                 u.UserId == referenceId &&
                                 u.IsActive &&
                                 u.UserOrganisation != null &&
-                                u.UserOrganisation.BusinessEntityID ==
-                                    organisationBusinessEntityId)
+                                u.UserOrganisation.BusinessEntityID == context.ApplicantBusinessEntityId)
                             .Select(u => u.UserId)
                             .ToListAsync(cancellationToken);
                         break;
@@ -70,17 +70,17 @@ namespace HRM.Services.Interfaces.AppovalWF
                                 u.IsActive &&
                                 u.UserOrganisation != null &&
                                 u.UserOrganisation.BusinessEntityID ==
-                                    organisationBusinessEntityId &&
+                                    context.ApplicantBusinessEntityId &&
                                 (
                                     u.UserRoles.Any(ur =>
                                         ur.RoleId == referenceId &&
                                         ur.IsActive &&
                                         ur.UserOrganisation.BusinessEntityID ==
-                                            organisationBusinessEntityId)
+                                            context.ApplicantBusinessEntityId)
                                     ||
                                     u.UserAssignedUserGroups.Any(assignment =>
                                         assignment.UserGroup.UserOrganisation.BusinessEntityID ==
-                                            organisationBusinessEntityId &&
+                                            context.ApplicantBusinessEntityId &&
                                         assignment.UserGroup.UserGroupRoles.Any(gr =>
                                             gr.RoleId == referenceId &&
                                             gr.IsActive))
