@@ -1,0 +1,609 @@
+﻿@page "/debug/attendance-resolver"
+@rendermode InteractiveServer
+
+@using HRM.DTOs.Attendance
+@using HRM.Services.Attendance.Abstraction
+@using HRM.Services.Attendance.AttendancePlan
+@using Microsoft.EntityFrameworkCore
+@using HRM.Models.WorkPlanning
+@using HRM.Models
+@using System.Globalization
+@inject IDbContextFactory<HrmTeContext> DbFactory
+@inject IAttendanceWorkPlanResolver AttendanceResolver
+@inject IAttendanceLogProcessor AttendanceProcessor
+
+
+@* Restrict this route using your existing admin authorization policy. *@
+
+<div class="mx-auto max-w-6xl space-y-6 p-6">
+
+    <div>
+        <h1 class="text-2xl font-bold text-slate-900">
+            Attendance Resolver Debug
+        </h1>
+        <p class="text-sm text-slate-500">
+            Temporary diagnostic tool. Read-only.
+        </p>
+    </div>
+
+    <div class="rounded-xl border bg-white p-5 shadow-sm">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+
+            <div>
+                <label class="text-sm font-medium">WorkPlan ID</label>
+                <input type="number"
+                @bind="WorkPlanId"
+                class="mt-1 w-full rounded-lg border p-2" />
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Clock Date</label>
+                <input type="date"
+                @bind="ClockDate"
+                @bind:format="yyyy-MM-dd"
+                class="mt-1 w-full rounded-lg border p-2" />
+            </div>
+
+            <div>
+                <label class="text-sm font-medium">Clock Time</label>
+                <input type="time"
+                step="1"
+                @bind="ClockTime"
+                class="mt-1 w-full rounded-lg border p-2" />
+            </div>
+        </div>
+
+        <button @onclick="CheckAsync"
+        disabled="@Loading"
+        class="mt-4 rounded-lg bg-blue-600 px-5 py-2
+                       text-sm font-semibold text-white
+                       disabled:opacity-50">
+            @(Loading ? "Checking..." : "Check Resolution Windows")
+        </button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="rounded-lg border border-red-200 bg-red-50 p-4 text-red-700">
+            @Error
+        </div>
+    }
+
+    @if (Results.Count > 0)
+    {
+
+        <div class="rounded-xl border bg-white p-4">
+            <h3 class="font-semibold mb-3">
+                WorkPlan Selection Debug
+            </h3>
+
+            <p>Candidate Plans: @CandidatePlanCount</p>
+            <p>Matching Plans: @MatchingPlanCount</p>
+
+            @if (MatchingPlanCount == 0)
+            {
+                <p class="text-red-600">
+                    No matching WorkPlan found.
+                </p>
+            }
+            else if (MatchingPlanCount == 1)
+            {
+                <p class="text-green-600">
+                    Exactly one matching WorkPlan.
+                </p>
+            }
+            else
+            {
+                <p class="text-amber-600">
+                    Multiple WorkPlans match this clock.
+                </p>
+            }
+        </div>
+
+
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <div class="rounded-xl border bg-white p-4">
+                <p class="text-xs text-slate-500">Clock</p>
+                <p class="font-semibold">@CheckedClock.ToString("dd MMM yyyy HH:mm:ss")</p>
+            </div>
+
+            <div class="rounded-xl border bg-white p-4">
+                <p class="text-xs text-slate-500">Eligible Boundaries</p>
+                <p class="text-xl font-bold">@Results.Count(x => x.Eligible)</p>
+            </div>
+
+            <div class="rounded-xl border bg-white p-4">
+                <p class="text-xs text-slate-500">Plan</p>
+                <p class="text-xl font-bold">@WorkPlanId</p>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border bg-white shadow-sm">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50 text-slate-600">
+                    <tr>
+                        <th class="p-3">Segment</th>
+                        <th class="p-3">Code</th>
+                        <th class="p-3">Expected</th>
+                        <th class="p-3">Window Start</th>
+                        <th class="p-3">Window End</th>
+                        <th class="p-3">Grace Before</th>
+                        <th class="p-3">Eligible</th>
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y">
+                    @foreach (var item in Results)
+                    {
+                        <tr>
+                            <td class="p-3 font-medium">@item.Name</td>
+                            <td class="p-3">@item.Code</td>
+                            <td class="p-3">@item.Expected.ToString("dd MMM HH:mm")</td>
+                            <td class="p-3">@item.WindowStart.ToString("dd MMM HH:mm")</td>
+                            <td class="p-3">@item.WindowEnd.ToString("dd MMM HH:mm")</td>
+                            <td class="p-3">@item.GraceBefore</td>
+                            <td class="p-3">
+                                @if (item.Eligible)
+                                {
+                                    <span class="rounded-full bg-green-100 px-2 py-1 text-green-700">
+                                        YES
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="rounded-full bg-red-100 px-2 py-1 text-red-700">
+                                        NO
+                                    </span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+
+        <div class="rounded-xl border bg-white p-5 shadow-sm">
+
+            <h3 class="font-semibold text-slate-800 mb-4">
+                Actual Attendance Resolver Test
+            </h3>
+
+            <button @onclick="TestResolverAsync"
+                    class="rounded-lg bg-indigo-600 px-4 py-2
+                   text-sm font-semibold text-white">
+                Test Actual Resolver
+            </button>
+
+            @if (!string.IsNullOrEmpty(ResolutionError))
+            {
+                <pre class="mt-4 whitespace-pre-wrap text-sm text-red-600">
+                    @ResolutionError
+                        </pre>
+            }
+
+            @if (ResolutionResult != null)
+            {
+                <div class="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+                    <div>
+                        <strong>State:</strong>
+                        @ResolutionResult.State
+                    </div>
+
+                    <div>
+                        <strong>Clock Type:</strong>
+                        @ResolutionResult.ClockType
+                    </div>
+
+                    <div>
+                        <strong>WorkPlan ID:</strong>
+                        @ResolutionResult.WorkPlanId
+                    </div>
+
+                    <div>
+                        <strong>Segment ID:</strong>
+                        @ResolutionResult.WorkPlanSegmentId
+                    </div>
+
+                    <div>
+                        <strong>Segment Name:</strong>
+                        @ResolutionResult.SegmentName
+                    </div>
+
+                    <div>
+                        <strong>Distance:</strong>
+                        @ResolutionResult.DistanceMinutes
+                    </div>
+
+                    <div class="md:col-span-2">
+                        <strong>Message:</strong>
+                        @ResolutionResult.Message
+                    </div>
+
+                </div>
+            }
+
+        </div>
+
+
+        <div class="rounded-xl border bg-white p-5">
+            <h3 class="mb-3 font-semibold">
+                Attendance Log Processing Debug
+            </h3>
+
+            <input type="number"
+                   @bind="AttendanceLogId"
+                   class="rounded-lg border p-2" />
+
+            <button @onclick="CheckExistingResolutionAsync"
+                    class="ml-2 rounded-lg bg-blue-600 px-4 py-2 text-white">
+                Check Saved Resolution
+            </button>
+
+            @if (!string.IsNullOrEmpty(ExistingResolutionMessage))
+            {
+                <pre class="mt-4 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm">
+        @ExistingResolutionMessage
+                </pre>
+            }
+        </div>
+
+
+        <div class="mt-4 rounded-xl border bg-white p-4">
+
+            <h3 class="mb-2 font-semibold">
+                Test Attendance Processor
+            </h3>
+
+            <p class="mb-3 text-sm text-amber-700">
+                Warning: This operation writes attendance resolution records.
+                Use only with test data.
+            </p>
+
+            <button @onclick="ProcessAttendanceLogAsync"
+                    disabled="@IsProcessing"
+                    class="rounded-lg bg-amber-600 px-4 py-2
+                   text-white disabled:opacity-50">
+                @(IsProcessing ? "Processing..." : "Process Attendance Log")
+            </button>
+
+            @if (!string.IsNullOrEmpty(ProcessingResultMessage))
+            {
+                <pre class="mt-4 whitespace-pre-wrap rounded-lg bg-slate-50 p-4 text-sm">
+                    @ProcessingResultMessage
+                </pre>
+            }
+
+        </div>
+    }
+</div>
+
+@code {
+
+    private string? ProcessingResultMessage;
+    private bool IsProcessing;
+
+
+    private AttendancePlanResolutionResult? ResolutionResult;
+
+    private string? ResolutionError;
+
+    private long WorkPlanId { get; set; }
+
+    private DateTime ClockDate { get; set; } = DateTime.Today;
+
+    private TimeOnly ClockTime { get; set; } = new(7, 44, 0);
+
+    private DateTime CheckedClock { get; set; }
+
+    private const int EarlyCheckInResolutionMinutes = 180;
+
+
+    private int AttendanceLogId = 230853;
+    private string? ExistingResolutionMessage;
+
+    // private int individualId { get; set; } = 811;
+    // private int jobId { get; set; } = 915;
+    // private int organisationId { get; set; } = 3;
+
+    private int CandidatePlanCount;
+    private int MatchingPlanCount;
+    
+    
+
+    private bool Loading;
+    private string? Error;
+
+    private List<SegmentDebugRow> Results = new();
+
+     private async Task CheckAsync()
+    {
+        Loading = true;
+        Error = null;
+        Results.Clear();
+
+        try
+        {
+             
+            CheckedClock = ClockDate.Date.Add(ClockTime.ToTimeSpan());
+
+            await using var db =
+                await DbFactory.CreateDbContextAsync();
+
+
+            var selectedPlan = await db.WorkPlans
+              .AsNoTracking()
+              .FirstOrDefaultAsync(x =>
+                  x.WorkPlanId == WorkPlanId);
+
+            if (selectedPlan == null)
+            {
+                Error = "WorkPlan not found.";
+                return;
+            }
+
+            var candidatePlans = await db.WorkPlans
+                .AsNoTracking()
+                .Include(x => x.WorkPlanSegments)
+                    .ThenInclude(x => x.WorkSegmentType)
+                .Where(x =>
+                    x.IndividualId == selectedPlan.IndividualId &&
+                    x.JobId == selectedPlan.JobId &&
+                    x.OrganisationBusinessEntityId ==
+                        selectedPlan.OrganisationBusinessEntityId &&
+                    x.IsValid &&
+                    x.WorkDate >= CheckedClock.Date.AddDays(-1) &&
+                    x.WorkDate < CheckedClock.Date.AddDays(2))
+                .ToListAsync();
+
+            var matchingPlans = candidatePlans
+                .Where(x =>
+                    HasApplicableClockWindow(x, CheckedClock))
+                .ToList();
+
+            CandidatePlanCount = candidatePlans.Count;
+            MatchingPlanCount = matchingPlans.Count;
+
+
+
+
+
+
+
+            var segments = await db.WorkPlanSegments
+                .AsNoTracking()
+                .Where(x =>
+                    x.WorkPlanId == WorkPlanId &&
+                    x.IsValid)
+                .OrderBy(x => x.SequenceNumber)
+                .Select(x => new
+                {
+                    x.Name,
+                    Code = x.WorkSegmentType.Code,
+                    x.StartDateTime,
+                    x.EndDateTime,
+                    x.GraceBeforeMinutes
+                })
+                .ToListAsync();
+
+            if (segments.Count == 0)
+            {
+                Error = "No valid segments found for this WorkPlan.";
+                return;
+            }
+
+            foreach (var segment in segments)
+            {
+                var code = segment.Code.ToUpperInvariant();
+
+                DateTime expected;
+                DateTime start;
+                DateTime end;
+
+                if (code is "CHECK_IN" or "DUTY_CHECK_IN")
+                {
+                    expected = segment.StartDateTime;
+                    start = expected.AddMinutes(
+                        -EarlyCheckInResolutionMinutes);
+                    end = segment.EndDateTime;
+                }
+                else if (code is "CHECK_OUT" or "DUTY_CHECK_OUT")
+                {
+                    expected = segment.StartDateTime;
+                    start = expected.AddMinutes(
+                        -segment.GraceBeforeMinutes);
+                    end = segment.EndDateTime;
+                }
+                else if (code == "LUNCH")
+                {
+                    expected = segment.StartDateTime;
+                    start = segment.StartDateTime;
+                    end = segment.EndDateTime;
+                }
+                else
+                {
+                    continue;
+                }
+
+                Results.Add(new SegmentDebugRow
+                    {
+                        Name = segment.Name,
+                        Code = segment.Code,
+                        Expected = expected,
+                        WindowStart = start,
+                        WindowEnd = end,
+                        GraceBefore = segment.GraceBeforeMinutes,
+                        Eligible = CheckedClock >= start &&
+                                   CheckedClock <= end
+                    });
+            }
+        }
+        catch (Exception ex)
+        {
+            Error = ex.Message;
+        }
+        finally
+        {
+            Loading = false;
+        }
+    }
+
+ 
+
+    private static bool HasApplicableClockWindow(
+        WorkPlan plan,
+        DateTime clockTime)
+    {
+        foreach (var segment in plan.WorkPlanSegments
+            .Where(x => x.IsValid && x.RequiresAttendance))
+        {
+            var code = segment.WorkSegmentType?.Code?
+                .ToUpperInvariant();
+
+            if (string.IsNullOrEmpty(code))
+                continue;
+
+            DateTime windowStart;
+            DateTime windowEnd;
+
+            if (code is "CHECK_IN" or "DUTY_CHECK_IN")
+            {
+                windowStart = segment.StartDateTime.AddMinutes(
+                    -EarlyCheckInResolutionMinutes);
+
+                windowEnd = segment.EndDateTime;
+            }
+            else if (code is "CHECK_OUT" or "DUTY_CHECK_OUT")
+            {
+                windowStart = segment.StartDateTime.AddMinutes(
+                    -segment.GraceBeforeMinutes);
+
+                windowEnd = segment.EndDateTime;
+            }
+            else if (code is "LUNCH")
+            {
+                windowStart = segment.StartDateTime;
+                windowEnd = segment.EndDateTime;
+            }
+            else
+            {
+                continue;
+            }
+
+            if (clockTime >= windowStart &&
+                clockTime <= windowEnd)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private async Task TestResolverAsync()
+    {
+        ResolutionResult = null;
+        ResolutionError = null;
+
+        try
+        {
+            await using var db =
+                await DbFactory.CreateDbContextAsync();
+
+            var plan = await db.WorkPlans
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.WorkPlanId == WorkPlanId);
+
+            if (plan == null)
+            {
+                ResolutionError = "WorkPlan not found.";
+                return;
+            }
+
+            ResolutionResult = await AttendanceResolver.ResolveAsync(
+                plan.IndividualId,
+                plan.JobId,
+                plan.OrganisationBusinessEntityId,
+                CheckedClock);
+        }
+        catch (Exception ex)
+        {
+            ResolutionError = ex.ToString();
+        }
+    }
+
+
+    private async Task CheckExistingResolutionAsync()
+    {
+        await using var db =
+            await DbFactory.CreateDbContextAsync();
+
+        var result = await db.AttendanceLogResolutions
+            .AsNoTracking()
+            .Where(x => x.AttendanceLogId == AttendanceLogId)
+            .OrderByDescending(x => x.ResolutionDate)
+            .Select(x => new
+            {
+                x.AttendanceLogResolutionId,
+                x.AttendanceResolutionStatusId,
+                x.AttendanceClockTypeId,
+                x.WorkPlanId,
+                x.WorkPlanSegmentId,
+                x.IsValid,
+                x.ResolutionMessage
+            })
+            .FirstOrDefaultAsync();
+
+        ExistingResolutionMessage = result == null
+            ? "No resolution record exists."
+            : $"Resolution ID: {result.AttendanceLogResolutionId}\n" +
+              $"Status: {result.AttendanceResolutionStatusId}\n" +
+              $"Clock Type: {result.AttendanceClockTypeId}\n" +
+              $"WorkPlan: {result.WorkPlanId}\n" +
+              $"Segment: {result.WorkPlanSegmentId}\n" +
+              $"Valid: {result.IsValid}\n" +
+              $"Message: {result.ResolutionMessage}";
+    }
+
+ 
+    private async Task ProcessAttendanceLogAsync()
+    {
+        if (IsProcessing)
+            return;
+
+        IsProcessing = true;
+        ProcessingResultMessage = null;
+
+        try
+        {
+            var result = await AttendanceProcessor.ProcessAsync(
+                AttendanceLogId);
+
+            ProcessingResultMessage =
+                $"Processing Result:\n" +
+                $"Success: {result.IsSuccess}\n" +
+                $"Message: {result.Message}";
+        }
+        catch (Exception ex)
+        {
+            ProcessingResultMessage = ex.ToString();
+        }
+        finally
+        {
+            IsProcessing = false;
+        }
+    }
+
+    private sealed class SegmentDebugRow
+    {
+        public string Name { get; set; } = "";
+        public string Code { get; set; } = "";
+        public DateTime Expected { get; set; }
+        public DateTime WindowStart { get; set; }
+        public DateTime WindowEnd { get; set; }
+        public int GraceBefore { get; set; }
+        public bool Eligible { get; set; }
+    }
+}
