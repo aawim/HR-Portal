@@ -6,5 +6,11 @@
            int requestId,
            int subjectJobId,
            CancellationToken cancellationToken = default);
+
+        Task CancelAsync(
+            int requestId,
+            string? reason,
+            CancellationToken cancellationToken = default);
+
     }
 }

@@ -11,6 +11,7 @@
 @using HRM.DTOs.Attendance
 @using HRM.DTOs.UserContext
 @using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.AppovalWF
 @using HRM.Services.Interfaces.Leave
 @using HRM.Components.Pages.Online.Dashboard
 @using HRM.Services.Attendance.AttendancePlan
@@ -24,6 +25,8 @@
 @inject IAttendancePlanService AttendancePlanService
 @inject IHttpContextAccessor HttpContextAccessor
 @inject PersistentComponentState ApplicationState
+
+@inject IWorkflowEngine WorkFlowEngine
 
 @rendermode RenderMode.InteractiveServer
 
@@ -319,6 +322,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+
+         
+          
+        // var workflowInstanceId = await WorkFlowEngine.StartAsync(23600, 915);
 
         // During interactive render, use the value saved from prerendering.
         if (!ApplicationState.TryTakeFromJson(

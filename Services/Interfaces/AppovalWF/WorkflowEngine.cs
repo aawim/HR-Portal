@@ -1,4 +1,5 @@
 ﻿using HRM.Models;
+using HRM.Models.Workflow;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using System.Data;
@@ -39,7 +40,7 @@ namespace HRM.Services.Interfaces.AppovalWF
         {
             // 1. Resolve the business context of the request.
             var context = await _contextResolver.ResolveAsync(
-                requestId, cancellationToken);
+                requestId, subjectJobId);
 
             // 2. Resolve the authenticated actor.
             var userId = await _actorProvider.GetCurrentUserIdAsync(
@@ -56,25 +57,21 @@ namespace HRM.Services.Interfaces.AppovalWF
             // 4. Select workflow using request type,
             // organisation, job type and effective date.
             var definition = await _definitionService.ResolveAsync(
-                context.RequestTypeId,
-                context.OrganisationBusinessEntityId,
-                context.JobTypeId,
-                context.EffectiveDate,
-                cancellationToken);
+                  context.RequestTypeId,
+                  context.OrganisationBusinessEntityId,
+                  context.JobTypeId,
+                  context.EffectiveDate,
+                  cancellationToken);
 
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
             // 5. Load the first active stage.
-            var stages = await db.WfWorkflowStages
-                .AsNoTracking()
-                .Where(x =>
-                    x.WorkflowDefinitionId ==
-                        definition.WorkflowDefinitionId &&
-                    x.IsActive)
+            var stages = definition.Stages
+                .Where(x => x.IsActive)
                 .OrderBy(x => x.StageOrder)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             if (stages.Count == 0)
                 throw new InvalidOperationException(
@@ -340,6 +337,216 @@ namespace HRM.Services.Interfaces.AppovalWF
                 throw;
             }
         }
+
+
+
+        public async Task CancelAsync(
+            int requestId,
+            string? reason,
+            CancellationToken cancellationToken = default)
+        {
+            if (requestId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(requestId));
+
+            // Resolve authenticated user, not a browser-supplied UserID.
+            var performedByUserId =
+                await _actorProvider.GetCurrentUserIdAsync(
+                    cancellationToken);
+
+            if (performedByUserId <= 0)
+                throw new UnauthorizedAccessException(
+                    "Authenticated user was not found.");
+
+       
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable,
+                    cancellationToken);
+
+            // 1. Load the request.
+            var request = await db.Requests
+                .FirstOrDefaultAsync(
+                    x => x.RequestId == requestId,
+                    cancellationToken);
+
+            if (request == null)
+                throw new InvalidOperationException(
+                    $"Request {requestId} was not found.");
+
+            // 2. Validate the applicant.
+            // IMPORTANT: Resolve the authenticated user's UserID on the server.
+            // Do not trust an arbitrary UserID supplied by the browser.
+            //
+            // Your Requests table stores ApplicantBusinessEntityID.
+            // Add an ownership check through your existing Users /
+            // Individuals / BusinessEntities relationship here.
+            //
+            // Do not enable this operation for production until
+            // ownership validation is implemented.
+
+            await EnsureApplicantCanCancelAsync(
+                db,
+                request.OrganisationBusinessEntityID ?? 0,
+                performedByUserId,
+                cancellationToken);
+
+            const int cancelledStateId = 5;
+
+            if (request.RequestStateId == cancelledStateId)
+            {
+                // Already cancelled: no additional changes needed.
+                return;
+            }
+
+            // 3. Check whether the transition is allowed.
+            var transitionAllowed =
+                await db.RequestTypesAllowedRequestStateTransitions
+                    .AsNoTracking()
+                    .AnyAsync(x =>
+                        x.RequestTypeId == request.RequestTypeId &&
+                        x.FromRequestStateId == request.RequestStateId &&
+                        x.ToRequestStateId == cancelledStateId,
+                        cancellationToken);
+
+            if (!transitionAllowed)
+            {
+                throw new InvalidOperationException(
+                    $"Cancellation is not permitted from " +
+                    $"RequestStateID {request.RequestStateId}.");
+            }
+
+            // 4. Applicant cancellation policy.
+            int[] applicantCancellableStates = { 1, 2, 3, 12 };
+
+            if (!applicantCancellableStates.Contains(request.RequestStateId))
+            {
+                throw new InvalidOperationException(
+                    "The applicant cannot cancel a request in its current state.");
+            }
+
+            var previousStateId = request.RequestStateId;
+            var now = DateTime.UtcNow;
+
+            // 5. Find the current workflow instance, if any.
+            var workflow = await db.WfRequestInstances
+                .Where(x => x.RequestId == requestId)
+                .OrderByDescending(x => x.WorkflowRequestInstanceId)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (workflow != null)
+            {
+                if (workflow.CompletedAt != null)
+                {
+                    throw new InvalidOperationException(
+                        "The existing workflow is already completed. " +
+                        "Its status must be reconciled before cancellation.");
+                }
+
+                // 6. Close pending approvals.
+                var stageIds = await db.WfRequestStageInstances
+                    .Where(x =>
+                        x.WorkflowRequestInstanceId ==
+                            workflow.WorkflowRequestInstanceId)
+                    .Select(x => x.RequestStageInstanceId)
+                    .ToListAsync(cancellationToken);
+
+                var pendingApprovals = await db.WfRequestApprovals
+                    .Where(x =>
+                        stageIds.Contains(x.RequestStageInstanceId) &&
+                        x.Decision == "Pending")
+                    .ToListAsync(cancellationToken);
+
+                foreach (var approval in pendingApprovals)
+                {
+                    approval.Decision = "Cancelled";
+                    approval.DecisionAt = now;
+                }
+
+                // 7. Close pending stages.
+                var pendingStages = await db.WfRequestStageInstances
+                    .Where(x =>
+                        x.WorkflowRequestInstanceId ==
+                            workflow.WorkflowRequestInstanceId &&
+                        x.StageStatus == "Pending")
+                    .ToListAsync(cancellationToken);
+
+                foreach (var stage in pendingStages)
+                {
+                    stage.StageStatus = "Cancelled";
+                    stage.CompletedAt = now;
+                }
+
+                // 8. Close workflow.
+                workflow.WorkflowStatus = "Cancelled";
+                workflow.ExecutionStatus = "Completed";
+                workflow.CompletedAt = now;
+
+                // 9. Record workflow action.
+                db.WfRequestActions.Add(new WfRequestAction
+                {
+                    WorkflowRequestInstanceId =
+                        workflow.WorkflowRequestInstanceId,
+
+                    RequestStageInstanceId =
+                        workflow.CurrentRequestStageInstanceId,
+
+                    PerformedByUserId = performedByUserId,
+
+                    ActionCode = "CANCEL",
+
+                    FromRequestStateId = previousStateId,
+                    ToRequestStateId = cancelledStateId,
+
+                    Comments = reason,
+                    PerformedAt = now
+                });
+            }
+
+            // 10. Update original request.
+            request.RequestStateId = cancelledStateId;
+            request.StateChangeRemarks = reason;
+            request.LastStateChangedByUserId = performedByUserId;
+            request.LastStateChangedDate = now;
+
+            await db.SaveChangesAsync(cancellationToken);
+            await transaction.CommitAsync(cancellationToken);
+        }
+
+
+
+
+
+
+
+
+        private static async Task EnsureApplicantCanCancelAsync(
+         HrmTeContext db,
+         int applicantBusinessEntityId,
+         int performedByUserId,
+         CancellationToken cancellationToken)
+        {
+            var isApplicant = await db.Users
+                .AsNoTracking()
+                .AnyAsync(x =>
+                    x.UserId == performedByUserId &&
+                    x.BusinessEntityID == applicantBusinessEntityId &&
+                    x.IsActive,
+                    cancellationToken);
+
+            if (!isApplicant)
+            {
+                throw new UnauthorizedAccessException(
+                    "Only the request applicant can cancel this request.");
+            }
+        }
+
+
+
+
 
         private static async Task<T> ScalarAsync<T>(
             DbConnection connection,

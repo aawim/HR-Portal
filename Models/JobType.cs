@@ -35,5 +35,5 @@ public partial class JobType
 
     public virtual ICollection<SalaryRateDefinition> SalaryRateDefinitions { get; set; } = new List<SalaryRateDefinition>();
 
-    public virtual ICollection<WfWorkflowDefinition> WorkflowDefinitions { get; set; } = new List<WfWorkflowDefinition>();
+    //public virtual ICollection<WfWorkflowDefinition> WorkflowDefinitions { get; set; } = new List<WfWorkflowDefinition>();
 }

@@ -16,9 +16,8 @@ namespace HRM.Services.Interfaces.AppovalWF
         }
 
 
-        public async Task<WorkflowRequestContextDto> ResolveAsync(
-       int requestId,
-       CancellationToken cancellationToken = default)
+        public async Task<WorkflowRequestContextDto> ResolveAsync(int requestId,int subjectJobId,
+            CancellationToken cancellationToken = default)
         {
             if (requestId <= 0)
                 throw new ArgumentOutOfRangeException(nameof(requestId));
@@ -26,82 +25,108 @@ namespace HRM.Services.Interfaces.AppovalWF
             await using var db =
                 await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-            var rows = await db.Database
-                .SqlQueryRaw<LeaveWorkflowContextRow>(
-                    """
-                SELECT
-                    r.RequestID AS RequestId,
-                    r.RequestTypeID AS RequestTypeId,
-                    r.OrganisationBusinessEntityID
-                        AS OrganisationBusinessEntityId,
-                    r.ApplicantBusinessEntityID
-                        AS ApplicantBusinessEntityId,
-                    l.JobID AS SubjectJobId,
-                    j.JobTypeID AS JobTypeId,
-                    CAST(
-                        COALESCE(
-                            r.RequestEffectiveDate,
-                            r.ApplicationDate
-                        ) AS date
-                    ) AS EffectiveDate
-                FROM dbo.Requests r
-                INNER JOIN dbo.LeaveRequests lr
-                    ON lr.RequestID = r.RequestID
-                INNER JOIN dbo.Leaves l
-                    ON l.LeaveID = lr.LeaveID
-                INNER JOIN dbo.Jobs j
-                    ON j.JobID = l.JobID
-                WHERE r.RequestID = {0}
-                """,
-                    requestId)
-                .ToListAsync(cancellationToken);
+            var request = await db.Requests
+                       .AsNoTracking()
+                       .FirstOrDefaultAsync(
+                           x => x.RequestId == requestId,
+                           cancellationToken);
 
-            if (rows.Count != 1)
+            if (request == null)
             {
                 throw new InvalidOperationException(
-                    $"Request {requestId} does not have exactly one " +
-                    "associated leave/job record. " +
-                    "This resolver currently supports leave requests only.");
+                    $"Request {requestId} was not found.");
             }
 
-            var row = rows[0];
-
-            if (!row.OrganisationBusinessEntityId.HasValue ||
-                !row.ApplicantBusinessEntityId.HasValue ||
-                !row.JobTypeId.HasValue ||
-                row.JobTypeId.Value <= 0)
+            if (!request.OrganisationBusinessEntityID.HasValue)
             {
                 throw new InvalidOperationException(
-                    "Request organisation, applicant or job type is missing.");
+                    $"Request {requestId} has no organisation.");
             }
+
+            if (!request.ApplicantBusinessEntityId.HasValue)
+            {
+                throw new InvalidOperationException(
+                    $"Request {requestId} has no applicant.");
+            }
+
+
+            var job = await db.Jobs
+                .AsNoTracking()
+                .Where(x => x.JobId == subjectJobId)
+                .Select(x => new
+                {
+                    x.JobId,
+                    x.JobTypeId,
+                    x.OrganisationID,
+                    x.IndividualID
+                })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (job == null)
+            {
+                throw new InvalidOperationException(
+                    $"JobID {subjectJobId} was not found.");
+            }
+
+            if (job.OrganisationID != request.OrganisationBusinessEntityID)
+            {
+                throw new InvalidOperationException(
+                    $"JobID {subjectJobId} does not belong to the request organisation.");
+            }
+
+
+
+
+
+
+
 
             return new WorkflowRequestContextDto
             {
-                RequestId = row.RequestId,
-                RequestTypeId = row.RequestTypeId,
+                RequestId = request.RequestId,
+
+                RequestTypeId = request.RequestTypeId,
+
                 OrganisationBusinessEntityId =
-                    row.OrganisationBusinessEntityId.Value,
+                    request.OrganisationBusinessEntityID.Value,
+
                 ApplicantBusinessEntityId =
-                    row.ApplicantBusinessEntityId.Value,
-                SubjectJobId = row.SubjectJobId,
-                JobTypeId = row.JobTypeId.Value,
-                EffectiveDate =
-                    DateOnly.FromDateTime(row.EffectiveDate)
+                    request.ApplicantBusinessEntityId.Value,
+
+                RequestStateId = request.RequestStateId,
+
+                SubjectJobId = job.JobId,
+
+                JobTypeId = job.JobTypeId,
+
+                EffectiveDate = DateOnly.FromDateTime(
+                    request.RequestEffectiveDate
+                    ?? request.ApplicationDate)
             };
         }
 
-        private sealed class LeaveWorkflowContextRow
-        {
-            public int RequestId { get; set; }
-            public int RequestTypeId { get; set; }
-            public int? OrganisationBusinessEntityId { get; set; }
-            public int? ApplicantBusinessEntityId { get; set; }
-            public int SubjectJobId { get; set; }
-            public int? JobTypeId { get; set; }
-            public DateTime EffectiveDate { get; set; }
-        }
+
+ 
 
 
+     
+
+        //public sealed class OutOfOfficeWorkflowContextRow
+        //{
+        //    public int RequestId { get; set; }
+
+        //    public int RequestTypeId { get; set; }
+
+        //    public int OrganisationBusinessEntityId { get; set; }
+
+        //    public int ApplicantBusinessEntityId { get; set; }
+
+        //    public int SubjectJobId { get; set; }
+
+        //    public int? JobTypeId { get; set; }
+
+        //    public DateTime EffectiveDate { get; set; }
+        //}
 
 
     }

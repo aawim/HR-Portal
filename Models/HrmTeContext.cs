@@ -2801,55 +2801,7 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_Jobs_Services");
         });
 
-        //modelBuilder.Entity<JobLeaveType>(entity =>
-        //{
-        //    entity.HasKey(e => e.JobLeaveTypeId).HasName("PK_JobLeaves");
-
-        //    entity.HasIndex(e => new { e.JobId, e.LeaveTypeId }, "IX_JobLeaveTypes");
-
-        //    entity.Property(e => e.JobLeaveTypeId).HasColumnName("JobLeaveTypeID");
-        //    entity.Property(e => e.AutoCorrectDate).HasColumnType("datetime");
-        //    entity.Property(e => e.AutoCorrectRemark).HasMaxLength(250);
-        //    entity.Property(e => e.EffectiveFromDate).HasColumnType("datetime");
-        //    entity.Property(e => e.EffectiveToDate).HasColumnType("datetime");
-        //    entity.Property(e => e.JobId).HasColumnName("JobID");
-        //    entity.Property(e => e.LastLeaveTakenDate).HasColumnType("datetime");
-        //    entity.Property(e => e.LeaveTypeId).HasColumnName("LeaveTypeID");
-        //    entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-        //    entity.Property(e => e.RenewedDate).HasColumnType("datetime");
-
-        //    entity.HasOne(d => d.Job).WithMany(p => p.JobLeaveTypes)
-        //        .HasForeignKey(d => d.JobId)
-        //        .OnDelete(DeleteBehavior.ClientSetNull)
-        //        .HasConstraintName("FK_JobLeaves_Jobs");
-
-        //    entity.HasOne(d => d.LeaveType).WithMany(p => p.JobLeaveTypes)
-        //        .HasForeignKey(d => d.LeaveTypeId)
-        //        .OnDelete(DeleteBehavior.ClientSetNull)
-        //        .HasConstraintName("FK_JobLeaves_LeaveTypes");
-
-        //    entity.HasOne(x => x.LeaveDefinition)
-        //        .WithMany()
-        //        .HasForeignKey(x => x.LeaveDefinitionId)
-        //        .OnDelete(DeleteBehavior.Restrict);
-
-        //    entity.HasOne(d => d.OperationLog).WithMany(p => p.JobLeaveTypes)
-        //        .HasForeignKey(d => d.OperationLogId)
-        //        .OnDelete(DeleteBehavior.ClientSetNull)
-        //        .HasConstraintName("FK_JobLeaves_OperationLogs");
-
-        //    entity.HasOne(x => x.LeaveType)
-        //     .WithMany(x => x.JobLeaveTypes)
-        //     .HasForeignKey(x => x.LeaveTypeId)
-        //     .OnDelete(DeleteBehavior.Restrict)
-        //     .HasConstraintName("FK_JobLeaves_LeaveTypes");
-
-        //    entity.HasOne(x => x.LeaveDefinition)
-        //        .WithMany(x => x.JobLeaveTypes)
-        //        .HasForeignKey(x => x.LeaveDefinitionId)
-        //        .OnDelete(DeleteBehavior.Restrict)
-        //        .HasConstraintName("FK_JobLeaveTypes_LeaveDefinitions");
-
+        
 
         modelBuilder.Entity<JobLeaveType>(entity =>
         {
@@ -7832,23 +7784,19 @@ public partial class HrmTeContext : DbContext
                 .ValueGeneratedOnAdd();
 
             entity.Property(x => x.RequestTypeId)
-                .HasColumnName("RequestTypeID")
-                .IsRequired();
+                .HasColumnName("RequestTypeID");
 
             entity.Property(x => x.OrganisationBusinessEntityId)
                 .HasColumnName("OrganisationBusinessEntityID");
 
             entity.Property(x => x.VersionNumber)
-                .HasColumnName("VersionNumber")
-                .IsRequired();
+                .HasColumnName("VersionNumber");
 
             entity.Property(x => x.Name)
-                .HasColumnName("Name")
-                .IsRequired();
+                .HasColumnName("Name");
 
             entity.Property(x => x.IsActive)
-                .HasColumnName("IsActive")
-                .HasDefaultValue(true);
+                .HasColumnName("IsActive");
 
             entity.Property(x => x.EffectiveFrom)
                 .HasColumnName("EffectiveFrom")
@@ -7859,13 +7807,7 @@ public partial class HrmTeContext : DbContext
                 .HasColumnType("date");
 
             entity.Property(x => x.CreatedAt)
-                .HasColumnName("CreatedAt")
-                .HasColumnType("datetime2");
-
-            entity.HasOne(x => x.RequestType)
-                .WithMany()
-                .HasForeignKey(x => x.RequestTypeId)
-                .OnDelete(DeleteBehavior.NoAction);
+                .HasColumnName("CreatedAt");
 
             entity.HasMany(x => x.WorkflowJobTypes)
                 .WithOne(x => x.WorkflowDefinition)

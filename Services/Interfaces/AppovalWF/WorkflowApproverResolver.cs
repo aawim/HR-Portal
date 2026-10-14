@@ -57,8 +57,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                             .Where(u =>
                                 u.UserId == referenceId &&
                                 u.IsActive &&
-                                u.UserOrganisation != null &&
-                                u.UserOrganisation.BusinessEntityID == context.ApplicantBusinessEntityId)
+                                u.UserOrganisation != null )
                             .Select(u => u.UserId)
                             .ToListAsync(cancellationToken);
                         break;

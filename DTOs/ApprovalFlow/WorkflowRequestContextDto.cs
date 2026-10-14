@@ -10,9 +10,11 @@
 
         public int ApplicantBusinessEntityId { get; set; }
 
-        public int SubjectJobId { get; set; }
+        public int RequestStateId { get; set; }
 
-        public int JobTypeId { get; set; }
+        public int? SubjectJobId { get; set; }
+
+        public int? JobTypeId { get; set; }
 
         public DateOnly EffectiveDate { get; set; }
     }

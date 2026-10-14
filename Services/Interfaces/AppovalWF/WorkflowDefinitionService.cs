@@ -1,26 +1,29 @@
-﻿using HRM.Models;
+﻿
+using HRM.Models;
 using HRM.Models.Workflow;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using System.Text;
 
 namespace HRM.Services.Interfaces.AppovalWF
 {
-
-    public sealed class WorkflowDefinitionService : IWorkflowDefinitionService
+    public sealed class WorkflowDefinitionService
+        : IWorkflowDefinitionService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
 
-        public WorkflowDefinitionService(IDbContextFactory<HrmTeContext> dbFactory)
+        public WorkflowDefinitionService(
+            IDbContextFactory<HrmTeContext> dbFactory)
         {
             _dbFactory = dbFactory;
         }
 
-
         public async Task<WfWorkflowDefinition> ResolveAsync(
-              int requestTypeId,
-              int organisationBusinessEntityId,
-              int jobTypeId,
-              DateOnly effectiveDate,
-              CancellationToken cancellationToken = default)
+            int requestTypeId,
+            int organisationBusinessEntityId,
+            int? jobTypeId,
+            DateOnly effectiveDate,
+            CancellationToken cancellationToken = default)
         {
             if (requestTypeId <= 0)
                 throw new ArgumentOutOfRangeException(
@@ -30,7 +33,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                 throw new ArgumentOutOfRangeException(
                     nameof(organisationBusinessEntityId));
 
-            if (jobTypeId <= 0)
+            if (jobTypeId.HasValue && jobTypeId.Value <= 0)
                 throw new ArgumentOutOfRangeException(
                     nameof(jobTypeId));
 
@@ -38,48 +41,181 @@ namespace HRM.Services.Interfaces.AppovalWF
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
-            // -------------------------------------------------
-            // 1. Validate JobType
-            // -------------------------------------------------
 
-            var jobTypeExists = await db.Set<JobType>()
-                .AsNoTracking()
-                .AnyAsync(x =>
-                    (x.JobTypeId == jobTypeId && x.IsActive == true),
-                    cancellationToken);
 
-            if (!jobTypeExists)
+
+
+            //var debug = new StringBuilder();
+
+            //var entityType = db.Model.FindEntityType(
+            //    typeof(WfWorkflowDefinition));
+
+            //if (entityType == null)
+            //{
+            //    throw new InvalidOperationException(
+            //        "WfWorkflowDefinition is not registered in EF Core.");
+            //}
+
+            //var table = StoreObjectIdentifier.Table(
+            //    entityType.GetTableName()!,
+            //    entityType.GetSchema());
+
+            //debug.AppendLine("========== ENTITY INFORMATION ==========");
+            //debug.AppendLine($"Entity: {entityType.ClrType.Name}");
+            //debug.AppendLine($"Table: {entityType.GetTableName()}");
+            //debug.AppendLine($"Schema: {entityType.GetSchema()}");
+
+            //debug.AppendLine();
+            //debug.AppendLine("========== MAPPED PROPERTIES ==========");
+
+            //foreach (var property in entityType.GetProperties())
+            //{
+            //    debug.AppendLine(
+            //        $"Property: {property.Name}, " +
+            //        $"Column: {property.GetColumnName(table)}, " +
+            //        $"Shadow: {property.IsShadowProperty()}");
+            //}
+
+            //debug.AppendLine();
+            //debug.AppendLine("========== FOREIGN KEYS ==========");
+
+            //foreach (var fk in entityType.GetForeignKeys())
+            //{
+            //    debug.AppendLine(
+            //        $"FK Properties: " +
+            //        $"{string.Join(", ", fk.Properties.Select(p => p.Name))}");
+
+            //    debug.AppendLine(
+            //        $"Principal Entity: {fk.PrincipalEntityType.ClrType.Name}");
+
+            //    debug.AppendLine();
+            //}
+
+            //debug.AppendLine();
+            //debug.AppendLine("========== NAVIGATION PROPERTIES ==========");
+
+            //foreach (var navigation in entityType.GetNavigations())
+            //{
+            //    debug.AppendLine(
+            //        $"Navigation: {navigation.Name}, " +
+            //        $"Target: {navigation.TargetEntityType.ClrType.Name}");
+            //}
+
+            //debug.AppendLine();
+            //debug.AppendLine("========== GENERATED SQL ==========");
+
+            //debug.AppendLine(
+            //    db.WfWorkflowDefinitions
+            //        .AsNoTracking()
+            //        .ToQueryString());
+
+            //debug.AppendLine();
+            //debug.AppendLine("========== FULL QUERY SQL ==========");
+
+            //debug.AppendLine(
+            //    db.WfWorkflowDefinitions
+            //        .AsNoTracking()
+            //        .AsSplitQuery()
+            //        .Include(x => x.WorkflowJobTypes)
+            //        .Include(x => x.Stages)
+            //        .Where(x =>
+            //            x.IsActive &&
+            //            x.RequestTypeId == requestTypeId &&
+            //            (
+            //                x.OrganisationBusinessEntityId ==
+            //                    organisationBusinessEntityId ||
+            //                x.OrganisationBusinessEntityId == null
+            //            ) &&
+            //            (
+            //                x.EffectiveFrom == null ||
+            //                x.EffectiveFrom <= effectiveDate
+            //            ) &&
+            //            (
+            //                x.EffectiveTo == null ||
+            //                x.EffectiveTo >= effectiveDate
+            //            ))
+            //        .ToQueryString());
+
+            //// TEMPORARY: Show diagnostics in exception
+            //throw new InvalidOperationException(
+            //    debug.ToString());
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            // 1. Validate JobTypeID when provided.
+            if (jobTypeId.HasValue)
             {
-                throw new InvalidOperationException(
-                    $"JobTypeID {jobTypeId} is invalid or inactive.");
+                bool exists = await db.JobTypes
+                    .AsNoTracking()
+                    .AnyAsync(
+                        x => x.JobTypeId == jobTypeId.Value,
+                        cancellationToken);
+
+                if (!exists)
+                {
+                    throw new InvalidOperationException(
+                        $"JobTypeID {jobTypeId.Value} does not exist.");
+                }
             }
 
-            // -------------------------------------------------
-            // 2. Load eligible workflow definitions
-            // -------------------------------------------------
-
-            var date = effectiveDate.ToDateTime(TimeOnly.MinValue);
-
-            // 1. Convert the DateTime parameter to DateOnly upfront
-            var searchDate = DateOnly.FromDateTime(date);
-
-            // 2. Execute the query using the matched parameter type
-            var definitions = await db.Set<WfWorkflowDefinition>()
+            // 2. Load only applicable active definitions.
+            var definitions = await db.WfWorkflowDefinitions
                 .AsNoTracking()
+                .AsSplitQuery()
+                .Include(x => x.WorkflowJobTypes)
+                .Include(x => x.Stages)
                 .Where(x =>
-                    x.RequestTypeId == requestTypeId &&
                     x.IsActive &&
+                    x.RequestTypeId == requestTypeId &&
                     (
-                        x.OrganisationBusinessEntityId == organisationBusinessEntityId ||
+                        x.OrganisationBusinessEntityId ==
+                            organisationBusinessEntityId ||
                         x.OrganisationBusinessEntityId == null
                     ) &&
                     (
-                        x.EffectiveFrom == null || x.EffectiveFrom <= searchDate
+                        x.EffectiveFrom == null ||
+                        x.EffectiveFrom <= effectiveDate
                     ) &&
                     (
-                        x.EffectiveTo == null || x.EffectiveTo >= searchDate
+                        x.EffectiveTo == null ||
+                        x.EffectiveTo >= effectiveDate
                     ))
                 .ToListAsync(cancellationToken);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -87,138 +223,116 @@ namespace HRM.Services.Interfaces.AppovalWF
             if (definitions.Count == 0)
             {
                 throw new InvalidOperationException(
-                    $"No active workflow found for " +
-                    $"RequestTypeID {requestTypeId}.");
+                    $"No active workflow found for RequestTypeID " +
+                    $"{requestTypeId}, OrganisationID " +
+                    $"{organisationBusinessEntityId}.");
             }
 
-            // -------------------------------------------------
-            // 3. Load employment type mappings
-            // -------------------------------------------------
-
-            var definitionIds = definitions
-                .Select(x => x.WorkflowDefinitionId)
-                .ToList();
-
-            var mappings = await db.Set<WfWorkflowJobType>()
-                .AsNoTracking()
-                .Where(x =>
-                    definitionIds.Contains(x.WorkflowDefinitionId) &&
-                    x.IsActive)
-                .ToListAsync(cancellationToken);
-
-            // -------------------------------------------------
-            // 4. Select best matching workflow
-            // -------------------------------------------------
-
-            // Priority:
-            // 1 = Organisation + JobType
-            // 2 = Organisation + Default
-            // 3 = Global + JobType
-            // 4 = Global + Default
-
-            var matches = definitions
+            // 3. Determine applicability and precedence.
+            var candidates = definitions
                 .Select(definition =>
                 {
-                    var definitionMappings = mappings
-                        .Where(x =>
-                            x.WorkflowDefinitionId ==
-                                definition.WorkflowDefinitionId)
+                    var mappings = definition.WorkflowJobTypes
                         .ToList();
 
+                    // Generic means NO mappings at all.
+                    // Inactive mappings must not make a
+                    // restricted workflow generic.
+                    bool isGeneric = mappings.Count == 0;
+
                     bool matchesJobType =
-                        definitionMappings.Any(x =>
-                            x.JobTypeId == jobTypeId);
+                        jobTypeId.HasValue &&
+                        mappings.Any(m =>
+                            m.IsActive &&
+                            m.JobTypeId == jobTypeId.Value);
 
-                    bool isDefault =
-                        definitionMappings.Count == 0;
-
-                    bool isOrganisationSpecific =
+                    bool matchesOrganisation =
                         definition.OrganisationBusinessEntityId ==
-                            organisationBusinessEntityId;
+                        organisationBusinessEntityId;
 
-                    int priority;
-
-                    if (isOrganisationSpecific && matchesJobType)
-                        priority = 1;
-                    else if (isOrganisationSpecific && isDefault)
-                        priority = 2;
-                    else if (matchesJobType)
-                        priority = 3;
-                    else if (isDefault)
-                        priority = 4;
-                    else
-                        priority = int.MaxValue;
+                    int priority = matchesOrganisation
+                        ? (matchesJobType ? 4 : 3)
+                        : (matchesJobType ? 2 : 1);
 
                     return new
                     {
                         Definition = definition,
+                        IsGeneric = isGeneric,
+                        MatchesJobType = matchesJobType,
                         Priority = priority
                     };
                 })
-                .Where(x => x.Priority != int.MaxValue)
-                .OrderBy(x => x.Priority)
+                .Where(x =>
+                    x.IsGeneric || x.MatchesJobType)
+                .OrderByDescending(x => x.Priority)
                 .ThenByDescending(x =>
                     x.Definition.VersionNumber)
                 .ToList();
 
-            if (matches.Count == 0)
+            if (candidates.Count == 0)
             {
                 throw new InvalidOperationException(
-                    "No workflow matches the selected employment type.");
+                    $"No matching workflow for RequestTypeID " +
+                    $"{requestTypeId}, OrganisationID " +
+                    $"{organisationBusinessEntityId}, JobTypeID " +
+                    $"{jobTypeId?.ToString() ?? "NULL"}.");
             }
 
-            var selected = matches[0];
+            // 4. Select highest-priority workflow.
+            var selected = candidates[0];
 
-            // Detect ambiguous definitions at the same
-            // priority and version.
-            var conflict = matches.Skip(1).Any(x =>
-                x.Priority == selected.Priority &&
-                x.Definition.VersionNumber ==
-                    selected.Definition.VersionNumber);
-
-            if (conflict)
-            {
-                throw new InvalidOperationException(
-                    "Multiple workflow definitions have the same " +
-                    "priority and version. Review the configuration.");
-            }
-
-            // -------------------------------------------------
-            // 5. Validate active stages
-            // -------------------------------------------------
-
-            var stages = await db.Set<WfWorkflowStage>()
-                .AsNoTracking()
+            // 5. Reject ambiguous configurations.
+            var conflicts = candidates
                 .Where(x =>
-                    x.WorkflowDefinitionId ==
-                        selected.Definition.WorkflowDefinitionId &&
-                    x.IsActive)
+                    x.Priority == selected.Priority &&
+                    x.Definition.VersionNumber ==
+                        selected.Definition.VersionNumber)
+                .ToList();
+
+            if (conflicts.Count > 1)
+            {
+                var ids = string.Join(
+                    ", ",
+                    conflicts.Select(x =>
+                        x.Definition.WorkflowDefinitionId));
+
+                throw new InvalidOperationException(
+                    "Ambiguous workflow configuration. " +
+                    $"Matching WorkflowDefinitionIDs: {ids}");
+            }
+
+            var workflow = selected.Definition;
+
+            // 6. Validate active stages.
+            var stages = workflow.Stages
+                .Where(x => x.IsActive)
                 .OrderBy(x => x.StageOrder)
-                .ToListAsync(cancellationToken);
+                .ToList();
 
             if (stages.Count == 0)
             {
                 throw new InvalidOperationException(
                     $"WorkflowDefinitionID " +
-                    $"{selected.Definition.WorkflowDefinitionId} " +
+                    $"{workflow.WorkflowDefinitionId} " +
                     "has no active stages.");
             }
 
-            // Check duplicate stage order
-            if (stages.GroupBy(x => x.StageOrder)
-                .Any(g => g.Count() > 1))
+            var duplicateOrders = stages
+                .GroupBy(x => x.StageOrder)
+                .Where(x => x.Count() > 1)
+                .Select(x => x.Key)
+                .ToList();
+
+            if (duplicateOrders.Count > 0)
             {
                 throw new InvalidOperationException(
-                    "Workflow contains duplicate StageOrder values.");
+                    $"WorkflowDefinitionID " +
+                    $"{workflow.WorkflowDefinitionId} " +
+                    "has duplicate stage orders: " +
+                    string.Join(", ", duplicateOrders));
             }
 
-            // -------------------------------------------------
-            // 6. Return selected definition
-            // -------------------------------------------------
-
-            return selected.Definition;
+            return workflow;
         }
-
-
     }
 }

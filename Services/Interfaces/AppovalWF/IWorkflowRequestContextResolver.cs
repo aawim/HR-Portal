@@ -6,6 +6,7 @@ namespace HRM.Services.Interfaces.AppovalWF
     {
         Task<WorkflowRequestContextDto> ResolveAsync(
            int requestId,
+           int subjectJobId,
            CancellationToken cancellationToken = default);
     }
 }
