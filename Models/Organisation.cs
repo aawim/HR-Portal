@@ -113,6 +113,8 @@ public partial class Organisation
     public virtual ICollection<WorkShift> WorkShifts { get; set; } = new List<WorkShift>();
 
 
+    // Permission assignments belong to UserOrganisation, not Organisation.
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
     public virtual ICollection<UserOrganisationRole> UserOrganisationRoles { get; set; } = new List<UserOrganisationRole>();
 
 }

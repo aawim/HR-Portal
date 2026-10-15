@@ -6751,6 +6751,7 @@ public partial class HrmTeContext : DbContext
         modelBuilder.Entity<UserOrganisationRole>(entity =>
         {
             entity.HasKey(e => new { e.UserOrganisationID, e.RoleID });
+            entity.Property(e => e.UserOrganisationRoleID).ValueGeneratedOnAdd();
 
             entity.Property(e => e.UserOrganisationID).HasColumnName("UserOrganisationID");
             entity.Property(e => e.RoleID).HasColumnName("RoleID");
