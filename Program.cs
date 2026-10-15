@@ -243,6 +243,7 @@ builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<ILeaveService, LeaveService>();
 builder.Services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeService>();
 builder.Services.AddScoped<HRM.Services.JobTypeConfigurationService>();
+builder.Services.AddScoped<HRM.Services.PermissionSettingsService>();
 
 
 builder.Services.AddScoped<LeaveApplicationState>();
