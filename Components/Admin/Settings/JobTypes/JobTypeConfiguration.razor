@@ -1,0 +1,189 @@
+@using HRM.DTOs.ApprovalFlow
+@using HRM.Services
+@inject JobTypeConfigurationService Configuration
+@inject ToastService Toast
+@inject ILogger<JobTypeConfiguration> Logger
+
+<div class="space-y-4">
+    <div><h2 class="text-xl font-semibold">Job Types</h2><p class="text-sm text-slate-500">Manage job types and leave approval stages for your current organisation.</p></div>
+    @if (error != null) { <p role="alert" class="text-red-700">@error</p> }
+    @if (loading) { <p>Loading configuration…</p> }
+    else if (data != null)
+    {
+        <fieldset disabled="@busy" class="space-y-4">
+            <div class="grid gap-4 lg:grid-cols-3">
+                <div class="border rounded-lg p-4 space-y-2">
+                    <button type="button" class="bg-blue-600 text-white rounded px-3 py-2" @onclick="NewJob">Add job type</button>
+                    @foreach (var item in data.JobTypes)
+                    {
+                        <button type="button" class="block w-full text-left rounded border p-3 @(job.Id == item.Id ? "bg-blue-50 border-blue-400" : "")" @onclick="() => SelectJobAsync(item)">
+                            @item.Name <span class="text-xs text-slate-500">@(item.IsActive ? "Active" : "Inactive")</span>
+                        </button>
+                    }
+                </div>
+                <div class="lg:col-span-2 border rounded-lg p-4 space-y-3">
+                    <h3 class="font-semibold">@(job.Id == 0 ? "New job type" : "Edit job type")</h3>
+                    <label class="block">Name<input class="block w-full border rounded p-2" maxlength="50" @bind="job.Name" /></label>
+                    <label class="block">Dhivehi name<input class="block w-full border rounded p-2" maxlength="50" dir="rtl" @bind="job.DhivehiName" /></label>
+                    <label class="block"><input type="checkbox" @bind="job.IsActive" /> Active</label>
+                    <p class="text-xs text-slate-500">Job types are shared. Mark unused types inactive to keep existing employment records intact.</p>
+                    <button type="button" class="bg-blue-600 text-white rounded px-3 py-2" @onclick="SaveJobAsync">Save job type</button>
+                </div>
+            </div>
+            @if (job.Id > 0)
+            {
+                <section class="border rounded-lg p-4 space-y-4">
+                    <h3 class="font-semibold">@job.Name — Leave approval workflow</h3>
+                    <label class="block">Leave request type
+                        <select class="block w-full border rounded p-2" value="@requestTypeId" @onchange="RequestChangedAsync">
+                            <option value="0">Select request type</option>
+                            @foreach (var option in data.RequestTypes) { <option value="@option.Id">@option.Name</option> }
+                        </select>
+                    </label>
+                    @if (workflow != null)
+                    {
+                        <p class="text-sm text-slate-500">@(workflow.Version == 0 ? "No job-type workflow saved yet; requests currently use the applicable fallback workflow." : $"Current version: {workflow.Version}") Changes apply to new requests. Existing requests keep their original stages.</p>
+                        <p class="text-sm">Stages run in order. Each stage's selected staff are its approvers. After the last stage, the leave becomes Approved.</p>
+                        <p class="text-sm text-slate-500">Saving enables the transitions between these stages and the final Approved status for this leave request type.</p>
+                        <label class="block">Find staff<input class="block w-full border rounded p-2" @bind="staffFilter" @bind:event="oninput" placeholder="Name or username" /></label>
+                        @foreach (var stage in workflow.Stages)
+                        {
+                            var index = workflow.Stages.IndexOf(stage);
+                            <div @key="stage" class="border rounded p-4 space-y-3">
+                                <div class="flex flex-wrap justify-between gap-2">
+                                    <h4 class="font-semibold">Stage @(index + 1)</h4>
+                                    <div class="flex gap-2">
+                                        <button type="button" disabled="@(index == 0)" @onclick="() => MoveStage(stage, -1)">Move up</button>
+                                        <button type="button" disabled="@(index == workflow.Stages.Count - 1)" @onclick="() => MoveStage(stage, 1)">Move down</button>
+                                        <button type="button" class="text-red-700" @onclick="() => workflow.Stages.Remove(stage)">Remove stage</button>
+                                    </div>
+                                </div>
+                                <label class="block">Stage name<input class="block w-full border rounded p-2" maxlength="150" @bind="stage.Name" /></label>
+                                <label class="block">Request status at this stage
+                                    <select class="block w-full border rounded p-2" @bind="stage.StateId">
+                                        <option value="0">Select processing status</option>
+                                        @foreach (var state in data.States) { <option value="@state.Id">@state.Name</option> }
+                                    </select>
+                                </label>
+                                <label class="block">Approval rule
+                                    <select class="block w-full border rounded p-2" @bind="stage.Mode">
+                                        <option value="Any">Any selected staff member</option><option value="All">All selected staff</option>
+                                        <option value="Sequential">All staff in listed order</option><option value="Quorum">Minimum number of staff</option>
+                                    </select>
+                                </label>
+                                @if (stage.Mode == "Quorum")
+                                { <label class="block">Minimum approvals<input type="number" min="1" max="@stage.StaffUserIds.Count" class="block border rounded p-2" @bind="stage.MinimumApprovals" /></label> }
+                                <h5 class="font-medium">Assigned staff (@stage.StaffUserIds.Count)</h5>
+                                @foreach (var id in stage.StaffUserIds.ToArray())
+                                {
+                                    <div class="flex flex-wrap gap-3 items-center text-sm">
+                                        <span>@(stage.StaffUserIds.IndexOf(id) + 1). @(data.Staff.FirstOrDefault(x => x.Id == id)?.Name ?? $"Unavailable user #{id}")</span>
+                                        @if (stage.Mode == "Sequential")
+                                        {
+                                            <button type="button" disabled="@(stage.StaffUserIds.IndexOf(id) == 0)" @onclick="() => MoveStaff(stage, id, -1)">Earlier</button>
+                                            <button type="button" disabled="@(stage.StaffUserIds.IndexOf(id) == stage.StaffUserIds.Count - 1)" @onclick="() => MoveStaff(stage, id, 1)">Later</button>
+                                        }
+                                        <button type="button" class="text-red-700" @onclick="() => stage.StaffUserIds.Remove(id)">Remove</button>
+                                    </div>
+                                }
+                                <div class="max-h-48 overflow-auto border rounded p-2 space-y-2" aria-label="Available staff">
+                                    @foreach (var staff in data.Staff.Where(x => !stage.StaffUserIds.Contains(x.Id) && x.Name.Contains(staffFilter, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        <button type="button" class="block text-left text-blue-700" @onclick="() => stage.StaffUserIds.Add(staff.Id)">Add @staff.Name</button>
+                                    }
+                                    @if (data.Staff.Count == 0) { <p>No active staff with user accounts were found in this organisation.</p> }
+                                </div>
+                            </div>
+                        }
+                        <div class="flex gap-3">
+                            <button type="button" class="border rounded px-3 py-2" @onclick="AddStage">Add stage</button>
+                            <button type="button" class="bg-blue-600 text-white rounded px-3 py-2" @onclick="SaveWorkflowAsync">Save approval workflow</button>
+                        </div>
+                    }
+                </section>
+            }
+        </fieldset>
+    }
+</div>
+
+@code {
+    private JobTypeConfigurationData? data;
+    private JobTypeConfigurationDto job = new();
+    private JobTypeWorkflowDto? workflow;
+    private int requestTypeId;
+    private bool busy, loading;
+    private string? error;
+    private string staffFilter = "";
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        try { data = await Configuration.LoadAsync(); }
+        catch (Exception ex) { Fail(ex); }
+        finally { loading = false; }
+    }
+    private void NewJob() { job = new(); workflow = null; requestTypeId = 0; error = null; }
+    private async Task SelectJobAsync(JobTypeConfigurationDto item)
+    {
+        job = new() { Id = item.Id, Name = item.Name, DhivehiName = item.DhivehiName, IsActive = item.IsActive };
+        await LoadWorkflowAsync();
+    }
+    private async Task RequestChangedAsync(ChangeEventArgs args)
+    {
+        requestTypeId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0;
+        await LoadWorkflowAsync();
+    }
+    private async Task LoadWorkflowAsync()
+    {
+        workflow = null;
+        if (job.Id == 0 || requestTypeId == 0) return;
+        busy = true;
+        try { workflow = await Configuration.GetWorkflowAsync(job.Id, requestTypeId); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private async Task SaveJobAsync()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Configuration.SaveJobTypeAsync(job);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message); data = await Configuration.LoadAsync();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private async Task SaveWorkflowAsync()
+    {
+        if (workflow == null) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Configuration.SaveWorkflowAsync(workflow);
+            if (result.Success) Toast.Success(result.Message);
+            else { error = result.Message; Toast.Error(result.Message); }
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private void AddStage() => workflow?.Stages.Add(new() { Name = $"Stage {workflow.Stages.Count + 1}" });
+    private void MoveStage(JobTypeStageDto stage, int delta)
+    {
+        if (workflow == null) return;
+        var index = workflow.Stages.IndexOf(stage); var target = index + delta;
+        if (target < 0 || target >= workflow.Stages.Count) return;
+        workflow.Stages.RemoveAt(index); workflow.Stages.Insert(target, stage);
+    }
+    private static void MoveStaff(JobTypeStageDto stage, int id, int delta)
+    {
+        var index = stage.StaffUserIds.IndexOf(id); var target = index + delta;
+        if (target < 0 || target >= stage.StaffUserIds.Count) return;
+        stage.StaffUserIds.RemoveAt(index); stage.StaffUserIds.Insert(target, id);
+    }
+    private void Fail(Exception ex)
+    {
+        Logger.LogError(ex, "Job type configuration failed.");
+        error = ex is UnauthorizedAccessException ? ex.Message : "Configuration could not be saved or loaded. Please try again.";
+        Toast.Error(error);
+    }
+}

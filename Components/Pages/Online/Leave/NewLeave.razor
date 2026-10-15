@@ -65,7 +65,7 @@
             </div>
 
             <div >
-                <LeaveAddressCard LeaveState="LeaveState" />
+                <LeaveAddressCard LeaveState="LeaveState" OnAddressSelected="AddressSelected" />
             </div>
 
         </div>
@@ -100,11 +100,8 @@
     private string activeTab = "LeaveInfo";
     // private int jobId = await UserService.GetJobID();
 
-    private Dictionary<string, object> FormParameters =>
-    new()
-    {
-        ["LeaveState"] = LeaveState
-    };
+    private Dictionary<string, object> FormParameters => new() { ["LeaveState"] = LeaveState };
+    private Task AddressSelected() => InvokeAsync(StateHasChanged);
 
         protected override async Task OnInitializedAsync()
     {
@@ -120,6 +117,13 @@
 
     private async Task LoadLeaveForm()
     {
+        // The balance card has already resolved the mapped legacy type and reasons.
+        if (LeaveState.Model.JobLeaveTypeId.HasValue)
+        {
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+
         var selected = LeaveState.JobLeaveTypes
             .FirstOrDefault(x =>
                 x.LeaveTypeId == LeaveState.Model.LeaveTypeId);
@@ -182,6 +186,12 @@
 
     private async Task Submit()
     {
+        if (!LeaveState.HasReason)
+        {
+            ToastService.Warning("Select a reason before submitting your leave application.");
+            return;
+        }
+
         LeaveState.IsSubmitting = true;
 
         try

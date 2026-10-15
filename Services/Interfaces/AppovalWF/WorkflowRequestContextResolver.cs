@@ -19,11 +19,17 @@ namespace HRM.Services.Interfaces.AppovalWF
         public async Task<WorkflowRequestContextDto> ResolveAsync(int requestId,int subjectJobId,
             CancellationToken cancellationToken = default)
         {
-            if (requestId <= 0)
-                throw new ArgumentOutOfRangeException(nameof(requestId));
-
             await using var db =
                 await _dbFactory.CreateDbContextAsync(cancellationToken);
+            return await ResolveAsync(db, requestId, subjectJobId, cancellationToken);
+        }
+
+        public async Task<WorkflowRequestContextDto> ResolveAsync(
+            HrmTeContext db, int requestId, int subjectJobId,
+            CancellationToken cancellationToken = default)
+        {
+            if (requestId <= 0)
+                throw new ArgumentOutOfRangeException(nameof(requestId));
 
             var request = await db.Requests
                        .AsNoTracking()
@@ -81,11 +87,24 @@ namespace HRM.Services.Interfaces.AppovalWF
 
 
 
+            int? fallbackApprovalTypeId = null;
+            if (request.RequestTypeId == HRM.Components.Shared.SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST)
+            {
+                var source = await db.LeaveChangeRequests.AsNoTracking()
+                    .Where(x => x.RequestId == requestId && x.Leave.JobId == subjectJobId)
+                    .Select(x => new { x.Leave.LeaveType.RequestTypeId })
+                    .SingleOrDefaultAsync(cancellationToken);
+                if (source == null)
+                    throw new InvalidOperationException("The leave change is not linked to the supplied job.");
+                fallbackApprovalTypeId = source.RequestTypeId;
+            }
+
             return new WorkflowRequestContextDto
             {
                 RequestId = request.RequestId,
 
                 RequestTypeId = request.RequestTypeId,
+                FallbackApprovalRequestTypeId = fallbackApprovalTypeId,
 
                 OrganisationBusinessEntityId =
                     request.OrganisationBusinessEntityID.Value,

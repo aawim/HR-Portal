@@ -55,9 +55,15 @@
 
                 @foreach (var address in Addresses)
                 {
-                    <div class="rounded-xl border border-slate-200 bg-white
+                    <button type="button"
+                            @onclick="() => SelectAddress(address)"
+                            disabled="@selectingAddress"
+                            aria-pressed="@(LeaveState.SelectedAddressLocationId == address.LocationId ? "true" : "false")"
+                            class="w-full text-left rounded-xl border bg-white
                                 p-4 hover:border-blue-300 hover:shadow-md
-                                transition-all duration-200">
+                                focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500
+                                disabled:opacity-50 transition-all duration-200
+                                @(LeaveState.SelectedAddressLocationId == address.LocationId ? "border-blue-500 ring-1 ring-blue-500" : "border-slate-200")">
 
                         <!-- Header -->
                         <div class="flex items-start justify-between">
@@ -86,6 +92,10 @@
                             </div>
 
                             <div class="flex gap-1">
+                                @if (LeaveState.SelectedAddressLocationId == address.LocationId)
+                                {
+                                    <span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-[11px]">Selected</span>
+                                }
 
                                 @if (address.IsCurrent)
                                 {
@@ -140,9 +150,21 @@
                                 </span>
                             </div>
 
+                            @foreach (var contact in address.Contacts)
+                            {
+                                <div class="flex gap-2 break-all">
+                                    <i class="fas @(contact.ContactInformationTypeId == 4 ? "fa-envelope" : "fa-phone") text-slate-400 w-4" aria-hidden="true"></i>
+                                    <span><span class="text-slate-500">@contact.ContactTypeName:</span> @contact.Value</span>
+                                </div>
+                            }
+                            @if (address.Contacts.Count == 0)
+                            {
+                                <p class="text-xs text-slate-500">No contact details saved.</p>
+                            }
+
                         </div>
 
-                    </div>
+                    </button>
                 }
 
             </div>
@@ -235,10 +257,44 @@
 
     [Parameter]
     public LeaveApplicationState LeaveState { get; set; } = default!;
+    [Parameter] public EventCallback OnAddressSelected { get; set; }
+    private bool selectingAddress;
 
     private List<AddressCardDto> Addresses = new();
 
     private bool isLoading = true;
+
+    private async Task SelectAddress(AddressCardDto address)
+    {
+        if (selectingAddress) return;
+        selectingAddress = true;
+        try
+        {
+            var islands = address.AtollId.HasValue
+                ? await AddressService.GetIslandsAsync(address.AtollId.Value)
+                : new List<Island>();
+
+            LeaveState.Countries = Countries.ToList();
+            LeaveState.Atolls = Atolls.ToList();
+            LeaveState.Islands = islands;
+            LeaveState.Model.CountryId = address.CountryId;
+            LeaveState.Model.AtollId = address.AtollId ?? 0;
+            LeaveState.Model.IslandId = address.IslandId;
+            LeaveState.Model.Country = address.Country;
+            LeaveState.Model.Atoll = address.Atoll;
+            LeaveState.Model.Island = address.Island;
+            LeaveState.Model.Phone = address.Phone;
+            LeaveState.Model.ContactEmail = address.Email;
+            LeaveState.Model.Address = string.IsNullOrWhiteSpace(address.Floor)
+                ? address.Address : $"{address.Address}, Floor {address.Floor}";
+            LeaveState.SelectedAddressLocationId = address.LocationId;
+            await OnAddressSelected.InvokeAsync();
+        }
+        finally
+        {
+            selectingAddress = false;
+        }
+    }
 
 
     protected override async Task OnInitializedAsync()

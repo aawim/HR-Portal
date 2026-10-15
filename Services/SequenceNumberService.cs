@@ -75,13 +75,28 @@ namespace HRM.Services
 
         public async Task<string> GenerateRequestNumberAsync(int requestTypeId)
         {
-            
-
-            using var transaction =
+            await using var transaction =
                 await _db.Database.BeginTransactionAsync();
+            try
+            {
+                var reference = await GenerateRequestNumberAsync(_db, requestTypeId);
+                await transaction.CommitAsync();
+                return reference;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<string> GenerateRequestNumberAsync(HrmTeContext db, int requestTypeId)
+        {
+            if (db.Database.CurrentTransaction == null)
+                throw new InvalidOperationException("Request numbering requires an active transaction.");
 
             var requestType =
-                await _db.RequestTypes
+                await db.RequestTypes.AsNoTracking()
                     .FirstOrDefaultAsync(x =>
                         x.RequestTypeId == requestTypeId);
 
@@ -100,10 +115,10 @@ namespace HRM.Services
 
 
             var sequence =
-                await _db.SequenceNumberTypes
-                    .FirstOrDefaultAsync(x =>
-                        x.SequenceNumberTypeId ==
-                        requestType.SequenceNumberTypeId);
+                await db.SequenceNumberTypes
+                    .FromSqlInterpolated($"SELECT * FROM dbo.SequenceNumberTypes WITH (UPDLOCK, HOLDLOCK) WHERE SequenceNumberTypeID = {requestType.SequenceNumberTypeId.Value}")
+                    .AsNoTracking()
+                    .SingleOrDefaultAsync();
 
             if (sequence == null)
             {
@@ -121,11 +136,8 @@ namespace HRM.Services
 
             var number = sequence.NextNumber.Value;
 
-            sequence.NextNumber++;
-
-            await _db.SaveChangesAsync();
-
-            await transaction.CommitAsync();
+            await db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE dbo.SequenceNumberTypes SET NextNumber = NextNumber + 1 WHERE SequenceNumberTypeID = {sequence.SequenceNumberTypeId}");
 
             return Format(sequence, number);
         }

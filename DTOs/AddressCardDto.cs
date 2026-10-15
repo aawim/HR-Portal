@@ -3,6 +3,12 @@
     public class AddressCardDto
     {
         public int LocationId { get; set; }
+        public int CountryId { get; set; }
+        public int? AtollId { get; set; }
+        public int? IslandId { get; set; }
+        public string? Phone { get; set; }
+        public string? Email { get; set; }
+        public List<HRM.DTOs.Profile.ProfileContactDto> Contacts { get; set; } = new();
 
         public string Title { get; set; } = "";
 

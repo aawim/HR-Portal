@@ -57,7 +57,9 @@ namespace HRM.Services.Interfaces.AppovalWF
                             .Where(u =>
                                 u.UserId == referenceId &&
                                 u.IsActive &&
-                                u.UserOrganisation != null )
+                                u.UserOrganisation != null &&
+                                u.UserOrganisation.BusinessEntityID ==
+                                    context.OrganisationBusinessEntityId)
                             .Select(u => u.UserId)
                             .ToListAsync(cancellationToken);
                         break;
@@ -69,17 +71,17 @@ namespace HRM.Services.Interfaces.AppovalWF
                                 u.IsActive &&
                                 u.UserOrganisation != null &&
                                 u.UserOrganisation.BusinessEntityID ==
-                                    context.ApplicantBusinessEntityId &&
+                                    context.OrganisationBusinessEntityId &&
                                 (
                                     u.UserRoles.Any(ur =>
                                         ur.RoleId == referenceId &&
                                         ur.IsActive &&
                                         ur.UserOrganisation.BusinessEntityID ==
-                                            context.ApplicantBusinessEntityId)
+                                            context.OrganisationBusinessEntityId)
                                     ||
                                     u.UserAssignedUserGroups.Any(assignment =>
                                         assignment.UserGroup.UserOrganisation.BusinessEntityID ==
-                                            context.ApplicantBusinessEntityId &&
+                                            context.OrganisationBusinessEntityId &&
                                         assignment.UserGroup.UserGroupRoles.Any(gr =>
                                             gr.RoleId == referenceId &&
                                             gr.IsActive))

@@ -12,6 +12,8 @@
 @inject ILeaveService LeaveService
 
 @inject IDbContextFactory<HrmTeContext> DbFactory
+@inject ILogger<RecentLeaveRequestsCard> Logger
+@implements IAsyncDisposable
 
 <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4">
 
@@ -25,7 +27,8 @@
             </p>
         </div>
 
-        <i class="fas fa-calendar-alt text-blue-600 text-xl"></i>
+        <button type="button" disabled="@(IsLoading || _processing)"
+                class="text-sm text-blue-600 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
     </div>
 
     @if (IsLoading)
@@ -65,12 +68,8 @@
                             Days
                         </th>
 
-                        <th class="px-3 py-3 text-center text-xs font-semibold uppercase">
-                            Status
-                        </th>
-
                          <th class="px-3 py-3 text-center text-xs font-semibold uppercase">
-                            Workflow
+                            Status
                         </th>
 
 
@@ -103,70 +102,8 @@
                             </td>
 
                             <td class="px-3 py-3 text-center">
-                                @leave.Duration + @leave.LeaveId
+                                @leave.Duration
                             </td>
-
-                            <td class="px-3 py-3 text-center">
-
-                                @switch (leave.LeaveState.LeaveStateId)
-                                {
-                                    case 1: // Incomplete
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 2: // Pending Verification
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 3: // Pending Approval
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 4: // Approved
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 5: // Rejected
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 6: // Cancelled
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-200 text-slate-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 7: // Pending HR Head Approval
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    case 8: // Pending HOD Approval
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-
-                                    default:
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
-                                            @leave.LeaveState.StateName
-                                        </span>
-                                        break;
-                                }
-
-                            </td>
-
 
                             <td class="px-3 py-3 text-center">
 
@@ -180,18 +117,23 @@
                                         No linked request
                                     </span>
                                 }
-                                else if (WorkflowInfo.TryGetValue(requestId.Value, out var workflow))
+                                else if (RequestStatuses.TryGetValue(requestId.Value, out var status))
                                 {
                                     <div class="flex flex-col items-center gap-1">
 
                                         <span class="px-2 py-1 rounded-full text-xs font-medium
                          bg-blue-100 text-blue-700">
-                                            @workflow.WorkflowStatus
+                                            @status
                                         </span>
 
-                                        <span class="text-xs text-slate-500">
-                                            @workflow.StageName
-                                        </span>
+                                        @if (WorkflowInfo.TryGetValue(requestId.Value, out var workflow))
+                                        {
+                                            <span class="text-xs text-slate-500">@workflow.WorkflowStatus</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-xs text-amber-600">Workflow not started</span>
+                                        }
 
                                     </div>
                                 }
@@ -278,12 +220,47 @@
 
 
 @code {
+    private readonly CancellationTokenSource refreshStop = new();
+    private Task? refreshLoop;
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) refreshLoop = RefreshPeriodicallyAsync();
+        return Task.CompletedTask;
+    }
+
+    private async Task RefreshPeriodicallyAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(refreshStop.Token))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (IsLoading || _processing || ShowCancelConfirm || refreshStop.IsCancellationRequested) return;
+                    try { await RefreshAsync(); }
+                    catch (Exception ex) { Logger.LogWarning(ex, "Could not refresh recent leave request statuses."); }
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (refreshStop.IsCancellationRequested) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await refreshStop.CancelAsync();
+        if (refreshLoop != null) await refreshLoop;
+        refreshStop.Dispose();
+    }
 
     private bool _processing;
 
     private Dictionary<int, int> LeaveRequestIds = new();
 
     private Dictionary<int, WorkflowCardInfo> WorkflowInfo = new();
+    private Dictionary<int, string> RequestStatuses = new();
 
 
     private int? GetWorkflowRequestId(int leaveId)
@@ -307,6 +284,9 @@
 
 
     protected override async Task OnInitializedAsync()
+        => await RefreshAsync();
+
+    private async Task RefreshAsync()
     {
         IsLoading = true;
 
@@ -314,9 +294,6 @@
         {
             LeaveRequests =
                 await LeaveService.GetMyLeaveRequestsAsync();
-
-            // Populate LeaveRequestIds using the real
-            // LeaveId -> RequestId relationship first.
 
             await LoadWorkflowInfoAsync();
         }
@@ -365,6 +342,7 @@
 
 
         LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
+        await LoadWorkflowInfoAsync();
     }
 
     private async Task CancelLeave(int leaveId)
@@ -384,6 +362,7 @@
 
 
         LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
+        await LoadWorkflowInfoAsync();
     }
 
     private async Task ShowDetail(int leaveId)
@@ -398,6 +377,7 @@
 
 
         LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
+        await LoadWorkflowInfoAsync();
 
         StateHasChanged();
     }
@@ -407,12 +387,12 @@
     {
         LeaveRequestIds.Clear();
         WorkflowInfo.Clear();
+        RequestStatuses.Clear();
 
         if (LeaveRequests == null || LeaveRequests.Count == 0)
             return;
 
         var leaveIds = LeaveRequests
-            .Take(5)
             .Select(x => x.LeaveId)
             .ToArray();
 
@@ -425,7 +405,8 @@
             .Select(x => new
             {
                 x.LeaveId,
-                x.RequestId
+                x.RequestId,
+                Status = x.Request.RequestState.StateName
             })
             .ToListAsync();
 
@@ -435,6 +416,8 @@
                 x => x.Key,
                 x => x.First().RequestId
             );
+        RequestStatuses = mappings.GroupBy(x => x.RequestId)
+            .ToDictionary(x => x.Key, x => x.First().Status);
 
         if (LeaveRequestIds.Count == 0)
             return;

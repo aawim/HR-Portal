@@ -31,6 +31,9 @@ namespace HRM.Services.State
         public JobLeaveTypeDto? SelectedLeaveType { get; set; }
 
         public int RemainingDays { get; set; }
+        public string SelectedLeaveTypeName { get; private set; } = string.Empty;
+        public bool IncludeHolidays { get; set; } = true;
+        public int? SelectedAddressLocationId { get; set; }
 
         // ==========================
         // Employee Leave Balances
@@ -68,20 +71,32 @@ namespace HRM.Services.State
         public List<int> SelectedApprovers { get; set; } = new();
 
         // 🔥 central mapping (no UI logic anymore)
-        private readonly Dictionary<string, Type> _formMap = new()
+        private readonly Dictionary<string, Type> _formMap = new(StringComparer.OrdinalIgnoreCase)
         {
             ["Annual Leave"] = typeof(AnnualLeaveForm),
             ["Sick Leave"] = typeof(Components.Pages.Online.Leave.Forms.SickLeaveForm),
             ["No Pay Leave"] = typeof(NoPayLeaveForm),
-            ["Official Trip"] = typeof(OfficialTripForm)
+            ["Official Trip"] = typeof(OfficialTripForm),
+            ["Family Leave"] = typeof(FamilyLeaveForm),
+            ["Child Care Leave"] = typeof(FamilyLeaveForm),
+            ["Paternity Leave"] = typeof(FamilyLeaveForm),
+            ["Circumcision Leave"] = typeof(FamilyLeaveForm),
+            ["Bonus Annual Leave"] = typeof(AnnualLeaveForm),
+            ["Half pay leave"] = typeof(NoPayLeaveForm)
         };
 
         public void ResolveForm(string leaveTypeCode)
         {
+            SelectedLeaveTypeName = leaveTypeCode?.Trim() ?? string.Empty;
             SelectedFormComponent =
-                _formMap.TryGetValue(leaveTypeCode, out var formType)
+                _formMap.TryGetValue(SelectedLeaveTypeName, out var formType)
                     ? formType
-                    : typeof(DefaultLeaveForm);
+                    : SelectedLeaveTypeName.Contains("Maternity", StringComparison.OrdinalIgnoreCase) ||
+                      SelectedLeaveTypeName.Contains("Birth", StringComparison.OrdinalIgnoreCase)
+                        ? typeof(MaternityLeaveForm)
+                        : SelectedLeaveTypeName.Contains("Covid", StringComparison.OrdinalIgnoreCase)
+                            ? typeof(Components.Pages.Online.Leave.Forms.SickLeaveForm)
+                            : typeof(DefaultLeaveForm);
         }
 
         // ==========================
@@ -91,7 +106,7 @@ namespace HRM.Services.State
             Model.LeaveTypeId > 0;
 
         public bool HasReason =>
-            Model.LeaveReasonId > 0;
+            Model.LeaveReasonId > 0 && Reasons.Any(x => x.Id == Model.LeaveReasonId);
 
         public bool IsWorkHandoverRequired =>
             Model.Duration > 3;
@@ -120,6 +135,10 @@ namespace HRM.Services.State
             Reasons.Clear();
 
             SelectedLeaveType = null;
+            SelectedLeaveTypeName = string.Empty;
+            SelectedFormComponent = typeof(DefaultLeaveForm);
+            IncludeHolidays = true;
+            SelectedAddressLocationId = null;
 
             RemainingDays = 0;
 

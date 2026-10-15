@@ -65,13 +65,17 @@ namespace HRM.Services
             //    .ToListAsync();
 
 
-            return await context.BusinessEntityLocations
+            var addresses = await context.BusinessEntityLocations
             .Where(x => x.BusinessEntityId == individualId && x.IsValid)
             .Select(x => new AddressCardDto
             {
                 LocationId = x.LocationId,
 
                 Title = x.Location.Address.AddressInstance.AddressInstanceType.TypeName,
+                CountryId = x.Location.CountryId,
+                AtollId = x.Location.Address != null && x.Location.Address.Island != null
+                    ? x.Location.Address.Island.AtollId : null,
+                IslandId = x.Location.Address != null ? x.Location.Address.IslandId : null,
 
                 Address = x.Location.Address.AddressInstance.Name,
 
@@ -88,6 +92,30 @@ namespace HRM.Services
                 IsCurrent = (bool) x.Location.Address.AddressInstance.AddressBase.IsCurrent
             })
             .ToListAsync();
+
+            var contacts = await context.BussinessEntityContactInformations.AsNoTracking()
+                .Where(x => x.BussinessEntityId == individualId && x.IsValid &&
+                    (x.ContactInformationTypeId == 1 || x.ContactInformationTypeId == 2 || x.ContactInformationTypeId == 4) &&
+                    x.Value != null && x.Value.Trim() != "")
+                .OrderBy(x => x.ContactInformationTypeId)
+                .ThenByDescending(x => x.BussinessEntityContactInformationId)
+                .Select(x => new HRM.DTOs.Profile.ProfileContactDto
+                {
+                    ContactId = x.BussinessEntityContactInformationId,
+                    ContactInformationTypeId = x.ContactInformationTypeId,
+                    ContactTypeName = x.ContactInformationType.TypeName,
+                    Value = x.Value,
+                    IsValid = true
+                })
+                .ToListAsync();
+
+            foreach (var address in addresses)
+            {
+                address.Contacts = contacts.ToList();
+                address.Phone = contacts.FirstOrDefault(x => x.ContactInformationTypeId is 1 or 2)?.Value.Trim();
+                address.Email = contacts.FirstOrDefault(x => x.ContactInformationTypeId == 4)?.Value.Trim();
+            }
+            return addresses;
 
         }
 

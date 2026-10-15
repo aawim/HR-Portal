@@ -61,9 +61,9 @@ namespace HRM.Services
                 Remarks = remarks
             };
 
-            _dbContext.OperationLogs.Add(log);
+            dbContext.OperationLogs.Add(log);
 
-            await _dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync();
 
             return log;
         }

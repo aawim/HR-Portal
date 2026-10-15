@@ -6,6 +6,7 @@ namespace HRM.Services.Interfaces
     public interface IRequestService
     {
         Task<Request> CreateAsync(CreateRequestDto dto);
+        Task<Request> CreateAsync(HrmTeContext db, CreateRequestDto dto);
 
         Task<Request?> GetByIdAsync(int requestId);
 

@@ -25,6 +25,24 @@ namespace HRM.Services
         public async Task<Request> CreateAsync(CreateRequestDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync();
+            try
+            {
+                var request = await CreateAsync(db, dto);
+                await transaction.CommitAsync();
+                return request;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+        }
+
+        public async Task<Request> CreateAsync(HrmTeContext db, CreateRequestDto dto)
+        {
+            if (db.Database.CurrentTransaction == null)
+                throw new InvalidOperationException("Request creation requires an active transaction.");
 
             var user = await _access.RequireContextAsync();
 
@@ -34,7 +52,7 @@ namespace HRM.Services
 
                 RequestStateId = SharedConfig.RequestStates.PENDING_VERIFICATION,
 
-                ReferenceNumber = await _sequence.GenerateRequestNumberAsync(dto.RequestTypeId),
+                ReferenceNumber = await _sequence.GenerateRequestNumberAsync(db, dto.RequestTypeId),
 
                 ApplicationDate = DateTime.Now,
 

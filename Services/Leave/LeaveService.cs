@@ -4,8 +4,11 @@ using HRM.DTOs.Leave;
 using HRM.DTOs.LeaveTypes;
 using HRM.DTOs.UserContext;
 using HRM.Models;
+using HRM.Models.LeaveTypes;
+using HRM.Helpers;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.Leave;
+using HRM.Services.Interfaces.AppovalWF;
 using HRM.Services.Stores;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,6 +21,7 @@ namespace HRM.Services.Leave
         private readonly IOperationLogService _operationLogService;
         private readonly IUserAccessService _access;
         private readonly IRequestService _requestService;
+        private readonly IWorkflowEngine _workflowEngine;
 
         private readonly ToastService _toastService;
 
@@ -27,7 +31,8 @@ namespace HRM.Services.Leave
             IUserContext userContextService, 
             ToastService toastService, 
             IUserAccessService access,
-            IRequestService requestService
+            IRequestService requestService,
+            IWorkflowEngine workflowEngine
             )
         {
             _dbFactory = dbFactory;
@@ -36,6 +41,7 @@ namespace HRM.Services.Leave
             //_userContextService = userContextService;
             _access = access;
             _requestService = requestService;
+            _workflowEngine = workflowEngine;
         }
 
         public async Task<LeaveResource?> BuildAsync(LeaveResource leaveRequestId)
@@ -158,8 +164,27 @@ namespace HRM.Services.Leave
                 }
 
                 var balances = await query.ToListAsync();
+                var organisationId = await db.Jobs.AsNoTracking()
+                    .Where(x => x.JobId == jobId)
+                    .Select(x => x.OrganisationID)
+                    .FirstOrDefaultAsync();
+                var mappings = await GetApplicationMappingsAsync(db, organisationId);
 
                 return balances
+                    .GroupBy(x =>
+                    {
+                        var definitionId = ResolveApplicationDefinitionId(x, x.LeaveType, mappings);
+                        return definitionId.HasValue
+                            ? $"definition:{definitionId.Value}"
+                            : $"legacy:{x.LeaveTypeId}";
+                    })
+                    .Select(group => group
+                        .OrderByDescending(x => x.RemainingDays > 0)
+                        .ThenByDescending(x => x.LeaveDefinitionId.HasValue)
+                        .ThenByDescending(x => mappings.Any(m => m.LegacyLeaveTypeId == x.LeaveTypeId))
+                        .ThenByDescending(x => x.EffectiveFromDate)
+                        .ThenByDescending(x => x.JobLeaveTypeId)
+                        .First())
                     .OrderBy(x =>
                         x.LeaveDefinition?.Name ??
                         x.LeaveType?.Name ??
@@ -208,16 +233,110 @@ namespace HRM.Services.Leave
 
         public async Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int? typeId)
         {
+            if (!typeId.HasValue || typeId.Value <= 0)
+                return new List<LeaveReasonDto>();
+
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            return await db.LeaveReasons
-                .Where(x => x.LeaveTypeReasonTypeId == typeId)
+            return await db.LeaveTypeReasonTypes
+                .AsNoTracking()
+                .Where(x => x.LeaveTypeId == typeId.Value)
+                .OrderBy(x => x.ReasonTypeName)
                 .Select(x => new LeaveReasonDto
                 {
-                    Id = x.LeaveId,
-                    Name = x.Reason
+                    Id = x.LeaveTypeReasonTypeId,
+                    Name = x.ReasonTypeName
                 })
                 .ToListAsync();
+        }
+
+        public async Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId)
+        {
+            var context = await _access.RequireContextAsync();
+            if (context.ActiveJob == null)
+                return null;
+
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var balance = await db.JobLeaveTypes.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId &&
+                    x.JobId == context.ActiveJob.JobId && x.IsValid && x.IsLeaveInfoUpdated);
+            if (balance == null)
+                return null;
+
+            var legacyType = await ResolveApplicationLegacyTypeAsync(
+                db, balance, context.ActiveJob.OrganisationId);
+            if (legacyType == null)
+                return null;
+
+            return new LeaveApplicationTypeDto
+            {
+                JobLeaveTypeId = balance.JobLeaveTypeId,
+                LeaveTypeId = legacyType.LeaveTypeId,
+                LeaveTypeName = legacyType.Name,
+                RemainingDays = balance.RemainingDays ?? 0,
+                IncludeHolidays = legacyType.IncludeHolidays,
+                Reasons = await GetReasonsByLeaveType(legacyType.LeaveTypeId)
+            };
+        }
+
+        internal static async Task<LeaveType?> ResolveApplicationLegacyTypeAsync(
+            HrmTeContext db, JobLeaveType balance, int organisationId)
+        {
+            var legacyType = balance.LeaveTypeId.HasValue
+                ? await db.LeaveTypes.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.LeaveTypeId == balance.LeaveTypeId.Value)
+                : null;
+            var mappings = await GetApplicationMappingsAsync(db, organisationId);
+            var definitionId = ResolveApplicationDefinitionId(balance, legacyType, mappings);
+            if (!definitionId.HasValue)
+                return legacyType;
+
+            var candidates = mappings.Where(x => x.LeaveDefinitionId == definitionId.Value).ToList();
+            if (candidates.Count == 0)
+                return legacyType;
+
+            var candidateIds = candidates.Select(x => x.LegacyLeaveTypeId).ToArray();
+            var typesWithReasons = await db.LeaveTypeReasonTypes.AsNoTracking()
+                .Where(x => candidateIds.Contains(x.LeaveTypeId))
+                .Select(x => x.LeaveTypeId).Distinct().ToListAsync();
+            var source = candidates.FirstOrDefault(x => typesWithReasons.Contains(x.LegacyLeaveTypeId))
+                ?? candidates[0];
+            return await db.LeaveTypes.AsNoTracking()
+                .FirstOrDefaultAsync(x => x.LeaveTypeId == source.LegacyLeaveTypeId);
+        }
+
+        private static Task<List<LeaveTypeMapping>> GetApplicationMappingsAsync(
+            HrmTeContext db, int organisationId)
+        {
+            var today = DateTime.Today;
+            return db.LeaveTypeMappings.AsNoTracking().Include(x => x.LeaveDefinition)
+                .Where(x => x.IsActive &&
+                    (x.OrganisationId == organisationId || x.OrganisationId == null) &&
+                    (x.EffectiveFrom == null || x.EffectiveFrom <= today) &&
+                    (x.EffectiveTo == null || x.EffectiveTo >= today))
+                .OrderByDescending(x => x.OrganisationId.HasValue)
+                .ThenByDescending(x => x.EffectiveFrom)
+                .ThenByDescending(x => x.LeaveTypeMappingId)
+                .ToListAsync();
+        }
+
+        private static int? ResolveApplicationDefinitionId(
+            JobLeaveType balance, LeaveType? legacyType, List<LeaveTypeMapping> mappings)
+        {
+            if (balance.LeaveDefinitionId.HasValue)
+                return balance.LeaveDefinitionId.Value;
+            var direct = mappings.FirstOrDefault(x => x.LegacyLeaveTypeId == balance.LeaveTypeId);
+            if (direct != null)
+                return direct.LeaveDefinitionId;
+            if (legacyType?.MigratedLeaveDefinitionID != null)
+                return legacyType.MigratedLeaveDefinitionID;
+
+            // Organisation copies can retain the definition's name without its ID.
+            // Only accept a unique definition in the applicable mapping scope.
+            var matchingIds = mappings.Where(x => string.Equals(
+                    x.LeaveDefinition.Name.Trim(), legacyType?.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+                .Select(x => x.LeaveDefinitionId).Distinct().ToArray();
+            return matchingIds.Length == 1 ? matchingIds[0] : null;
         }
 
         public Task<List<LeaveReasonDto>> GetReasonsByLeaveType()
@@ -287,7 +406,7 @@ namespace HRM.Services.Leave
 
             try
             {
-                int jobId = context.ActiveJob.JobId;
+                int jobId = context.ActiveJob?.JobId ?? 0;
 
                 if (jobId == 0)
                 {
@@ -300,6 +419,45 @@ namespace HRM.Services.Leave
 
 
                 model.JobId = jobId;
+                var organisationId = await db.Jobs.AsNoTracking()
+                    .Where(x => x.JobId == jobId)
+                    .Select(x => x.OrganisationID)
+                    .FirstOrDefaultAsync();
+                if (organisationId <= 0)
+                    return ServiceResult.Fail("The employee's job has no organisation. Leave was not submitted.");
+
+                var jobLeaveType = await db.JobLeaveTypes.FirstOrDefaultAsync(x =>
+                    x.JobId == jobId && x.IsValid && x.IsLeaveInfoUpdated &&
+                    (model.JobLeaveTypeId.HasValue
+                        ? x.JobLeaveTypeId == model.JobLeaveTypeId.Value
+                        : x.LeaveTypeId == model.LeaveTypeId));
+                if (jobLeaveType == null)
+                    return ServiceResult.Fail("Leave balance not found for selected leave type.");
+
+                var legacyType = await ResolveApplicationLegacyTypeAsync(
+                    db, jobLeaveType, organisationId);
+                if (legacyType == null)
+                    return ServiceResult.Fail("No active legacy leave type mapping was found for the selected leave balance.");
+
+                // Keep the selected legacy balance's identity for existing leave
+                // and cancellation paths; reasons can come from its mapped source.
+                model.LeaveTypeId = jobLeaveType.LeaveTypeId ?? legacyType.LeaveTypeId;
+                var reasonType = await db.LeaveTypeReasonTypes.AsNoTracking()
+                    .FirstOrDefaultAsync(x => x.LeaveTypeReasonTypeId == model.LeaveReasonId &&
+                        x.LeaveTypeId == legacyType.LeaveTypeId);
+                if (reasonType == null)
+                    return ServiceResult.Fail("Select a valid reason for the selected leave type.");
+
+                if (model.FromDate == default || model.ToDate < model.FromDate)
+                    return ServiceResult.Fail("Select a valid start and end date.");
+                model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, legacyType.IncludeHolidays);
+                if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
+                    return ServiceResult.Fail("The requested days must be positive and within your available balance.");
+                var explanation = LeaveApplicationDetails.Build(model);
+                if (explanation.Length > 250)
+                    return ServiceResult.Fail("Explanation and additional details must total 250 characters or fewer.");
+                if (!legacyType.RequestTypeId.HasValue || legacyType.RequestTypeId.Value <= 0)
+                    return ServiceResult.Fail("No request type is configured for this leave type. Contact HR before applying.");
 
                 // CHECK OVERLAP LEAVES (ANY STATE)
                 bool hasOverlap = await db.Leaves
@@ -335,10 +493,11 @@ namespace HRM.Services.Leave
                 // CREATE REQUEST
                 var request =
                     await _requestService.CreateAsync(
+                        db,
                         new CreateRequestDto
                         {
                             RequestTypeId =
-                                SharedConfig.RequestTypes.ANNUAL_LEAVE_REQUEST,
+                                legacyType.RequestTypeId.Value,
 
                             OperationLogId =
                                 operationLog.OperationLogId,
@@ -347,8 +506,7 @@ namespace HRM.Services.Leave
                                 context.BusinessEntityId,
 
                             OrganisationBusinessEntityId =
-                                context.Organisation?
-                                       .OrganisationBusinessEntityId,
+                                organisationId,
 
                             EffectiveDate =
                                 model.FromDate
@@ -378,6 +536,15 @@ namespace HRM.Services.Leave
                 };
 
                 db.LeaveRequests.Add(leaveRequest);
+                if (reasonType != null)
+                {
+                    db.LeaveReasons.Add(new LeaveReason
+                    {
+                        LeaveId = leave.LeaveId,
+                        LeaveTypeReasonTypeId = reasonType.LeaveTypeReasonTypeId,
+                        Reason = string.IsNullOrWhiteSpace(explanation) ? reasonType.ReasonTypeName : explanation
+                    });
+                }
                 await db.SaveChangesAsync();
 
                 // LOCATION (OPTIONAL)
@@ -397,12 +564,6 @@ namespace HRM.Services.Leave
                 }
 
                 // UPDATE JOB LEAVE TYPE
-                var jobLeaveType = await db.JobLeaveTypes
-                    .FirstOrDefaultAsync(x =>
-                    x.JobId == jobId &&
-                    x.IsValid &&
-                    x.LeaveTypeId == model.LeaveTypeId);
-
                 if (jobLeaveType == null)
                 {
                     return new ServiceResult
@@ -426,6 +587,24 @@ namespace HRM.Services.Leave
                 jobLeaveType.OperationLogId = operationLog.OperationLogId;
 
                 await db.SaveChangesAsync();
+
+                try
+                {
+                    await _workflowEngine.StartAsync(db, request.RequestId, jobId);
+                    // Startup chooses the first state from the employee's configured workflow.
+                    // Read it back because the engine updates the request through SQL.
+                    var initialState = await db.Requests.AsNoTracking()
+                        .Where(x => x.RequestId == request.RequestId)
+                        .Select(x => x.RequestStateId).SingleAsync();
+                    leave.LeaveStateId = LeaveRequestStateMapper.ToLeaveState(initialState);
+                    await db.SaveChangesAsync();
+                }
+                catch (InvalidOperationException ex)
+                {
+                    await transaction.RollbackAsync();
+                    return ServiceResult.Fail(
+                        $"Leave was not submitted because its approval workflow could not start. {ex.Message}");
+                }
 
                 await transaction.CommitAsync();
 

@@ -5,6 +5,7 @@
         public int RequestId { get; set; }
 
         public int RequestTypeId { get; set; }
+        public int? FallbackApprovalRequestTypeId { get; set; }
 
         public int OrganisationBusinessEntityId { get; set; }
 

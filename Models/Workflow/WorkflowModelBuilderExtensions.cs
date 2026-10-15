@@ -59,7 +59,7 @@ namespace HRM.Models.Workflow
                 e.Property(x => x.CompletedAt).HasPrecision(3);
                 e.Property(x => x.RowVersion).IsRowVersion();
                 e.HasIndex(x => x.RequestId).IsUnique().HasDatabaseName("UQ_WF_Instance_Request");
-                e.HasOne(x => x.WorkflowDefinition).WithMany().HasForeignKey(x => x.WorkflowDefinitionId).OnDelete(DeleteBehavior.NoAction);
+                e.HasOne(x => x.WorkflowDefinition).WithMany(x => x.RequestInstances).HasForeignKey(x => x.WorkflowDefinitionId).OnDelete(DeleteBehavior.NoAction);
                 e.HasOne(x => x.CurrentStage).WithMany().HasForeignKey(x => x.CurrentRequestStageInstanceId).OnDelete(DeleteBehavior.NoAction);
             });
             modelBuilder.Entity<WfRequestStageInstance>(e =>

@@ -1,18 +1,16 @@
-﻿@using HRM.DTOs.Leave
 @using HRM.Services.State
-@using System.ComponentModel.DataAnnotations
-@using Microsoft.EntityFrameworkCore;
-<div class="bg-white rounded-lg border border-slate-200 p-6">
-
-    <h3 class="text-lg font-semibold mb-4">
-        Official Trip Details
-    </h3>
-
-     
-
-</div>
-
+<LeaveApplicationForm LeaveState="LeaveState" ExplanationLabel="Additional trip details">
+    <AdditionalFields>
+        <div>
+            <label class="block text-sm mb-1" for="leave-destination">Destination</label>
+            <InputText id="leave-destination" class="w-full border rounded-md p-2" @bind-Value="LeaveState.Model.Destination" />
+        </div>
+        <div>
+            <label class="block text-sm mb-1" for="leave-purpose">Purpose of Trip</label>
+            <InputTextArea id="leave-purpose" class="w-full border rounded-md p-2" rows="3" @bind-Value="LeaveState.Model.Purpose" />
+        </div>
+    </AdditionalFields>
+</LeaveApplicationForm>
 @code {
-    [Parameter]
-    public LeaveApplicationState LeaveState { get; set; } = default!;
+    [Parameter] public LeaveApplicationState LeaveState { get; set; } = default!;
 }

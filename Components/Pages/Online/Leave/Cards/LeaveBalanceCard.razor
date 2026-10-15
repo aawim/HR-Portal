@@ -6,6 +6,7 @@
 @using HRM.Services.State
 
 @inject ILeaveService LeaveService
+@inject ToastService ToastService
 
 
 <div class="w-full">
@@ -173,11 +174,24 @@
     private async Task ApplyLeaveType(JobLeaveType leave)
     {
 
-        LeaveState.Model.LeaveTypeId = leave.LeaveTypeId;
-        LeaveState.RemainingDays = (int)leave.RemainingDays;
-        LeaveState.Reasons = await LeaveService.GetReasonsByLeaveType(leave.LeaveTypeId);
+        var applicationType = await LeaveService.GetApplicationLeaveTypeAsync(leave.JobLeaveTypeId);
+        if (applicationType == null)
+        {
+            ToastService.Warning("No active legacy leave type mapping was found for this leave balance.");
+            return;
+        }
+
+        LeaveState.Model.JobLeaveTypeId = applicationType.JobLeaveTypeId;
+        LeaveState.Model.LeaveTypeId = applicationType.LeaveTypeId;
+        LeaveState.RemainingDays = applicationType.RemainingDays;
+        LeaveState.IncludeHolidays = applicationType.IncludeHolidays;
+        LeaveState.Reasons = applicationType.Reasons;
         LeaveState.Model.LeaveReasonId = 0;
-        LeaveState.ResolveForm(leave.LeaveType.Name);
+        LeaveState.Model.MedicalCertificateNo = null;
+        LeaveState.Model.HospitalName = null;
+        LeaveState.Model.Destination = null;
+        LeaveState.Model.Purpose = null;
+        LeaveState.ResolveForm(applicationType.LeaveTypeName);
        
         // Notify parent
         await OnLeaveTypeSelected.InvokeAsync();

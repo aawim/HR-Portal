@@ -1,4 +1,4 @@
-﻿using HRM.Models;
+using HRM.Models;
 using HRM.Models.Workflow;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -38,9 +38,39 @@ namespace HRM.Services.Interfaces.AppovalWF
             int subjectJobId,
             CancellationToken cancellationToken = default)
         {
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    IsolationLevel.Serializable, cancellationToken);
+
+            try
+            {
+                var instanceId = await StartAsync(
+                    db, requestId, subjectJobId, cancellationToken);
+                await transaction.CommitAsync(cancellationToken);
+                return instanceId;
+            }
+            catch
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                throw;
+            }
+        }
+
+        public async Task<long> StartAsync(
+            HrmTeContext db,
+            int requestId,
+            int subjectJobId,
+            CancellationToken cancellationToken = default)
+        {
+            var transaction = db.Database.CurrentTransaction
+                ?? throw new InvalidOperationException(
+                    "Workflow startup requires an active transaction.");
+
             // 1. Resolve the business context of the request.
             var context = await _contextResolver.ResolveAsync(
-                requestId, subjectJobId);
+                db, requestId, subjectJobId, cancellationToken);
 
             // 2. Resolve the authenticated actor.
             var userId = await _actorProvider.GetCurrentUserIdAsync(
@@ -56,16 +86,24 @@ namespace HRM.Services.Interfaces.AppovalWF
 
             // 4. Select workflow using request type,
             // organisation, job type and effective date.
+            var approvalRequestTypeId = context.RequestTypeId;
+            if (context.FallbackApprovalRequestTypeId.HasValue &&
+                !await db.WfWorkflowDefinitions.AsNoTracking().AnyAsync(x =>
+                    x.RequestTypeId == context.RequestTypeId && x.IsActive &&
+                    (x.OrganisationBusinessEntityId == context.OrganisationBusinessEntityId || x.OrganisationBusinessEntityId == null) &&
+                    (!x.WorkflowJobTypes.Any() || x.WorkflowJobTypes.Any(m =>
+                        m.IsActive && m.JobTypeId == context.JobTypeId)) &&
+                    (x.EffectiveFrom == null || x.EffectiveFrom <= context.EffectiveDate) &&
+                    (x.EffectiveTo == null || x.EffectiveTo >= context.EffectiveDate), cancellationToken))
+            {
+                approvalRequestTypeId = context.FallbackApprovalRequestTypeId.Value;
+            }
             var definition = await _definitionService.ResolveAsync(
-                  context.RequestTypeId,
+                  approvalRequestTypeId,
                   context.OrganisationBusinessEntityId,
                   context.JobTypeId,
                   context.EffectiveDate,
                   cancellationToken);
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
 
             // 5. Load the first active stage.
             var stages = definition.Stages
@@ -107,235 +145,220 @@ namespace HRM.Services.Interfaces.AppovalWF
             await db.Database.OpenConnectionAsync(
                 cancellationToken);
 
-            await using var transaction =
-                await db.Database.BeginTransactionAsync(
-                    IsolationLevel.Serializable,
-                    cancellationToken);
-
             var connection = db.Database.GetDbConnection();
             var sqlTransaction = transaction.GetDbTransaction();
 
-            try
+            // Lock the central request.
+            var requestStateId = await ScalarAsync<int?>(
+                connection,
+                sqlTransaction,
+                """
+            SELECT RequestStateID
+            FROM dbo.Requests WITH (UPDLOCK, HOLDLOCK)
+            WHERE RequestID = @RequestID
+            """,
+                cancellationToken,
+                ("@RequestID", requestId));
+
+            if (!requestStateId.HasValue)
+                throw new InvalidOperationException(
+                    "The request does not exist.");
+
+            // Prevent duplicate workflow initiation.
+            var existingInstance = await ScalarAsync<long?>(
+                connection,
+                sqlTransaction,
+                """
+            SELECT WorkflowRequestInstanceID
+            FROM dbo.WF_RequestInstances
+                WITH (UPDLOCK, HOLDLOCK)
+            WHERE RequestID = @RequestID
+            """,
+                cancellationToken,
+                ("@RequestID", requestId));
+
+            if (existingInstance.HasValue)
+                throw new InvalidOperationException(
+                    "A workflow has already been started " +
+                    "for this request.");
+
+            // Validate the configured request-state transition.
+            if (requestStateId.Value != firstStage.RequestStateId)
             {
-                // Lock the central request.
-                var requestStateId = await ScalarAsync<int?>(
+                var allowed = await ScalarAsync<int?>(
                     connection,
                     sqlTransaction,
                     """
-                SELECT RequestStateID
-                FROM dbo.Requests WITH (UPDLOCK, HOLDLOCK)
-                WHERE RequestID = @RequestID
+                SELECT TOP (1) 1
+                FROM dbo.RequestTypesAllowedRequestStateTransitions
+                WHERE RequestTypeID = @RequestTypeID
+                  AND FromRequestStateID = @FromStateID
+                  AND ToRequestStateID = @ToStateID
                 """,
                     cancellationToken,
-                    ("@RequestID", requestId));
-
-                if (!requestStateId.HasValue)
-                    throw new InvalidOperationException(
-                        "The request does not exist.");
-
-                // Prevent duplicate workflow initiation.
-                var existingInstance = await ScalarAsync<long?>(
-                    connection,
-                    sqlTransaction,
-                    """
-                SELECT WorkflowRequestInstanceID
-                FROM dbo.WF_RequestInstances
-                    WITH (UPDLOCK, HOLDLOCK)
-                WHERE RequestID = @RequestID
-                """,
-                    cancellationToken,
-                    ("@RequestID", requestId));
-
-                if (existingInstance.HasValue)
-                    throw new InvalidOperationException(
-                        "A workflow has already been started " +
-                        "for this request.");
-
-                // Validate the configured request-state transition.
-                if (requestStateId.Value != firstStage.RequestStateId)
-                {
-                    var allowed = await ScalarAsync<int?>(
-                        connection,
-                        sqlTransaction,
-                        """
-                    SELECT TOP (1) 1
-                    FROM dbo.RequestTypesAllowedRequestStateTransitions
-                    WHERE RequestTypeID = @RequestTypeID
-                      AND FromRequestStateID = @FromStateID
-                      AND ToRequestStateID = @ToStateID
-                    """,
-                        cancellationToken,
-                        ("@RequestTypeID", context.RequestTypeId),
-                        ("@FromStateID", requestStateId.Value),
-                        ("@ToStateID", firstStage.RequestStateId));
-
-                    if (allowed != 1)
-                        throw new InvalidOperationException(
-                            "The transition to the first workflow " +
-                            "stage is not configured for this request type.");
-                }
-
-                // 8. Create workflow request instance.
-                var workflowInstanceId = await ScalarAsync<long>(
-                    connection,
-                    sqlTransaction,
-                    """
-                INSERT INTO dbo.WF_RequestInstances
-                (
-                    RequestID,
-                    WorkflowDefinitionID,
-                    WorkflowStatus,
-                    ExecutionStatus,
-                    StartedAt
-                )
-                OUTPUT INSERTED.WorkflowRequestInstanceID
-                VALUES
-                (
-                    @RequestID,
-                    @WorkflowDefinitionID,
-                    'InProgress',
-                    'Pending',
-                    SYSUTCDATETIME()
-                )
-                """,
-                    cancellationToken,
-                    ("@RequestID", requestId),
-                    ("@WorkflowDefinitionID",
-                        definition.WorkflowDefinitionId));
-
-                // 9. Create first stage instance.
-                var stageInstanceId = await ScalarAsync<long>(
-                    connection,
-                    sqlTransaction,
-                    """
-                INSERT INTO dbo.WF_RequestStageInstances
-                (
-                    WorkflowRequestInstanceID,
-                    WorkflowStageID,
-                    AttemptNumber,
-                    StageStatus,
-                    StartedAt
-                )
-                OUTPUT INSERTED.RequestStageInstanceID
-                VALUES
-                (
-                    @WorkflowRequestInstanceID,
-                    @WorkflowStageID,
-                    1,
-                    'Pending',
-                    SYSUTCDATETIME()
-                )
-                """,
-                    cancellationToken,
-                    ("@WorkflowRequestInstanceID", workflowInstanceId),
-                    ("@WorkflowStageID", firstStage.WorkflowStageId));
-
-                // 10. Assign approvers.
-                foreach (var approver in assignments)
-                {
-                    await ExecuteAsync(
-                        connection,
-                        sqlTransaction,
-                        """
-                    INSERT INTO dbo.WF_RequestApprovals
-                    (
-                        RequestStageInstanceID,
-                        ApproverUserID,
-                        StageApproverID,
-                        ApprovalSequence,
-                        Decision,
-                        AssignedAt
-                    )
-                    VALUES
-                    (
-                        @StageInstanceID,
-                        @ApproverUserID,
-                        @StageApproverID,
-                        @ApprovalSequence,
-                        'Pending',
-                        SYSUTCDATETIME()
-                    )
-                    """,
-                        cancellationToken,
-                        ("@StageInstanceID", stageInstanceId),
-                        ("@ApproverUserID", approver.UserId),
-                        ("@StageApproverID", approver.StageApproverId),
-                        ("@ApprovalSequence", approver.SequenceNumber));
-                }
-
-                // 11. Set current stage.
-                await ExecuteAsync(
-                    connection,
-                    sqlTransaction,
-                    """
-                UPDATE dbo.WF_RequestInstances
-                SET CurrentRequestStageInstanceID = @StageInstanceID
-                WHERE WorkflowRequestInstanceID = @WorkflowInstanceID
-                """,
-                    cancellationToken,
-                    ("@StageInstanceID", stageInstanceId),
-                    ("@WorkflowInstanceID", workflowInstanceId));
-
-                // 12. Update existing request state.
-                await ExecuteAsync(
-                    connection,
-                    sqlTransaction,
-                    """
-                UPDATE dbo.Requests
-                SET RequestStateID = @NewStateID,
-                    LastStateChangedByUserID = @UserID,
-                    LastStateChangedDate = SYSUTCDATETIME()
-                WHERE RequestID = @RequestID
-                """,
-                    cancellationToken,
-                    ("@NewStateID", firstStage.RequestStateId),
-                    ("@UserID", userId),
-                    ("@RequestID", requestId));
-
-                // 13. Record audit action.
-                await ExecuteAsync(
-                    connection,
-                    sqlTransaction,
-                    """
-                INSERT INTO dbo.WF_RequestActions
-                (
-                    WorkflowRequestInstanceID,
-                    RequestStageInstanceID,
-                    PerformedByUserID,
-                    ActionCode,
-                    FromRequestStateID,
-                    ToRequestStateID,
-                    Comments,
-                    PerformedAt
-                )
-                VALUES
-                (
-                    @WorkflowInstanceID,
-                    @StageInstanceID,
-                    @UserID,
-                    'START',
-                    @FromStateID,
-                    @ToStateID,
-                    'Workflow initiated',
-                    SYSUTCDATETIME()
-                )
-                """,
-                    cancellationToken,
-                    ("@WorkflowInstanceID", workflowInstanceId),
-                    ("@StageInstanceID", stageInstanceId),
-                    ("@UserID", userId),
+                    ("@RequestTypeID", context.RequestTypeId),
                     ("@FromStateID", requestStateId.Value),
                     ("@ToStateID", firstStage.RequestStateId));
 
-                await transaction.CommitAsync(cancellationToken);
+                if (allowed != 1)
+                    throw new InvalidOperationException(
+                        "The transition to the first workflow " +
+                        "stage is not configured for this request type.");
+            }
 
-                return workflowInstanceId;
-            }
-            catch
+            // 8. Create workflow request instance.
+            var workflowInstanceId = await ScalarAsync<long>(
+                connection,
+                sqlTransaction,
+                """
+            INSERT INTO dbo.WF_RequestInstances
+            (
+                RequestID,
+                WorkflowDefinitionID,
+                WorkflowStatus,
+                ExecutionStatus,
+                StartedAt
+            )
+            OUTPUT INSERTED.WorkflowRequestInstanceID
+            VALUES
+            (
+                @RequestID,
+                @WorkflowDefinitionID,
+                'InProgress',
+                'Pending',
+                SYSUTCDATETIME()
+            )
+            """,
+                cancellationToken,
+                ("@RequestID", requestId),
+                ("@WorkflowDefinitionID",
+                    definition.WorkflowDefinitionId));
+
+            // 9. Create first stage instance.
+            var stageInstanceId = await ScalarAsync<long>(
+                connection,
+                sqlTransaction,
+                """
+            INSERT INTO dbo.WF_RequestStageInstances
+            (
+                WorkflowRequestInstanceID,
+                WorkflowStageID,
+                AttemptNumber,
+                StageStatus,
+                StartedAt
+            )
+            OUTPUT INSERTED.RequestStageInstanceID
+            VALUES
+            (
+                @WorkflowRequestInstanceID,
+                @WorkflowStageID,
+                1,
+                'Pending',
+                SYSUTCDATETIME()
+            )
+            """,
+                cancellationToken,
+                ("@WorkflowRequestInstanceID", workflowInstanceId),
+                ("@WorkflowStageID", firstStage.WorkflowStageId));
+
+            // 10. Assign approvers.
+            foreach (var approver in assignments)
             {
-                await transaction.RollbackAsync(CancellationToken.None);
-                throw;
+                await ExecuteAsync(
+                    connection,
+                    sqlTransaction,
+                    """
+                INSERT INTO dbo.WF_RequestApprovals
+                (
+                    RequestStageInstanceID,
+                    ApproverUserID,
+                    StageApproverID,
+                    ApprovalSequence,
+                    Decision,
+                    AssignedAt
+                )
+                VALUES
+                (
+                    @StageInstanceID,
+                    @ApproverUserID,
+                    @StageApproverID,
+                    @ApprovalSequence,
+                    'Pending',
+                    SYSUTCDATETIME()
+                )
+                """,
+                    cancellationToken,
+                    ("@StageInstanceID", stageInstanceId),
+                    ("@ApproverUserID", approver.UserId),
+                    ("@StageApproverID", approver.StageApproverId),
+                    ("@ApprovalSequence", approver.SequenceNumber));
             }
+
+            // 11. Set current stage.
+            await ExecuteAsync(
+                connection,
+                sqlTransaction,
+                """
+            UPDATE dbo.WF_RequestInstances
+            SET CurrentRequestStageInstanceID = @StageInstanceID
+            WHERE WorkflowRequestInstanceID = @WorkflowInstanceID
+            """,
+                cancellationToken,
+                ("@StageInstanceID", stageInstanceId),
+                ("@WorkflowInstanceID", workflowInstanceId));
+
+            // 12. Update existing request state.
+            await ExecuteAsync(
+                connection,
+                sqlTransaction,
+                """
+            UPDATE dbo.Requests
+            SET RequestStateID = @NewStateID,
+                LastStateChangedByUserID = @UserID,
+                LastStateChangedDate = SYSUTCDATETIME()
+            WHERE RequestID = @RequestID
+            """,
+                cancellationToken,
+                ("@NewStateID", firstStage.RequestStateId),
+                ("@UserID", userId),
+                ("@RequestID", requestId));
+
+            // 13. Record audit action.
+            await ExecuteAsync(
+                connection,
+                sqlTransaction,
+                """
+            INSERT INTO dbo.WF_RequestActions
+            (
+                WorkflowRequestInstanceID,
+                RequestStageInstanceID,
+                PerformedByUserID,
+                ActionCode,
+                FromRequestStateID,
+                ToRequestStateID,
+                Comments,
+                PerformedAt
+            )
+            VALUES
+            (
+                @WorkflowInstanceID,
+                @StageInstanceID,
+                @UserID,
+                'START',
+                @FromStateID,
+                @ToStateID,
+                'Workflow initiated',
+                SYSUTCDATETIME()
+            )
+            """,
+                cancellationToken,
+                ("@WorkflowInstanceID", workflowInstanceId),
+                ("@StageInstanceID", stageInstanceId),
+                ("@UserID", userId),
+                ("@FromStateID", requestStateId.Value),
+                ("@ToStateID", firstStage.RequestStateId));
+
+            return workflowInstanceId;
         }
 
 
@@ -377,20 +400,14 @@ namespace HRM.Services.Interfaces.AppovalWF
                 throw new InvalidOperationException(
                     $"Request {requestId} was not found.");
 
-            // 2. Validate the applicant.
-            // IMPORTANT: Resolve the authenticated user's UserID on the server.
-            // Do not trust an arbitrary UserID supplied by the browser.
-            //
-            // Your Requests table stores ApplicantBusinessEntityID.
-            // Add an ownership check through your existing Users /
-            // Individuals / BusinessEntities relationship here.
-            //
-            // Do not enable this operation for production until
-            // ownership validation is implemented.
+            // 2. Match the authenticated user to the request applicant.
+            if (!request.ApplicantBusinessEntityId.HasValue)
+                throw new InvalidOperationException(
+                    "The request has no applicant.");
 
             await EnsureApplicantCanCancelAsync(
                 db,
-                request.OrganisationBusinessEntityID ?? 0,
+                request.ApplicantBusinessEntityId.Value,
                 performedByUserId,
                 cancellationToken);
 

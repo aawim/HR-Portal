@@ -1,0 +1,172 @@
+@using HRM.DTOs.Leave
+@using HRM.Helpers
+@using HRM.Services
+@using HRM.Services.State
+@using HRM.Services.Interfaces.Leave
+@inject ILeaveChangeService Changes
+@inject ToastService ToastService
+
+<div class="space-y-6">
+    <div>
+        <h2 class="text-xl font-semibold text-slate-800">Leave Change Request</h2>
+        <p class="text-sm text-slate-500">Request an early return or an extension to approved leave. Dates and balances change only after final approval.</p>
+    </div>
+    @if (loading)
+    {
+        <p class="text-slate-500">Loading leave requests...</p>
+    }
+    else
+    {
+        @if (leaves.Count == 0)
+        {
+            <p class="rounded-lg bg-slate-50 p-4 text-slate-600">You have no approved leave to change.</p>
+        }
+        else
+        {
+            <EditForm Model="model" OnValidSubmit="SubmitAsync" class="border rounded-xl p-4 space-y-4">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <div>
+                    <label for="change-leave" class="block text-sm mb-1">Approved leave *</label>
+                    <InputSelect id="change-leave" class="w-full border rounded-md p-2" @bind-Value="model.LeaveId" @bind-Value:after="SelectionChanged">
+                        <option value="0">Select leave</option>
+                        @foreach (var leave in leaves)
+                        {
+                            <option value="@leave.LeaveId" disabled="@leave.HasPendingChange">
+                                @leave.LeaveType: @leave.FromDate.ToString("dd MMM yyyy") – @leave.ToDate.ToString("dd MMM yyyy") (@leave.Duration days) @(leave.HasPendingChange ? "— change pending" : "")
+                            </option>
+                        }
+                    </InputSelect>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="change-kind" class="block text-sm mb-1">Change type *</label>
+                        <InputSelect id="change-kind" class="w-full border rounded-md p-2" @bind-Value="model.Kind" @bind-Value:after="SelectionChanged">
+                            <option value="@LeaveChangeKind.Extension">Leave extension</option>
+                            <option value="@LeaveChangeKind.EarlyReturn">Early return</option>
+                        </InputSelect>
+                    </div>
+                    <div>
+                        <label for="change-date" class="block text-sm mb-1">@(model.Kind == LeaveChangeKind.EarlyReturn ? "Return-to-work date *" : "New leave end date *")</label>
+                        <InputDate id="change-date" class="w-full border rounded-md p-2" @bind-Value="model.Date" />
+                    </div>
+                </div>
+                @if (SelectedLeave != null)
+                {
+                    <div class="bg-blue-50 rounded-lg p-3 text-sm text-blue-900">
+                        @if (PreviewError != null) { <span>@PreviewError</span> }
+                        else
+                        {
+                            <p>Requested leave: @SelectedLeave.FromDate.ToString("dd MMM yyyy") – @Preview.EndDate.ToString("dd MMM yyyy") (@Preview.Duration days).</p>
+                            <p>Upon approval: @(Preview.BalanceAdjustment >= 0 ? $"{Preview.BalanceAdjustment} days returned to your balance." : $"{-Preview.BalanceAdjustment} additional days deducted from your balance.")</p>
+                        }
+                    </div>
+                }
+                <div>
+                    <label for="change-reason" class="block text-sm mb-1">Reason *</label>
+                    <InputTextArea id="change-reason" class="w-full border rounded-md p-2" rows="3" maxlength="250" @bind-Value="model.Reason" />
+                </div>
+                <button type="submit" disabled="@(busy || SelectedLeave == null || PreviewError != null)" class="bg-blue-600 text-white rounded-lg px-4 py-2 disabled:opacity-50">
+                    @(busy ? "Submitting..." : "Submit Change Request")
+                </button>
+            </EditForm>
+        }
+
+        <section>
+            <h3 class="font-semibold mb-3">My change requests</h3>
+            @if (history.Count == 0) { <p class="text-sm text-slate-500">No leave change requests found.</p> }
+            else
+            {
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead><tr class="border-b text-left"><th class="p-2">Reference</th><th class="p-2">Leave / change</th><th class="p-2">Requested end date</th><th class="p-2">Status</th><th class="p-2">Actions</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in history)
+                            {
+                                <tr class="border-b"><td class="p-2">@item.Reference</td><td class="p-2">@item.LeaveType — @item.ChangeType</td><td class="p-2">@item.RequestedEndDate.ToString("dd MMM yyyy")</td><td class="p-2">@item.Status</td><td class="p-2"><RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" /></td></tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+        <section>
+            <h3 class="font-semibold mb-3">Changes awaiting my approval</h3>
+            @if (assigned.Count == 0) { <p class="text-sm text-slate-500">No leave changes are assigned to you.</p> }
+            @foreach (var item in assigned)
+            {
+                <div class="border rounded-xl p-4 mb-3 space-y-2">
+                    <p class="font-medium">@item.Reference — @item.LeaveType — @item.ChangeType</p>
+                    <p class="text-sm text-slate-600">Current status: @item.Status</p>
+                    <p class="text-sm">Current leave: @item.FromDate.ToString("dd MMM yyyy") – @item.CurrentEndDate.ToString("dd MMM yyyy"). Requested end date: @item.RequestedEndDate.ToString("dd MMM yyyy").</p>
+                    <p class="text-sm whitespace-pre-wrap">@item.Reason</p>
+                    <RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" />
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public LeaveApplicationState LeaveState { get; set; } = default!;
+    private LeaveChangeApplicationDto model = new();
+    private List<LeaveChangeLeaveDto> leaves = new();
+    private List<LeaveChangeRequestDto> history = new(), assigned = new();
+    private bool loading = true, busy;
+    private LeaveChangeLeaveDto? SelectedLeave => leaves.FirstOrDefault(x => x.LeaveId == model.LeaveId);
+    private (DateTime EndDate, int Duration, int BalanceAdjustment) Preview => LeaveChangeRules.Calculate(
+        SelectedLeave!.FromDate, SelectedLeave.ToDate, SelectedLeave.Duration, model.Kind, model.Date, SelectedLeave.IncludeHolidays);
+    private string? PreviewError
+    {
+        get
+        {
+            if (SelectedLeave == null) return "Select an approved leave.";
+            try { _ = Preview; return null; }
+            catch (InvalidOperationException ex) { return ex.Message; }
+        }
+    }
+    protected override async Task OnInitializedAsync()
+    {
+        try { await ReloadAsync(); }
+        finally { loading = false; }
+    }
+    private async Task ReloadAsync()
+    {
+        leaves = await Changes.GetMyLeavesAsync();
+        history = await Changes.GetMyRequestsAsync();
+        assigned = await Changes.GetAssignedRequestsAsync();
+    }
+    private void SelectionChanged()
+    {
+        if (SelectedLeave == null) return;
+        model.Date = model.Kind == LeaveChangeKind.Extension ? SelectedLeave.ToDate.AddDays(1) : SelectedLeave.ToDate;
+    }
+    private async Task SubmitAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Changes.SubmitAsync(model);
+            if (!result.Success) { ToastService.Warning(result.Message); return; }
+            ToastService.Success(result.Message);
+            model = new();
+            await ReloadAsync();
+        }
+        catch { ToastService.Error("The change request could not be submitted. Please try again."); }
+        finally { busy = false; }
+    }
+    private async Task ExecuteAsync(int requestId, RequestActionSubmissionDto action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Changes.ExecuteActionAsync(requestId, action);
+            if (result.Success) ToastService.Success(result.Message); else ToastService.Warning(result.Message);
+            await ReloadAsync();
+        }
+        catch { ToastService.Error("The approval could not be saved. No changes were applied."); }
+        finally { busy = false; }
+    }
+}

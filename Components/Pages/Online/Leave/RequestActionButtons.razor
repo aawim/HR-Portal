@@ -1,0 +1,53 @@
+@using HRM.DTOs.Leave
+
+@if (Actions.Count > 0)
+{
+    <div class="flex flex-wrap gap-2">
+        @foreach (var action in Actions)
+        {
+            <button type="button" disabled="@Disabled" class="border border-blue-200 bg-blue-50 text-blue-800 rounded px-3 py-2 disabled:opacity-50"
+                    title="Next status: @action.NextStatus" @onclick="() => Choose(action)">@action.Label</button>
+        }
+    </div>
+    @if (selected != null)
+    {
+        <div class="mt-3 rounded-lg border bg-slate-50 p-3 space-y-2">
+            <p class="text-sm">Next status: <strong>@selected.NextStatus</strong></p>
+            <p class="text-xs text-slate-600">@(selected.CommentRequired
+                ? "Enter a comment, then confirm to save this status change."
+                : "Confirm below to save this status change.")</p>
+            <label class="block text-sm">Comment @(selected.CommentRequired ? "*" : "(optional)")
+                <textarea class="mt-1 w-full border rounded p-2" rows="2" maxlength="250" @bind="comment" @bind:event="oninput"></textarea>
+            </label>
+            <div class="flex gap-2">
+                <button type="button" disabled="@(Disabled || (selected.CommentRequired && string.IsNullOrWhiteSpace(comment)))"
+                        class="bg-blue-600 text-white rounded px-3 py-2 disabled:opacity-50" @onclick="ExecuteAsync">Confirm status change</button>
+                <button type="button" disabled="@Disabled" class="border rounded px-3 py-2" @onclick="Close">Close</button>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <p class="text-xs text-slate-500">No actions are available for your permissions at this status.</p>
+}
+
+@code {
+    [Parameter] public List<RequestActionDto> Actions { get; set; } = new();
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<RequestActionSubmissionDto> OnExecute { get; set; }
+    private RequestActionDto? selected;
+    private string? comment;
+    private void Choose(RequestActionDto action) { selected = action; comment = null; }
+    private void Close() { selected = null; comment = null; }
+    protected override void OnParametersSet()
+    {
+        if (selected != null && !Actions.Any(x => x.FromStateId == selected.FromStateId && x.ToStateId == selected.ToStateId)) Close();
+    }
+    private async Task ExecuteAsync()
+    {
+        if (Disabled || selected == null || (selected.CommentRequired && string.IsNullOrWhiteSpace(comment))) return;
+        await OnExecute.InvokeAsync(new RequestActionSubmissionDto { FromStateId = selected.FromStateId, ToStateId = selected.ToStateId, Comments = comment });
+        Close();
+    }
+}
