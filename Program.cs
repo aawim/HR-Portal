@@ -245,6 +245,7 @@ builder.Services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeSe
 builder.Services.AddScoped<HRM.Services.JobTypeConfigurationService>();
 builder.Services.AddScoped<HRM.Services.PermissionSettingsService>();
 builder.Services.AddScoped<HRM.Services.UserSettingsService>();
+builder.Services.AddScoped<HRM.Services.OrganisationSettingsService>();
 
 
 builder.Services.AddScoped<LeaveApplicationState>();

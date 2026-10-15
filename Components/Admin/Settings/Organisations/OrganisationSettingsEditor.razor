@@ -1,0 +1,283 @@
+@using HRM.DTOs
+@using HRM.DTOs.Organisation
+@using HRM.Services
+@using HRM.Components.Admin.Hr.Organisation.Tabs
+@inject OrganisationSettingsService Settings
+@inject ToastService Toast
+@inject ILogger<OrganisationSettingsEditor> Logger
+
+<div class="w-full">
+    @if (error != null) { <p role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">@error</p> }
+    @if (loading) { <p class="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading organisations…</p> }
+    else if (data != null)
+    {
+        <fieldset disabled="@busy">
+                        <nav aria-label="Organisation sections" class="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+                            @foreach (var item in OrganisationSections)
+                            {
+                                <button type="button" disabled="@(model.Id == 0 && item.Name != "Edit")" aria-pressed="@(activeSection == item.Name)" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40 @(activeSection == item.Name ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50")" @onclick="() => ChangeSection(item.Name)"><OrganisationIcon Name="@item.Name" />@(item.Name)</button>
+                            }
+                        </nav>
+            @if (model.Id > 0)
+            {
+                <div class="mb-5 flex items-center gap-3 px-1"><span class="text-indigo-600"><OrganisationIcon /></span><h1 class="text-xl font-semibold text-slate-900">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
+            }
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                <section class="min-w-0 space-y-6 @(activeSection == "Structure" ? "xl:col-span-10" : "xl:col-span-8")">
+                    @if (model.Id == 0 || activeSection == "Edit")
+                    {
+                    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                            <div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><OrganisationIcon /></div>
+                                <div><h2 class="text-sm font-semibold text-slate-900">@(model.Id == 0 ? "Add New Organisation" : model.Name)</h2><p class="mt-1 text-xs text-slate-500">@(model.Id == 0 ? "Save the details, then add addresses and contacts below." : "Manage details, addresses and contacts in one place.")</p></div></div>
+                            @if (model.Id > 0) { <button type="button" class="@Secondary" @onclick="NewOrganisation">Add new</button> }
+                        </div>
+                        <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
+                            @if (model.Id > 0)
+                            {
+                                <div class="md:col-span-2">
+                                    <button type="button" class="@Danger" @onclick="() => deletingOrganisation = true">Delete organisation</button>
+                                    @if (deletingOrganisation)
+                                    {
+                                        <div class="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm"><p>Delete @model.Name? Organisations with employees or departments cannot be deleted.</p><div class="mt-3 flex gap-3"><button type="button" class="@Secondary" @onclick="() => deletingOrganisation = false">Cancel</button><button type="button" class="@Danger" @onclick="DeleteOrganisationAsync">Confirm delete</button></div></div>
+                                    }
+                                </div>
+                            }
+                            <label class="@Label">Organisation name<input class="@Input" maxlength="250" @bind="model.Name" /></label>
+                            <label class="@Label">Dhivehi name<input class="@Input" maxlength="250" dir="rtl" @bind="model.DhivehiName" /></label>
+                            <label class="@Label">Organisation type<select class="@Input" @bind="model.TypeId"><option value="0">Select type</option>@foreach (var option in data.Types) { <option value="@option.Id">@option.Name</option> }</select></label>
+                            <label class="@Label">Registration number<input class="@Input" maxlength="50" @bind="model.RegistrationNumber" /></label>
+                            <label class="@Label">Registration date<input type="date" class="@Input" @bind="model.RegistrationDate" /></label>
+                            <label class="@Label">Country<select class="@Input" @bind="model.CountryId"><option value="0">Select country</option>@foreach (var option in data.Countries) { <option value="@option.Id">@option.Name</option> }</select></label>
+                            <label class="@Label">Parent organisation (optional)<select class="@Input" @bind="model.ParentId"><option value="">No parent</option>@foreach (var option in data.Organisations.Where(x => x.Id != model.Id)) { <option value="@option.Id">@option.Name</option> }</select></label>
+                        </div>
+                        <div class="flex gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4"><button type="button" class="@Secondary" @onclick="NewOrganisation">Cancel</button><button type="button" class="@Primary" @onclick="SaveDetailsAsync">@(busy ? "Saving…" : "Save organisation")</button></div>
+                    </div>
+                    }
+                    @if (model.Id > 0 && (activeSection == "Edit" || activeSection == "Address"))
+                    {
+                        <section aria-label="Organisation addresses" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Addresses</h3><p class="mt-1 text-xs text-slate-500">@links.Addresses.Count linked addresses</p></div><button type="button" class="@Secondary" @onclick="() => addingAddress = !addingAddress">@(addingAddress ? "Close address form" : "Add address")</button></div>
+                            <div class="space-y-3 p-5">
+                                @foreach (var saved in links.Addresses)
+                                {
+                                    <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                                        <div class="flex items-center justify-between gap-3"><p>@saved.Name</p><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditAddressAsync(saved.LinkId)">Edit</button><button type="button" class="rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50" @onclick="() => deletingAddress = saved.LinkId">Delete</button></div></div>
+                                        @if (deletingAddress == saved.LinkId)
+                                        {
+                                            <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3"><span>Remove this address from the organisation?</span><button type="button" class="@Secondary" @onclick="() => deletingAddress = null">Cancel</button><button type="button" class="rounded-lg bg-red-600 px-3 py-2 text-xs font-medium text-white" @onclick="() => DeleteAddressAsync(saved.LinkId)">Confirm delete</button></div>
+                                        }
+                                    </div>
+                                }
+                                @if (links.Addresses.Count == 0) { <p class="text-sm text-slate-500">No addresses yet. Add a new address or link an existing one.</p> }
+                                @if (addingAddress)
+                                {
+                                    <div class="space-y-4 rounded-xl border border-indigo-100 p-4">
+                                        <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" @bind="useExisting" @bind:after="AddressModeChanged" /> Link an existing address</label>
+                                        <label class="@Label">Address usage<select class="@Input" @bind="address.UsageId">@foreach (var option in data.AddressUsages) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                        @if (useExisting)
+                                        {
+                                            <label class="@Label">Search addresses<input type="search" class="@Input" placeholder="Building or street name…" @bind="addressSearch" /></label>
+                                            <button type="button" class="@Secondary" @onclick="SearchAddressesAsync">Search addresses</button>
+                                            <div class="max-h-56 space-y-2 overflow-y-auto">@foreach (var result in addressResults) { <button type="button" class="block w-full rounded-lg border p-3 text-left text-sm @(address.ExistingLocationId == result.Id ? "border-indigo-300 bg-indigo-50" : "border-slate-200")" @onclick="() => address.ExistingLocationId = result.Id">@result.Name @(address.ExistingLocationId == result.Id ? "✓" : "")</button> }</div>
+                                        }
+                                        else
+                                        {
+                                            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                                <label class="@Label">Address type<select class="@Input" @bind="address.BaseTypeId">@foreach (var option in data.AddressTypes) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                                <label class="@Label">Country<select class="@Input" @bind="address.CountryId" @bind:after="ClearArea">@foreach (var option in data.Countries) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                                <label class="@Label">Address line 1<input class="@Input" maxlength="250" @bind="address.Line1" /></label>
+                                                <label class="@Label">Address line 2<input class="@Input" maxlength="250" @bind="address.Line2" /></label>
+                                                <label class="@Label">Street<input class="@Input" maxlength="250" @bind="address.Street" /></label>
+                                                <label class="@Label">Floor / suite<input class="@Input" maxlength="50" @bind="address.Floor" /></label>
+                                                @if (data.Countries.Any(x => x.Id == address.CountryId && x.Name.Equals("Maldives", StringComparison.OrdinalIgnoreCase)))
+                                                {
+                                                    <label class="@Label">Island<select class="@Input" @bind="address.IslandId" @bind:after="() => address.WardId = null"><option value="">Select island</option>@foreach (var option in data.Islands) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                                    <label class="@Label">Ward (optional)<select class="@Input" @bind="address.WardId"><option value="">Select ward</option>@foreach (var option in data.Wards.Where(x => x.ParentId == address.IslandId)) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                                }
+                                                <label class="@Label">Postcode<input class="@Input" maxlength="20" @bind="address.PostCode" /></label>
+                                            </div>
+                                        }
+                                        <div class="flex gap-3"><button type="button" class="@Primary" @onclick="SaveAddressAsync">@(address.LinkId > 0 ? "Save changes" : "Save address")</button><button type="button" class="@Secondary" @onclick="ResetForms">Cancel</button></div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                    @if (model.Id > 0 && (activeSection == "Edit" || activeSection == "Contact"))
+                    {
+                        <section aria-label="Organisation contacts" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                            <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4"><div><h3 class="text-sm font-semibold text-slate-900">Contacts</h3><p class="mt-1 text-xs text-slate-500">@links.Contacts.Count contact details</p></div><button type="button" class="@Secondary" @onclick="NewContact">Add contact</button></div>
+                            <div class="space-y-4 p-5">
+                                @foreach (var saved in links.Contacts)
+                                {
+                                    <div class="rounded-xl border border-slate-200 p-3">
+                                        <div class="flex items-center justify-between gap-3"><div class="min-w-0"><p class="text-xs font-semibold text-slate-500">@saved.Type</p><p class="break-all text-sm text-slate-800">@saved.Value</p></div><div class="flex gap-2"><button type="button" class="@Secondary" @onclick="() => EditContact(saved)">Edit</button><button type="button" class="@Danger" @onclick="() => deletingContact = saved.Id">Delete</button></div></div>
+                                        @if (deletingContact == saved.Id)
+                                        {
+                                            <div class="mt-3 flex flex-wrap items-center gap-3 border-t border-slate-200 pt-3 text-sm"><span>Delete this contact?</span><button type="button" class="@Secondary" @onclick="() => deletingContact = null">Cancel</button><button type="button" class="@Danger" @onclick="() => ExecuteAsync(() => Settings.DeleteContactAsync(model.Id, saved.Id))">Confirm delete</button></div>
+                                        }
+                                    </div>
+                                }
+                                @if (links.Contacts.Count == 0) { <p class="text-sm text-slate-500">No contacts have been added yet.</p> }
+                                @if (addingContact)
+                                {
+                                    <div class="grid grid-cols-1 gap-4 rounded-xl border border-indigo-100 p-4 md:grid-cols-2">
+                                        <label class="@Label">Contact type<select class="@Input" @bind="contact.TypeId"><option value="0">Select type</option>@foreach (var option in data.ContactTypes) { <option value="@option.Id">@option.Name</option> }</select></label>
+                                        <label class="@Label">Contact value<input class="@Input" maxlength="250" @bind="contact.Value" /></label>
+                                        <div class="flex gap-3 md:col-span-2"><button type="button" class="@Primary" @onclick="SaveContactAsync">Save contact</button><button type="button" class="@Secondary" @onclick="() => addingContact = false">Cancel</button></div>
+                                    </div>
+                                }
+                            </div>
+                        </section>
+                    }
+                    @if (model.Id > 0 && activeSection == "Summary")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationSummaryTab Org="SelectedOrganisation" @key="model.Id" /></div>
+                    }
+                    @if (model.Id > 0 && activeSection == "Structure")
+                    {
+                        <OrganisationStructureTab OrganisationId="model.Id" @key="model.Id" />
+                    }
+                    @if (model.Id > 0 && activeSection == "Staff")
+                    {
+                        <OrganisationStaffPanel OrganisationId="model.Id" OrganisationName="@SelectedOrganisation.OrganisationName" @key="model.Id" />
+                    }
+                    @if (model.Id > 0 && activeSection == "Teams")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationTeamsTab Org="SelectedOrganisation" @key="model.Id" /></div>
+                    }
+                    @if (model.Id > 0 && activeSection == "Groups")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationGroupsTab Org="SelectedOrganisation" @key="model.Id" /></div>
+                    }
+                    @if (model.Id > 0 && (activeSection == "Schedules" || activeSection == "Documents"))
+                    {
+                        <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 class="text-sm font-semibold text-slate-900">@activeSection</h3><p class="mt-2 text-sm text-slate-500">Organisation @activeSection.ToLowerInvariant() management is not yet available.</p></section>
+                    }
+                </section>
+                <aside class="min-w-0 @(activeSection == "Structure" ? "xl:col-span-2" : "xl:col-span-4")">
+                    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <div class="border-b border-slate-200 px-5 py-4"><div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">Organisations</h2><p class="mt-1 text-xs text-slate-500">@data.Organisations.Count organisations</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-label="Add organisation" @onclick="NewOrganisation"><OrganisationIcon Name="Add" /></button></div>
+                            <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" aria-label="Search organisations" placeholder="Search name or registration number…" @bind="search" @bind:event="oninput" /></div>
+                        <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0">
+                            @foreach (var item in FilteredOrganisations) { <button type="button" class="block w-full border-l-4 px-5 py-4 text-left @(model.Id == item.Id ? "border-indigo-600 bg-indigo-50" : "border-transparent hover:bg-slate-50")" @onclick="() => SelectAsync(item)"><span class="block text-sm font-semibold text-slate-800">@item.Name</span><span class="mt-1 block text-xs text-slate-500">@item.RegistrationNumber</span></button> }
+                            @if (!FilteredOrganisations.Any()) { <p class="px-5 py-12 text-center text-sm text-slate-500">No organisations found.</p> }
+                        </div>
+                    </div>
+                </aside>
+            </div>
+        </fieldset>
+    }
+</div>
+
+@code {
+    private OrganisationSettingsData? data;
+    private OrganisationSettingsDto model = new();
+    private OrganisationLinksDto links = new();
+    private OrganisationAddressDto address = new();
+    private OrganisationContactDto contact = new();
+    private List<OrganisationSettingsOption> addressResults = new();
+    private string search = "", addressSearch = "";
+    private string? error;
+    private bool busy, loading, addingAddress, addingContact, useExisting;
+    private int? deletingAddress;
+    private int? deletingContact;
+    private bool deletingOrganisation;
+    private string activeSection = "Edit";
+    private static readonly (string Name, string Icon)[] OrganisationSections =
+    [ ("Summary", "dashboard"), ("Structure", "account_tree"), ("Edit", "edit"), ("Contact", "contact_phone"),
+      ("Staff", "badge"), ("Teams", "groups"), ("Address", "location_on"), ("Schedules", "calendar_month"), ("Groups", "group_work"), ("Documents", "description") ];
+    private OrganisationResultDto SelectedOrganisation => new()
+    {
+        BusinessEntityID = model.Id, OrganisationName = model.Name, OrganisationNameDhivehi = model.DhivehiName ?? "",
+        RegistrationNumber = model.RegistrationNumber, RegistrationDate = model.RegistrationDate,
+        Type = data?.Types.FirstOrDefault(x => x.Id == model.TypeId)?.Name ?? "",
+        Country = data?.Countries.FirstOrDefault(x => x.Id == model.CountryId)?.Name ?? ""
+    };
+    private void ChangeSection(string name) { activeSection = name; ResetForms(); }
+    private const string Danger = "rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50";
+    private const string Label = "block text-xs font-bold uppercase tracking-wide text-slate-700";
+    private const string Input = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
+    private const string Primary = "rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700";
+    private const string Secondary = "rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50";
+    private IEnumerable<OrganisationSettingsDto> FilteredOrganisations => data?.Organisations.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.RegistrationNumber.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? Enumerable.Empty<OrganisationSettingsDto>();
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        try { data = await Settings.LoadAsync(); NewOrganisation(); }
+        catch (Exception ex) { Fail(ex); }
+        finally { loading = false; }
+    }
+    private void NewOrganisation()
+    {
+        activeSection = "Edit";
+        model = new() { CountryId = data?.Countries.FirstOrDefault(x => x.Name == "Maldives")?.Id ?? 0 };
+        links = new(); error = null; ResetForms();
+    }
+    private void ResetForms()
+    {
+        deletingAddress = null;
+        deletingContact = null; deletingOrganisation = false;
+        address = new() { BaseTypeId = data?.AddressTypes.FirstOrDefault()?.Id ?? 0, CountryId = model.CountryId, UsageId = data?.AddressUsages.FirstOrDefault(x => x.Id == 3)?.Id ?? data?.AddressUsages.FirstOrDefault()?.Id ?? 0 };
+        contact = new(); addressResults.Clear(); addressSearch = ""; useExisting = false; addingAddress = false; addingContact = false;
+    }
+    private async Task SelectAsync(OrganisationSettingsDto item)
+    {
+        busy = true; error = null;
+        try
+        {
+            var savedLinks = await Settings.GetLinksAsync(item.Id);
+            model = new() { Id = item.Id, Name = item.Name, DhivehiName = item.DhivehiName, TypeId = item.TypeId, CountryId = item.CountryId, RegistrationNumber = item.RegistrationNumber, RegistrationDate = item.RegistrationDate, ParentId = item.ParentId };
+            links = savedLinks; ResetForms();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private void AddressModeChanged() { address.ExistingLocationId = null; addressResults.Clear(); }
+    private async Task EditAddressAsync(int linkId)
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try { address = await Settings.GetAddressAsync(model.Id, linkId); useExisting = false; addressResults.Clear(); deletingAddress = null; addingAddress = true; }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private Task DeleteAddressAsync(int linkId) => ExecuteAsync(() => Settings.DeleteAddressAsync(model.Id, linkId));
+    private void ClearArea() { address.IslandId = null; address.WardId = null; }
+    private void NewContact() { contact = new(); addingContact = true; }
+    private void EditContact(OrganisationContactDto item) { contact = new() { Id = item.Id, TypeId = item.TypeId, Type = item.Type, Value = item.Value }; addingContact = true; }
+    private async Task SearchAddressesAsync()
+    {
+        busy = true;
+        try { addressResults = await Settings.SearchAddressesAsync(model.Id, addressSearch); address.ExistingLocationId = null; if (addressResults.Count == 0) Toast.Info("No matching addresses. Try another search or add a new address."); }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private Task SaveDetailsAsync() => ExecuteAsync(() => Settings.SaveDetailsAsync(model), true);
+    private Task DeleteOrganisationAsync() => ExecuteAsync(async () =>
+    {
+        var result = await Settings.DeleteOrganisationAsync(model.Id);
+        if (result.Success) NewOrganisation();
+        return result;
+    }, true);
+    private Task SaveAddressAsync() => ExecuteAsync(() => useExisting && !address.ExistingLocationId.HasValue ? Task.FromResult(ServiceResult.Fail("Select an existing address from the search results.")) : Settings.SaveAddressAsync(model.Id, address));
+    private Task SaveContactAsync() => ExecuteAsync(() => Settings.SaveContactAsync(model.Id, contact));
+    private async Task ExecuteAsync(Func<Task<ServiceResult>> save, bool refreshList = false)
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await save();
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message);
+            if (refreshList) data = await Settings.LoadAsync();
+            if (model.Id > 0) links = await Settings.GetLinksAsync(model.Id);
+            ResetForms();
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private void Fail(Exception ex) { Logger.LogError(ex, "Organisation settings operation failed."); error = ex is UnauthorizedAccessException ? ex.Message : "Organisation settings could not be loaded or saved. Please try again."; Toast.Error(error); }
+}
