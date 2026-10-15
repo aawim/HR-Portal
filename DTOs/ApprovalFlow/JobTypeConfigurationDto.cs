@@ -6,6 +6,8 @@ public class JobTypeConfigurationDto
     public string Name { get; set; } = "";
     public string? DhivehiName { get; set; }
     public bool IsActive { get; set; } = true;
+    public int? SequenceNumberTypeId { get; set; }
+    public string? ViewUrl { get; set; }
 }
 
 public class JobTypeWorkflowDto
@@ -32,4 +34,5 @@ public class JobTypeConfigurationData
     public List<ConfigurationOption> Staff { get; set; } = new();
     public List<ConfigurationOption> RequestTypes { get; set; } = new();
     public List<ConfigurationOption> States { get; set; } = new();
+    public List<ConfigurationOption> NumberingTypes { get; set; } = new();
 }
