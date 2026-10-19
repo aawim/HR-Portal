@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace HRM.DTOs.LeaveTypes
 {
@@ -19,6 +19,11 @@ namespace HRM.DTOs.LeaveTypes
         public bool IncludePay { get; set; } = true;
 
         public decimal? PayPercentage { get; set; } = 100;
+
+        public bool RequireWorkHandover { get; set; }
+
+        [Range(0, 3650)]
+        public int WorkHandoverAfterDays { get; set; } = 2;
 
         public bool IsLocationRequired { get; set; }
 

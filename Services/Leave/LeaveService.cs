@@ -392,6 +392,36 @@ namespace HRM.Services.Leave
         }
  
 
+        private static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType legacyType, int organisationId, DateTime fromDate)
+        {
+            var definitionId = ResolveApplicationDefinitionId(balance, legacyType, await GetApplicationMappingsAsync(db, organisationId));
+            if (!definitionId.HasValue) return null;
+            var date = fromDate.Date;
+            var policy = await db.LeavePolicies.AsNoTracking().Where(x => x.OrganisationId == organisationId &&
+                x.LeaveDefinitionId == definitionId && x.IsActive && x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date))
+                .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.LeavePolicyId)
+                .Select(x => new { x.RequireWorkHandover, x.WorkHandoverAfterDays }).FirstOrDefaultAsync();
+            return policy?.RequireWorkHandover == true ? policy.WorkHandoverAfterDays : null;
+        }
+        public async Task<LeaveHandoverRulesDto> GetHandoverRulesAsync(int jobLeaveTypeId, DateTime fromDate)
+        {
+            var context = await _access.RequireContextAsync();
+            var jobId = context.ActiveJob?.JobId ?? 0;
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var balance = await db.JobLeaveTypes.AsNoTracking().FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId && x.JobId == jobId && x.IsValid && x.IsLeaveInfoUpdated)
+                ?? throw new InvalidOperationException("Leave balance was not found.");
+            var organisationId = await db.Jobs.Where(x => x.JobId == jobId).Select(x => x.OrganisationID).SingleAsync();
+            var legacy = await ResolveApplicationLegacyTypeAsync(db, balance, organisationId)
+                ?? throw new InvalidOperationException("Leave type mapping was not found.");
+            var threshold = await ResolveHandoverThresholdAsync(db, balance, legacy, organisationId, fromDate);
+            var recipients = threshold.HasValue ? await db.Jobs.AsNoTracking()
+                .Where(x => x.OrganisationID == organisationId && x.IndividualID != context.BusinessEntityId && x.TerminatedDate == null && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= fromDate.Date && db.Users.Any(u => u.BusinessEntityID == x.IndividualID))
+                .OrderBy(x => x.Individual.FirstNameEnglish)
+                .Select(x => new LeaveHandoverRecipient(x.JobId, x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")))
+                .ToListAsync() : new List<LeaveHandoverRecipient>();
+            return new(threshold, recipients);
+        }
+
         //// SUBMIT LEAVE (MAIN PART)
 
         public async Task<ServiceResult> SubmitLeave(LeaveApplicationDto model)
@@ -453,6 +483,19 @@ namespace HRM.Services.Leave
                 model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, legacyType.IncludeHolidays);
                 if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
                     return ServiceResult.Fail("The requested days must be positive and within your available balance.");
+                var handoverAfterDays = await ResolveHandoverThresholdAsync(db, jobLeaveType, legacyType, organisationId, model.FromDate);
+                var needsHandover = handoverAfterDays.HasValue && model.Duration > handoverAfterDays.Value;
+                var handoverTasks = model.HandoverTasks.ToList();
+                if (handoverTasks.Count == 0 && model.HandoverJobId.HasValue)
+                    handoverTasks.Add(new() { JobId = model.HandoverJobId, Tasks = model.HandoverNotes ?? "" });
+                var handoverSupervisors = new List<int>();
+                if (needsHandover)
+                {
+                    var handoverError = await LeaveHandoverService.ValidateTasksAsync(db, handoverTasks, organisationId, context.BusinessEntityId, model.FromDate);
+                    if (handoverError != null) return ServiceResult.Fail(handoverError);
+                    handoverSupervisors = await LeaveHandoverService.SupervisorsAsync(db, jobId);
+                    if (handoverSupervisors.Count == 0) return ServiceResult.Fail("No active supervisor with a user account is configured for your department. Contact HR before applying.");
+                }
                 var explanation = LeaveApplicationDetails.Build(model);
                 if (explanation.Length > 250)
                     return ServiceResult.Fail("Explanation and additional details must total 250 characters or fewer.");
@@ -536,6 +579,13 @@ namespace HRM.Services.Leave
                 };
 
                 db.LeaveRequests.Add(leaveRequest);
+                if (needsHandover)
+                {
+                    db.LeaveHandoverReviews.Add(new() { LeaveId = leave.LeaveId, OperationLogId = operationLog.OperationLogId });
+                    foreach (var supervisor in handoverSupervisors) db.LeaveHandoverSupervisors.Add(new() { LeaveId = leave.LeaveId, IndividualId = supervisor });
+                    foreach (var task in handoverTasks) db.LeaveWorkHandOvers.Add(new HRM.Models.Archives.LeaveWorkHandOver
+                        { LeaveId = leave.LeaveId, JobId = task.JobId!.Value, TaskDetails = task.Tasks.Trim(), IsValid = true });
+                }
                 if (reasonType != null)
                 {
                     db.LeaveReasons.Add(new LeaveReason
@@ -596,6 +646,8 @@ namespace HRM.Services.Leave
                     var initialState = await db.Requests.AsNoTracking()
                         .Where(x => x.RequestId == request.RequestId)
                         .Select(x => x.RequestStateId).SingleAsync();
+                    if (needsHandover && initialState == SharedConfig.RequestStates.APPROVED)
+                        throw new InvalidOperationException("Leave with a handover requires a pending approval stage before final HR approval.");
                     leave.LeaveStateId = LeaveRequestStateMapper.ToLeaveState(initialState);
                     await db.SaveChangesAsync();
                 }

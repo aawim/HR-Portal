@@ -1,9 +1,11 @@
-﻿using HRM.DTOs.LeaveTypes;
+using HRM.DTOs.LeaveTypes;
 using HRM.Models;
 using HRM.Models.LeaveTypes;
 using HRM.Services.Interfaces;
 using HRM.Services.Interfaces.LeaveType;
 using Microsoft.EntityFrameworkCore;
+using HRM.Components.Shared;
+using System.Data;
 
 namespace HRM.Services
 {
@@ -13,17 +15,20 @@ namespace HRM.Services
         private readonly IUserAccessService _userAccessService;
         private readonly IUserContext _userContext;
         private readonly ILogger<LeavePolicyService> _logger;
+        private readonly IHttpContextAccessor _http;
 
         public LeavePolicyService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IUserAccessService userAccessService,
         IUserContext userContext,
-        ILogger<LeavePolicyService> logger)
+        ILogger<LeavePolicyService> logger,
+        IHttpContextAccessor http)
         {
             _dbFactory = dbFactory;
             _userAccessService = userAccessService;
             _userContext = userContext;
             _logger = logger;
+            _http = http;
         }
 
 
@@ -88,6 +93,8 @@ namespace HRM.Services
                     PayPercentage =
                         policy.PayPercentage,
 
+                    RequireWorkHandover = policy.RequireWorkHandover,
+                    WorkHandoverAfterDays = policy.WorkHandoverAfterDays,
                     IsLocationRequired =
                         policy.IsLocationRequired,
 
@@ -175,6 +182,8 @@ namespace HRM.Services
                     PayPercentage =
                         policy.PayPercentage,
 
+                    RequireWorkHandover = policy.RequireWorkHandover,
+                    WorkHandoverAfterDays = policy.WorkHandoverAfterDays,
                     IsLocationRequired =
                         policy.IsLocationRequired,
 
@@ -223,6 +232,9 @@ namespace HRM.Services
                 await using var db =
                     await _dbFactory.CreateDbContextAsync(
                         cancellationToken);
+
+                await using var transaction = db.Database.CurrentTransaction == null
+                    ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
 
                 var definition =
                     await db.LeaveDefinitions
@@ -273,9 +285,12 @@ namespace HRM.Services
                         "An active leave policy already exists for this leave type during the selected effective period.");
                 }
 
+                var logId = await CreateOperationLogAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_TYPE_CREATE,
+                    $"Created leave policy for definition {request.LeaveDefinitionId}, organisation {organisationId}. Values: {System.Text.Json.JsonSerializer.Serialize(request)}", cancellationToken);
                 var policy =
                     new LeavePolicy
                     {
+                        OperationLogId = logId,
                         LeaveDefinitionId =
                             request.LeaveDefinitionId,
 
@@ -299,6 +314,8 @@ namespace HRM.Services
                                 ? request.PayPercentage
                                 : null,
 
+                        RequireWorkHandover = request.RequireWorkHandover,
+                        WorkHandoverAfterDays = request.WorkHandoverAfterDays,
                         IsLocationRequired =
                             request.IsLocationRequired,
 
@@ -328,6 +345,7 @@ namespace HRM.Services
 
                 await db.SaveChangesAsync(
                     cancellationToken);
+                if (transaction != null) await transaction.CommitAsync(cancellationToken);
 
                 return ServiceResult<int>.Successful(
                     policy.LeavePolicyId,
@@ -374,6 +392,8 @@ namespace HRM.Services
                     await _dbFactory.CreateDbContextAsync(
                         cancellationToken);
 
+                await using var transaction = db.Database.CurrentTransaction == null
+                    ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
                 var policy =
                     await db.LeavePolicies
                         .FirstOrDefaultAsync(
@@ -420,6 +440,9 @@ namespace HRM.Services
                         "Another active policy overlaps this effective period.");
                 }
 
+                var logId = await CreateOperationLogAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_TYPE_UDPATE,
+                    $"Updated leave policy {policy.LeavePolicyId}, organisation {organisationId}. Before: {System.Text.Json.JsonSerializer.Serialize(policy)} After: {System.Text.Json.JsonSerializer.Serialize(request)}", cancellationToken);
+                policy.OperationLogId = logId;
                 policy.LeaveDefinitionId =
                     request.LeaveDefinitionId;
 
@@ -440,6 +463,8 @@ namespace HRM.Services
                         ? request.PayPercentage
                         : null;
 
+                policy.RequireWorkHandover = request.RequireWorkHandover;
+                policy.WorkHandoverAfterDays = request.WorkHandoverAfterDays;
                 policy.IsLocationRequired =
                     request.IsLocationRequired;
 
@@ -467,6 +492,7 @@ namespace HRM.Services
                 await db.SaveChangesAsync(
                     cancellationToken);
 
+                if (transaction != null) await transaction.CommitAsync(cancellationToken);
                 return ServiceResult<int>.Successful(
                     policy.LeavePolicyId,
                     "Leave policy updated successfully.");
@@ -503,6 +529,8 @@ namespace HRM.Services
                     await _dbFactory.CreateDbContextAsync(
                         cancellationToken);
 
+                await using var transaction = db.Database.CurrentTransaction == null
+                    ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
                 var policy =
                     await db.LeavePolicies
                         .FirstOrDefaultAsync(
@@ -519,6 +547,8 @@ namespace HRM.Services
                         "The leave policy could not be found.");
                 }
 
+                policy.OperationLogId = await CreateOperationLogAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_TYPE_UDPATE,
+                    $"Deactivated leave policy {policy.LeavePolicyId}, organisation {organisationId}. Before: {System.Text.Json.JsonSerializer.Serialize(policy)}", cancellationToken);
                 policy.IsActive =
                     false;
 
@@ -531,6 +561,7 @@ namespace HRM.Services
                 await db.SaveChangesAsync(
                     cancellationToken);
 
+                if (transaction != null) await transaction.CommitAsync(cancellationToken);
                 return ServiceResult<int>.Successful(
                     policy.LeavePolicyId,
                     "Leave policy deactivated successfully.");
@@ -547,6 +578,31 @@ namespace HRM.Services
             }
         }
 
+        private async Task<int> CreateOperationLogAsync(HrmTeContext db, int actionId, string remarks, CancellationToken cancellationToken)
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            var session = await _userContext.GetSessionAsync()
+                ?? throw new InvalidOperationException("The current session could not be resolved for the operation log.");
+            if (actor.UserId <= 0 || session.OrganisationId is not > 0)
+                throw new InvalidOperationException("The current user and organisation are required for the operation log.");
+            var individualId = actor.IndividualId > 0 ? actor.IndividualId : actor.BusinessEntityId;
+            var now = DateTime.Now;
+            var log = new OperationLog
+            {
+                OperationLogActionId = actionId, Remarks = remarks,
+                CreatedByUserId = actor.UserId, UpdatedByUserId = actor.UserId,
+                CreatedByIndividualId = individualId > 0 ? individualId : null,
+                UpdatedByIndividualId = individualId > 0 ? individualId : null,
+                CreatedByUserOrganisationId = session.OrganisationId, UpdatedByUserOrganisationId = session.OrganisationId,
+                CreatedByContextId = 1, UpdatedContextId = 1, CreatedDate = now, UpdatedDate = now,
+                CreatedByIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "",
+                UpdatedByIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? ""
+            };
+            db.OperationLogs.Add(log);
+            await db.SaveChangesAsync(cancellationToken);
+            return log.OperationLogId;
+        }
+
         private static string? Validate(
             LeavePolicySaveRequest request)
         {
@@ -560,6 +616,9 @@ namespace HRM.Services
             {
                 return "Default entitlement cannot be negative.";
             }
+
+            if (request.WorkHandoverAfterDays < 0 || request.WorkHandoverAfterDays > 3650)
+                return "Work handover days must be between 0 and 3650.";
 
             if (request.MinimumServiceMonths.HasValue &&
                 request.MinimumServiceMonths.Value < 0)

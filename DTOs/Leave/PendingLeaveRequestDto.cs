@@ -14,5 +14,6 @@ public class PendingLeaveRequestDto
     public string Explanation { get; set; } = "";
     public string Address { get; set; } = "";
     public string Contact { get; set; } = "";
+    public string HandoverStatus { get; set; } = "Not required";
     public List<RequestActionDto> Actions { get; set; } = new();
 }

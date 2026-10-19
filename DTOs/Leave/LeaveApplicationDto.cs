@@ -8,6 +8,9 @@
         public DateTime FromDate { get; set; }
         public DateTime ToDate { get; set; }
         public int Duration { get; set; }
+        public int? HandoverJobId { get; set; }
+        public string? HandoverNotes { get; set; }
+        public List<LeaveHandoverTaskInput> HandoverTasks { get; set; } = [];
         public string? Explanation { get; set; }
         [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Select a reason for your leave application.")]
         [System.ComponentModel.DataAnnotations.Range(1, int.MaxValue, ErrorMessage = "Select a reason for your leave application.")]

@@ -360,6 +360,15 @@
                                 @bind-Value="_model.IsLocationRequired"
                                 Disabled="@_isSaving" />
 
+                                <PolicyToggle Label="Work Handover" Description="Require an employee and handover details when leave exceeds the configured days." @bind-Value="_model.RequireWorkHandover" Disabled="@_isSaving" />
+                                @if (_model.RequireWorkHandover)
+                                {
+                                    <label class="rounded-xl border border-slate-200 p-3 text-sm font-semibold text-slate-700">Required for leave longer than (days)
+                                        <InputNumber class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2" min="0" max="3650" @bind-Value="_model.WorkHandoverAfterDays" disabled="@_isSaving" />
+                                        <span class="mt-2 block text-xs font-normal text-slate-500">For example, 2 requires handover from 3 leave days onward. Set 0 to require it for all leave.</span>
+                                    </label>
+                                }
+
                                 <PolicyToggle
                                 Label="Staff Wide"
                                 Description="Automatically available to eligible organisation staff."
@@ -1181,6 +1190,8 @@
 
                 IsLocationRequired =
                     detail.IsLocationRequired,
+                RequireWorkHandover = detail.RequireWorkHandover,
+                WorkHandoverAfterDays = detail.WorkHandoverAfterDays,
 
                 IsStaffWideAvailable =
                     detail.IsStaffWideAvailable,

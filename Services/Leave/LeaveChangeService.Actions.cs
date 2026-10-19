@@ -51,6 +51,7 @@ public partial class LeaveChangeService
             .OrderBy(x => x.StageOrder).FirstOrDefaultAsync();
         var transitions = await db.RequestTypesAllowedRequestStateTransitions.AsNoTracking().Include(x => x.ToRequestState)
             .Where(x => x.RequestTypeId == request.RequestTypeId && x.FromRequestStateId == request.RequestStateId).ToListAsync();
+        var handoverReady = await LeaveHandoverService.ReadyAsync(db, leave.LeaveId);
         foreach (var transition in transitions)
         {
             var state = transition.ToRequestState;
@@ -60,6 +61,7 @@ public partial class LeaveChangeService
             var processorAction = assigned && (namedApprovers || rules.Count == 0 || required.Any(x => roles.Contains(x.RoleId)));
             if (!applicantAction && !processorAction) continue;
             var stopping = state.RequestStateId is SharedConfig.RequestStates.REJECTED or SharedConfig.RequestStates.CANCELLED or SharedConfig.RequestStates.INCOMPLETE;
+            if (!stopping && !handoverReady && !applicantAction) continue;
             if (!stopping && nextStage != null && state.RequestStateId != nextStage.RequestStateId) continue;
             if (!stopping && state.RequestStateId != SharedConfig.RequestStates.APPROVED && !state.IsProcessingState) continue;
             result.Add(new()

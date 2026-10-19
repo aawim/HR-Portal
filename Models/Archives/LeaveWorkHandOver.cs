@@ -12,6 +12,10 @@ public partial class LeaveWorkHandOver
     public int JobId { get; set; }
 
     public bool IsValid { get; set; }
+    public string? TaskDetails { get; set; }
+    public string Decision { get; set; } = "Pending";
+    public string? Comments { get; set; }
+    public DateTime? DecisionAt { get; set; }
 
     public virtual Job Job { get; set; } = null!;
 

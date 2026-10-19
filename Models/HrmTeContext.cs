@@ -13,6 +13,8 @@ public partial class HrmTeContext : DbContext
     public HrmTeContext()
     {
     }
+    public DbSet<LeaveHandoverReview> LeaveHandoverReviews => Set<LeaveHandoverReview>();
+    public DbSet<LeaveHandoverSupervisor> LeaveHandoverSupervisors => Set<LeaveHandoverSupervisor>();
 
     public HrmTeContext(DbContextOptions<HrmTeContext> options) : base(options)
     {
@@ -714,6 +716,22 @@ public partial class HrmTeContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<LeaveHandoverReview>(entity =>
+        {
+            entity.ToTable("LeaveHandoverReviews"); entity.HasKey(x => x.LeaveId);
+            entity.Property(x => x.LeaveId).ValueGeneratedNever();
+            entity.Property(x => x.SupervisorDecision).HasMaxLength(20);
+            entity.Property(x => x.Comments).HasMaxLength(250);
+            entity.HasOne<Leaf>().WithMany().HasForeignKey(x => x.LeaveId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.SupervisorApprovedByIndividualId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<OperationLog>().WithMany().HasForeignKey(x => x.OperationLogId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<LeaveHandoverSupervisor>(entity =>
+        {
+            entity.ToTable("LeaveHandoverSupervisors"); entity.HasKey(x => new { x.LeaveId, x.IndividualId });
+            entity.HasOne<LeaveHandoverReview>().WithMany().HasForeignKey(x => x.LeaveId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.IndividualId).OnDelete(DeleteBehavior.Restrict);
+        });
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HrmTeContext).Assembly);
 
@@ -3468,6 +3486,9 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<LeaveWorkHandOver>(entity =>
         {
+            entity.Property(x => x.TaskDetails).HasMaxLength(250);
+            entity.Property(x => x.Decision).HasMaxLength(20);
+            entity.Property(x => x.Comments).HasMaxLength(250);
             entity.HasKey(e => e.LeaveWorkHandOverId).HasName("PK_LeaveWorkHandOvers_1");
 
             entity.Property(e => e.LeaveWorkHandOverId).HasColumnName("LeaveWorkHandOverID");

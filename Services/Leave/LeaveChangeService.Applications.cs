@@ -42,6 +42,7 @@ public partial class LeaveChangeService
                 Reason = leave.LeaveReason?.LeaveTypeReasonType?.ReasonTypeName ?? "",
                 Explanation = leave.LeaveReason?.Reason ?? "",
                 Address = leave.LeaveSpendingLocation?.Address ?? "",
+                HandoverStatus = await LeaveHandoverService.StatusAsync(db, leave.LeaveId),
                 Contact = leave.LeaveSpendingLocation?.ContactNumber ?? "", Actions = actions
             });
         }

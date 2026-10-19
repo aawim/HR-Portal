@@ -9693,6 +9693,12 @@ namespace HRM.Migrations
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicy", b =>
                 {
+                    b.Property<bool>("RequireWorkHandover")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("WorkHandoverAfterDays")
+                        .HasColumnType("int");
+
                     b.Property<int>("LeavePolicyId")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int")

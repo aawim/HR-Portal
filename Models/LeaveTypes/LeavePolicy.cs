@@ -1,4 +1,4 @@
-﻿namespace HRM.Models.LeaveTypes
+namespace HRM.Models.LeaveTypes
 {
     public class LeavePolicy
     {
@@ -17,6 +17,10 @@
         public bool IncludePay { get; set; }
 
         public decimal? PayPercentage { get; set; }
+
+        public bool RequireWorkHandover { get; set; }
+
+        public int WorkHandoverAfterDays { get; set; } = 2;
 
         public bool IsLocationRequired { get; set; }
 

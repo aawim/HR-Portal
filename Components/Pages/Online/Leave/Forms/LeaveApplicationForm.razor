@@ -2,6 +2,8 @@
 @using HRM.Services.Interfaces
 @using HRM.Helpers
 @inject IGeographyService GeographyService
+@inject HRM.Services.Interfaces.Leave.ILeaveService LeaveService
+@inject ILogger<LeaveApplicationForm> Logger
 
 <div class="bg-white rounded-lg border border-slate-200 p-6 space-y-4">
     <h3 class="text-lg font-semibold text-slate-800">@Title</h3>
@@ -43,6 +45,17 @@
             <p class="mt-1 text-sm text-amber-700" role="alert">No reasons are configured for this leave type. Contact HR before applying.</p>
         }
     </div>
+    @if (handoverError != null) { <p role="alert" class="text-sm text-red-700">@handoverError</p> }
+    @if (LeaveState.IsWorkHandoverRequired)
+    {
+        <section class="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+            <h4 class="text-sm font-semibold text-slate-800">Work handover required</h4>
+            <p class="text-sm text-slate-600">Your leave policy requires handover for leave longer than @LeaveState.WorkHandoverAfterDays days.</p>
+            <p class="text-sm text-slate-600">Assign each task to an employee. Every task needs their verification and approval, followed by approval from any one department supervisor, before HR can approve your leave.</p>
+            <HRM.Components.Pages.Online.Leave.HandoverTaskEditor Tasks="LeaveState.Model.HandoverTasks" Recipients="handoverRecipients" OnChanged="StateHasChanged" />
+            @if (handoverRecipients.Count == 0) { <p class="text-sm text-amber-700">No eligible employees are available. Contact HR before applying.</p> }
+        </section>
+    }
     @AdditionalFields
     <div>
         <label class="block text-sm mb-1" for="leave-explanation">@ExplanationLabel</label>
@@ -102,23 +115,54 @@
     private string Title => string.IsNullOrWhiteSpace(LeaveState.SelectedLeaveTypeName)
         ? "Leave Information" : $"{LeaveState.SelectedLeaveTypeName} Information";
     private int? currentBalanceId;
+    private List<HRM.DTOs.Leave.LeaveHandoverRecipient> handoverRecipients = [];
+    private string? handoverError;
+    private bool loadingHandover;
+    private int handoverLoadVersion;
+    private bool HasHandover => !LeaveState.IsWorkHandoverRequired ||
+        (LeaveState.Model.HandoverTasks.Count is > 0 and <= 50 && LeaveState.Model.HandoverTasks.All(task =>
+            handoverRecipients.Any(x => x.JobId == task.JobId) && !string.IsNullOrWhiteSpace(task.Tasks) && task.Tasks.Trim().Length <= 250));
     private int DetailsLength => LeaveApplicationDetails.Build(LeaveState.Model).Length;
-    private bool CanSubmit => LeaveState.CanSubmit && !LeaveState.IsSubmitting &&
+    private bool CanSubmit => LeaveState.CanSubmit && !LeaveState.IsSubmitting && !loadingHandover && handoverError == null && HasHandover &&
         LeaveState.Model.ToDate >= LeaveState.Model.FromDate && LeaveState.Model.Duration <= LeaveState.RemainingDays && DetailsLength <= 250;
 
     protected override async Task OnInitializedAsync()
     {
         if (LeaveState.Countries.Count == 0) LeaveState.Countries = await GeographyService.GetCountriesAsync();
     }
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (currentBalanceId == LeaveState.Model.JobLeaveTypeId && LeaveState.Model.FromDate != default) return;
+        if (currentBalanceId.HasValue && currentBalanceId != LeaveState.Model.JobLeaveTypeId)
+        {
+            LeaveState.Model.HandoverJobId = null;
+            LeaveState.Model.HandoverNotes = null;
+            LeaveState.Model.HandoverTasks.Clear();
+        }
         currentBalanceId = LeaveState.Model.JobLeaveTypeId;
         if (LeaveState.Model.FromDate == default) LeaveState.Model.FromDate = DateTime.Today;
         if (LeaveState.Model.Duration < 1) LeaveState.Model.Duration = 1;
         DurationChanged();
+        await LoadHandoverAsync();
     }
-    private void FromChanged() => DurationChanged();
+    private async Task FromChanged() { DurationChanged(); await LoadHandoverAsync(); }
+    private async Task LoadHandoverAsync()
+    {
+        var version = ++handoverLoadVersion;
+        loadingHandover = true; handoverError = null;
+        try
+        {
+            if (!LeaveState.Model.JobLeaveTypeId.HasValue) throw new InvalidOperationException("Select a leave balance first.");
+            var rules = await LeaveService.GetHandoverRulesAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.Model.FromDate);
+            if (version != handoverLoadVersion) return;
+            LeaveState.WorkHandoverAfterDays = rules.AfterDays;
+            handoverRecipients = rules.Recipients;
+            foreach (var task in LeaveState.Model.HandoverTasks.Where(t => !handoverRecipients.Any(x => x.JobId == t.JobId))) task.JobId = null;
+            if (!handoverRecipients.Any(x => x.JobId == LeaveState.Model.HandoverJobId)) LeaveState.Model.HandoverJobId = null;
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load handover policy"); if (version == handoverLoadVersion) handoverError = "The leave handover policy could not be loaded. Please select the leave type again."; }
+        finally { if (version == handoverLoadVersion) loadingHandover = false; }
+    }
     private void ToChanged() => LeaveState.Model.Duration = LeaveApplicationDates.Count(
         LeaveState.Model.FromDate, LeaveState.Model.ToDate, LeaveState.IncludeHolidays);
     private void DurationChanged()

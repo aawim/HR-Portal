@@ -1,0 +1,24 @@
+@using HRM.DTOs.Leave
+<div class="space-y-3">
+    @foreach (var task in Tasks)
+    {
+        <div @key="task" class="space-y-2 rounded-lg border border-slate-200 bg-white p-3">
+            <label class="block text-sm">Handover employee
+                <select class="mt-1 w-full rounded-lg border p-2" @bind="task.JobId" @bind:after="Notify"><option value="">Select employee</option>@foreach (var employee in Recipients) { <option value="@employee.JobId">@employee.Name</option> }</select>
+            </label>
+            <label class="block text-sm">Assigned task
+                <textarea class="mt-1 w-full rounded-lg border p-2" rows="3" maxlength="250" @bind="task.Tasks" @bind:event="oninput" @bind:after="Notify"></textarea>
+            </label>
+            <button type="button" class="text-sm text-red-600" @onclick="() => Remove(task)">Remove task</button>
+        </div>
+    }
+    <button type="button" disabled="@(Tasks.Count >= 50)" class="rounded-lg border border-indigo-200 px-3 py-2 text-sm text-indigo-700 disabled:opacity-40" @onclick="Add">Add employee / task</button>
+</div>
+@code {
+    [Parameter, EditorRequired] public List<LeaveHandoverTaskInput> Tasks { get; set; } = [];
+    [Parameter] public List<LeaveHandoverRecipient> Recipients { get; set; } = [];
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private async Task Add() { Tasks.Add(new()); await Notify(); }
+    private async Task Remove(LeaveHandoverTaskInput item) { Tasks.Remove(item); await Notify(); }
+    private Task Notify() => OnChanged.InvokeAsync();
+}
