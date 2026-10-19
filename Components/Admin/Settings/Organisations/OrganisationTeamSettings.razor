@@ -1,0 +1,157 @@
+@using HRM.DTOs.Organisation
+@inject HRM.Services.OrganisationSettingsService Settings
+@inject HRM.Services.ToastService Toast
+@inject ILogger<OrganisationTeamSettings> Logger
+
+<section class="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
+    <div><h2 class="text-xl font-semibold">Teams and supervisors</h2><p class="mt-1 text-sm text-slate-500">Assign supervisors for organisation teams and departments.</p></div>
+    @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
+    @if (ShowOrganisationSelector)
+    {
+        <label class="block max-w-xl text-sm font-medium">Organisation
+            <select class="mt-1 w-full rounded border p-2" disabled="@busy" @bind="organisationId" @bind:after="LoadSettingsAsync">
+                <option value="0">Select an organisation</option>
+                @foreach (var org in organisations) { <option value="@org.Id">@org.Name</option> }
+            </select>
+        </label>
+    }
+    @if (busy && data == null) { <p role="status" class="text-sm text-slate-500">Loading teams and supervisors…</p> }
+    @if (data != null)
+    {
+        <div class="flex flex-wrap items-center gap-3">
+            <button type="button" disabled="@busy" aria-pressed="@(kind == "Team")" class="rounded border px-3 py-2 text-sm @(kind == "Team" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(true)">Teams</button>
+            <button type="button" disabled="@busy" aria-pressed="@(kind == "Department")" class="rounded border px-3 py-2 text-sm @(kind == "Department" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(false)">Departments</button>
+            <button type="button" disabled="@busy" class="text-sm text-blue-700" @onclick="LoadSettingsAsync">Refresh</button>
+        </div>
+        <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
+            <div class="space-y-3">
+                <label class="block text-sm">Search @kind.ToLower()s<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Team or department name" @bind="search" @bind:event="oninput" /></label>
+                <div class="max-h-[32rem] space-y-2 overflow-y-auto">
+                    @foreach (var row in Filtered)
+                    {
+                        <button type="button" disabled="@busy" aria-pressed="@(selected?.Id == row.Id && selected.Kind == row.Kind)"
+                                class="block w-full rounded-lg border p-3 text-left @(selected?.Id == row.Id && selected.Kind == row.Kind ? "border-blue-300 bg-blue-50" : "")"
+                                @onclick="() => Select(row)">
+                            <span class="block text-sm font-semibold">@row.Name</span>
+                            <span class="mt-1 block text-xs @(EligibleCount(row) == 0 ? "text-amber-700" : "text-slate-500")">@(EligibleCount(row) == 0 ? "No eligible supervisor" : $"{EligibleCount(row)} eligible supervisor(s)")</span>
+                        </button>
+                    }
+                    @if (!Filtered.Any()) { <p class="text-sm text-slate-500">No @kind.ToLower()s found.</p> }
+                </div>
+            </div>
+            <div class="rounded-lg border p-4 space-y-4 lg:col-span-2">
+                @if (selected == null) { <p class="text-sm text-slate-500">Select a team or department to manage its supervisors.</p> }
+                else
+                {
+                    <div><h3 class="font-semibold">@selected.Name</h3><p class="text-xs text-slate-500">@selected.Kind supervisors</p></div>
+                    @if (selected.Supervisors.Count == 0) { <p class="rounded bg-amber-50 p-3 text-sm text-amber-800">No supervisor is assigned. Choose an eligible staff member below.</p> }
+                    @foreach (var supervisor in selected.Supervisors)
+                    {
+                        <div @key="supervisor.Id" class="flex flex-wrap items-center justify-between gap-3 rounded border p-3">
+                            <div><span class="text-sm">@supervisor.Name</span>
+                                @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue)) { <p class="mt-1 text-xs text-amber-800">@issue</p> }
+                            </div>
+                            @if (CanRemove)
+                            {
+                                <button type="button" disabled="@busy" class="text-sm text-red-700" @onclick="() => removeId = supervisor.Id">Remove supervisor</button>
+                            }
+                        </div>
+                    }
+                    @if (removeId.HasValue)
+                    {
+                        <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm space-y-3">
+                            <p>Remove @(selected.Supervisors.FirstOrDefault(x => x.Id == removeId)?.Name) as supervisor?</p>
+                            <button type="button" disabled="@busy" class="rounded border bg-white px-3 py-2" @onclick="RemoveAsync">Confirm removal</button>
+                            <button type="button" disabled="@busy" class="ml-3 text-blue-700" @onclick="() => removeId = null">Cancel</button>
+                        </div>
+                    }
+                    @if (CanAssign)
+                    {
+                        <fieldset disabled="@busy" class="space-y-3 border-t pt-4">
+                            <label class="block text-sm font-medium">Assign supervisor
+                                <select class="mt-1 w-full rounded border p-2 font-normal" @bind="staffId">
+                                    <option value="0">Select a staff member</option>
+                                    @foreach (var staff in AvailableStaff) { <option value="@staff.Id">@staff.Name</option> }
+                                </select>
+                            </label>
+                            <p class="text-xs text-slate-500">Eligible staff must have an active approved job and user account in this organisation. A supervisor cannot approve their own leave handover.</p>
+                            <button type="button" disabled="@(busy || staffId <= 0)" class="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" @onclick="AssignAsync">@(busy ? "Saving…" : "Assign supervisor")</button>
+                            @if (!AvailableStaff.Any()) { <p class="text-sm text-amber-800">No additional eligible staff are available.</p> }
+                        </fieldset>
+                    }
+                    else { <p class="text-sm text-slate-500">You can view these assignments. Editing requires supervisor management permission.</p> }
+                }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public bool ShowOrganisationSelector { get; set; } = true;
+    private List<OrganisationSettingsOption> organisations = [];
+    private OrganisationTeamSettingsData? data;
+    private OrganisationTeamSettingsRow? selected;
+    private bool initialised, busy;
+    private int organisationId, staffId;
+    private int? removeId;
+    private string kind = "Team", search = "";
+    private string? message;
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(x => x.Kind == kind && x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
+    private IEnumerable<OrganisationSettingsOption> AvailableStaff => data?.Staff.Where(x => selected != null && !selected.Supervisors.Any(s => s.Id == x.Id)) ?? [];
+    private int EligibleCount(OrganisationTeamSettingsRow row) => row.Supervisors.Count(x => data?.SupervisorIssues.ContainsKey(x.Id) != true);
+    private bool CanAssign => data != null && (kind == "Team" ? data.CanEditTeams : data.CanAssignDepartments);
+    private bool CanRemove => data != null && (kind == "Team" ? data.CanEditTeams : data.CanRemoveDepartments);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!initialised)
+        {
+            initialised = true;
+            try
+            {
+                organisations = await Settings.GetTeamOrganisationsAsync();
+                organisationId = InitialOrganisationId ?? organisations.FirstOrDefault()?.Id ?? 0;
+                await LoadSettingsAsync();
+            }
+            catch (Exception ex) { HandleError(ex); }
+        }
+        else if (InitialOrganisationId is > 0 && InitialOrganisationId != organisationId)
+        {
+            organisationId = InitialOrganisationId.Value;
+            await LoadSettingsAsync();
+        }
+    }
+    private void Select(OrganisationTeamSettingsRow row) { selected = row; staffId = 0; removeId = null; }
+    private void ChangeKind(bool teams) { kind = teams ? "Team" : "Department"; search = ""; selected = data?.Rows.FirstOrDefault(x => x.Kind == kind); staffId = 0; removeId = null; }
+    private async Task LoadSettingsAsync()
+    {
+        if (busy) return;
+        if (organisationId <= 0) { data = null; selected = null; return; }
+        busy = true;
+        var previousId = selected?.Id; selected = null;
+        try { data = await Settings.GetTeamSettingsAsync(organisationId); selected = data.Rows.FirstOrDefault(x => x.Kind == kind && x.Id == previousId) ?? data.Rows.FirstOrDefault(x => x.Kind == kind); staffId = 0; removeId = null; }
+        catch (Exception ex) { data = null; HandleError(ex); }
+        finally { busy = false; }
+    }
+    private Task AssignAsync() => SaveAsync(staffId, true);
+    private Task RemoveAsync() => removeId.HasValue ? SaveAsync(removeId.Value, false) : Task.CompletedTask;
+    private async Task SaveAsync(int person, bool assign)
+    {
+        if (busy || selected == null || person <= 0) return;
+        busy = true;
+        try
+        {
+            var result = await Settings.SetTeamSupervisorAsync(organisationId, selected.Kind, selected.Id, person, assign);
+            message = result.Message;
+            if (result.Success) Toast.Success(result.Message); else Toast.Warning(result.Message);
+        }
+        catch (Exception ex) { HandleError(ex); }
+        finally { busy = false; await LoadSettingsAsync(); }
+    }
+    private void HandleError(Exception ex)
+    {
+        Logger.LogError(ex, "Could not manage team supervisors.");
+        message = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Team supervisor settings could not be saved or loaded. Please try again.";
+    }
+}

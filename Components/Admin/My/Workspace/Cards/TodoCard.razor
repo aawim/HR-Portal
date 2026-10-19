@@ -1,112 +1,123 @@
-﻿@using HRM.Components.Cards
-<BaseCard Title="My To Do">
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@inject IUserTodoService Todos
+@inject ILogger<TodoCard> Logger
 
-    <div class="divide-y divide-slate-100">
-
-        <button class="w-full text-left px-4 py-3 hover:bg-slate-50 transition">
-
-            <div class="flex justify-between items-start">
-
-                <div>
-
-                    <div class="text-sm font-medium text-slate-800">
-                        Approve Annual Leave
-                    </div>
-
-                    <div class="text-xs text-slate-500 mt-1">
-                        Ahmed Ali • Annual Leave • 3 days
-                    </div>
-
-                </div>
-
-                <span class="px-2 py-1 rounded-full bg-red-100 text-red-600 text-xs">
-                    High
-                </span>
-
-            </div>
-
-        </button>
-
-        <button class="w-full text-left px-4 py-3 hover:bg-slate-50 transition">
-
-            <div class="flex justify-between items-start">
-
-                <div>
-
-                    <div class="text-sm font-medium text-slate-800">
-                        Review Attendance Exceptions
-                    </div>
-
-                    <div class="text-xs text-slate-500 mt-1">
-                        2 team members require review.
-                    </div>
-
-                </div>
-
-                <span class="px-2 py-1 rounded-full bg-amber-100 text-amber-700 text-xs">
-                    Medium
-                </span>
-
-            </div>
-
-        </button>
-
-        <button class="w-full text-left px-4 py-3 hover:bg-slate-50 transition">
-
-            <div class="flex justify-between items-start">
-
-                <div>
-
-                    <div class="text-sm font-medium text-slate-800">
-                        Approve Overtime Request
-                    </div>
-
-                    <div class="text-xs text-slate-500 mt-1">
-                        Mohamed Hassan • 4 hours
-                    </div>
-
-                </div>
-
-                <span class="px-2 py-1 rounded-full bg-blue-100 text-blue-700 text-xs">
-                    Normal
-                </span>
-
-            </div>
-
-        </button>
-
-        <button class="w-full text-left px-4 py-3 hover:bg-slate-50 transition">
-
-            <div class="flex justify-between items-start">
-
-                <div>
-
-                    <div class="text-sm font-medium text-slate-800">
-                        Complete Performance Review
-                    </div>
-
-                    <div class="text-xs text-slate-500 mt-1">
-                        Due by 15 July 2026
-                    </div>
-
-                </div>
-
-                <span class="px-2 py-1 rounded-full bg-violet-100 text-violet-700 text-xs">
-                    Upcoming
-                </span>
-
-            </div>
-
-        </button>
-
+<section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <div><h2 class="text-sm font-semibold text-slate-800">My To Do</h2><p class="mt-0.5 text-xs text-slate-500">@pendingCount open tasks</p></div>
+        <button type="button" disabled="@busy" class="text-xs text-blue-700 disabled:opacity-50" @onclick="NewTask">Add task</button>
     </div>
-
-    <div class="border-t border-slate-100 p-3 text-center">
-
-        <button class="text-sm font-medium text-blue-600 hover:text-blue-700">
-            View All Tasks
-        </button>
-
+    <div class="space-y-2 p-2">
+        @if (message != null) { <p role="status" class="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">@message</p> }
+        @if (editing != null)
+        {
+            <div class="space-y-2 rounded-lg border border-blue-100 bg-blue-50/30 p-3">
+                <h3 class="text-sm font-medium">@(editing.Id == 0 ? "New task" : "Edit task")</h3>
+                <label class="block text-xs text-slate-600">Title<input disabled="@busy" maxlength="200" class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" @bind="editing.Title" /></label>
+                <label class="block text-xs text-slate-600">Notes<textarea disabled="@busy" maxlength="1000" rows="2" class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" @bind="editing.Notes"></textarea></label>
+                <label class="block text-xs text-slate-600">Priority<select disabled="@busy" class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" @bind="editing.Priority"><option>Normal</option><option>Medium</option><option>High</option></select></label>
+                <label class="block text-xs text-slate-600">Due date (optional)<InputDate disabled="@busy" class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" @bind-Value="editing.DueDate" /></label>
+                <div class="flex gap-2">
+                    <button type="button" disabled="@busy" class="rounded bg-blue-600 px-3 py-1.5 text-xs text-white disabled:opacity-50" @onclick="SaveAsync">Save</button>
+                    <button type="button" disabled="@busy" class="rounded border px-3 py-1.5 text-xs disabled:opacity-50" @onclick="() => editing = null">Cancel</button>
+                </div>
+            </div>
+        }
+        <div class="flex items-center justify-between gap-2 px-2 py-1 text-xs text-slate-500">
+            <label class="flex items-center gap-2"><input type="checkbox" disabled="@busy" @bind="includeCompleted" @bind:after="FilterAsync" />Show completed</label>
+            <button type="button" disabled="@busy" class="text-blue-700 disabled:opacity-50" @onclick="LoadAsync">Refresh</button>
+        </div>
+        @if (busy) { <p role="status" class="p-2 text-xs text-slate-500">Updating your list…</p> }
+        else if (items.Count == 0 && !loadFailed) { <p class="p-3 text-sm text-slate-500">@(includeCompleted ? "Your to-do list is empty." : "No open tasks. Add a task to get started.")</p> }
+        <ul class="divide-y divide-slate-100">
+            @foreach (var item in items)
+            {
+                <li @key="item.Id" class="space-y-2 px-2 py-3">
+                    <div class="flex items-start gap-2">
+                        <input type="checkbox" checked="@item.IsCompleted" disabled="@busy" aria-label="@(item.IsCompleted ? "Reopen " + item.Title : "Complete " + item.Title)" class="mt-1 rounded border-slate-300" @onchange="() => ToggleAsync(item)" />
+                        <div class="min-w-0 flex-1">
+                            <p class="break-words text-sm font-medium @(item.IsCompleted ? "text-slate-400 line-through" : "text-slate-800")">@item.Title</p>
+                            @if (!string.IsNullOrWhiteSpace(item.Notes)) { <p class="mt-1 whitespace-pre-wrap break-words text-xs text-slate-500">@item.Notes</p> }
+                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                                <span class="rounded px-1.5 py-0.5 @PriorityClass(item.Priority)">@item.Priority</span>
+                                @if (item.DueDate.HasValue) { <span class="@(!item.IsCompleted && item.DueDate.Value.Date < Today ? "text-red-700" : "text-slate-500")">Due @item.DueDate.Value.ToString("dd MMM yyyy")</span> }
+                                @if (item.IsCompleted) { <span class="text-green-700">Completed</span> }
+                            </div>
+                            <div class="mt-2 flex gap-3">
+                                <button type="button" disabled="@busy" class="text-xs text-blue-700 disabled:opacity-50" @onclick="() => Edit(item)">Edit</button>
+                                <button type="button" disabled="@busy" class="text-xs text-red-700 disabled:opacity-50" @onclick="() => deleteId = item.Id">Delete</button>
+                            </div>
+                            @if (deleteId == item.Id)
+                            {
+                                <div class="mt-2 rounded border border-red-100 p-2 text-xs">
+                                    <p>Delete this task?</p>
+                                    <div class="mt-2 flex gap-3"><button type="button" disabled="@busy" class="text-red-700" @onclick="() => DeleteAsync(item)">Confirm delete</button><button type="button" disabled="@busy" @onclick="() => deleteId = null">Cancel</button></div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </li>
+            }
+        </ul>
+        @if (total > 10 || page > 0)
+        {
+            <div class="flex items-center justify-between gap-2 border-t border-slate-100 px-2 pt-2 text-xs text-slate-500">
+                <button type="button" disabled="@(busy || page == 0)" class="disabled:opacity-40" @onclick="() => MoveAsync(-1)">Previous</button>
+                <span>Page @(page + 1) of @Math.Max(1, (int)Math.Ceiling(total / 10m))</span>
+                <button type="button" disabled="@(busy || (page + 1) * 10 >= total)" class="disabled:opacity-40" @onclick="() => MoveAsync(1)">Next</button>
+            </div>
+        }
     </div>
+</section>
 
-</BaseCard>
+@code {
+    private static DateTime Today => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date;
+    private List<UserTodoDto> items = [];
+    private UserTodoDto? editing;
+    private int? deleteId;
+    private bool busy, includeCompleted, loadFailed;
+    private int page, total, pendingCount;
+    private string? message;
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    private void NewTask() { editing = new(); message = null; deleteId = null; }
+    private void Edit(UserTodoDto item)
+    {
+        editing = new() { Id = item.Id, Title = item.Title, Notes = item.Notes, Priority = item.Priority, DueDate = item.DueDate, RowVersion = item.RowVersion.ToArray() };
+        message = null; deleteId = null;
+    }
+    private async Task FilterAsync() { page = 0; await LoadAsync(); }
+    private async Task MoveAsync(int change) { page += change; await LoadAsync(); }
+    private async Task LoadAsync()
+    {
+        if (busy) return;
+        busy = true; message = null;
+        try { await ReloadAsync(); }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load personal to-do list."); items = []; loadFailed = true; message = "Your to-do list could not be loaded. Please refresh."; }
+        finally { busy = false; }
+    }
+    private async Task ReloadAsync()
+    {
+        var result = await Todos.GetMyTodosAsync(includeCompleted, page);
+        if (page > 0 && result.Items.Count == 0) { page = Math.Max(0, (int)Math.Ceiling(result.Total / 10m) - 1); result = await Todos.GetMyTodosAsync(includeCompleted, page); }
+        items = result.Items; total = result.Total; pendingCount = result.PendingCount; loadFailed = false;
+    }
+    private async Task SaveAsync()
+    {
+        if (editing == null || busy) return;
+        var draft = editing;
+        await MutateAsync(async () => { await Todos.SaveAsync(draft); editing = null; page = 0; });
+    }
+    private Task ToggleAsync(UserTodoDto item) => MutateAsync(() => Todos.SetCompletedAsync(item.Id, item.RowVersion, !item.IsCompleted));
+    private Task DeleteAsync(UserTodoDto item) => MutateAsync(() => Todos.DeleteAsync(item.Id, item.RowVersion));
+    private async Task MutateAsync(Func<Task> action)
+    {
+        if (busy) return;
+        busy = true; message = null;
+        try { await action(); deleteId = null; await ReloadAsync(); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Could not update personal to-do list."); message = "The task could not be updated. Refresh before trying again."; }
+        finally { busy = false; }
+    }
+    private static string PriorityClass(string priority) => priority switch { "High" => "bg-red-50 text-red-700", "Medium" => "bg-amber-50 text-amber-800", _ => "bg-blue-50 text-blue-700" };
+}

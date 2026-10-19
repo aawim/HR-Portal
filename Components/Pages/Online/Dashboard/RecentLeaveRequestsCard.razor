@@ -1,4 +1,6 @@
-﻿@using HRM.Components.Shared
+@using HRM.DTOs.Leave
+@using HRM.Components.Pages.Online.Leave
+@using HRM.Components.Shared
 @using HRM.Helpers
 @using HRM.Models
 @using HRM.Services
@@ -10,6 +12,8 @@
 @inject IWorkflowEngine WorkflowEngine
 @inject ToastService ToastService
 @inject ILeaveService LeaveService
+@inject ILeaveChangeService Applications
+@inject IUserAccessService UserAccess
 
 @inject IDbContextFactory<HrmTeContext> DbFactory
 @inject ILogger<RecentLeaveRequestsCard> Logger
@@ -27,7 +31,7 @@
             </p>
         </div>
 
-        <button type="button" disabled="@(IsLoading || _processing)"
+        <button type="button" disabled="@(IsLoading || _processing || editingRequestId.HasValue)"
                 class="text-sm text-blue-600 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
     </div>
 
@@ -160,6 +164,17 @@
 
 
                             <td class="px-3 py-3 text-center gap-2">
+                                @if (HandoverLeaveIds.Contains(leave.LeaveId)) { <a class="mb-2 inline-block text-xs text-blue-700 underline" href="@($"/online/leave-handovers/{leave.LeaveId}")">Work handover</a> }
+                                @if (GetWorkflowRequestId(leave.LeaveId) is int correctionRequestId &&
+                                    ReturnReasons.ContainsKey(correctionRequestId) && OwnedRequestIds.Contains(correctionRequestId) &&
+                                    leave.LeaveStateId == SharedConfig.LeaveStates.INCOMPLETE &&
+                                    WorkflowInfo.TryGetValue(correctionRequestId, out var returnedWorkflow) && returnedWorkflow.WorkflowStatus == "Returned")
+                                {
+                                    <button type="button" class="mb-2 rounded-md bg-blue-600 px-3 py-2 text-xs text-white disabled:opacity-50"
+                                            disabled="@(IsLoading || _processing || editingRequestId.HasValue)" @onclick="() => OpenCorrectionAsync(leave.LeaveId)">
+                                        Edit and resubmit
+                                    </button>
+                                }
 
                                
                                     @* <button class="px-3 py-1 rounded-md text-xs
@@ -171,7 +186,7 @@
                                     </button> *@
 
                                 <button type="button"
-                                        disabled="@_processing"
+                                        disabled="@(_processing || editingRequestId.HasValue)"
                                         @onclick="() => OpenCancelDialog(leave.LeaveId)"
                                         class="px-3 py-1 rounded-md text-xs
                                            bg-red-50 text-red-700
@@ -208,6 +223,51 @@
     }
 
 </div>
+@if (selectedDetails != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <section role="dialog" aria-modal="true" aria-labelledby="recent-leave-detail-title" tabindex="-1"
+                 class="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-xl bg-white p-6 shadow-xl"
+                 @onkeydown="HandleDetailKey">
+            <div class="mb-4 flex items-start justify-between gap-4">
+                <div>
+                    <h2 id="recent-leave-detail-title" class="text-lg font-semibold">Leave request details</h2>
+                    <p class="text-sm text-slate-500">@selectedDetails.Reference · @selectedDetails.LeaveType</p>
+                </div>
+                <button type="button" autofocus disabled="@editingRequestId.HasValue" class="rounded border px-3 py-2 text-sm disabled:opacity-50"
+                        @onclick="CloseDetails">Close</button>
+            </div>
+            @if (editingRequestId.HasValue)
+            {
+                <MyLeaveApplications @key="editingRequestId.Value" EditorOnly="true" EditRequestId="editingRequestId"
+                                     OnSaved="CorrectionSavedAsync" OnClose="CloseCorrection" />
+            }
+            else
+            {
+                <p class="mb-4 text-sm">@selectedDetails.FromDate.ToString("dd MMM yyyy") – @selectedDetails.ToDate.ToString("dd MMM yyyy") · @selectedDetails.Duration days · @selectedDetails.Status</p>
+                @if (selectedDetails.HasHandover) { <a class="mb-4 inline-block text-sm text-blue-700 underline" href="@($"/online/leave-handovers/{selectedDetails.LeaveId}")">View work handover</a> }
+                @if (selectedDetails.ReturnReason != null || selectedDetails.CanEdit)
+                {
+                    <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+                        <h3 class="font-semibold">Reason for return</h3>
+                        <p class="mt-1 whitespace-pre-wrap break-words text-sm">@(string.IsNullOrWhiteSpace(selectedDetails.ReturnReason) ? "No return reason was recorded. Contact the reviewer for details." : selectedDetails.ReturnReason)</p>
+                    </div>
+                }
+                <dl class="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+                    <div><dt class="font-medium text-slate-500">Leave reason</dt><dd>@DisplayDetail(selectedDetails.Reason)</dd></div>
+                    <div><dt class="font-medium text-slate-500">Contact</dt><dd>@DisplayDetail(selectedDetails.ContactNumber)</dd></div>
+                    <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Explanation</dt><dd class="whitespace-pre-wrap break-words">@DisplayDetail(selectedDetails.Explanation)</dd></div>
+                    <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Leave address</dt><dd class="whitespace-pre-wrap break-words">@DisplayDetail(selectedDetails.Address)</dd></div>
+                </dl>
+                @if (selectedDetails.CanEdit && OwnedRequestIds.Contains(selectedDetails.RequestId))
+                {
+                    <button type="button" class="mt-5 rounded bg-blue-600 px-4 py-2 text-sm text-white"
+                            @onclick="BeginCorrection">Edit and resubmit</button>
+                }
+            }
+        </section>
+    </div>
+}
 @if (ShowCancelConfirm)
 {
     <ConfirmDialog ActionType="ConfirmAction.Cancel"
@@ -238,7 +298,7 @@
             {
                 await InvokeAsync(async () =>
                 {
-                    if (IsLoading || _processing || ShowCancelConfirm || refreshStop.IsCancellationRequested) return;
+                    if (IsLoading || _processing || ShowCancelConfirm || selectedDetails != null || editingRequestId.HasValue || refreshStop.IsCancellationRequested) return;
                     try { await RefreshAsync(); }
                     catch (Exception ex) { Logger.LogWarning(ex, "Could not refresh recent leave request statuses."); }
                     StateHasChanged();
@@ -256,6 +316,18 @@
     }
 
     private bool _processing;
+    private int? editingRequestId;
+    private MyLeaveApplicationDto? selectedDetails;
+    private HashSet<int> OwnedRequestIds = new();
+    private HashSet<int> HandoverLeaveIds = new();
+    private Dictionary<int, string?> ReturnReasons = new();
+    private void CloseCorrection() => editingRequestId = null;
+    private async Task CorrectionSavedAsync()
+    {
+        editingRequestId = null;
+        await RefreshAsync();
+        if (selectedDetails != null) selectedDetails = await Applications.GetMyApplicationDetailsAsync(selectedDetails.RequestId);
+    }
 
     private Dictionary<int, int> LeaveRequestIds = new();
 
@@ -365,21 +437,49 @@
         await LoadWorkflowInfoAsync();
     }
 
+    private static string DisplayDetail(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+    private void CloseDetails()
+    {
+        if (!editingRequestId.HasValue) selectedDetails = null;
+    }
+    private void HandleDetailKey(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") CloseDetails();
+    }
+    private void BeginCorrection()
+    {
+        if (selectedDetails?.CanEdit == true && OwnedRequestIds.Contains(selectedDetails.RequestId))
+            editingRequestId = selectedDetails.RequestId;
+    }
+    private async Task OpenCorrectionAsync(int leaveId)
+    {
+        var requestId = GetWorkflowRequestId(leaveId);
+        if (!requestId.HasValue || !OwnedRequestIds.Contains(requestId.Value)) return;
+        await ShowDetail(leaveId);
+        BeginCorrection();
+    }
     private async Task ShowDetail(int leaveId)
     {
-        var result = await LeaveService.ShowDetailLeaveAsync(leaveId);
-
-        if (!result.Success)
+        if (_processing || editingRequestId.HasValue) return;
+        var requestId = GetWorkflowRequestId(leaveId);
+        if (!requestId.HasValue) { ToastService.Warning("No linked request was found."); return; }
+        _processing = true;
+        try
         {
-            //ToastService.ShowWarning(result.Message);
-            return;
+            selectedDetails = await Applications.GetMyApplicationDetailsAsync(requestId.Value);
         }
-
-
-        LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
-        await LoadWorkflowInfoAsync();
-
-        StateHasChanged();
+        catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException)
+        {
+            selectedDetails = null;
+            ToastService.Warning(ex.Message);
+        }
+        catch (Exception ex)
+        {
+            selectedDetails = null;
+            Logger.LogError(ex, "Could not load leave request details.");
+            ToastService.Error("Leave request details could not be loaded. Please try again.");
+        }
+        finally { _processing = false; }
     }
 
 
@@ -388,6 +488,9 @@
         LeaveRequestIds.Clear();
         WorkflowInfo.Clear();
         RequestStatuses.Clear();
+        ReturnReasons.Clear();
+        OwnedRequestIds.Clear();
+        HandoverLeaveIds.Clear();
 
         if (LeaveRequests == null || LeaveRequests.Count == 0)
             return;
@@ -406,9 +509,18 @@
             {
                 x.LeaveId,
                 x.RequestId,
-                Status = x.Request.RequestState.StateName
+                Status = x.Request.RequestState.StateName,
+                StateId = x.Request.RequestStateId,
+                ReturnReason = x.Request.StateChangeRemarks,
+                OwnerPersonId = x.Leave.Job.IndividualID,
+                HasHandover = db.LeaveHandoverReviews.Any(r => r.LeaveId == x.LeaveId)
             })
             .ToListAsync();
+
+        HandoverLeaveIds = mappings.Where(x => x.HasHandover).Select(x => x.LeaveId).ToHashSet();
+        var user = await UserAccess.RequireContextAsync();
+        var person = user.IndividualId > 0 ? user.IndividualId : user.BusinessEntityId;
+        OwnedRequestIds = mappings.Where(x => person > 0 && x.OwnerPersonId == person).Select(x => x.RequestId).ToHashSet();
 
         LeaveRequestIds = mappings
             .GroupBy(x => x.LeaveId)
@@ -418,6 +530,9 @@
             );
         RequestStatuses = mappings.GroupBy(x => x.RequestId)
             .ToDictionary(x => x.Key, x => x.First().Status);
+
+        ReturnReasons = mappings.Where(x => x.StateId == SharedConfig.RequestStates.INCOMPLETE)
+            .GroupBy(x => x.RequestId).ToDictionary(x => x.Key, x => x.First().ReturnReason);
 
         if (LeaveRequestIds.Count == 0)
             return;

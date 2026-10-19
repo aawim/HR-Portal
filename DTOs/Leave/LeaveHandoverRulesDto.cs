@@ -17,6 +17,7 @@ public class LeaveHandoverInboxItem
     public string Status { get; set; } = "";
     public string? SupervisorComments { get; set; }
     public bool CanRevise { get; set; }
+    public bool IsApplicant { get; set; }
     public bool CanSupervise { get; set; }
     public List<LeaveHandoverTaskView> Tasks { get; set; } = [];
     public List<LeaveHandoverRecipient> Recipients { get; set; } = [];

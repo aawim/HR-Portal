@@ -29,11 +29,12 @@
 }
 else
 {
-    <p class="text-xs text-slate-500">No actions are available for your permissions at this status.</p>
+    <p class="text-xs text-slate-500">@(EmptyMessage ?? "No actions are available for your permissions at this status.")</p>
 }
 
 @code {
     [Parameter] public List<RequestActionDto> Actions { get; set; } = new();
+    [Parameter] public string? EmptyMessage { get; set; }
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<RequestActionSubmissionDto> OnExecute { get; set; }
     private RequestActionDto? selected;
@@ -42,7 +43,9 @@ else
     private void Close() { selected = null; comment = null; }
     protected override void OnParametersSet()
     {
-        if (selected != null && !Actions.Any(x => x.FromStateId == selected.FromStateId && x.ToStateId == selected.ToStateId)) Close();
+        if (selected == null) return;
+        selected = Actions.FirstOrDefault(x => x.FromStateId == selected.FromStateId && x.ToStateId == selected.ToStateId);
+        if (selected == null) Close();
     }
     private async Task ExecuteAsync()
     {

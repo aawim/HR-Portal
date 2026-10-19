@@ -1,4 +1,4 @@
-﻿using HRM.Enum;
+using HRM.Enum;
 using Microsoft.AspNetCore.Http.HttpResults;
 using System.ComponentModel.DataAnnotations;
 
@@ -45,7 +45,9 @@ namespace HRM.Enum
         ShiftWork,
         Assignments,
         [Display(Name = "Create Assignment")]
-        AssignmentCreate
+        AssignmentCreate,
+        AssignedRoles,
+        Permissions
     }
 }
 

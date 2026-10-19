@@ -24,55 +24,149 @@ public partial class LeaveChangeService
         }
     }
 
+    private sealed class RequestActionAvailability
+    {
+        public List<RequestActionDto> Actions { get; set; } = new();
+        public string? Message { get; set; }
+    }
+
     private async Task<List<RequestActionDto>> AllowedActionsAsync(
         HrmTeContext db, Request request, Leaf leave, WfRequestInstance instance, UserContextDto user)
+        => (await GetActionAvailabilityAsync(db, request, leave, instance, user)).Actions;
+
+    private async Task<RequestActionAvailability> GetActionAvailabilityAsync(
+        HrmTeContext db, Request request, Leaf leave, WfRequestInstance instance, UserContextDto user)
     {
-        var result = new List<RequestActionDto>();
-        if (instance.CompletedAt.HasValue || instance.WorkflowStatus is not ("InProgress" or "Returned")) return result;
+        var result = new RequestActionAvailability();
+        if (instance.CompletedAt.HasValue || instance.WorkflowStatus is not ("InProgress" or "Returned") ||
+            request.RequestStateId is SharedConfig.RequestStates.APPROVED or SharedConfig.RequestStates.CANCELLED or SharedConfig.RequestStates.REJECTED)
+        {
+            result.Message = "This request is closed. No further actions are available.";
+            return result;
+        }
+
+        if (request.RequestTypeId != SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST &&
+            leave.LeaveStateId is SharedConfig.LeaveStates.APPROVED or SharedConfig.LeaveStates.REJECTED or SharedConfig.LeaveStates.CANCELLED)
+        {
+            result.Message = "This leave application is already closed. Contact HR if its request status is inconsistent.";
+            return result;
+        }
         var stage = await db.WfRequestStageInstances.AsNoTracking().Include(x => x.Approvals).Include(x => x.WorkflowStage)
-            .SingleOrDefaultAsync(x => x.RequestStageInstanceId == instance.CurrentRequestStageInstanceId);
-        if (stage == null) return result;
-        var owner = leave.Job.IndividualID == user.IndividualId;
+            .SingleOrDefaultAsync(x => x.RequestStageInstanceId == instance.CurrentRequestStageInstanceId &&
+                x.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId);
+        if (stage == null)
+        {
+            result.Message = "No current approval stage is available. Contact HR.";
+            return result;
+        }
+
+        var personId = user.IndividualId > 0 ? user.IndividualId : user.BusinessEntityId;
+        var owner = personId > 0 && leave.Job.IndividualID == personId;
         var assignment = stage.Approvals.FirstOrDefault(x => x.ApproverUserId == user.UserId && x.Decision == "Pending");
-        var assigned = instance.WorkflowStatus == "InProgress" && stage.StageStatus == "Pending" && assignment != null;
-        if (assigned && stage.WorkflowStage.ApprovalMode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) &&
-            stage.Approvals.Any(x => x.Decision == "Pending" && x.ApprovalSequence < assignment!.ApprovalSequence)) assigned = false;
+        var assigned = instance.WorkflowStatus == "InProgress" && stage.StageStatus == "Pending" &&
+            !stage.CompletedAt.HasValue && assignment != null;
+        var waitingForTurn = assigned && stage.WorkflowStage.ApprovalMode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) &&
+            stage.Approvals.Any(x => x.Decision == "Pending" && x.ApprovalSequence < assignment!.ApprovalSequence);
         var organisationId = request.OrganisationBusinessEntityID ?? 0;
-        assigned = assigned && await access.HasOrganisationAccessAsync(organisationId);
+        assigned = assigned && !waitingForTurn && await access.HasOrganisationAccessAsync(organisationId);
+        result.Message = waitingForTurn ? "An earlier approver must review this request before your turn." :
+            assignment == null && stage.Approvals.Any(x => x.ApproverUserId == user.UserId && x.Decision != "Pending")
+                ? "Your decision for this stage has already been recorded. Other approvers must complete their review."
+                : "You are not assigned to process this request at its current stage.";
         if (!owner && !assigned) return result;
 
         var rules = await db.RequestTypesStatesRequiredRolesForProcessings.AsNoTracking()
             .Where(x => x.RequestTypeId == request.RequestTypeId && x.RequestStateId == request.RequestStateId).ToListAsync();
-        var namedApprovers = await db.WfStageApprovers.AsNoTracking()
-            .AnyAsync(x => x.WorkflowStageId == stage.WorkflowStageId && x.ApproverType == "USER");
         var roles = assigned ? await UserRolesAsync(db, user.UserId, organisationId) : new List<int>();
         var nextStage = await db.WfWorkflowStages.AsNoTracking()
             .Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive && x.StageOrder > stage.WorkflowStage.StageOrder)
             .OrderBy(x => x.StageOrder).FirstOrDefaultAsync();
+        // Standard leave processing must verify before it can approve.
+        var nextStateId = request.RequestStateId switch
+        {
+            SharedConfig.RequestStates.PENDING_VERIFICATION => (int?)SharedConfig.RequestStates.PENDING_APPROVAL,
+            SharedConfig.RequestStates.PENDING_APPROVAL => SharedConfig.RequestStates.APPROVED,
+            _ => nextStage?.RequestStateId
+        };
         var transitions = await db.RequestTypesAllowedRequestStateTransitions.AsNoTracking().Include(x => x.ToRequestState)
             .Where(x => x.RequestTypeId == request.RequestTypeId && x.FromRequestStateId == request.RequestStateId).ToListAsync();
+        var votedTargets = await db.WfRequestActions.AsNoTracking()
+            .Where(x => x.RequestStageInstanceId == stage.RequestStageInstanceId && x.ActionCode == "VOTE")
+            .Select(x => x.ToRequestStateId).Distinct().ToListAsync();
         var handoverReady = await LeaveHandoverService.ReadyAsync(db, leave.LeaveId);
+        var blockedByHandover = false;
+        var blockedByRole = false;
+
         foreach (var transition in transitions)
         {
             var state = transition.ToRequestState;
             var applicantAction = owner && (state.RequestStateId == SharedConfig.RequestStates.CANCELLED ||
                 (request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE && state.RequestStateId == SharedConfig.RequestStates.PENDING_VERIFICATION));
             var required = rules.Where(x => x.ToRequestStateId == null || x.ToRequestStateId == state.RequestStateId).ToList();
-            var processorAction = assigned && (namedApprovers || rules.Count == 0 || required.Any(x => roles.Contains(x.RoleId)));
-            if (!applicantAction && !processorAction) continue;
+            // A named assignment grants a place in the workflow, not every processing permission.
+            var processorAction = assigned && (rules.Count == 0 || required.Any(x => roles.Contains(x.RoleId)));
+            if (!applicantAction && !processorAction)
+            {
+                blockedByRole |= assigned;
+                continue;
+            }
+
             var stopping = state.RequestStateId is SharedConfig.RequestStates.REJECTED or SharedConfig.RequestStates.CANCELLED or SharedConfig.RequestStates.INCOMPLETE;
-            if (!stopping && !handoverReady && !applicantAction) continue;
-            if (!stopping && nextStage != null && state.RequestStateId != nextStage.RequestStateId) continue;
-            if (!stopping && state.RequestStateId != SharedConfig.RequestStates.APPROVED && !state.IsProcessingState) continue;
-            result.Add(new()
+            if (!applicantAction && !stopping)
+            {
+                if (nextStateId.HasValue && state.RequestStateId != nextStateId.Value) continue;
+                if (state.RequestStateId != SharedConfig.RequestStates.APPROVED && !state.IsProcessingState) continue;
+                if (votedTargets.Any(x => x != state.RequestStateId)) continue;
+                if (state.RequestStateId == SharedConfig.RequestStates.APPROVED && !handoverReady)
+                {
+                    blockedByHandover = true;
+                    continue;
+                }
+            }
+
+            result.Actions.Add(new()
             {
                 FromStateId = request.RequestStateId, ToStateId = state.RequestStateId,
-                Label = string.IsNullOrWhiteSpace(state.ButtonActionName) ? state.StateName.Trim() : state.ButtonActionName.Trim(),
-                NextStatus = state.StateName.Trim(), CommentRequired = state.CommentRequired
+                Label = RequestActionLabel(request.RequestStateId, state),
+                NextStatus = state.StateName.Trim(), CommentRequired = state.CommentRequired || state.RequestStateId == SharedConfig.RequestStates.INCOMPLETE
             });
         }
-        return result.OrderBy(x => x.ToStateId).ToList();
+
+        result.Actions = result.Actions.OrderBy(x => x.ToStateId).ToList();
+        result.Message = blockedByHandover ? "Leave approval is available after the assigned employees and a team or department supervisor approve the work handover." :
+            result.Actions.Count > 0 ? null :
+            blockedByRole ? "Your roles do not permit the configured actions at this request status." :
+            "No actions are configured for you at this request status.";
+        return result;
     }
+
+    private static string RequestActionLabel(int fromStateId, RequestState state)
+    {
+        if (fromStateId == SharedConfig.RequestStates.PENDING_VERIFICATION &&
+            state.RequestStateId == SharedConfig.RequestStates.PENDING_APPROVAL) return "Verify";
+        if (fromStateId == SharedConfig.RequestStates.PENDING_APPROVAL &&
+            state.RequestStateId == SharedConfig.RequestStates.APPROVED) return "Approve";
+        if (!string.IsNullOrWhiteSpace(state.ButtonActionName)) return state.ButtonActionName.Trim();
+        return state.RequestStateId switch
+        {
+            SharedConfig.RequestStates.APPROVED => "Approve",
+            SharedConfig.RequestStates.REJECTED => "Reject",
+            SharedConfig.RequestStates.CANCELLED => "Cancel request",
+            SharedConfig.RequestStates.INCOMPLETE => "Return for correction",
+            SharedConfig.RequestStates.PENDING_VERIFICATION => "Submit for verification",
+            SharedConfig.RequestStates.PENDING_APPROVAL when fromStateId is SharedConfig.RequestStates.PENDING_VERIFICATION
+                or SharedConfig.RequestStates.PENDING_HR_VERIFICATION => "Verify",
+            SharedConfig.RequestStates.PENDING_APPROVAL => "Send for approval",
+            SharedConfig.RequestStates.PENDING_HOD_APPROVAL => "Send to head of department",
+            SharedConfig.RequestStates.PENDING_HR_VERIFICATION => "Send for HR verification",
+            SharedConfig.RequestStates.PENDING_HR_APPROVAL => "Send for HR approval",
+            SharedConfig.RequestStates.PENDING_HR_HEAD_APPROVAL => "Send for HR head approval",
+            SharedConfig.RequestStates.PENDING_SUPERVISOR_VERIFICATION => "Send for supervisor verification",
+            SharedConfig.RequestStates.PENDING_SUPERVISOR_APPROVAL => "Send for supervisor approval",
+            _ => $"Move to {state.StateName.Trim()}"
+        };
+    }
+
 
     private static async Task<List<int>> UserRolesAsync(HrmTeContext db, int userId, int organisationId)
     {
@@ -89,7 +183,7 @@ public partial class LeaveChangeService
     public async Task<ServiceResult> ExecuteLeaveActionAsync(int requestId, RequestActionSubmissionDto action)
         => await ExecuteRequestActionAsync(requestId, action, true);
 
-    private async Task<ServiceResult> ExecuteRequestActionAsync(int requestId, RequestActionSubmissionDto action, bool application)
+    private async Task<ServiceResult> ExecuteRequestActionAsync(int requestId, RequestActionSubmissionDto action, bool application, ReturnedLeaveApplicationDto? revision = null)
     {
         var user = await access.RequireContextAsync();
         if (action.Comments?.Length > 250) return ServiceResult.Fail("Comments must be 250 characters or fewer.");
@@ -110,6 +204,13 @@ public partial class LeaveChangeService
                 .SingleOrDefaultAsync(x => x.RequestId == requestId) : null;
             var subjectLeave = change?.Leave ?? applicationLink?.Leave
                 ?? throw new InvalidOperationException("The leave application was not found.");
+            if (application)
+            {
+                subjectLeave = await LockLeaveAsync(db, subjectLeave.LeaveId)
+                    ?? throw new InvalidOperationException("The leave application was not found.");
+                await db.Entry(subjectLeave).ReloadAsync();
+                await db.Entry(subjectLeave).Reference(x => x.Job).LoadAsync();
+            }
             var instance = await db.WfRequestInstances.SingleOrDefaultAsync(x => x.RequestId == requestId)
                 ?? throw new InvalidOperationException("The approval workflow has not started.");
             var allowed = await AllowedActionsAsync(db, request, subjectLeave, instance, user);
@@ -117,6 +218,12 @@ public partial class LeaveChangeService
                 ?? throw new UnauthorizedAccessException("This transition is not allowed for the current request status and your permissions.");
             if (selected.CommentRequired && string.IsNullOrWhiteSpace(action.Comments))
                 throw new InvalidOperationException("A comment is required for this action.");
+            if (application && request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE &&
+                action.ToStateId == SharedConfig.RequestStates.PENDING_VERIFICATION)
+            {
+                if (revision == null) throw new InvalidOperationException("Open the correction form to edit and resubmit this application.");
+                await ApplyReturnedApplicationEditsAsync(db, request, subjectLeave, revision, user);
+            }
             var stage = await db.WfRequestStageInstances.Include(x => x.Approvals).Include(x => x.WorkflowStage)
                 .SingleAsync(x => x.RequestStageInstanceId == instance.CurrentRequestStageInstanceId);
             var target = selected.ToStateId;
@@ -212,12 +319,13 @@ public partial class LeaveChangeService
     {
         var template = await db.WfWorkflowStages.AsNoTracking()
             .Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive && x.RequestStateId == target)
-            .OrderBy(x => x.StageOrder).FirstOrDefaultAsync() ?? previous.WorkflowStage;
+            .OrderBy(x => x.StageOrder).FirstOrDefaultAsync();
+        var processingStage = template ?? previous.WorkflowStage;
         var roles = await db.RequestTypesStatesRequiredRolesForProcessings.AsNoTracking()
             .Where(x => x.RequestTypeId == request.RequestTypeId && x.RequestStateId == target)
             .Select(x => x.RoleId).Distinct().ToListAsync();
         List<WfRequestApproval> assignments;
-        var namedApprovers = await db.WfStageApprovers.AsNoTracking()
+        var namedApprovers = template != null && await db.WfStageApprovers.AsNoTracking()
             .AnyAsync(x => x.WorkflowStageId == template.WorkflowStageId && x.ApproverType == "USER");
         if (roles.Count > 0 && !namedApprovers)
         {
@@ -232,16 +340,16 @@ public partial class LeaveChangeService
         else
         {
             var context = await workflowContext.ResolveAsync(db, request.RequestId, jobId);
-            var users = await approvers.ResolveAsync(template.WorkflowStageId, context);
+            var users = await approvers.ResolveAsync(processingStage.WorkflowStageId, context);
             assignments = users.GroupBy(x => x.UserId).Select(x => x.OrderBy(y => y.SequenceNumber).First())
                 .Select(x => new WfRequestApproval { ApproverUserId = x.UserId, StageApproverId = x.StageApproverId, ApprovalSequence = x.SequenceNumber, AssignedAt = now }).ToList();
         }
         if (assignments.Count == 0) throw new InvalidOperationException("No eligible processors are configured for the next status.");
-        var attempt = await db.WfRequestStageInstances.Where(x => x.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId && x.WorkflowStageId == template.WorkflowStageId)
+        var attempt = await db.WfRequestStageInstances.Where(x => x.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId && x.WorkflowStageId == processingStage.WorkflowStageId)
             .Select(x => (int?)x.AttemptNumber).MaxAsync() ?? 0;
         var next = new WfRequestStageInstance
         {
-            WorkflowRequestInstanceId = instance.WorkflowRequestInstanceId, WorkflowStageId = template.WorkflowStageId,
+            WorkflowRequestInstanceId = instance.WorkflowRequestInstanceId, WorkflowStageId = processingStage.WorkflowStageId,
             AttemptNumber = attempt + 1, StartedAt = now, Approvals = assignments
         };
         db.WfRequestStageInstances.Add(next);

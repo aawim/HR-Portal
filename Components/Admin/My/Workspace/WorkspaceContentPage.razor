@@ -1,73 +1,148 @@
-﻿@using HRM.Components.Admin.My.Workspace.Cards
+@using HRM.Components.Admin.My.Workspace.Cards
 @using HRM.Components.Admin.My.Workspace.Tabs
 @using HRM.Components.Cards
 @using HRM.Components.Layout
+@using HRM.DTOs.Leave
 @using HRM.Enum
+@using HRM.Services.Interfaces.Leave
+@inject ILeaveChangeService Leaves
+@inject ILogger<WorkspaceContentPage> Logger
+@inject HRM.Services.ToastService ToastService
 
-<WorkSpaceLayout Loading="@loading">
+<WorkSpaceLayout Loading="false">
     <Left>
-       
         <MyTeamCard />
-        <PendingLeaveCard />
+        <PendingLeaveCard Items="items" SelectedRequestId="selected?.RequestId"
+                          Loading="loading" Busy="busy" Message="loadError"
+                          OnSelected="SelectRequest" OnRefresh="RefreshAsync" />
     </Left>
-
     <Center>
-        <CalendarCard />
-        <TeamAttendanceCard />
-        <RecentActivityCard /> 
+        @if (selected != null)
+        {
+            <LeaveRequestDetails @key="selected.RequestId" Item="selected" Busy="@(busy || loading)"
+                                 Message="message" OnClose="CloseRequest" OnExecute="ExecuteAsync" />
+        }
+        else
+        {
+            @if (message != null) { <p role="status" class="rounded-lg border bg-white p-4 text-sm">@message</p> }
+            @switch (ActiveTab)
+            {
+                case WorkspaceTab.Calendar:
+                    <WorkspaceCalendarCard />
+                    break;
+                case WorkspaceTab.OrgDaily:
+                    <HRM.Components.Admin.Attendance.Attendance.OrganisationDaily />
+                    break;
+                case WorkspaceTab.ShiftWork:
+                    <ShiftAssignments />
+                    break;
+                case WorkspaceTab.AssignmentCreate:
+                    <AssignmentCreat />
+                    break;
+                case WorkspaceTab.Assignments:
+                    <Assignment />
+                    break;
+                default:
+                    <CalendarCard />
+                    <TeamAttendanceCard />
+                    <RecentActivityCard />
+                    break;
+            }
+        }
     </Center>
-
     <Right>
         <NotificationCard Title="Title" />
         <TodoCard />
     </Right>
-</WorkSpaceLayout>   
-
-
-    @if (ActiveTab == WorkspaceTab.Calendar)
-    {
-        <div class="grid grid-cols-1 gap-4">
-            <WorkspaceCalendarCard />
-        </div>
-    }
-    else if (ActiveTab == WorkspaceTab.ShiftWork)
-    {
-        <div class="grid grid-cols-1 gap-4">
-            <ShiftAssignments />
-        </div>
-    }
-    else if (ActiveTab == WorkspaceTab.AssignmentCreate)
-    {
-        <div class="grid grid-cols-1 gap-4">
-            <AssignmentCreat />
-        </div>
-    }
-    else if (ActiveTab == WorkspaceTab.Assignments)
-    {
-        <div class="grid grid-cols-1 gap-4">
-            <Assignment />
-        </div>
-    }
-          
+</WorkSpaceLayout>
 
 @code {
-    private bool loading = true;
-
-
     [Parameter] public string Title { get; set; } = "";
-
-    [Parameter]
-    public WorkspaceTab ActiveTab { get; set; }
-
-
-
-    protected override async Task OnInitializedAsync()
+    [Parameter] public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public int NavigationVersion { get; set; }
+    private int previousNavigationVersion;
+    protected override void OnParametersSet()
     {
- 
-       loading = false;
+        if (previousNavigationVersion == NavigationVersion) return;
+        previousNavigationVersion = NavigationVersion;
+        selected = null; message = null;
     }
-    private void OnTabChanged(WorkspaceTab tab)
+
+    private List<PendingLeaveRequestDto> items = new();
+    private PendingLeaveRequestDto? selected;
+    private bool loading, busy;
+    private string? message, loadError;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private void SelectRequest(PendingLeaveRequestDto item)
     {
-        ActiveTab = tab;
+        if (busy || loading) return;
+        selected = item;
+        message = null;
+    }
+
+    private void CloseRequest()
+    {
+        if (busy || loading) return;
+        selected = null;
+        message = null;
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (busy || loading) return;
+        message = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        loadError = null;
+        try
+        {
+            var id = selected?.RequestId;
+            items = await Leaves.GetPendingLeaveRequestsAsync();
+            selected = items.FirstOrDefault(x => x.RequestId == id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load pending leave requests.");
+            items.Clear();
+            selected = null;
+            loadError = "Leave requests could not be loaded. Please refresh to try again.";
+            ToastService.Error(loadError);
+        }
+        finally { loading = false; }
+    }
+
+    private async Task ExecuteAsync(RequestActionSubmissionDto action)
+    {
+        if (busy || loading || selected == null) return;
+        var requestId = selected.RequestId;
+        busy = true;
+        try
+        {
+            var result = await Leaves.ExecuteLeaveActionAsync(requestId, action);
+            if (!result.Success)
+                Logger.LogWarning("Leave request {RequestId} transition {FromState} to {ToState} refused: {Reason}",
+                    requestId, action.FromStateId, action.ToStateId, result.Message);
+            message = result.Message;
+            if (result.Success) ToastService.Success(result.Message);
+            else ToastService.Error(result.Message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save leave request {RequestId} transition {FromState} to {ToState}.",
+                requestId, action.FromStateId, action.ToStateId);
+            message = $"The status change for request #{requestId} failed. The server log contains the error details.";
+            ToastService.Error(message);
+        }
+        finally
+        {
+            await LoadAsync();
+            busy = false;
+        }
     }
 }

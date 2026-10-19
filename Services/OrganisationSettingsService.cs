@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public class OrganisationSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
+public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
 {
     private async Task<bool> GlobalAsync(UserContextDto user) => user.IsSuperAdministrator ||
         await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("UserOrganisations.Admin.View") || await access.HasPermissionAsync("UserOrganisations.Edit");

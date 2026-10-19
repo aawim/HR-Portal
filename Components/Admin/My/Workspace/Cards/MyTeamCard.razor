@@ -1,97 +1,62 @@
-﻿@using HRM.DTOs
-@using HRM.Services
+@using HRM.DTOs
 @using HRM.Services.Interfaces
-@using HRM.Components.Cards
-
 @inject ITeam TeamService
- 
+@inject ILogger<MyTeamCard> Logger
 @rendermode RenderMode.InteractiveServer
 
-
-<BaseCard Title="My Team">
-
-    @if (!Teams.Any())
+<section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <h2 class="text-sm font-semibold text-slate-800">My teams</h2>
+        <button type="button" disabled="@loading" class="text-xs text-blue-700 disabled:opacity-50" @onclick="FetchData">Refresh</button>
+    </div>
+    @if (loading)
     {
-        <div class="p-4 text-sm text-gray-500">
-            You are not assigned as a supervisor for any team.
-        </div>
+        <p role="status" class="p-4 text-xs text-slate-500">Loading team members…</p>
+    }
+    else if (error != null)
+    {
+        <p role="alert" class="p-4 text-xs text-red-700">@error</p>
+    }
+    else if (teams.Count == 0)
+    {
+        <p class="p-4 text-xs text-slate-500">You are not assigned as a supervisor for an active team.</p>
     }
     else
     {
-        <div class="space-y-4">
-
-            @foreach (var team in Teams)
+        <div class="max-h-[32rem] space-y-2 overflow-y-auto p-2">
+            @foreach (var team in teams)
             {
-                <div>
-
-                    <!-- Team Header -->
-                    <div class="px-2 py-2 bg-gray-50 border-b border-gray-200">
-                        <div class="text-sm font-semibold text-gray-800">
-                            @team.Name
-                        </div>
-
-                        @if (!string.IsNullOrWhiteSpace(team.NameDhivehi))
-                        {
-                            <div class="text-xs text-gray-500">
-                                @team.NameDhivehi
-                            </div>
-                        }
+                <section @key="team.TeamId" class="overflow-hidden rounded-lg border border-slate-100">
+                    <div class="bg-slate-50 px-3 py-2">
+                        <h3 class="break-words text-xs font-semibold text-slate-800">@team.Name</h3>
+                        <p class="mt-1 text-xs text-slate-500">@team.Staffs.Count @(team.Staffs.Count == 1 ? "member" : "members")</p>
+                        @if (!string.IsNullOrWhiteSpace(team.NameDhivehi)) { <p lang="dv" dir="rtl" class="mt-1 text-xs text-slate-500">@team.NameDhivehi</p> }
                     </div>
-
-
-               @*      <!-- Team Staff -->
-                    <div class="divide-y divide-gray-100">
-
+                    <ul class="divide-y divide-slate-100">
                         @foreach (var member in team.Staffs)
                         {
-                            <div class="flex items-center px-2 py-3">
-
-
-                                <div class="ml-3">
-
-                                    @if (member.IsSuperVisor)
-                                    {
-                                        <div class="text-sm font-medium text-gray-800">
-                                            @member.FullName (Supervisor)
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="text-sm font-medium text-gray-800">
-                                            @member.FullName
-                                        </div>
-                                    }
-
-                                 
-
-                                </div>
-
-                            </div>
+                            <li @key="member.StaffId" class="px-3 py-2">
+                                <p class="break-words text-sm font-medium text-slate-800">@member.FullName</p>
+                                <p class="mt-0.5 text-xs text-slate-500">@(member.IsSuperVisor ? "Supervisor" : "Team member")</p>
+                            </li>
                         }
-
-                    </div> *@
-
-                </div>
+                    </ul>
+                </section>
             }
-
         </div>
     }
+</section>
 
-</BaseCard>
 @code {
-    public List<TeamDto> Teams { get; set; } = new();
-    public List<TeamStaffDto> TeamMembers { get; set; } = new();
-    protected override async Task OnInitializedAsync()
-    {
-        await FetchData();
-    }
-
-
+    private List<TeamDto> teams = [];
+    private bool loading = true;
+    private string? error;
+    protected override async Task OnInitializedAsync() => await FetchData();
     private async Task FetchData()
     {
-        Teams = await TeamService.GetMyTeamsAsync();
+        loading = true; error = null;
+        try { teams = await TeamService.GetMyTeamsAsync(); }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load supervised teams."); error = "Team members could not be loaded. Please refresh."; }
+        finally { loading = false; }
     }
-
 }
-
-

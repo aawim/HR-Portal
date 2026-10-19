@@ -1,100 +1,39 @@
 @using HRM.Components.Cards
-@using HRM.Components.Pages.Online.Leave
 @using HRM.DTOs.Leave
-@using HRM.Services.Interfaces.Leave
-@inject ILeaveChangeService Leaves
-@inject ILogger<PendingLeaveCard> Logger
-@inject HRM.Services.ToastService ToastService
 
+@if (Loading || Items.Count > 0 || !string.IsNullOrWhiteSpace(Message))
+{
 <BaseCard Title="Pending Leave Requests">
     <div class="px-4 py-3 space-y-3">
-        @if (message != null) { <p role="status" class="text-sm">@message</p> }
-        @if (loading) { <p>Loading requests…</p> }
-        else if (items.Count == 0) { <p class="text-sm text-slate-500">No pending leave requests are assigned to you.</p> }
-        @foreach (var item in (showAll ? items : items.Take(5)))
+        @if (Message != null) { <p role="status" class="text-sm">@Message</p> }
+        @if (Loading) { <p>Loading requests…</p> }
+
+        @foreach (var item in (showAll ? Items : Items.Take(5)))
         {
-            <button type="button" disabled="@busy" class="w-full text-left border-b py-3 hover:bg-slate-50" @onclick="() => selected = item">
+            <button type="button" disabled="@(Busy || Loading)" aria-pressed="@(SelectedRequestId == item.RequestId)"
+                    class="w-full text-left border-b rounded px-2 py-3 hover:bg-slate-50 disabled:opacity-50 @(SelectedRequestId == item.RequestId ? "bg-blue-50 ring-1 ring-blue-200" : "")"
+                    @onclick="() => OnSelected.InvokeAsync(item)">
                 <div class="flex justify-between gap-3"><strong>@item.Applicant</strong><span class="text-xs text-amber-700">@item.Status</span></div>
                 <div class="text-sm text-slate-500">@item.LeaveType · @item.FromDate.ToString("dd MMM yyyy") – @item.ToDate.ToString("dd MMM yyyy") (@item.Duration days)</div>
                 <span class="text-xs text-blue-600">@item.Reference · View details</span>
             </button>
         }
-        <div class="flex justify-between gap-3 text-sm">
-            <span>@items.Count pending requests</span>
-            @if (items.Count > 5) { <button disabled="@busy" @onclick="() => showAll = !showAll">@(showAll ? "Show fewer" : "View all")</button> }
-            <button disabled="@(busy || loading)" @onclick="RefreshAsync">Refresh</button>
+        <div class="flex flex-wrap justify-between gap-3 text-sm">
+            <span>@Items.Count pending requests</span>
+            @if (Items.Count > 5) { <button type="button" disabled="@(Busy || Loading)" @onclick="() => showAll = !showAll">@(showAll ? "Show fewer" : "View all")</button> }
+            <button type="button" disabled="@(Busy || Loading)" @onclick="OnRefresh">Refresh</button>
         </div>
-        @if (selected != null)
-        {
-            <section aria-label="Leave request details" class="border rounded p-4 space-y-3">
-                <div class="flex justify-between gap-3">
-                    <h3 class="font-semibold">@selected.Reference — @selected.Applicant</h3>
-                    <button disabled="@busy" @onclick="() => selected = null">Close details</button>
-                </div>
-                <p>@selected.LeaveType · @selected.Status</p>
-                <p>@selected.FromDate.ToString("dd MMM yyyy") – @selected.ToDate.ToString("dd MMM yyyy") · @selected.Duration days</p>
-                <dl class="text-sm space-y-2">
-                    <dt class="font-medium">Reason</dt><dd>@selected.Reason</dd>
-                    <dt class="font-medium">Additional details</dt><dd class="whitespace-pre-wrap">@selected.Explanation</dd>
-                    <dt class="font-medium">Leave address</dt><dd>@selected.Address</dd>
-                    <dt class="font-medium">Contact</dt><dd>@selected.Contact</dd>
-                    <dt class="font-medium">Work handover</dt><dd>@selected.HandoverStatus</dd>
-                </dl>
-                <RequestActionButtons @key="selected.RequestId" Actions="selected.Actions" Disabled="busy" OnExecute="ExecuteAsync" />
-            </section>
-        }
     </div>
 </BaseCard>
+}
 
 @code {
-    private List<PendingLeaveRequestDto> items = new();
-    private PendingLeaveRequestDto? selected;
-    private bool loading, busy, showAll;
-    private string? message;
-    protected override async Task OnInitializedAsync() => await LoadAsync();
-    private async Task RefreshAsync() { message = null; await LoadAsync(); }
-    private async Task LoadAsync()
-    {
-        loading = true;
-        try
-        {
-            var id = selected?.RequestId;
-            items = await Leaves.GetPendingLeaveRequestsAsync();
-            selected = items.FirstOrDefault(x => x.RequestId == id);
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to load pending leave requests.");
-            items.Clear(); selected = null;
-            message = "Leave requests could not be loaded. Please refresh to try again.";
-            ToastService.Error(message);
-        }
-        finally { loading = false; }
-    }
-    private async Task ExecuteAsync(RequestActionSubmissionDto action)
-    {
-        if (busy || selected == null) return;
-        var requestId = selected.RequestId;
-        busy = true;
-        try
-        {
-            var result = await Leaves.ExecuteLeaveActionAsync(requestId, action);
-            if (!result.Success)
-                Logger.LogWarning("Leave request {RequestId} transition {FromState} to {ToState} refused: {Reason}",
-                    requestId, action.FromStateId, action.ToStateId, result.Message);
-            message = result.Message;
-            if (result.Success) ToastService.Success(result.Message);
-            else ToastService.Error(result.Message);
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to save leave request {RequestId} transition {FromState} to {ToState}.",
-                requestId, action.FromStateId, action.ToStateId);
-            message = $"The status change for request #{requestId} failed. The server log contains the error details.";
-            ToastService.Error(message);
-            await LoadAsync();
-        }
-        finally { busy = false; }
-    }
+    [Parameter] public List<PendingLeaveRequestDto> Items { get; set; } = new();
+    [Parameter] public int? SelectedRequestId { get; set; }
+    [Parameter] public bool Loading { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public EventCallback<PendingLeaveRequestDto> OnSelected { get; set; }
+    [Parameter] public EventCallback OnRefresh { get; set; }
+    private bool showAll;
 }

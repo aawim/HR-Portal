@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Leave;
 using HRM.DTOs.LeaveTypes;
@@ -392,7 +392,7 @@ namespace HRM.Services.Leave
         }
  
 
-        private static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType legacyType, int organisationId, DateTime fromDate)
+        internal static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType legacyType, int organisationId, DateTime fromDate)
         {
             var definitionId = ResolveApplicationDefinitionId(balance, legacyType, await GetApplicationMappingsAsync(db, organisationId));
             if (!definitionId.HasValue) return null;
@@ -494,7 +494,7 @@ namespace HRM.Services.Leave
                     var handoverError = await LeaveHandoverService.ValidateTasksAsync(db, handoverTasks, organisationId, context.BusinessEntityId, model.FromDate);
                     if (handoverError != null) return ServiceResult.Fail(handoverError);
                     handoverSupervisors = await LeaveHandoverService.SupervisorsAsync(db, jobId);
-                    if (handoverSupervisors.Count == 0) return ServiceResult.Fail("No active supervisor with a user account is configured for your department. Contact HR before applying.");
+                    if (handoverSupervisors.Count == 0) return ServiceResult.Fail("No active supervisor with a user account is configured for your team or department. Ask HR to assign one under Settings > Organisation > Teams and supervisors.");
                 }
                 var explanation = LeaveApplicationDetails.Build(model);
                 if (explanation.Length > 250)

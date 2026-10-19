@@ -1,4 +1,4 @@
-﻿@* @page "/online/leave/application" *@
+@* @page "/online/leave/application" *@
 @* @page "/online/leaves/{Page}" *@
 @using System.ComponentModel.DataAnnotations
 @using HRM.Components.Pages.Online.Leave.Cards
@@ -35,11 +35,11 @@
         <!-- Top: Equal two columns -->
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div class="p-1 rounded">
-                <LeaveCalendarCard />
+                <LeaveCalendarCard RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
             </div>
 
             <div class="p-1 rounded">
-                <LeaveCalendarCard />
+                <LeaveCalendarCard MonthOffset="1" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
             </div>
         </div>
 
@@ -97,6 +97,13 @@
     public LeaveApplicationState LeaveState { get; set; } = default!;
 
      // ===== TAB CONTROL =====
+    private int calendarRefresh;
+    private void CalendarChanged() => calendarRefresh++;
+    private void UsePlan(LeaveCalendarEntry plan)
+    {
+        LeaveState.Model.FromDate = plan.From; LeaveState.Model.ToDate = plan.To;
+        LeaveState.Model.Duration = (plan.To.Date - plan.From.Date).Days + 1;
+    }
     private string activeTab = "LeaveInfo";
     // private int jobId = await UserService.GetJobID();
 
@@ -205,6 +212,7 @@
             }
 
             ToastService.Success(result.Message);
+            calendarRefresh++;
 
             // Optional: reset form after successful submission
             // LeaveState.Model = new LeaveApplicationDto();

@@ -1,104 +1,45 @@
-﻿using HRM.DTOs;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.Models;
 using HRM.Services.Interfaces;
-using Microsoft.AspNetCore.Rewrite;
 using Microsoft.EntityFrameworkCore;
- 
 
-namespace HRM.Services
+namespace HRM.Services;
+
+public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access) : ITeam
 {
-    public class TeamService : ITeam
+    public async Task<List<TeamDto>> GetMyTeamMembersAsync(int teamId)
+        => (await GetMyTeamsAsync()).Where(x => x.TeamId == teamId).ToList();
+
+    public async Task<List<TeamDto>> GetMyTeamsAsync()
     {
-
-        private readonly IDbContextFactory<HrmTeContext> _context;
-        private readonly IUserAccessService _access;
-
-
-
-        public TeamService(
-            IDbContextFactory<HrmTeContext> factory,IUserAccessService userAccessService
-            )
-        {
-            _context = factory;
-
-            _access = userAccessService;
-
- 
-        }
-
-        public Task<List<TeamDto>> GetMyTeamMembersAsync(int TeamId)
-        {
-            throw new NotImplementedException();
-        }
-
-
-    
-
-           
-
-
-
-        public async Task<List<TeamDto>> GetMyTeamsAsync()
-        {
-        
-            var context = await _access.RequireContextAsync();
-            using var db = await _context.CreateDbContextAsync();
-
-
-            // 1. Get teams where current user is supervisor
-            var myTeamIds = await db.TeamStaffs
-                .Where(ts =>
-                    ts.StaffId == context.IndividualId &&
-                    ts.IsSuperVisor &&
-                    ts.IsValid)
-                .Select(ts => ts.TeamId)
-                .Distinct()
-                .ToListAsync();
-
-
-            if (!myTeamIds.Any())
-                return new List<TeamDto>();
-
-
-            // 2. Get teams and their staff
-            var teams = await db.Teams
-                .Where(t =>
-                    myTeamIds.Contains(t.TeamId) &&
-                    t.IsValid == true)
-                .Select(t => new TeamDto
-                {
-                    TeamId = t.TeamId,
-                    Name = t.Name,
-                   // NameDhivehi = t.NameDhivehi,
-
-                    Staffs = t.TeamStaffs
-                        .Where(ts => ts.IsValid)
-                        .Select(ts => new TeamStaffDto
-                        {
-                            StaffId = ts.StaffId,
-
-                            IsSuperVisor = ts.IsSuperVisor,
-
-                            FullName =
-                                ts.Staff.Individual.FirstNameEnglish
-                                + " "
-                                + ts.Staff.Individual.LastNameEnglish,
-
-                             //=
-                             //   ts.Staff.Individual.FirstNameDhivehi
-                             //   + " "
-                             //   + ts.Staff.Individual.LastNameDhivehi
-                        })
-                        .ToList()
-                })
-                .ToListAsync();
-
-
-            return teams;
-
-
-
-        }
+        var actor = await access.RequireContextAsync();
+        if (actor.ActiveJob == null) return [];
+        await using var db = await factory.CreateDbContextAsync();
+        var today = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date;
+        var organisationId = await db.Jobs.Where(x => x.JobId == actor.ActiveJob.JobId && x.IndividualID == actor.IndividualId &&
+            x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today)
+            .Select(x => (int?)x.OrganisationID).SingleOrDefaultAsync();
+        if (organisationId == null) return [];
+        var teamIds = db.TeamStaffs.Where(x => x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid &&
+            x.StartDate <= today && (x.EndDate == null || x.EndDate >= today)).Select(x => x.TeamId);
+        var teams = await db.Teams.AsNoTracking().Where(x => teamIds.Contains(x.TeamId) && x.OrganisationId == organisationId &&
+            x.IsValid == true && (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
+            .OrderBy(x => x.Name).Select(x => new TeamDto
+            {
+                TeamId = x.TeamId, Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
+                Staffs = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today) &&
+                    db.Jobs.Any(j => j.IndividualID == m.StaffId && j.OrganisationID == organisationId &&
+                        j.JobStateId == SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today))
+                    .Select(m => new TeamStaffDto
+                    {
+                        StaffId = m.StaffId, IsSuperVisor = m.IsSuperVisor,
+                        FullName = (m.Staff.Individual.FirstNameEnglish + " " + (m.Staff.Individual.MiddleNameEnglish ?? "") + " " + (m.Staff.Individual.LastNameEnglish ?? "")).Trim()
+                    }).ToList()
+            }).ToListAsync();
+        foreach (var team in teams)
+            team.Staffs = team.Staffs.GroupBy(x => x.StaffId).Select(x => x.OrderByDescending(m => m.IsSuperVisor).First())
+                .OrderByDescending(x => x.IsSuperVisor).ThenBy(x => x.FullName).ToList();
+        return teams;
     }
 }

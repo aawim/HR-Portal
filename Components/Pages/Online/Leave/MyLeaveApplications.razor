@@ -1,0 +1,164 @@
+@using HRM.DTOs.Leave
+@using HRM.Helpers
+@using HRM.Models.Archives
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.Leave
+@using HRM.Services.State
+@inject ILeaveChangeService Applications
+@inject IGeographyService Geography
+@inject HRM.Services.ToastService Toast
+@inject ILogger<MyLeaveApplications> Logger
+
+<div class="space-y-5">
+    @if (!EditorOnly)
+    {
+    <div class="flex justify-between items-start gap-3">
+        <div><h2 class="text-xl font-semibold">My leave applications</h2><p class="text-sm text-slate-500">Review your requests and correct applications returned as Incomplete.</p></div>
+        <button type="button" class="border rounded px-3 py-2 text-sm" disabled="@busy" @onclick="RefreshAsync">Refresh</button>
+    </div>
+    }
+    @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
+    @if (EditorOnly && editor == null && !busy) { <button type="button" class="text-sm text-blue-700" @onclick="CloseEditor">Close correction</button> }
+    @if (busy && editor == null) { <p role="status">Loading applications…</p> }
+    @if (editor != null)
+    {
+        <section class="border rounded-xl p-4 space-y-4">
+            <div class="flex justify-between gap-3">
+                <div><h3 class="font-semibold">Correct @editor.Reference</h3><p class="text-sm text-slate-500">@editor.LeaveType</p></div>
+                <button type="button" disabled="@busy" class="text-sm text-blue-700" @onclick="CloseEditor">Close</button>
+            </div>
+            <div role="status" class="rounded-lg border border-amber-200 bg-amber-50 p-4">
+                <h4 class="font-semibold text-amber-900">Reason for return</h4>
+                <p class="mt-1 whitespace-pre-wrap break-words text-sm text-amber-900">@editor.ReturnReason</p>
+            </div>
+            <EditForm Model="editor" OnValidSubmit="ResubmitAsync" @key="editor">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                <fieldset disabled="@busy" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <label class="block text-sm">From date<InputDate class="mt-1 w-full border rounded p-2" @bind-Value="editor.FromDate" /></label>
+                        <label class="block text-sm">To date<InputDate class="mt-1 w-full border rounded p-2" @bind-Value="editor.ToDate" /></label>
+                    </div>
+                    <p class="text-sm text-slate-500">@RevisedDays leave days. The reserved balance will be adjusted for the revised dates.</p>
+                    <label class="block text-sm">Leave reason
+                        <InputSelect class="mt-1 w-full border rounded p-2" @bind-Value="editor.ReasonId">
+                            <option value="0">Select a reason</option>
+                            @foreach (var reason in editor.Reasons) { <option value="@reason.Id">@reason.Name</option> }
+                        </InputSelect>
+                    </label>
+                    <label class="block text-sm">Explanation and additional details
+                        <InputTextArea class="mt-1 w-full border rounded p-2" rows="4" maxlength="250" @bind-Value="editor.Explanation" />
+                    </label>
+                    <label class="block text-sm">Country
+                        <InputSelect class="mt-1 w-full border rounded p-2" @bind-Value="editor.CountryId">
+                            <option value="">Select a country</option>
+                            @foreach (var country in countries) { <option value="@country.CountryId">@country.NameEnglish</option> }
+                        </InputSelect>
+                    </label>
+                    <label class="block text-sm">Leave address<InputTextArea class="mt-1 w-full border rounded p-2" rows="2" maxlength="250" @bind-Value="editor.Address" /></label>
+                    <label class="block text-sm">Contact number<InputText class="mt-1 w-full border rounded p-2" maxlength="250" @bind-Value="editor.ContactNumber" /></label>
+                    <div class="space-y-2 rounded-lg border p-3">
+                        <h4 class="font-medium">Work handover</h4>
+                        <p class="text-sm text-slate-500">Update assigned tasks if needed. Tasks are required when your revised leave exceeds the policy threshold. Handover approvals restart when you resubmit.</p>
+                        <HandoverTaskEditor Tasks="editor.HandoverTasks" Recipients="editor.Recipients" />
+                    </div>
+                    <div class="flex flex-wrap gap-3">
+                        <button type="submit" class="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-50" disabled="@(busy || RevisedDays <= 0)">@(busy ? "Resubmitting…" : "Save changes and resubmit")</button>
+                        <button type="button" class="border rounded px-4 py-2" @onclick="CloseEditor">Cancel editing</button>
+                    </div>
+                    <p class="text-xs text-slate-500">Resubmission sends this application back to Pending Verification.</p>
+                </fieldset>
+            </EditForm>
+        </section>
+    }
+    @if (!EditorOnly)
+    {
+    @if (!busy && items.Count == 0) { <p class="text-sm text-slate-500">You have no leave applications.</p> }
+    <div class="space-y-3">
+        @foreach (var item in items)
+        {
+            <article @key="item.RequestId" class="rounded-lg border p-4 space-y-2">
+                <div class="flex flex-wrap justify-between gap-2"><strong>@item.Reference · @item.LeaveType</strong><span class="text-sm text-slate-600">@item.Status</span></div>
+                <p class="text-sm">@item.FromDate.ToString("dd MMM yyyy") – @item.ToDate.ToString("dd MMM yyyy") · @item.Duration days</p>
+                @if (item.HasHandover)
+                {
+                    <a class="inline-block text-sm text-blue-700 underline" href="@($"/online/leave-handovers/{item.LeaveId}")">View work handover</a>
+                }
+                @if (item.CanEdit)
+                {
+                    <button type="button" class="rounded bg-blue-600 text-white px-3 py-2 text-sm disabled:opacity-50" disabled="@busy" @onclick="() => EditAsync(item.RequestId)">Edit and resubmit</button>
+                }
+            </article>
+        }
+    </div>
+    }
+</div>
+
+@code {
+    [Parameter] public LeaveApplicationState? LeaveState { get; set; }
+    [Parameter] public bool EditorOnly { get; set; }
+    [Parameter] public int? EditRequestId { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    private int? lastEditRequestId;
+    private List<MyLeaveApplicationDto> items = [];
+    private List<Country> countries = [];
+    private ReturnedLeaveApplicationDto? editor;
+    private bool busy;
+    private string? message;
+    private int RevisedDays => editor == null || editor.FromDate == default || editor.ToDate == default ||
+        editor.ToDate.Date == DateTime.MaxValue.Date ? 0 : LeaveApplicationDates.Count(editor.FromDate, editor.ToDate, editor.IncludeHolidays);
+    protected override async Task OnInitializedAsync()
+    {
+        if (!EditorOnly) await RefreshAsync();
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (EditRequestId.HasValue && EditRequestId != lastEditRequestId)
+        {
+            lastEditRequestId = EditRequestId;
+            await EditAsync(EditRequestId.Value);
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (busy) return;
+        busy = true; message = null; editor = null;
+        try { items = await Applications.GetMyApplicationsAsync(); }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load applicant leave requests."); message = "Your leave applications could not be loaded. Please refresh to try again."; }
+        finally { busy = false; }
+    }
+    private async Task EditAsync(int requestId)
+    {
+        if (busy) return;
+        busy = true; message = null; editor = null;
+        try
+        {
+            var application = await Applications.GetReturnedApplicationAsync(requestId);
+            if (countries.Count == 0) countries = await Geography.GetCountriesAsync();
+            editor = application;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { message = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load returned leave request {RequestId}.", requestId); message = "The correction form could not be loaded. Please try again."; }
+        finally { busy = false; }
+    }
+    private async Task CloseEditor() { if (!busy) { editor = null; message = null; await OnClose.InvokeAsync(); } }
+    private async Task ResubmitAsync()
+    {
+        if (busy || editor == null) return;
+        busy = true; message = null;
+        try
+        {
+            var result = await Applications.ResubmitApplicationAsync(editor);
+            message = result.Message;
+            if (!result.Success) { Toast.Warning(result.Message); return; }
+            editor = null;
+            Toast.Success(result.Message);
+            if (EditorOnly) { await OnSaved.InvokeAsync(); return; }
+            items = await Applications.GetMyApplicationsAsync();
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Could not resubmit returned leave request."); message = "The correction could not be saved. Refresh to check the current request status before trying again."; }
+        finally { busy = false; }
+    }
+}

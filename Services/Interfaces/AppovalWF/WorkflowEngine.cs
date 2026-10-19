@@ -164,6 +164,15 @@ namespace HRM.Services.Interfaces.AppovalWF
                 throw new InvalidOperationException(
                     "The request does not exist.");
 
+            // A final request or leave must not be restarted as a pending workflow.
+            if (requestStateId.Value is HRM.Components.Shared.SharedConfig.RequestStates.APPROVED
+                or HRM.Components.Shared.SharedConfig.RequestStates.REJECTED
+                or HRM.Components.Shared.SharedConfig.RequestStates.CANCELLED ||
+                await db.LeaveRequests.AsNoTracking().AnyAsync(x => x.RequestId == requestId &&
+                    (x.Leave.LeaveStateId == HRM.Components.Shared.SharedConfig.LeaveStates.APPROVED ||
+                     x.Leave.LeaveStateId == HRM.Components.Shared.SharedConfig.LeaveStates.REJECTED ||
+                     x.Leave.LeaveStateId == HRM.Components.Shared.SharedConfig.LeaveStates.CANCELLED), cancellationToken))
+                throw new InvalidOperationException("A closed request or leave application cannot start an approval workflow.");
             // Prevent duplicate workflow initiation.
             var existingInstance = await ScalarAsync<long?>(
                 connection,
@@ -532,11 +541,6 @@ namespace HRM.Services.Interfaces.AppovalWF
             await db.SaveChangesAsync(cancellationToken);
             await transaction.CommitAsync(cancellationToken);
         }
-
-
-
-
-
 
 
 

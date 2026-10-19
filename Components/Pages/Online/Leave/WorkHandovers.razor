@@ -1,0 +1,148 @@
+@page "/online/leave-handovers"
+@page "/online/leave-handovers/{LeaveId:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using HRM.DTOs.Leave
+@using HRM.Services.Leave
+@inject LeaveHandoverService Handovers
+@inject HRM.Services.ToastService Toast
+@inject ILogger<WorkHandovers> Logger
+
+<PageTitle>Work handovers</PageTitle>
+<div class="mx-auto max-w-4xl space-y-5 p-4">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+        <div><h1 class="text-xl font-semibold">@(AssignedOnly ? "Work handovers assigned to you" : "Work handovers")</h1><p class="text-sm text-slate-500">Review assigned tasks and track employee and supervisor approvals.</p></div>
+        <div class="flex gap-3 text-sm">
+            <a class="text-blue-700" href="/online">Dashboard</a>
+            @if (LeaveId.HasValue) { <a class="text-blue-700" href="@(AssignedOnly ? "/online/leave-handovers?assigned=true" : "/online/leave-handovers")">@(AssignedOnly ? "All assigned handovers" : "All my handovers")</a> }
+            <button type="button" disabled="@busy" class="text-blue-700 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
+        </div>
+    </div>
+    @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
+    @if (busy && items.Count == 0) { <p role="status">Loading handovers…</p> }
+    else if (!busy && items.Count == 0) { <p class="text-sm text-slate-500">@(LeaveId.HasValue ? "This handover was not found or is not available to you." : (AssignedOnly ? "No handovers are waiting for your approval." : "No handovers are assigned to you or linked to your leave applications."))</p> }
+    @foreach (var item in items)
+    {
+        <section @key="item.LeaveId" class="rounded-xl border bg-white p-5 space-y-4">
+            <div class="flex flex-wrap justify-between gap-3">
+                <div><h2 class="font-semibold">@item.Reference · @item.Applicant</h2><p class="text-sm text-slate-500">@item.Dates</p></div>
+                <p class="text-sm font-medium text-indigo-700">@item.Status</p>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(item.SupervisorComments))
+            {
+                <div class="rounded bg-amber-50 p-3 text-sm"><strong>Supervisor comments</strong><p class="mt-1 whitespace-pre-wrap break-words">@item.SupervisorComments</p></div>
+            }
+            @foreach (var task in item.Tasks)
+            {
+                <div @key="task.Id" class="rounded-lg border p-4 space-y-2">
+                    <div class="flex flex-wrap justify-between gap-2"><h3 class="font-medium">@task.Employee</h3><span class="text-sm text-slate-500">@task.Decision</span></div>
+                    <p class="whitespace-pre-wrap break-words text-sm">@task.Tasks</p>
+                    @if (!string.IsNullOrWhiteSpace(task.Comments)) { <p class="whitespace-pre-wrap break-words text-sm text-amber-800">Comment: @task.Comments</p> }
+                    @if (task.CanDecide)
+                    {
+                        <div class="flex flex-wrap gap-2 pt-2">
+                            <button type="button" disabled="@busy" class="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" @onclick="() => Choose(item, task.Id, true)">Verify and approve task</button>
+                            <button type="button" disabled="@busy" class="rounded border border-amber-300 px-3 py-2 text-sm text-amber-800 disabled:opacity-50" @onclick="() => Choose(item, task.Id, false)">Return for correction</button>
+                        </div>
+                    }
+                </div>
+            }
+            @if (item.CanSupervise)
+            {
+                <div class="rounded-lg bg-indigo-50 p-4 space-y-3">
+                    <p class="text-sm">All assigned employees have approved their tasks. You can now review the complete handover.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <button type="button" disabled="@busy" class="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" @onclick="() => Choose(item, null, true)">Approve handover as supervisor</button>
+                        <button type="button" disabled="@busy" class="rounded border border-amber-300 px-3 py-2 text-sm text-amber-800 disabled:opacity-50" @onclick="() => Choose(item, null, false)">Return handover for correction</button>
+                    </div>
+                </div>
+            }
+            @if (decision?.LeaveId == item.LeaveId)
+            {
+                <div class="rounded-lg border bg-slate-50 p-4 space-y-3">
+                    <h3 class="font-semibold">@(approve ? "Confirm approval" : "Return for correction")</h3>
+                    <label class="block text-sm">Comment @(approve ? "(optional)" : "(required)")
+                        <textarea disabled="@busy" class="mt-1 w-full rounded border p-2" rows="3" maxlength="250" @bind="comment" @bind:event="oninput"></textarea>
+                    </label>
+                    <div class="flex gap-3">
+                        <button type="button" disabled="@(busy || (!approve && string.IsNullOrWhiteSpace(comment)))" class="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" @onclick="SaveDecisionAsync">@(busy ? "Saving…" : "Confirm decision")</button>
+                        <button type="button" disabled="@busy" class="rounded border px-3 py-2 text-sm" @onclick="CloseDecision">Cancel</button>
+                    </div>
+                </div>
+            }
+            @if (revision?.LeaveId == item.LeaveId)
+            {
+                <fieldset disabled="@busy" class="rounded-lg border p-4 space-y-3">
+                    <legend class="px-2 font-semibold">Revise your handover</legend>
+                    <p class="text-sm text-slate-500">Resubmitting tasks restarts employee and supervisor approvals.</p>
+                    <HandoverTaskEditor Tasks="revisedTasks" Recipients="item.Recipients" />
+                    <button type="button" class="rounded bg-blue-600 px-3 py-2 text-sm text-white disabled:opacity-50" disabled="@(busy || revisedTasks.Count == 0)" @onclick="SaveRevisionAsync">Save revised handover</button>
+                    <button type="button" class="ml-3 text-sm text-blue-700" @onclick="CloseRevision">Cancel</button>
+                </fieldset>
+            }
+            else if (item.CanRevise)
+            {
+                <button type="button" disabled="@busy" class="text-sm text-blue-700 disabled:opacity-50" @onclick="() => StartRevision(item)">Revise my handover</button>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    [Parameter] public int? LeaveId { get; set; }
+    [SupplyParameterFromQuery(Name = "assigned")] public bool AssignedOnly { get; set; }
+    private List<LeaveHandoverInboxItem> items = [];
+    private LeaveHandoverInboxItem? decision, revision;
+    private List<LeaveHandoverTaskInput> revisedTasks = [];
+    private int? taskId;
+    private bool approve, busy;
+    private string? comment, message;
+    protected override async Task OnParametersSetAsync() => await RefreshAsync();
+    private async Task RefreshAsync()
+    {
+        if (busy) return;
+        busy = true; decision = null; revision = null;
+        try { items = AssignedOnly ? (await Handovers.GetAssignedInboxAsync()).Where(x => !LeaveId.HasValue || x.LeaveId == LeaveId.Value).ToList() : await Handovers.InboxAsync(LeaveId); }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load work handovers."); items.Clear(); message = "Work handovers could not be loaded. Please refresh to try again."; }
+        finally { busy = false; }
+    }
+    private void Choose(LeaveHandoverInboxItem item, int? id, bool approval)
+    {
+        if (busy) return;
+        decision = item; taskId = id; approve = approval; comment = null; revision = null; message = null;
+    }
+    private void CloseDecision() { if (!busy) decision = null; }
+    private void StartRevision(LeaveHandoverInboxItem item)
+    {
+        if (busy || !item.CanRevise) return;
+        revision = item; decision = null; message = null;
+        revisedTasks = item.Tasks.Select(x => new LeaveHandoverTaskInput { JobId = x.JobId, Tasks = x.Tasks }).ToList();
+    }
+    private void CloseRevision() { if (!busy) revision = null; }
+    private async Task SaveDecisionAsync()
+    {
+        if (busy || decision == null || (!approve && string.IsNullOrWhiteSpace(comment))) return;
+        busy = true;
+        try
+        {
+            var result = await Handovers.DecideAsync(decision.LeaveId, decision.Revision, taskId, approve, comment);
+            message = result.Message;
+            if (result.Success) Toast.Success(result.Message); else Toast.Warning(result.Message);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Could not save handover decision."); message = "The decision could not be saved. Refresh to check its current status."; Toast.Error(message); }
+        finally { busy = false; await RefreshAsync(); }
+    }
+    private async Task SaveRevisionAsync()
+    {
+        if (busy || revision == null) return;
+        busy = true;
+        try
+        {
+            var result = await Handovers.ReviseAsync(revision.LeaveId, revision.Revision, revisedTasks);
+            message = result.Message;
+            if (result.Success) Toast.Success(result.Message); else Toast.Warning(result.Message);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Could not revise work handover."); message = "The revision could not be saved. Refresh to check its current status."; Toast.Error(message); }
+        finally { busy = false; await RefreshAsync(); }
+    }
+}

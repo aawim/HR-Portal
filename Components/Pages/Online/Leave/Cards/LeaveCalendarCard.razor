@@ -1,285 +1,143 @@
-﻿<div class="bg-white rounded-xl border border-slate-200 shadow-sm">
+@using HRM.DTOs.Leave
+@inject HRM.Services.Leave.LeaveCalendarService CalendarService
+@inject ILogger<LeaveCalendarCard> Logger
 
-
-    <!-- Header -->
-    <div class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
-
-
-        <div>
-            <h3 class="text-sm font-semibold text-slate-800">
-                Leave Calendar
-            </h3>
-
-            <p class="text-xs text-slate-500">
-                Check your availability
-            </p>
+<section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+        <div><h3 class="text-sm font-semibold text-slate-800">@(IncludeTeam ? "My and team leave calendar" : "My leave calendar")</h3><p class="text-xs text-slate-500">Plans and submitted leave</p></div>
+        <div class="flex items-center gap-2">
+            <button type="button" aria-label="Previous month" disabled="@busy" class="rounded p-2 hover:bg-slate-100 disabled:opacity-50" @onclick="() => MoveAsync(-1)">‹</button>
+            <span class="text-sm font-semibold">@month.ToString("MMM yyyy")</span>
+            <button type="button" aria-label="Next month" disabled="@busy" class="rounded p-2 hover:bg-slate-100 disabled:opacity-50" @onclick="() => MoveAsync(1)">›</button>
+            <button type="button" disabled="@busy" class="text-xs text-blue-700 disabled:opacity-50" @onclick="LoadAsync">Refresh</button>
         </div>
-
-
-        <div class="flex items-center gap-1">
-
-            <button @onclick="PreviousMonth"
-                    class="w-7 h-7 rounded-md hover:bg-slate-100">
-                <i class="fas fa-chevron-left text-xs"></i>
-            </button>
-
-
-            <span class="text-sm font-semibold text-slate-700">
-                @CurrentMonth.ToString("MMMM yyyy")
-            </span>
-
-
-            <button @onclick="NextMonth"
-                    class="w-7 h-7 rounded-md hover:bg-slate-100">
-                <i class="fas fa-chevron-right text-xs"></i>
-            </button>
-
-        </div>
-
-
     </div>
-
-
-
-    <!-- Calendar -->
-    <div class="p-1">
-
-
-        <!-- Week Names -->
-        <div class="grid grid-cols-7 text-center mb-2">
-
-            @foreach (var day in WeekDays)
+    <div class="space-y-3 p-3">
+        @if (message != null) { <p role="status" class="rounded-lg bg-slate-50 p-2 text-xs text-slate-700">@message</p> }
+        @if (busy) { <p role="status" class="text-xs text-slate-500">Loading calendar…</p> }
+        <div class="grid grid-cols-7 gap-1 text-center text-xs">
+            @foreach (var name in weekDays) { <span class="py-1 font-medium text-slate-500">@name</span> }
+            @for (var i = 0; i < (int)month.DayOfWeek; i++) { <span></span> }
+            @for (var i = 1; i <= DateTime.DaysInMonth(month.Year, month.Month); i++)
             {
-                <span class="text-xs font-medium text-slate-400">
-                    @day
-                </span>
+                var day = month.AddDays(i - 1);
+                var events = OnDay(day).ToList();
+                <button type="button" disabled="@busy" aria-label="@(day.ToString("dd MMM yyyy") + ", " + events.Count + " leave entries")" aria-pressed="@(selected == day)" class="@DayClass(day, events)" @onclick="() => Select(day)">
+                    <span>@i</span>
+                    <span class="flex h-1.5 justify-center gap-0.5" aria-hidden="true">
+                        @if (events.Any(x => x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-amber-500"></span> }
+                        @if (events.Any(x => !x.IsPlan)) { <span class="h-1.5 w-1.5 rounded-full bg-blue-600"></span> }
+                    </span>
+                    @foreach (var boundary in events.Where(x => x.From.Date == day.Date || x.To.Date == day.Date))
+                    {
+                        var label = boundary.From.Date == boundary.To.Date ? "Starts and ends" : boundary.From.Date == day.Date ? "Starts" : "Ends";
+                        <span class="@(boundary.IsPlan ? "w-full break-words rounded bg-amber-50 px-0.5 text-[10px] leading-tight text-amber-800" : "w-full break-words rounded bg-blue-50 px-0.5 text-[10px] leading-tight text-blue-800")"
+                              title="@(boundary.Person + " · " + label + " · " + boundary.Title)">
+                            @boundary.Person.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
+                            <span class="sr-only">@label</span>
+                        </span>
+                    }
+                </button>
             }
-
         </div>
-
-
-
-        <!-- Dates -->
-        <div class="grid grid-cols-7 gap-1">
-
-
-            @foreach (var day in CalendarDays)
-            {
-
-                @if (day == null)
+        <div class="flex flex-wrap gap-3 text-xs text-slate-500"><span>🟠 Planned</span><span>🔵 Submitted / approved</span><span>Outline: today</span></div>
+        @if (selected.HasValue)
+        {
+            <div class="space-y-2 border-t border-slate-100 pt-3">
+                <h4 class="text-sm font-semibold">@selected.Value.ToString("dd MMM yyyy")</h4>
+                @if (!OnDay(selected.Value).Any()) { <p class="text-xs text-slate-500">No leave entries for this date.</p> }
+                @foreach (var entry in OnDay(selected.Value))
                 {
-                    <div></div>
-                }
-                else
-                {
-
-                    <div class="@GetDayClass(day.Value)"
-                         title="@GetTooltip(day.Value)">
-
-                        @day.Value.Day
-
+                    <div class="rounded-lg border border-slate-200 p-2 text-xs">
+                        <p class="break-words font-semibold text-slate-800">@(entry.IsOwner ? "You" : entry.Person) · @entry.Title</p>
+                        <p class="mt-1 text-slate-500">@entry.Status · @entry.From.ToString("dd MMM") – @entry.To.ToString("dd MMM yyyy")</p>
+                        @if (entry.IsPlan && entry.IsOwner)
+                        {
+                            @if (removeId == entry.Id)
+                            {
+                                <p class="mt-2">Remove this plan?</p>
+                                <button type="button" disabled="@busy" class="mr-2 mt-1 text-red-700" @onclick="() => RemoveAsync(entry.Id)">Confirm removal</button>
+                                <button type="button" disabled="@busy" class="text-slate-600" @onclick="() => removeId = null">Cancel</button>
+                            }
+                            else { <button type="button" disabled="@busy" class="mt-2 text-red-700" @onclick="() => removeId = entry.Id">Remove plan</button> }
+                        }
+                        @if (entry.IsPlan && entry.IsOwner && OnPlanSelected.HasDelegate)
+                        { <button type="button" disabled="@busy" class="ml-2 mt-2 text-blue-700" @onclick="() => OnPlanSelected.InvokeAsync(entry)">Use dates in application</button> }
                     </div>
-
                 }
-
-            }
-
-
-        </div>
-
-
-
+            </div>
+        }
+        @if (AllowPlanning)
+        {
+            <details class="rounded-lg border border-slate-200 p-3">
+                <summary class="cursor-pointer text-sm font-medium text-blue-700">Plan leave</summary>
+                <div class="mt-3 space-y-2">
+                    <label class="block text-xs text-slate-600">Title<input class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" maxlength="100" disabled="@busy" @bind="title" /></label>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="block text-xs text-slate-600">From<input type="date" class="mt-1 w-full min-w-0 rounded border border-slate-300 p-2 text-sm" disabled="@busy" @bind="from" @bind:format="yyyy-MM-dd" /></label>
+                        <label class="block text-xs text-slate-600">To<input type="date" class="mt-1 w-full min-w-0 rounded border border-slate-300 p-2 text-sm" disabled="@busy" @bind="to" @bind:format="yyyy-MM-dd" /></label>
+                    </div>
+                    <p class="text-xs text-slate-500">Visible to your current supervisors. Planning does not submit an application or deduct leave balance.</p>
+                    <button type="button" disabled="@busy" class="rounded bg-blue-600 px-3 py-2 text-xs text-white disabled:opacity-50" @onclick="SaveAsync">Save plan</button>
+                </div>
+            </details>
+        }
     </div>
-
-
-
-    <!-- Legend -->
-    <div class="flex gap-4 px-4 pb-4 text-xs">
-
-
-        <div class="flex items-center gap-1">
-
-            <span class="w-3 h-3 rounded bg-blue-500"></span>
-
-            Leave
-
-        </div>
-
-
-        <div class="flex items-center gap-1">
-
-            <span class="w-3 h-3 rounded bg-red-200"></span>
-
-            Weekend
-
-        </div>
-
-
-        <div class="flex items-center gap-1">
-
-            <span class="w-3 h-3 rounded bg-green-500"></span>
-
-            Today
-
-        </div>
-
-
-    </div>
-
-
-</div>
-
-
+</section>
 
 @code {
-
-
-    private DateTime CurrentMonth = DateTime.Today;
-
-
-    private List<string> WeekDays =
-        [
-        "Sun",
-        "Mon",
-        "Tue",
-        "Wed",
-        "Thu",
-        "Fri",
-        "Sat"
-    ];
-
-
-
-    // Dummy leave dates
-    private List<DateTime> LeaveDates =
-        [
-        DateTime.Today.AddDays(5),
-        DateTime.Today.AddDays(6),
-        DateTime.Today.AddDays(7)
-    ];
-
-
-
-    private List<DateTime?> CalendarDays =>
-        GenerateCalendar();
-
-
-
-    private List<DateTime?> GenerateCalendar()
+    [Parameter] public int MonthOffset { get; set; }
+    [Parameter] public bool IncludeTeam { get; set; }
+    [Parameter] public bool AllowPlanning { get; set; } = true;
+    [Parameter] public int RefreshKey { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback<LeaveCalendarEntry> OnPlanSelected { get; set; }
+    private static DateTime Today => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date;
+    private readonly string[] weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    private DateTime month, from = Today, to = Today;
+    private DateTime? selected;
+    private List<LeaveCalendarEntry> entries = [];
+    private bool busy, initialized;
+    private int lastRefresh;
+    private int? removeId;
+    private string title = "Planned leave";
+    private string? message;
+    protected override async Task OnParametersSetAsync()
     {
-
-        var result = new List<DateTime?>();
-
-
-        var firstDay =
-            new DateTime(
-                CurrentMonth.Year,
-                CurrentMonth.Month,
-                1);
-
-
-        int empty =
-            (int)firstDay.DayOfWeek;
-
-
-        for (int i = 0; i < empty; i++)
-        {
-            result.Add(null);
-        }
-
-
-
-        int days =
-            DateTime.DaysInMonth(
-                CurrentMonth.Year,
-                CurrentMonth.Month);
-
-
-
-        for (int i = 1; i <= days; i++)
-        {
-            result.Add(
-                new DateTime(
-                    CurrentMonth.Year,
-                    CurrentMonth.Month,
-                    i));
-        }
-
-
-        return result;
-
+        if (!initialized) { month = new DateTime(Today.Year, Today.Month, 1).AddMonths(MonthOffset); initialized = true; }
+        else if (lastRefresh == RefreshKey) return;
+        lastRefresh = RefreshKey;
+        await LoadAsync();
     }
-
-
-
-    private void PreviousMonth()
+    private IEnumerable<LeaveCalendarEntry> OnDay(DateTime day) => entries.Where(x => x.From.Date <= day.Date && x.To.Date >= day.Date);
+    private string DayClass(DateTime day, List<LeaveCalendarEntry> events) => "flex min-h-10 min-w-0 flex-col items-center justify-center gap-1 rounded-md border py-1 text-xs " +
+        (selected == day ? "border-blue-600 bg-blue-50 text-blue-800 " : day == Today ? "border-blue-400 " : "border-transparent ") +
+        (events.Count > 0 ? "font-semibold text-slate-800 " : day.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday ? "bg-slate-50 text-slate-400 " : "text-slate-700 ") + "hover:bg-blue-50";
+    private void Select(DateTime day) { selected = day; from = to = day; removeId = null; }
+    private async Task MoveAsync(int direction) { month = month.AddMonths(direction); selected = null; await LoadAsync(); }
+    private async Task LoadAsync()
     {
-        CurrentMonth =
-            CurrentMonth.AddMonths(-1);
+        busy = true;
+        try { entries = await CalendarService.LoadAsync(month, IncludeTeam); }
+        catch (Exception ex) { entries = []; Logger.LogError(ex, "Could not load leave calendar."); message = "The calendar could not be loaded. Try Refresh."; }
+        finally { busy = false; }
     }
-
-
-
-    private void NextMonth()
+    private async Task SaveAsync()
     {
-        CurrentMonth =
-            CurrentMonth.AddMonths(1);
+        if (busy) return;
+        busy = true; message = null;
+        try { await CalendarService.SavePlanAsync(from, to, title); month = new DateTime(from.Year, from.Month, 1); selected = from; message = "Leave plan saved."; await LoadAsync(); await OnChanged.InvokeAsync(); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Could not save leave plan."); message = "The plan could not be saved. Refresh before trying again."; }
+        finally { busy = false; }
     }
-
-
-
-    private string GetDayClass(DateTime day)
+    private async Task RemoveAsync(int id)
     {
-
-        string css =
-            "h-8 flex items-center justify-center rounded-md text-xs cursor-pointer ";
-
-
-        if (day.Date == DateTime.Today)
-        {
-            return css +
-                   "bg-green-500 text-white font-semibold";
-        }
-
-
-        if (LeaveDates.Contains(day.Date))
-        {
-            return css +
-                   "bg-blue-500 text-white";
-        }
-
-
-        if (day.DayOfWeek == DayOfWeek.Friday ||
-           day.DayOfWeek == DayOfWeek.Saturday)
-        {
-            return css +
-                   "bg-red-100 text-red-600";
-        }
-
-
-
-        return css +
-               "hover:bg-slate-100 text-slate-700";
-
+        if (busy) return;
+        busy = true; message = null;
+        try { await CalendarService.RemovePlanAsync(id); removeId = null; message = "Leave plan removed."; await LoadAsync(); await OnChanged.InvokeAsync(); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Could not remove leave plan."); message = "The plan could not be removed. Please refresh."; }
+        finally { busy = false; }
     }
-
-
-
-    private string GetTooltip(DateTime day)
-    {
-
-        if (LeaveDates.Contains(day.Date))
-            return "Existing Leave";
-
-
-        if (day.DayOfWeek == DayOfWeek.Friday ||
-           day.DayOfWeek == DayOfWeek.Saturday)
-            return "Weekend";
-
-
-        return day.ToString("dd MMM yyyy");
-
-    }
-
-
 }

@@ -24,18 +24,24 @@ public partial class LeaveChangeService
             .Include(x => x.Leave).ThenInclude(x => x.LeaveType)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveReason).ThenInclude(x => x!.LeaveTypeReasonType)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveSpendingLocation)
-            .Where(x => pending.Contains(x.RequestId)).OrderByDescending(x => x.RequestId).ToListAsync();
+            .Where(x => pending.Contains(x.RequestId) &&
+                x.Leave.LeaveStateId != SharedConfig.LeaveStates.APPROVED &&
+                x.Leave.LeaveStateId != SharedConfig.LeaveStates.REJECTED &&
+                x.Leave.LeaveStateId != SharedConfig.LeaveStates.CANCELLED &&
+                x.Request.RequestStateId != SharedConfig.RequestStates.APPROVED &&
+                x.Request.RequestStateId != SharedConfig.RequestStates.REJECTED &&
+                x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED).OrderByDescending(x => x.RequestId).ToListAsync();
         var result = new List<PendingLeaveRequestDto>();
         foreach (var link in links)
         {
             if (!await access.HasOrganisationAccessAsync(link.Request.OrganisationBusinessEntityID ?? 0)) continue;
             var instance = await db.WfRequestInstances.AsNoTracking().SingleAsync(x => x.RequestId == link.RequestId);
             var leave = link.Leave;
-            var actions = await AllowedActionsAsync(db, link.Request, leave, instance, user);
+            var availability = await GetActionAvailabilityAsync(db, link.Request, leave, instance, user);
             var person = leave.Job.Individual;
             result.Add(new()
             {
-                RequestId = link.RequestId, Reference = link.Request.ReferenceNumber ?? $"#{link.RequestId}",
+                RequestId = link.RequestId, LeaveId = leave.LeaveId, HasHandover = await db.LeaveHandoverReviews.AnyAsync(r => r.LeaveId == leave.LeaveId), Reference = link.Request.ReferenceNumber ?? $"#{link.RequestId}",
                 Applicant = string.Join(" ", new[] { person.FirstNameEnglish, person.MiddleNameEnglish, person.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))),
                 LeaveType = leave.LeaveType.Name, FromDate = leave.FromDate, ToDate = leave.ToDate,
                 Duration = leave.Duration, Status = link.Request.RequestState.StateName,
@@ -43,7 +49,7 @@ public partial class LeaveChangeService
                 Explanation = leave.LeaveReason?.Reason ?? "",
                 Address = leave.LeaveSpendingLocation?.Address ?? "",
                 HandoverStatus = await LeaveHandoverService.StatusAsync(db, leave.LeaveId),
-                Contact = leave.LeaveSpendingLocation?.ContactNumber ?? "", Actions = actions
+                Contact = leave.LeaveSpendingLocation?.ContactNumber ?? "", Actions = availability.Actions, ActionsMessage = availability.Message
             });
         }
         return result;
