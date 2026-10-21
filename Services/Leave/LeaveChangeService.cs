@@ -32,7 +32,8 @@ public partial class LeaveChangeService(
             .OrderByDescending(x => x.FromDate).ToListAsync();
         var ids = leaves.Select(x => x.LeaveId).ToArray();
         var pendingIds = await db.LeaveChangeRequests.AsNoTracking()
-            .Where(x => ids.Contains(x.LeaveId) && x.Request.RequestState.IsProcessingState)
+            .Where(x => ids.Contains(x.LeaveId) &&
+                (x.Request.RequestState.IsProcessingState || x.Request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE))
             .Select(x => x.LeaveId).Distinct().ToListAsync();
         var result = new List<LeaveChangeLeaveDto>();
         var policies = new Dictionary<(int? TypeId, int OrganisationId), bool>();
@@ -75,10 +76,11 @@ public partial class LeaveChangeService(
             .Where(x => x.ApproverUserId == user.UserId && x.Decision == "Pending" &&
                 x.RequestStageInstance.StageStatus == "Pending" &&
                 x.RequestStageInstance.WorkflowRequestInstance.WorkflowStatus == "InProgress" &&
+                x.RequestStageInstance.WorkflowRequestInstance.CompletedAt == null &&
                 x.RequestStageInstance.WorkflowRequestInstance.CurrentRequestStageInstanceId == x.RequestStageInstanceId)
             .Select(x => x.RequestStageInstance.WorkflowRequestInstance.RequestId);
         var result = await Project(db.LeaveChangeRequests.AsNoTracking()
-            .Where(x => pending.Contains(x.RequestId))).ToListAsync();
+            .Where(x => pending.Contains(x.RequestId) && x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState)).ToListAsync();
         await PopulateActionsAsync(db, result, user);
         return result;
     }
@@ -86,6 +88,9 @@ public partial class LeaveChangeService(
     private static IQueryable<LeaveChangeRequestDto> Project(IQueryable<LeaveChangeRequest> query) =>
         query.OrderByDescending(x => x.LeaveChangeRequestId).Select(x => new LeaveChangeRequestDto
         {
+            Applicant = (x.Leave.Job.Individual.FirstNameEnglish + " " + (x.Leave.Job.Individual.MiddleNameEnglish ?? "") + " " + (x.Leave.Job.Individual.LastNameEnglish ?? "")).Trim(),
+            ChangeKind = x.LeaveChangeRequestTypeId,
+            IsProcessing = x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState,
             RequestId = x.RequestId, Reference = x.Request.ReferenceNumber ?? "",
             LeaveType = x.Leave.LeaveType.Name, ChangeType = x.LeaveChangeRequestType.TypeName,
             FromDate = x.FromDate, CurrentEndDate = x.Leave.ToDate, RequestedEndDate = x.ToDate,
@@ -107,7 +112,8 @@ public partial class LeaveChangeService(
             if (leave.Job.IndividualID != user.IndividualId)
                 throw new UnauthorizedAccessException("You can only change your own leave.");
             RequireApproved(leave);
-            if (await db.LeaveChangeRequests.AnyAsync(x => x.LeaveId == leave.LeaveId && x.Request.RequestState.IsProcessingState))
+            if (await db.LeaveChangeRequests.AnyAsync(x => x.LeaveId == leave.LeaveId &&
+                (x.Request.RequestState.IsProcessingState || x.Request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE)))
                 throw new InvalidOperationException("This leave already has a pending change request.");
 
             var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
@@ -121,7 +127,7 @@ public partial class LeaveChangeService(
                 $"{model.Kind} requested for leave {leave.LeaveId}");
             var request = await requests.CreateAsync(db, new CreateRequestDto
             {
-                RequestTypeId = SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST,
+                RequestTypeId = LeaveChangeRequestTypes.ForKind(model.Kind),
                 ApplicantBusinessEntityId = user.BusinessEntityId,
                 OrganisationBusinessEntityId = leave.Job.OrganisationID,
                 OperationLogId = log.OperationLogId, EffectiveDate = model.Date.Date
@@ -164,9 +170,13 @@ public partial class LeaveChangeService(
             .Where(x => x.JobId == leave.JobId && x.LeaveTypeId == leave.LeaveTypeId && x.LeaveId != leave.LeaveId &&
                 x.LeaveStateId != SharedConfig.LeaveStates.CANCELLED && x.LeaveStateId != SharedConfig.LeaveStates.REJECTED)
             .Select(x => (DateTime?)x.ToDate).MaxAsync();
-        balance.LastLeaveTakenDate = otherLastDate.HasValue && otherLastDate > result.EndDate ? otherLastDate : result.EndDate;
+        balance.LastLeaveTakenDate = result.Duration == 0 ? otherLastDate :
+            otherLastDate.HasValue && otherLastDate > result.EndDate ? otherLastDate : result.EndDate;
         balance.OperationLogId = log.OperationLogId;
-        leave.ToDate = result.EndDate;
+        if (result.Duration == 0)
+            leave.LeaveStateId = SharedConfig.LeaveStates.CANCELLED;
+        else
+            leave.ToDate = result.EndDate;
         leave.Duration = result.Duration;
         leave.OperationLogId = log.OperationLogId;
         change.OperationLogId = log.OperationLogId;
@@ -179,8 +189,10 @@ public partial class LeaveChangeService(
             x.FromDate <= targetEnd && x.ToDate > leave.ToDate &&
             x.LeaveStateId != SharedConfig.LeaveStates.CANCELLED && x.LeaveStateId != SharedConfig.LeaveStates.REJECTED))
             throw new InvalidOperationException("The extension overlaps another leave application.");
-        var balances = await db.JobLeaveTypes.FromSqlInterpolated(
-            $"SELECT * FROM dbo.JobLeaveTypes WITH (UPDLOCK, HOLDLOCK) WHERE JobID = {leave.JobId} AND IsValid = 1").ToListAsync();
+        var balanceQuery = db.Database.IsSqlServer()
+            ? db.JobLeaveTypes.FromSqlInterpolated($"SELECT * FROM dbo.JobLeaveTypes WITH (UPDLOCK, HOLDLOCK) WHERE JobID = {leave.JobId} AND IsValid = 1")
+            : db.JobLeaveTypes.Where(x => x.JobId == leave.JobId && x.IsValid);
+        var balances = await balanceQuery.ToListAsync();
         var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
             new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID);
         var candidates = new List<JobLeaveType>();
@@ -200,7 +212,9 @@ public partial class LeaveChangeService(
     }
 
     private static Task<Leaf?> LockLeaveAsync(HrmTeContext db, int leaveId) =>
-        db.Leaves.FromSqlInterpolated($"SELECT * FROM dbo.Leaves WITH (UPDLOCK, HOLDLOCK) WHERE LeaveID = {leaveId}").SingleOrDefaultAsync();
+        db.Database.IsSqlServer()
+            ? db.Leaves.FromSqlInterpolated($"SELECT * FROM dbo.Leaves WITH (UPDLOCK, HOLDLOCK) WHERE LeaveID = {leaveId}").SingleOrDefaultAsync()
+            : db.Leaves.SingleOrDefaultAsync(x => x.LeaveId == leaveId);
     private static void RequireApproved(Leaf leave)
     {
         if (leave.LeaveStateId != SharedConfig.LeaveStates.APPROVED)

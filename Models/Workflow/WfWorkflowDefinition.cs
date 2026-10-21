@@ -7,6 +7,9 @@ namespace HRM.Models.Workflow
         public int WorkflowDefinitionId { get; set; }
 
         public int RequestTypeId { get; set; }
+        public int? LeaveTypeId { get; set; }
+        // 0 = new leave, 1 = extension, 2 = early return. Null denotes a general workflow.
+        public int? LeaveRequestKind { get; set; }
 
         public int? OrganisationBusinessEntityId { get; set; }
 

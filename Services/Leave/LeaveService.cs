@@ -24,6 +24,7 @@ namespace HRM.Services.Leave
         private readonly IWorkflowEngine _workflowEngine;
 
         private readonly ToastService _toastService;
+        private readonly ILeaveChangeService? _leaveChanges;
 
         public LeaveService(
             IDbContextFactory<HrmTeContext> dbFactory, 
@@ -32,7 +33,8 @@ namespace HRM.Services.Leave
             ToastService toastService, 
             IUserAccessService access,
             IRequestService requestService,
-            IWorkflowEngine workflowEngine
+            IWorkflowEngine workflowEngine,
+            ILeaveChangeService? leaveChanges = null
             )
         {
             _dbFactory = dbFactory;
@@ -42,6 +44,7 @@ namespace HRM.Services.Leave
             _access = access;
             _requestService = requestService;
             _workflowEngine = workflowEngine;
+            _leaveChanges = leaveChanges;
         }
 
         public async Task<LeaveResource?> BuildAsync(LeaveResource leaveRequestId)
@@ -77,14 +80,19 @@ namespace HRM.Services.Leave
         public async Task<List<ProcessingLeaveDto>> GetMyProcessingLeavesAsync()
         {
             var context = await _access.RequireContextAsync();
+            if (context.IndividualId <= 0) return [];
 
             await using var db = await _dbFactory.CreateDbContextAsync();
 
             return await db.LeaveRequests
                 .AsNoTracking()
                 .Where(lr =>
-                    lr.Leave.JobId == context.ActiveJob!.JobId &&
-                    lr.Request.RequestState.IsProcessingState)
+                    lr.Leave.Job.IndividualID == context.IndividualId &&
+                    lr.Leave.LeaveStateId != SharedConfig.LeaveStates.APPROVED &&
+                    lr.Leave.LeaveStateId != SharedConfig.LeaveStates.REJECTED &&
+                    lr.Leave.LeaveStateId != SharedConfig.LeaveStates.CANCELLED &&
+                    lr.Request.RequestState.IsProcessingState &&
+                    !lr.Request.RequestState.IsFinalState)
                 .Select(lr => new ProcessingLeaveDto
                 {
                     LeaveTypeId = lr.Leave.LeaveTypeId,
@@ -101,11 +109,28 @@ namespace HRM.Services.Leave
         }
 
 
-        public async Task<List<Leaf>> GetMyLeaveRequestsAsync()
+        public async Task<List<Leaf>> GetMyLeaveRequestsAsync(int? statusId = null, DateTime? fromDate = null, DateTime? toDate = null, int? limit = null)
         {
-            var jobId = await _access.GetCurrentJobIdAsync();
-
-            return await GetLeaveRequestsAsync(jobId);
+            var user = await _access.RequireContextAsync();
+            if (user.IndividualId <= 0) return [];
+            if (fromDate.HasValue && toDate.HasValue && fromDate.Value.Date > toDate.Value.Date)
+                throw new ArgumentException("From date must be on or before To date.");
+            if (limit is <= 0) throw new ArgumentOutOfRangeException(nameof(limit));
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var query = db.Leaves.AsNoTracking()
+                .Include(x => x.LeaveType).Include(x => x.LeaveState)
+                .Where(x => x.Job.IndividualID == user.IndividualId);
+            if (statusId is > 0) query = query.Where(x => x.LeaveStateId == statusId);
+            if (fromDate.HasValue) query = query.Where(x => x.ToDate >= fromDate.Value.Date);
+            if (toDate.HasValue)
+            {
+                var endExclusive = toDate.Value.Date.AddDays(1);
+                query = query.Where(x => x.FromDate < endExclusive);
+            }
+            // LeaveId reflects application creation order, independent of scheduled leave dates.
+            query = query.OrderByDescending(x => x.LeaveId);
+            if (limit.HasValue) query = query.Take(limit.Value);
+            return await query.ToListAsync();
         }
 
 
@@ -217,14 +242,14 @@ namespace HRM.Services.Leave
 
         public async Task<List<Leaf>> GetLeaveRequestsAsync(int jobId)
         {
-            var context = await _dbFactory.CreateDbContextAsync();
+            await using var context = await _dbFactory.CreateDbContextAsync();
 
             return await context.Leaves
+             .AsNoTracking()
              .Include(l => l.LeaveType)  // Fetches the Type name
              .Include(l => l.LeaveState) // Fetches the Status name
              .Where(l => l.JobId == jobId)
-             .Where(s => s.LeaveStateId != 4)
-             .OrderByDescending(l => l.FromDate)
+             .OrderByDescending(l => l.LeaveId)
              .ToListAsync();
 
         }
@@ -648,7 +673,8 @@ namespace HRM.Services.Leave
                         .Select(x => x.RequestStateId).SingleAsync();
                     if (needsHandover && initialState == SharedConfig.RequestStates.APPROVED)
                         throw new InvalidOperationException("Leave with a handover requires a pending approval stage before final HR approval.");
-                    leave.LeaveStateId = LeaveRequestStateMapper.ToLeaveState(initialState);
+                    var isProcessing = await db.RequestStates.AnyAsync(x => x.RequestStateId == initialState && x.IsProcessingState && !x.IsFinalState);
+                    leave.LeaveStateId = LeaveRequestStateMapper.ToLeaveState(initialState, isProcessing);
                     await db.SaveChangesAsync();
                 }
                 catch (InvalidOperationException ex)
@@ -680,15 +706,21 @@ namespace HRM.Services.Leave
             var context = await _access.RequireContextAsync();
 
             await using var db = await _dbFactory.CreateDbContextAsync();
-            await using var transaction = await db.Database.BeginTransactionAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             try
             {
                 var leave = await db.Leaves
+                    .Include(x => x.Job)
                     .FirstOrDefaultAsync(l => l.LeaveId == leaveId);
 
                 if (leave == null)
                     return ServiceResult.Fail("Leave request not found.");
+                var personId = context.IndividualId > 0 ? context.IndividualId : context.BusinessEntityId;
+                if (personId <= 0 || leave.Job.IndividualID != personId)
+                    return ServiceResult.Fail("You can only cancel your own leave.");
+                if (leave.LeaveStateId is SharedConfig.LeaveStates.APPROVED or SharedConfig.LeaveStates.REJECTED)
+                    return ServiceResult.Fail("This leave is final and cannot be cancelled as a pending request.");
 
                 if (leave.LeaveStateId == SharedConfig.LeaveStates.CANCELLED)
                     return ServiceResult.Fail("Leave request is already cancelled.");
@@ -701,6 +733,14 @@ namespace HRM.Services.Leave
 
                 if (request == null)
                     return ServiceResult.Fail("Associated request not found.");
+                await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, SharedConfig.RequestStates.CANCELLED);
+                if (await db.WfRequestInstances.AnyAsync(x => x.RequestId == request.RequestId))
+                {
+                    await transaction.RollbackAsync();
+                    if (_leaveChanges == null) return ServiceResult.Fail("Cancel this request through its approval workflow.");
+                    return await _leaveChanges.ExecuteLeaveActionAsync(request.RequestId, new RequestActionSubmissionDto
+                    { FromStateId = request.RequestStateId, ToStateId = SharedConfig.RequestStates.CANCELLED, Comments = "Cancelled by applicant" });
+                }
 
                 // Create Operation Log
                 var operationLog = await _operationLogService.CreateAsync(
@@ -747,6 +787,11 @@ namespace HRM.Services.Leave
                 await transaction.CommitAsync();
 
                 return ServiceResult.Ok("Leave request cancelled successfully.");
+            }
+            catch (InvalidOperationException ex)
+            {
+                await transaction.RollbackAsync();
+                return ServiceResult.Fail(ex.Message);
             }
             catch (Exception)
             {

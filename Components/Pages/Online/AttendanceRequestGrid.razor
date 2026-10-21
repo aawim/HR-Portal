@@ -1,6 +1,10 @@
 ﻿@page "/online/attendance/attendance-request"
 @using HRM.Components.Shared
 @using HRM.DTOs
+@using HRM.DTOs.Attendance
+@using HRM.DTOs.Leave
+@using HRM.Helpers
+@using HRM.Services.Interfaces.Leave
 @using HRM.Models
 @using HRM.Models.Archives
 @using HRM.Services
@@ -11,6 +15,9 @@
 @inject HrmTeContext DbContext
 @inject IOrganisationService OrganisationService
 @inject IIndividual _individual
+@inject IAttendanceRequestService AttendanceRequests
+@inject IAttendanceService Attendance
+@inject ILeaveChangeService LeaveChanges
 
 
 <BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
@@ -27,6 +34,40 @@
             Add Request
         </button>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(requestSuccess))
+    {
+        <div role="status" class="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800">
+            @requestSuccess
+            @if (submittedLeaveChange)
+            {
+                <a class="ml-2 underline" href="/online/leaves/leave-change-request">View leave change requests</a>
+            }
+        </div>
+    }
+
+    <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4">
+        <h3 class="font-semibold text-slate-800">Uneven-log corrections</h3>
+        <p class="mb-3 text-sm text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
+        @if (unevenLogs.Count == 0)
+        {
+            <p class="text-sm text-slate-500">No uneven clock events in the current salary period.</p>
+        }
+        @foreach (var log in unevenLogs)
+        {
+            <div class="flex items-center justify-between gap-3 border-t border-slate-100 py-2">
+                <span class="text-sm">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
+                @if (CanRequestCorrection(log.AttendanceLogID))
+                {
+                    <button class="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700" @onclick="() => OpenCorrection(log)">Request correction</button>
+                }
+                else
+                {
+                    <span class="max-w-md text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
+                }
+            </div>
+        }
+    </section>
 
     <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
         @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
@@ -103,7 +144,7 @@
                                 <th scope="col" class="px-6 py-3">Ref No</th>
                                 <th scope="col" class="px-6 py-3">Staff</th>
                                 <th scope="col" class="px-6 py-3">Date & Time</th>
-                                <th scope="col" class="px-6 py-3">Mode</th>
+                                <th scope="col" class="px-6 py-3">Request / Mode</th>
                                 <th scope="col" class="px-6 py-3">Status</th>
                             </tr>
                         </thead>
@@ -117,7 +158,7 @@
                                         <div class="font-medium text-slate-700">@req.LogDate.ToString("dd MMM yyyy")</div>
                                         <div class="text-xs text-slate-500">@req.LogTime</div>
                                     </td>
-                                    <td class="px-6 py-4 font-medium">@req.Mode</td>
+                                    <td class="px-6 py-4 font-medium"><div>@req.Kind</div><div class="text-xs text-slate-500">@req.Mode</div></td>
                                     <td class="px-6 py-4">
                                         <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(req.RequestState)">
                                             @req.RequestState
@@ -149,7 +190,7 @@
 <div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddPanel ? "translate-x-0" : "translate-x-full")">
 
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-        <h3 class="text-lg font-bold text-slate-800">New Attendance Request</h3>
+        <h3 class="text-lg font-bold text-slate-800">@(isLeaveChange ? "New Leave Change Request" : "New Attendance Request")</h3>
         <button @onclick="CloseAddPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -158,15 +199,79 @@
     <div class="flex-1 overflow-y-auto p-6 space-y-5">
         <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Staff Member <span class="text-rose-500">*</span></label>
-            <select @bind="newRequest.StaffId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                <option value="0">-- Select Staff --</option>
-                <option value="1">Myself</option>
+            <select disabled class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md">
+                <option>Myself</option>
             </select>
         </div>
 
         <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Request type</label>
+            <select @bind="requestKind" @bind:after="RequestKindChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                <option value="attendance">Missing attendance</option>
+                <option value="correction">Uneven-log correction</option>
+                <option value="leave">Leave change</option>
+            </select>
+        </div>
+        @if (isLeaveChange)
+        {
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Approved leave</label>
+                <select @bind="leaveChange.LeaveId" @bind:after="LeaveSelectionChanged" disabled="@(isSubmitting || loadingLeaves)" class="w-full border rounded-md p-2">
+                    <option value="0">Select leave</option>
+                    @foreach (var leave in approvedLeaves)
+                    {
+                        <option value="@leave.LeaveId" disabled="@leave.HasPendingChange">
+                            @leave.LeaveType: @leave.FromDate.ToString("dd MMM yyyy") – @leave.ToDate.ToString("dd MMM yyyy") (@leave.Duration days) @(leave.HasPendingChange ? "— change pending" : "")
+                        </option>
+                    }
+                </select>
+                @if (loadingLeaves) { <p class="mt-2 text-sm text-slate-500">Loading approved leave...</p> }
+                else if (approvedLeaves.Count == 0) { <p class="mt-2 text-sm text-slate-500">You have no approved leave to change.</p> }
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Change type</label>
+                <select @bind="leaveChange.Kind" @bind:after="LeaveSelectionChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                    <option value="@LeaveChangeKind.Extension">Extension</option>
+                    <option value="@LeaveChangeKind.EarlyReturn">Early return</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">@(leaveChange.Kind == LeaveChangeKind.Extension ? "New leave end date" : "Return-to-work date")</label>
+                <input type="date" @bind="leaveChange.Date" disabled="@isSubmitting" class="w-full border rounded-md p-2" />
+            </div>
+            @if (SelectedLeave != null)
+            {
+                <div role="status" class="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
+                    @if (LeavePreviewError != null) { <p>@LeavePreviewError</p> }
+                    else
+                    {
+                        var preview = LeaveChangePreview;
+                        @if (preview.Duration == 0) { <p>The full leave period will be cancelled upon approval.</p> }
+                        else { <p>Requested leave: @SelectedLeave.FromDate.ToString("dd MMM yyyy") – @preview.EndDate.ToString("dd MMM yyyy") (@preview.Duration days).</p> }
+                        <p>@(preview.BalanceAdjustment >= 0 ? $"{preview.BalanceAdjustment} unused leave days will return to your balance after approval." : $"{-preview.BalanceAdjustment} additional leave days will be deducted from your balance after approval.")</p>
+                    }
+                </div>
+            }
+        }
+        @if (isCorrection)
+        {
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Uneven clock event</label>
+                <select @bind="newRequest.OriginalLogId" @bind:after="OriginalLogChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                    <option value="">Select a clock event</option>
+                    @foreach (var log in unevenLogs.Where(x => CanRequestCorrection(x.AttendanceLogID)))
+                    {
+                        <option value="@log.AttendanceLogID">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (!isLeaveChange)
+        {
+        <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-2">In/Out Mode <span class="text-rose-500">*</span></label>
-            <select @bind="newRequest.InOutModeId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+            <select @bind="newRequest.InOutModeId" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
                 <option value="0">-- Select Mode --</option>
                 <option value="1">Clock In</option>
                 <option value="2">Clock Out</option>
@@ -177,27 +282,47 @@
 
         <div class="grid grid-cols-2 gap-4">
             <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
-                <input type="date" @bind="newRequest.Date" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                @if (isCorrection)
+                {
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Clock event date</label>
+                    <p class="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                        @(newRequest.OriginalLogId.HasValue ? newRequest.Date.ToString("dd MMM yyyy") : "Select an uneven clock event above")
+                    </p>
+                }
+                else
+                {
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
+                    <input type="date" @bind="newRequest.Date" @bind:after="RefreshDateInfo" disabled="@isSubmitting" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                }
             </div>
             <div>
                 <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Time <span class="text-rose-500">*</span></label>
-                <input type="time" @bind="newRequest.Time" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                <input type="time" @bind="newRequest.Time" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
             </div>
         </div>
+        }
 
         <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Comments / Reason</label>
-            <textarea @bind="newRequest.Comments" rows="4" placeholder="Briefly explain why this manual adjustment is needed..." class="w-full p-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 resize-none"></textarea>
+            <textarea @bind="newRequest.Comments" rows="4" maxlength="250" disabled="@isSubmitting" placeholder="Explain the reason for your request (required)..." class="w-full p-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 resize-none"></textarea>
         </div>
+        @if (!isLeaveChange && checkingDate) { <p class="text-sm text-slate-500">Checking leave for this date...</p> }
+        @if (!isLeaveChange && !string.IsNullOrWhiteSpace(requestDateInfo?.Message))
+        {
+            <div role="status" class="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">@requestDateInfo.Message</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(requestError))
+        {
+            <div role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-800">@requestError</div>
+        }
     </div>
 
     <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
         <button @onclick="CloseAddPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
             Cancel
         </button>
-        <button @onclick="SubmitNewRequest" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm">
-            Add Request
+        <button @onclick="SubmitNewRequest" disabled="@(isSubmitting || (isLeaveChange ? loadingLeaves || LeavePreviewError != null : checkingDate || requestDateInfo?.CanSubmit != true || (isCorrection && !newRequest.OriginalLogId.HasValue)))" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">
+            @(isSubmitting ? "Submitting..." : isLeaveChange ? leaveChange.Kind == LeaveChangeKind.Extension ? "Request extension" : "Request early return" : requestDateInfo?.IsEarlyReturn == true ? "Request early return" : "Submit request")
         </button>
     </div>
 </div>
@@ -222,35 +347,168 @@
 
     // --- Panel State ---
     private bool showAddPanel = false;
-    private AddRequestModel newRequest = new();
+    private AttendanceRequestApplicationDto newRequest = new();
+    private List<AttendanceLogDto> unevenLogs = [];
+    private readonly Dictionary<int, AttendanceRequestDateInfoDto> correctionEligibility = [];
+    private bool CanRequestCorrection(int logId) => correctionEligibility.TryGetValue(logId, out var info) && info.CanSubmit && !info.IsEarlyReturn;
+    private AttendanceRequestDateInfoDto? requestDateInfo;
+    private bool isSubmitting, checkingDate, submittedLeaveChange, loadingLeaves;
+    private List<LeaveChangeLeaveDto> approvedLeaves = [];
+    private LeaveChangeApplicationDto leaveChange = new();
+    private bool isLeaveChange => requestKind == "leave";
+    private LeaveChangeLeaveDto? SelectedLeave => approvedLeaves.FirstOrDefault(x => x.LeaveId == leaveChange.LeaveId);
+    private (DateTime EndDate, int Duration, int BalanceAdjustment) LeaveChangePreview => LeaveChangeRules.Calculate(
+        SelectedLeave!.FromDate, SelectedLeave.ToDate, SelectedLeave.Duration, leaveChange.Kind, leaveChange.Date, SelectedLeave.IncludeHolidays);
+    private string? LeavePreviewError
+    {
+        get
+        {
+            if (SelectedLeave == null) return "Select an approved leave.";
+            if (SelectedLeave.HasPendingChange) return "This leave already has a pending change request.";
+            if (leaveChange.Kind == LeaveChangeKind.EarlyReturn && leaveChange.Date.Date <= DateTime.Today)
+                return "Choose a future return-to-work date.";
+            try { _ = LeaveChangePreview; return null; }
+            catch (InvalidOperationException ex) { return ex.Message; }
+        }
+    }
+    private string requestKind = "attendance";
+    private bool isCorrection
+    {
+        get => requestKind == "correction";
+        set => requestKind = value ? "correction" : "attendance";
+    }
+    private int dateCheckVersion;
+    private string? requestError, requestSuccess;
 
     // --- Panel Methods ---
-    private void OpenAddPanel()
+    private async Task OpenAddPanel()
     {
-        newRequest = new AddRequestModel();
+        newRequest = new();
+        leaveChange = new();
+        isCorrection = false;
+        requestError = null;
         showAddPanel = true;
+        await RefreshDateInfo();
+    }
+
+    private async Task OpenCorrection(AttendanceLogDto log)
+    {
+        if (!CanRequestCorrection(log.AttendanceLogID)) return;
+        newRequest = new() { OriginalLogId = log.AttendanceLogID, Date = DateOnly.FromDateTime(log.Date), Time = TimeOnly.FromDateTime(log.Date) };
+        isCorrection = true;
+        requestError = null;
+        showAddPanel = true;
+        await RefreshDateInfo();
+    }
+
+    private async Task RequestKindChanged()
+    {
+        newRequest.OriginalLogId = null;
+        requestError = null;
+        if (isLeaveChange)
+        {
+            dateCheckVersion++;
+            checkingDate = false;
+            requestDateInfo = null;
+            loadingLeaves = true;
+            try { approvedLeaves = await LeaveChanges.GetMyLeavesAsync(); }
+            catch { approvedLeaves = []; requestError = "Approved leave could not be loaded. Please try again."; }
+            finally { loadingLeaves = false; }
+            return;
+        }
+        await RefreshDateInfo();
+    }
+
+    private void LeaveSelectionChanged()
+    {
+        requestError = null;
+        if (SelectedLeave == null) return;
+        leaveChange.Date = leaveChange.Kind == LeaveChangeKind.Extension
+            ? (SelectedLeave.ToDate.Date >= DateTime.Today ? SelectedLeave.ToDate.Date.AddDays(1) : DateTime.Today)
+            : (SelectedLeave.FromDate.Date > DateTime.Today ? SelectedLeave.FromDate.Date : DateTime.Today.AddDays(1));
+    }
+
+    private async Task OriginalLogChanged()
+    {
+        var log = unevenLogs.FirstOrDefault(x => x.AttendanceLogID == newRequest.OriginalLogId && CanRequestCorrection(x.AttendanceLogID));
+        if (log == null)
+        {
+            newRequest.OriginalLogId = null;
+            requestDateInfo = null;
+            requestError = "Select a clock event that is eligible for correction.";
+            return;
+        }
+        if (log != null)
+        {
+            newRequest.Date = DateOnly.FromDateTime(log.Date);
+            newRequest.Time = TimeOnly.FromDateTime(log.Date);
+        }
+        await RefreshDateInfo();
+    }
+
+    private async Task RefreshDateInfo()
+    {
+        var date = newRequest.Date;
+        var version = ++dateCheckVersion;
+        checkingDate = true;
+        requestDateInfo = null;
+        requestError = null;
+        try
+        {
+            var info = await AttendanceRequests.GetDateInfoAsync(date, isCorrection ? newRequest.OriginalLogId : null);
+            if (version == dateCheckVersion)
+            {
+                if (isCorrection && info.IsEarlyReturn)
+                {
+                    info.CanSubmit = false;
+                    info.IsEarlyReturn = false;
+                    info.Message = "An uneven-log correction cannot move an event onto approved leave. Choose Missing attendance to request a future early return.";
+                }
+                requestDateInfo = info;
+            }
+        }
+        catch { if (version == dateCheckVersion) requestError = "Leave availability could not be checked. Please try again."; }
+        finally { if (version == dateCheckVersion) checkingDate = false; }
     }
 
     private void CloseAddPanel()
     {
+        if (isSubmitting) return;
         showAddPanel = false;
     }
 
     private async Task SubmitNewRequest()
     {
-        // Add your logic here to save the request
-        showAddPanel = false;
-        await ExecuteSearch();
-    }
-
-    // --- Panel Data Model ---
-    public class AddRequestModel
-    {
-        public int StaffId { get; set; }
-        public int InOutModeId { get; set; }
-        public DateOnly Date { get; set; }
-        public TimeOnly Time { get; set; }
-        public string Comments { get; set; } = string.Empty;
+        if (isSubmitting || (isLeaveChange ? loadingLeaves : checkingDate)) return;
+        if (isLeaveChange && LeavePreviewError != null) { requestError = LeavePreviewError; return; }
+        if (isCorrection && !newRequest.OriginalLogId.HasValue) { requestError = "Select an uneven clock event."; return; }
+        isSubmitting = true;
+        requestError = null;
+        try
+        {
+            var result = isLeaveChange
+                ? await LeaveChanges.SubmitAsync(new LeaveChangeApplicationDto
+                {
+                    LeaveId = leaveChange.LeaveId, Kind = leaveChange.Kind, Date = leaveChange.Date, Reason = newRequest.Comments
+                })
+                : await AttendanceRequests.SubmitAsync(newRequest);
+            if (!result.Success) { requestError = result.Message; return; }
+            requestSuccess = result.Message;
+            submittedLeaveChange = isLeaveChange || requestDateInfo?.IsEarlyReturn == true;
+            showAddPanel = false;
+            try
+            {
+                if (submittedLeaveChange) approvedLeaves = await LeaveChanges.GetMyLeavesAsync();
+                else
+                {
+                    await RefreshUnevenLogs();
+                    await ExecuteSearch();
+                }
+            }
+            catch { requestSuccess += " The request was saved, but the list could not refresh. Use Search to reload it."; }
+        }
+        catch { requestError = "The request could not be submitted. Please try again."; }
+        finally { isSubmitting = false; }
     }
 
     protected override async Task OnInitializedAsync()
@@ -262,6 +520,32 @@
         requestStates = await DbContext.RequestStates.ToListAsync();
 
         await SetDefaultOrganisationAsync();
+        await RefreshUnevenLogs();
+    }
+
+    private async Task RefreshUnevenLogs()
+    {
+        unevenLogs = await Attendance.GetMyUnevenLogsAsync();
+        await LoadCorrectionEligibility();
+    }
+
+    private async Task LoadCorrectionEligibility()
+    {
+        correctionEligibility.Clear();
+        foreach (var group in unevenLogs.GroupBy(x => x.Date.Date))
+        {
+            AttendanceRequestDateInfoDto info;
+            try
+            {
+                info = await AttendanceRequests.GetDateInfoAsync(DateOnly.FromDateTime(group.Key), group.First().AttendanceLogID);
+                if (info.IsEarlyReturn) info.Message = "Use a leave change request for this future leave date.";
+            }
+            catch
+            {
+                info = new() { CanSubmit = false, Message = "Correction availability could not be checked. Reload the page to try again." };
+            }
+            foreach (var log in group) correctionEligibility[log.AttendanceLogID] = info;
+        }
     }
 
     private void FilterByCard(string status)
@@ -310,7 +594,10 @@
         try
         {
             // USING LEFT JOINS to prevent missing data from hiding records
-            var query = from req in DbContext.AttendanceLogRequests
+            int currentIndividualId = await _individual.GetIndividualID();
+            var links = DbContext.AttendanceLogRequests.Select(x => new { x.RequestId, x.AttendanceLogId, x.Comments })
+                .Concat(DbContext.AttendanceLogChangeRequests.Select(x => new { x.RequestId, x.AttendanceLogId, x.Comments }));
+            var query = from req in links
                         join r in DbContext.Requests on req.RequestId equals r.RequestId
                         join log in DbContext.AttendanceLogs on req.AttendanceLogId equals log.AttendanceLogId
 
@@ -323,8 +610,8 @@
                         join org in DbContext.Organisations on log.OrganisationId equals org.BusinessEntityID into orgGroup
                         from org in orgGroup.DefaultIfEmpty()
 
-                        where log.Date >= startDate && log.Date <= endDate
-                              && r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_REQUEST
+                        where log.IndividualId == currentIndividualId && log.Date >= startDate.Date && log.Date < endDate.Date.AddDays(1)
+                              && (r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_REQUEST || r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_CHANGE_REQUEST)
                         select new { req, r, rs, log, ind, org };
 
             // Apply Filters
@@ -344,6 +631,7 @@
                     {
                         RequestId = q.req.RequestId,
                         ReferenceNo = q.r.ReferenceNumber ?? "N/A",
+                        Kind = q.r.RequestTypeId == SharedConfig.RequestTypes.ATTENDANCE_LOG_CHANGE_REQUEST ? "Uneven-log correction" : "Attendance",
                         LogDate = q.log.Date,
                         LogTime = q.log.Date.ToString("HH:mm"),
 
@@ -388,6 +676,7 @@
     {
         public int RequestId { get; set; }
         public string ReferenceNo { get; set; } = string.Empty;
+        public string Kind { get; set; } = string.Empty;
         public DateTime LogDate { get; set; }
         public string LogTime { get; set; } = string.Empty;
         public string OrganisationName { get; set; } = string.Empty;

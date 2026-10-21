@@ -105,6 +105,7 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             var context =
                 await _access.RequireContextAsync();
@@ -117,6 +118,7 @@ namespace HRM.Services
             if (request == null)
                 return false;
 
+            await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, requestStateId);
             request.RequestStateId = requestStateId;
 
             request.StateChangeRemarks = remarks;
@@ -129,6 +131,7 @@ namespace HRM.Services
 
             await db.SaveChangesAsync();
 
+            await transaction.CommitAsync();
             return true;
         }
 

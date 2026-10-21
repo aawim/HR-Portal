@@ -326,7 +326,7 @@ namespace HRM.Services
         {
             return await _context.AttendanceLogs
                 // 1. Filter by the user (Update 'IndividualId' to match your actual Foreign Key property name)
-                .Where(log => log.IndividualId == userId)
+                .Where(log => log.IndividualId == userId && log.AttendanceLogStateId == 1)
 
                 // 2. Filter by the date range. 
                 // We use .Date to strip out the time component and ensure accurate inclusive boundaries.

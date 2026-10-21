@@ -13,6 +13,10 @@ public partial class UserPreference
 
     public int? SelectedContextId { get; set; }
 
+    public string ThemeMode { get; set; } = "dark";
+
+    public DateTime? UpdatedAtUtc { get; set; }
+
     public virtual OperationLog OperationLog { get; set; } = null!;
 
     public virtual Context? SelectedContext { get; set; }

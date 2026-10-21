@@ -1,0 +1,127 @@
+@using HRM.DTOs.Leave
+@using HRM.Services.Interfaces.Leave
+@using HRM.Components.Pages.Online.Leave
+@inject ILeaveChangeService Changes
+@inject HRM.Services.ToastService Toast
+@inject ILogger<PendingLeaveChangesCard> Logger
+@implements IAsyncDisposable
+
+<section class="rounded-xl border bg-white shadow-sm" aria-label="Pending leave changes">
+    <div class="flex items-center justify-between gap-3 border-b p-4">
+        <h2 class="font-semibold">Pending Leave Changes</h2>
+        <button type="button" disabled="@(loading || busy)" class="text-sm text-blue-700 disabled:opacity-50" @onclick="RefreshAsync">Refresh changes</button>
+    </div>
+    <div class="space-y-2 p-4">
+        <p class="text-xs text-slate-500">Early returns and extensions assigned to you, plus your own pending changes.</p>
+        @if (error != null) { <p role="alert" class="text-sm text-red-700">@error</p> }
+        @if (loading) { <p role="status">Loading leave changes…</p> }
+        else if (items.Count == 0) { <p class="text-sm text-slate-500">No pending leave changes.</p> }
+        @foreach (var item in (showAll ? items : items.Take(5)))
+        {
+            <button type="button" disabled="@busy" @onclick="() => Select(item.RequestId)" class="w-full rounded-lg border p-3 text-left hover:bg-blue-50 disabled:opacity-50">
+                <div class="flex flex-wrap justify-between gap-2"><strong>@item.Applicant</strong><span class="text-xs text-amber-700">Processing · @item.Status</span></div>
+                <p class="text-sm">@item.ChangeType · @item.LeaveType</p>
+                <p class="text-xs text-slate-500">@(item.ChangeKind == 2 ? "Return to work" : "Requested end date"): @RequestedDate(item).ToString("dd MMM yyyy")</p>
+                @if (item.IsOwnRequest) { <p class="text-xs text-slate-500">Your request</p> }
+                @if (item.PendingApprovers.Count > 0) { <p class="text-xs text-slate-500">@item.CurrentStage · @string.Join(", ", item.PendingApprovers)</p> }
+                <span class="text-xs text-blue-700">@item.Reference · View change request</span>
+            </button>
+        }
+        <div class="flex flex-wrap justify-between gap-2 text-sm">
+            <span>@items.Count pending changes</span>
+            @if (items.Count > 5) { <button type="button" @onclick="() => showAll = !showAll">@(showAll ? "Show fewer" : "View all changes")</button> }
+            <a href="/online/leaves/leave-change-request" class="text-blue-700 underline">Leave change history</a>
+        </div>
+    </div>
+</section>
+@if (selected != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <section role="dialog" aria-modal="true" aria-labelledby="pending-change-title" class="max-h-[90vh] w-full max-w-2xl space-y-4 overflow-y-auto rounded-xl bg-white p-6">
+            <div class="flex justify-between gap-3"><h2 id="pending-change-title" class="text-lg font-semibold">@selected.ChangeType request</h2><button type="button" disabled="@busy" @onclick="Close" class="rounded border px-3 py-1">Close change details</button></div>
+            <p>@selected.Applicant · @selected.LeaveType · @selected.Reference</p>
+            <p>Current leave: @selected.FromDate.ToString("dd MMM yyyy") – @selected.CurrentEndDate.ToString("dd MMM yyyy")</p>
+            <p>@(selected.ChangeKind == 2 ? "Return to work" : "New leave end date"): @RequestedDate(selected).ToString("dd MMM yyyy")</p>
+            @if (selected.RequestedEndDate.Date < selected.FromDate.Date) { <p class="text-sm text-amber-800">Approval will cancel the full leave period and refund its unused days.</p> }
+            <p class="whitespace-pre-wrap break-words">@selected.Reason</p>
+            <p class="text-sm text-amber-700">Processing · @selected.Status</p>
+            @if (selected.PendingApprovers.Count > 0) { <p class="text-sm">@selected.CurrentStage · Awaiting @string.Join(", ", selected.PendingApprovers)</p> }
+            @if (selected.IsOwnRequest) { <p class="text-sm text-slate-500">You cannot verify or approve your own request.</p> }
+            @if (message != null) { <p role="status">@message</p> }
+            <RequestActionButtons @key="selected.RequestId" Actions="selected.Actions" EmptyMessage="selected.ActionsMessage" Disabled="busy" OnExecute="ExecuteAsync" />
+        </section>
+    </div>
+}
+
+@code {
+    private List<LeaveChangeRequestDto> items = [];
+    private LeaveChangeRequestDto? selected;
+    private bool loading, busy, showAll;
+    private string? error, message;
+    private readonly CancellationTokenSource stop = new();
+    private Task? loop;
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) loop = RefreshLoopAsync();
+        return Task.CompletedTask;
+    }
+    private async Task RefreshLoopAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(stop.Token))
+                await InvokeAsync(async () => { if (!busy && !loading && selected == null) { await LoadAsync(); StateHasChanged(); } });
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+    }
+    private static DateTime RequestedDate(LeaveChangeRequestDto item) => item.ChangeKind == 2 ? item.RequestedEndDate.Date.AddDays(1) : item.RequestedEndDate;
+    private void Select(int id) { if (!busy) { selected = items.FirstOrDefault(x => x.RequestId == id); message = null; } }
+    private void Close() { if (!busy) selected = null; }
+    private async Task RefreshAsync() { if (!busy && !loading) await LoadAsync(); }
+    private async Task LoadAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            var assigned = await Changes.GetAssignedRequestsAsync();
+            var own = await Changes.GetMyRequestsAsync();
+            var id = selected?.RequestId;
+            items = assigned.Concat(own).Where(x => x.IsProcessing).GroupBy(x => x.RequestId).Select(x => x.First()).OrderByDescending(x => x.RequestId).ToList();
+            selected = items.FirstOrDefault(x => x.RequestId == id);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load pending leave changes.");
+            error = "Leave changes could not be loaded. Please refresh to try again.";
+            items = []; selected = null;
+        }
+        finally { loading = false; }
+    }
+    private async Task ExecuteAsync(RequestActionSubmissionDto action)
+    {
+        if (busy || loading || selected == null) return;
+        busy = true;
+        try
+        {
+            var result = await Changes.ExecuteActionAsync(selected.RequestId, action);
+            message = result.Message;
+            if (result.Success) Toast.Success(result.Message); else Toast.Error(result.Message);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not process leave change request.");
+            message = "The change request could not be processed. Please refresh and try again.";
+        }
+        finally { busy = false; }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        await stop.CancelAsync();
+        if (loop != null) await loop;
+        stop.Dispose();
+    }
+}

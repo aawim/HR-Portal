@@ -482,6 +482,8 @@ namespace HRM.Components.Shared
             public const int NOPAY_LEAVE_REQUEST = 46;
             public const int JOB_TEMPORARY_TERMINATION_REQUEST = 47;
             public const int LEAVE_CHANGE_REQUEST = 48;
+            public const int EARLY_RETURN_REQUEST = 105;
+            public const int LEAVE_EXTENSION_REQUEST = 106;
             public const int OUT_OF_OFFICE_REQUEST = 50;
             public const int OT_PRE_APPROVAL_REQUEST = 51;
             public const int OT_REQUEST = 52;

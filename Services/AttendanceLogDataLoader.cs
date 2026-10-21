@@ -23,6 +23,7 @@ namespace HRM.Services
                 .AsNoTracking()
                 .Where(x =>
                     x.IndividualId == individualId &&
+                    x.AttendanceLogStateId == 1 &&
                     x.InOutModeId == 1 &&
                     x.Date.Date == date.Date)
                 .OrderBy(x => x.Date)
@@ -57,6 +58,7 @@ namespace HRM.Services
               .AsNoTracking()
               .Where(x =>
                   x.IndividualId == individualId &&
+                    x.AttendanceLogStateId == 1 &&
                   x.InOutModeId == 2 &&
                   x.Date.Date == date.Date)
               .OrderBy(x => x.Date)

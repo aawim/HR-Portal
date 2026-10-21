@@ -6,6 +6,7 @@ using HRM.DTOs.UserContext;
 using HRM.Models;
 using HRM.Models.Archives;
 using HRM.Models.Workflow;
+using HRM.Helpers;
 using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services.Leave;
@@ -19,8 +20,23 @@ public partial class LeaveChangeService
             var request = await db.Requests.AsNoTracking().SingleAsync(x => x.RequestId == item.RequestId);
             var change = await db.LeaveChangeRequests.AsNoTracking().Include(x => x.Leave).ThenInclude(x => x.Job)
                 .SingleAsync(x => x.RequestId == item.RequestId);
+            item.IsOwnRequest = change.Leave.Job.IndividualID == (user.IndividualId > 0 ? user.IndividualId : user.BusinessEntityId);
             var instance = await db.WfRequestInstances.AsNoTracking().SingleOrDefaultAsync(x => x.RequestId == item.RequestId);
-            if (instance != null) item.Actions = await AllowedActionsAsync(db, request, change.Leave, instance, user);
+            if (instance != null)
+            {
+                var availability = await GetActionAvailabilityAsync(db, request, change.Leave, instance, user);
+                item.Actions = availability.Actions;
+                item.ActionsMessage = availability.Message;
+                item.CurrentStage = await db.WfRequestStageInstances.AsNoTracking()
+                    .Where(x => x.RequestStageInstanceId == instance.CurrentRequestStageInstanceId)
+                    .Select(x => x.WorkflowStage.StageName).SingleOrDefaultAsync();
+                item.PendingApprovers = await (from a in db.WfRequestApprovals.AsNoTracking()
+                    join u in db.Users.AsNoTracking() on a.ApproverUserId equals u.UserId
+                    where a.RequestStageInstanceId == instance.CurrentRequestStageInstanceId && a.Decision == "Pending" &&
+                        instance.CompletedAt == null && instance.WorkflowStatus == "InProgress"
+                    orderby a.ApprovalSequence
+                    select u.FullName ?? u.Username).ToListAsync();
+            }
         }
     }
 
@@ -38,6 +54,12 @@ public partial class LeaveChangeService
         HrmTeContext db, Request request, Leaf leave, WfRequestInstance instance, UserContextDto user)
     {
         var result = new RequestActionAvailability();
+        var currentState = await db.RequestStates.AsNoTracking().SingleOrDefaultAsync(x => x.RequestStateId == request.RequestStateId);
+        if (currentState?.IsFinalState == true)
+        {
+            result.Message = "This request is final. No further processing actions are available.";
+            return result;
+        }
         if (instance.CompletedAt.HasValue || instance.WorkflowStatus is not ("InProgress" or "Returned") ||
             request.RequestStateId is SharedConfig.RequestStates.APPROVED or SharedConfig.RequestStates.CANCELLED or SharedConfig.RequestStates.REJECTED)
         {
@@ -45,7 +67,7 @@ public partial class LeaveChangeService
             return result;
         }
 
-        if (request.RequestTypeId != SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST &&
+        if (!LeaveChangeRequestTypes.IsChange(request.RequestTypeId) &&
             leave.LeaveStateId is SharedConfig.LeaveStates.APPROVED or SharedConfig.LeaveStates.REJECTED or SharedConfig.LeaveStates.CANCELLED)
         {
             result.Message = "This leave application is already closed. Contact HR if its request status is inconsistent.";
@@ -63,7 +85,7 @@ public partial class LeaveChangeService
         var personId = user.IndividualId > 0 ? user.IndividualId : user.BusinessEntityId;
         var owner = personId > 0 && leave.Job.IndividualID == personId;
         var assignment = stage.Approvals.FirstOrDefault(x => x.ApproverUserId == user.UserId && x.Decision == "Pending");
-        var assigned = instance.WorkflowStatus == "InProgress" && stage.StageStatus == "Pending" &&
+        var assigned = !owner && instance.WorkflowStatus == "InProgress" && stage.StageStatus == "Pending" &&
             !stage.CompletedAt.HasValue && assignment != null;
         var waitingForTurn = assigned && stage.WorkflowStage.ApprovalMode.Equals("Sequential", StringComparison.OrdinalIgnoreCase) &&
             stage.Approvals.Any(x => x.Decision == "Pending" && x.ApprovalSequence < assignment!.ApprovalSequence);
@@ -77,12 +99,32 @@ public partial class LeaveChangeService
 
         var rules = await db.RequestTypesStatesRequiredRolesForProcessings.AsNoTracking()
             .Where(x => x.RequestTypeId == request.RequestTypeId && x.RequestStateId == request.RequestStateId).ToListAsync();
+        var configuredLeaveFlow = await db.WfWorkflowDefinitions.AnyAsync(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.LeaveRequestKind != null);
+        if (configuredLeaveFlow && assigned)
+        {
+            try
+            {
+                var context = await workflowContext.ResolveAsync(db, request.RequestId, leave.JobId);
+                var eligible = await approvers.ResolveAsync(stage.WorkflowStageId, context);
+                assigned = eligible.Any(x => x.UserId == user.UserId);
+            }
+            catch (InvalidOperationException) { assigned = false; }
+            if (!assigned && !owner)
+            {
+                result.Message = "You no longer meet this stage's group or supervisor requirements.";
+                return result;
+            }
+        }
+        var resubmitState = configuredLeaveFlow
+            ? await db.WfWorkflowStages.Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive)
+                .OrderBy(x => x.StageOrder).Select(x => x.RequestStateId).FirstAsync()
+            : SharedConfig.RequestStates.PENDING_VERIFICATION;
         var roles = assigned ? await UserRolesAsync(db, user.UserId, organisationId) : new List<int>();
         var nextStage = await db.WfWorkflowStages.AsNoTracking()
             .Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive && x.StageOrder > stage.WorkflowStage.StageOrder)
             .OrderBy(x => x.StageOrder).FirstOrDefaultAsync();
         // Standard leave processing must verify before it can approve.
-        var nextStateId = request.RequestStateId switch
+        var nextStateId = configuredLeaveFlow ? nextStage?.RequestStateId ?? SharedConfig.RequestStates.APPROVED : request.RequestStateId switch
         {
             SharedConfig.RequestStates.PENDING_VERIFICATION => (int?)SharedConfig.RequestStates.PENDING_APPROVAL,
             SharedConfig.RequestStates.PENDING_APPROVAL => SharedConfig.RequestStates.APPROVED,
@@ -101,10 +143,10 @@ public partial class LeaveChangeService
         {
             var state = transition.ToRequestState;
             var applicantAction = owner && (state.RequestStateId == SharedConfig.RequestStates.CANCELLED ||
-                (request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE && state.RequestStateId == SharedConfig.RequestStates.PENDING_VERIFICATION));
+                (request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE && state.RequestStateId == resubmitState));
             var required = rules.Where(x => x.ToRequestStateId == null || x.ToRequestStateId == state.RequestStateId).ToList();
             // A named assignment grants a place in the workflow, not every processing permission.
-            var processorAction = assigned && (rules.Count == 0 || required.Any(x => roles.Contains(x.RoleId)));
+            var processorAction = assigned && (configuredLeaveFlow || rules.Count == 0 || required.Any(x => roles.Contains(x.RoleId)));
             if (!applicantAction && !processorAction)
             {
                 blockedByRole |= assigned;
@@ -133,8 +175,14 @@ public partial class LeaveChangeService
         }
 
         result.Actions = result.Actions.OrderBy(x => x.ToStateId).ToList();
+        if (transitions.Count == 0)
+        {
+            result.Message = "No allowed transitions are configured for this Request Type and current state. Configure From State / To State in Settings > State Transitions.";
+            return result;
+        }
         result.Message = blockedByHandover ? "Leave approval is available after the assigned employees and a team or department supervisor approve the work handover." :
             result.Actions.Count > 0 ? null :
+            owner ? "You can view and change your leave, but cannot verify or approve your own request." :
             blockedByRole ? "Your roles do not permit the configured actions at this request status." :
             "No actions are configured for you at this request status.";
         return result;
@@ -194,7 +242,7 @@ public partial class LeaveChangeService
             var request = await db.Requests.FromSqlInterpolated(
                 $"SELECT * FROM dbo.Requests WITH (UPDLOCK, HOLDLOCK) WHERE RequestID = {requestId}").SingleOrDefaultAsync()
                 ?? throw new InvalidOperationException("The request was not found.");
-            if (!application && request.RequestTypeId != SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST)
+            if (!application && !LeaveChangeRequestTypes.IsChange(request.RequestTypeId))
                 throw new InvalidOperationException("This is not a leave change request.");
             if (request.RequestStateId != action.FromStateId)
                 throw new InvalidOperationException("The request status has changed. Refresh and choose an available action.");
@@ -213,13 +261,17 @@ public partial class LeaveChangeService
             }
             var instance = await db.WfRequestInstances.SingleOrDefaultAsync(x => x.RequestId == requestId)
                 ?? throw new InvalidOperationException("The approval workflow has not started.");
+            if (revision != null && request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE &&
+                await db.WfWorkflowDefinitions.AnyAsync(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.LeaveRequestKind != null))
+                action.ToStateId = await db.WfWorkflowStages.Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive)
+                    .OrderBy(x => x.StageOrder).Select(x => x.RequestStateId).FirstAsync();
+            await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, action.ToStateId);
             var allowed = await AllowedActionsAsync(db, request, subjectLeave, instance, user);
             var selected = allowed.FirstOrDefault(x => x.ToStateId == action.ToStateId)
                 ?? throw new UnauthorizedAccessException("This transition is not allowed for the current request status and your permissions.");
             if (selected.CommentRequired && string.IsNullOrWhiteSpace(action.Comments))
                 throw new InvalidOperationException("A comment is required for this action.");
-            if (application && request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE &&
-                action.ToStateId == SharedConfig.RequestStates.PENDING_VERIFICATION)
+            if (application && request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE)
             {
                 if (revision == null) throw new InvalidOperationException("Open the correction form to edit and resubmit this application.");
                 await ApplyReturnedApplicationEditsAsync(db, request, subjectLeave, revision, user);
@@ -327,7 +379,8 @@ public partial class LeaveChangeService
         List<WfRequestApproval> assignments;
         var namedApprovers = template != null && await db.WfStageApprovers.AsNoTracking()
             .AnyAsync(x => x.WorkflowStageId == template.WorkflowStageId && x.ApproverType == "USER");
-        if (roles.Count > 0 && !namedApprovers)
+        var configuredLeaveFlow = await db.WfWorkflowDefinitions.AnyAsync(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.LeaveRequestKind != null);
+        if (roles.Count > 0 && !namedApprovers && !configuredLeaveFlow)
         {
             var org = request.OrganisationBusinessEntityID ?? 0;
             var users = await db.Users.AsNoTracking().Where(x => x.IsActive &&

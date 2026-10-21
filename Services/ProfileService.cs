@@ -237,7 +237,7 @@ namespace HRM.Services
                     StaffNo = StaffNo?.StaffNo ?? "N/A",
 
 
-                    JobHistory =[],
+                    JobHistory = await JobHistoryQuery.LoadAsync(db, individualId, cancellationToken),
                     /*
                      * Populate these as their loaders are implemented.
                      */

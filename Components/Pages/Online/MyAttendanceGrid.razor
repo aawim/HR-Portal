@@ -185,7 +185,7 @@
                                                         </span>
                                                     </td>
 
-                                                    <td class="px-4 py-3 text-xs text-slate-500 truncate max-w-[150px]">
+                                                    <td class="px-4 py-3 text-xs text-slate-500 truncate max-w-[150px]" title="@record.Details">
                                                         @(string.IsNullOrEmpty(record.Details) ? "-" : record.Details)
                                                     </td>
                                                 </tr>
@@ -515,7 +515,8 @@
         var shiftStart = new TimeSpan(8, 30, 0); 
         
         lateRecords = rawLogs
-            .Where(l => l.InOutModeId == 1 && l.Date.TimeOfDay > shiftStart)
+            .Where(l => l.InOutModeId == 1 && l.Date.TimeOfDay > shiftStart &&
+                dailyRecords.Any(r => r.Date.Date == l.Date.Date && r.Status == "Present"))
             .Select(l => new LateRecord {
                 Date = l.Date,
                 ActualTime = l.Date.TimeOfDay,
@@ -549,14 +550,16 @@
 
     private void LoadChartData()
     {
+        var totalDays = Math.Max(1, dailyRecords.Count);
+        var leaveDays = dailyRecords.Count(r => r.Status == "Leave");
         attendanceStats = new List<ChartStat>
         {
             new ChartStat { Label = "To Attend", Days = 30, Percentage = 100, ColorClass = "bg-slate-400" },
-            new ChartStat { Label = "Absent", Days = 30, Percentage = 100, ColorClass = "bg-rose-500" },
+            new ChartStat { Label = "Absent", Days = TotalAbsentDays, Percentage = (int)Math.Round(100d * TotalAbsentDays / totalDays), ColorClass = "bg-rose-500" },
             new ChartStat { Label = "Late", Days = 0, Percentage = 0, ColorClass = "bg-amber-400" },
             new ChartStat { Label = "Perfect", Days = 0, Percentage = 0, ColorClass = "bg-emerald-400" },
             new ChartStat { Label = "Attended", Days = 0, Percentage = 0, ColorClass = "bg-blue-500" },
-            new ChartStat { Label = "Leaves", Days = 0, Percentage = 0, ColorClass = "bg-purple-400" }
+            new ChartStat { Label = "Leaves", Days = leaveDays, Percentage = (int)Math.Round(100d * leaveDays / totalDays), ColorClass = "bg-blue-400" }
         };
     }
   
@@ -577,14 +580,30 @@
 
             int individualID = await _individual.GetIndividualID();
         rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
+        var approvedLeaves = await DbContext.Leaves
+            .AsNoTracking()
+            .Where(l => l.Job.IndividualID == individualID &&
+                l.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
+                l.FromDate < end.Date.AddDays(1) && l.ToDate >= start.Date)
+            .Select(l => new
+            {
+                l.FromDate,
+                l.ToDate,
+                Type = l.LeaveTypeId.HasValue ? l.LeaveType.Name : "Leave"
+            })
+            .ToListAsync();
 
         // Define rules
         // var shiftStart = new TimeSpan(8, 30, 0);
         // var allowedBreakDuration = TimeSpan.FromMinutes(60);
 
-        for (var day = start; day <= end; day = day.AddDays(1))
+        for (var day = start.Date; day <= end.Date; day = day.AddDays(1))
         {
             var dayLogs = rawLogs.Where(l => l.Date.Date == day.Date).ToList();
+            var dayLeaves = approvedLeaves
+                .Where(l => l.FromDate.Date <= day && l.ToDate.Date >= day)
+                .ToList();
+            var isOnLeave = dayLeaves.Count > 0;
 
             var row = new DailyAttendanceRow
                 {
@@ -593,9 +612,18 @@
                     Details = ""
                 };
 
+            if (isOnLeave)
+            {
+                row.Status = "Leave";
+                row.Details = string.Join(", ", dayLeaves
+                    .Select(l => string.IsNullOrWhiteSpace(l.Type) ? "Leave" : l.Type)
+                    .Distinct());
+            }
+
             if (dayLogs.Any())
             {
-                row.Status = "Present";
+                if (!isOnLeave)
+                    row.Status = "Present";
 
                 // Clock In/Out
                 var clockIn = dayLogs.LastOrDefault(l => l.InOutModeId == 1);
@@ -609,7 +637,7 @@
                 row.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
 
                 // 1. Calculate Late Arrival
-                if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                if (!isOnLeave && clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
                 {
                     lateRecords.Add(new LateRecord
                         {
@@ -621,7 +649,7 @@
                 }
 
                 // 2. Calculate Break Overtime
-                if (breakOut != null && breakIn != null)
+                if (!isOnLeave && breakOut != null && breakIn != null)
                 {
                     TimeSpan actualBreak = breakIn.Date - breakOut.Date;
                     if (actualBreak > allowedBreakDuration)
@@ -644,6 +672,7 @@
             }
             dailyRecords.Add(row);
         }
+        LoadChartData();
         StateHasChanged(); // Refresh the UI
 
         }

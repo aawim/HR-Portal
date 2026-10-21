@@ -13,7 +13,7 @@
         </div>
         <div class="rounded-lg border bg-slate-50 p-4 space-y-1">
             <p class="font-medium">@Item.FromDate.ToString("dd MMM yyyy") – @Item.ToDate.ToString("dd MMM yyyy") · @Item.Duration days</p>
-            <p class="text-sm text-amber-700">@Item.Status</p>
+            <p class="text-sm text-amber-700">@(Item.IsProcessing ? "Processing · " : "")@Item.Status</p>
         </div>
         <dl class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div><dt class="font-medium text-slate-500">Reason</dt><dd class="mt-1">@Display(Item.Reason)</dd></div>
@@ -21,11 +21,21 @@
             <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Additional details</dt><dd class="mt-1 whitespace-pre-wrap break-words">@Display(Item.Explanation)</dd></div>
             <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Leave address</dt><dd class="mt-1 whitespace-pre-wrap break-words">@Display(Item.Address)</dd></div>
             <div class="sm:col-span-2"><dt class="font-medium text-slate-500">Work handover</dt><dd class="mt-1">@Item.HandoverStatus
-                @if (Item.HasHandover) { <a class="mt-1 block text-blue-700 underline" href="@($"/online/leave-handovers/{Item.LeaveId}")">View work handover</a> }
+                @if (Item.HasHandover) { <a class="app-button app-button-secondary mt-1 block text-blue-700 underline" href="@($"/online/leave-handovers/{Item.LeaveId}")">View work handover</a> }
             </dd></div>
         </dl>
         <div class="border-t pt-4 space-y-3">
             <h3 class="font-semibold">Request actions</h3>
+            @if (Item.IsOwnLeave)
+            {
+                <p class="text-sm text-slate-500">You cannot verify or approve your own leave.</p>
+                <a class="inline-block text-sm text-blue-700 underline" href="/online/attendance/attendance-request">Request an extension or early return</a>
+            }
+            @if (Item.CanEdit)
+            {
+                <MyLeaveApplications @key="Item.RequestId" EditorOnly="true" EditRequestId="Item.RequestId"
+                                     OnSaved="OnChanged" OnClose="OnChanged" />
+            }
             @if (Message != null) { <p role="status" class="text-sm">@Message</p> }
             @if (Busy) { <p role="status" class="text-sm text-slate-500">Saving status change…</p> }
             @if (Item.Actions.Count > 0 && Item.ActionsMessage != null) { <p role="status" class="text-sm text-amber-700">@Item.ActionsMessage</p> }
@@ -40,5 +50,6 @@
     [Parameter] public string? Message { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<RequestActionSubmissionDto> OnExecute { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
     private static string Display(string value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 }

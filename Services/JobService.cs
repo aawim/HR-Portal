@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.UserContext;
 using HRM.Models;
@@ -29,34 +29,7 @@ namespace HRM.Services
         {
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            return await db.Jobs
-                .AsNoTracking()
-                .Where(x =>
-                    x.IndividualID == individualId &&
-                    !(x.JobStateId == SharedConfig.JobStates.APPROVED &&
-                      x.TerminatedDate == null))
-                .OrderByDescending(x => x.JoinedDate)
-                .Select(x => new JobDto
-                {
-                    JobID = x.JobId,
-
-                    IndividualID = x.IndividualID,
-
-                    OrganisationID = x.OrganisationID,
-
-                    OrganisationStructureID = x.OrganisationStructureId,
-
-                    JobStateID = x.JobStateId,
-
-                    JobTypeID = x.JobTypeId,
-
-                    JoinedDate = x.JoinedDate,
-
-                    TerminatedDate = x.TerminatedDate,
-
-                    BasicSalary = x.BasicSalary
-                })
-                .ToListAsync();
+            return await JobHistoryQuery.LoadAsync(db, individualId);
         }
         public async Task<int?> GetOrganisationIdByIndividualAsync(int individualId)
         {
@@ -148,3 +121,4 @@ namespace HRM.Services
 
     }
 }
+

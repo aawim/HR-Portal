@@ -13,7 +13,7 @@
             <button type="button" disabled="@(Busy || Loading)" aria-pressed="@(SelectedRequestId == item.RequestId)"
                     class="w-full text-left border-b rounded px-2 py-3 hover:bg-slate-50 disabled:opacity-50 @(SelectedRequestId == item.RequestId ? "bg-blue-50 ring-1 ring-blue-200" : "")"
                     @onclick="() => OnSelected.InvokeAsync(item)">
-                <div class="flex justify-between gap-3"><strong>@item.Applicant</strong><span class="text-xs text-amber-700">@item.Status</span></div>
+                <div class="flex justify-between gap-3"><strong>@item.Applicant</strong><span class="text-xs text-amber-700">@(item.IsProcessing ? "Processing · " : "")@item.Status</span></div>
                 <div class="text-sm text-slate-500">@item.LeaveType · @item.FromDate.ToString("dd MMM yyyy") – @item.ToDate.ToString("dd MMM yyyy") (@item.Duration days)</div>
                 <span class="text-xs text-blue-600">@item.Reference · View details</span>
             </button>

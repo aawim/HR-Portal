@@ -1,5 +1,6 @@
 ﻿using HRM.DTOs.Attendance;
 using HRM.Enum;
+using HRM.Components.Shared;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.Services.Attendance.Evaluation;
@@ -108,6 +109,7 @@ namespace HRM.Services
                 .Include(x => x.AttendanceLogResolutions)
                 .Where(x =>
                     x.IndividualId == individualId &&
+                    x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                     x.Date >= periodStart &&
                     x.Date < periodEndExclusive)
                 .OrderBy(x => x.Date)
@@ -335,6 +337,7 @@ namespace HRM.Services
                 .Include(x => x.AttendanceLogResolutions)
                 .Where(x =>
                     x.IndividualId == context.IndividualId &&
+                    x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                     x.Date >= startDate &&
                     x.Date < endDate)
                 .OrderBy(x => x.Date)
@@ -469,6 +472,7 @@ namespace HRM.Services
 
             where
                 log.IndividualId == individualId &&
+                log.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                 log.Date >= date &&
                 log.Date < nextDate
 
@@ -613,6 +617,7 @@ namespace HRM.Services
             .Include(x => x.AttendanceLogResolutions)
             .Where(x =>
                 x.IndividualId == userContext.IndividualId &&
+                x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                 x.Date >= previousWeekStart &&
                 x.Date < currentWeekEndExclusive)
             .OrderBy(x => x.Date)
@@ -821,6 +826,8 @@ namespace HRM.Services
                     x.IndividualId ==
                         userContext.IndividualId &&
 
+                    x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
+
                     x.Date >= yearStart &&
 
                     x.Date < queryEnd)
@@ -829,14 +836,19 @@ namespace HRM.Services
 
 
             // ---------------------------------------------------------
-            // Group logs by calendar date
-            //
-            // NOTE:
-            // For the yearly overview, calendar-date grouping is fine.
-            //
-            // Worked-hour calculations may later need WorkPlan grouping
-            // for overnight assignments.
+            // Load approved leave across all of the employee's jobs.
             // ---------------------------------------------------------
+            var approvedLeaves = await db.Leaves
+                .AsNoTracking()
+                .Where(x =>
+                    x.Job.IndividualID == userContext.IndividualId &&
+                    x.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
+                    x.FromDate < yearEndExclusive &&
+                    x.ToDate >= yearStart)
+                .Select(x => new { x.FromDate, x.ToDate })
+                .ToListAsync(cancellationToken);
+
+            // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
                 .GroupBy(x => x.Date.Date)
                 .ToDictionary(
@@ -1033,15 +1045,20 @@ namespace HRM.Services
                 // Attendance state
                 // -----------------------------------------------------
 
-                // Presence is determined by successfully resolved
-                // CheckIn.
+                // Approved leave takes precedence over attendance states,
+                // while physical clock details remain available on the DTO.
+                var isOnLeave = approvedLeaves.Any(x =>
+                    x.FromDate.Date <= date && x.ToDate.Date >= date);
+
+                // Presence is determined by successfully resolved CheckIn.
                 var isPresent =
-                    firstCheckIn != null;
+                    !isOnLeave && firstCheckIn != null;
 
 
                 // There were physical clock events but none of them
                 // resulted in useful attendance.
                 var isUnresolved =
+                    !isOnLeave &&
                     dayLogs.Count > 0 &&
                     !isPresent &&
                     resolvedEvents.Count == 0 &&
@@ -1066,6 +1083,7 @@ namespace HRM.Services
                  * attendance summary.
                  */
                 var isAbsent =
+                    !isOnLeave &&
                     !isPresent &&
                     !isUnresolved;
 
@@ -1109,13 +1127,12 @@ namespace HRM.Services
                         IsUnresolved =
                             isUnresolved,
 
-                        // These will be implemented from the
-                        // appropriate modules later.
+                        // Rest-day and holiday classification is not yet available.
                         IsRestDay =
                             false,
 
                         IsOnLeave =
-                            false,
+                            isOnLeave,
 
                         IsHoliday =
                             false

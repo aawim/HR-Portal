@@ -16,6 +16,7 @@ public class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, 
     {
         var user = await access.RequireContextAsync();
         if (!user.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") &&
+            !(groups && await access.HasPermissionAsync("Developer")) &&
             !await access.HasPermissionAsync(permission) &&
             !(groups && await access.HasPermissionAsync(permission.Replace("UserOrganisation", "Organisation").Replace(".Create", ".Add"))))
             throw new UnauthorizedAccessException("You do not have permission to manage these access settings.");

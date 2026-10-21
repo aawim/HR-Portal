@@ -1,0 +1,88 @@
+/* Button tokens are separate from status badges and other coloured content. */
+:root {
+    --action-primary: #2563eb; --action-primary-hover: #1d4ed8;
+    --action-success: #15803d; --action-success-hover: #166534;
+    --action-danger: #dc2626; --action-danger-hover: #b91c1c;
+    --action-neutral: #f1f5f9; --action-neutral-hover: #e2e8f0;
+    --action-neutral-text: #334155; --action-border: #cbd5e1;
+    --action-focus: #2563eb;
+    --action-secondary: #eff6ff; --action-secondary-hover: #dbeafe; --action-secondary-text: #1d4ed8;
+}
+[data-theme="dark"] {
+    --action-primary: #1d4ed8; --action-primary-hover: #2563eb;
+    --action-success: #166534; --action-success-hover: #15803d;
+    --action-danger: #b91c1c; --action-danger-hover: #dc2626;
+    --action-neutral: #28364b; --action-neutral-hover: #3b4b63;
+    --action-neutral-text: #e2e8f0; --action-border: #52627a;
+    --action-focus: #93c5fd;
+    --action-secondary: #193657; --action-secondary-hover: #25486e; --action-secondary-text: #bfdbfe;
+}
+
+.app-button {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    padding: .5rem .75rem; border: 1px solid; border-radius: .5rem;
+    font-weight: 600; line-height: 1.25; text-align: center; text-decoration: none;
+}
+:root .app-button.app-button-secondary {
+    background-color: var(--action-secondary) !important;
+    color: var(--action-secondary-text) !important;
+    border-color: var(--action-border) !important;
+    text-decoration: none !important;
+}
+:root .app-button.app-button-secondary:hover:not(:disabled):not([aria-disabled="true"]) {
+    background-color: var(--action-secondary-hover) !important;
+    color: var(--action-secondary-text) !important;
+}
+
+:is(button, .btn, input[type="submit"], input[type="button"]) {
+    transition: background-color .15s, border-color .15s, color .15s, box-shadow .15s;
+}
+:is(button, .btn, input[type="submit"], input[type="button"]):focus-visible {
+    outline: 3px solid var(--action-focus); outline-offset: 3px;
+}
+:is(button, .btn, input[type="submit"], input[type="button"]):disabled {
+    cursor: not-allowed; opacity: .5;
+}
+/* Respect existing segmented button groups; wrap action rows on small screens. */
+:where(.flex, .inline-flex, .d-flex, .d-inline-flex, .grid):has(> :is(button, .app-button) ~ :is(button, .app-button)):not([class*="gap-"]):not(.btn-group):not(.btn-group-vertical) {
+    column-gap: .5rem; row-gap: .5rem;
+}
+:where(.flex, .inline-flex, .d-flex, .d-inline-flex):has(> button ~ button):not(.btn-group):not(.btn-group-vertical):not(.flex-col) { flex-wrap: wrap; }
+:where(div, section, footer, form, td):not(.flex):not(.inline-flex):not(.grid):not(.d-flex):not(.d-inline-flex):not(.btn-group):not(.btn-group-vertical) > :is(button, .btn) + :is(button, .btn) { margin-inline-start: .5rem; }
+
+@media screen {
+    :root :is(button, a, input):is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .btn-primary) {
+        background-color: var(--action-primary) !important; color: #fff !important; border-color: var(--action-primary) !important;
+    }
+    :root :is(button, a, input):is(.bg-blue-500, .bg-blue-600, .bg-blue-700, .bg-indigo-600, .btn-primary):hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--action-primary-hover) !important; border-color: var(--action-primary-hover) !important;
+    }
+    :root :is(button, a, input):is(.bg-green-600, .bg-green-700, .bg-emerald-500, .bg-emerald-600, .bg-emerald-700, .btn-success) {
+        background-color: var(--action-success) !important; color: #fff !important; border-color: var(--action-success) !important;
+    }
+    :root :is(button, a, input):is(.bg-green-600, .bg-green-700, .bg-emerald-500, .bg-emerald-600, .bg-emerald-700, .btn-success):hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--action-success-hover) !important; border-color: var(--action-success-hover) !important;
+    }
+    :root :is(button, a, input):is(.bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-rose-700, .btn-danger) {
+        background-color: var(--action-danger) !important; color: #fff !important; border-color: var(--action-danger) !important;
+    }
+    :root :is(button, a, input):is(.bg-red-500, .bg-red-600, .bg-red-700, .bg-rose-500, .bg-rose-600, .bg-rose-700, .btn-danger):hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--action-danger-hover) !important; border-color: var(--action-danger-hover) !important;
+    }
+    :root :is(button, .btn):is(.bg-white, .bg-gray-100, .bg-slate-100, .bg-gray-200, .bg-slate-200, .btn-light, .btn-secondary, .btn-outline-secondary) {
+        background-color: var(--action-neutral) !important; color: var(--action-neutral-text) !important; border-color: var(--action-border) !important;
+    }
+    :root :is(button, .btn):is(.bg-white, .bg-gray-100, .bg-slate-100, .bg-gray-200, .bg-slate-200, .btn-light, .btn-secondary, .btn-outline-secondary):hover:not(:disabled):not([aria-disabled="true"]) {
+        background-color: var(--action-neutral-hover) !important;
+    }
+    [data-theme="dark"] :is(.btn-outline-primary, .btn-link) { color: #93c5fd; }
+    [data-theme="dark"] .btn-outline-primary:hover { background-color: var(--action-primary); color: white; }
+    [data-theme="dark"] .btn-outline-danger { color: #fda4af; }
+    [data-theme="dark"] .btn-outline-danger:hover { background-color: var(--action-danger); color: white; }
+    /* Legacy light action fills also need a matching foreground in dark mode. */
+    [data-theme="dark"] :is(button, a):is(.bg-green-200, .bg-green-300, .bg-emerald-200, .bg-emerald-300) { background-color: #153e34 !important; color: #a7f3d0 !important; }
+    [data-theme="dark"] :is(button, a):is(.bg-blue-200, .bg-blue-300, .bg-sky-200, .bg-indigo-200) { background-color: #193657 !important; color: #bfdbfe !important; }
+}
+@media (prefers-reduced-motion: reduce) {
+    :is(button, .btn, input[type="submit"], input[type="button"]) { transition: none; }
+}

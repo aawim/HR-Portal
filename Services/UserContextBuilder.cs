@@ -71,6 +71,7 @@ namespace HRM.Services
         public async Task<UserContextDto?> BuildCurrentUserAsync()
         {
             var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true) return null;
 
             var username = authState.User.FindFirst("idnumber")?.Value;
 
@@ -96,6 +97,7 @@ namespace HRM.Services
         {
             return await db.Users
                 .AsNoTracking()
+                .Where(x => x.IsActive && x.LocalUserStateId == 1)
                 .SingleOrDefaultAsync(predicate);
         }
 
@@ -120,7 +122,7 @@ namespace HRM.Services
             await PopulatePermissionsAsync(db, context);
 
 
-            await PopulateSecurityAsync(context);
+            // Permissions and groups above are resolved with current organisation scope.
 
 
             await PopulateOrganisationAccessAsync(db, context);
@@ -297,6 +299,7 @@ namespace HRM.Services
             return new UserContextDto
             {
                 UserId = user.UserId,
+                UserOrganisationId = user.UserOrganisationId,
 
                 BusinessEntityId = user.BusinessEntityID,
 
@@ -370,7 +373,9 @@ namespace HRM.Services
                 where
                     job.IndividualID == individualId &&
                     job.JobStateId == approvedStateId &&
-                    job.TerminatedDate == null
+                    job.TerminatedDate == null && job.JoinedDate <= today &&
+                    db.Users.Any(u => u.BusinessEntityID == individualId &&
+                        db.UserOrganisations.Any(o => o.UserOrganisationID == u.UserOrganisationId && o.BusinessEntityID == job.OrganisationID))
 
                 let activePosition =
                     (
@@ -498,7 +503,7 @@ namespace HRM.Services
                 return;
             }
 
-            context.Organisation = await _organisationService.GetOrganisationAsync(context.BusinessEntityId);
+            context.Organisation = await _organisationService.GetUserOrganisationAsync(context.UserId);
         }
 
 
@@ -506,7 +511,7 @@ namespace HRM.Services
         {
             return await db.UserAssignedUserGroups
                 .AsNoTracking()
-                .Where(x => x.UserId == userId)
+                .Where(x => x.UserId == userId && (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId))
                 .Select(x => new UserGroupDto
                 {
                     UserGroupID = x.UserGroupId,

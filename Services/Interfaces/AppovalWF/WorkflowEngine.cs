@@ -86,6 +86,17 @@ namespace HRM.Services.Interfaces.AppovalWF
 
             // 4. Select workflow using request type,
             // organisation, job type and effective date.
+            WfWorkflowDefinition definition;
+            var scopedRequestFlow = context.LeaveRequestKind.HasValue || await db.WfWorkflowDefinitions.AnyAsync(x => x.IsActive &&
+                x.LeaveTypeId == null && x.LeaveRequestKind == 0 && x.RequestTypeId == context.RequestTypeId &&
+                x.OrganisationBusinessEntityId == context.OrganisationBusinessEntityId &&
+                x.WorkflowJobTypes.Any(j => j.IsActive && j.JobTypeId == context.JobTypeId), cancellationToken);
+            if (scopedRequestFlow)
+            {
+                definition = await HRM.Services.Leave.LeaveFlowConfigurationService.ResolveAsync(db, context, cancellationToken);
+            }
+            else
+            {
             var approvalRequestTypeId = context.RequestTypeId;
             if (context.FallbackApprovalRequestTypeId.HasValue &&
                 !await db.WfWorkflowDefinitions.AsNoTracking().AnyAsync(x =>
@@ -98,12 +109,13 @@ namespace HRM.Services.Interfaces.AppovalWF
             {
                 approvalRequestTypeId = context.FallbackApprovalRequestTypeId.Value;
             }
-            var definition = await _definitionService.ResolveAsync(
+            definition = await _definitionService.ResolveAsync(
                   approvalRequestTypeId,
                   context.OrganisationBusinessEntityId,
                   context.JobTypeId,
                   context.EffectiveDate,
                   cancellationToken);
+            }
 
             // 5. Load the first active stage.
             var stages = definition.Stages
@@ -116,6 +128,23 @@ namespace HRM.Services.Interfaces.AppovalWF
                     "The workflow has no active stages.");
 
             var firstStage = stages[0];
+            if (context.RequestStateId != firstStage.RequestStateId)
+                await RequestTransitionPolicy.RequireAllowedAsync(db, context.RequestTypeId, context.RequestStateId, firstStage.RequestStateId, cancellationToken);
+
+            // Validate every stage before accepting a leave submission, so it cannot become stranded later.
+            if (scopedRequestFlow)
+                foreach (var stage in stages)
+                {
+                    try
+                    {
+                    if ((await _approverResolver.ResolveAsync(stage.WorkflowStageId, context, cancellationToken)).Count == 0)
+                        throw new InvalidOperationException($"No eligible approver for {stage.StageName}. Ask HR to configure the flow and supervisors.");
+                    }
+                    catch (InvalidOperationException ex)
+                    {
+                        throw new InvalidOperationException($"{stage.StageName}: {ex.Message} Check the stage's User Group membership and team/department supervisor configuration.", ex);
+                    }
+                }
 
             // 6. Resolve approvers before making changes.
             var approvers = await _approverResolver.ResolveAsync(
@@ -316,21 +345,13 @@ namespace HRM.Services.Interfaces.AppovalWF
                 ("@StageInstanceID", stageInstanceId),
                 ("@WorkflowInstanceID", workflowInstanceId));
 
-            // 12. Update existing request state.
-            await ExecuteAsync(
-                connection,
-                sqlTransaction,
-                """
-            UPDATE dbo.Requests
-            SET RequestStateID = @NewStateID,
-                LastStateChangedByUserID = @UserID,
-                LastStateChangedDate = SYSUTCDATETIME()
-            WHERE RequestID = @RequestID
-            """,
-                cancellationToken,
-                ("@NewStateID", firstStage.RequestStateId),
-                ("@UserID", userId),
-                ("@RequestID", requestId));
+            // 12. Use the tracked state write so notifications share this transaction.
+            var stateRequest = await db.Requests.SingleAsync(x => x.RequestId == requestId, cancellationToken);
+            db.Entry(stateRequest).Property(x => x.RequestStateId).OriginalValue = requestStateId.Value;
+            stateRequest.RequestStateId = firstStage.RequestStateId;
+            stateRequest.LastStateChangedByUserId = userId;
+            stateRequest.LastStateChangedDate = DateTime.UtcNow;
+            await db.SaveChangesAsync(cancellationToken);
 
             // 13. Record audit action.
             await ExecuteAsync(
@@ -429,21 +450,7 @@ namespace HRM.Services.Interfaces.AppovalWF
             }
 
             // 3. Check whether the transition is allowed.
-            var transitionAllowed =
-                await db.RequestTypesAllowedRequestStateTransitions
-                    .AsNoTracking()
-                    .AnyAsync(x =>
-                        x.RequestTypeId == request.RequestTypeId &&
-                        x.FromRequestStateId == request.RequestStateId &&
-                        x.ToRequestStateId == cancelledStateId,
-                        cancellationToken);
-
-            if (!transitionAllowed)
-            {
-                throw new InvalidOperationException(
-                    $"Cancellation is not permitted from " +
-                    $"RequestStateID {request.RequestStateId}.");
-            }
+            await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, cancelledStateId, cancellationToken);
 
             // 4. Applicant cancellation policy.
             int[] applicantCancellableStates = { 1, 2, 3, 12 };

@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.UserContext;
+using HRM.DTOs.UserContext;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using Microsoft.AspNetCore.Components.Authorization;
@@ -30,8 +30,7 @@ namespace HRM.Services
         public async Task<UserContextDto?> GetCurrentAsync()
         {
 
-            if (Current != null)
-                return Current;
+            Current = null;
 
             var authState = await _authentication.GetAuthenticationStateAsync();
             var principal = authState.User;
@@ -233,22 +232,22 @@ namespace HRM.Services
 
         public async Task<UserContextDto?> GetAsync(int userId)
         {
-            var cached =
-                await _cache.GetAsync(userId);
-
-            if (cached != null)
-            {
-                Current = cached;
-                return cached;
-            }
-
+            Current = null;
+            var auth = await _authentication.GetAuthenticationStateAsync();
+            var username = auth.User.FindFirst("idnumber")?.Value;
+            if (auth.User.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username))
+            { Current = null; return null; }
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var actor = await db.Users.AsNoTracking().SingleOrDefaultAsync(x => x.Username == username && x.IsActive && x.LocalUserStateId == 1);
+            if (actor == null) { Current = null; return null; }
+            if (actor.UserId != userId) throw new UnauthorizedAccessException("User context cannot be switched to another account.");
+            // Rebuild authorization data: cached grants must not survive revocation,
+            // organisation reassignment, or an authentication identity change.
             var context =
                 await _builder.BuildAsync(userId);
 
-            if (context == null)
+            if (context == null || context.UserId != actor.UserId)
                 return null;
-
-            await _cache.SetAsync(userId, context);
 
             Current = context;
 
@@ -258,6 +257,8 @@ namespace HRM.Services
 
         public async Task<UserContextDto?> RefreshAsync(int userId)
         {
+            var current = await GetCurrentAsync();
+            if (current == null || current.UserId != userId) throw new UnauthorizedAccessException("Only your own user context can be refreshed.");
             await _cache.RemoveAsync(userId);
 
             Current = null;
@@ -276,3 +277,4 @@ namespace HRM.Services
 
     }
 }
+

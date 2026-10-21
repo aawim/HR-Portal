@@ -20,15 +20,18 @@
 
         <main class="flex-1 overflow-x-hidden overflow-y-auto p-4">
 
-           @if (_session is not null)
+           @if (_session?.CanAccessAdminPortal == true)
             {
-                <PortalSwitcher InitialOrgId="@_session.OrganisationId"
-                                InitialOrgName="@_session.OrganisationName" />
+                <PortalSwitcher />
+                @Body
             }
 
 
 
-            @Body
+            else
+            {
+                <p role="alert">You do not have access to the Admin portal.</p>
+            }
 
         </main>
     </div>
@@ -40,17 +43,13 @@
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        _session = null;
         _session = await UserContext.GetSessionAsync();
+        PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "", _session?.CanAccessAdminPortal == true);
+        PortalContext.SwitchToAdmin();
 
-        if (_session != null)
-        {
-            PortalContext.Initialize(
-                _session.OrganisationId,
-                _session.OrganisationName,
-                _session.CanAccessAdminPortal);
-        }
     }
 
     public class UserSession

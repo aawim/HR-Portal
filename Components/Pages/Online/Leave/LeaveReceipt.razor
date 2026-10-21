@@ -1,0 +1,67 @@
+@page "/online/leaves/{LeaveId:int}/receipt"
+@layout HRM.Components.Layout.ReceiptLayout
+@rendermode RenderMode.InteractiveServer
+@using HRM.DTOs.Leave
+@using HRM.Services.Interfaces.Leave
+@inject ILeaveReceiptService Receipts
+@inject IJSRuntime JS
+@inject ILogger<LeaveReceipt> Logger
+
+<PageTitle>Leave receipt</PageTitle>
+<div class="receipt-page">
+    <nav class="receipt-actions" aria-label="Receipt actions">
+        <a href="/online/leaves/all-requests">Back to leave requests</a>
+        @if (receipt != null) { <button type="button" @onclick="PrintAsync">Print / Save as PDF</button> }
+    </nav>
+    @if (loading) { <p role="status">Loading leave receipt…</p> }
+    else if (receipt == null) { <p role="alert">@error</p> }
+    else
+    {
+        <article class="leave-receipt" aria-label="Approved leave receipt">
+            <header class="letterhead">
+                @if (!string.IsNullOrWhiteSpace(receipt.OrganisationDhivehi)) { <p lang="dv" dir="rtl">@receipt.OrganisationDhivehi</p> }
+                <h1>@receipt.Organisation</h1>
+                @if (!string.IsNullOrWhiteSpace(receipt.RegistrationNumber)) { <p>Registration no. @receipt.RegistrationNumber</p> }
+                <p>Human Resources</p>
+            </header>
+            <div class="receipt-heading"><h2>Leave Approval Receipt</h2><span>Approved</span></div>
+            <p class="reference">Reference: @receipt.Reference</p>
+            <p>This confirms the approved leave for <strong>@receipt.StaffName</strong>@(string.IsNullOrWhiteSpace(receipt.StaffNumber) ? "." : $" (Staff no. {receipt.StaffNumber}).")</p>
+            <dl>
+                <div><dt>Leave type</dt><dd>@receipt.LeaveType</dd></div>
+                <div><dt>Number of days</dt><dd>@receipt.Days</dd></div>
+                <div><dt>From date</dt><dd>@receipt.FromDate.ToString("dd MMM yyyy")</dd></div>
+                <div><dt>To date</dt><dd>@receipt.ToDate.ToString("dd MMM yyyy")</dd></div>
+                <div><dt>Current leave balance</dt><dd>@(receipt.CurrentBalance.HasValue ? $"{receipt.CurrentBalance} days" : "Not available")</dd></div>
+                <div><dt>Calendar return date (day after leave)</dt><dd>@receipt.CalendarReturnDate.ToString("dd MMM yyyy")</dd></div>
+                <div><dt>Reporting date (next scheduled working day)</dt><dd>@(receipt.ReportingDate?.ToString("dd MMM yyyy") ?? "Schedule not available — confirm with HR")</dd></div>
+                <div><dt>HR approval recorded by</dt><dd>@(receipt.ApprovedBy ?? "Not recorded (legacy leave)")</dd></div>
+                <div><dt>Approval date</dt><dd>@(receipt.ApprovedAt?.ToString("dd MMM yyyy") ?? "Not recorded")</dd></div>
+            </dl>
+            <footer>
+                <p>Balance reflects the current leave balance and may differ from the balance on the approval date.</p>
+                <p>This receipt reflects the approved leave record currently held by Human Resources. Changes to approved leave may change these details.</p>
+            </footer>
+        </article>
+    }
+</div>
+
+@code {
+    [Parameter] public int LeaveId { get; set; }
+    private LeaveReceiptDto? receipt;
+    private bool loading;
+    private string error = "A receipt is available only for your approved leave.";
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        receipt = null;
+        try { receipt = await Receipts.GetMyReceiptAsync(LeaveId); }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load leave receipt {LeaveId}.", LeaveId);
+            error = "The leave receipt could not be loaded. Please try again.";
+        }
+        finally { loading = false; }
+    }
+    private async Task PrintAsync() => await JS.InvokeVoidAsync("print");
+}

@@ -57,7 +57,14 @@
                         @if (PreviewError != null) { <span>@PreviewError</span> }
                         else
                         {
-                            <p>Requested leave: @SelectedLeave.FromDate.ToString("dd MMM yyyy") – @Preview.EndDate.ToString("dd MMM yyyy") (@Preview.Duration days).</p>
+                            @if (Preview.Duration == 0)
+                            {
+                                <p>The full leave period will be cancelled upon approval.</p>
+                            }
+                            else
+                            {
+                                <p>Requested leave: @SelectedLeave.FromDate.ToString("dd MMM yyyy") – @Preview.EndDate.ToString("dd MMM yyyy") (@Preview.Duration days).</p>
+                            }
                             <p>Upon approval: @(Preview.BalanceAdjustment >= 0 ? $"{Preview.BalanceAdjustment} days returned to your balance." : $"{-Preview.BalanceAdjustment} additional days deducted from your balance.")</p>
                         }
                     </div>
@@ -83,7 +90,9 @@
                         <tbody>
                             @foreach (var item in history)
                             {
-                                <tr class="border-b"><td class="p-2">@item.Reference</td><td class="p-2">@item.LeaveType — @item.ChangeType</td><td class="p-2">@item.RequestedEndDate.ToString("dd MMM yyyy")</td><td class="p-2">@item.Status</td><td class="p-2"><RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" /></td></tr>
+                                <tr class="border-b"><td class="p-2">@item.Reference</td><td class="p-2">@item.LeaveType — @item.ChangeType</td><td class="p-2">@item.RequestedEndDate.ToString("dd MMM yyyy")</td><td class="p-2">@item.Status
+                                    @if (item.PendingApprovers.Count > 0) { <p class="mt-1 text-xs text-slate-500">@item.CurrentStage · Awaiting @string.Join(", ", item.PendingApprovers)</p> }
+                                </td><td class="p-2"><RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" /></td></tr>
                             }
                         </tbody>
                     </table>
@@ -98,6 +107,7 @@
                 <div class="border rounded-xl p-4 mb-3 space-y-2">
                     <p class="font-medium">@item.Reference — @item.LeaveType — @item.ChangeType</p>
                     <p class="text-sm text-slate-600">Current status: @item.Status</p>
+                    @if (item.PendingApprovers.Count > 0) { <p class="text-sm text-slate-600">@item.CurrentStage · Awaiting @string.Join(", ", item.PendingApprovers)</p> }
                     <p class="text-sm">Current leave: @item.FromDate.ToString("dd MMM yyyy") – @item.CurrentEndDate.ToString("dd MMM yyyy"). Requested end date: @item.RequestedEndDate.ToString("dd MMM yyyy").</p>
                     <p class="text-sm whitespace-pre-wrap">@item.Reason</p>
                     <RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" />

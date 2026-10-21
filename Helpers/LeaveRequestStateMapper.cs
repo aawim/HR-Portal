@@ -4,7 +4,7 @@ namespace HRM.Helpers;
 
 internal static class LeaveRequestStateMapper
 {
-    public static int ToLeaveState(int requestState) => requestState switch
+    public static int ToLeaveState(int requestState, bool isProcessing = false) => requestState switch
     {
         SharedConfig.RequestStates.INCOMPLETE or
         SharedConfig.RequestStates.PENDING_STAFF_COMPLETION => SharedConfig.LeaveStates.INCOMPLETE,
@@ -21,6 +21,7 @@ internal static class LeaveRequestStateMapper
         SharedConfig.RequestStates.APPROVED => SharedConfig.LeaveStates.APPROVED,
         SharedConfig.RequestStates.REJECTED => SharedConfig.LeaveStates.REJECTED,
         SharedConfig.RequestStates.CANCELLED => SharedConfig.LeaveStates.CANCELLED,
+        _ when isProcessing => SharedConfig.LeaveStates.PENDING_APPROVAL,
         _ => throw new InvalidOperationException(
             $"Request state {requestState} is not supported for leave applications.")
     };

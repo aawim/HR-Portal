@@ -35,6 +35,8 @@ namespace HRM.Services
             CurrentOrganisationId = organisationId;
             OrganisationName = organisationName;
             CanAccessAdminPortal = canAccessAdminPortal;
+            if (!canAccessAdminPortal) IsAdminPortal = false;
+            CurrentContext = IsAdminPortal ? TransactionContext.Admin : TransactionContext.Online;
 
             OnChange?.Invoke();
         }
@@ -45,12 +47,14 @@ namespace HRM.Services
                 return;
 
             IsAdminPortal = true;
+            CurrentContext = TransactionContext.Admin;
             OnChange?.Invoke();
         }
 
         public void SwitchToEmployee()
         {
             IsAdminPortal = false;
+            CurrentContext = TransactionContext.Online;
             OnChange?.Invoke();
         }
 

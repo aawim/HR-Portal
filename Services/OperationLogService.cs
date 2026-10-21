@@ -35,19 +35,24 @@ namespace HRM.Services
                 .Connection
                 .RemoteIpAddress?
                 .ToString();
+            var organisationId = userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId;
+            var userOrganisationId = organisationId.HasValue
+                ? await dbContext.UserOrganisations.Where(x => x.BusinessEntityID == organisationId.Value)
+                    .Select(x => (int?)x.UserOrganisationID).SingleOrDefaultAsync()
+                : await dbContext.Users.Where(x => x.UserId == userContext.UserId).Select(x => x.UserOrganisationId).SingleOrDefaultAsync();
 
             var log = new OperationLog
             {
                 OperationLogActionId = actionId,
 
-                CreatedByIndividualId = userContext.IndividualId,
-                UpdatedByIndividualId = userContext.IndividualId,
+                CreatedByIndividualId = userContext.IndividualId > 0 ? userContext.IndividualId : null,
+                UpdatedByIndividualId = userContext.IndividualId > 0 ? userContext.IndividualId : null,
 
                 CreatedByUserId = userContext.UserId,
                 UpdatedByUserId = userContext.UserId,
 
-                CreatedByUserOrganisationId = userContext.ActiveJob!.OrganisationId,  
-                UpdatedByUserOrganisationId = userContext.ActiveJob!.OrganisationId,
+                CreatedByUserOrganisationId = userOrganisationId,
+                UpdatedByUserOrganisationId = userOrganisationId,
 
                 CreatedByContextId = 1,
                 UpdatedContextId = 1,
@@ -55,8 +60,8 @@ namespace HRM.Services
                 CreatedDate = DateTime.Now,
                 UpdatedDate = DateTime.Now,
 
-                CreatedByIp = ip,
-                UpdatedByIp = ip,
+                CreatedByIp = ip ?? "",
+                UpdatedByIp = ip ?? "",
 
                 Remarks = remarks
             };

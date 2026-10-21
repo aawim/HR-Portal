@@ -12,7 +12,7 @@
             <i class="fas fa-clock"></i>
         </div>
     </div>
-    <div class="flex flex-col gap-4 p-5">
+    <div class="flex flex-col gap-4 p-4">
         @if (isLoading)
         {
             <div role="status" class="flex min-h-40 flex-1 items-center justify-center gap-2 text-sm text-slate-500">
@@ -20,19 +20,23 @@
                 Calculating worked hours...
             </div>
         }
+        else if (errorMessage != null)
+        {
+            <p role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700">@errorMessage</p>
+        }
         else if (workedHours == null)
         {
             <p class="py-10 text-center text-sm text-slate-500">No attendance information available.</p>
         }
         else
         {
-            <div class="rounded-lg border border-blue-100 bg-blue-50/50 p-4">
+            <div class="rounded-lg bg-blue-50 p-4">
                 <p class="text-xs font-medium text-slate-500">This week</p>
-                <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900">@FormatHours(workedHours.CurrentWeekHours)</p>
+                <p class="mt-2 text-3xl font-bold tabular-nums tracking-tight text-slate-900">@FormatHours(workedHours.CurrentWeekHours)</p>
             </div>
-            <div class="rounded-lg border border-slate-200 bg-slate-50 p-4">
-                <p class="text-xs font-medium text-slate-500">Last week</p>
-                <p class="mt-1 text-xl font-semibold tabular-nums text-slate-800">@FormatHours(workedHours.PreviousWeekHours)</p>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-sm text-slate-500">Last week</p>
+                <p class="text-sm font-semibold tabular-nums text-slate-800">@FormatHours(workedHours.PreviousWeekHours)</p>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-4">
                 <span class="text-xs text-slate-500">Weekly difference</span>
@@ -49,17 +53,28 @@
     private WeeklyWorkedHoursDto? workedHours;
 
     private bool isLoading = true;
+    [Parameter] public int RefreshKey { get; set; }
+    private int lastRefreshKey = -1;
+    private string? errorMessage;
 
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        if (lastRefreshKey == RefreshKey) return;
+        lastRefreshKey = RefreshKey;
         try
         {
             isLoading = true;
+            errorMessage = null;
 
             workedHours =
                 await AttendanceService
                     .GetMyWeeklyWorkedHoursAsync();
+        }
+        catch
+        {
+            workedHours = null;
+            errorMessage = "Worked hours could not be loaded. Please refresh the page.";
         }
         finally
         {

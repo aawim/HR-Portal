@@ -90,6 +90,8 @@ namespace HRM.Services
             if (context.UserId == 0)
                 return null;
 
+            await using var db = await _dbFactory.CreateDbContextAsync();
+
             return new UserProfileDto
             {
                 UserId = context.UserId,
@@ -99,6 +101,7 @@ namespace HRM.Services
                 Username = context.Username,
 
                 FullName = context.FullName,
+                JobHistory = await JobHistoryQuery.LoadAsync(db, context.IndividualId),
 
                 OrganisationName =
                     context.Organisation?.OrganisationName,
@@ -108,6 +111,12 @@ namespace HRM.Services
                     : new JobDto
                     {
                         JobID = context.ActiveJob.JobId,
+                        IndividualID = context.IndividualId,
+                        JobStateID = context.ActiveJob.JobStateId,
+                        JobTypeID = context.ActiveJob.JobTypeId ?? 0,
+                        JobTypeName = context.ActiveJob.JobTypeName,
+                        JoinedDate = context.ActiveJob.JoinedDate,
+                        TerminatedDate = context.ActiveJob.TerminatedDate,
 
                         OrganisationID = context.ActiveJob.OrganisationId,
 

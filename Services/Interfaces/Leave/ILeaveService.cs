@@ -21,7 +21,7 @@ namespace HRM.Services.Interfaces.Leave
         Task<List<Leaf>>GetLeaveRequestsAsync(int jobId);
         Task<List<JobLeaveType>> GetJobLeaveTypesAsync();
 
-        Task<List<Leaf>> GetMyLeaveRequestsAsync();
+        Task<List<Leaf>> GetMyLeaveRequestsAsync(int? statusId = null, DateTime? fromDate = null, DateTime? toDate = null, int? limit = null);
 
 
         Task<ServiceResult> SubmitLeave(LeaveApplicationDto model);

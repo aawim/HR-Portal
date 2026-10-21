@@ -88,15 +88,28 @@ namespace HRM.Services.Interfaces.AppovalWF
 
 
             int? fallbackApprovalTypeId = null;
-            if (request.RequestTypeId == HRM.Components.Shared.SharedConfig.RequestTypes.LEAVE_CHANGE_REQUEST)
+            int? leaveTypeId = null, leaveRequestKind = null;
+            if (HRM.Helpers.LeaveChangeRequestTypes.IsChange(request.RequestTypeId))
             {
                 var source = await db.LeaveChangeRequests.AsNoTracking()
                     .Where(x => x.RequestId == requestId && x.Leave.JobId == subjectJobId)
-                    .Select(x => new { x.Leave.LeaveType.RequestTypeId })
+                    .Select(x => new { x.Leave.LeaveType.RequestTypeId, x.Leave.LeaveTypeId, x.LeaveChangeRequestTypeId })
                     .SingleOrDefaultAsync(cancellationToken);
                 if (source == null)
                     throw new InvalidOperationException("The leave change is not linked to the supplied job.");
+                if (request.RequestTypeId != HRM.Helpers.LeaveChangeRequestTypes.Legacy &&
+                    HRM.Helpers.LeaveChangeRequestTypes.ForKind((HRM.DTOs.Leave.LeaveChangeKind)source.LeaveChangeRequestTypeId) != request.RequestTypeId)
+                    throw new InvalidOperationException("The Request Type does not match the linked leave change.");
                 fallbackApprovalTypeId = source.RequestTypeId;
+                leaveTypeId = source.LeaveTypeId;
+                leaveRequestKind = source.LeaveChangeRequestTypeId;
+            }
+            else
+            {
+                var application = await db.LeaveRequests.AsNoTracking()
+                    .Where(x => x.RequestId == requestId && x.Leave.JobId == subjectJobId)
+                    .Select(x => new { x.Leave.LeaveTypeId }).SingleOrDefaultAsync(cancellationToken);
+                if (application != null) { leaveTypeId = application.LeaveTypeId; leaveRequestKind = 0; }
             }
 
             return new WorkflowRequestContextDto
@@ -104,6 +117,8 @@ namespace HRM.Services.Interfaces.AppovalWF
                 RequestId = request.RequestId,
 
                 RequestTypeId = request.RequestTypeId,
+                LeaveTypeId = leaveTypeId,
+                LeaveRequestKind = leaveRequestKind,
                 FallbackApprovalRequestTypeId = fallbackApprovalTypeId,
 
                 OrganisationBusinessEntityId =

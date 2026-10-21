@@ -10,6 +10,7 @@ namespace HRM.Models;
 
 public partial class HrmTeContext : DbContext
 {
+    public DbSet<RequestNotification> RequestNotifications => Set<RequestNotification>();
     public HrmTeContext()
     {
     }
@@ -716,6 +717,19 @@ public partial class HrmTeContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<RequestNotification>(entity =>
+        {
+            entity.ToTable("RequestNotifications");
+            entity.HasKey(x => x.RequestNotificationId);
+            entity.Property(x => x.ReferenceNumber).HasMaxLength(512);
+            entity.Property(x => x.CreatedAtUtc).HasColumnType("datetime2");
+            entity.Property(x => x.ReadAtUtc).HasColumnType("datetime2");
+            entity.HasIndex(x => new { x.UserId, x.ReadAtUtc, x.CreatedAtUtc });
+            entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RequestState>().WithMany().HasForeignKey(x => x.FromStateId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne<RequestState>().WithMany().HasForeignKey(x => x.ToStateId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<LeaveHandoverReview>(entity =>
         {
             entity.ToTable("LeaveHandoverReviews"); entity.HasKey(x => x.LeaveId);
@@ -6834,6 +6848,8 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<UserPreference>(entity =>
         {
+            entity.Property(e => e.ThemeMode).HasMaxLength(16).HasDefaultValue("dark").IsRequired();
+            entity.Property(e => e.UpdatedAtUtc).HasColumnType("datetime2");
             entity.Property(e => e.UserPreferenceId).HasColumnName("UserPreferenceID");
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.SelectedContextId).HasColumnName("SelectedContextID");

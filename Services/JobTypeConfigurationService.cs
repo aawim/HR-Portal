@@ -127,7 +127,7 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         var org = await RequireOrganisationAsync();
         await using var db = await factory.CreateDbContextAsync();
         var definition = await db.WfWorkflowDefinitions.AsNoTracking().Include(x => x.Stages).ThenInclude(x => x.Approvers)
-            .Where(x => x.IsActive && x.OrganisationBusinessEntityId == org && x.RequestTypeId == requestTypeId &&
+            .Where(x => x.LeaveRequestKind == null && x.IsActive && x.OrganisationBusinessEntityId == org && x.RequestTypeId == requestTypeId &&
                 (requestTypeDefault ? !x.WorkflowJobTypes.Any() : x.WorkflowJobTypes.Any(m => m.JobTypeId == jobTypeId && m.IsActive)))
             .OrderByDescending(x => x.VersionNumber).FirstOrDefaultAsync();
         return new()
@@ -161,15 +161,13 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         }
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var transitions = await db.RequestTypesAllowedRequestStateTransitions.AsNoTracking()
-            .Where(x => x.RequestTypeId == model.RequestTypeId).Select(x => new { x.FromRequestStateId, x.ToRequestStateId }).ToListAsync();
         var route = new[] { 2 }.Concat(model.Stages.Select(x => x.StateId)).Append(4).ToArray();
         for (var i = 1; i < route.Length; i++)
-            if (route[i - 1] != route[i] && !transitions.Any(x => x.FromRequestStateId == route[i - 1] && x.ToRequestStateId == route[i]))
-                db.RequestTypesAllowedRequestStateTransitions.Add(new()
-                { RequestTypeId = model.RequestTypeId, FromRequestStateId = route[i - 1], ToRequestStateId = route[i] });
+            if (route[i - 1] != route[i])
+                try { await RequestTransitionPolicy.RequireAllowedAsync(db, model.RequestTypeId, route[i - 1], route[i]); }
+                catch (InvalidOperationException ex) { return ServiceResult.Fail(ex.Message); }
         var previous = await db.WfWorkflowDefinitions.Include(x => x.WorkflowJobTypes)
-            .Where(x => x.OrganisationBusinessEntityId == org && x.RequestTypeId == model.RequestTypeId &&
+            .Where(x => x.LeaveRequestKind == null && x.OrganisationBusinessEntityId == org && x.RequestTypeId == model.RequestTypeId &&
                 (requestTypeDefault ? !x.WorkflowJobTypes.Any() : x.WorkflowJobTypes.Any(m => m.JobTypeId == model.JobTypeId && m.IsActive))).ToListAsync();
         var currentVersion = previous.Where(x => x.IsActive).Select(x => x.VersionNumber).DefaultIfEmpty().Max();
         if (currentVersion != model.Version) return ServiceResult.Fail("This workflow was changed by another administrator. Reload it before saving.");

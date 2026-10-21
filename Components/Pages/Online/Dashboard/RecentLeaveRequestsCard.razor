@@ -24,16 +24,43 @@
     <div class="flex justify-between items-center mb-4">
         <div>
             <h3 class="text-lg font-semibold text-slate-800">
-                Recent Leave Requests
+                @(ShowAll ? "All Leave Requests" : "Recent Leave Requests")
             </h3>
             <p class="text-sm text-slate-500">
-                Your latest leave applications
+                @(ShowAll ? "Search your leave history by status and leave dates." : "Your 10 most recent leave applications")
             </p>
         </div>
 
-        <button type="button" disabled="@(IsLoading || _processing || editingRequestId.HasValue)"
-                class="text-sm text-blue-600 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
+        <div class="flex items-center gap-4">
+            @if (!ShowAll) { <a class="text-sm text-blue-600 underline" href="/online/leaves/all-requests">View all</a> }
+            <button type="button" disabled="@(IsLoading || _processing || editingRequestId.HasValue)"
+                    class="text-sm text-blue-600 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
+        </div>
     </div>
+
+    @if (ShowAll)
+    {
+        <div class="mb-4 grid gap-3 rounded-lg bg-slate-50 p-3 sm:grid-cols-3">
+            <label class="text-sm text-slate-600">Status
+                <select id="leave-history-status" @bind="selectedStatusId" class="mt-1 w-full rounded border p-2" disabled="@IsLoading">
+                    <option value="0">All statuses</option>
+                    @foreach (var state in availableStatuses) { <option value="@state.LeaveStateId">@state.StateName</option> }
+                </select>
+            </label>
+            <label class="text-sm text-slate-600">Leave date from
+                <input id="leave-history-from" type="date" @bind="filterFrom" class="mt-1 w-full rounded border p-2" disabled="@IsLoading" />
+            </label>
+            <label class="text-sm text-slate-600">Leave date to
+                <input id="leave-history-to" type="date" @bind="filterTo" class="mt-1 w-full rounded border p-2" disabled="@IsLoading" />
+            </label>
+            <p class="text-xs text-slate-500 sm:col-span-3">Matches leave periods that overlap the selected dates.</p>
+            <div class="flex gap-3 sm:col-span-3">
+                <button type="button" @onclick="SearchAsync" disabled="@(IsLoading || _processing || editingRequestId.HasValue)" class="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50">Search</button>
+                <button type="button" @onclick="ResetSearchAsync" disabled="@(IsLoading || _processing || editingRequestId.HasValue)" class="rounded border px-4 py-2 text-sm disabled:opacity-50">Reset filters</button>
+            </div>
+        </div>
+    }
+    @if (!string.IsNullOrWhiteSpace(loadError)) { <p role="alert" class="mb-3 rounded bg-red-50 p-3 text-sm text-red-800">@loadError</p> }
 
     @if (IsLoading)
     {
@@ -94,7 +121,7 @@
                         <tr class="hover:bg-slate-50">
 
                             <td class="px-3 py-3">
-                                @leave.LeaveType.Name
+                                @(leave.LeaveType?.Name ?? "Leave")
                             </td>
 
                             <td class="px-3 py-3">
@@ -115,38 +142,24 @@
                                     var requestId = GetWorkflowRequestId(leave.LeaveId);
                                 }
 
-                                @if (!requestId.HasValue)
-                                {
-                                    <span class="text-xs text-slate-400">
-                                        No linked request
-                                    </span>
-                                }
-                                else if (RequestStatuses.TryGetValue(requestId.Value, out var status))
-                                {
                                     <div class="flex flex-col items-center gap-1">
 
-                                        <span class="px-2 py-1 rounded-full text-xs font-medium
-                         bg-blue-100 text-blue-700">
-                                            @status
+                                        <span class="px-2 py-1 rounded-full text-xs font-medium @StatusClass(leave.LeaveStateId)">
+                                            @GetDisplayStatus(leave)
                                         </span>
 
-                                        @if (WorkflowInfo.TryGetValue(requestId.Value, out var workflow))
+                                        @if (LeaveHelper.CanCancel(leave.LeaveStateId) && requestId.HasValue && IsWorkflowActive(requestId.Value) &&
+                                            RequestStatuses.TryGetValue(requestId.Value, out var requestStatus))
+                                        {
+                                            <span class="text-xs text-amber-700">Processing · @requestStatus</span>
+                                        }
+                                        @if (LeaveHelper.CanCancel(leave.LeaveStateId) && requestId.HasValue && IsWorkflowActive(requestId.Value) && WorkflowInfo.TryGetValue(requestId.Value, out var workflow))
                                         {
                                             <span class="text-xs text-slate-500">@workflow.WorkflowStatus</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-xs text-amber-600">Workflow not started</span>
+                                            <span class="text-xs text-slate-500">@workflow.StageName</span>
                                         }
 
                                     </div>
-                                }
-                                else
-                                {
-                                    <span class="text-xs text-amber-600">
-                                        Not started
-                                    </span>
-                                }
 
                             </td>
                        
@@ -164,7 +177,20 @@
 
 
                             <td class="px-3 py-3 text-center gap-2">
-                                @if (HandoverLeaveIds.Contains(leave.LeaveId)) { <a class="mb-2 inline-block text-xs text-blue-700 underline" href="@($"/online/leave-handovers/{leave.LeaveId}")">Work handover</a> }
+                                <div class="flex flex-wrap items-center justify-center gap-2">
+                                @if (leave.LeaveStateId == SharedConfig.LeaveStates.APPROVED)
+                                {
+                                    <a class="app-button app-button-secondary text-xs" href="@($"/online/leaves/{leave.LeaveId}/receipt")">View receipt</a>
+                                }
+                                @if (HandoverLeaveIds.Contains(leave.LeaveId))
+                                {
+                                    <a class="app-button app-button-secondary text-xs"
+                                       href="@($"/online/leave-handovers/{leave.LeaveId}")"
+                                       title="View work handover for this leave request">
+                                        <i class="bi bi-hand-index-thumb" aria-hidden="true"></i>
+                                        <span>Work handover</span>
+                                    </a>
+                                }
                                 @if (GetWorkflowRequestId(leave.LeaveId) is int correctionRequestId &&
                                     ReturnReasons.ContainsKey(correctionRequestId) && OwnedRequestIds.Contains(correctionRequestId) &&
                                     leave.LeaveStateId == SharedConfig.LeaveStates.INCOMPLETE &&
@@ -185,6 +211,8 @@
                                         Cancel
                                     </button> *@
 
+                                @if (LeaveHelper.CanCancel(leave.LeaveStateId))
+                                {
                                 <button type="button"
                                         disabled="@(_processing || editingRequestId.HasValue)"
                                         @onclick="() => OpenCancelDialog(leave.LeaveId)"
@@ -195,21 +223,16 @@
                                     <i class="fas fa-times me-1"></i>
                                     Cancel
                                 </button>
+                                }
 
 
 
 
-                                @if (LeaveHelper.CanCancel(leave.LeaveState.LeaveStateId))
-                                { }
-                                <button class="px-3 py-1 rounded-md text-xs
-                                       bg-green-200 text-green-700
-                                       hover:bg-green-300 text-green-700"
+                                <button type="button" class="app-button app-button-secondary text-xs"
                                 @onclick="() => ShowDetail(leave.LeaveId)">
-                                    <i class="fas fa-times me-1"></i>
                                     View
                                 </button>
-
-
+                                </div>
                             </td>
 
                         </tr>
@@ -245,7 +268,7 @@
             else
             {
                 <p class="mb-4 text-sm">@selectedDetails.FromDate.ToString("dd MMM yyyy") – @selectedDetails.ToDate.ToString("dd MMM yyyy") · @selectedDetails.Duration days · @selectedDetails.Status</p>
-                @if (selectedDetails.HasHandover) { <a class="mb-4 inline-block text-sm text-blue-700 underline" href="@($"/online/leave-handovers/{selectedDetails.LeaveId}")">View work handover</a> }
+                @if (selectedDetails.HasHandover) { <a class="app-button app-button-secondary mb-4 inline-block text-sm text-blue-700 underline" href="@($"/online/leave-handovers/{selectedDetails.LeaveId}")">View work handover</a> }
                 @if (selectedDetails.ReturnReason != null || selectedDetails.CanEdit)
                 {
                     <div class="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
@@ -280,6 +303,32 @@
 
 
 @code {
+    [Parameter] public bool ShowAll { get; set; }
+    private int selectedStatusId;
+    private DateTime? filterFrom, filterTo;
+    private List<LeaveState> availableStatuses = [];
+    private string? loadError;
+    private string GetDisplayStatus(Leaf leave)
+    {
+        var leaveStatus = leave.LeaveState?.StateName;
+        if (!string.IsNullOrWhiteSpace(leaveStatus)) return leaveStatus;
+        var id = GetWorkflowRequestId(leave.LeaveId);
+        return id.HasValue && RequestStatuses.TryGetValue(id.Value, out var status) ? status : "Unknown";
+    }
+    private static string StatusClass(int state) => state switch
+    {
+        SharedConfig.LeaveStates.APPROVED => "bg-green-100 text-green-700",
+        SharedConfig.LeaveStates.REJECTED => "bg-red-100 text-red-700",
+        SharedConfig.LeaveStates.CANCELLED => "bg-slate-100 text-slate-600",
+        _ => "bg-blue-100 text-blue-700"
+    };
+    private Task SearchAsync() => RefreshAsync();
+    private async Task ResetSearchAsync()
+    {
+        selectedStatusId = 0;
+        filterFrom = filterTo = null;
+        await RefreshAsync();
+    }
     private readonly CancellationTokenSource refreshStop = new();
     private Task? refreshLoop;
 
@@ -333,6 +382,10 @@
 
     private Dictionary<int, WorkflowCardInfo> WorkflowInfo = new();
     private Dictionary<int, string> RequestStatuses = new();
+    private Dictionary<int, bool> ProcessingRequests = new();
+
+    private bool IsWorkflowActive(int requestId) =>
+        ProcessingRequests.TryGetValue(requestId, out var processing) && processing;
 
 
     private int? GetWorkflowRequestId(int leaveId)
@@ -355,19 +408,35 @@
     private int SelectedLeaveId;
 
 
-    protected override async Task OnInitializedAsync()
-        => await RefreshAsync();
+    protected override async Task OnInitializedAsync() => await RefreshAsync();
 
     private async Task RefreshAsync()
     {
+        loadError = null;
+        if (ShowAll && filterFrom.HasValue && filterTo.HasValue && filterFrom.Value.Date > filterTo.Value.Date)
+        {
+            loadError = "From date must be on or before To date.";
+            return;
+        }
         IsLoading = true;
 
         try
         {
+            if (ShowAll && availableStatuses.Count == 0)
+            {
+                await using var db = await DbFactory.CreateDbContextAsync();
+                availableStatuses = await db.LeaveStates.AsNoTracking().OrderBy(x => x.StateName).ToListAsync();
+            }
             LeaveRequests =
-                await LeaveService.GetMyLeaveRequestsAsync();
+                await LeaveService.GetMyLeaveRequestsAsync(ShowAll ? selectedStatusId : null,
+                    ShowAll ? filterFrom : null, ShowAll ? filterTo : null, ShowAll ? null : 10);
 
             await LoadWorkflowInfoAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load leave request history.");
+            loadError = "Leave requests could not be loaded. Please try again.";
         }
         finally
         {
@@ -413,8 +482,7 @@
 
 
 
-        LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
-        await LoadWorkflowInfoAsync();
+        await RefreshAsync();
     }
 
     private async Task CancelLeave(int leaveId)
@@ -433,8 +501,7 @@
 
 
 
-        LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
-        await LoadWorkflowInfoAsync();
+        await RefreshAsync();
     }
 
     private static string DisplayDetail(string? value) => string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
@@ -462,7 +529,16 @@
     {
         if (_processing || editingRequestId.HasValue) return;
         var requestId = GetWorkflowRequestId(leaveId);
-        if (!requestId.HasValue) { ToastService.Warning("No linked request was found."); return; }
+        if (!requestId.HasValue)
+        {
+            var leave = LeaveRequests?.FirstOrDefault(x => x.LeaveId == leaveId);
+            if (leave != null) selectedDetails = new()
+            {
+                LeaveId = leave.LeaveId, Reference = $"Leave #{leave.LeaveId}", LeaveType = leave.LeaveType?.Name ?? "Leave",
+                FromDate = leave.FromDate, ToDate = leave.ToDate, Duration = leave.Duration, Status = GetDisplayStatus(leave)
+            };
+            return;
+        }
         _processing = true;
         try
         {
@@ -488,6 +564,7 @@
         LeaveRequestIds.Clear();
         WorkflowInfo.Clear();
         RequestStatuses.Clear();
+        ProcessingRequests.Clear();
         ReturnReasons.Clear();
         OwnedRequestIds.Clear();
         HandoverLeaveIds.Clear();
@@ -510,6 +587,7 @@
                 x.LeaveId,
                 x.RequestId,
                 Status = x.Request.RequestState.StateName,
+                IsProcessing = x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState,
                 StateId = x.Request.RequestStateId,
                 ReturnReason = x.Request.StateChangeRemarks,
                 OwnerPersonId = x.Leave.Job.IndividualID,
@@ -530,6 +608,8 @@
             );
         RequestStatuses = mappings.GroupBy(x => x.RequestId)
             .ToDictionary(x => x.Key, x => x.First().Status);
+        ProcessingRequests = mappings.GroupBy(x => x.RequestId)
+            .ToDictionary(x => x.Key, x => x.First().IsProcessing);
 
         ReturnReasons = mappings.Where(x => x.StateId == SharedConfig.RequestStates.INCOMPLETE)
             .GroupBy(x => x.RequestId).ToDictionary(x => x.Key, x => x.First().ReturnReason);
@@ -564,6 +644,7 @@
                 wi.RequestId,
                 wi.WorkflowRequestInstanceId,
                 wi.WorkflowStatus,
+                wi.CompletedAt,
                 StageName = ws != null
                     ? ws.StageName
                     : null
@@ -587,6 +668,7 @@
 
                             WorkflowStatus =
                                 workflow.WorkflowStatus,
+                            Completed = workflow.CompletedAt.HasValue,
 
                             StageName =
                                 workflow.StageName ?? "No active stage"
@@ -602,6 +684,7 @@
     {
         public long WorkflowInstanceId { get; set; }
         public string WorkflowStatus { get; set; } = "";
+        public bool Completed { get; set; }
         public string StageName { get; set; } = "";
         public string? ApproverName { get; set; }
     }

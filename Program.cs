@@ -223,6 +223,10 @@ builder.Services.AddScoped<ILeaveResourceBuilder,LeaveResourceBuilder>();
 builder.Services.AddScoped<IIndividualResourceBuilder,IndividualResourceBuilder>();
 builder.Services.AddScoped<IBusinessAccessService,BusinessAccessService>();
 builder.Services.AddScoped<IUserContextService, UserContextService>();
+builder.Services.AddScoped<UserService>();
+builder.Services.AddScoped<IUserService>(sp => sp.GetRequiredService<UserService>());
+builder.Services.AddScoped<UserPreferenceService>();
+builder.Services.AddScoped<RequestNotificationService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IUserContextCache, UserContextCache>();
  
@@ -241,6 +245,9 @@ builder.Services.AddScoped<IStaffService, StaffService>();
 builder.Services.AddScoped<IRoleService, RoleService>();
 builder.Services.AddScoped<IAuditLogger, AuditLogger>();
 builder.Services.AddScoped<ILeaveService, LeaveService>();
+builder.Services.AddScoped<ILeaveReceiptService, LeaveReceiptService>();
+builder.Services.AddScoped<LeaveFlowConfigurationService>();
+builder.Services.AddScoped<RequestTransitionSettingsService>();
 builder.Services.AddScoped<HRM.Services.Leave.LeaveHandoverService>();
 builder.Services.AddScoped<HRM.Services.Leave.LeaveCalendarService>();
 builder.Services.AddScoped<HRM.Services.OrganisationWorkspaceService>();
@@ -262,6 +269,7 @@ builder.Services.AddScoped<UserRepository>();
 
 builder.Services.AddScoped<IUserContext, UserContext>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
+builder.Services.AddScoped<IAttendanceRequestService, AttendanceRequestService>();
 builder.Services.AddScoped<IJobDataLoader, JobDataLoader>();
 builder.Services.AddScoped<IJobStore, JobStore>();
 builder.Services.AddScoped<IAttendanceLogDataLoader, AttendanceLogDataLoader>();

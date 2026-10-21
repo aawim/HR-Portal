@@ -26,6 +26,13 @@ public class LeaveChangeLeaveDto
 
 public class LeaveChangeRequestDto
 {
+    public string Applicant { get; set; } = "";
+    public int ChangeKind { get; set; }
+    public bool IsProcessing { get; set; }
+    public bool IsOwnRequest { get; set; }
+    public string? ActionsMessage { get; set; }
+    public string? CurrentStage { get; set; }
+    public List<string> PendingApprovers { get; set; } = [];
     public int RequestId { get; set; }
     public string Reference { get; set; } = string.Empty;
     public string LeaveType { get; set; } = string.Empty;

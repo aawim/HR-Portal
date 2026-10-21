@@ -2,6 +2,8 @@
 using HRM.Enum;
 using HRM.Services.Interfaces;
 using Microsoft.AspNetCore.Components;
+using HRM.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services
 {
@@ -9,12 +11,14 @@ namespace HRM.Services
     {
         private readonly IUserContextService _userContextService;
         private readonly NavigationManager _navigation;
+        private readonly IDbContextFactory<HrmTeContext>? _dbFactory;
 
         public UserAccessService(
-            IUserContextService userContextService, NavigationManager navigation)
+            IUserContextService userContextService, NavigationManager navigation, IDbContextFactory<HrmTeContext>? dbFactory = null)
         {
             _userContextService = userContextService;
             _navigation = navigation;
+            _dbFactory = dbFactory;
         }
 
  
@@ -116,6 +120,17 @@ namespace HRM.Services
 
             if (context == null)
                 return false;
+
+            // Membership can change while a cached context or Blazor circuit is still active.
+            if (_dbFactory != null)
+            {
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                var name = userGroupName.Trim().ToUpperInvariant();
+                return await db.UserAssignedUserGroups.AsNoTracking().AnyAsync(x => x.UserId == context.UserId &&
+                    x.User.IsActive && x.User.LocalUserStateId == 1 &&
+                    (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId) &&
+                    x.UserGroup.GroupName.Trim().ToUpper() == name);
+            }
 
 
             return context.UserGroups.Any(x =>

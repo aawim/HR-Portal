@@ -61,6 +61,25 @@ namespace HRM.Services
                 })
                 .FirstOrDefaultAsync();
 
+            data ??= await db.AttendanceLogChangeRequests.AsNoTracking()
+                .Where(x => x.RequestId == requestId)
+                .Select(x => new
+                {
+                    AttendanceLogRequestId = 0,
+                    x.RequestId,
+                    x.AttendanceLogId,
+                    x.Comments,
+                    RequestStateID = x.Request.RequestStateId,
+                    Attendance = new
+                    {
+                        x.AttendanceLog.IndividualId,
+                        x.AttendanceLog.OrganisationId,
+                        x.AttendanceLog.OrganisationStructureId,
+                        x.AttendanceLog.AttendanceLogStateId,
+                        x.AttendanceLog.AttendanceLogModeId
+                    }
+                }).FirstOrDefaultAsync();
+
 
 
             if (data == null)

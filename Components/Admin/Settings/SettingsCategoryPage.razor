@@ -14,6 +14,7 @@
 @using Microsoft.AspNetCore.Components.Authorization
 
 @inject ILeaveService LeaveService
+@inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
 <PageTitle>Settings - HR Portal</PageTitle>
@@ -46,7 +47,7 @@
                     </div>
 
                     <div class="flex flex-col gap-1 mb-4">
-                        @foreach (var item in GetSubItems(CategoryName))
+                        @foreach (var item in GetSubItems(CategoryName).Where(x => x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper))
                         {
                             <button @onclick="() => SelectItem(item)"
                             title="@(!isSidebarExpanded ? item.Title : null)"
@@ -193,6 +194,7 @@
     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
         "leaves" => new() {
+            new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
             new("Manage Leave Types", "🌴", "Define leave accruals and policies.", typeof(LeaveTypesGrid)),
             new("Manage Leave Sets", "🗓️", "Group leave types into sets.", typeof(LeaveSetsGrid)),
             new("Manage Configurable", "⚙️", "Global leave system variables.", typeof(LeaveConfigGrid)),
@@ -220,6 +222,7 @@
             new("Roles", "🛡️", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
         },
         "requests" => new() {
+           new("State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
            new("Request Types", "📋", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
         "job-types" => new() {
@@ -280,9 +283,11 @@
     private List<JobLeaveType>? leaveBalances;
 
     private List<Leaf>? leaveRequests;
+    private bool isDeveloper;
 
     protected override async Task OnInitializedAsync()
     {
+        isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
         leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
     }
 }

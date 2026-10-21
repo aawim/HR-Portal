@@ -5,6 +5,9 @@ public class PendingLeaveRequestDto
     public int RequestId { get; set; }
     public int LeaveId { get; set; }
     public bool HasHandover { get; set; }
+    public bool IsOwnLeave { get; set; }
+    public bool IsProcessing { get; set; }
+    public bool CanEdit { get; set; }
     public string Reference { get; set; } = "";
     public string Applicant { get; set; } = "";
     public string LeaveType { get; set; } = "";

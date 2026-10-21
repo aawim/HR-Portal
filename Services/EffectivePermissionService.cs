@@ -113,7 +113,8 @@ namespace HRM.Services
                 .AsNoTracking()
                 .Where(x =>
                     x.UserId == userId &&
-                    x.IsActive)
+                    x.IsActive && x.User.IsActive && x.User.LocalUserStateId == 1 &&
+                    x.UserOrganisationId == x.User.UserOrganisationId)
                 .Select(x => new UserPermissionDto
                 {
                     RoleID = x.RoleId,
@@ -144,7 +145,7 @@ namespace HRM.Services
                     UserGroupName = null,
 
                     OrganisationID =
-                        x.UserOrganisationId,
+                        x.UserOrganisation.BusinessEntityID,
 
                     IsGlobal = 
                         x.UserOrganisationId == null
@@ -159,7 +160,8 @@ namespace HRM.Services
             return await db.UserAssignedUserGroups
                 .AsNoTracking()
                 .Where(x =>
-                    x.UserId == userId)
+                    x.UserId == userId && x.User.IsActive && x.User.LocalUserStateId == 1 &&
+                    (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId))
                 .SelectMany(x =>
                     x.UserGroup.UserGroupRoles
                     .Where(r =>
@@ -202,7 +204,7 @@ namespace HRM.Services
 
 
                         OrganisationID =
-                            x.UserGroup.UserOrganisationId,
+                            x.UserGroup.IsGlobal ? null : (int?)x.UserGroup.UserOrganisation.BusinessEntityID,
 
 
                         IsGlobal =
@@ -221,7 +223,7 @@ namespace HRM.Services
                     x.IsActive &&
                     x.UserOrganisation.Users
                         .Any(u =>
-                            u.UserId == userId))
+                            u.UserId == userId && u.IsActive && u.LocalUserStateId == 1))
                 .Select(x => new UserPermissionDto
                 {
                     RoleID =

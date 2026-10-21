@@ -29,6 +29,7 @@
     protected override async Task OnInitializedAsync()
     {
         var session = await UserContext.GetSessionAsync();
+        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true);
 
         if (session != null)
         {
@@ -47,7 +48,7 @@
     {
         var path = new Uri(NavManager.Uri).AbsolutePath.ToLower();
 
-        if (path.StartsWith("/admin"))
+        if (path == "/admin" || path.StartsWith("/admin/"))
             PortalContext.SwitchToAdmin();
         else
             PortalContext.SwitchToEmployee();
@@ -60,8 +61,11 @@
         NavManager.NavigateTo("/", forceLoad: true);
     }
 
-    private void SwitchToOrganisation()
+    private async Task SwitchToOrganisation()
     {
+        var session = await UserContext.GetSessionAsync();
+        PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true);
+        if (!PortalContext.CanAccessAdminPortal) return;
         PortalContext.SwitchToAdmin();
 
         NavManager.NavigateTo("/admin", forceLoad: true);

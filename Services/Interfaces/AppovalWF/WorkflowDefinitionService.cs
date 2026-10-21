@@ -187,6 +187,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                 .Include(x => x.Stages)
                 .Where(x =>
                     x.IsActive &&
+                    x.LeaveTypeId == null && x.LeaveRequestKind == null &&
                     x.RequestTypeId == requestTypeId &&
                     (
                         x.OrganisationBusinessEntityId ==

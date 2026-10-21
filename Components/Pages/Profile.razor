@@ -1,4 +1,4 @@
-﻿@page "/profile"
+@page "/profile"
 @rendermode RenderMode.InteractiveServer
 
 @using HRM.Services
@@ -9,7 +9,7 @@
 @inject AuthenticationStateProvider AuthenticationStateProvider
 
 @attribute [Authorize]
-@inject UserService UserService
+@inject HRM.Services.Interfaces.IUserService UserService
 
 <PageTitle>My Profile - HR Portal</PageTitle>
 
@@ -141,7 +141,7 @@ else
 
                 <!-- Job Information (Approved Job Only) -->
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
-                    <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Job Information</h3>
+                    <h2 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Active Job</h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
                         <div>
                             <p class="text-slate-500 mb-1">Organisation</p>
@@ -161,6 +161,14 @@ else
                                 MVR @(approvedJob?.BasicSalary?.ToString("N2") ?? "0.00")
                             </p>
                         </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Job Type</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.JobTypeName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Joined Date</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.JoinedDate.ToString("dd MMM yyyy") ?? "N/A")</p>
+                        </div>
                     </div>
                 </div>
 
@@ -179,97 +187,7 @@ else
                     </div>
                 </div>
 
-                <!-- Active Job Table -->
-                <div class="bg-white rounded-xl shadow-sm border border-emerald-100 overflow-hidden">
-                    <div class="p-3 border-b border-emerald-100 bg-emerald-50/30">
-                        <h3 class="font-semibold text-emerald-800">Active Job</h3>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr class="bg-white border-b border-slate-200">
-                                    <th class="py-3 px-5 font-medium text-slate-500">Organisation</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">Department</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">State</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (approvedJob != null)
-                                {
-                                    <tr class="hover:bg-slate-50 transition-colors">
-                                        <td class="py-3 px-5 text-slate-800 font-medium">@(approvedJob.OrganisationName ?? "N/A")</td>
-                                        <td class="py-3 px-5 text-slate-600">@(approvedJob.OrganisationStructureName ?? "N/A")</td>
-                                        <td class="py-3 px-5">
-                                            <span class="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-xs font-medium border border-emerald-200">
-                                                @(approvedJob.JobStateName ?? "Approved")
-                                            </span>
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="3" class="py-6 px-5 text-center text-slate-400 italic">No approved job found.</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- Jobs History Table -->
-                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div class="p-3 border-b border-slate-100 bg-slate-50/50">
-                        <h3 class="font-semibold text-slate-800">Jobs History</h3>
-                    </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse text-sm">
-                            <thead>
-                                <tr class="bg-white border-b border-slate-200">
-                                    <th class="py-3 px-5 font-medium text-slate-500">Organisation</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">Department</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">State</th>
-                                    <th class="py-3 px-5 font-medium text-slate-500">Basic Salary</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                @if (userProfile.ActiveJob != null)
-                                {
-                                    var job = userProfile.ActiveJob;
-
-                                    <tr class="hover:bg-slate-50 transition-colors border-b border-slate-50">
-                                        <td class="py-3 px-5 text-slate-800">
-                                            @(job.OrganisationName ?? "N/A")
-                                        </td>
-
-                                        <td class="py-3 px-5 text-slate-600">
-                                            @(job.OrganisationStructureName ?? "N/A")
-                                        </td>
-
-                                        <td class="py-3 px-5">
-                                            <span class="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs font-medium">
-                                                @(job.JobStateName ?? "N/A")
-                                            </span>
-                                        </td>
-
-                                        <td class="py-3 px-5 text-slate-600">
-                                            @(job.BasicSalary?.ToString("N2") ?? "0.00")
-                                        </td>
-                                    </tr>
-                                }
-                                else
-                                {
-                                    <tr>
-                                        <td colspan="4"
-                                            class="py-6 px-5 text-center text-slate-400 italic">
-                                            No active job found.
-                                        </td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                <HRM.Components.Profile.Employment.EmploymentHistoryTable Jobs="@userProfile.JobHistory" />
 
                 <!-- Leave History Table -->
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
@@ -351,3 +269,4 @@ else
         }
     }
 }
+

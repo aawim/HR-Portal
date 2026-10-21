@@ -40,7 +40,7 @@ namespace HRM.DTOs.Profile
         public List<JobLeaveTypeDto> LeaveTypes { get; set; } =
             [];
 
-        public List<JobPositionHistoryDto> JobHistory { get; set; } =
+        public List<HRM.DTOs.JobDto> JobHistory { get; set; } =
             [];
 
         public List<JobPositionHistoryDto> PositionHistory { get; set; } = [];
@@ -61,7 +61,7 @@ namespace HRM.DTOs.Profile
             ActiveJob?.IsActive == true;
 
         public bool HasEmploymentHistory =>
-            PositionHistory.Count > 0 ||
+            JobHistory.Count > 0 || PositionHistory.Count > 0 ||
             HasActiveJob;
 
 
