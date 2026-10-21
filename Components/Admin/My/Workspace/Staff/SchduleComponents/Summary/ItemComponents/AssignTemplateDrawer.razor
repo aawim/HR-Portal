@@ -18,20 +18,8 @@
                 @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm text-red-600">@error</p> }
                 <fieldset disabled="@saving" class="space-y-5">
                     <section class="space-y-3">
-                        <h3 class="font-semibold">1. @(SchedulePurpose == "Duty" ? "Duty details" : "Working hours")</h3>
-                        @if (SchedulePurpose == "Duty")
-                        {
-                            <label class="block text-sm">Duty name<input class="mt-1 w-full rounded-lg border p-2.5" maxlength="100" @bind="name" placeholder="e.g. Service desk duty" /></label>
-                            <div class="grid grid-cols-2 gap-3">
-                                <label class="text-sm">Start time<input type="time" class="mt-1 w-full rounded-lg border p-2.5" @bind="start" /></label>
-                                <label class="text-sm">End time<input type="time" class="mt-1 w-full rounded-lg border p-2.5" @bind="end" /></label>
-                            </div>
-                            @if (start == end) { <p class="text-xs text-red-600">Choose different start and end times.</p> }
-                            @if (end < start) { <p class="text-xs text-slate-500">Ends the following day.</p> }
-                        }
-                        else
-                        {
-                            <label class="block text-sm">Working pattern<select class="mt-1 w-full rounded-lg border p-2.5" @bind="scheduleMode"><option value="Standard">Normal staff · Sunday–Thursday</option><option value="Weekly">Shift · selected weekdays</option><option value="Rotation">Rotating shifts · repeating cycle</option></select></label>
+                        <h3 class="font-semibold">1. Select a configured template</h3>
+                            <label class="block text-sm">Working pattern<select class="mt-1 w-full rounded-lg border p-2.5" @bind="scheduleMode"><option value="Standard">@(SchedulePurpose == "Duty" ? "Every day in the assigned date range" : "Normal staff · Sunday–Thursday")</option><option value="Weekly">Shift · selected weekdays</option><option value="Rotation">Rotating shifts · repeating cycle</option></select></label>
                             @if (scheduleMode == "Weekly")
                             {
                                 <div class="flex flex-wrap gap-3">
@@ -55,13 +43,12 @@
                             }
                             else
                             {
-                            <label class="block text-sm">Choose working hours<select class="mt-1 w-full rounded-lg border p-2.5" @bind="templateId">
-                                <option value="0">Select a schedule</option>
+                            <label class="block text-sm">Work template<select class="mt-1 w-full rounded-lg border p-2.5" @bind="templateId">
+                                <option value="0">Select a template</option>
                                 @foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }
                             </select></label>
                             }
-                            @if (templates.Count == 0) { <p class="text-sm text-slate-500">No working hours are available. Ask HR to add a schedule in Settings.</p> }
-                        }
+                            @if (templates.Count == 0) { <p class="text-sm text-slate-500">No templates are available. Create one in Admin → Settings → Work Planning → Templates.</p> }
                     </section>
                     <section class="space-y-3">
                         <h3 class="font-semibold">2. When does it apply?</h3>
@@ -72,20 +59,17 @@
                         </div>
                         @if (period == "DateRange" && to < from) { <p class="text-xs text-red-600">The end date must be on or after the start date.</p> }
                     </section>
-                    @if (SchedulePurpose == "Duty")
-                    {
-                        <section class="space-y-3">
-                            <h3 class="font-semibold">3. Required clock events</h3>
-                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="checkIn" />Check in at @start.ToString("HH:mm")</label>
-                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="checkOut" />Check out at @end.ToString("HH:mm")</label>
-                            <p class="text-xs text-slate-500">These are separate from the official schedule's check-ins.</p>
-                        </section>
-                    }
+                    <p class="text-sm text-slate-500">Hours, segments and required clock events come from the selected template. Manage them in <a class="underline" href="/admin/work-planning/templates">Settings → Work Planning → Templates</a>.</p>
                     <section class="space-y-2 rounded-lg border p-4" aria-label="Schedule summary">
                         <h3 class="font-semibold">Summary</h3>
-                        <p class="text-sm">@(SchedulePurpose == "Duty" ? string.IsNullOrWhiteSpace(name) ? "New duty" : name : Selected?.Name ?? "Choose working hours") · @Hours</p>
+                        <p class="text-sm">@(scheduleMode == "Rotation" ? "Repeating cycle" : Selected?.Name ?? "Choose a template") · @Hours</p>
+                        @if (scheduleMode != "Rotation" && Selected is { } selected)
+                        {
+                            @foreach (var offset in selected.MandatoryCheckInOffsets) { <p class="text-sm">Required check-in: @ClockTime(offset)</p> }
+                            @foreach (var offset in selected.MandatoryCheckOutOffsets) { <p class="text-sm">Required check-out: @ClockTime(offset)</p> }
+                        }
                         <p class="text-sm">@Dates</p>
-                        @if (SchedulePurpose == "Official") { <p class="text-sm">@(scheduleMode == "Rotation" ? $"Repeats every {rotation.Count} days from {anchor:dd MMM yyyy}" : scheduleMode == "Weekly" ? "Attendance follows the selected weekdays" : "Friday and Saturday are weekends")</p> }
+                        <p class="text-sm">@(scheduleMode == "Rotation" ? $"Repeats every {rotation.Count} days from {anchor:dd MMM yyyy}" : scheduleMode == "Weekly" ? "Attendance follows the selected weekdays" : SchedulePurpose == "Duty" ? "Every day within the assigned dates" : "Friday and Saturday are weekends")</p>
                         @if (SchedulePurpose == "Duty" && OfficialSchedule != null)
                         {
                             <p class="text-xs text-slate-500">Official hours: @OfficialSchedule.DefaultStartTime?.ToString("HH:mm")–@OfficialSchedule.DefaultEndTime?.ToString("HH:mm").</p>
@@ -120,32 +104,36 @@
     private List<WorkTemplateLookupDto> templates = [];
     private bool wasOpen, saving;
     private string? error;
-    private string name = "", period = "OneDay";
-    private TimeOnly start = new(10, 0), end = new(12, 0);
+    private string period = "OneDay";
     private DateTime from = DateTime.UtcNow.AddHours(5).Date, to = DateTime.UtcNow.AddHours(5).Date;
     private int templateId;
     private string scheduleMode = "Standard";
     private bool[] weekdays = [true, true, true, true, true, false, false];
     private List<int> rotation = [0];
     private DateTime anchor = DateTime.UtcNow.AddHours(5).Date;
-    private bool checkIn = true, checkOut = true;
     private WorkTemplateLookupDto? Selected => templates.FirstOrDefault(x => x.WorkTemplateId == templateId);
     private bool CanSave => !saving && from != default && (period != "DateRange" || to >= from) &&
-        (SchedulePurpose == "Duty" ? !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 100 && start != end : scheduleMode == "Rotation" ? rotation.Any(x => x > 0) && anchor != default : templateId > 0 && (scheduleMode != "Weekly" || weekdays.Any(x => x)));
-    private string Hours => SchedulePurpose == "Duty" ? $"{start:HH:mm}–{end:HH:mm}" : $"{Selected?.DefaultStartTime:HH:mm}–{Selected?.DefaultEndTime:HH:mm}";
+        (scheduleMode == "Rotation" ? rotation.Any(x => x > 0) && anchor != default : Selected != null && (scheduleMode != "Weekly" || weekdays.Any(x => x)));
+    private string Hours => scheduleMode == "Rotation" ? "Hours follow each cycle template" : $"{Selected?.DefaultStartTime:HH:mm}–{Selected?.DefaultEndTime:HH:mm}";
     private string Dates => period == "OneDay" ? from.ToString("dd MMM yyyy") : period == "Ongoing" ? $"From {from:dd MMM yyyy}, ongoing" : $"{from:dd MMM yyyy}–{to:dd MMM yyyy}";
     private static string Minutes(int n) => $"{n / 60}h {n % 60:00}m";
+    private string ClockTime(int offset)
+    {
+        if (Selected?.DefaultStartTime == null) return "See template";
+        var time = from.Date.Add(Selected.DefaultStartTime.Value.ToTimeSpan()).AddMinutes(offset);
+        return time.ToString("HH:mm") + (time.Date > from.Date ? " (next day)" : "");
+    }
     private HRM.Helpers.WorkHourCoverageResult? Coverage
     {
         get
         {
-            if (OfficialSchedule?.DefaultStartTime == null || OfficialSchedule.DefaultEndTime == null) return null;
+            if (scheduleMode == "Rotation" || OfficialSchedule?.DefaultStartTime == null || OfficialSchedule.DefaultEndTime == null || Selected?.DefaultStartTime == null || Selected.DefaultEndTime == null) return null;
             var officeStart = from.Date.Add(OfficialSchedule.DefaultStartTime.Value.TimeOfDay);
             var officeEnd = from.Date.Add(OfficialSchedule.DefaultEndTime.Value.TimeOfDay);
             if (OfficialSchedule.EndsNextDay || officeEnd <= officeStart) officeEnd = officeEnd.AddDays(1);
-            var dutyStart = from.Date.Add(start.ToTimeSpan());
-            var dutyEnd = from.Date.Add(end.ToTimeSpan());
-            if (end < start) dutyEnd = dutyEnd.AddDays(1);
+            var dutyStart = from.Date.Add(Selected.DefaultStartTime.Value.ToTimeSpan());
+            var dutyEnd = from.Date.Add(Selected.DefaultEndTime.Value.ToTimeSpan());
+            if (Selected.EndsNextDay || dutyEnd <= dutyStart) dutyEnd = dutyEnd.AddDays(1);
             return HRM.Helpers.WorkHourCoverage.Calculate([(officeStart, officeEnd)], [(dutyStart, dutyEnd)]);
         }
     }
@@ -161,22 +149,14 @@
                 to = CurrentAssignment.EffectiveTo?.Date ?? from;
                 period = !CurrentAssignment.EffectiveTo.HasValue ? "Ongoing" : CurrentAssignment.EffectiveFrom.Date == CurrentAssignment.EffectiveTo.Value.Date ? "OneDay" : "DateRange";
             }
-            name = CurrentAssignment?.TemplateName ?? "";
-            start = CurrentAssignment?.DefaultStartTime is { } a ? TimeOnly.FromDateTime(a) : new(10, 0);
-            end = CurrentAssignment?.DefaultEndTime is { } b ? TimeOnly.FromDateTime(b) : new(12, 0);
-            checkIn = CurrentAssignment == null || CurrentAssignment.MandatoryCheckInOffsets.Count > 0;
-            checkOut = CurrentAssignment == null || CurrentAssignment.MandatoryCheckOutOffsets.Count > 0;
             templateId = CurrentAssignment?.WorkTemplateId ?? 0;
             scheduleMode = CurrentAssignment?.ScheduleMode ?? "Standard";
             anchor = CurrentAssignment?.RotationAnchorDate ?? from;
             weekdays = Enumerable.Range(0, 7).Select(n => ((CurrentAssignment?.WorkingDaysMask ?? 31) & (1 << n)) != 0).ToArray();
             rotation = HRM.Helpers.StaffScheduleCalendar.Parse(CurrentAssignment?.RotationTemplateIds);
             if (rotation.Count == 0) rotation.Add(0);
-            if (SchedulePurpose == "Official")
-            {
-                try { templates = (await AssignmentService.SearchTemplatesAsync(OrganisationBusinessEntityId, null)).Where(x => !(x.Code?.StartsWith("DUTY-", StringComparison.OrdinalIgnoreCase) ?? false)).ToList(); }
-                catch { error = "Working hours could not be loaded. Close and try again."; templates = []; }
-            }
+            try { templates = await AssignmentService.SearchTemplatesAsync(OrganisationBusinessEntityId, null); }
+            catch { error = "Templates could not be loaded. Close and try again."; templates = []; }
         }
         wasOpen = IsOpen;
     }
@@ -186,11 +166,8 @@
         saving = true; error = null;
         try
         {
-            var result = SchedulePurpose == "Duty"
-                ? await AssignmentService.AssignDutyAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
-                    Name = name, StartTime = start, EndTime = end, FromDate = from, ToDate = to, Period = period, RequireCheckIn = checkIn, RequireCheckOut = checkOut })
-                : await AssignmentService.AssignAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
-                    WorkTemplateId = scheduleMode == "Rotation" ? rotation.First(x => x > 0) : templateId, SchedulePurpose = "Official",
+            var result = await AssignmentService.AssignAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
+                    WorkTemplateId = scheduleMode == "Rotation" ? rotation.First(x => x > 0) : templateId, SchedulePurpose = SchedulePurpose,
                     ScheduleMode = scheduleMode, WorkingDaysMask = scheduleMode == "Weekly" ? Enumerable.Range(0, 7).Where(n => weekdays[n]).Sum(n => 1 << n) : 31,
                     RotationAnchorDate = anchor, RotationTemplateIds = rotation.ToList(),
                     EffectiveFrom = from, EffectiveTo = period == "OneDay" ? from : period == "DateRange" ? to : null });

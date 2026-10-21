@@ -19,7 +19,7 @@ public static class StaffScheduleCalendar
             var offset = (date.Date - assignment.RotationAnchorDate.Value.Date).Days;
             return pattern[((offset % pattern.Count) + pattern.Count) % pattern.Count];
         }
-        if (assignment.SchedulePurpose == "Duty") return assignment.WorkTemplateID;
+        if (assignment.SchedulePurpose == "Duty" && assignment.ScheduleMode == "Standard") return assignment.WorkTemplateID;
         return (assignment.WorkingDaysMask & (1 << (int)date.DayOfWeek)) != 0 ? assignment.WorkTemplateID : 0;
     }
     public static List<int> Parse(string? json)

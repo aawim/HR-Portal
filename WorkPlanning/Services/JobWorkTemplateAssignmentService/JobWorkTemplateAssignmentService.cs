@@ -192,6 +192,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                     .AsNoTracking()
                     .Where(x =>
                         x.IsActive &&
+                        x.DefaultStartTime.HasValue && x.DefaultEndTime.HasValue && x.WorkTemplateSegments.Any(s => s.IsActive) &&
                         (
                             x.IsGlobal ||
                             x.OrganisationBusinessEntityId == 
@@ -232,6 +233,12 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                         Code = x.Code,
 
                         TemplateTypeName = x.WorkTemplateType.Name,
+                        MandatoryCheckInOffsets = x.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
+                            (s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN" || s.WorkSegmentType.Code == "BREAK_END"))
+                            .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
+                        MandatoryCheckOutOffsets = x.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
+                            (s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT" || s.WorkSegmentType.Code == "BREAK_START"))
+                            .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
 
                         DefaultStartTime = x.DefaultStartTime,
 
@@ -239,36 +246,19 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
 
                         EndsNextDay = x.EndsNextDay
                     })
-                .Take(50)
                 .ToListAsync(
                     cancellationToken);
         }
 
-        public Task<ServiceResult> AssignAsync(AssignJobWorkTemplateDto dto, CancellationToken cancellationToken = default) =>
-            AssignCoreAsync(dto, null, cancellationToken);
-
-        public Task<ServiceResult> AssignDutyAsync(AssignDutyScheduleDto duty, CancellationToken cancellationToken = default)
-        {
-            if (duty == null || string.IsNullOrWhiteSpace(duty.Name) || duty.Name.Trim().Length > 100 || duty.StartTime == duty.EndTime ||
-                duty.StartTime.Ticks % TimeSpan.TicksPerMinute != 0 || duty.EndTime.Ticks % TimeSpan.TicksPerMinute != 0 ||
-                duty.Period is not ("OneDay" or "DateRange" or "Ongoing") || duty.FromDate == default ||
-                (duty.Period == "DateRange" && (!duty.ToDate.HasValue || duty.ToDate.Value.Date < duty.FromDate.Date)))
-                return Task.FromResult(ServiceResult.Failed("Enter a duty name, different start and end times, and valid dates."));
-            var request = new AssignJobWorkTemplateDto { JobId = duty.JobId, IndividualId = duty.IndividualId,
-                OrganisationBusinessEntityId = duty.OrganisationBusinessEntityId, SchedulePurpose = "Duty", EffectiveFrom = duty.FromDate.Date,
-                EffectiveTo = duty.Period == "OneDay" ? duty.FromDate.Date : duty.Period == "DateRange" ? duty.ToDate!.Value.Date : null };
-            return AssignCoreAsync(request, duty, cancellationToken);
-        }
-
-        private async Task<ServiceResult> AssignCoreAsync(AssignJobWorkTemplateDto dto, AssignDutyScheduleDto? duty, CancellationToken ct)
+        public async Task<ServiceResult> AssignAsync(AssignJobWorkTemplateDto dto, CancellationToken ct = default)
         {
             if (dto == null) return ServiceResult.Failed("Select a staff member and schedule.");
-            var validation = ValidateAssignmentRequest(dto, duty == null);
+            var validation = ValidateAssignmentRequest(dto);
             if (validation != null) return ServiceResult.Failed(validation);
             if (dto.SchedulePurpose is not ("Official" or "Duty")) return ServiceResult.Failed("Choose official hours or duty.");
             if (dto.ScheduleMode is not ("Standard" or "Weekly" or "Rotation") || dto.WorkingDaysMask < 1 || dto.WorkingDaysMask > 127)
                 return ServiceResult.Failed("Choose a valid schedule pattern and at least one working day.");
-            if (dto.ScheduleMode == "Rotation" && (dto.SchedulePurpose != "Official" || !dto.RotationAnchorDate.HasValue ||
+            if (dto.ScheduleMode == "Rotation" && (!dto.RotationAnchorDate.HasValue ||
                 dto.RotationTemplateIds.Count is < 1 or > 90 || dto.RotationTemplateIds.Any(x => x < 0) || !dto.RotationTemplateIds.Any(x => x > 0)))
                 return ServiceResult.Failed("Add 1–90 cycle days with at least one shift and choose the date for cycle day 1. Use 0 for rest days.");
             await _access.RequireContextAsync();
@@ -288,46 +278,32 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 {
                     var ids = dto.RotationTemplateIds.Where(x => x > 0).Distinct().ToList();
                     var available = await db.WorkTemplates.Where(x => ids.Contains(x.WorkTemplateId) && x.IsActive &&
+                        x.DefaultStartTime.HasValue && x.DefaultEndTime.HasValue && x.WorkTemplateSegments.Any(s => s.IsActive) &&
                         (x.IsGlobal || x.OrganisationBusinessEntityId == dto.OrganisationBusinessEntityId) &&
                         (!x.EffectiveFrom.HasValue || x.EffectiveFrom <= from) &&
                         (!x.EffectiveTo.HasValue || (to.HasValue && x.EffectiveTo >= to.Value)))
                         .Select(x => x.WorkTemplateId).ToListAsync(ct);
                     if (available.Count != ids.Count) return ServiceResult.Failed("Every cycle shift must be available in your organisation for the selected dates.");
                 }
-                if (duty != null)
-                {
-                    var type = await db.WorkTemplateTypes.Where(x => x.Code == "DUTY" && x.IsActive).Select(x => (int?)x.WorkTemplateTypeId).SingleOrDefaultAsync(ct);
-                    var clockTypes = await db.WorkSegmentTypes.Where(x => x.IsActive && (x.Code == "CHECK_IN" || x.Code == "CHECK_OUT")).ToListAsync(ct);
-                    if (!type.HasValue || clockTypes.Count != 2) return ServiceResult.Failed("Duty schedules are not configured yet. Ask an administrator to enable Duty, Check in and Check out.");
-                    var duration = (int)(duty.EndTime.ToTimeSpan() - duty.StartTime.ToTimeSpan()).TotalMinutes;
-                    if (duration <= 0) duration += 1440;
-                    var log = await _logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
-                        $"Duty assignment: tenant {dto.OrganisationBusinessEntityId}, job {dto.JobId}, {duty.Name.Trim()}, {duty.StartTime:HH:mm}–{duty.EndTime:HH:mm}, {from:yyyy-MM-dd} through {to:yyyy-MM-dd}; check-in required {duty.RequireCheckIn}, check-out required {duty.RequireCheckOut}.");
-                    var created = new WorkTemplate { Name = duty.Name.Trim(), Code = "DUTY-" + Guid.NewGuid().ToString("N"),
-                        WorkTemplateTypeId = type.Value, OrganisationBusinessEntityId = dto.OrganisationBusinessEntityId,
-                        DefaultStartTime = duty.StartTime, DefaultEndTime = duty.EndTime, EndsNextDay = duty.EndTime < duty.StartTime,
-                        IsGlobal = false, IsActive = true, IsRepeatable = true, RequiresAttendance = duty.RequireCheckIn || duty.RequireCheckOut,
-                        RequiresCheckOut = duty.RequireCheckOut, OperationLogId = log.OperationLogId };
-                    created.WorkTemplateSegments.Add(new WorkTemplateSegment { WorkSegmentTypeId = clockTypes.Single(x => x.Code == "CHECK_IN").WorkSegmentTypeId,
-                        Name = "Check in", SequenceNumber = 1, OffsetMinutes = 0, DurationMinutes = 30, IsMandatory = duty.RequireCheckIn,
-                        RequiresAttendance = duty.RequireCheckIn, IsActive = true, IsPaid = true, OperationLogId = log.OperationLogId, CreatedAt = DateTime.UtcNow });
-                    created.WorkTemplateSegments.Add(new WorkTemplateSegment { WorkSegmentTypeId = clockTypes.Single(x => x.Code == "CHECK_OUT").WorkSegmentTypeId,
-                        Name = "Check out", SequenceNumber = 2, OffsetMinutes = duration, DurationMinutes = 30, IsMandatory = duty.RequireCheckOut,
-                        RequiresAttendance = duty.RequireCheckOut, IsActive = true, IsPaid = true, OperationLogId = log.OperationLogId, CreatedAt = DateTime.UtcNow });
-                    db.WorkTemplates.Add(created); await db.SaveChangesAsync(ct);
-                    dto.WorkTemplateId = created.WorkTemplateId;
-                }
                 var template = await db.WorkTemplates.AsNoTracking().SingleOrDefaultAsync(x => x.WorkTemplateId == dto.WorkTemplateId && x.IsActive &&
                     (x.IsGlobal || x.OrganisationBusinessEntityId == dto.OrganisationBusinessEntityId), ct);
                 if (template == null) return ServiceResult.Failed("This schedule is no longer available in your organisation.");
+                if (!template.DefaultStartTime.HasValue || !template.DefaultEndTime.HasValue ||
+                    !await db.WorkTemplateSegments.AnyAsync(x => x.WorkTemplateId == template.WorkTemplateId && x.IsActive, ct))
+                    return ServiceResult.Failed("Complete this template's hours and segments in Settings before assigning it.");
                 if (template.EffectiveFrom.HasValue && from < template.EffectiveFrom.Value.Date)
                     return ServiceResult.Failed($"These working hours are available from {template.EffectiveFrom.Value:dd MMM yyyy}. Choose that date or later.");
                 if (template.EffectiveTo.HasValue && (from > template.EffectiveTo.Value.Date || !to.HasValue || to.Value > template.EffectiveTo.Value.Date))
                     return ServiceResult.Failed($"These working hours are available until {template.EffectiveTo.Value:dd MMM yyyy}. Choose an end date on or before that day.");
                 var overlaps = await db.JobWorkTemplateAssignments.Where(x => x.JobID == dto.JobId && x.SchedulePurpose == dto.SchedulePurpose && x.IsActive &&
                     (!to.HasValue || x.EffectiveFrom <= to.Value) && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);
-                if (duty == null)
-                    await _logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
+                var rotationJson = dto.ScheduleMode == "Rotation" ? System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds) : null;
+                var mask = dto.ScheduleMode == "Standard" ? 31 : dto.WorkingDaysMask;
+                if (overlaps.Count == 1 && overlaps[0].WorkTemplateID == dto.WorkTemplateId && overlaps[0].EffectiveFrom.Date == from &&
+                    overlaps[0].EffectiveTo?.Date == to && overlaps[0].ScheduleMode == dto.ScheduleMode && overlaps[0].WorkingDaysMask == mask &&
+                    overlaps[0].RotationTemplateIds == rotationJson && overlaps[0].RotationAnchorDate?.Date == (dto.ScheduleMode == "Rotation" ? dto.RotationAnchorDate?.Date : null))
+                    return ServiceResult.Ok("This template is already assigned with these dates and working pattern.");
+                await _logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
                         $"Schedule assignment: tenant {dto.OrganisationBusinessEntityId}, job {dto.JobId}, {dto.SchedulePurpose}, mode {dto.ScheduleMode}, template {dto.WorkTemplateId}, from {from:yyyy-MM-dd} to {to:yyyy-MM-dd}; weekdays {dto.WorkingDaysMask}, cycle anchor {dto.RotationAnchorDate:yyyy-MM-dd}, cycle {System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds)}.");
                 foreach (var old in overlaps)
                 {
@@ -472,7 +448,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
         }
 
         private static string? ValidateAssignmentRequest(
-            AssignJobWorkTemplateDto dto, bool requireTemplate = true)
+            AssignJobWorkTemplateDto dto)
         {
             if (dto.JobId <= 0)
             {
@@ -489,7 +465,7 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 return "A valid organisation is required.";
             }
 
-            if (requireTemplate && dto.WorkTemplateId <= 0)
+            if (dto.WorkTemplateId <= 0)
             {
                 return "A valid work template is required.";
             }

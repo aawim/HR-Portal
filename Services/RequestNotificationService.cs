@@ -52,6 +52,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var reviews = handovers.Where(x => x.Kind == "HandoverReview").Select(x => x.LeaveId).ToArray();
         var returned = handovers.Where(x => x.Kind == "HandoverReturned").Select(x => x.LeaveId).ToArray();
         return db.RequestNotifications.Where(n => n.UserId == actor.UserId &&
+            (n.NotificationKind != "DutyAcceptance" || n.Request.RequestStateId == 10) &&
             (n.Request.OrganisationBusinessEntityID == null || n.Request.OrganisationBusinessEntityID == actor.OrganisationId) &&
             (n.NotificationKind != "ActionRequired" || (n.RequestStageInstanceId.HasValue && pending.Contains(n.RequestStageInstanceId.Value))) &&
             (!n.NotificationKind.StartsWith("Handover") || (n.LeaveId.HasValue &&
@@ -102,7 +103,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                           join toState in db.RequestStates on n.ToStateId equals toState.RequestStateId
                           orderby n.CreatedAtUtc descending, n.RequestNotificationId descending
                           select new { n.RequestNotificationId, n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
-                              n.NotificationKind, n.Request.RequestId, n.LeaveId,
+                              n.NotificationKind, n.Request.RequestId, n.LeaveId, n.Request.RequestType.ViewUrl,
                               ActionStage = db.WfRequestStageInstances.Where(s => s.RequestStageInstanceId == n.RequestStageInstanceId)
                                   .Select(s => s.WorkflowStage.StageName).FirstOrDefault(),
                               FromState = fromState.StateName, ToState = toState.StateName, n.Request.RequestTypeId,
@@ -111,6 +112,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                           .Take(30).ToListAsync(token);
         return new(unread, rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
+            n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
             n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
@@ -124,6 +126,8 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.NotificationKind switch {
                 "HandoverAssigned" => "Work handover assigned for your supervision. Employee verification is pending.",
                 "RequestSubmitted" => "Your request has been submitted.",
+                "DutyAcceptance" => "A duty transfer or swap needs your acceptance. Open the roster to review it.",
+                "DutyUpdate" => "Your duty request has been updated. Open the roster for its current status.",
                 _ => null })).ToList());
     }
 

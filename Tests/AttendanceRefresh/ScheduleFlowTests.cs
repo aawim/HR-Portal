@@ -109,47 +109,37 @@ static class ScheduleFlowTests
         Check(!(await service.AssignAsync(foreign)).Success, "Cross-tenant assignment was allowed");
         attachAllowed = false;
         Check(!(await service.AssignAsync(Request(2, "Duty"))).Success, "Missing Schedule.Attach permission was ignored");
-        var quickDuty = new AssignDutyScheduleDto { JobId = 100, IndividualId = 1000, OrganisationBusinessEntityId = 10,
-            Name = "Service desk duty", StartTime = new(10, 0), EndTime = new(12, 0), FromDate = today.AddDays(1),
-            Period = "OneDay", RequireCheckIn = true, RequireCheckOut = false };
-        Check(!(await service.AssignDutyAsync(quickDuty)).Success, "Quick duty bypassed Schedule.Attach permission");
         attachAllowed = true;
+        var dutyRequest = Request(3, "Duty"); dutyRequest.EffectiveFrom = today.AddDays(1); dutyRequest.EffectiveTo = dutyRequest.EffectiveFrom;
+        Check((await service.AssignAsync(dutyRequest)).Success, "Configured dutyRequest template assignment failed");
+        int assignmentCount;
+        await using (var db = factory.CreateDbContext()) assignmentCount = await db.JobWorkTemplateAssignments.CountAsync();
+        Check((await service.AssignAsync(dutyRequest)).Success, "Configured dutyRequest template reassignment failed");
         await using (var db = factory.CreateDbContext())
         {
-            db.WorkTemplateTypes.Add(new WorkTemplateType { WorkTemplateTypeId = 2, Name = "Duty", Code = "DUTY", IsActive = true });
-            var checkInType = await db.WorkSegmentTypes.SingleAsync(x => x.WorkSegmentTypeId == 1);
-            checkInType.Name = "Check in"; checkInType.Code = "CHECK_IN";
-            db.WorkSegmentTypes.Add(new WorkSegmentType { WorkSegmentTypeId = 2, Name = "Check out", Code = "CHECK_OUT", IsActive = true });
-            await db.SaveChangesAsync();
-        }
-        var quickResult = await service.AssignDutyAsync(quickDuty);
-        Check(quickResult.Success, "Direct duty creation failed: " + quickResult.Message);
-        await using (var db = factory.CreateDbContext())
-        {
-            var saved = await db.JobWorkTemplateAssignments.SingleAsync(x => x.JobID == 100 && x.SchedulePurpose == "Duty" && x.IsActive && x.EffectiveFrom == today.AddDays(1));
-            Check(saved.EffectiveTo == today.AddDays(1), "One-day duty accidentally became ongoing");
-            var created = await db.WorkTemplates.Include(x => x.WorkTemplateSegments).SingleAsync(x => x.WorkTemplateId == saved.WorkTemplateID);
-            Check(created.Name == quickDuty.Name && created.OrganisationBusinessEntityId == 10 && !created.IsGlobal && created.DefaultStartTime == new TimeOnly(10, 0),
-                "Quick duty did not create tenant-scoped working hours");
-            Check(created.WorkTemplateSegments.Single(x => x.SequenceNumber == 1).IsMandatory &&
-                !created.WorkTemplateSegments.Single(x => x.SequenceNumber == 2).IsMandatory &&
-                created.WorkTemplateSegments.Single(x => x.SequenceNumber == 2).OffsetMinutes == 120,
-                "Quick duty check-in/out options were not saved");
-            Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 1 && x.IsActive && x.EffectiveTo == null), "Quick duty changed official hours");
-            Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2) && x.EffectiveTo == null),
-                "One-day duty did not restore the existing duty afterward");
+            Check(await db.WorkTemplates.CountAsync() == 3 && await db.WorkTemplateSegments.CountAsync() == 3,
+                "Duty assignment duplicated templates or segments");
+            Check(await db.JobWorkTemplateAssignments.CountAsync() == assignmentCount, "Saving the same duty twice duplicated staff assignments");
+            Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 1 && x.IsActive && x.EffectiveTo == null), "Duty replaced official hours");
+            Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2)), "Temporary dutyRequest did not restore the previous schedule");
         }
         var tomorrow = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today.AddDays(1)));
-        Check(tomorrow!.Assignments.Count == 2 && tomorrow.Assignments.Any(x => x.Name == quickDuty.Name) && tomorrow.HourCoverage.PotentialOvertimeMinutes == 0,
-            "Quick duty was not included in the daily plan or was counted as OT");
-        quickDuty.OrganisationBusinessEntityId = 20;
-        Check(!(await service.AssignDutyAsync(quickDuty)).Success, "Quick duty accepted another tenant");
-        quickDuty.OrganisationBusinessEntityId = 10; quickDuty.Period = "DateRange"; quickDuty.ToDate = today;
-        Check(!(await service.AssignDutyAsync(quickDuty)).Success, "Invalid duty date range was accepted");
+        Check(tomorrow!.Assignments.Count == 2 && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan");
+        dutyRequest.OrganisationBusinessEntityId = 20;
+        Check(!(await service.AssignAsync(dutyRequest)).Success, "Duty accepted another tenant");
+        dutyRequest.OrganisationBusinessEntityId = 10; dutyRequest.EffectiveTo = today;
+        Check(!(await service.AssignAsync(dutyRequest)).Success, "Invalid dutyRequest dates accepted");
         await CheckEvaluationAsync();
         await CheckSimpleDutyFormAsync();
         var friday = today.AddDays(14);
         while (friday.DayOfWeek != DayOfWeek.Friday) friday = friday.AddDays(1);
+        var dutyPattern = new JobWorkTemplateAssignment { SchedulePurpose = "Duty", WorkTemplateID = 3, EffectiveFrom = friday,
+            ScheduleMode = "Weekly", WorkingDaysMask = 1 << (int)DayOfWeek.Friday };
+        Check(HRM.Helpers.StaffScheduleCalendar.TemplateOn(dutyPattern, friday) == 3 && HRM.Helpers.StaffScheduleCalendar.TemplateOn(dutyPattern, friday.AddDays(2)) == 0,
+            "Weekly duty ignored the selected weekdays");
+        var rotatingDuty = Request(3, "Duty"); rotatingDuty.ScheduleMode = "Rotation"; rotatingDuty.RotationAnchorDate = friday;
+        rotatingDuty.EffectiveFrom = friday; rotatingDuty.RotationTemplateIds = [3, 0];
+        Check((await service.AssignAsync(rotatingDuty)).Success, "Duty rotation could not reuse existing templates");
         await using (var db = factory.CreateDbContext())
         {
             db.Jobs.Add(new Job { JobId = 101, IndividualID = 1001, OrganisationID = 10, JobStateId = 4 });
@@ -189,19 +179,17 @@ static class ScheduleFlowTests
 
     private static async Task CheckSimpleDutyFormAsync()
     {
-        AssignDutyScheduleDto? submitted = null;
+        AssignJobWorkTemplateDto? submitted = null;
         AssignJobWorkTemplateDto? submittedPattern = null;
         var searched = false;
         var saved = false;
         var service = Proxy.For<HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment.IJobWorkTemplateAssignmentService>((method, values) => method switch
         {
-            "AssignDutyAsync" => Capture((AssignDutyScheduleDto)values[0]!),
             "AssignAsync" => CapturePattern((AssignJobWorkTemplateDto)values[0]!),
             "SearchTemplatesAsync" => Search(),
             _ => throw new Exception(method)
         });
-        Task<HRM.DTOs.ServiceResult> Capture(AssignDutyScheduleDto dto) { submitted = dto; return Task.FromResult(HRM.DTOs.ServiceResult.Ok("Saved")); }
-        Task<HRM.DTOs.ServiceResult> CapturePattern(AssignJobWorkTemplateDto dto) { submittedPattern = dto; return Task.FromResult(HRM.DTOs.ServiceResult.Ok("Saved")); }
+        Task<HRM.DTOs.ServiceResult> CapturePattern(AssignJobWorkTemplateDto dto) { submitted = dto; submittedPattern = dto; return Task.FromResult(HRM.DTOs.ServiceResult.Ok("Saved")); }
         Task<List<HRM.DTOs.WorkPlanning.WorkTemplateLookupDto>> Search() { searched = true; return Task.FromResult(new List<HRM.DTOs.WorkPlanning.WorkTemplateLookupDto> { new() { WorkTemplateId = 1, Name = "Morning" }, new() { WorkTemplateId = 2, Name = "Evening" } }); }
         var services = new Microsoft.Extensions.DependencyInjection.ServiceCollection();
         Microsoft.Extensions.DependencyInjection.LoggingServiceCollectionExtensions.AddLogging(services);
@@ -217,17 +205,17 @@ static class ScheduleFlowTests
         form.GetType().GetProperty("AssignmentService", flags)!.SetValue(form, service);
         await renderer.Dispatcher.InvokeAsync(async () => { renderer.Attach(form); await renderer.Render(); });
         renderer.CheckErrors();
-        Check(!searched && renderer.RootText().Contains("Duty details") && renderer.RootText().Contains("Required clock events") &&
-            !renderer.RootText().Contains("Search work templates"), "Duty form still requires technical template selection");
+        Check(searched && renderer.RootText().Contains("Select a configured template") && !renderer.RootText().Contains("Duty name"),
+            "Duty form did not reuse templates configured in Settings");
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
-            form.GetType().GetField("name", flags)!.SetValue(form, "Service desk duty");
+            form.GetType().GetField("templateId", flags)!.SetValue(form, 2);
             await renderer.Render();
             await renderer.RootClick("Save schedule");
         });
         renderer.CheckErrors();
-        Check(saved && submitted?.Period == "OneDay" && submitted.StartTime == new TimeOnly(10, 0) && submitted.EndTime == new TimeOnly(12, 0) &&
-            submitted.RequireCheckIn && submitted.RequireCheckOut && submitted.JobId == 100, "Simple duty form did not save the displayed hours and requirements");
+        Check(saved && submitted?.SchedulePurpose == "Duty" && submitted.WorkTemplateId == 2 && submitted.EffectiveTo == submitted.EffectiveFrom && submitted.JobId == 100,
+            "Duty form did not assign the selected existing template for one day");
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
             form.IsOpen = false; await renderer.Render();

@@ -16,7 +16,8 @@
         else
         {
         <p class="mt-4 text-xl font-semibold tabular-nums">@current.DefaultStartTime?.ToString("HH:mm")–@current.DefaultEndTime?.ToString("HH:mm") @if (current.EndsNextDay) { <span class="text-xs font-normal">next day</span> }</p>
-        @if (SchedulePurpose == "Official") { <p class="text-xs text-slate-500">Working days: @string.Join(", ", Enumerable.Range(0, 7).Where(n => (current.WorkingDaysMask & (1 << n)) != 0).Select(n => ((DayOfWeek)n).ToString()))</p> }
+        @if (SchedulePurpose == "Official" || current.ScheduleMode == "Weekly") { <p class="text-xs text-slate-500">Working days: @string.Join(", ", Enumerable.Range(0, 7).Where(n => (current.WorkingDaysMask & (1 << n)) != 0).Select(n => ((DayOfWeek)n).ToString()))</p> }
+        else { <p class="text-xs text-slate-500">Every day within the assigned dates</p> }
         }
         <p class="mt-1 break-words text-sm">@current.TemplateName</p>
         <p class="mt-2 text-xs text-slate-500">@current.EffectiveFrom.ToString("dd MMM yyyy") @(current.EffectiveTo.HasValue ? $"through {current.EffectiveTo:dd MMM yyyy}" : "onwards")</p>

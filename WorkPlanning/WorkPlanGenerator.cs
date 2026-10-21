@@ -88,6 +88,8 @@ namespace HRM.WorkPlanning
             }
             foreach (var selection in selections)
             {
+                if (selection.Purpose == "Duty" && plan.WorkAssignments.Any(x => x.WorkTemplateId == selection.Template.WorkTemplateId &&
+                    x.SchedulePurpose == "Duty" && x.CancellationReason != null && x.CancellationReason.StartsWith(HRM.WorkPlanning.Services.DutyRosterService.MovementMarker))) continue;
                 if (plan.WorkAssignments.Any(x => x.IsValid && x.WorkTemplateId == selection.Template.WorkTemplateId && x.SchedulePurpose == selection.Purpose)) continue;
                 AddTemplate(plan, selection.Template, selection.Start, selection.Priority, state, now, workDate, selection.Purpose);
             }

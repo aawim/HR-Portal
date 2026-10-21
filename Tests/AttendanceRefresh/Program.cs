@@ -27,6 +27,9 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await DutyRosterTests.RunAsync(); Console.WriteLine("PASS Duty roster: acceptance, supervisor approvals, transfer/swap movements, conflicts, notifications, stale states and tenant boundaries"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Duty roster: {ex}"); }
+if(args.Contains("--duty-only")) return failures == 0 ? 0 : 1;
 try
 {
     await WorkPlanningLifecycleTests.RunAsync();

@@ -71,6 +71,9 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
                 .ToListAsync();
             if (legacy.Count == 1) { definition = legacy[0]; imported = true; }
         }
+        var dutyType = await db.RequestTypes.AnyAsync(x => x.RequestTypeId == requestType && x.ViewUrl == "/online/duty-roster");
+        var supervisorGroup = dutyType ? await db.UserGroups.Where(x => x.GroupName == "Supervisor (Team Leader)" &&
+            (x.IsGlobal || x.UserOrganisation.BusinessEntityID == org)).OrderBy(x => x.IsGlobal).Select(x => x.UserGroupId).FirstOrDefaultAsync() : 0;
         return new()
         {
             JobTypeId = jobType, RequestTypeId = requestType, Version = imported ? 0 : definition?.VersionNumber ?? 0,
@@ -82,7 +85,8 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
                 Name = x.StageName, StateId = x.RequestStateId,
                 UserGroupId = x.Approvers.FirstOrDefault(a => a.ApproverType.ToUpper() == "USERGROUP" || a.ApproverType.ToUpper() == "SUPERVISORGROUP")?.ApproverReferenceId ?? 0,
                 ApplicantSupervisorOnly = x.Approvers.Any(a => a.ApproverType.ToUpper() == "SUPERVISOR" || a.ApproverType.ToUpper() == "SUPERVISORGROUP")
-            }).ToList() ?? (requestType == LeaveChangeRequestTypes.EarlyReturn ? new List<LeaveFlowStageDto> { new() { Name = "HR approval", StateId = 3 } }
+            }).ToList() ?? (dutyType ? new List<LeaveFlowStageDto> { new() { Name = "Supervisor approval", StateId = 3, UserGroupId = supervisorGroup, ApplicantSupervisorOnly = true } }
+                : requestType == LeaveChangeRequestTypes.EarlyReturn ? new List<LeaveFlowStageDto> { new() { Name = "HR approval", StateId = 3 } }
                 : new List<LeaveFlowStageDto> { new() { Name = "Supervisor verification", StateId = 2, ApplicantSupervisorOnly = true }, new() { Name = "HR approval", StateId = 3 } })
         };
     }
@@ -111,6 +115,8 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
         if (await db.RequestStates.CountAsync(x => stateIds.Contains(x.RequestStateId) && x.IsProcessingState && !x.IsFinalState && x.RequestStateId != 1) != stages.Count)
             return ServiceResult.Fail("Every stage must use a non-final processing status, excluding Incomplete.");
         var requestType = model.RequestTypeId;
+        var dutyType = await db.RequestTypes.AnyAsync(x => x.RequestTypeId == requestType && x.ViewUrl == "/online/duty-roster");
+        if (dutyType && stages.Any(x => x.StateId == 10)) return ServiceResult.Fail("Pending staff completion is reserved for duty acceptance. Select a separate state for each approval stage.");
         if (requestType <= 0 || !await db.RequestTypes.AnyAsync(x => x.RequestTypeId == requestType))
             return ServiceResult.Fail("Select a valid Request Type.");
         if (await db.RequestStates.CountAsync(x => new[] { 1, 2, 3 }.Contains(x.RequestStateId) && x.IsProcessingState && !x.IsFinalState) != 3 ||
@@ -139,7 +145,7 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
         db.WfWorkflowDefinitions.Add(definition);
         var route = stages.Select(x => x.StateId).Append(4).ToArray();
         var pairs = route.Zip(route.Skip(1), (from, to) => (from, to))
-            .Concat(new[] { (1, route[0]), (2, route[0]) })
+            .Concat(dutyType ? new[] { (1, 10), (10, route[0]), (10, 5), (10, 6) } : new[] { (1, route[0]), (2, route[0]) })
             .Where(p => p.Item1 != p.Item2).Distinct();
         foreach (var pair in pairs)
         {

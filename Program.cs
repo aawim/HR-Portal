@@ -91,6 +91,7 @@ builder.Services.AddScoped<
     AttendanceWorkPlanResolver>();
 
 builder.Services.AddScoped<IWorkPlanGenerator, WorkPlanGenerator>();
+builder.Services.AddScoped<HRM.WorkPlanning.Services.DutyRosterService>();
 
 builder.Services.AddScoped<IJobWorkTemplateService, JobWorkTemplateService>();
 

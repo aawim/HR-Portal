@@ -4,6 +4,8 @@ namespace HRM.DTOs.WorkPlanning
 {
     public class WorkTemplateLookupDto
     {
+        public List<int> MandatoryCheckInOffsets { get; set; } = [];
+        public List<int> MandatoryCheckOutOffsets { get; set; } = [];
         public int WorkTemplateId { get; set; }
 
         public string Name { get; set; } = string.Empty;
