@@ -18,6 +18,8 @@
             string.Empty;
 
         public bool HasActiveJob { get; set; }
+        public List<CurrentWorkTemplateAssignmentDto> CurrentTemplates { get; set; } = [];
+        public HRM.Helpers.WorkHourCoverageResult HourCoverage { get; set; } = new(false, 0, 0, 0, 0);
 
         public CurrentWorkTemplateAssignmentDto? CurrentTemplate
         {

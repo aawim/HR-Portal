@@ -206,7 +206,12 @@ public partial class LeaveChangeService(
         var selected = original.Count == 1 ? original[0] : exactCopy.Count == 1 ? exactCopy[0] : candidates.Count == 1 ? candidates[0] : null;
         // Duplicate migrated balances must never receive a guessed deduction/refund.
         if (selected == null) throw new InvalidOperationException("The original leave balance could not be uniquely identified. Contact HR to reconcile the duplicate balances.");
-        if (selected.RemainingDays == null || (long)selected.RemainingDays.Value + balanceAdjustment < 0)
+        if (balanceAdjustment < 0)
+        {
+            var contractYearError = await LeaveContractYearBalance.ValidateSpendAsync(db, selected, targetEnd);
+            if (contractYearError != null) throw new InvalidOperationException(contractYearError);
+        }
+        if (selected.RemainingDays == null || selected.RemainingDays.Value + balanceAdjustment < 0)
             throw new InvalidOperationException("There are not enough remaining leave days for this extension.");
         return selected;
     }

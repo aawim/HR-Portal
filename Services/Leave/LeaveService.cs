@@ -505,6 +505,8 @@ namespace HRM.Services.Leave
 
                 if (model.FromDate == default || model.ToDate < model.FromDate)
                     return ServiceResult.Fail("Select a valid start and end date.");
+                var contractYearError = await LeaveContractYearBalance.ValidateSpendAsync(db, jobLeaveType, model.ToDate);
+                if (contractYearError != null) return ServiceResult.Fail(contractYearError);
                 model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, legacyType.IncludeHolidays);
                 if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
                     return ServiceResult.Fail("The requested days must be positive and within your available balance.");

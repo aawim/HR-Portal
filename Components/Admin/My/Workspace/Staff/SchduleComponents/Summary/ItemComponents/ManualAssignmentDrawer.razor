@@ -33,7 +33,7 @@
                     </p>
 
                     <h2 class="mt-1 text-lg font-semibold text-slate-900">
-                        Create Manual Work Assignment
+                        @(IsEditing ? "Edit Manual Work Assignment" : "Create Manual Work Assignment")
                     </h2>
 
                     <p class="mt-1 text-sm text-slate-500">
@@ -101,6 +101,7 @@
                           OnValidSubmit="HandleSaveAsync">
 
                     <DataAnnotationsValidator />
+                    @if (IsEditing) { <p class="mb-3 text-sm text-slate-500">Edit the title and attendance rules here. To change hours or date, cancel this assignment and add a new one.</p> }
 
                     <div class="space-y-6">
 
@@ -159,7 +160,7 @@
                             <InputDate TValue="DateTime"
                                        @bind-Value="model.WorkDate"
                                        @bind-Value:after="HandleWorkDateChangedAsync"
-                                       disabled="@isSaving"
+                                       disabled="@(isSaving || IsEditing)"
                                        class="w-full rounded-lg border
                                               border-slate-300 px-3 py-2.5
                                               text-sm outline-none transition
@@ -200,14 +201,12 @@
 
                                     <p class="text-sm font-medium
                                               text-amber-800">
-                                        No template assigned to this job
+                                        No templates available
                                     </p>
 
                                     <p class="mt-1 text-xs leading-5
                                               text-amber-700">
-                                        Assign a recurring work template
-                                        to the staff job before creating
-                                        an assignment from a template.
+                                        Ask HR to create an active template with working hours and clock segments in Settings.
                                     </p>
 
                                 </div>
@@ -217,7 +216,7 @@
                                 <div class="relative">
 
                                     <select value="@model.WorkTemplateId"
-                                            disabled="@(isSaving ||
+                                            disabled="@(isSaving || IsEditing ||
                                                         isLoadingTemplates ||
                                                         templates.Count == 0)"
                                             @onchange="HandleTemplateChanged"
@@ -488,8 +487,8 @@
                                disabled:bg-slate-300">
 
                     @(isSaving
-                        ? "Generating..."
-                        : "Generate Assignment")
+                        ? "Saving..."
+                        : IsEditing ? "Save changes" : "Generate Assignment")
 
                 </button>
 
@@ -594,28 +593,28 @@
                     OrganisationBusinessEntityId,
 
                 WorkDate =
-                    DateTime.Today,
+                    IsEditing && Assignment != null ? Assignment.WorkDate : DateTime.UtcNow.AddHours(5).Date,
 
                 WorkTemplateId =
-                    0,
+                    IsEditing && Assignment != null ? Assignment.WorkTemplateId : 0,
 
                 AssignmentTitle =
-                    null,
+                    IsEditing ? Assignment?.AssignmentName : null,
 
                 AssignmentDescription =
-                    null,
+                    IsEditing ? Assignment?.Description : null,
 
                 Remarks =
-                    null,
+                    IsEditing ? Assignment?.Remarks : null,
 
                 RequiresAttendance =
-                    true,
+                    !IsEditing || Assignment?.RequiresAttendance == true,
 
                 RequiresCheckout =
-                    true,
+                    !IsEditing || Assignment?.RequiresCheckout == true,
 
                 Priority =
-                    0,
+                    IsEditing ? Assignment?.Priority ?? 0 : 0,
 
                 AssignmentSource =
                     "Manual"
@@ -672,12 +671,18 @@
             errorMessage = null;
 
             templates =
-                await LookupService.GetTemplatesForJobAsync(
-                    JobId,
+                (await LookupService.GetAvailableTemplatesAsync(
+                    OrganisationBusinessEntityId,
                     model.WorkDate,
-                    loadCancellation.Token);
+                    loadCancellation.Token)).ToList();
 
-            if (templates.Count == 1)
+            if (IsEditing && Assignment != null)
+            {
+                model.WorkTemplateId = Assignment.WorkTemplateId;
+                if (!templates.Any(x => x.WorkTemplateId == Assignment.WorkTemplateId))
+                    templates.Add(new AssignedWorkTemplateDto { WorkTemplateId = Assignment.WorkTemplateId, TemplateName = Assignment.WorkTemplateName });
+            }
+            else if (templates.Count == 1)
             {
                 model.WorkTemplateId =
                     templates[0].WorkTemplateId;
@@ -724,8 +729,9 @@
             * Use your access service here instead when the manual
                  * service does not resolve the current user internally.
                  */
-            var result =
-                await ManualAssignmentService.GenerateAsync(model);
+            var result = IsEditing && Assignment != null
+                ? await ManualAssignmentService.UpdateAsync(Assignment.WorkAssignmentId, model)
+                : await ManualAssignmentService.GenerateAsync(model);
 
             if (!result.Success)
             {

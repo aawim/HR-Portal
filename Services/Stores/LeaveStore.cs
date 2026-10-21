@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Leave;
+using HRM.DTOs.Leave;
 namespace HRM.Services.Stores
 {
     public class LeaveStore
@@ -18,7 +18,7 @@ namespace HRM.Services.Stores
                 JobId = x.JobId,
                 LeaveTypeId = x.LeaveTypeId,
                 LeaveTypeName = x.LeaveType?.Name,
-                RemainingDays = (int)x.RemainingDays,
+                RemainingDays = x.RemainingDays ?? 0,
             })
             .ToList();
 

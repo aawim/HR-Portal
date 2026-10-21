@@ -61,6 +61,10 @@ namespace HRM.DTOs.Attendance
         public int EarlyDepartureMinutes { get; set; }
 
         public int OvertimeMinutes { get; set; }
+        // Candidate minutes only; an OT request and approval are still required.
+        public int PotentialOvertimeMinutes { get; set; }
+        public int DutyWithinOfficialMinutes { get; set; }
+        public int PlannedDutyOutsideOfficialMinutes { get; set; }
 
 
         // =========================================================

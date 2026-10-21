@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.WorkPlanning;
 using HRM.Models;
@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services
 {
-    public class WorkTemplateService : IWorkTemplateService
+    public partial class WorkTemplateService : IWorkTemplateService
     {
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
@@ -47,11 +47,12 @@ namespace HRM.Services
         }
         public async Task<List<WorkTemplateDto>> GetAllAsync(bool includeInactive = true)
         {
+            var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db = await _dbFactory.CreateDbContextAsync();
 
             var query = db.WorkTemplates
         .AsNoTracking()
-        .AsQueryable();
+        .Where(x => x.IsGlobal || x.OrganisationBusinessEntityId == org).AsQueryable();
 
     if (!includeInactive)
     {
@@ -109,6 +110,7 @@ namespace HRM.Services
             }
         public async Task<List<WorkTemplateDto>> GetAvailableAsync()
         {
+            var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db = await _dbFactory.CreateDbContextAsync();
 
             //var today = DateOnly.FromDateTime(DateTime.Today);
@@ -116,7 +118,7 @@ namespace HRM.Services
             return await db.WorkTemplates
                 .AsNoTracking()
                 .Where(x =>
-                    x.IsActive &&
+                    x.IsActive && (x.IsGlobal || x.OrganisationBusinessEntityId == org) &&
                     (!x.EffectiveFrom.HasValue ||
                      x.EffectiveFrom.Value <= DateTime.Today) &&
                     (!x.EffectiveTo.HasValue ||
@@ -161,6 +163,7 @@ namespace HRM.Services
         public async Task<WorkTemplateDto?> GetByIdAsync(int workTemplateId)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, workTemplateId);
 
             return await db.WorkTemplates
 
@@ -223,7 +226,12 @@ namespace HRM.Services
 
             var context = await _userAccessService.RequireContextAsync();
 
-            var organisationBusinessEntityId = context.ActiveJob?.OrganisationId;
+            int? organisationBusinessEntityId = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_userAccessService, true);
+            if (dto.IsGlobal)
+            {
+                if (!await _userAccessService.HasUserGroupAsync("Developer")) return ServiceResult.Failed("Global templates require the Developer user group.");
+                organisationBusinessEntityId = null;
+            }
 
             //var organisationBusinessEntityId = dto.IsGlobal ? null : dto.OrganisationBusinessEntityId;
 
@@ -320,7 +328,7 @@ namespace HRM.Services
                     "The selected work template type does not exist.");
             }
 
-            if (dto.OrganisationBusinessEntityId.HasValue)
+            if (!dto.IsGlobal)
             {
                 var organisationExists = await db.Organisations
                     .AnyAsync(x =>
@@ -370,6 +378,7 @@ namespace HRM.Services
         public async Task<ServiceResult> UpdateAsync(UpdateWorkTemplateDto dto)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             var entity = await db.WorkTemplates
                 .FirstOrDefaultAsync(x =>
@@ -378,7 +387,13 @@ namespace HRM.Services
 
             var context = await _userAccessService.RequireContextAsync();
 
-            var organisationBusinessEntityId = context.ActiveJob?.OrganisationId;
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, dto.WorkTemplateId, true);
+            int? organisationBusinessEntityId = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (dto.IsGlobal)
+            {
+                if (!await _userAccessService.HasUserGroupAsync("Developer")) return ServiceResult.Failed("Global templates require the Developer user group.");
+                organisationBusinessEntityId = null;
+            }
 
 
  
@@ -445,7 +460,7 @@ namespace HRM.Services
                     "The selected work template type does not exist.");
             }
 
-            if (dto.OrganisationBusinessEntityId.HasValue)
+            if (!dto.IsGlobal)
             {
                 var organisationExists = await db.Organisations
                     .AnyAsync(x =>
@@ -482,6 +497,8 @@ namespace HRM.Services
             entity.RequiresCheckOut = dto.RequiresCheckOut;
             entity.IsRepeatable = dto.IsRepeatable;
             entity.IsGlobal = dto.IsGlobal;
+            if (!dto.IsActive && await HasLiveAssignmentsAsync(db, entity.WorkTemplateId))
+                return ServiceResult.Failed("End or replace the staff schedules using this template before archiving it.");
             entity.IsActive = dto.IsActive;
 
             entity.EffectiveFrom = dto.EffectiveFrom;
@@ -489,13 +506,17 @@ namespace HRM.Services
 
             entity.OperationLogId = dto.OperationLogId;
 
+            await HRM.WorkPlanning.Services.WorkPlanSnapshots.InvalidateUnusedAsync(db, entity.WorkTemplateId);
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return ServiceResult.Ok("Work template updated successfully.");
         }
         public async Task<ServiceResult> ArchiveAsync(int workTemplateId)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, workTemplateId, true);
 
             var entity = await db.WorkTemplates
                 .FirstOrDefaultAsync(x =>
@@ -505,9 +526,13 @@ namespace HRM.Services
                 return ServiceResult.Failed(
                     "Template not found.");
 
+            if (await HasLiveAssignmentsAsync(db, workTemplateId))
+                return ServiceResult.Failed("End or replace the staff schedules using this template before archiving it.");
             entity.IsActive = false;
 
+            await HRM.WorkPlanning.Services.WorkPlanSnapshots.InvalidateUnusedAsync(db, entity.WorkTemplateId);
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return ServiceResult.Ok("Template archived.");
         }
@@ -522,6 +547,7 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, workTemplateId);
 
             return await db.WorkTemplateSegments.AsNoTracking()
                   .Where(x =>x.WorkTemplateId == workTemplateId)
@@ -612,11 +638,12 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, workTemplateId);
 
             return await db.WorkTemplateSegments
                 .AsNoTracking()
                 .Where(x =>
-                    x.IsActive)
+                    x.IsActive && x.WorkTemplateId == workTemplateId)
                 .OrderBy(x => x.SequenceNumber)
                 .Select(x => new WorkTemplateSegmentDto
                 {
@@ -624,6 +651,9 @@ namespace HRM.Services
                         x.WorkTemplateSegmentId,
 
                    WorkSegmentTypeId = x.WorkSegmentTypeId,
+                   SequenceNumber = x.SequenceNumber, OffsetMinutes = x.OffsetMinutes,
+                   GraceBeforeMinutes = x.GraceBeforeMinutes, GraceAfterMinutes = x.GraceAfterMinutes,
+                   IsMandatory = x.IsMandatory, WorkSegmentTypeName = x.WorkSegmentType.Name,
 
                    DurationMinutes = (int) x.DurationMinutes,
 
@@ -662,6 +692,8 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, dto.WorkTemplateId, true);
 
 
 
@@ -739,7 +771,7 @@ namespace HRM.Services
 
                 RequiresDeviceValidation = dto.RequiresDeviceValidation,
 
-                SequenceNumber = dto.DisplayOrder > 0 ? dto.DisplayOrder : nextDisplayOrder + 1,
+                SequenceNumber = dto.SequenceNumber > 0 ? dto.SequenceNumber : dto.DisplayOrder > 0 ? dto.DisplayOrder : nextDisplayOrder + 1,
 
                 IsActive = true,
       
@@ -759,8 +791,8 @@ namespace HRM.Services
                 segment.SequenceNumber,
                 (int)segment.OffsetMinutes,
                 (int)segment.DurationMinutes,
-                (int)segment.GraceAfterMinutes,
-                (int)segment.GraceBeforeMinutes );
+                (int)segment.GraceBeforeMinutes,
+                (int)segment.GraceAfterMinutes );
 
 
             if (!validationResult.Success)
@@ -771,7 +803,9 @@ namespace HRM.Services
    
             db.WorkTemplateSegments.Add(segment);
 
+            await HRM.WorkPlanning.Services.WorkPlanSnapshots.InvalidateUnusedAsync(db, segment.WorkTemplateId);
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return ServiceResult.Ok(
                 "Work template segment created successfully.");
@@ -782,6 +816,7 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
             if (dto.WorkTemplateSegmentId <= 0)
             {
@@ -793,6 +828,7 @@ namespace HRM.Services
                 .FirstOrDefaultAsync(x =>
                     x.WorkTemplateSegmentId ==
                         dto.WorkTemplateSegmentId);
+            if (segment != null) await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, segment.WorkTemplateId, true);
 
             if (segment == null)
             {
@@ -841,12 +877,12 @@ namespace HRM.Services
              db,
                 segment.WorkTemplateId,
                 segment.WorkTemplateSegmentId,
-                segment.WorkSegmentTypeId,
-                segment.SequenceNumber,
+                dto.WorkSegmentTypeId,
+                dto.SequenceNumber > 0 ? dto.SequenceNumber : dto.DisplayOrder,
                 dto.OffsetMinutes,
                 dto.DurationMinutes,
-                dto.GraceAfterMinutes,
-                dto.GraceBeforeMinutes
+                dto.GraceBeforeMinutes,
+                dto.GraceAfterMinutes
                        
                    );
 
@@ -866,6 +902,8 @@ namespace HRM.Services
 
             segment.IsPaid =
                 dto.IsPaid;
+            segment.IsMandatory = dto.IsMandatory;
+            segment.WorkSegmentTypeId = dto.WorkSegmentTypeId;
 
             segment.RequiresAttendance =
                 dto.RequiresAttendance;
@@ -877,7 +915,7 @@ namespace HRM.Services
                 dto.RequiresDeviceValidation;
 
             segment.SequenceNumber =
-                dto.SequenceNumber;
+                dto.SequenceNumber > 0 ? dto.SequenceNumber : dto.DisplayOrder;
 
             segment.IsActive = dto.IsActive;
             segment.OffsetMinutes = dto.OffsetMinutes;
@@ -891,7 +929,9 @@ namespace HRM.Services
 
 
 
+            await HRM.WorkPlanning.Services.WorkPlanSnapshots.InvalidateUnusedAsync(db, segment.WorkTemplateId);
             await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
             return ServiceResult.Ok(
                 "Work template segment updated successfully.");
@@ -903,11 +943,13 @@ namespace HRM.Services
 {
     await using var db =
         await _dbFactory.CreateDbContextAsync();
+            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
 
     var segment = await db.WorkTemplateSegments
         .FirstOrDefaultAsync(x =>
             x.WorkTemplateSegmentId ==
                 workTemplateSegmentId);
+            if (segment != null) await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, segment.WorkTemplateId, true);
 
     if (segment == null)
     {
@@ -924,7 +966,9 @@ namespace HRM.Services
     segment.IsActive = false;
             segment.UpdatedAt = DateTime.UtcNow;
 
-    await db.SaveChangesAsync();
+    await HRM.WorkPlanning.Services.WorkPlanSnapshots.InvalidateUnusedAsync(db, segment.WorkTemplateId);
+            await db.SaveChangesAsync();
+            await transaction.CommitAsync();
 
     return ServiceResult.Ok(
         "Work template segment archived successfully.");
@@ -977,7 +1021,7 @@ namespace HRM.Services
                     "Offset minutes cannot be negative.");
             }
 
-            if (durationMinutes < 0)
+            if (durationMinutes <= 0)
             {
                 return ServiceResult.Failed(
                     "Duration must be greater than zero.");

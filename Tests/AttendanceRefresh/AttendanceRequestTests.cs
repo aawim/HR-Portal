@@ -142,7 +142,7 @@ static class AttendanceRequestTests
     private static async Task TestPastLeaveCheckIn(RequestTestFactory factory, AttendanceRequestService service, DateTime today)
     {
         int leaveChangesBefore;
-        int? balanceBefore;
+        decimal? balanceBefore;
         await using (var db = factory.CreateDbContext())
         {
             var checkout = Clock(10, 1, today.AddDays(-2));
@@ -372,7 +372,9 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
     {
         Type[] types = [typeof(Job), typeof(Leaf), typeof(LeaveType), typeof(JobLeaveType), typeof(Request), typeof(RequestState),
             typeof(AttendanceLog), typeof(AttendanceLogResolution), typeof(AttendanceLogRequest), typeof(AttendanceLogChangeRequest),
-            typeof(LeaveChangeRequest), typeof(LeaveTypeMapping), typeof(LeaveDefinition)];
+            typeof(LeaveChangeRequest), typeof(LeaveTypeMapping), typeof(LeaveDefinition),
+            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
+            typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule), typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting), typeof(HRM.Models.LeaveTypes.LeaveCarryForward)];
         var navigations = new HashSet<(Type, string)>
         {
             (typeof(Leaf), "Job"), (typeof(Leaf), "LeaveType"), (typeof(Request), "RequestState"),
@@ -386,9 +388,10 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
         {
-            builder.Entity(type).HasKey(type == typeof(Leaf) ? "LeaveId" : type == typeof(AttendanceLogChangeRequest) ? "RequestId" : type.Name + "Id");
+            builder.Entity(type).HasKey(type == typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule) || type == typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting) || type == typeof(HRM.Models.LeaveTypes.LeaveCarryForward)
+                ? "Id" : type == typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment) ? "JobWorkTemplateAssignmentID" : type == typeof(Leaf) ? "LeaveId" : type == typeof(AttendanceLogChangeRequest) ? "RequestId" : type.Name + "Id");
             foreach (var property in type.GetProperties().Where(x => !x.PropertyType.IsValueType && x.PropertyType != typeof(string) && x.PropertyType != typeof(byte[])))
-                if (!navigations.Contains((type, property.Name))) builder.Entity(type).Ignore(property.Name);
+                if (!navigations.Contains((type, property.Name)) && !ScheduleTestModel.Navigation(type, property.Name)) builder.Entity(type).Ignore(property.Name);
         }
         builder.Entity<Leaf>().HasOne(x => x.Job).WithMany().HasForeignKey(x => x.JobId);
         builder.Entity<Leaf>().HasOne(x => x.LeaveType).WithMany().HasForeignKey(x => x.LeaveTypeId);
@@ -401,5 +404,6 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
         builder.Entity<LeaveChangeRequest>().HasOne(x => x.Leave).WithMany().HasForeignKey(x => x.LeaveId);
         builder.Entity<LeaveChangeRequest>().HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId);
         builder.Entity<LeaveTypeMapping>().HasOne(x => x.LeaveDefinition).WithMany().HasForeignKey(x => x.LeaveDefinitionId);
+        ScheduleTestModel.Configure(builder);
     }
 }

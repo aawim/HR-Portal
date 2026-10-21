@@ -4,6 +4,7 @@ namespace HRM.DTOs.Attendance
 {
     public class AttendanceWorkAssignmentDto
     {
+        public string SchedulePurpose { get; set; } = "Official";
         public long WorkAssignmentId { get; set; }
 
         public int WorkTemplateTypeId { get; set; }

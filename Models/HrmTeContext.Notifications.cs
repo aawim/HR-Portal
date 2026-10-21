@@ -20,6 +20,24 @@ public partial class HrmTeContext
     {
         if (Model.FindEntityType(typeof(RequestNotification)) == null) return;
         ChangeTracker.DetectChanges();
+        foreach (var entry in ChangeTracker.Entries<Request>().Where(x => x.State == EntityState.Added).ToList())
+        {
+            var request = entry.Entity;
+            if (!request.ApplicantBusinessEntityId.HasValue) continue;
+            var users = Users.Where(u => u.IsActive && u.LocalUserStateId == 1 &&
+                u.BusinessEntityID == request.ApplicantBusinessEntityId &&
+                (request.OrganisationBusinessEntityID == null || u.UserOrganisation!.BusinessEntityID == request.OrganisationBusinessEntityID))
+                .Select(u => u.UserId);
+            var ids = asynchronous ? await users.ToListAsync(token).ConfigureAwait(false) : users.ToList();
+            foreach (var id in ids)
+            {
+                if (ChangeTracker.Entries<RequestNotification>().Any(n => n.State == EntityState.Added &&
+                    ReferenceEquals(n.Entity.Request, request) && n.Entity.UserId == id && n.Entity.NotificationKind == "RequestSubmitted")) continue;
+                RequestNotifications.Add(new RequestNotification { Request = request, UserId = id,
+                    NotificationKind = "RequestSubmitted", FromStateId = request.RequestStateId, ToStateId = request.RequestStateId,
+                    ReferenceNumber = request.ReferenceNumber ?? "New request", CreatedAtUtc = DateTime.UtcNow });
+            }
+        }
         var changes = ChangeTracker.Entries<Request>().Where(x => x.State == EntityState.Modified &&
             x.Property(r => r.RequestStateId).OriginalValue != x.Property(r => r.RequestStateId).CurrentValue).ToList();
         foreach (var entry in changes)

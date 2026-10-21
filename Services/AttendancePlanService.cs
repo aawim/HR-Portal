@@ -237,6 +237,7 @@ namespace HRM.Services
                 .OrderBy(x => x.SequenceNumber)
                 .Select(x => new AttendanceWorkSegmentDto
                 {
+                    SchedulePurpose = x.SchedulePurpose,
                     WorkPlanSegmentId =
                         x.WorkPlanSegmentId,
 
@@ -328,6 +329,7 @@ namespace HRM.Services
 
                     return new AttendanceWorkAssignmentDto
                     {
+                        SchedulePurpose = x.SchedulePurpose,
                         WorkAssignmentId =
                             x.WorkAssignmentId,
 

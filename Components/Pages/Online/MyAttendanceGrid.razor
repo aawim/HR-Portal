@@ -580,6 +580,7 @@
 
             int individualID = await _individual.GetIndividualID();
         rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
+        var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(DbContext, individualID, start.Date, end.Date);
         var approvedLeaves = await DbContext.Leaves
             .AsNoTracking()
             .Where(l => l.Job.IndividualID == individualID &&
@@ -608,7 +609,7 @@
             var row = new DailyAttendanceRow
                 {
                     Date = day,
-                    Status = (day.DayOfWeek == System.DayOfWeek.Friday || day.DayOfWeek == System.DayOfWeek.Saturday) ? "Weekend" : "Absent",
+                    Status = restDays.Contains(day.Date) ? "Weekend" : day.Date > DateTime.UtcNow.AddHours(5).Date ? "Upcoming" : "Absent",
                     Details = ""
                 };
 
@@ -626,9 +627,9 @@
                     row.Status = "Present";
 
                 // Clock In/Out
-                var clockIn = dayLogs.LastOrDefault(l => l.InOutModeId == 1);
-                var clockOut = dayLogs.LastOrDefault(l => l.InOutModeId == 2);
-                var breakOut = dayLogs.LastOrDefault(l => l.InOutModeId == 3);
+                var clockIn = dayLogs.FirstOrDefault(l => l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1) || (!l.AttendanceLogResolutions.Any() && l.InOutModeId == 1));
+                var clockOut = dayLogs.LastOrDefault(l => l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2) || (!l.AttendanceLogResolutions.Any() && l.InOutModeId == 2));
+                var breakOut = dayLogs.LastOrDefault(l => l.InOutModeId == 3 && !l.AttendanceLogResolutions.Any());
                 var breakIn = dayLogs.LastOrDefault(l => l.InOutModeId == 4);
 
                 row.ClockIn = clockIn != null ? clockIn.Date.ToString("HH:mm") : "--:--";

@@ -227,6 +227,9 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<IUserService>(sp => sp.GetRequiredService<UserService>());
 builder.Services.AddScoped<UserPreferenceService>();
 builder.Services.AddScoped<RequestNotificationService>();
+builder.Services.AddScoped<HRM.Services.Leave.LeaveAccrualSettingsService>();
+builder.Services.AddScoped<HRM.Services.Leave.LeaveCarryForwardService>();
+builder.Services.AddHostedService<HRM.Services.Leave.LeaveAccrualWorker>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IUserContextCache, UserContextCache>();
  

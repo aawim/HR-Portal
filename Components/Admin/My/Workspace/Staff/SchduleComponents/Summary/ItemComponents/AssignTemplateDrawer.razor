@@ -1,686 +1,204 @@
-﻿@using HRM.DTOs.WorkPlanning
+@using HRM.DTOs.WorkPlanning
 @using HRM.DTOs.StaffSchedule
 @using HRM.DTOs.Job.JobWorkTemplateAssignment
 @using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment
-@using Microsoft.AspNetCore.Components.Forms
-@using System.ComponentModel.DataAnnotations;
-
 @inject IJobWorkTemplateAssignmentService AssignmentService
 
 @if (IsOpen)
 {
     <div class="fixed inset-0 z-50">
-
-        <div class="absolute inset-0 bg-slate-950/40"
-             @onclick="HandleCloseAsync">
-        </div>
-
-        <aside class="absolute inset-y-0 right-0 flex w-full
-                      max-w-xl flex-col bg-white shadow-2xl">
-
-            <!-- Header -->
-            <div class="flex items-start justify-between border-b
-                        border-slate-200 px-6 py-5">
-
-                <div>
-                    <p class="text-xs font-medium uppercase tracking-wide
-                              text-blue-600">
-                        Work Template
-                    </p>
-
-                    <h2 class="mt-1 text-lg font-semibold text-slate-900">
-                        @DrawerTitle
-                    </h2>
-
-                    <p class="mt-1 text-sm text-slate-500">
-                        Select the recurring schedule for this staff job.
-                    </p>
-                </div>
-
-                <button type="button"
-                        disabled="@isSaving"
-                        @onclick="HandleCloseAsync"
-                        class="rounded-lg p-2 text-slate-400
-                               hover:bg-slate-100 hover:text-slate-700
-                               disabled:cursor-not-allowed
-                               disabled:opacity-50">
-
-                    <svg xmlns="http://www.w3.org/2000/svg"
-                         fill="none"
-                         viewBox="0 0 24 24"
-                         stroke-width="1.5"
-                         stroke="currentColor"
-                         class="h-5 w-5">
-
-                        <path stroke-linecap="round"
-                              stroke-linejoin="round"
-                              d="M6 18 18 6M6 6l12 12" />
-                    </svg>
-
-                </button>
-
-            </div>
-
-            <!-- Content -->
-            <div class="flex-1 overflow-y-auto px-6 py-5">
-
-                @if (!string.IsNullOrWhiteSpace(errorMessage))
-                {
-                    <div class="mb-5 rounded-lg border border-red-200
-                                bg-red-50 p-4">
-
-                        <p class="text-sm font-medium text-red-800">
-                            Unable to save assignment
-                        </p>
-
-                        <p class="mt-1 text-sm text-red-700">
-                            @errorMessage
-                        </p>
-
-                    </div>
-                }
-
-                <EditForm Model="@model"
-                          OnValidSubmit="HandleSaveAsync">
-
-                    <DataAnnotationsValidator />
-
-                    <div class="space-y-6">
-
-                        <!-- Search -->
-                        <div>
-                            <label class="mb-1.5 block text-sm
-                                          font-medium text-slate-700">
-                                Search work templates
-                            </label>
-
-                            <div class="relative">
-
-                                <input type="search"
-                                       value="@searchText"
-                                       @oninput="HandleSearchInputAsync"
-                                       disabled="@isSaving"
-                                       placeholder="Search by name, code or description"
-                                       class="w-full rounded-lg border
-                                              border-slate-300 px-3 py-2.5
-                                              pr-10 text-sm outline-none
-                                              transition focus:border-blue-500
-                                              focus:ring-2 focus:ring-blue-100
-                                              disabled:bg-slate-100" />
-
-                                <div class="pointer-events-none absolute
-                                            inset-y-0 right-0 flex items-center
-                                            pr-3 text-slate-400">
-
-                                    @if (isSearching)
-                                    {
-                                        <span class="h-4 w-4 animate-spin
-                                                     rounded-full border-2
-                                                     border-slate-300
-                                                     border-t-slate-700">
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <svg xmlns="http://www.w3.org/2000/svg"
-                                             fill="none"
-                                             viewBox="0 0 24 24"
-                                             stroke-width="1.5"
-                                             stroke="currentColor"
-                                             class="h-4 w-4">
-
-                                            <path stroke-linecap="round"
-                                                  stroke-linejoin="round"
-                                                  d="m21 21-4.35-4.35m2.1-5.4a7.5
-                                                     7.5 0 1 1-15 0 7.5
-                                                     7.5 0 0 1 15 0Z" />
-                                        </svg>
-                                    }
-
-                                </div>
-
+        <div class="absolute inset-0 bg-slate-950/40" @onclick="CloseAsync"></div>
+        <aside role="dialog" aria-modal="true" aria-labelledby="schedule-form-title" class="absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l bg-white shadow-xl">
+            <header class="flex items-start justify-between gap-3 border-b p-5">
+                <div><h2 id="schedule-form-title" class="text-xl font-semibold">@(CurrentAssignment == null ? "Add" : "Change") @SchedulePurpose.ToLowerInvariant() schedule</h2>
+                    <p class="mt-1 text-sm text-slate-500">@StaffName</p></div>
+                <button type="button" class="app-button app-button-secondary" disabled="@saving" @onclick="CloseAsync" aria-label="Close schedule form">✕</button>
+            </header>
+            <div class="flex-1 space-y-5 overflow-y-auto p-5">
+                @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm text-red-600">@error</p> }
+                <fieldset disabled="@saving" class="space-y-5">
+                    <section class="space-y-3">
+                        <h3 class="font-semibold">1. @(SchedulePurpose == "Duty" ? "Duty details" : "Working hours")</h3>
+                        @if (SchedulePurpose == "Duty")
+                        {
+                            <label class="block text-sm">Duty name<input class="mt-1 w-full rounded-lg border p-2.5" maxlength="100" @bind="name" placeholder="e.g. Service desk duty" /></label>
+                            <div class="grid grid-cols-2 gap-3">
+                                <label class="text-sm">Start time<input type="time" class="mt-1 w-full rounded-lg border p-2.5" @bind="start" /></label>
+                                <label class="text-sm">End time<input type="time" class="mt-1 w-full rounded-lg border p-2.5" @bind="end" /></label>
                             </div>
-                        </div>
-
-                        <!-- Template results -->
-                        <div>
-                            <label class="mb-2 block text-sm
-                                          font-medium text-slate-700">
-                                Work template
-                                <span class="text-red-500">*</span>
-                            </label>
-
-                            @if (isSearching)
+                            @if (start == end) { <p class="text-xs text-red-600">Choose different start and end times.</p> }
+                            @if (end < start) { <p class="text-xs text-slate-500">Ends the following day.</p> }
+                        }
+                        else
+                        {
+                            <label class="block text-sm">Working pattern<select class="mt-1 w-full rounded-lg border p-2.5" @bind="scheduleMode"><option value="Standard">Normal staff · Sunday–Thursday</option><option value="Weekly">Shift · selected weekdays</option><option value="Rotation">Rotating shifts · repeating cycle</option></select></label>
+                            @if (scheduleMode == "Weekly")
                             {
-                                <div class="rounded-lg border
-                                            border-slate-200 bg-slate-50
-                                            p-5 text-center text-sm
-                                            text-slate-500">
-                                    Searching templates...
+                                <div class="flex flex-wrap gap-3">
+                                @for (var n = 0; n < 7; n++)
+                                {
+                                    var index = n;
+                                    <label class="flex items-center gap-1 text-sm"><input type="checkbox" @bind="weekdays[index]" />@((DayOfWeek)index)</label>
+                                }
                                 </div>
                             }
-                            else if (templates.Count == 0)
+                            @if (scheduleMode == "Rotation")
                             {
-                                <div class="rounded-lg border
-                                            border-dashed border-slate-300
-                                            bg-slate-50 p-5 text-center">
-
-                                    <p class="text-sm font-medium
-                                              text-slate-700">
-                                        No templates found
-                                    </p>
-
-                                    <p class="mt-1 text-xs text-slate-500">
-                                        Try another search term or confirm
-                                        that active templates exist for
-                                        this organisation.
-                                    </p>
-                                </div>
+                                <label class="block text-sm">Cycle day 1 date<InputDate class="mt-1 w-full rounded-lg border p-2.5" @bind-Value="anchor" /></label>
+                                <p class="text-xs text-slate-500">The cycle repeats from this date, including Fridays and Saturdays. Add shifts or rest days in order.</p>
+                                @for (var n = 0; n < rotation.Count; n++)
+                                {
+                                    var index = n;
+                                    <div class="flex items-center gap-2"><label class="flex-1 text-sm">Day @(index + 1)<select class="ml-2 rounded-lg border p-2" @bind="rotation[index]"><option value="0">Rest day</option>@foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }</select></label><button type="button" class="app-button app-button-secondary" @onclick="() => rotation.RemoveAt(index)" aria-label="Remove cycle day">Remove</button></div>
+                                }
+                                <button type="button" class="app-button app-button-secondary" disabled="@(rotation.Count >= 90)" @onclick="() => rotation.Add(0)">Add cycle day</button>
                             }
                             else
                             {
-                                <div class="max-h-72 space-y-2 overflow-y-auto
-                                            rounded-lg border border-slate-200
-                                            p-2">
-
-                                    @foreach (var template in templates)
-                                    {
-                                        var isSelected =
-                                        model.WorkTemplateId ==
-                                        template.WorkTemplateId;
-
-                                        <button type="button"
-                                                disabled="@isSaving"
-                                                @onclick="() => SelectTemplate(template)"
-                                                class="@GetTemplateRowClass(isSelected)">
-
-                                            <div class="flex items-start
-                                                        justify-between gap-4">
-
-                                                <div class="text-left">
-
-                                                    <p class="text-sm
-                                                              font-semibold
-                                                              text-slate-900">
-                                                        @template.Name
-                                                    </p>
-
-                                                    <div class="mt-1 flex
-                                                                flex-wrap gap-2">
-
-                                                        @if (!string.IsNullOrWhiteSpace(
-                                                       template.Code))
-                                                        {
-                                                            <span class="rounded-full
-                                                                         bg-slate-100
-                                                                         px-2 py-0.5
-                                                                         text-xs
-                                                                         text-slate-600">
-                                                                @template.Code
-                                                            </span>
-                                                        }
-
-                                                        @if (!string.IsNullOrWhiteSpace(
-                                                       template.TemplateTypeName))
-                                                        {
-                                                            <span class="rounded-full
-                                                                         bg-blue-50
-                                                                         px-2 py-0.5
-                                                                         text-xs
-                                                                         text-blue-700">
-                                                                @template.TemplateTypeName
-                                                            </span>
-                                                        }
-
-                                                    </div>
-
-                                                    <p class="mt-2 text-xs
-                                                              text-slate-500">
-                                                        @GetTemplateScheduleText(
-                                                                 template)
-                                                    </p>
-
-                                                </div>
-
-                                                <span class="@GetSelectionIndicatorClass(isSelected)">
-                                                    @if (isSelected)
-                                                    {
-                                                        <svg xmlns="http://www.w3.org/2000/svg"
-                                                             fill="none"
-                                                             viewBox="0 0 24 24"
-                                                             stroke-width="2"
-                                                             stroke="currentColor"
-                                                             class="h-4 w-4">
-
-                                                            <path stroke-linecap="round"
-                                                                  stroke-linejoin="round"
-                                                                  d="m4.5 12.75 6 6 9-13.5" />
-                                                        </svg>
-                                                    }
-                                                </span>
-
-                                            </div>
-
-                                        </button>
-                                    }
-
-                                </div>
+                            <label class="block text-sm">Choose working hours<select class="mt-1 w-full rounded-lg border p-2.5" @bind="templateId">
+                                <option value="0">Select a schedule</option>
+                                @foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }
+                            </select></label>
                             }
-
-                            <ValidationMessage For="@(() => model.WorkTemplateId)"
-                                               class="mt-1 block text-xs text-red-600" />
-                        </div>
-
-                        <!-- Effective dates -->
-                        <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
-
-                            <div>
-                                <label class="mb-1.5 block text-sm
-                                              font-medium text-slate-700">
-                                    Effective from
-                                    <span class="text-red-500">*</span>
-                                </label>
-
-                                <InputDate @bind-Value="model.EffectiveFrom"
-                                           disabled="@isSaving"
-                                           class="w-full rounded-lg border
-                                                  border-slate-300 px-3 py-2.5
-                                                  text-sm outline-none
-                                                  transition focus:border-blue-500
-                                                  focus:ring-2 focus:ring-blue-100
-                                                  disabled:bg-slate-100" />
-
-                                <ValidationMessage For="@(() => model.EffectiveFrom)"
-                                                   class="mt-1 block text-xs text-red-600" />
-                            </div>
-
-                            <div>
-                                <label class="mb-1.5 block text-sm
-                                              font-medium text-slate-700">
-                                    Effective to
-                                </label>
-
-                                <InputDate @bind-Value="model.EffectiveTo"
-                                           disabled="@isSaving"
-                                           class="w-full rounded-lg border
-                                                  border-slate-300 px-3 py-2.5
-                                                  text-sm outline-none
-                                                  transition focus:border-blue-500
-                                                  focus:ring-2 focus:ring-blue-100
-                                                  disabled:bg-slate-100" />
-
-                                <ValidationMessage For="@(() => model.EffectiveTo)"
-                                                   class="mt-1 block text-xs text-red-600" />
-                            </div>
-
-                        </div>
-
-                        @if (SelectedTemplate is not null)
-                        {
-                            <div class="rounded-lg border border-blue-100
-                                        bg-blue-50 p-4">
-
-                                <p class="text-xs font-medium uppercase
-                                          tracking-wide text-blue-600">
-                                    Selected Template
-                                </p>
-
-                                <p class="mt-1 text-sm font-semibold
-                                          text-slate-900">
-                                    @SelectedTemplate.Name
-                                </p>
-
-                                <p class="mt-1 text-xs text-slate-600">
-                                    @GetTemplateScheduleText(
-                                             SelectedTemplate)
-                                </p>
-
-                            </div>
+                            @if (templates.Count == 0) { <p class="text-sm text-slate-500">No working hours are available. Ask HR to add a schedule in Settings.</p> }
                         }
-
-                        <button type="submit"
-                                class="hidden">
-                            Submit
-                        </button>
-
-                    </div>
-
-                </EditForm>
-
+                    </section>
+                    <section class="space-y-3">
+                        <h3 class="font-semibold">2. When does it apply?</h3>
+                        <label class="block text-sm">Duration<select class="mt-1 w-full rounded-lg border p-2.5" @bind="period"><option value="OneDay">One day</option><option value="DateRange">Date range</option><option value="Ongoing">Ongoing</option></select></label>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="text-sm">@(period == "OneDay" ? "Date" : "From")<InputDate class="mt-1 w-full rounded-lg border p-2.5" @bind-Value="from" /></label>
+                            @if (period == "DateRange") { <label class="text-sm">Until<InputDate class="mt-1 w-full rounded-lg border p-2.5" @bind-Value="to" /></label> }
+                        </div>
+                        @if (period == "DateRange" && to < from) { <p class="text-xs text-red-600">The end date must be on or after the start date.</p> }
+                    </section>
+                    @if (SchedulePurpose == "Duty")
+                    {
+                        <section class="space-y-3">
+                            <h3 class="font-semibold">3. Required clock events</h3>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="checkIn" />Check in at @start.ToString("HH:mm")</label>
+                            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="checkOut" />Check out at @end.ToString("HH:mm")</label>
+                            <p class="text-xs text-slate-500">These are separate from the official schedule's check-ins.</p>
+                        </section>
+                    }
+                    <section class="space-y-2 rounded-lg border p-4" aria-label="Schedule summary">
+                        <h3 class="font-semibold">Summary</h3>
+                        <p class="text-sm">@(SchedulePurpose == "Duty" ? string.IsNullOrWhiteSpace(name) ? "New duty" : name : Selected?.Name ?? "Choose working hours") · @Hours</p>
+                        <p class="text-sm">@Dates</p>
+                        @if (SchedulePurpose == "Official") { <p class="text-sm">@(scheduleMode == "Rotation" ? $"Repeats every {rotation.Count} days from {anchor:dd MMM yyyy}" : scheduleMode == "Weekly" ? "Attendance follows the selected weekdays" : "Friday and Saturday are weekends")</p> }
+                        @if (SchedulePurpose == "Duty" && OfficialSchedule != null)
+                        {
+                            <p class="text-xs text-slate-500">Official hours: @OfficialSchedule.DefaultStartTime?.ToString("HH:mm")–@OfficialSchedule.DefaultEndTime?.ToString("HH:mm").</p>
+                            @if (Coverage is { HasOfficialSchedule: true } coverage)
+                            {
+                                <p class="text-sm">@Minutes(coverage.DutyWithinOfficialMinutes) within official hours · @Minutes(coverage.PotentialOvertimeMinutes) outside official hours.</p>
+                                @if (coverage.PotentialOvertimeMinutes > 0) { <p class="text-xs text-amber-700">Outside hours need a separate OT request and approval.</p> }
+                            }
+                        }
+                    </section>
+                </fieldset>
             </div>
-
-            <!-- Footer -->
-            <div class="flex items-center justify-end gap-3 border-t
-                        border-slate-200 bg-slate-50 px-6 py-4">
-
-                <button type="button"
-                        disabled="@isSaving"
-                        @onclick="HandleCloseAsync"
-                        class="rounded-lg border border-slate-300 bg-white
-                               px-4 py-2.5 text-sm font-medium text-slate-700
-                               hover:bg-slate-100 disabled:cursor-not-allowed
-                               disabled:opacity-50">
-                    Cancel
-                </button>
-
-                <button type="button"
-                        disabled="@(!CanSave)"
-                        @onclick="HandleSaveAsync"
-                        class="rounded-lg bg-blue-600 px-4 py-2.5
-                               text-sm font-medium text-white hover:bg-blue-700
-                               disabled:cursor-not-allowed
-                               disabled:bg-slate-300">
-
-                    @(isSaving
-                        ? "Saving..."
-                        : SaveButtonText)
-
-                </button>
-
-            </div>
-
+            <footer class="flex flex-wrap justify-end gap-2 border-t p-5">
+                <button type="button" class="app-button app-button-secondary" disabled="@saving" @onclick="CloseAsync">Cancel</button>
+                <button type="button" class="app-button app-button-primary" disabled="@(!CanSave)" @onclick="SaveAsync">@(saving ? "Saving..." : "Save schedule")</button>
+            </footer>
         </aside>
-
     </div>
 }
 
 @code {
-    [Parameter]
-    public bool IsOpen { get; set; }
-
-    [Parameter]
-    public EventCallback<bool> IsOpenChanged { get; set; }
-
-    [Parameter]
-    public int StaffId { get; set; }
-
-    [Parameter]
-    public int JobId { get; set; }
-
-    [Parameter]
-    public int OrganisationBusinessEntityId { get; set; }
-
-    [Parameter]
-    public CurrentWorkTemplateAssignmentDto? CurrentAssignment
-    {
-        get;
-        set;
-    }
-
-    [Parameter]
-    public EventCallback OnSaved { get; set; }
-
-    private AssignJobWorkTemplateDto model = new();
-
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public int StaffId { get; set; }
+    [Parameter] public int JobId { get; set; }
+    [Parameter] public int OrganisationBusinessEntityId { get; set; }
+    [Parameter] public string StaffName { get; set; } = "";
+    [Parameter] public string SchedulePurpose { get; set; } = "Official";
+    [Parameter] public CurrentWorkTemplateAssignmentDto? CurrentAssignment { get; set; }
+    [Parameter] public CurrentWorkTemplateAssignmentDto? OfficialSchedule { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
     private List<WorkTemplateLookupDto> templates = [];
-
-    private string searchText = string.Empty;
-
-    private string? errorMessage;
-
-    private bool isSearching;
-
-    private bool isSaving;
-
-    private bool wasOpen;
-
-    private CancellationTokenSource? searchCancellation;
-
-    private string DrawerTitle =>
-        CurrentAssignment is null
-            ? "Assign Work Template"
-            : "Change Work Template";
-
-    private string SaveButtonText =>
-        CurrentAssignment is null
-            ? "Assign Template"
-            : "Change Template";
-
-    private bool CanSave =>
-        !isSaving &&
-        model.WorkTemplateId > 0 &&
-        model.JobId > 0 &&
-        model.IndividualId > 0 &&
-        model.OrganisationBusinessEntityId > 0 &&
-        model.EffectiveFrom != default &&
-        (!model.EffectiveTo.HasValue ||
-         model.EffectiveTo.Value.Date >=
-         model.EffectiveFrom.Date);
-
-    private WorkTemplateLookupDto? SelectedTemplate =>
-        templates.FirstOrDefault(
-            x => x.WorkTemplateId ==
-                 model.WorkTemplateId);
-
+    private bool wasOpen, saving;
+    private string? error;
+    private string name = "", period = "OneDay";
+    private TimeOnly start = new(10, 0), end = new(12, 0);
+    private DateTime from = DateTime.UtcNow.AddHours(5).Date, to = DateTime.UtcNow.AddHours(5).Date;
+    private int templateId;
+    private string scheduleMode = "Standard";
+    private bool[] weekdays = [true, true, true, true, true, false, false];
+    private List<int> rotation = [0];
+    private DateTime anchor = DateTime.UtcNow.AddHours(5).Date;
+    private bool checkIn = true, checkOut = true;
+    private WorkTemplateLookupDto? Selected => templates.FirstOrDefault(x => x.WorkTemplateId == templateId);
+    private bool CanSave => !saving && from != default && (period != "DateRange" || to >= from) &&
+        (SchedulePurpose == "Duty" ? !string.IsNullOrWhiteSpace(name) && name.Trim().Length <= 100 && start != end : scheduleMode == "Rotation" ? rotation.Any(x => x > 0) && anchor != default : templateId > 0 && (scheduleMode != "Weekly" || weekdays.Any(x => x)));
+    private string Hours => SchedulePurpose == "Duty" ? $"{start:HH:mm}–{end:HH:mm}" : $"{Selected?.DefaultStartTime:HH:mm}–{Selected?.DefaultEndTime:HH:mm}";
+    private string Dates => period == "OneDay" ? from.ToString("dd MMM yyyy") : period == "Ongoing" ? $"From {from:dd MMM yyyy}, ongoing" : $"{from:dd MMM yyyy}–{to:dd MMM yyyy}";
+    private static string Minutes(int n) => $"{n / 60}h {n % 60:00}m";
+    private HRM.Helpers.WorkHourCoverageResult? Coverage
+    {
+        get
+        {
+            if (OfficialSchedule?.DefaultStartTime == null || OfficialSchedule.DefaultEndTime == null) return null;
+            var officeStart = from.Date.Add(OfficialSchedule.DefaultStartTime.Value.TimeOfDay);
+            var officeEnd = from.Date.Add(OfficialSchedule.DefaultEndTime.Value.TimeOfDay);
+            if (OfficialSchedule.EndsNextDay || officeEnd <= officeStart) officeEnd = officeEnd.AddDays(1);
+            var dutyStart = from.Date.Add(start.ToTimeSpan());
+            var dutyEnd = from.Date.Add(end.ToTimeSpan());
+            if (end < start) dutyEnd = dutyEnd.AddDays(1);
+            return HRM.Helpers.WorkHourCoverage.Calculate([(officeStart, officeEnd)], [(dutyStart, dutyEnd)]);
+        }
+    }
     protected override async Task OnParametersSetAsync()
     {
         if (IsOpen && !wasOpen)
         {
-            InitialiseModel();
-
-            await SearchTemplatesAsync();
+            from = to = DateTime.UtcNow.AddHours(5).Date; error = null;
+            period = SchedulePurpose == "Duty" ? "OneDay" : "Ongoing";
+            if (CurrentAssignment != null)
+            {
+                if (CurrentAssignment.EffectiveFrom.Date > from) from = CurrentAssignment.EffectiveFrom.Date;
+                to = CurrentAssignment.EffectiveTo?.Date ?? from;
+                period = !CurrentAssignment.EffectiveTo.HasValue ? "Ongoing" : CurrentAssignment.EffectiveFrom.Date == CurrentAssignment.EffectiveTo.Value.Date ? "OneDay" : "DateRange";
+            }
+            name = CurrentAssignment?.TemplateName ?? "";
+            start = CurrentAssignment?.DefaultStartTime is { } a ? TimeOnly.FromDateTime(a) : new(10, 0);
+            end = CurrentAssignment?.DefaultEndTime is { } b ? TimeOnly.FromDateTime(b) : new(12, 0);
+            checkIn = CurrentAssignment == null || CurrentAssignment.MandatoryCheckInOffsets.Count > 0;
+            checkOut = CurrentAssignment == null || CurrentAssignment.MandatoryCheckOutOffsets.Count > 0;
+            templateId = CurrentAssignment?.WorkTemplateId ?? 0;
+            scheduleMode = CurrentAssignment?.ScheduleMode ?? "Standard";
+            anchor = CurrentAssignment?.RotationAnchorDate ?? from;
+            weekdays = Enumerable.Range(0, 7).Select(n => ((CurrentAssignment?.WorkingDaysMask ?? 31) & (1 << n)) != 0).ToArray();
+            rotation = HRM.Helpers.StaffScheduleCalendar.Parse(CurrentAssignment?.RotationTemplateIds);
+            if (rotation.Count == 0) rotation.Add(0);
+            if (SchedulePurpose == "Official")
+            {
+                try { templates = (await AssignmentService.SearchTemplatesAsync(OrganisationBusinessEntityId, null)).Where(x => !(x.Code?.StartsWith("DUTY-", StringComparison.OrdinalIgnoreCase) ?? false)).ToList(); }
+                catch { error = "Working hours could not be loaded. Close and try again."; templates = []; }
+            }
         }
-
         wasOpen = IsOpen;
     }
-
-    private void InitialiseModel()
+    private async Task SaveAsync()
     {
-        model =  new AssignJobWorkTemplateDto
-            {
-                IndividualId =
-                    StaffId,
-
-                JobId =
-                    JobId,
-
-                OrganisationBusinessEntityId =
-                    OrganisationBusinessEntityId,
-
-                WorkTemplateId =
-                    CurrentAssignment?.WorkTemplateId ?? 0,
-
-                EffectiveFrom =
-                    CurrentAssignment is null
-                        ? DateTime.Today
-                        : DateTime.Today,
-
-                EffectiveTo =
-                    null
-            };
-
-        searchText = string.Empty;
-        errorMessage = null;
-    }
-
-    private async Task HandleSearchInputAsync(
-        ChangeEventArgs args)
-    {
-        searchText =
-            args.Value?.ToString()?.Trim()
-            ?? string.Empty;
-
-        searchCancellation?.Cancel();
-        searchCancellation?.Dispose();
-
-        searchCancellation =
-            new CancellationTokenSource();
-
+        if (!CanSave) return;
+        saving = true; error = null;
         try
         {
-            await Task.Delay(
-                300,
-                searchCancellation.Token);
-
-            await SearchTemplatesAsync(
-                searchCancellation.Token);
+            var result = SchedulePurpose == "Duty"
+                ? await AssignmentService.AssignDutyAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
+                    Name = name, StartTime = start, EndTime = end, FromDate = from, ToDate = to, Period = period, RequireCheckIn = checkIn, RequireCheckOut = checkOut })
+                : await AssignmentService.AssignAsync(new() { JobId = JobId, IndividualId = StaffId, OrganisationBusinessEntityId = OrganisationBusinessEntityId,
+                    WorkTemplateId = scheduleMode == "Rotation" ? rotation.First(x => x > 0) : templateId, SchedulePurpose = "Official",
+                    ScheduleMode = scheduleMode, WorkingDaysMask = scheduleMode == "Weekly" ? Enumerable.Range(0, 7).Where(n => weekdays[n]).Sum(n => 1 << n) : 31,
+                    RotationAnchorDate = anchor, RotationTemplateIds = rotation.ToList(),
+                    EffectiveFrom = from, EffectiveTo = period == "OneDay" ? from : period == "DateRange" ? to : null });
+            if (!result.Success) { error = result.Message; return; }
+            await OnSaved.InvokeAsync(); await IsOpenChanged.InvokeAsync(false);
         }
-        catch (OperationCanceledException)
-        {
-            // User continued typing.
-        }
+        catch { error = "The schedule could not be saved. Please try again."; }
+        finally { saving = false; }
     }
-
-    private async Task SearchTemplatesAsync(
-        CancellationToken cancellationToken = default)
-    {
-        if (OrganisationBusinessEntityId <= 0)
-        {
-            templates = [];
-            return;
-        }
-
-        try
-        {
-            isSearching = true;
-            errorMessage = null;
-
-            templates =
-                await AssignmentService.SearchTemplatesAsync(
-                    OrganisationBusinessEntityId,
-                    searchText,
-                    cancellationToken);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            templates = [];
-
-            errorMessage =
-                "Unable to load work templates.";
-        }
-        finally
-        {
-            isSearching = false;
-        }
-    }
-
-    private void SelectTemplate(
-        WorkTemplateLookupDto template)
-    {
-        if (isSaving)
-        {
-            return;
-        }
-
-        model.WorkTemplateId =
-            template.WorkTemplateId;
-    }
-
-    private async Task HandleSaveAsync()
-    {
-        if (!CanSave)
-        {
-            return;
-        }
-
-        try
-        {
-            isSaving = true;
-            errorMessage = null;
-
-            var result =
-                await AssignmentService.AssignAsync(
-                    model);
-
-            if (!result.Success)
-            {
-                errorMessage = result.Message;
-                return;
-            }
-
-            if (OnSaved.HasDelegate)
-            {
-                await OnSaved.InvokeAsync();
-            }
-
-            await SetOpenAsync(false);
-        }
-        catch (Exception)
-        {
-            errorMessage =
-                "An unexpected error occurred while assigning the template.";
-        }
-        finally
-        {
-            isSaving = false;
-        }
-    }
-
-    private async Task HandleCloseAsync()
-    {
-        if (isSaving)
-        {
-            return;
-        }
-
-        await SetOpenAsync(false);
-    }
-
-    private async Task SetOpenAsync(
-        bool value)
-    {
-        if (IsOpenChanged.HasDelegate)
-        {
-            await IsOpenChanged.InvokeAsync(value);
-        }
-    }
-
-    private static string GetTemplateRowClass(
-        bool selected)
-    {
-        const string baseClass =
-            "w-full rounded-lg border p-3 text-left transition " +
-            "disabled:cursor-not-allowed disabled:opacity-50 ";
-
-        return selected
-            ? baseClass +
-              "border-blue-500 bg-blue-50 ring-1 ring-blue-500"
-            : baseClass +
-              "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40";
-    }
-
-    private static string GetSelectionIndicatorClass(
-        bool selected)
-    {
-        const string baseClass =
-            "flex h-6 w-6 shrink-0 items-center justify-center " +
-            "rounded-full border ";
-
-        return selected
-            ? baseClass +
-              "border-blue-600 bg-blue-600 text-white"
-            : baseClass +
-              "border-slate-300 bg-white text-transparent";
-    }
-
-    private static string GetTemplateScheduleText(WorkTemplateLookupDto template)
-            {
-                if (!template.DefaultStartTime.HasValue ||
-                    !template.DefaultEndTime.HasValue)
-                {
-                    return "Flexible schedule";
-                }
-
-                var start =
-                    template.DefaultStartTime.Value
-                        .ToString("HH:mm");
-
-                var end =
-                    template.DefaultEndTime.Value
-                        .ToString("HH:mm");
-
-                return template.EndsNextDay
-                    ? $"{start} – {end} (+1 day)"
-                    : $"{start} – {end}";
-            }
-
-    public void Dispose()
-    {
-        searchCancellation?.Cancel();
-        searchCancellation?.Dispose();
-    }
+    private Task CloseAsync() => saving ? Task.CompletedTask : IsOpenChanged.InvokeAsync(false);
 }

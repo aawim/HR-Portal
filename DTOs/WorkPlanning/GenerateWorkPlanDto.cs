@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HRM.DTOs.WorkPlanning
 {
-    public class GenerateWorkPlanDto
+    public class GenerateWorkPlanDto : IValidatableObject
     {
         [Range(1, int.MaxValue, ErrorMessage = "Individual is required.")]
         public int IndividualId { get; set; }
@@ -14,11 +14,15 @@ namespace HRM.DTOs.WorkPlanning
         [Range(1, int.MaxValue, ErrorMessage = "Organisation is required.")]
         public int OrganisationBusinessEntityId { get; set; }
 
-        [Range(1, int.MaxValue, ErrorMessage = "Work template is required.")]
         public int WorkTemplateId { get; set; }
 
-        [Required(ErrorMessage = "Planning provider is required.")]
         public int? PlanningProviderId { get; set; }
+        public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+        {
+            if ((IsManual || WorkPlanGenerationSource == HRM.Enum.WorkPlanGenerationSource.Manual) && WorkTemplateId <= 0)
+                yield return new ValidationResult("Choose a template for the manual assignment.", [nameof(WorkTemplateId)]);
+            if (WorkDate == default) yield return new ValidationResult("Choose a work date.", [nameof(WorkDate)]);
+        }
 
         [Required]
         public DateTime WorkDate { get; set; }

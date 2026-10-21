@@ -1,4 +1,4 @@
-﻿using HRM.Components.Pages.Online.Leave.Forms;
+using HRM.Components.Pages.Online.Leave.Forms;
 using HRM.DTOs.Leave;
 using HRM.Models;
 using HRM.Models.Archives;
@@ -30,7 +30,7 @@ namespace HRM.Services.State
         // ==========================
         public JobLeaveTypeDto? SelectedLeaveType { get; set; }
 
-        public int RemainingDays { get; set; }
+        public decimal RemainingDays { get; set; }
         public string SelectedLeaveTypeName { get; private set; } = string.Empty;
         public bool IncludeHolidays { get; set; } = true;
         public int? SelectedAddressLocationId { get; set; }

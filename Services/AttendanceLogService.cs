@@ -325,6 +325,7 @@ namespace HRM.Services
         public async Task<List<AttendanceLog>> GetAttendanceLogsAsync(int userId, DateTime startDate, DateTime endDate)
         {
             return await _context.AttendanceLogs
+                .Include(x => x.AttendanceLogResolutions)
                 // 1. Filter by the user (Update 'IndividualId' to match your actual Foreign Key property name)
                 .Where(log => log.IndividualId == userId && log.AttendanceLogStateId == 1)
 

@@ -25,7 +25,7 @@
         </div>
 
 
-        <WorkspaceContentPage ActiveTab="ActiveTab" NavigationVersion="navigationVersion" />
+        <WorkspaceContentPage ActiveTab="ActiveTab" NavigationVersion="navigationVersion" NotificationRequestId="NotificationRequestId" />
          
 
     }
@@ -63,6 +63,12 @@
 
 
 @code {
+    [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (NotificationRequestId.HasValue) SelectedItem = null;
+    }
 
     private WorkspaceSearchResult? SelectedItem;
 

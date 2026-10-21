@@ -1,4 +1,4 @@
-﻿using HRM.Components.Admin.Settings.Workplan;
+using HRM.Components.Admin.Settings.Workplan;
 using HRM.Data;
 using HRM.DTOs.Attendance;
 using HRM.Enum;
@@ -34,7 +34,8 @@ namespace HRM.Services.Attendance
                 workDate.Date;
 
             var evaluationTime =
-                DateTime.Now;
+                DateTime.UtcNow.AddHours(5);
+            var isRestDay = (await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, individualId, date, date, cancellationToken)).Contains(date);
 
 
 
@@ -49,6 +50,9 @@ namespace HRM.Services.Attendance
                     .AsNoTracking()
                     .Include(x => x.WorkPlanSegments)
                         .ThenInclude(x => x.WorkSegmentType)
+                    .Include(x => x.WorkPlanSegments)
+                        .ThenInclude(x => x.WorkTemplateSegment)
+                    .Include(x => x.WorkAssignments)
                     .Include(x => x.AttendanceLogResolutions)
                         .ThenInclude(x => x.AttendanceLog)
                     .Where(x =>
@@ -88,15 +92,15 @@ namespace HRM.Services.Attendance
                     Status =
                         date > evaluationTime.Date
                             ? AttendanceDailyStatus.Future
-                            : AttendanceDailyStatus.Unknown,
+                            : isRestDay ? AttendanceDailyStatus.RestDay : AttendanceDailyStatus.Unknown,
 
                     IsComplete =
                         false,
 
                     HasException =
-                        date <= evaluationTime.Date,
+                        !isRestDay && date <= evaluationTime.Date,
 
-                    Issues =
+                    Issues = isRestDay ? [] :
                     [
                         new AttendanceEvaluationIssueDto
                         {
@@ -126,8 +130,11 @@ namespace HRM.Services.Attendance
                     .OrderBy(x => x.SequenceNumber)
                     .ThenBy(x => x.StartDateTime)
                     .ToList();
-            var attendanceSegments = segments.ToList();
-            var requiresAttendance = attendanceSegments.Any();
+            var officialSegments = segments.Where(x => x.SchedulePurpose == "Official").ToList();
+            var attendanceSegments = segments.Where(x => x.RequiresAttendance && x.IsMandatory).ToList();
+            var requiresAttendance = !isRestDay && segments.Any(x => x.RequiresAttendance);
+            if (isRestDay) attendanceSegments.Clear();
+            var templateBySegment = segments.ToDictionary(x => x.WorkPlanSegmentId, x => x.WorkTemplateSegment?.WorkTemplateId ?? 0);
  
 
             // ========================================================
@@ -150,6 +157,7 @@ namespace HRM.Services.Attendance
                     .Select(x =>
                         new ResolvedAttendanceEvent
                         {
+                            ScheduleTemplateId = x.WorkPlanSegmentId.HasValue ? templateBySegment.GetValueOrDefault(x.WorkPlanSegmentId.Value) : 0,
                             AttendanceLogId =
                                 x.AttendanceLogId,
 
@@ -265,7 +273,7 @@ namespace HRM.Services.Attendance
             // ========================================================
 
             var checkInBoundary =
-                attendanceSegments
+                officialSegments
                     .Where(x =>
                         RequiresCheckIn(
                             x.WorkSegmentType?.Code))
@@ -283,7 +291,7 @@ namespace HRM.Services.Attendance
             // ========================================================
 
             var checkOutBoundary =
-                attendanceSegments
+                officialSegments
                     .Where(x =>
                         RequiresCheckOut(
                             x.WorkSegmentType?.Code))
@@ -328,6 +336,13 @@ namespace HRM.Services.Attendance
             // ========================================================
 
             var workedMinutes = CalculateWorkedMinutes(resolvedEvents);
+            var officialPeriods = workPlan.WorkAssignments.Where(x => x.IsValid && x.SchedulePurpose == "Official")
+                .Select(x => (x.StartDateTime, x.EndDateTime)).ToList();
+            if (officialPeriods.Count == 0 && plannedStart.HasValue && plannedEnd.HasValue)
+                officialPeriods.Add((plannedStart.Value, plannedEnd.Value));
+            var dutyCoverage = HRM.Helpers.WorkHourCoverage.Calculate(officialPeriods,
+                workPlan.WorkAssignments.Where(x => x.IsValid && x.SchedulePurpose == "Duty").Select(x => (x.StartDateTime, x.EndDateTime)));
+            var actualCoverage = HRM.Helpers.WorkHourCoverage.Calculate(officialPeriods, WorkedPeriods(resolvedEvents));
 
 
             // ========================================================
@@ -341,7 +356,7 @@ namespace HRM.Services.Attendance
 
 
 
-            foreach (var segment in segments)
+            foreach (var segment in isRestDay ? new List<WorkPlanSegment>() : segments)
             {
                 var evaluatedSegment =
                     EvaluateSegment(
@@ -400,7 +415,6 @@ namespace HRM.Services.Attendance
             var isComplete =
                 !requiresAttendance ||
                 (
-                    requiredBoundarySegments.Any() &&
                     requiredBoundarySegments.All(
                         segment =>
                             evaluatedSegments
@@ -495,6 +509,9 @@ namespace HRM.Services.Attendance
 
                 OvertimeMinutes =
                     0,
+                PotentialOvertimeMinutes = actualCoverage.PotentialOvertimeMinutes,
+                DutyWithinOfficialMinutes = dutyCoverage.DutyWithinOfficialMinutes,
+                PlannedDutyOutsideOfficialMinutes = dutyCoverage.PotentialOvertimeMinutes,
 
                 RawClockCount =
                     rawClockCount,
@@ -716,7 +733,7 @@ namespace HRM.Services.Attendance
                         segment.EndDateTime;
 
 
-                    if (evaluationTime >
+                    if (segment.IsMandatory && evaluationTime >
                         latestAllowedCheckIn)
                     {
                         result.Issues.Add(
@@ -829,7 +846,7 @@ namespace HRM.Services.Attendance
                     // Do not mark missing while the permitted
                     // checkout window is still open.
 
-                    if (evaluationTime >
+                    if (segment.IsMandatory && evaluationTime >
                         latestAllowedCheckOut)
                     {
                         result.Issues.Add(
@@ -964,6 +981,7 @@ namespace HRM.Services.Attendance
             }
 
 
+            if (!segment.IsMandatory) result.IsComplete = true;
             result.HasException =
                 result.Issues.Any(x =>
                     x.Severity ==
@@ -1281,6 +1299,7 @@ namespace HRM.Services.Attendance
 
         private sealed class ResolvedAttendanceEvent
         {
+            public int ScheduleTemplateId { get; set; }
             public int AttendanceLogId { get; set; }
 
             public int? WorkPlanSegmentId { get; set; }
@@ -1291,81 +1310,32 @@ namespace HRM.Services.Attendance
         }
 
 
-        private static int CalculateWorkedMinutes(
-    IReadOnlyCollection<ResolvedAttendanceEvent> events)
+        private static int CalculateWorkedMinutes(IReadOnlyCollection<ResolvedAttendanceEvent> events) =>
+            HRM.Helpers.WorkHourCoverage.Minutes(WorkedPeriods(events));
+
+        private static IEnumerable<(DateTime Start, DateTime End)> WorkedPeriods(IEnumerable<ResolvedAttendanceEvent> events)
         {
-            var orderedEvents =
-                events
-                    .Where(x =>
-                        x.ClockType ==
-                            AttendanceClockType.CheckIn
-                        ||
-                        x.ClockType ==
-                            AttendanceClockType.CheckOut)
-                    .OrderBy(x => x.LogDateTime)
-                    .ToList();
-
-
-            if (orderedEvents.Count == 0)
-                return 0;
-
-
-            DateTime? currentCheckIn = null;
-
-            var totalWorkedMinutes = 0;
-
-
-            foreach (var attendanceEvent in orderedEvents)
+            var all = events.ToList();
+            static List<(DateTime Start, DateTime End)> Pair(IEnumerable<ResolvedAttendanceEvent> source)
             {
-                // ========================================================
-                // CHECK IN
-                // ========================================================
-
-                if (attendanceEvent.ClockType ==
-                    AttendanceClockType.CheckIn)
+                var periods = new List<(DateTime Start, DateTime End)>();
+                DateTime? start = null;
+                foreach (var item in source.OrderBy(x => x.LogDateTime))
                 {
-                    // Only open a working period when we are currently OUT.
-                    //
-                    // Duplicate CheckIns do not restart the period.
-                    if (!currentCheckIn.HasValue)
+                    if (item.ClockType == AttendanceClockType.CheckIn) start ??= item.LogDateTime;
+                    else if (item.ClockType == AttendanceClockType.CheckOut && start.HasValue)
                     {
-                        currentCheckIn =
-                            attendanceEvent.LogDateTime;
+                        if (item.LogDateTime > start.Value) periods.Add((start.Value, item.LogDateTime));
+                        start = null;
                     }
-
-                    continue;
                 }
-
-
-                // ========================================================
-                // CHECK OUT
-                // ========================================================
-
-                if (attendanceEvent.ClockType ==
-                    AttendanceClockType.CheckOut)
-                {
-                    // Cannot close a period if we were not IN.
-                    if (!currentCheckIn.HasValue)
-                        continue;
-
-
-                    if (attendanceEvent.LogDateTime >
-                        currentCheckIn.Value)
-                    {
-                        totalWorkedMinutes +=
-                            CalculateMinutes(
-                                currentCheckIn.Value,
-                                attendanceEvent.LogDateTime);
-                    }
-
-
-                    // Employee is now OUT.
-                    currentCheckIn = null;
-                }
+                return periods;
             }
-
-
-            return totalWorkedMinutes;
+            var grouped = all.GroupBy(x => x.ScheduleTemplateId).SelectMany(Pair).ToList();
+            // A single physical in/out pair can span office and duty assignments.
+            // Use the coverage supported by either pairing, never add their totals.
+            var physical = Pair(all);
+            return HRM.Helpers.WorkHourCoverage.Minutes(grouped) >= HRM.Helpers.WorkHourCoverage.Minutes(physical) ? grouped : physical;
         }
 
         private static bool IsPairedBreakSegment(string? code)

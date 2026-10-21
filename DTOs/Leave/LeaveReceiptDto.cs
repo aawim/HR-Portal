@@ -14,7 +14,7 @@ public sealed class LeaveReceiptDto
     public DateTime ToDate { get; set; }
     public DateTime CalendarReturnDate => ToDate.Date.AddDays(1);
     public int Days { get; set; }
-    public int? CurrentBalance { get; set; }
+    public decimal? CurrentBalance { get; set; }
     public DateTime? ReportingDate { get; set; }
     public string? ApprovedBy { get; set; }
     public DateTime? ApprovedAt { get; set; }

@@ -48,7 +48,31 @@ namespace HRM.Services
                     workDate,
                     cancellationToken);
 
-            if (generatedPlan == null)
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            long? selectedPlanId = generatedPlan?.WorkPlanId;
+            // Overnight shifts belong to the day they started, even when the
+            // checkout is on a cycle rest day or a different calendar day.
+            var previousDate = clockTime.Date.AddDays(-1);
+            var overnightBoundaries = await db.WorkPlanSegments.AsNoTracking()
+                .Where(x => x.IsValid && x.RequiresAttendance && x.WorkPlan.IsValid &&
+                    x.WorkPlan.IndividualId == individualId && x.WorkPlan.JobId == jobId &&
+                    x.WorkPlan.OrganisationBusinessEntityId == organisationBusinessEntityId &&
+                    x.WorkPlan.WorkDate == previousDate && x.StartDateTime >= clockTime.Date &&
+                    (x.WorkSegmentType.Code == "CHECK_OUT" || x.WorkSegmentType.Code == "DUTY_CHECK_OUT"))
+                .Select(x => new { x.WorkPlanId, x.StartDateTime, x.EndDateTime, x.GraceBeforeMinutes }).ToListAsync(cancellationToken);
+            var overnightBoundary = overnightBoundaries.Where(x => clockTime >= x.StartDateTime.AddMinutes(-x.GraceBeforeMinutes) && clockTime <= x.EndDateTime)
+                .OrderBy(x => Math.Abs((clockTime - x.StartDateTime).TotalMinutes)).FirstOrDefault();
+            if (overnightBoundary != null)
+            {
+                var currentSegments = await db.WorkPlanSegments.AsNoTracking().Where(x => x.IsValid && x.RequiresAttendance && x.WorkPlanId == selectedPlanId)
+                    .Select(x => new { x.StartDateTime, x.EndDateTime, x.GraceBeforeMinutes, Code = x.WorkSegmentType.Code }).ToListAsync(cancellationToken);
+                var nearestCurrent = currentSegments.Where(x =>
+                    (RequiresCheckIn(x.Code) && clockTime >= x.StartDateTime.AddMinutes(-EarlyCheckInResolutionMinutes) && clockTime <= x.EndDateTime) ||
+                    (RequiresCheckOut(x.Code) && clockTime >= x.StartDateTime.AddMinutes(-x.GraceBeforeMinutes) && clockTime <= x.EndDateTime))
+                    .Select(x => Math.Abs((clockTime - x.StartDateTime).TotalMinutes)).DefaultIfEmpty(double.MaxValue).Min();
+                if (Math.Abs((clockTime - overnightBoundary.StartDateTime).TotalMinutes) <= nearestCurrent) selectedPlanId = overnightBoundary.WorkPlanId;
+            }
+            if (!selectedPlanId.HasValue)
             {
                 return new AttendancePlanResolutionResult
                 {
@@ -66,12 +90,8 @@ namespace HRM.Services
                 };
             }
 
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
-
             var workPlanId =
-                generatedPlan.WorkPlanId;
+                selectedPlanId.Value;
  
 
             var segments =
@@ -88,6 +108,7 @@ namespace HRM.Services
                         x.StartDateTime,
                         x.EndDateTime,
                         x.SequenceNumber,
+                        TemplateId = x.WorkTemplateSegment == null ? (int?)null : x.WorkTemplateSegment.WorkTemplateId,
                             WorkSegmentTypeCode = x.WorkSegmentType.Code,
                         x.RequiresAttendance,
                         x.GraceBeforeMinutes,
@@ -117,7 +138,7 @@ namespace HRM.Services
             var pairedBreakSegment =
                 segments
                     .Where(x =>
-                        IsPairedBreakSegment(x.WorkSegmentTypeCode))
+                        x.RequiresAttendance && IsPairedBreakSegment(x.WorkSegmentTypeCode))
                     .Where(x =>
                         clockTime >= x.StartDateTime &&
                         clockTime <= x.EndDateTime)
@@ -133,14 +154,21 @@ namespace HRM.Services
             // Current state = CheckOut -> Lunch event = CheckIn
             // ============================================================
 
-            if (pairedBreakSegment != null)
+            // Explicit shift/duty clock boundaries take precedence over a simultaneous break.
+            var hasExplicitBoundary = segments.Any(x => x.RequiresAttendance &&
+                (RequiresCheckIn(x.WorkSegmentTypeCode) || RequiresCheckOut(x.WorkSegmentTypeCode)) &&
+                clockTime >= x.StartDateTime.AddMinutes(-x.GraceBeforeMinutes) && clockTime <= x.EndDateTime);
+            if (pairedBreakSegment != null && !hasExplicitBoundary)
             {
+                var scheduleSegmentIds = segments.Where(x => x.TemplateId == pairedBreakSegment.TemplateId).Select(x => x.WorkPlanSegmentId).ToList();
                 var lastAttendanceState =
                     await db.AttendanceLogResolutions
                         .AsNoTracking()
                         .Where(x =>
                             x.WorkPlanId == workPlanId &&
                             x.IsValid &&
+                            x.AttendanceLog.Date <= clockTime &&
+                            x.WorkPlanSegmentId.HasValue && scheduleSegmentIds.Contains(x.WorkPlanSegmentId.Value) &&
                             x.AttendanceClockTypeId.HasValue &&
                             (
                                 x.AttendanceClockTypeId.Value ==
@@ -261,7 +289,7 @@ namespace HRM.Services
                 new List<BoundaryCandidate>();
 
 
-            foreach (var segment in segments)
+            foreach (var segment in segments.Where(x => x.RequiresAttendance))
             {
                 var code =
                     segment.WorkSegmentTypeCode;
@@ -423,28 +451,8 @@ namespace HRM.Services
                     .First();
 
 
-            var earlyCandidates = candidates
-            .Where(x =>
-                x.ClockType == AttendanceClockType.CheckIn &&
-                clockTime < x.BoundaryTime)
-            .ToList();
-
-            foreach (var earlyCandidate in earlyCandidates)
-            {
-                var hasCompetingSegment = segments.Any(x =>
-                    x.WorkPlanSegmentId !=
-                        earlyCandidate.WorkPlanSegmentId &&
-
-                    x.RequiresAttendance &&
-
-                    clockTime >= x.StartDateTime &&
-                    clockTime <= x.EndDateTime);
-
-                if (hasCompetingSegment)
-                {
-                    candidates.Remove(earlyCandidate);
-                }
-            }
+            // Match each punch to the nearest scheduled boundary. A prior official
+            // check-in never changes the direction of a separate duty check-in.
 
 
 

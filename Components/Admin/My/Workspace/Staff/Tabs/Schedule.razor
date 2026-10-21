@@ -7,6 +7,8 @@
 @using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents.Summary.ItemComponents
 @inject IStaffScheduleService StaffScheduleService
 @inject ToastService ToastService
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
+@inject HRM.WorkPlanning.Abstractions.IManualWorkAssignmentService ManualAssignments
 
 
 <div class="space-y-6">
@@ -36,6 +38,22 @@
     else if (schedule is not null)
     {
         <CurrentScheduleSummary Schedule="@schedule" />
+        @if ((IsManualAssignmentDetailsOpen || IsManualAssignmentRemovalOpen) && selectedManualAssignment is { } selected)
+        {
+            <section class="space-y-3 rounded-xl border p-4">
+                <div class="flex items-center justify-between gap-3"><h3 class="font-semibold">@(IsManualAssignmentRemovalOpen ? "Cancel manual assignment" : "Manual assignment details")</h3><button class="app-button app-button-secondary" disabled="@cancelling" @onclick="ClosePanel">Close</button></div>
+                <p>@selected.AssignmentName · @selected.WorkTemplateName</p>
+                <p class="text-sm">@selected.StartDateTime.ToString("dd MMM yyyy HH:mm")–@selected.EndDateTime.ToString("dd MMM yyyy HH:mm") · @selected.Status</p>
+                <p class="text-sm">@selected.Description</p>
+                <p class="text-sm">Attendance: @(selected.RequiresAttendance ? "Required" : "Optional") · Checkout: @(selected.RequiresCheckout ? "Required" : "Optional")</p>
+                @if (IsManualAssignmentRemovalOpen)
+                {
+                    <label class="block text-sm">Cancellation reason<textarea class="mt-1 w-full rounded-lg border p-2" maxlength="500" disabled="@cancelling" @bind="cancelReason"></textarea></label>
+                    <button class="app-button app-button-primary" disabled="@(cancelling || !canManageSchedules || string.IsNullOrWhiteSpace(cancelReason))" @onclick="CancelManualAsync">@(cancelling ? "Cancelling..." : "Cancel assignment")</button>
+                }
+            </section>
+        }
+        @if (!canManageSchedules) { <p class="text-sm text-slate-500">Viewing only. Contact HR to change schedules.</p> }
 
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-2">
 
@@ -44,7 +62,10 @@
                                   StaffId="@schedule.IndividualId"
                                   JobId="@schedule.JobId"
                                   OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-                                  CurrentAssignment="@schedule.CurrentTemplate"
+                                  StaffName="@schedule.EmployeeName"
+                                  OfficialSchedule="@schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == "Official")"
+                                  SchedulePurpose="@selectedSchedulePurpose"
+                                  CurrentAssignment="@selectedTemplateAssignment"
                                   OnSaved="@HandleTemplateAssignmentSavedAsync" />
 
             <RemoveTemplateAssignmentDialog IsOpen="@IsTemplateRemovalOpen"
@@ -65,28 +86,39 @@
         </div>
 
 
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+        @foreach (var purpose in new[] { "Official", "Duty" })
+        {
         <TemplateAssignmentCard StaffId="@schedule.IndividualId"
+                                SchedulePurpose="@purpose"
                                 JobId="@schedule.JobId"
                                 OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
-                                CurrentAssignment="@schedule.CurrentTemplate"
-                                History="@schedule.TemplateHistory"
-                                IsDisabled="@(!schedule.HasActiveJob)"
-                                OnAssignRequested="@OpenTemplateAssignmentDrawerAsync"
+                                CurrentAssignment="@schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose)"
+                                History="@schedule.TemplateHistory.Where(x => x.SchedulePurpose == purpose).ToList()"
+                                IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
+                                OnAssignRequested="@(() => OpenTemplateAssignmentForPurposeAsync(purpose))"
                                 OnRemoveRequested="@OpenTemplateRemovalAsync"
                                 OnChanged="@HandleScheduleChangedAsync" />
+        }
+        </div>
 
+        <details class="rounded-xl border p-4">
+        <summary class="cursor-pointer text-sm font-semibold">More options: work adjustments</summary>
+        <div class="mt-4">
         <ManualAssignmentCard StaffId="@schedule.IndividualId"
                               JobId="@schedule.JobId"
                               OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
                               Assignments="@schedule.ManualAssignments"
                               CurrentTemplate="@schedule.CurrentTemplate"
-                              IsDisabled="@(!schedule.HasActiveJob)"
+                              IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
                               OnAssignTemplateRequested="@OpenTemplateAssignmentDrawerAsync"
                               OnAssignRequested="@OpenManualAssignmentDrawerAsync"
                               OnViewRequested="@OpenManualAssignmentDetailsAsync"
                               OnEditRequested="@OpenManualAssignmentEditAsync"
                               OnRemoveRequested="@OpenManualAssignmentRemovalAsync"
                               OnChanged="@HandleScheduleChangedAsync" />
+        </div>
+        </details>
 
 
 
@@ -102,10 +134,12 @@
     private StaffScheduleDto? schedule;
 
     private bool isLoading;
+    private bool canManageSchedules;
 
     private string? errorMessage;
 
     private int loadedStaffId;
+    private string selectedSchedulePurpose = "Official";
 
     private SchedulePanel activePanel =
         SchedulePanel.None;
@@ -115,6 +149,22 @@
 
     private ManualWorkAssignmentListDto?
         selectedManualAssignment;
+    private bool cancelling;
+    private string cancelReason = "";
+    private async Task CancelManualAsync()
+    {
+        if (selectedManualAssignment == null || cancelling || !canManageSchedules) return;
+        try
+        {
+            cancelling = true;
+            var result = await ManualAssignments.CancelAsync(selectedManualAssignment.WorkAssignmentId, cancelReason);
+            if (!result.Success) { ToastService.Error(result.Message); return; }
+            ToastService.Success(result.Message);
+            await HandleManualAssignmentRemovedAsync();
+        }
+        catch (Exception ex) { ToastService.Error(ex.Message); }
+        finally { cancelling = false; }
+    }
 
     private bool IsTemplateDrawerOpen =>
         activePanel ==
@@ -200,6 +250,7 @@
             }
 
             schedule = result.Schedule;
+            canManageSchedules = await UserAccess.HasPermissionAsync("Schedule.Attach");
         }
         catch (Exception exception)
         {
@@ -233,6 +284,9 @@
          */
 
     private Task OpenTemplateAssignmentDrawerAsync()
+        => OpenTemplateAssignmentForPurposeAsync("Official");
+
+    private Task OpenTemplateAssignmentForPurposeAsync(string purpose)
     {
         if (schedule is null ||
             !schedule.HasActiveJob)
@@ -240,8 +294,8 @@
             return Task.CompletedTask;
         }
 
-        selectedTemplateAssignment =
-            schedule.CurrentTemplate;
+        selectedSchedulePurpose = purpose;
+        selectedTemplateAssignment = schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose);
 
         selectedManualAssignment =
             null;
@@ -303,6 +357,7 @@
 
     private async Task HandleTemplateAssignmentSavedAsync()
     {
+        ToastService.Success("Schedule saved.");
         selectedTemplateAssignment =
             null;
 
@@ -313,6 +368,7 @@
 
     private async Task HandleTemplateRemovedAsync()
     {
+        ToastService.Success("Schedule end date saved.");
         selectedTemplateAssignment =
             null;
 
@@ -333,22 +389,6 @@
             return Task.CompletedTask;
         }
 
-        /*
-        * A template must first be assigned to the job.
-             */
-        if (schedule.CurrentTemplate is null)
-        {
-            selectedTemplateAssignment =
-                null;
-
-            selectedManualAssignment =
-                null;
-
-            OpenPanel(
-                SchedulePanel.AssignTemplate);
-
-            return Task.CompletedTask;
-        }
 
         selectedManualAssignment =
             null;
@@ -401,6 +441,7 @@
     private Task OpenManualAssignmentRemovalAsync(
         ManualWorkAssignmentListDto assignment)
     {
+        cancelReason = "";
         if (schedule is null ||
             !schedule.HasActiveJob)
         {

@@ -22,6 +22,9 @@
 
         public List<AttendanceWorkSegmentDto> Segments { get; set; } = [];
         public List<AttendanceWorkAssignmentDto> Assignments { get; set; } = [];
+        public HRM.Helpers.WorkHourCoverageResult HourCoverage => HRM.Helpers.WorkHourCoverage.Calculate(
+            Assignments.Where(x => x.IsValid && x.SchedulePurpose == "Official").Select(x => (x.StartDateTime, x.EndDateTime)),
+            Assignments.Where(x => x.IsValid && x.SchedulePurpose == "Duty").Select(x => (x.StartDateTime, x.EndDateTime)));
 
        
     }

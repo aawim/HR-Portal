@@ -13,7 +13,7 @@ public partial class JobLeaveType
 
     public int? LeaveTypeId { get; set; }
 
-    public int? RemainingDays { get; set; }
+    public decimal? RemainingDays { get; set; }
 
     public DateTime? LastLeaveTakenDate { get; set; }
 

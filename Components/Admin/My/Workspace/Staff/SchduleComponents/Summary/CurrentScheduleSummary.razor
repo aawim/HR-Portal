@@ -1,92 +1,18 @@
-﻿@using HRM.DTOs.StaffSchedule
-@using HRM.Components.Admin.My.Workspace.Staff.SchduleComponents.Summary.ItemComponents
-<div class="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-
-    <div class="flex flex-col gap-4 lg:flex-row
-                lg:items-center lg:justify-between">
-
-        <div>
-
-            <p class="text-xs font-medium uppercase tracking-wide
-                      text-slate-500">
-                Staff Schedule
-            </p>
-
-            <h2 class="mt-1 text-xl font-semibold text-slate-900">
-                @Schedule.EmployeeName
-            </h2>
-
-            <p class="mt-1 text-sm text-slate-500">
-                @Schedule.PositionName · @Schedule.OrganisationName
-            </p>
-
-        </div>
-
-        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
- 
-
-
-            <SummaryItem Label="Work Template"
-                         Value="@TemplateName"
-                         Icon="calendar" 
-                         
-                         />
-
-            <SummaryItem Label="Shift"
-                         Value="@ShiftName" 
-                         Icon="clock" />
-
-            <SummaryItem Label="Manual Assignments"
-                         Value="@Schedule.ManualAssignments.Count.ToString()"
-                         Icon="check-circle" />
-
-        </div>
-
-    </div>
-
-</div>
-
+@using HRM.DTOs.StaffSchedule
+<header class="space-y-2 rounded-xl border bg-white p-5 shadow-sm">
+    <h2 class="text-xl font-semibold">Schedules · @Schedule.EmployeeName</h2>
+    <p class="text-sm text-slate-500">@Schedule.PositionName · @Schedule.OrganisationName</p>
+    @if (Schedule.HourCoverage.HasOfficialSchedule)
+    {
+        <p class="text-sm">Regular working day: <strong>@Minutes(Schedule.HourCoverage.OfficialMinutes)</strong>.</p>
+        @if (Schedule.HourCoverage.PotentialOvertimeMinutes > 0)
+        { <p class="text-sm text-amber-700">Duty outside official hours: @Minutes(Schedule.HourCoverage.PotentialOvertimeMinutes). This needs a separate OT request and approval.</p> }
+        else if (Schedule.HourCoverage.DutyMinutes > 0)
+        { <p class="text-sm text-slate-500">Duty is within official hours and does not add extra working hours.</p> }
+    }
+    else { <p class="text-sm text-slate-500">Start by setting official working hours, then add duty as needed.</p> }
+</header>
 @code {
-    [Parameter, EditorRequired]
-    public StaffScheduleDto Schedule { get; set; } = null!;
-
-    private string Position =>
-    string.IsNullOrWhiteSpace(Schedule.PositionName)
-        ? "Not Assigned"
-        : Schedule.PositionName;
-
-    private string Organisation =>
-        string.IsNullOrWhiteSpace(Schedule.OrganisationName)
-            ? "-"
-            : Schedule.OrganisationName;
-
-    private int ManualAssignmentCount =>
-        Schedule.ManualAssignments.Count(x => x.IsValid);
-
-    private bool HasTemplate =>
-        Schedule.CurrentTemplate is not null;
-
-    private bool HasShift =>
-        Schedule.CurrentShift is not null;
-
-    private string TemplateName =>
-        Schedule.CurrentTemplate?.TemplateName
-        ?? "Not Assigned";
-
-    private string ShiftName =>
-        Schedule.CurrentShift?.ShiftName
-        ?? "Not Assigned";
-
-    private string NextAssignment =>
-        Schedule.ManualAssignments
-            .Where(x => x.IsValid)
-            .OrderBy(x => x.WorkDate)
-            .Select(x => x.WorkDate.ToString("dd MMM yyyy"))
-            .FirstOrDefault()
-        ?? "None";
-
-    private string Status =>
-        Schedule.HasActiveJob
-            ? "Active"
-            : "No Active Job";
+    [Parameter, EditorRequired] public StaffScheduleDto Schedule { get; set; } = null!;
+    private static string Minutes(int value) => $"{value / 60}h {value % 60:00}m";
 }

@@ -116,6 +116,9 @@
                     // ------------------------------------------------
                     var isFutureDay =
                     day.Date > DateTime.Today;
+                    var overview = Days?.FirstOrDefault(x => x.Date.Date == day.Date);
+                    var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
+                    var isOnLeave = overview?.IsOnLeave == true;
 
 
                     // ------------------------------------------------
@@ -128,6 +131,10 @@
                     ? "bg-green-500 text-white"
                     : isUnresolvedDay
                     ? "bg-slate-500 text-white"
+                    : isOnLeave
+                    ? "bg-blue-500 text-white"
+                    : isWeekend
+                    ? "bg-slate-100 text-slate-500"
                     : "bg-red-500 text-white";
 
 
@@ -160,6 +167,14 @@
                                 <span class="mt-1 text-[10px] opacity-80">
                                     Upcoming
                                 </span>
+                            }
+                            else if (isOnLeave)
+                            {
+                                <span class="text-sm font-semibold">Leave</span>
+                            }
+                            else if (isWeekend && !hasLogs)
+                            {
+                                <span class="text-sm font-semibold">@(HRM.Helpers.StaffScheduleCalendar.IsWeekend(day) ? "Weekend" : "Rest day")</span>
                             }
                             else if (isPresent)
                             {
@@ -326,6 +341,9 @@
     [Parameter]
     public List<AttendanceLogDto>? WeeklyLogs { get; set; }
 
+    [Parameter]
+    public List<YearlyAttendanceDayDto>? Days { get; set; }
+
 
     // ==============================================================
     // CURRENT WEEK
@@ -369,10 +387,8 @@
                 .Select(i => WeekStart.AddDays(i).Date)
                 .Where(day =>
                     day <= DateTime.Today)
-                .Count(day =>
-                    WeeklyLogs.Any(x =>
-                        x.Date.Date == day &&
-                        x.IsCheckIn));
+                .Count(day => Days?.FirstOrDefault(x => x.Date.Date == day)?.IsPresent ??
+                    WeeklyLogs.Any(x => x.Date.Date == day && x.IsCheckIn));
         }
     }
 
@@ -404,6 +420,9 @@
 
                     if (logs.Count == 0)
                         return false;
+
+                    var overview = Days?.FirstOrDefault(x => x.Date.Date == day);
+                    if (overview != null) return overview.IsUnresolved;
 
                     return !logs.Any(x =>
                         x.IsCheckIn ||
@@ -444,6 +463,9 @@
                             x.Date.Date == day)
                         .ToList();
 
+                    var overview = Days?.FirstOrDefault(x => x.Date.Date == day);
+                    if (overview != null) return overview.IsAbsent;
+                    if (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday) return false;
                     // Unresolved is handled separately.
                     if (logs.Count > 0 &&
                         !logs.Any(x =>

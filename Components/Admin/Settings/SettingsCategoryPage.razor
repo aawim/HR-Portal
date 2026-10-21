@@ -47,7 +47,7 @@
                     </div>
 
                     <div class="flex flex-col gap-1 mb-4">
-                        @foreach (var item in GetSubItems(CategoryName).Where(x => x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper))
+                        @foreach (var item in GetSubItems(CategoryName).Where(x => (x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper) && (x.ComponentType != typeof(LeaveCarryForwardSettings) || canViewCarryForward)))
                         {
                             <button @onclick="() => SelectItem(item)"
                             title="@(!isSidebarExpanded ? item.Title : null)"
@@ -195,6 +195,8 @@
     {
         "leaves" => new() {
             new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
+            new("Leave Accrual by Job Type", "📅", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
+            new("Leave Carry Forward", "📅", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
             new("Manage Leave Types", "🌴", "Define leave accruals and policies.", typeof(LeaveTypesGrid)),
             new("Manage Leave Sets", "🗓️", "Group leave types into sets.", typeof(LeaveSetsGrid)),
             new("Manage Configurable", "⚙️", "Global leave system variables.", typeof(LeaveConfigGrid)),
@@ -237,8 +239,8 @@
            new("Manage Positions", "💼", "Configure attendance clients and devices.", typeof(PositionGrid)),
         },
         "workplaning" => new() {
-           new("Templates", "💼", "Configure attendance clients and devices.", typeof(WorkTemplateManagement)),
-           new("Plans", "💼", "Configure attendance clients and devices.", typeof(WorkPlanManagement)),
+           new("Templates", "💼", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
+           new("Plans", "💼", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
            new("Segments", "💼", "Configure attendance clients and devices.", typeof(Segments)),
            new("Manual Assignments", "💼", "Configure Assignemnts.", typeof(ManualAssignment)),
         },
@@ -284,10 +286,13 @@
 
     private List<Leaf>? leaveRequests;
     private bool isDeveloper;
+    private bool canViewCarryForward;
 
     protected override async Task OnInitializedAsync()
     {
         isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
+        canViewCarryForward = await UserAccess.HasPermissionAsync(HRM.Services.Leave.LeaveCarryForwardPermissions.View) &&
+            (await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head"));
         leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
     }
 }

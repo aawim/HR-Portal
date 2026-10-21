@@ -10,5 +10,9 @@ public sealed class RequestNotification
     public string ReferenceNumber { get; set; } = "";
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? ReadAtUtc { get; set; }
+    public string NotificationKind { get; set; } = "StateChanged";
+    public long? RequestStageInstanceId { get; set; }
+    public int? LeaveId { get; set; }
+    public int? HandoverRevision { get; set; }
     public Request Request { get; set; } = null!;
 }

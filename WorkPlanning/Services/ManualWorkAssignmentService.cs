@@ -9,13 +9,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.WorkPlanning.Services
 {
-    public class ManualWorkAssignmentService : IManualWorkAssignmentService
+    public partial class ManualWorkAssignmentService : IManualWorkAssignmentService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IWorkAssignmentGenerator _generator;
         private readonly IOperationLogService _operationLogService;
         private readonly ILogger<ManualWorkAssignmentService> _logger;
         private readonly IUserContextBuilder _userContextBuilder;
+        private readonly IUserAccessService _access;
 
 
         public ManualWorkAssignmentService(
@@ -23,13 +24,14 @@ namespace HRM.WorkPlanning.Services
             IWorkAssignmentGenerator generator,
             IOperationLogService operationLogService,
             ILogger<ManualWorkAssignmentService> logger,
-            IUserContextBuilder userContextBuilder)
+            IUserContextBuilder userContextBuilder, IUserAccessService access)
         {
             _dbFactory = dbFactory;
             _generator = generator;
             _operationLogService = operationLogService;
             _logger = logger;
             _userContextBuilder = userContextBuilder;
+            _access = access;
         }
 
         public async Task<GeneratedWorkPlanResult> GenerateAsync(
@@ -67,6 +69,10 @@ namespace HRM.WorkPlanning.Services
 
             try
             {
+                var org = await WorkPlanningAccess.RequireOrganisationAsync(_access, true);
+                if (org != request.OrganisationBusinessEntityId) return Failure("Select a staff member in the current organisation.");
+                await WorkPlanningAccess.RequireJobAsync(db, _access, request.JobId);
+                await WorkPlanningAccess.RequireTemplateAsync(db, _access, request.WorkTemplateId);
                 /*
                  * The generator uses a different DbContext, therefore save
                  * the operation log before invoking it.

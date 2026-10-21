@@ -2,6 +2,14 @@
 {
     public sealed class CurrentWorkTemplateAssignmentDto
     {
+        public string SchedulePurpose { get; set; } = "Official";
+        public string ScheduleMode { get; set; } = "Standard";
+        public int WorkingDaysMask { get; set; } = 31;
+        public DateTime? RotationAnchorDate { get; set; }
+        public string? RotationTemplateIds { get; set; }
+        public bool EndsNextDay { get; set; }
+        public List<int> MandatoryCheckInOffsets { get; set; } = [];
+        public List<int> MandatoryCheckOutOffsets { get; set; } = [];
         public int JobWorkTemplateAssignmentId { get; set; }
 
         public int JobId { get; set; }

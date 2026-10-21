@@ -27,13 +27,15 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
     private readonly IDbContextFactory<HrmTeContext> _dbFactory;
     private readonly ILogger<WorkAssignmentGeneratorService> _logger;
+    private readonly HRM.Services.Interfaces.IUserAccessService _access;
 
     public WorkAssignmentGeneratorService(
         IDbContextFactory<HrmTeContext> dbFactory,
-        ILogger<WorkAssignmentGeneratorService> logger)
+        ILogger<WorkAssignmentGeneratorService> logger, HRM.Services.Interfaces.IUserAccessService access)
     {
         _dbFactory = dbFactory;
         _logger = logger;
+        _access = access;
     }
 
     public async Task<GeneratedWorkPlanResult> GenerateAsync(
@@ -60,6 +62,13 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
         try
         {
+            var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access, true);
+            if (org != request.OrganisationBusinessEntityId) return Failure("The selected organisation is outside the current context.");
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _access, request.WorkTemplateId);
+            if (!await db.WorkTemplates.AnyAsync(x => x.WorkTemplateId == request.WorkTemplateId &&
+                (!x.EffectiveFrom.HasValue || x.EffectiveFrom <= request.WorkDate.Date) &&
+                (!x.EffectiveTo.HasValue || x.EffectiveTo >= request.WorkDate.Date), cancellationToken))
+                return Failure("The template is not effective on the selected date.");
             /*
              * Load the template and all active template segments
              * using a non-tracked projection.
@@ -132,6 +141,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     request,
                     cancellationToken);
 
+            if (jobTemplateAssignment is null && request.GenerationSource == WorkPlanGenerationSource.Manual)
+                jobTemplateAssignment = new JobTemplateAssignmentModel { SchedulePurpose = "Duty" };
             if (jobTemplateAssignment is null)
             {
                 return Failure(
@@ -153,12 +164,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             }
 
             /*
-             * Only one active work plan should exist for the same:
-             *
-             * Employee + Job + Organisation + Date
-             *
-             * WorkTemplateId must not be included because otherwise
-             * different templates could create duplicate assignments.
+             * Reuse the one daily plan for this employee, job and organisation.
+             * Different templates produce separate assignments inside that plan.
              */
             var existingPlan =
                 await FindExistingActivePlanAsync(
@@ -166,7 +173,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     request,
                     cancellationToken);
 
-            if (existingPlan is not null)
+            if (existingPlan?.IsFinalized == true)
             {
                 var state =
                     existingPlan.IsFinalized
@@ -194,8 +201,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
              * The current database has no scheduled-start-time field.
              * Therefore 08:00 is used as the assignment base time.
              */
-            var scheduledStartTime =
-                DefaultScheduledStartTime;
+            var scheduledStartTime = request.ScheduledStartTime != default
+                ? TimeOnly.FromDateTime(request.ScheduledStartTime) : template.DefaultStartTime ?? DefaultScheduledStartTime;
 
             var assignmentPeriod =
                 CalculateAssignmentPeriod(
@@ -215,7 +222,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
              * has completed.
              */
             await using var transaction =
-                await db.Database.BeginTransactionAsync(
+                await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable,
                     cancellationToken);
 
             try
@@ -228,6 +235,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                         planningProvider,
                         assignmentPeriod,
                         nextVersion,
+                        request.GenerationSource == WorkPlanGenerationSource.Manual ? "Duty" : jobTemplateAssignment.SchedulePurpose,
                         cancellationToken);
 
                 await transaction.CommitAsync(
@@ -357,6 +365,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             PlanningProvider planningProvider,
             DateTimeCalculationResult assignmentPeriod,
             int nextVersion,
+            string schedulePurpose,
             CancellationToken cancellationToken)
     {
         var now = DateTime.UtcNow;
@@ -376,23 +385,21 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 $"Work template '{template.Name}' does not have a default end time.");
         }
 
-        var assignmentStart =
-            workDate.ToDateTime(
-                template.DefaultStartTime.Value);
-
-        var assignmentEnd =
-            workDate.ToDateTime(
-                template.DefaultEndTime.Value);
-
-        if (template.EndsNextDay ||
-            assignmentEnd <= assignmentStart)
-        {
-            assignmentEnd =
-                assignmentEnd.AddDays(1);
-        }
+        var assignmentStart = assignmentPeriod.AssignmentBaseDateTime;
+        var duration = template.DefaultEndTime.Value.ToTimeSpan() - template.DefaultStartTime.Value.ToTimeSpan();
+        if (template.EndsNextDay || duration <= TimeSpan.Zero) duration += TimeSpan.FromDays(1);
+        var assignmentEnd = assignmentStart.Add(duration);
 
 
-        var workPlan = new WorkPlan
+        var existing = await db.WorkPlans.SingleOrDefaultAsync(x => x.JobId == request.JobId &&
+            x.IndividualId == request.IndividualId && x.OrganisationBusinessEntityId == request.OrganisationBusinessEntityId &&
+            x.WorkDate == request.WorkDate.Date && x.IsValid, cancellationToken);
+        if (existing?.IsFinalized == true) throw new InvalidOperationException("The daily work plan is finalized.");
+        if (existing != null && await db.WorkAssignments.AnyAsync(x => x.WorkPlanId == existing.WorkPlanId &&
+            x.WorkTemplateId == request.WorkTemplateId && x.SchedulePurpose == schedulePurpose &&
+            x.StartDateTime < assignmentEnd && x.EndDateTime > assignmentStart && x.IsValid, cancellationToken))
+            throw new InvalidOperationException("This template already has an active assignment for the day.");
+        var workPlan = existing ?? new WorkPlan
         {
             IndividualId =
                 request.IndividualId,
@@ -457,7 +464,12 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 nextVersion
         };
 
-        db.WorkPlans.Add(workPlan);
+        if (existing == null) db.WorkPlans.Add(workPlan);
+        else
+        {
+            workPlan.WorkTemplateId = null;
+            if (request.GenerationSource == WorkPlanGenerationSource.Manual) workPlan.IsManual = true;
+        }
 
         /*
          * WorkPlanId is database-generated, so save the WorkPlan first.
@@ -466,8 +478,12 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             cancellationToken);
 
 
+        var plannedState = await db.WorkAssignmentStates.Where(x => x.IsActive && x.Code == "PLANNED")
+            .Select(x => (int?)x.WorkAssignmentStateId).SingleOrDefaultAsync(cancellationToken)
+            ?? throw new InvalidOperationException("An active PLANNED assignment state is required.");
         var workAssignment = new WorkAssignment
         {
+            SchedulePurpose = schedulePurpose,
             WorkPlanId =
                 workPlan.WorkPlanId,
 
@@ -478,7 +494,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 template.WorkTemplateTypeId,
 
             WorkAssignmentStateId =
-                AssignedWorkAssignmentStateId,
+                plannedState,
 
             Name =
                 string.IsNullOrWhiteSpace(
@@ -577,6 +593,19 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
 
          db.WorkAssignmentSegments.AddRange(assignmentSegments);
+        var sequence = await db.WorkPlanSegments.Where(x => x.WorkPlanId == workPlan.WorkPlanId)
+            .MaxAsync(x => (int?)x.SequenceNumber, cancellationToken) ?? 0;
+        foreach (var segment in assignmentSegments)
+            db.WorkPlanSegments.Add(new WorkPlanSegment { WorkPlanId = workPlan.WorkPlanId,
+                SchedulePurpose = schedulePurpose,
+                WorkTemplateSegmentId = segment.WorkTemplateSegmentId, WorkSegmentTypeId = segment.WorkSegmentTypeId,
+                Name = $"{workAssignment.Name} · {segment.Name}", Description = segment.Description, SequenceNumber = ++sequence,
+                StartDateTime = segment.StartDateTime, EndDateTime = segment.EndDateTime ?? segment.StartDateTime,
+                GraceBeforeMinutes = segment.GraceBeforeMinutes, GraceAfterMinutes = segment.GraceAfterMinutes,
+                IsMandatory = segment.IsMandatory, RequiresAttendance = segment.RequiresAttendance,
+                RequiresLocationValidation = segment.RequiresLocationValidation, RequiresDeviceValidation = segment.RequiresDeviceValidation,
+                IsPaid = template.Segments.Single(x => x.WorkTemplateSegmentId == segment.WorkTemplateSegmentId).IsPaid,
+                IsValid = true, OperationLogId = request.OperationLogId, CreatedDate = now });
 
         //await db.SaveChangesAsync();
 
@@ -712,11 +741,11 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                             .GraceAfterMinutes,
 
                     IsMandatory =
-                        templateSegment.IsMandatory,
+                        request.IsMandatory && templateSegment.IsMandatory,
 
                     RequiresAttendance =
-                        templateSegment
-                            .RequiresAttendance,
+                        request.RequiresAttendance && templateSegment.RequiresAttendance &&
+                        (request.RequiresCheckout || templateSegment.WorkSegmentTypeCode is not ("CHECK_OUT" or "DUTY_CHECK_OUT")),
 
                     RequiresLocationValidation =
                         templateSegment
@@ -841,6 +870,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     .Select(segment =>
                         new TemplateSegmentGenerationModel
                         {
+                            IsPaid = segment.IsPaid,
+                            WorkSegmentTypeCode = segment.WorkSegmentType.Code,
                             WorkTemplateSegmentId =
                                 segment.WorkTemplateSegmentId,
 
@@ -947,6 +978,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                 x.EffectiveFrom)
             .Select(x => new JobTemplateAssignmentModel
             {
+                SchedulePurpose = x.SchedulePurpose,
                 JobWorkTemplateAssignmentId =
                     x.JobWorkTemplateAssignmentID,
 
@@ -1377,6 +1409,8 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
     private sealed class TemplateSegmentGenerationModel
     {
+        public string? WorkSegmentTypeCode { get; init; }
+        public bool IsPaid { get; init; }
         public int WorkTemplateSegmentId { get; init; }
 
         public int WorkSegmentTypeId { get; init; }
@@ -1420,6 +1454,7 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
 
     private sealed class JobTemplateAssignmentModel
     {
+        public string SchedulePurpose { get; init; } = "Official";
         public int JobWorkTemplateAssignmentId { get; init; }
 
         public int JobId { get; init; }

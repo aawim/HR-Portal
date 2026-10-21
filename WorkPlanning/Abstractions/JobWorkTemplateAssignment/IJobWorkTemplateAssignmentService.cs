@@ -7,6 +7,7 @@ namespace HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment
 {
     public interface IJobWorkTemplateAssignmentService
     {
+        Task<ServiceResult> AssignDutyAsync(AssignDutyScheduleDto dto, CancellationToken cancellationToken = default);
         Task<CurrentWorkTemplateAssignmentDto?> GetCurrentAsync(
         int jobId,
         DateTime effectiveDate,

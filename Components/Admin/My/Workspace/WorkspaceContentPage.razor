@@ -15,7 +15,7 @@
         <PendingLeaveCard Items="items" SelectedRequestId="selected?.RequestId"
                           Loading="loading" Busy="busy" Message="loadError"
                           OnSelected="SelectRequest" OnRefresh="RefreshAsync" />
-        <PendingLeaveChangesCard />
+        <PendingLeaveChangesCard NotificationRequestId="NotificationRequestId" />
     </Left>
     <Center>
         @if (selected != null)
@@ -61,6 +61,15 @@
     [Parameter] public string Title { get; set; } = "";
     [Parameter] public WorkspaceTab ActiveTab { get; set; }
     [Parameter] public int NavigationVersion { get; set; }
+    [Parameter] public int? NotificationRequestId { get; set; }
+    private int? previousNotificationId;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!NotificationRequestId.HasValue || previousNotificationId == NotificationRequestId) return;
+        previousNotificationId = NotificationRequestId;
+        await LoadAsync();
+        selected = items.FirstOrDefault(x => x.RequestId == NotificationRequestId);
+    }
     private int previousNavigationVersion;
     protected override void OnParametersSet()
     {

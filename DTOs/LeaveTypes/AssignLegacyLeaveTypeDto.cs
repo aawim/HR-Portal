@@ -1,4 +1,4 @@
-﻿namespace HRM.DTOs.LeaveTypes
+namespace HRM.DTOs.LeaveTypes
 {
     public class AssignLegacyLeaveTypeDto
     {
@@ -12,7 +12,7 @@
 
         public DateTime? EffectiveToDate { get; set; }
 
-        public int RemainingDays { get; set; }
+        public decimal RemainingDays { get; set; }
 
         public bool IsValid { get; set; } = true;
     }

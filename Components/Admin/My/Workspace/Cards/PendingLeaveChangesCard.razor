@@ -54,6 +54,15 @@
 }
 
 @code {
+    [Parameter] public int? NotificationRequestId { get; set; }
+    private int? previousNotificationId;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!NotificationRequestId.HasValue || previousNotificationId == NotificationRequestId) return;
+        previousNotificationId = NotificationRequestId;
+        await LoadAsync();
+        Select(NotificationRequestId.Value);
+    }
     private List<LeaveChangeRequestDto> items = [];
     private LeaveChangeRequestDto? selected;
     private bool loading, busy, showAll;

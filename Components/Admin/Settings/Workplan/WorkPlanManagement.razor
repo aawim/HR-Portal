@@ -6,6 +6,7 @@
 @using HRM.Components.Admin.Settings.Workplan.Components.Plan
 
 @inject IWorkPlanService WorkPlanService
+@inject HRM.Services.ToastService ToastService
 
 <div class="min-h-screen bg-slate-50">
 
@@ -137,12 +138,20 @@
                     planEditModel);
 
             if (!result.Success)
+            {
+                ToastService.Error(string.Join(" ", result.Errors));
                 return;
+            }
+            ToastService.Success("Work plan saved.");
 
             showSegmentPanel = false;
             showPlanPanel = false;
 
             await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error($"Unable to generate the work plan: {ex.Message}");
         }
         finally
         {

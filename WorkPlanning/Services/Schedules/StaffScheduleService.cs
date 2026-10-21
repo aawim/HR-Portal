@@ -3,17 +3,20 @@ using HRM.DTOs.StaffSchedule;
 using HRM.Models;
 using HRM.WorkPlanning.Abstractions.Schedules;
 using Microsoft.EntityFrameworkCore;
+using HRM.Services.Interfaces;
 
 namespace HRM.WorkPlanning.Services.Schedules
 {
     public sealed class StaffScheduleService : IStaffScheduleService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
+        private readonly IUserAccessService _access;
 
         public StaffScheduleService(
-            IDbContextFactory<HrmTeContext> dbFactory)
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access)
         {
             _dbFactory = dbFactory;
+            _access = access;
         }
 
         public async Task<StaffScheduleResult> GetScheduleAsync(
@@ -30,12 +33,16 @@ namespace HRM.WorkPlanning.Services.Schedules
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
 
-            var today = DateTime.Today;
+            await _access.RequireContextAsync();
+            var org = await _access.GetCurrentOrganisationIdAsync();
+            if (!await _access.HasOrganisationAccessAsync(org)) return StaffScheduleResult.Failure("Organisation access denied.");
+            var today = DateTime.UtcNow.AddHours(5).Date;
 
             var activeJob = await db.Jobs
                 .AsNoTracking()
                 .Where(x =>
                     x.IndividualID == individualId &&
+                    x.OrganisationID == org &&
                     x.JobStateId ==
                         SharedConfig.JobStates.APPROVED &&
                     x.TerminatedDate == null)
@@ -110,12 +117,18 @@ namespace HRM.WorkPlanning.Services.Schedules
                     true
             };
 
-            schedule.CurrentTemplate =
+            schedule.CurrentTemplates =
                 await GetCurrentTemplateAsync(
                     db,
                     activeJob.JobId,
                     today,
                     cancellationToken);
+            schedule.CurrentTemplate = schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == "Official") ?? schedule.CurrentTemplates.FirstOrDefault();
+            var windows = schedule.CurrentTemplates.Where(x => x.DefaultStartTime.HasValue && x.DefaultEndTime.HasValue)
+                .Select(x => (x.SchedulePurpose, Start: today.Add(x.DefaultStartTime!.Value.TimeOfDay),
+                    End: today.Add(x.DefaultEndTime!.Value.TimeOfDay).AddDays(x.EndsNextDay || x.DefaultEndTime.Value.TimeOfDay <= x.DefaultStartTime.Value.TimeOfDay ? 1 : 0))).ToList();
+            schedule.HourCoverage = HRM.Helpers.WorkHourCoverage.Calculate(windows.Where(x => x.SchedulePurpose == "Official").Select(x => (x.Start, x.End)),
+                windows.Where(x => x.SchedulePurpose == "Duty").Select(x => (x.Start, x.End)));
 
             schedule.TemplateHistory =
                 await GetTemplateHistoryAsync(
@@ -149,7 +162,7 @@ namespace HRM.WorkPlanning.Services.Schedules
         }
 
 
-        private static async Task<CurrentWorkTemplateAssignmentDto?>
+        private static async Task<List<CurrentWorkTemplateAssignmentDto>>
             GetCurrentTemplateAsync(
                 HrmTeContext db,
                 int jobId,
@@ -175,6 +188,16 @@ namespace HRM.WorkPlanning.Services.Schedules
                     x.JobWorkTemplateAssignmentID)
                 .Select(x => new CurrentWorkTemplateAssignmentDto
                 {
+                    EndsNextDay = x.WorkTemplate.EndsNextDay,
+                    MandatoryCheckOutOffsets = x.WorkTemplate.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
+                        (s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT" || s.WorkSegmentType.Code == "BREAK_START"))
+                        .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
+                    MandatoryCheckInOffsets = x.WorkTemplate.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
+                        (s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN" || s.WorkSegmentType.Code == "BREAK_END"))
+                        .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
+                    SchedulePurpose = x.SchedulePurpose,
+                    ScheduleMode = x.ScheduleMode, WorkingDaysMask = x.WorkingDaysMask,
+                    RotationAnchorDate = x.RotationAnchorDate, RotationTemplateIds = x.RotationTemplateIds,
                     JobWorkTemplateAssignmentId =
                         x.JobWorkTemplateAssignmentID,
 
@@ -210,7 +233,7 @@ namespace HRM.WorkPlanning.Services.Schedules
                     ? DateTime.MinValue.Add(x.WorkTemplate.DefaultEndTime.Value.ToTimeSpan())
                     : null
                 })
-                .FirstOrDefaultAsync(cancellationToken);
+                .ToListAsync(cancellationToken);
         }
 
         private static async Task<List<JobWorkTemplateAssignmentHistoryDto>>
@@ -229,6 +252,7 @@ namespace HRM.WorkPlanning.Services.Schedules
                 .Select(x =>
                     new JobWorkTemplateAssignmentHistoryDto
                     {
+                        SchedulePurpose = x.SchedulePurpose,
                         JobWorkTemplateAssignmentId =
                             x.JobWorkTemplateAssignmentID,
 
@@ -277,7 +301,7 @@ namespace HRM.WorkPlanning.Services.Schedules
                     x.IsValid &&
                     x.WorkPlan.IndividualId == individualId &&
                     x.WorkPlan.JobId == jobId &&
-                    x.WorkPlan.IsManual &&
+                    x.AssignmentSource == HRM.Enum.WorkAssignmentSource.Manual &&
                     x.WorkPlan.WorkDate >= fromDate &&
                     x.WorkPlan.WorkDate <= toDate)
                 .OrderBy(x =>
@@ -285,6 +309,8 @@ namespace HRM.WorkPlanning.Services.Schedules
                 .Select(x =>
                     new ManualWorkAssignmentListDto
                     {
+                        WorkTemplateId = x.WorkTemplateId, RequiresAttendance = x.RequiresAttendance,
+                        RequiresCheckout = x.RequiresCheckOut, Priority = x.Priority, Description = x.Description,
                         WorkPlanId =
                             x.WorkPlanId,
 

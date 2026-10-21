@@ -1,53 +1,138 @@
 using HRM.Helpers;
 using HRM.Models;
+using HRM.Models.Workflow;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Data.SqlClient;
 
 namespace HRM.Services;
 
 public sealed record RequestNotificationItem(long Id, string Reference, string FromState, string ToState,
-    DateTime CreatedAtUtc, bool IsRead, string Url);
+    DateTime CreatedAtUtc, bool IsRead, string Url, string? ActionStage = null, string? Message = null);
 public sealed record RequestNotificationInbox(int UnreadCount, List<RequestNotificationItem> Items);
 
-public sealed class RequestNotificationService(IDbContextFactory<HrmTeContext> factory, AuthenticationStateProvider authentication)
+public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeContext> factory, AuthenticationStateProvider authentication)
 {
-    private async Task<IQueryable<RequestNotification>> OwnedAsync(HrmTeContext db, CancellationToken token)
+    private sealed record Actor(int UserId, int PersonId, int? OrganisationId);
+
+    private async Task<Actor?> CurrentActorAsync(HrmTeContext db, CancellationToken token)
     {
         var principal = (await authentication.GetAuthenticationStateAsync()).User;
         var username = principal.FindFirst("idnumber")?.Value;
-        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username))
-            return db.RequestNotifications.Where(x => false);
-        var user = await db.Users.AsNoTracking().Where(x => x.Username == username && x.IsActive && x.LocalUserStateId == 1)
-            .Select(x => new { x.UserId, OrganisationId = (int?)x.UserOrganisation!.BusinessEntityID }).SingleOrDefaultAsync(token);
-        if (user == null) return db.RequestNotifications.Where(x => false);
-        return db.RequestNotifications.Where(x => x.UserId == user.UserId &&
-            (x.Request.OrganisationBusinessEntityID == null || x.Request.OrganisationBusinessEntityID == user.OrganisationId));
+        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username)) return null;
+        return await db.Users.AsNoTracking().Where(x => x.Username == username && x.IsActive && x.LocalUserStateId == 1)
+            .Select(x => new Actor(x.UserId, x.BusinessEntityID, (int?)x.UserOrganisation!.BusinessEntityID)).SingleOrDefaultAsync(token);
+    }
+
+    private static IQueryable<WfRequestApproval> PendingFor(HrmTeContext db, Actor actor)
+        => db.WfRequestApprovals.Where(a => a.ApproverUserId == actor.UserId && a.Decision == "Pending" &&
+            a.RequestStageInstance.StageStatus == "Pending" && a.RequestStageInstance.CompletedAt == null &&
+            a.RequestStageInstance.WorkflowRequestInstance.WorkflowStatus == "InProgress" &&
+            a.RequestStageInstance.WorkflowRequestInstance.CompletedAt == null &&
+            a.RequestStageInstance.WorkflowRequestInstance.CurrentRequestStageInstanceId == a.RequestStageInstanceId &&
+            (a.RequestStageInstance.WorkflowStage.ApprovalMode != "Sequential" ||
+                !a.RequestStageInstance.Approvals.Any(other => other.Decision == "Pending" && other.ApprovalSequence < a.ApprovalSequence)) &&
+            // Removed group membership must not continue to produce actionable alerts.
+            (a.StageApprover == null ||
+                (a.StageApprover.ApproverType != "UserGroup" && a.StageApprover.ApproverType != "SupervisorGroup") ||
+                db.UserAssignedUserGroups.Any(g => g.UserId == actor.UserId && g.UserGroupId == a.StageApprover.ApproverReferenceId &&
+                    (g.UserGroup.IsGlobal || g.UserGroup.UserOrganisation.BusinessEntityID == actor.OrganisationId))))
+            .Where(a => db.Requests.Any(r => r.RequestId == a.RequestStageInstance.WorkflowRequestInstance.RequestId &&
+                !r.RequestState.IsFinalState &&
+                (r.OrganisationBusinessEntityID == null || r.OrganisationBusinessEntityID == actor.OrganisationId) &&
+                r.ApplicantBusinessEntityId != actor.PersonId &&
+                !db.LeaveRequests.Any(l => l.RequestId == r.RequestId && l.Leave.Job.IndividualID == actor.PersonId) &&
+                !db.LeaveChangeRequests.Any(l => l.RequestId == r.RequestId && l.Leave.Job.IndividualID == actor.PersonId)));
+
+    private static IQueryable<RequestNotification> Owned(HrmTeContext db, Actor actor, List<HandoverAlert> handovers)
+    {
+        var pending = PendingFor(db, actor).Select(a => a.RequestStageInstanceId);
+        var tasks = handovers.Where(x => x.Kind == "HandoverTasks").Select(x => x.LeaveId).ToArray();
+        var assigned = handovers.Where(x => x.Kind == "HandoverAssigned").Select(x => x.LeaveId).ToArray();
+        var reviews = handovers.Where(x => x.Kind == "HandoverReview").Select(x => x.LeaveId).ToArray();
+        var returned = handovers.Where(x => x.Kind == "HandoverReturned").Select(x => x.LeaveId).ToArray();
+        return db.RequestNotifications.Where(n => n.UserId == actor.UserId &&
+            (n.Request.OrganisationBusinessEntityID == null || n.Request.OrganisationBusinessEntityID == actor.OrganisationId) &&
+            (n.NotificationKind != "ActionRequired" || (n.RequestStageInstanceId.HasValue && pending.Contains(n.RequestStageInstanceId.Value))) &&
+            (!n.NotificationKind.StartsWith("Handover") || (n.LeaveId.HasValue &&
+                db.LeaveHandoverReviews.Any(r => r.LeaveId == n.LeaveId && r.Revision == n.HandoverRevision) &&
+                ((n.NotificationKind == "HandoverTasks" && tasks.Contains(n.LeaveId.Value)) ||
+                 (n.NotificationKind == "HandoverAssigned" && assigned.Contains(n.LeaveId.Value)) ||
+                 (n.NotificationKind == "HandoverReview" && reviews.Contains(n.LeaveId.Value)) ||
+                 (n.NotificationKind == "HandoverReturned" && returned.Contains(n.LeaveId.Value))))));
+    }
+
+    private static async Task EnsureActionNotificationsAsync(HrmTeContext db, Actor actor, CancellationToken token)
+    {
+        // Reconcile the actual current inbox, including requests assigned before this feature.
+        // No broadcast to everyone with a Supervisor/HR role: only assigned users get an alert.
+        var candidates = await (from a in PendingFor(db, actor)
+                                join r in db.Requests on a.RequestStageInstance.WorkflowRequestInstance.RequestId equals r.RequestId
+                                where !db.RequestNotifications.Any(n => n.UserId == actor.UserId &&
+                                    n.NotificationKind == "ActionRequired" && n.RequestStageInstanceId == a.RequestStageInstanceId)
+                                select new { a.RequestStageInstanceId, r.RequestId, r.ReferenceNumber, r.RequestStateId })
+                                .Distinct().ToListAsync(token);
+        if (candidates.Count == 0) return;
+        foreach (var row in candidates)
+            db.RequestNotifications.Add(new RequestNotification { UserId = actor.UserId, RequestId = row.RequestId,
+                NotificationKind = "ActionRequired", RequestStageInstanceId = row.RequestStageInstanceId,
+                FromStateId = row.RequestStateId, ToStateId = row.RequestStateId,
+                ReferenceNumber = row.ReferenceNumber ?? $"#{row.RequestId}", CreatedAtUtc = DateTime.UtcNow });
+        try { await db.SaveChangesAsync(token); }
+        catch (DbUpdateException ex) when (ex.InnerException is SqlException { Number: 2601 or 2627 })
+        {
+            // Two open tabs can discover the assignment together. The unique index keeps one alert.
+            foreach (var entry in db.ChangeTracker.Entries<RequestNotification>().Where(x => x.State == EntityState.Added).ToList())
+                entry.State = EntityState.Detached;
+        }
     }
 
     public async Task<RequestNotificationInbox> GetInboxAsync(CancellationToken token = default)
     {
         await using var db = await factory.CreateDbContextAsync(token);
-        var owned = await OwnedAsync(db, token);
+        var actor = await CurrentActorAsync(db, token);
+        if (actor == null) return new(0, []);
+        await EnsureActionNotificationsAsync(db, actor, token);
+        var handovers = await LoadHandoverAlertsAsync(db, actor, token);
+        await EnsureHandoverNotificationsAsync(db, actor, handovers, token);
+        var owned = Owned(db, actor, handovers);
         var unread = await owned.CountAsync(x => x.ReadAtUtc == null, token);
         var rows = await (from n in owned.AsNoTracking()
                           join fromState in db.RequestStates on n.FromStateId equals fromState.RequestStateId
                           join toState in db.RequestStates on n.ToStateId equals toState.RequestStateId
                           orderby n.CreatedAtUtc descending, n.RequestNotificationId descending
                           select new { n.RequestNotificationId, n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
+                              n.NotificationKind, n.Request.RequestId, n.LeaveId,
+                              ActionStage = db.WfRequestStageInstances.Where(s => s.RequestStageInstanceId == n.RequestStageInstanceId)
+                                  .Select(s => s.WorkflowStage.StageName).FirstOrDefault(),
                               FromState = fromState.StateName, ToState = toState.StateName, n.Request.RequestTypeId,
                               IsLeave = db.LeaveRequests.Any(x => x.RequestId == n.RequestId),
                               IsAttendance = n.Request.AttendanceLogChangeRequest != null || n.Request.AttendanceLogRequests.Any() })
                           .Take(30).ToListAsync(token);
         return new(unread, rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
+            n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
+            n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
-            n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online")).ToList());
+            n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online",
+            n.NotificationKind switch {
+                "ActionRequired" => n.ActionStage ?? "Review request",
+                "HandoverTasks" => "Verify your work handover tasks",
+                "HandoverReview" => "Review and approve work handover",
+                "HandoverReturned" => "Revise your work handover",
+                _ => null },
+            n.NotificationKind switch {
+                "HandoverAssigned" => "Work handover assigned for your supervision. Employee verification is pending.",
+                "RequestSubmitted" => "Your request has been submitted.",
+                _ => null })).ToList());
     }
 
     public async Task MarkReadAsync(long? notificationId = null, CancellationToken token = default)
     {
         await using var db = await factory.CreateDbContextAsync(token);
-        var owned = await OwnedAsync(db, token);
+        var actor = await CurrentActorAsync(db, token);
+        if (actor == null) return;
+        var owned = Owned(db, actor, await LoadHandoverAlertsAsync(db, actor, token));
         var items = await owned.Where(x => x.ReadAtUtc == null && (!notificationId.HasValue || x.RequestNotificationId == notificationId.Value)).ToListAsync(token);
         foreach (var item in items) item.ReadAtUtc = DateTime.UtcNow;
         await db.SaveChangesAsync(token);

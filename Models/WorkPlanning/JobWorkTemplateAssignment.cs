@@ -2,6 +2,11 @@
 {
     public class JobWorkTemplateAssignment
     {
+        public string SchedulePurpose { get; set; } = "Official";
+        public string ScheduleMode { get; set; } = "Standard";
+        public int WorkingDaysMask { get; set; } = 31;
+        public DateTime? RotationAnchorDate { get; set; }
+        public string? RotationTemplateIds { get; set; }
         public DateTime EffectiveFrom { get; set; }
 
         public DateTime? EffectiveTo { get; set; }

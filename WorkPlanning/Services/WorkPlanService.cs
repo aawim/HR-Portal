@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+using Azure.Core;
 using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
@@ -15,17 +15,23 @@ namespace HRM.WorkPlanning.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _logService;
         private readonly IUserAccessService _userAccessService;
+        private readonly IWorkAssignmentGenerator _assignmentGenerator;
+        private readonly IWorkPlanGenerator _planGenerator;
         public string searchText = string.Empty;
         public WorkPlanService(
-            IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService, IUserAccessService userAccessService    )
+            IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService logService, IUserAccessService userAccessService,
+            IWorkAssignmentGenerator assignmentGenerator, IWorkPlanGenerator planGenerator)
         {
             _dbFactory = dbFactory;
             _logService = logService;
             _userAccessService = userAccessService;
+            _assignmentGenerator = assignmentGenerator;
+            _planGenerator = planGenerator;
         }
 
         public async Task<List<WorkPlanEmployeeDto>> SearchEmployeesAsync(string searchText)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             if (string.IsNullOrWhiteSpace(searchText))
                 return [];
 
@@ -71,7 +77,7 @@ namespace HRM.WorkPlanning.Services
                       (individual.LastNameEnglish ?? string.Empty))
                     .Trim()
 
-                where job.JobStateId == approvedJobStateId
+                where job.OrganisationID == org && job.JobStateId == approvedJobStateId
                       && job.TerminatedDate == null
                       && (
                           fullName.Contains(searchText) ||
@@ -118,488 +124,53 @@ namespace HRM.WorkPlanning.Services
         public async Task<GenerateWorkPlanResultDto> GenerateWorkPlanAsync(GenerateWorkPlanDto request)
         {
             var result = new GenerateWorkPlanResultDto();
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync();
-
-            await using var transaction =
-                await db.Database.BeginTransactionAsync();
-
+            if (request == null || request.WorkDate == default || request.JobId <= 0 || request.IndividualId <= 0)
+            { result.Errors.Add("Select a staff member, job and work date."); return result; }
             try
             {
-
-                var userContext = await _userAccessService.GetContextAsync();
-
-                if (userContext == null || userContext.UserId <= 0)
+                var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService, true);
+                if (org != request.OrganisationBusinessEntityId) throw new UnauthorizedAccessException("Select the current organisation.");
+                await using var db = await _dbFactory.CreateDbContextAsync();
+                await WorkPlanningAccess.RequireJobAsync(db, _userAccessService, request.JobId);
+                if (request.IsManual || request.WorkPlanGenerationSource == WorkPlanGenerationSource.Manual)
                 {
-                    throw new UnauthorizedAccessException(
-                        "The current user account could not be identified.");
+                    await WorkPlanningAccess.RequireTemplateAsync(db, _userAccessService, request.WorkTemplateId);
+                    var context = await _userAccessService.RequireContextAsync();
+                    var log = await _logService.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
+                        $"Manual plan: job {request.JobId}, template {request.WorkTemplateId}, date {request.WorkDate:yyyy-MM-dd}.");
+                    await db.SaveChangesAsync();
+                    var generated = await _assignmentGenerator.GenerateAsync(new GenerateWorkPlanRequest {
+                        IndividualId = request.IndividualId, JobId = request.JobId, OrganisationBusinessEntityId = org,
+                        WorkTemplateId = request.WorkTemplateId, WorkDate = request.WorkDate.Date,
+                        GeneratedByUserId = context.UserId, OperationLogId = log.OperationLogId, Remarks = request.Remarks,
+                        GenerationSource = WorkPlanGenerationSource.Manual, AssignmentSource = WorkAssignmentSource.Manual });
+                    if (!generated.Success) { result.Errors.Add(generated.Message); return result; }
+                    result.WorkPlanId = generated.WorkPlanId;
                 }
-
-
-                if (!request.PlanningProviderId.HasValue)
+                else
                 {
-                    throw new InvalidOperationException(
-                        "Planning provider is required.");
+                    var plan = await _planGenerator.GenerateOrGetAsync(request.IndividualId, request.JobId, org, DateOnly.FromDateTime(request.WorkDate));
+                    if (plan == null) { result.Errors.Add("No work is scheduled on this date. Use a manual assignment for extra duty."); return result; }
+                    result.WorkPlanId = plan.WorkPlanId;
                 }
-
-
-                var workDate = request.WorkDate.Date;
-
-                // 1. Validate the employee's job.
-                var job = await db.Jobs
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.JobId == request.JobId &&
-                        x.IndividualID == request.IndividualId &&
-                        x.OrganisationID ==
-                            request.OrganisationBusinessEntityId &&
-                        x.TerminatedDate == null)
-                    .Select(x => new
-                    {
-                        x.JobId,
-                        x.IndividualID,
-                        x.OrganisationID
-                    })
-                    .SingleOrDefaultAsync();
-
-                if (job == null)
-                {
-                    result.Errors.Add(
-                        "The selected active job could not be found.");
-
-                    return result;
-                }
-
-                // 2. Validate the template.
-                var template = await db.WorkTemplates
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkTemplateId == request.WorkTemplateId &&
-                        x.IsActive)
-                    .Select(x => new
-                    {
-                        x.WorkTemplateId,
-                        x.Name,
-                        x.DefaultStartTime,
-                        x.DefaultEndTime
-                    })
-                    .SingleOrDefaultAsync();
-
-                if (template == null)
-                {
-                    result.Errors.Add(
-                        "The selected work template could not be found.");
-
-                    return result;
-                }
-
-                // 3. Load the template segments.
-                var templateSegments = await db.WorkTemplateSegments
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkTemplateId == request.WorkTemplateId &&
-                        x.IsActive)
-                    .OrderBy(x => x.SequenceNumber)
-                    .Select(x => new
-                    {
-                        x.WorkTemplateSegmentId,
-                        x.WorkSegmentTypeId,
-                        x.Name,
-                        x.Description,
-                        x.SequenceNumber,
-                        x.OffsetMinutes,
-                        x.DurationMinutes,
-                        x.GraceBeforeMinutes,
-                        x.GraceAfterMinutes,
-                        x.IsMandatory,
-                        x.RequiresAttendance,
-                        x.RequiresLocationValidation,
-                        x.RequiresDeviceValidation,
-                        x.IsPaid
-                    })
-                    .ToListAsync();
-
-                if (templateSegments.Count == 0)
-                {
-                    result.Errors.Add(
-                        "The selected template has no active segments.");
-
-                    return result;
-                }
-
-                // 4. Check whether an active plan already exists.
-    
-
-                DateOnly targetDate = DateOnly.FromDateTime(workDate);
-
-                var existingPlan = await db.WorkPlans
-                         .AsNoTracking()
-                         .Where(x =>
-                             x.IndividualId == request.IndividualId &&
-                             x.JobId == request.JobId &&
-                             // 2. Compare matching DateOnly structures
-                             x.WorkDate == request.WorkDate &&
-                             x.IsValid)
-                         .Select(x => new
-                         {
-                             x.WorkPlanId,
-                             x.PlanGuid,
-                             x.Version,
-                             x.IsFinalized
-                         })
-                         .OrderByDescending(x => x.Version)
-                         .FirstOrDefaultAsync();
-
-                if (existingPlan?.IsFinalized == true)
-                {
-                    result.Errors.Add(
-                        "A finalized work plan already exists for this date.");
-
-                    return result;
-                }
-
-                var planGuid =
-                    existingPlan?.PlanGuid ?? Guid.NewGuid();
-
-                var version =
-                    existingPlan == null
-                        ? 1
-                        : existingPlan.Version + 1;
-
-                // Optional:
-                // Invalidate the previous active version.
-                if (existingPlan != null)
-                {
-                    var previousPlan = await db.WorkPlans
-                        .SingleAsync(x =>
-                            x.WorkPlanId == existingPlan.WorkPlanId);
-
-                    previousPlan.IsValid = false;
-                }
-
-
-
-                var operationLog = await _logService.CreateAsync(
-                 db,
-                 actionId: SharedConfig.OperationLogActionTypes.WORK_PLAN_CREATE_CREATE,
-                 remarks: "Work Plan Create");
-
-
-                // 5. Create the plan header.
-                var workPlan = new WorkPlan
-                {
-                    IndividualId = request.IndividualId,
-                    JobId = request.JobId,
-
-                    OrganisationBusinessEntityId =
-                        request.OrganisationBusinessEntityId,
-
-                    PlanningProviderId = request.PlanningProviderId.Value,
-
-                    WorkDate = request.WorkDate,
-
-                    GenerationSource = request.IsManual ? WorkPlanGenerationSource.Manual : WorkPlanGenerationSource.Template,
-
-
-                    GeneratedDate = DateTime.UtcNow,
-
-                    GeneratedByUserId = userContext.UserId,
-            
-
-                    IsFinalized = false,
-                    FinalizedDate = null,
-                    FinalizedByUserId = null,
-
-                    Remarks = request.Remarks,
-
-                    IsValid = true,
-
-                    OperationLogId = operationLog.OperationLogId,
-
-                    CreatedDate = DateTime.UtcNow,
-
-                    WorkTemplateId = request.WorkTemplateId,
-
-                    PlanGuid = planGuid,
-
-                    Version = version,
-
-                    IsGenerated = false,
-
-                    IsManual = request.IsManual,
-                 
-                };
-
-                db.WorkPlans.Add(workPlan);
-
-                await db.SaveChangesAsync();
-
-                // 6. Generate actual dated segments.
-                //var assignmentBaseDateTime = workDate;
-
-    
-                var assignmentBaseDateTime = workDate.Date.Add(template.DefaultStartTime.GetValueOrDefault().ToTimeSpan());
-
-                var generatedSegments = new List<WorkPlanSegment>();
-
-                foreach (var templateSegment in templateSegments)
-                {
-                    var offsetMinutes =
-                        templateSegment.OffsetMinutes;
-
-                    var durationMinutes =
-                        templateSegment.DurationMinutes;
-
-                    if (offsetMinutes < 0)
-                    {
-                        result.Errors.Add(
-                            $"Segment '{templateSegment.Name}' has an invalid offset.");
-
-                        await transaction.RollbackAsync();
-                        return result;
-                    }
-
-                    if (durationMinutes < 0)
-                    {
-                        result.Errors.Add(
-                            $"Segment '{templateSegment.Name}' has an invalid duration.");
-
-                        await transaction.RollbackAsync();
-                        return result;
-                    }
-
-                    var segmentStartDateTime = assignmentBaseDateTime.AddMinutes(offsetMinutes);
-
-                    var segmentEndDateTime = segmentStartDateTime.AddMinutes(durationMinutes);
-
-                    var workPlanSegment = new WorkPlanSegment
-                    {
-                        WorkPlanId = (int)
-                            workPlan.WorkPlanId,
-
-                        WorkTemplateSegmentId =
-                            templateSegment.WorkTemplateSegmentId,
-
-                        WorkSegmentTypeId =
-                            templateSegment.WorkSegmentTypeId,
-
-                        Name =
-                            templateSegment.Name ?? string.Empty,
-
-                        Description =
-                            templateSegment.Description,
-
-                        SequenceNumber =
-                            templateSegment.SequenceNumber,
-
-                        StartDateTime = segmentStartDateTime,
-
-                        EndDateTime = segmentEndDateTime,
-
-                        GraceBeforeMinutes =
-                            templateSegment.GraceBeforeMinutes,
-
-                        GraceAfterMinutes =
-                            templateSegment.GraceAfterMinutes,
-
-                        IsMandatory =
-                            templateSegment.IsMandatory,
-
-                        RequiresAttendance =
-                            templateSegment.RequiresAttendance,
-
-                        RequiresLocationValidation =
-                            templateSegment.RequiresLocationValidation,
-
-                        RequiresDeviceValidation =
-                            templateSegment.RequiresDeviceValidation,
-
-                        IsPaid =
-                            templateSegment.IsPaid,
-
-                        IsCompleted = false,
-
-                        AttendanceId = null,
-
-                        IsValid = true,
-
-                        OperationLogId =
-                            request.OperationLogId,
-
-                        CreatedDate =
-                            DateTime.UtcNow,
-
-                        UpdatedDate = null
-                    };
-
-                    generatedSegments.Add(workPlanSegment);
-                }
-
-                db.WorkPlanSegments.AddRange(generatedSegments);
-
-                workPlan.IsGenerated = true;
-
-                await db.SaveChangesAsync();
-
-                await transaction.CommitAsync();
-
-                result.Success = true;
-                result.WorkPlanId = workPlan.WorkPlanId;
-                result.PlanGuid = workPlan.PlanGuid;
-                result.GeneratedSegmentCount = generatedSegments.Count;
-
-                return result;
+                var saved = await db.WorkPlans.AsNoTracking().Where(x => x.WorkPlanId == result.WorkPlanId)
+                    .Select(x => new { x.PlanGuid, Count = x.WorkPlanSegments.Count(s => s.IsValid) }).SingleAsync();
+                result.Success = true; result.PlanGuid = saved.PlanGuid; result.GeneratedSegmentCount = saved.Count;
             }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-
-                result.Errors.Add(
-                    ex.InnerException?.Message ?? ex.Message);
-
-                return result;
-            }
-
-
+            catch (Exception ex) when (ex is UnauthorizedAccessException or InvalidOperationException)
+            { result.Errors.Add(ex.Message); }
+            return result;
         }
-
-
-        //public async Task<WorkPlanDetailDto?> GetWorkPlanDetailAsync(int workPlanId)
-        //{
-
-        //    await using var db = await _dbFactory.CreateDbContextAsync();
-
-        //    return await db.WorkPlans
-        //        .AsNoTracking()
-        //        .Where(x =>
-        //            x.WorkPlanId == workPlanId &&
-        //            x.IsValid)
-        //        .Select(x => new WorkPlanDetailDto
-        //        {
-        //            WorkPlanId = x.WorkPlanId,
-        //            IndividualId = x.IndividualId,
-        //            JobId = x.JobId,
-
-        //            OrganisationBusinessEntityId =
-        //                x.OrganisationBusinessEntityId,
-
-        //            WorkDate =   x.WorkDate ,
-
-        //            //WorkDate = x.WorkDate.HasValue? x.WorkDate.Value.ToDateTime(TimeOnly.MinValue) : DateTime.MinValue,
-
-        //            WorkTemplateId =
-        //                x.WorkTemplateId,
-
-        //            WorkTemplateName =
-        //                x.WorkTemplate != null
-        //                    ? x.WorkTemplate.Name
-        //                    : string.Empty,
-
-        //            GenerationSource = x.GenerationSource,
-
-        //            GeneratedDate =
-        //                x.GeneratedDate,
-
-        //            IsGenerated =
-        //                x.IsGenerated,
-
-        //            IsFinalized =
-        //                x.IsFinalized,
-
-        //            IsManual =
-        //                x.IsManual,
-
-        //            IsValid =
-        //                x.IsValid,
-
-        //            PlanGuid =
-        //                x.PlanGuid,
-
-        //            Version =
-        //                x.Version,
-
-        //            Remarks =
-        //                x.Remarks,
-
-        //            Segments = x.WorkPlanSegments
-        //                .Where(s => s.IsValid)
-        //                .OrderBy(s => s.SequenceNumber)
-        //                .Select(s => new WorkPlanSegmentDto
-        //                {
-        //                    WorkPlanSegmentId =
-        //                        s.WorkPlanSegmentId,
-
-        //                    WorkPlanId =(int)
-        //                        s.WorkPlanId,
-
-        //                    WorkTemplateSegmentId =
-        //                        s.WorkTemplateSegmentId,
-
-        //                    WorkSegmentTypeId =
-        //                        s.WorkSegmentTypeId,
-
-        //                    WorkSegmentTypeName =
-        //                        s.WorkSegmentType != null
-        //                            ? s.WorkSegmentType.Name
-        //                            : string.Empty,
-
-        //                    Name =
-        //                        s.Name ?? string.Empty,
-
-        //                    Description =
-        //                        s.Description,
-
-        //                    SequenceNumber =
-        //                        s.SequenceNumber,
-
-        //                    StartDateTime =
-        //                        s.StartDateTime,
-
-        //                    EndDateTime =
-        //                        s.EndDateTime,
-
-        //                    GraceBeforeMinutes =
-        //                        s.GraceBeforeMinutes,
-
-        //                    GraceAfterMinutes =
-        //                        s.GraceAfterMinutes,
-
-        //                    IsMandatory =
-        //                        s.IsMandatory,
-
-        //                    RequiresAttendance =
-        //                        s.RequiresAttendance,
-
-        //                    RequiresLocationValidation =
-        //                        s.RequiresLocationValidation,
-
-        //                    RequiresDeviceValidation =
-        //                        s.RequiresDeviceValidation,
-
-        //                    IsPaid =
-        //                        s.IsPaid,
-
-        //                    IsCompleted =
-        //                        s.IsCompleted,
-
-        //                    AttendanceId =
-        //                        s.AttendanceId
-        //                })
-        //                .ToList()
-        //        })
-        //        .SingleOrDefaultAsync();
-        //}
-
         public async Task<WorkPlanListDto?> GetWorkPlanDetailAsync(int workPlanId)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
             return await db.WorkPlans
                 .AsNoTracking()
                 .Where(x =>
-                    x.WorkPlanId == workPlanId &&
+                    x.WorkPlanId == workPlanId && x.OrganisationBusinessEntityId == org &&
                     x.IsValid)
                 .Select(x => new WorkPlanListDto
                 {
@@ -710,6 +281,7 @@ namespace HRM.WorkPlanning.Services
          DateTime fromDate,
          DateTime toDate)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
@@ -731,7 +303,7 @@ namespace HRM.WorkPlanning.Services
 
                from template in templateGroup.DefaultIfEmpty()
 
-               where wp.IsValid
+               where wp.IsValid && wp.OrganisationBusinessEntityId == org
 
                select new
                {
@@ -814,12 +386,13 @@ namespace HRM.WorkPlanning.Services
 
         public async Task<List<WorkTemplateLookupDto>>GetActiveTemplatesAsync()
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
             return await db.WorkTemplates
                 .AsNoTracking()
-                .Where(x => x.IsActive)
+                .Where(x => x.IsActive && (x.IsGlobal || x.OrganisationBusinessEntityId == org))
                 .OrderBy(x => x.Name)
                 .Select(x => new WorkTemplateLookupDto
                 {
@@ -837,12 +410,13 @@ namespace HRM.WorkPlanning.Services
 
         public async Task<List<PlanningProviderLookupDto>>GetPlanningProvidersAsync()
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_userAccessService);
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
             return await db.PlanningProviders
                 .AsNoTracking()
-                .Where(x => x.IsActive)
+                .Where(x => x.IsActive && x.OrganisationBusinessEntityID == org)
                 .OrderBy(x => x.Name)
                 .Select(x => new PlanningProviderLookupDto
                 {

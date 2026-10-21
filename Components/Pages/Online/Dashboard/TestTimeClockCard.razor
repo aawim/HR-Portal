@@ -1,4 +1,4 @@
-﻿@using HRM.Components.Tools
+@using HRM.Components.Tools
 @using HRM.DTOs.Attendance
 @using HRM.Enum
 @using HRM.Models
@@ -16,7 +16,7 @@
 
 @inject AttendanceLogService AttendanceLogService
 
-@inject IAttendancePlanService AttendancePlanService
+
 
 <div class="bg-white rounded-xl shadow-sm border p-6">
 
@@ -61,7 +61,7 @@
 
                 <div>
                     <label class="mb-1 block text-xs font-medium text-slate-600">
-                        Time
+                        Time (24-hour)
                     </label>
                     <input type="time"
                     step="1"
@@ -74,12 +74,17 @@
                 </div>
 
 
+                @if (_testTime.HasValue)
+                {
+                <p class="text-sm sm:col-span-2">Selected punch: <strong>@GetAttendanceTimestamp().ToString("dd MMM yyyy HH:mm:ss")</strong> (@GetAttendanceTimestamp().ToString("hh:mm:ss tt", System.Globalization.CultureInfo.InvariantCulture))</p>
+                }
+                <p class="text-xs text-slate-500 sm:col-span-2">10:00 = 10 AM · 22:00 = 10 PM. The scheduled event determines check-in or check-out.</p>
                 <div class="flex gap-1">
 
          
 
                     <button @onclick="HandleClock"
-                    disabled="@ProcessingClock"
+                    disabled="@(ProcessingClock || !_testTime.HasValue)"
                     class="w-full rounded-lg bg-blue-600 px-4 py-3
                        font-semibold text-white hover:bg-blue-700
                        disabled:opacity-50">
@@ -106,125 +111,6 @@
 
 
 
-    @if (_attendancePlan != null)
-    {
-        <div class="mt-2 bg-white overflow-hidden">
-
-            <div class="flex items-center justify-between gap-3" style=" border-bottom: 2px solid #ccc;">
-
-                <div class="font-semibold text-slate-800">
-                    Today's Work Plan
-                </div>
-
-                <div class="mt-1 text-xs text-slate-500">
-                    Work Plan #@_attendancePlan.WorkPlanId
-                    ·
-                    @_attendancePlan.WorkDate.ToString("dd MMM yyyy")
-                </div>
-
-            </div>
-
-
-
-            @if (_attendancePlan?.Assignments?.Any() == true)
-            {
-                <div class="space-y-2">
-                    @foreach (var assignment in _attendancePlan.Assignments)
-                    {
-                        <div class="mt-2" style="border-bottom: 2px solid #ccc;">
-                            <div class="font-semibold text-slate-800">
-                                @assignment.Name
-                            </div>
-
-                            <div class="mt-1 text-sm text-slate-600">
-                                @assignment.StartDateTime.ToString("hh:mm tt")
-                                -
-                                @assignment.EndDateTime.ToString("hh:mm tt")
-                            </div>
-
-                            <div class="mt-1 text-xs text-slate-500">
-                                Source: @assignment.AssignmentSource
-                                · Owner: @assignment.OwnershipType
-                            </div>
-                        </div>
-                    }
-                </div>
-            }
-            else
-            {
-                <div>No work assignments found.</div>
-            }
-
-            @if (_attendancePlan.Segments.Count == 0)
-            {
-                <div class="p-2 text-sm text-amber-700">
-                    No work segments found.
-                </div>
-            }
-            else
-            {
-                <div class="divide-y divide-slate-100">
-
-                    @foreach (var segment in _attendancePlan.Segments .OrderBy(x => x.StartDateTime))
-                    {
-                        <div class="flex items-center justify-between gap-2">
-
-                            <div>
-                                <div class="font-medium text-slate-800">
-                                    @segment.Name
-                                </div>
-
-                                <div class="mt-1 text-xs text-slate-500">
-                                    @(segment.StartDateTime.ToString("hh:mm tt"))
-                                    -
-                                    @(segment.EndDateTime.ToString("hh:mm tt"))
-                                    ·
-                                    @segment.PlannedMinutes min
-                                </div>
-                            </div>
-
-                            <div>
-                                @if (segment.RequiresAttendance)
-                                {
-                                    <span class="rounded-full
-                                             bg-green-100
-                                             px-2.5 py-1
-                                             text-xs font-medium
-                                             text-green-700">
-                                        Attendance
-                                    </span>
-                                }
-                                else
-                                {
-                                    <span class="rounded-full
-                                             bg-slate-100
-                                             px-2.5 py-1
-                                             text-xs font-medium
-                                             text-slate-600">
-                                        No Punch
-                                    </span>
-                                }
-                            </div>
-
-                        </div>
-                    }
-
-                </div>
-            }
-
-
- 
-
-         
-
-        </div>
-    }
-    else
-    {
-        <p>No Assignments</p>
-    }
-
-    
     @* Only for testing ends *@
 
 
@@ -241,14 +127,14 @@
     // Only for tetsing
     private bool _useTestTime = false;
 
-    private DateTime _testDate = DateTime.Today;
+    private DateTime _testDate = DateTime.UtcNow.AddHours(5).Date;
 
-    private TimeOnly? _testTime = TimeOnly.FromDateTime(DateTime.Now);
+    private TimeOnly? _testTime = TimeOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
 
     private DateTime GetAttendanceTimestamp()
     {
         if (!_useTestTime)
-            return DateTime.Now;
+            return DateTime.UtcNow.AddHours(5);
 
         if (!_testTime.HasValue)
         {
@@ -271,7 +157,7 @@
 
     // only for testing ends
 
-    private AttendanceWorkPlanDto? _attendancePlan;
+
 
  
 
@@ -304,17 +190,6 @@
  
 
         var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
-             _attendancePlan =
-                await AttendancePlanService.GetOrGenerateAsync(
-                    context.IndividualId,
-                    context.ActiveJob.JobId,
-                    context.ActiveJob.OrganisationId,
-                    attendanceTime);
-
- 
-
-    
-
         TodayCheckIn = result.checkIn;
         TodayCheckOut = result.checkOut;
     }

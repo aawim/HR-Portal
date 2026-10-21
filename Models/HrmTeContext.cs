@@ -11,6 +11,9 @@ namespace HRM.Models;
 public partial class HrmTeContext : DbContext
 {
     public DbSet<RequestNotification> RequestNotifications => Set<RequestNotification>();
+    public DbSet<JobTypeLeaveAccrualRule> JobTypeLeaveAccrualRules => Set<JobTypeLeaveAccrualRule>();
+    public DbSet<LeaveAccrualPosting> LeaveAccrualPostings => Set<LeaveAccrualPosting>();
+    public DbSet<LeaveCarryForward> LeaveCarryForwards => Set<LeaveCarryForward>();
     public HrmTeContext()
     {
     }
@@ -717,13 +720,62 @@ public partial class HrmTeContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<LeaveCarryForward>(e =>
+        {
+            e.ToTable("LeaveCarryForwards"); e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.RuleId, x.JobId, x.RenewalDate }).IsUnique();
+            e.Property(x => x.RenewalDate).HasColumnType("date");
+            e.Property(x => x.PreviousBalance).HasPrecision(10, 2);
+            e.Property(x => x.CarriedDays).HasPrecision(10, 2);
+            e.Property(x => x.PeriodStart).HasColumnType("date");
+            e.Property(x => x.PeriodEnd).HasColumnType("date");
+            e.Property(x => x.ClosingGrant).HasPrecision(10, 2);
+            e.Property(x => x.RenewalGrant).HasPrecision(10, 2);
+            e.Property(x => x.NewBalance).HasPrecision(10, 2);
+            e.Property(x => x.Reason).HasMaxLength(1000);
+            e.HasOne<JobTypeLeaveAccrualRule>().WithMany().HasForeignKey(x => x.RuleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Job>().WithMany().HasForeignKey(x => x.JobId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<JobLeaveType>().WithMany().HasForeignKey(x => x.JobLeaveTypeId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<JobTypeLeaveAccrualRule>(e =>
+        {
+            e.ToTable("JobTypeLeaveAccrualRules"); e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.OrganisationId, x.JobTypeId, x.LeaveTypeId }).IsUnique();
+            e.Property(x => x.GrantDays).HasPrecision(10, 2);
+            e.Property(x => x.CarryForwardLimit).HasPrecision(10, 2);
+            e.Property(x => x.MaximumBalance).HasPrecision(10, 2);
+            e.Property(x => x.CarryForwardMode).HasMaxLength(20);
+            e.Property(x => x.EffectiveFrom).HasColumnType("date");
+            e.HasOne<Organisation>().WithMany().HasForeignKey(x => x.OrganisationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<JobType>().WithMany().HasForeignKey(x => x.JobTypeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<LeaveType>().WithMany().HasForeignKey(x => x.LeaveTypeId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<LeaveAccrualPosting>(e =>
+        {
+            e.ToTable("LeaveAccrualPostings"); e.HasKey(x => x.Id);
+            e.HasIndex(x => new { x.RuleId, x.JobId, x.DueDate }).IsUnique();
+            e.Property(x => x.DueDate).HasColumnType("date");
+            e.Property(x => x.GrantedDays).HasPrecision(10, 2); e.Property(x => x.CarryAdjustment).HasPrecision(10, 2);
+            e.Property(x => x.PreviousBalance).HasPrecision(10, 2); e.Property(x => x.NewBalance).HasPrecision(10, 2);
+            e.HasOne<JobTypeLeaveAccrualRule>().WithMany().HasForeignKey(x => x.RuleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Job>().WithMany().HasForeignKey(x => x.JobId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<JobLeaveType>().WithMany().HasForeignKey(x => x.JobLeaveTypeId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<RequestNotification>(entity =>
         {
             entity.ToTable("RequestNotifications");
             entity.HasKey(x => x.RequestNotificationId);
             entity.Property(x => x.ReferenceNumber).HasMaxLength(512);
+            entity.Property(x => x.NotificationKind).HasMaxLength(32).HasDefaultValue("StateChanged");
+            entity.HasIndex(x => new { x.UserId, x.RequestStageInstanceId }).IsUnique()
+                .HasDatabaseName("UX_RequestNotifications_ActionRecipientStage")
+                .HasFilter("[NotificationKind] = 'ActionRequired' AND [RequestStageInstanceId] IS NOT NULL");
             entity.Property(x => x.CreatedAtUtc).HasColumnType("datetime2");
             entity.Property(x => x.ReadAtUtc).HasColumnType("datetime2");
+            entity.HasIndex(x => new { x.UserId, x.NotificationKind, x.LeaveId, x.HandoverRevision }).IsUnique()
+                .HasDatabaseName("UX_RequestNotifications_HandoverRecipientRevision")
+                .HasFilter("[LeaveId] IS NOT NULL AND [HandoverRevision] IS NOT NULL");
+            entity.HasOne<Leaf>().WithMany().HasForeignKey(x => x.LeaveId).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.UserId, x.ReadAtUtc, x.CreatedAtUtc });
             entity.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
@@ -2887,7 +2939,7 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.LeaveDefinitionId)
                 .HasColumnName("LeaveDefinitionID");
 
-            entity.Property(e => e.RemainingDays);
+            entity.Property(e => e.RemainingDays).HasPrecision(10, 2);
 
             entity.Property(e => e.LastLeaveTakenDate)
                 .HasColumnType("datetime");
@@ -7144,8 +7196,15 @@ public partial class HrmTeContext : DbContext
 
 
 
+        modelBuilder.Entity<WorkAssignment>().Property(x => x.SchedulePurpose).HasMaxLength(20).HasDefaultValue("Official");
+        modelBuilder.Entity<WorkPlanSegment>().Property(x => x.SchedulePurpose).HasMaxLength(20).HasDefaultValue("Official");
         modelBuilder.Entity<JobWorkTemplateAssignment>(entity =>
         {
+            entity.Property(x => x.SchedulePurpose).HasMaxLength(20).HasDefaultValue("Official");
+            entity.Property(x => x.ScheduleMode).HasMaxLength(20).HasDefaultValue("Standard");
+            entity.Property(x => x.WorkingDaysMask).HasDefaultValue(31);
+            entity.Property(x => x.RotationAnchorDate).HasColumnType("date");
+            entity.Property(x => x.RotationTemplateIds).HasMaxLength(2000);
             entity.ToTable("JobWorkTemplateAssignments");
 
             entity.HasKey(e => e.JobWorkTemplateAssignmentID);

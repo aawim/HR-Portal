@@ -2,6 +2,7 @@
 {
     public sealed class JobWorkTemplateAssignmentHistoryDto
     {
+        public string SchedulePurpose { get; set; } = "Official";
         public int JobWorkTemplateAssignmentId { get; set; }
 
         public int WorkTemplateId { get; set; }

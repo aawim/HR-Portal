@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
 using HRM.Models;
@@ -19,22 +19,25 @@ public sealed class WorkAssignmentManagementService
     private readonly IUserAccessService _access;
     private readonly IOperationLogService _operationLogService;
     private readonly ILogger<WorkAssignmentManagementService> _logger;
+    private readonly IWorkAssignmentGenerator _generator;
 
     public WorkAssignmentManagementService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IUserAccessService access,
         IOperationLogService operationLogService,
-        ILogger<WorkAssignmentManagementService> logger)
+        ILogger<WorkAssignmentManagementService> logger, IWorkAssignmentGenerator generator)
     {
         _dbFactory = dbFactory;
         _access = access;
         _operationLogService = operationLogService;
         _logger = logger;
+        _generator = generator;
     }
 
     public async Task<List<WorkAssignmentDepartmentDto>>GetDepartmentsAsync(
             CancellationToken cancellationToken = default)
     {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -47,7 +50,7 @@ public sealed class WorkAssignmentManagementService
                 on structure.OrganisationStructureTypeId
                 equals structureType.OrganisationStructureTypeId
 
-            where structure.OrganisationStructureTypeId ==
+            where structure.OrganisationBusinessEntityID == org && structure.OrganisationStructureTypeId ==
                       DepartmentStructureTypeId
                   && structureType.TypeName == "Department"
 
@@ -103,6 +106,7 @@ public sealed class WorkAssignmentManagementService
     GetWorkPlansAsync(
         CancellationToken cancellationToken = default)
     {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -114,7 +118,7 @@ public sealed class WorkAssignmentManagementService
                 on workPlan.WorkTemplateId
                 equals workTemplate.WorkTemplateId
 
-            where workPlan.IsValid
+            where workPlan.OrganisationBusinessEntityId == org && workPlan.IsValid
                   && workTemplate.IsActive
 
             orderby workPlan.WorkDate descending,
@@ -139,6 +143,7 @@ public sealed class WorkAssignmentManagementService
          WorkAssignmentFilterDto filter,
          CancellationToken cancellationToken = default)
     {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
         ArgumentNullException.ThrowIfNull(filter);
 
         if (filter.ToDate.Date < filter.FromDate.Date)
@@ -190,7 +195,7 @@ public sealed class WorkAssignmentManagementService
 
             from department in departmentJoin.DefaultIfEmpty()
 
-            where workAssignment.IsValid
+            where job.OrganisationID == org && workAssignment.IsValid
                   && workPlan.IsValid
                   && !workAssignment.CancelledDate.HasValue
 
@@ -349,6 +354,7 @@ public sealed class WorkAssignmentManagementService
             int organisationStructureId,
             CancellationToken cancellationToken = default)
     {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
         if (organisationStructureId <= 0)
         {
             return new List<EligibleAssignmentStaffDto>();
@@ -392,7 +398,7 @@ public sealed class WorkAssignmentManagementService
 
             from position in positionJoin.DefaultIfEmpty()
 
-            where job.OrganisationStructureId ==
+            where job.OrganisationID == org && job.OrganisationStructureId ==
                       organisationStructureId
                   && !job.TerminatedDate.HasValue
 
@@ -511,7 +517,7 @@ public sealed class WorkAssignmentManagementService
 
     //        from position in positionJoin.DefaultIfEmpty()
 
-    //        where workAssignment.IsValid
+    //        where job.OrganisationID == org && workAssignment.IsValid
     //              && !workAssignment.CancelledDate.HasValue
 
     //              && currentOwner.IsValid
@@ -621,6 +627,7 @@ public sealed class WorkAssignmentManagementService
         DateTime scheduledEnd,
         CancellationToken cancellationToken = default)
     {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
@@ -663,7 +670,7 @@ public sealed class WorkAssignmentManagementService
 
             from position in positionJoin.DefaultIfEmpty()
 
-            where workAssignment.IsValid
+            where job.OrganisationID == org && workAssignment.IsValid
                   && !workAssignment.CancelledDate.HasValue
 
                   && owner.IsValid
@@ -753,396 +760,54 @@ public sealed class WorkAssignmentManagementService
 
 
 
-    public async Task<BulkAssignmentResultDto>
-        AssignDepartmentAsync(
-            BulkDepartmentAssignmentRequest request,
-            CancellationToken cancellationToken = default)
+    public async Task<BulkAssignmentResultDto> AssignDepartmentAsync(BulkDepartmentAssignmentRequest request, CancellationToken cancellationToken = default)
     {
-        if (request is null)
-        {
-            return Failure(
-                "The assignment request is required.");
-        }
-
-        var selectedIndividualIds =
-            request.SelectedIndividualIds?
-                .Where(x => x > 0)
-                .Distinct()
-                .ToList()
-            ?? new List<int>();
-
-        var result =
-            new BulkAssignmentResultDto
-            {
-                TotalSelected =
-                    selectedIndividualIds.Count,
-
-                Warnings =
-                    new List<string>()
-            };
-
-        var validationMessage =
-            ValidateBulkRequest(
-                request,
-                selectedIndividualIds);
-
-        if (validationMessage is not null)
-        {
-            result.Success = false;
-            result.Message = validationMessage;
-
-            return result;
-        }
-
-        await using var db =
-            await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-        await using var transaction =
-            await db.Database.BeginTransactionAsync(
-                cancellationToken);
-
+        if (request == null) return Failure("The assignment request is required.");
+        var ids = request.SelectedIndividualIds?.Where(x => x > 0).Distinct().ToList() ?? [];
+        var validation = ValidateBulkRequest(request, ids);
+        if (validation != null) return Failure(validation, ids.Count);
+        var result = new BulkAssignmentResultDto { TotalSelected = ids.Count, Warnings = [] };
         try
         {
-            var selectedDepartment =
-                await db.OrganisationStructures
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.OrganisationStructureId ==
-                            request.OrganisationStructureId &&
-                        x.OrganisationStructureTypeId ==
-                            DepartmentStructureTypeId)
-                    .Select(x => new
-                    {
-                        x.OrganisationStructureId,
-                        x.Name
-                    })
-                    .SingleOrDefaultAsync(cancellationToken);
-
-            if (selectedDepartment is null)
-            {
-                return Failure(
-                    "The selected department was not found.",
-                    selectedIndividualIds.Count);
-            }
-
-            var selectedPlan =
-                await db.WorkPlans
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkPlanId == request.WorkPlanId &&
-                        x.IsValid)
-                    .Select(x => new
-                    {
-                        x.WorkPlanId,
-                        x.WorkTemplateId,
-                        x.OrganisationBusinessEntityId
-                    })
-                    .SingleOrDefaultAsync(cancellationToken);
-
-            if (selectedPlan is null)
-            {
-                return Failure(
-                    "The selected work plan was not found.",
-                    selectedIndividualIds.Count);
-            }
-
-            if (selectedPlan.OrganisationBusinessEntityId !=
-                selectedDepartment.OrganisationStructureId)
-            {
-                return Failure(
-                    "The selected work plan does not belong to the department's organisation.",
-                    selectedIndividualIds.Count);
-            }
-
-            /*
-             * Create one audit/operation log for this bulk operation.
-             *
-             * It is created using the same DbContext and transaction,
-             * so it will roll back if assignment creation fails.
-             */
-            var operationLog =
-                await _operationLogService.CreateAsync(
-                    db,
-                    actionId:
-                        SharedConfig.WorkPlaningTypes.WORK_ASSIGNMENT_CREATE,
-
-                    remarks:
-                        $"Created work assignment " +
-                        $"'{request.AssignmentName.Trim()}' for " +
-                        $"{selectedIndividualIds.Count} selected employee(s) " +
-                        $"in department '{selectedDepartment.Name}'.");
-
-            var activeStaffRows = await
-            (
-                from job in db.Jobs.AsNoTracking()
-
-                join individual in db.Individuals.AsNoTracking()
-                    on job.IndividualID
-                    equals individual.BusinessEntityId
-
-                where selectedIndividualIds.Contains(
-                          job.IndividualID)
-                      && job.OrganisationStructureId ==
-                         request.OrganisationStructureId
-                      && !job.TerminatedDate.HasValue
-
-                select new
-                {
-                    IndividualId =
-                        job.IndividualID,
-
-                    JobId =
-                        job.JobId,
-
-                    FirstName =
-                        individual.FirstNameEnglish,
-
-                    MiddleName =
-                        individual.MiddleNameEnglish,
-
-                    LastName =
-                        individual.LastNameEnglish
-                }
-            )
-            .ToListAsync(cancellationToken);
-
-            var activeStaff =
-                activeStaffRows
-                    .GroupBy(x => x.IndividualId)
-                    .Select(group =>
-                        group
-                            .OrderByDescending(x => x.JobId)
-                            .First())
-                    .ToDictionary(x => x.IndividualId);
-
-            var assignmentName =
-                request.AssignmentName.Trim();
-
-            var existingOwnerIds = await
-            (
-                from existingWorkAssignment in
-                    db.WorkAssignments.AsNoTracking()
-
-                join existingOwner in
-                        db.WorkAssignmentOwners.AsNoTracking()
-                    on existingWorkAssignment.WorkAssignmentId
-                    equals existingOwner.WorkAssignmentId
-
-                where existingWorkAssignment.IsValid
-                      && !existingWorkAssignment.CancelledDate.HasValue
-
-                      && existingWorkAssignment.WorkPlanId ==
-                         request.WorkPlanId!.Value
-
-                      && existingWorkAssignment.Name ==
-                         assignmentName
-
-                      && existingWorkAssignment.StartDateTime ==
-                         request.ScheduledStart
-
-                      && existingWorkAssignment.EndDateTime ==
-                         request.ScheduledEnd
-
-                      && existingOwner.IsValid
-                      && existingOwner.IsCurrentOwner
-                      && !existingOwner.RelievedDate.HasValue
-
-                      && selectedIndividualIds.Contains(
-                          existingOwner.IndividualId)
-
-                select existingOwner.IndividualId
-            )
-            .Distinct()
-            .ToListAsync(cancellationToken);
-
-            var duplicateIndividualIds =
-                existingOwnerIds.ToHashSet();
-
-            foreach (var individualId in selectedIndividualIds)
+            var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access, true);
+            var actor = await _access.RequireContextAsync();
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            if (!await db.OrganisationStructures.AnyAsync(x => x.OrganisationStructureId == request.OrganisationStructureId && x.OrganisationBusinessEntityID == org && x.OrganisationStructureTypeId == DepartmentStructureTypeId, cancellationToken))
+                return Failure("Select a department in the current organisation.", ids.Count);
+            var source = await db.WorkPlans.AsNoTracking().Where(x => x.WorkPlanId == request.WorkPlanId && x.IsValid && x.OrganisationBusinessEntityId == org)
+                .Select(x => new { x.WorkTemplateId }).SingleOrDefaultAsync(cancellationToken);
+            if (source?.WorkTemplateId == null) return Failure("Choose a source plan with one template. A combined daily plan cannot be used as a template.", ids.Count);
+            await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireTemplateAsync(db, _access, source.WorkTemplateId.Value);
+            var template = await db.WorkTemplates.AsNoTracking().SingleAsync(x => x.WorkTemplateId == source.WorkTemplateId.Value, cancellationToken);
+            if (!template.DefaultStartTime.HasValue || !template.DefaultEndTime.HasValue) return Failure("The source template needs start and end times.", ids.Count);
+            var duration = template.DefaultEndTime.Value.ToTimeSpan() - template.DefaultStartTime.Value.ToTimeSpan();
+            if (template.EndsNextDay || duration <= TimeSpan.Zero) duration += TimeSpan.FromDays(1);
+            if (request.ScheduledEnd != request.ScheduledStart.Add(duration))
+                return Failure($"The selected template lasts {duration.TotalHours:0.##} hours. Set the end to {request.ScheduledStart.Add(duration):dd MMM yyyy HH:mm}, or choose a template with the required hours.", ids.Count);
+            var staff = await db.Jobs.AsNoTracking().Where(x => ids.Contains(x.IndividualID) && x.OrganisationID == org && x.OrganisationStructureId == request.OrganisationStructureId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null)
+                .Select(x => new { x.IndividualID, x.JobId }).ToListAsync(cancellationToken);
+            foreach (var id in ids)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-
-                if (!activeStaff.TryGetValue(
-                        individualId,
-                        out var staff))
-                {
-                    result.SkippedCount++;
-
-                    result.Warnings.Add(
-                        $"Individual {individualId} does not have " +
-                        $"an active job in {selectedDepartment.Name}.");
-
-                    continue;
-                }
-
-                if (duplicateIndividualIds.Contains(
-                        individualId))
-                {
-                    result.SkippedCount++;
-
-                    result.Warnings.Add(
-                        $"{BuildFullName(
-                            staff.FirstName,
-                            staff.MiddleName,
-                            staff.LastName)} already has this assignment.");
-
-                    continue;
-                }
-
-                var newWorkAssignment =
-                    new WorkAssignment
-                    {
-                        WorkPlanId =
-                            request.WorkPlanId!.Value,
-
-                        WorkTemplateId =(int)
-                            selectedPlan.WorkTemplateId,
-
-                        Name =
-                            assignmentName,
-
-                        Description =
-                            request.Remarks,
-
-                        StartDateTime =
-                            request.ScheduledStart,
-
-                        EndDateTime =
-                            request.ScheduledEnd,
-
-                        RequiresAttendance =
-                            true,
-
-                        RequiresCheckOut =
-                            true,
-
-                        Priority =
-                            0,
-
-                        CancelledDate =
-                            null,
-
-                        CancellationReason =
-                            null,
-
-                        CancelledByUserId =
-                            null,
-
-                        IsValid =
-                            true,
-
-                        OperationLogId =
-                            operationLog.OperationLogId
-                    };
-
-                db.WorkAssignments.Add(
-                    newWorkAssignment);
-
-                var newOwner =
-                    new WorkAssignmentOwner
-                    {
-                        WorkAssignment =
-                            newWorkAssignment,
-
-                        IndividualId =
-                            staff.IndividualId,
-
-                        JobId =
-                            staff.JobId,
-
-                        EffectiveFrom =
-                            request.ScheduledStart,
-
-                        EffectiveTo =
-                            null,
-
-                        RelievedDate =
-                            null,
-
-                        OwnershipType =
-                            WorkOwnershipType.Original,
-
-                        IsCurrentOwner =
-                            true,
-
-                        IsValid =
-                            true,
-
-                        OperationLogId =
-                            operationLog.OperationLogId
-                    };
-
-                db.WorkAssignmentOwners.Add(
-                    newOwner);
-
-                result.AssignedCount++;
-
-                duplicateIndividualIds.Add(
-                    individualId);
+                var job = staff.Where(x => x.IndividualID == id).OrderByDescending(x => x.JobId).FirstOrDefault();
+                if (job == null) { result.SkippedCount++; result.Warnings.Add($"Staff {id} has no approved active job in this department."); continue; }
+                var log = await _operationLogService.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
+                    $"Department assignment: tenant {org}, job {job.JobId}, template {template.WorkTemplateId}, {request.ScheduledStart:O}–{request.ScheduledEnd:O}.");
+                await db.SaveChangesAsync(cancellationToken);
+                var generated = await _generator.GenerateAsync(new GenerateWorkPlanRequest {
+                    IndividualId = id, JobId = job.JobId, OrganisationBusinessEntityId = org, WorkTemplateId = template.WorkTemplateId,
+                    WorkDate = request.ScheduledStart.Date, ScheduledStartTime = request.ScheduledStart,
+                    AssignmentTitle = request.AssignmentName.Trim(), Remarks = request.Remarks, GeneratedByUserId = actor.UserId, OperationLogId = log.OperationLogId,
+                    GenerationSource = WorkPlanGenerationSource.Manual, AssignmentSource = WorkAssignmentSource.Manual }, cancellationToken);
+                if (generated.Success) result.AssignedCount++;
+                else { result.SkippedCount++; result.Warnings.Add($"Staff {id}: {generated.Message}"); }
             }
-
-            if (result.AssignedCount == 0)
-            {
-                await transaction.RollbackAsync(
-                    cancellationToken);
-
-                result.Success = false;
-                result.Message =
-                    "No employees were assigned.";
-
-                return result;
-            }
-
-            await db.SaveChangesAsync(cancellationToken);
-
-            await transaction.CommitAsync(cancellationToken);
-
-            result.Success = true;
-
-            result.Message =
-                result.SkippedCount > 0
-                    ? $"{result.AssignedCount} employee(s) assigned and " +
-                      $"{result.SkippedCount} employee(s) skipped."
-                    : $"{result.AssignedCount} employee(s) assigned successfully.";
-
-            return result;
+            result.Success = result.AssignedCount > 0;
+            result.Message = $"{result.AssignedCount} employee(s) assigned; {result.SkippedCount} skipped. Each employee has their own daily plan and clock segments.";
         }
-        catch (OperationCanceledException)
-        {
-            await transaction.RollbackAsync(
-                CancellationToken.None);
-
-            throw;
-        }
-        catch (Exception exception)
-        {
-            try
-            {
-                await transaction.RollbackAsync(
-                    CancellationToken.None);
-            }
-            catch (Exception rollbackException)
-            {
-                _logger.LogError(
-                    rollbackException,
-                    "Failed to roll back the work-assignment transaction.");
-            }
-
-            _logger.LogError(
-                exception,
-                "Failed to create assignments for work plan {WorkPlanId}.",
-                request.WorkPlanId);
-
-            result.Success = false;
-
-            result.Message =
-                "The assignments could not be created. " +
-                exception.GetBaseException().Message;
-
-            return result;
-        }
+        catch (UnauthorizedAccessException ex) { result.Success = false; result.Message = ex.Message; }
+        return result;
     }
-
     private static string? ValidateBulkRequest(
         BulkDepartmentAssignmentRequest request,
         IReadOnlyCollection<int> selectedIndividualIds)

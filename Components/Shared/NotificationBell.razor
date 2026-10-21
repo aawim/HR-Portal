@@ -30,7 +30,7 @@
                 <div role="alert" class="p-4 text-sm text-red-700">@error <button type="button" class="underline" @onclick="RefreshAsync">Retry</button></div>
             }
             else if (loading && inbox.Items.Count == 0) { <p class="p-4 text-sm text-slate-500">Loading notifications…</p> }
-            else if (inbox.Items.Count == 0) { <p class="p-4 text-sm text-slate-500">No notifications yet. Request status changes will appear here.</p> }
+            else if (inbox.Items.Count == 0) { <p class="p-4 text-sm text-slate-500">No notifications yet. Assigned actions and request status changes will appear here.</p> }
             else
             {
                 <ul class="m-0 max-h-96 list-none divide-y divide-slate-100 overflow-y-auto p-0">
@@ -42,7 +42,20 @@
                                     <span class="text-sm font-semibold text-slate-900">@item.Reference</span>
                                     @if (!item.IsRead) { <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">New</span> }
                                 </span>
-                                <span class="mt-1 block text-sm text-slate-700">@item.FromState → @item.ToState</span>
+                                @if (item.Message != null)
+                                {
+                                    <span class="mt-1 block text-sm text-slate-700">@item.Message</span>
+                                    <span class="mt-1 block text-xs text-slate-500">@item.ToState</span>
+                                }
+                                else if (item.ActionStage != null)
+                                {
+                                    <span class="mt-1 block text-sm font-semibold text-blue-700">Action required · @item.ActionStage</span>
+                                    <span class="mt-1 block text-sm text-slate-700">@item.ToState</span>
+                                }
+                                else
+                                {
+                                    <span class="mt-1 block text-sm text-slate-700">@item.FromState → @item.ToState</span>
+                                }
                                 <time class="mt-2 block text-xs text-slate-500" datetime="@item.CreatedAtUtc.ToString("O")">@item.CreatedAtUtc.AddHours(5).ToString("dd MMM yyyy, HH:mm") · Maldives</time>
                             </button>
                         </li>

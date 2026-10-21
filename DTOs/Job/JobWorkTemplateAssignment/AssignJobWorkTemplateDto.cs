@@ -4,6 +4,11 @@ namespace HRM.DTOs.Job.JobWorkTemplateAssignment
 {
     public sealed class AssignJobWorkTemplateDto
     {
+        public string SchedulePurpose { get; set; } = "Official";
+        public string ScheduleMode { get; set; } = "Standard";
+        public int WorkingDaysMask { get; set; } = 31;
+        public DateTime? RotationAnchorDate { get; set; }
+        public List<int> RotationTemplateIds { get; set; } = [];
         [Range(1, int.MaxValue)]
         public int JobId { get; set; }
 

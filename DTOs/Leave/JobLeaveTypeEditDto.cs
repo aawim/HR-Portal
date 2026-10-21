@@ -1,10 +1,10 @@
-﻿namespace HRM.DTOs.Leave
+namespace HRM.DTOs.Leave
 {
     public class JobLeaveTypeEditDto
     {
         public int JobLeaveTypeId { get; set; }
 
-        public int RemainingDays { get; set; }
+        public decimal RemainingDays { get; set; }
 
         public DateTime? EffectiveFromDate { get; set; }
 

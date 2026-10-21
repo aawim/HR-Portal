@@ -848,6 +848,9 @@ namespace HRM.Services
                 .Select(x => new { x.FromDate, x.ToDate })
                 .ToListAsync(cancellationToken);
 
+            var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, userContext.IndividualId,
+                yearStart, yearEndExclusive.AddDays(-1), cancellationToken);
+
             // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
                 .GroupBy(x => x.Date.Date)
@@ -1065,25 +1068,11 @@ namespace HRM.Services
                     unresolvedEvents.Count > 0;
 
 
-                /*
-                 * TEMPORARY ABSENCE RULE
-                 *
-                 * At this stage we do not yet know whether the employee
-                 * was actually scheduled to work.
-                 *
-                 * Eventually absence MUST come from WorkPlan:
-                 *
-                 * Has required attendance WorkPlan
-                 *        +
-                 * no valid CheckIn
-                 *        =
-                 * absent
-                 *
-                 * For now this preserves the behaviour of the existing
-                 * attendance summary.
-                 */
+                // Only working days can be absent. Explicit duty and shift patterns
+                // override the normal Sunday–Thursday working week.
+                var isRestDay = restDays.Contains(date);
                 var isAbsent =
-                    !isOnLeave &&
+                    !isRestDay && !isOnLeave &&
                     !isPresent &&
                     !isUnresolved;
 
@@ -1127,9 +1116,8 @@ namespace HRM.Services
                         IsUnresolved =
                             isUnresolved,
 
-                        // Rest-day and holiday classification is not yet available.
                         IsRestDay =
-                            false,
+                            isRestDay && !isOnLeave && !isPresent && !isUnresolved,
 
                         IsOnLeave =
                             isOnLeave,

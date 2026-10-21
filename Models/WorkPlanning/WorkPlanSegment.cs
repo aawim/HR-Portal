@@ -4,6 +4,7 @@ namespace HRM.Models.WorkPlanning
 {
     public partial class WorkPlanSegment
     {
+        public string SchedulePurpose { get; set; } = "Official";
         public int WorkPlanSegmentId { get; set; }
 
         public long WorkPlanId { get; set; }

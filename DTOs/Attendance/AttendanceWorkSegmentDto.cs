@@ -2,6 +2,7 @@
 {
     public sealed class AttendanceWorkSegmentDto
     {
+        public string SchedulePurpose { get; set; } = "Official";
         public int WorkPlanSegmentId { get; set; }
 
         public long WorkPlanId { get; set; }

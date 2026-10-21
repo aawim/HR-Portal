@@ -29,6 +29,48 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 var failures = 0;
 try
 {
+    await WorkPlanningLifecycleTests.RunAsync();
+    Console.WriteLine("PASS Work planning lifecycle: tenant-scoped templates/segments, edit persistence, snapshot refresh, historical plans, unified generation, manual duty, previews, finalization and permissions");
+}
+catch (Exception ex)
+{
+    failures++;
+    Console.Error.WriteLine($"FAIL Work planning lifecycle: {ex}");
+}
+if (args.Contains("--schedule-only"))
+{
+    await ScheduleFlowTests.RunAsync();
+    Console.WriteLine("PASS Schedule flow: concurrent official and duty assignments, overlapping hours, history, plan refresh, removal, permission checks and tenant isolation");
+    return failures == 0 ? 0 : 1;
+}
+try
+{
+    await ScheduleFlowTests.RunAsync();
+    Console.WriteLine("PASS Schedule flow: concurrent official and duty assignments, overlapping hours, plan refresh, removal and access checks");
+}
+catch (Exception ex)
+{
+    failures++;
+    Console.Error.WriteLine($"FAIL Schedule flow: {ex}");
+}
+if (args.Contains("--accrual-only"))
+{
+    await LeaveAccrualTests.RunAsync();
+    Console.WriteLine("PASS Leave accrual: monthly fractions, completed months, annual eligibility, political joining grants, leap dates, carry-forward, caps, tenant isolation, previews and duplicate prevention");
+    return 0;
+}
+try
+{
+    await LeaveAccrualTests.RunAsync();
+    Console.WriteLine("PASS Leave accrual: tenant configuration, future job types, fractional credits, eligibility, carry-forward, preview and idempotent posting");
+}
+catch (Exception ex)
+{
+    failures++;
+    Console.Error.WriteLine($"FAIL Leave accrual: {ex}");
+}
+try
+{
     await ContextSecurityTests.RunAsync();
     Console.WriteLine("PASS Context security: identity binding, sign out, disabled accounts, organisation boundaries, permission revocation and portal audit context");
 }
@@ -160,7 +202,7 @@ static async Task TestLeaveDays()
         db.AttendanceLogs.Add(new AttendanceLog
         {
             IndividualId = 1, Date = first.AddDays(4).AddHours(10), InOutModeId = 1, AttendanceLogStateId = 1, Uidstamp = "leave-clock",
-            AttendanceLogResolutions = [new AttendanceLogResolution { AttendanceClockTypeId = (int)AttendanceClockType.CheckIn }]
+            AttendanceLogResolutions = [new AttendanceLogResolution { IsValid = true, AttendanceClockTypeId = (int)AttendanceClockType.CheckIn }]
         });
         await db.SaveChangesAsync();
     }
@@ -171,7 +213,8 @@ static async Task TestLeaveDays()
     Assert(onLeave.Count == 5, $"Expected 5 approved leave days, got {onLeave.Count}");
     Assert(onLeave.All(x => !x.IsAbsent && !x.IsPresent && !x.IsUnresolved), "Leave days counted under another status");
     Assert(days.Single(x => x.Date == first.AddDays(4)).HasAttendanceLogs, "Leave classification lost clock events");
-    Assert(days.Single(x => x.Date == first.AddDays(3)).IsAbsent, "Ordinary attendance behavior changed");
+    Assert(days.Single(x => x.Date == first.AddDays(3)).IsAbsent == !HRM.Helpers.StaffScheduleCalendar.IsWeekend(first.AddDays(3)), "Normal staff weekends counted as absent");
+    Assert(days.Where(x => HRM.Helpers.StaffScheduleCalendar.IsWeekend(x.Date)).All(x => !x.IsAbsent), "Friday/Saturday inflated absent totals");
 
     using var services = new ServiceCollection().AddLogging().BuildServiceProvider();
     await using var renderer = new TestRenderer(services);
@@ -233,7 +276,18 @@ static async Task TestRefresh(Type clockType)
         _ => throw new InvalidOperationException(name)
     });
     var plans = Proxy.For<IAttendancePlanService>((_, _) =>
-        Task.FromResult<AttendanceWorkPlanDto?>(null));
+        Task.FromResult<AttendanceWorkPlanDto?>(new AttendanceWorkPlanDto
+        {
+            WorkDate = DateTime.UtcNow.AddHours(5).Date,
+            Assignments = [new() { WorkAssignmentId = 1, Name = "Official office hours", SchedulePurpose = "Official", IsValid = true,
+                StartDateTime = DateTime.Today.AddHours(8), EndDateTime = DateTime.Today.AddHours(23).AddMinutes(59) },
+                new() { WorkAssignmentId = 2, Name = $"Duty review {data.Revision}", SchedulePurpose = "Duty", IsValid = true,
+                    StartDateTime = DateTime.Today.AddHours(10), EndDateTime = DateTime.Today.AddHours(12) }],
+            Segments = [new() { Name = "Official · Check In", SchedulePurpose = "Official", StartDateTime = DateTime.Today.AddHours(8), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Official · Check Out", SchedulePurpose = "Official", StartDateTime = DateTime.Today.AddHours(14), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Duty · Check In", SchedulePurpose = "Duty", StartDateTime = DateTime.Today.AddHours(10), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Duty · Check Out", SchedulePurpose = "Duty", StartDateTime = DateTime.Today.AddHours(12), RequiresAttendance = true, IsMandatory = true }]
+        }));
     await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     db.Jobs.Add(new Job { JobId = 2, IndividualID = 1, OrganisationID = 3 });
@@ -267,6 +321,10 @@ static async Task TestRefresh(Type clockType)
     });
     renderer.CheckErrors();
     Assert(renderer.Text<TodaysAttendanceLogCard>().Contains("No clock events yet"), "Initial empty events missing");
+    var workPlanText = renderer.Text<TodaysWorkPlanCard>();
+    Assert(workPlanText.Contains("Today's Work Plan") && workPlanText.Contains("Official office hours") && workPlanText.Contains("Duty review 0"), "Dashboard work plan did not show both schedules");
+    Assert(new[] { "08:00", "10:00", "12:00", "14:00", "Check in", "Check out", "Required" }.All(workPlanText.Contains), "Dashboard work-plan events or times missing");
+    Assert(!workPlanText.Contains("23:59"), "Dashboard displayed the late clocking allowance as official working hours");
     if (clockType == typeof(TestTimeClockCard))
         await renderer.Dispatcher.InvokeAsync(() => renderer.Event(clockType, "onchange", new ChangeEventArgs { Value = true }));
 
@@ -286,6 +344,7 @@ static async Task TestRefresh(Type clockType)
         Assert(overview.Days?.Single().ClockEventCount == revision, "Yearly overview still stale");
         Assert(data.LogReads == revision + 1, "Clock events did not reload exactly once per click");
         Assert(data.EvaluationReads == revision + 1, "Daily status did not reload exactly once per click");
+        Assert(renderer.Text<TodaysWorkPlanCard>().Contains($"Duty review {revision}"), "Today's Work Plan did not refresh after clocking");
     }
     await renderer.Dispatcher.InvokeAsync(() => renderer.Event(typeof(YearlyAttendanceGridCard), "onclick", new MouseEventArgs()));
     var selectedYear = DateTime.Today.Year - 1;
@@ -380,7 +439,7 @@ sealed class TestActivator : IComponentActivator
 {
     private static readonly HashSet<Type> RealComponents =
     [typeof(TimeClockCard), typeof(TestTimeClockCard), typeof(AttendanceSummaryCard),
-     typeof(YearlyAttendanceGridCard), typeof(TodaysAttendanceLogCard), typeof(TodaysAttendanceStatusCard)];
+     typeof(YearlyAttendanceGridCard), typeof(TodaysAttendanceLogCard), typeof(TodaysAttendanceStatusCard), typeof(TodaysWorkPlanCard)];
     public IComponent CreateInstance(Type type) => type == typeof(AuthorizeView)
         ? new AuthorizedView()
         : RealComponents.Contains(type) ? (IComponent)Activator.CreateInstance(type)! : new EmptyWidget();
@@ -555,7 +614,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder) { }
     protected override void OnModelCreating(ModelBuilder builder)
     {
-        var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution) };
+        var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution),
+            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment) };
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
@@ -563,7 +623,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
                 !x.PropertyType.IsValueType && x.PropertyType != typeof(string) && x.PropertyType != typeof(byte[])))
                 if (!(type == typeof(Leaf) && (property.Name == "Job" || property.Name == "LeaveType")) &&
                     !(type == typeof(AttendanceLog) && property.Name == "AttendanceLogResolutions") &&
-                    !(type == typeof(AttendanceLogResolution) && property.Name == "AttendanceLog"))
+                    !(type == typeof(AttendanceLogResolution) && property.Name == "AttendanceLog") &&
+                    !ScheduleTestModel.Navigation(type, property.Name))
                     builder.Entity(type).Ignore(property.Name);
         builder.Entity<Job>().HasKey(x => x.JobId);
         builder.Entity<AttendanceLog>().HasKey(x => x.AttendanceLogId);
@@ -573,6 +634,7 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
         builder.Entity<Leaf>().HasOne(x => x.LeaveType).WithMany().HasForeignKey(x => x.LeaveTypeId);
         builder.Entity<AttendanceLogResolution>().HasKey(x => x.AttendanceLogResolutionId);
         builder.Entity<AttendanceLogResolution>().HasOne(x => x.AttendanceLog).WithMany(x => x.AttendanceLogResolutions).HasForeignKey(x => x.AttendanceLogId);
+        ScheduleTestModel.Configure(builder);
     }
 }
 

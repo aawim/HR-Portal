@@ -2,6 +2,11 @@
 {
     public sealed class ManualWorkAssignmentListDto
     {
+        public int WorkTemplateId { get; set; }
+        public bool RequiresAttendance { get; set; }
+        public bool RequiresCheckout { get; set; }
+        public int Priority { get; set; }
+        public string? Description { get; set; }
         public long WorkPlanId { get; set; }
 
         public long WorkAssignmentId { get; set; }

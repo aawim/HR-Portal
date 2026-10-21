@@ -9,11 +9,13 @@ namespace HRM.WorkPlanning.Services
     public class ManualWorkAssignmentLookupService : IManualWorkAssignmentLookupService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
+        private readonly HRM.Services.Interfaces.IUserAccessService _access;
 
         public ManualWorkAssignmentLookupService(
-            IDbContextFactory<HrmTeContext> dbFactory)
+            IDbContextFactory<HrmTeContext> dbFactory, HRM.Services.Interfaces.IUserAccessService access)
         {
             _dbFactory = dbFactory;
+            _access = access;
         }
 
         public async Task<List<AssignedWorkTemplateDto>>
@@ -32,6 +34,7 @@ namespace HRM.WorkPlanning.Services
                     cancellationToken);
 
             var date = workDate.Date;
+            await WorkPlanningAccess.RequireJobAsync(db, _access, jobId);
 
             return await db.JobWorkTemplateAssignments
                 .AsNoTracking()
@@ -92,6 +95,8 @@ namespace HRM.WorkPlanning.Services
         int organisationBusinessEntityId,
         CancellationToken cancellationToken = default)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_access);
+            if (org != organisationBusinessEntityId) return [];
             if (organisationBusinessEntityId <= 0)
             {
                 return new List<PlanningProviderLookupDto>();
@@ -131,6 +136,8 @@ namespace HRM.WorkPlanning.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
+            await WorkPlanningAccess.RequireJobAsync(db, _access, jobId);
+            await WorkPlanningAccess.RequireTemplateAsync(db, _access, workTemplateId);
 
             var jobExists =
                 await db.Jobs
@@ -156,7 +163,7 @@ namespace HRM.WorkPlanning.Services
                     .Select(x => new
                     {
                         x.WorkTemplateId,
-                        x.Name
+                        x.Name, x.DefaultStartTime, x.DefaultEndTime, x.EndsNextDay
                     })
                     .FirstOrDefaultAsync(cancellationToken);
 
@@ -236,11 +243,12 @@ namespace HRM.WorkPlanning.Services
             }
 
             var scheduledStartTime =
-                new TimeOnly(8, 0);
+                template.DefaultStartTime;
+            if (!scheduledStartTime.HasValue) return null;
 
             var baseDateTime =
                 workDate.Date.Add(
-                    scheduledStartTime.ToTimeSpan());
+                    scheduledStartTime.Value.ToTimeSpan());
 
             var previewSegments =
                 segments
@@ -318,6 +326,8 @@ namespace HRM.WorkPlanning.Services
         int? organisationId,
         CancellationToken cancellationToken = default)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_access);
+            if (organisationId.HasValue && organisationId != org) return [];
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
@@ -362,7 +372,7 @@ namespace HRM.WorkPlanning.Services
                     ).FirstOrDefault()
 
                 where
-                    job.JobStateId ==
+                    job.OrganisationID == org && job.JobStateId ==
                         SharedConfig.JobStates.APPROVED
                     &&
                     job.TerminatedDate == null
@@ -493,6 +503,8 @@ namespace HRM.WorkPlanning.Services
            DateTime workDate,
            CancellationToken cancellationToken = default)
         {
+            var org = await WorkPlanningAccess.RequireOrganisationAsync(_access);
+            if (org != organisationId) return [];
             if (organisationId <= 0)
             {
                 return [];
@@ -510,7 +522,7 @@ namespace HRM.WorkPlanning.Services
                     template.IsActive
                     &&
                     (
-                        template.OrganisationBusinessEntityId == null
+                        template.IsGlobal
                         ||
                         template.OrganisationBusinessEntityId ==
                             organisationId
