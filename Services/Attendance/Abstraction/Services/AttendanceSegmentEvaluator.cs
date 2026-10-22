@@ -129,12 +129,10 @@ namespace HRM.Services.Attendance.Abstraction.Services
             var allowedCheckIn =
                 plannedStart.AddMinutes(graceMinutes);
 
-            if (result.CheckInTime.Value > allowedCheckIn)
+            var lateMinutes = HRM.Helpers.AttendanceTiming.LateMinutes(result.CheckInTime.Value, allowedCheckIn);
+            if (lateMinutes > 0)
             {
-                result.LateMinutes =
-                    (int)Math.Ceiling(
-                        (result.CheckInTime.Value - plannedStart)
-                        .TotalMinutes);
+                result.LateMinutes = lateMinutes;
 
                 result.Exceptions.Add(
                     AttendanceExceptionType.LateCheckIn);

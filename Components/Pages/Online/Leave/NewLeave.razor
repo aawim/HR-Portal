@@ -23,7 +23,7 @@
 <div class="leave-application">
 <div class="border-b px-1 pb-3">
     <h2 class="text-2xl font-bold text-slate-800">Leave Application</h2>
-    <p class="text-sm text-gray-500">Apply for leave and manage details</p>
+    <p class="text-sm text-gray-500">@(LeaveState.ApplicantJobId.HasValue ? "HR application on behalf of the selected staff member. The normal approval flow applies." : "Apply for leave and manage details")</p>
 
 </div>
 
@@ -36,11 +36,11 @@
         <!-- Top: Equal two columns -->
         <div class="leave-application-calendars">
             <div class="p-1 rounded">
-                <LeaveCalendarCard RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
+                <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
             </div>
 
             <div class="p-1 rounded">
-                <LeaveCalendarCard MonthOffset="1" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
+                <LeaveCalendarCard ApplicantJobId="LeaveState.ApplicantJobId" MonthOffset="1" RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
             </div>
         </div>
 
@@ -76,7 +76,7 @@
 
     <!-- RIGHT COLUMN (Fixed 350px) -->
     <div class="leave-application-balances">
-        <LeaveBalanceCard LeaveState="LeaveState"
+        <LeaveBalanceCard LeaveState="LeaveState" RefreshKey="calendarRefresh"
                           OnLeaveTypeSelected="LoadLeaveForm" />
     </div>
 
@@ -114,6 +114,17 @@
 
         protected override async Task OnInitializedAsync()
     {
+        if (LeaveState.ApplicantJobId.HasValue)
+        {
+            var balances = await LeaveService.GetApplicantLeaveBalancesAsync(LeaveState.ApplicantJobId.Value);
+            LeaveState.JobLeaveTypes = balances.Select(x => new JobLeaveTypeDto
+            {
+                JobId = x.JobId, LeaveTypeId = x.LeaveTypeId ?? 0,
+                LeaveTypeName = x.LeaveDefinition?.Name ?? x.LeaveType?.Name ?? "Leave",
+                RemainingDays = x.RemainingDays ?? 0
+            }).ToList();
+            return;
+        }
         if (!LeaveStore.JobLeaveTypes.Any())
         {
             await LeaveStore.LoadAsync();
@@ -195,6 +206,7 @@
 
     private async Task Submit()
     {
+        if (LeaveState.IsSubmitting) return;
         if (!LeaveState.HasReason)
         {
             ToastService.Warning("Select a reason before submitting your leave application.");
@@ -205,7 +217,7 @@
 
         try
         {
-            var result = await LeaveService.SubmitLeave(LeaveState.Model);
+            var result = await LeaveService.SubmitLeave(LeaveState.Model, LeaveState.ApplicantJobId);
 
             if (!result.Success)
             {

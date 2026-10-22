@@ -1,0 +1,162 @@
+@using HRM.Services
+@using static HRM.Services.StaffPositionManagementService
+@inject StaffPositionManagementService Positions
+@inject ToastService Toasts
+@inject ILogger<StaffPositions> Logger
+
+<section class="mt-4 space-y-4" aria-label="Staff positions">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h3 class="text-lg font-semibold text-slate-800">Staff positions</h3>
+            <p class="text-sm text-slate-500">Manage assignments and effective dates. End an assignment to remove it while keeping its history.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            @if (data?.CanManage == true && data.Jobs.Count > 0)
+            {
+                <button type="button" class="app-button app-button-primary" disabled="@busy" @onclick="New">Assign position</button>
+            }
+            <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+        </div>
+    </div>
+    @if (message != null)
+    {
+        <p role="alert" class="rounded-lg border p-3 text-sm">@message</p>
+    }
+    @if (loading)
+    {
+        <p role="status" class="text-sm text-slate-500">Loading positions…</p>
+    }
+    else if (data != null)
+    {
+        @if (editing)
+        {
+            <form @onsubmit="SaveAsync" @onsubmit:preventDefault class="space-y-3 rounded-xl border border-slate-200 p-4">
+                <h4 class="font-semibold text-slate-800">@(ending ? "End / remove assignment" : changing ? "Change position" : original != null ? "Edit position dates" : "Assign position")</h4>
+                @if (changing)
+                {
+                    <p class="text-sm text-slate-500">@original!.Name will end the day before the new position starts.</p>
+                }
+                <fieldset disabled="@busy" class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label class="text-sm">Employment
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="jobId" disabled="@(original != null)" required>
+                            <option value="0">Select employment</option>
+                            @foreach (var job in data.Jobs) { <option value="@job.Id">@job.Name</option> }
+                            @if (original != null && !data.Jobs.Any(j => j.Id == original.JobId))
+                            { <option value="@original.JobId">Job @original.JobId</option> }
+                        </select>
+                    </label>
+                    <label class="text-sm">Position
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="positionId" disabled="@(original != null && !changing)" required>
+                            <option value="0">Select position</option>
+                            @foreach (var position in data.Positions) { <option value="@position.Id">@position.Name</option> }
+                            @if (original != null && !data.Positions.Any(p => p.Id == original.PositionId))
+                            { <option value="@original.PositionId">@original.Name</option> }
+                        </select>
+                    </label>
+                    <label class="text-sm">From date
+                        <InputDate class="mt-1 w-full rounded-lg border p-2" @bind-Value="from" disabled="@ending" />
+                    </label>
+                    <label class="text-sm">To date @(ending ? "(required)" : "(optional)")
+                        <InputDate class="mt-1 w-full rounded-lg border p-2" @bind-Value="to" />
+                    </label>
+                    <label class="text-sm sm:col-span-2">Reason
+                        <textarea class="mt-1 w-full rounded-lg border p-2" @bind="reason" maxlength="500" required rows="2"></textarea>
+                    </label>
+                </fieldset>
+                <div class="flex flex-wrap gap-2">
+                    <button type="submit" class="app-button app-button-primary" disabled="@busy">@(busy ? "Saving…" : "Save")</button>
+                    <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => editing = false">Cancel</button>
+                </div>
+            </form>
+        }
+        @if (data.Assignments.Count == 0)
+        {
+            <p class="rounded-lg border p-4 text-sm text-slate-500">No position assignments found in this organisation.</p>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-slate-50 text-slate-500"><tr><th class="p-3">Position</th><th class="p-3">Employment</th><th class="p-3">From</th><th class="p-3">To</th><th class="p-3">Status</th><th class="p-3">Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var assignment in data.Assignments)
+                        {
+                            <tr class="border-t border-slate-200">
+                                <td class="p-3 font-medium">@assignment.Name</td><td class="p-3">Job @assignment.JobId</td>
+                                <td class="p-3 whitespace-nowrap">@assignment.From.ToString("dd MMM yyyy")</td>
+                                <td class="p-3 whitespace-nowrap">@(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</td>
+                                <td class="p-3">@Status(assignment)</td>
+                                <td class="p-3">
+                                    @if (data.CanManage && assignment.StateId == 4)
+                                    {
+                                        <div class="flex flex-wrap gap-2">
+                                            <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
+                                            @if (!assignment.To.HasValue || assignment.To.Value.Date >= Today)
+                                            {
+                                                <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
+                                                <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment, end: true)">End / remove</button>
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public int StaffId { get; set; }
+    private Data? data;
+    private Assignment? original;
+    private bool loading, busy, editing, changing, ending;
+    private int jobId, positionId;
+    private DateTime from = Today;
+    private DateTime? to;
+    private string reason = "";
+    private string? message;
+    private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        loading = true; message = null; editing = false;
+        try { data = await Positions.LoadAsync(StaffId); }
+        catch (UnauthorizedAccessException ex) { data = null; message = ex.Message; }
+        catch (Exception ex) { data = null; message = "Positions could not be loaded. Please try again."; Logger.LogError(ex, "Loading positions for staff {StaffId}", StaffId); }
+        finally { loading = false; }
+    }
+    private void New()
+    {
+        original = null; changing = ending = false; editing = true; message = null;
+        jobId = data!.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
+    }
+    private void Edit(Assignment item, bool change = false, bool end = false)
+    {
+        original = item; changing = change; ending = end; editing = true; message = null;
+        jobId = item.JobId; positionId = change ? 0 : item.PositionId;
+        from = change ? (Today > item.From.Date ? Today : item.From.Date.AddDays(1)) : item.From;
+        to = end ? (Today >= item.From.Date ? Today : item.From.Date) : change ? null : item.To; reason = "";
+    }
+    private async Task SaveAsync()
+    {
+        if (busy) return;
+        message = null;
+        if (ending && !to.HasValue) { message = "Select the date this assignment ends."; return; }
+        busy = true;
+        try
+        {
+            await Positions.SaveAsync(StaffId, jobId, positionId, from, to, reason, original, changing);
+            Toasts.Success("Staff position saved.");
+            await LoadAsync();
+        }
+        catch (UnauthorizedAccessException ex) { message = ex.Message; Toasts.Error(message); }
+        catch (InvalidOperationException ex) { message = ex.Message; }
+        catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
+        finally { busy = false; }
+    }
+    private static string Status(Assignment a) => a.StateId != 4 ? a.State : a.From.Date > Today ? "Scheduled" :
+        a.To.HasValue && a.To.Value.Date < Today ? "Ended" : "Current";
+}

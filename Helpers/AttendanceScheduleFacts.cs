@@ -34,7 +34,9 @@ public static class AttendanceScheduleFacts
         return assignments.Select(a =>
         {
             var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
-                .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution?.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved &&
+                .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution != null &&
+                    (e.Resolution.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved ||
+                     e.Resolution.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.DuplicatePunch) &&
                     (e.Resolution.WorkAssignmentId ?? snapshotOwners.GetValueOrDefault(e.Resolution.WorkPlanSegmentId ?? 0)) == a.WorkAssignmentId).ToList();
             var start = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 1 || s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.StartDateTime).Min();

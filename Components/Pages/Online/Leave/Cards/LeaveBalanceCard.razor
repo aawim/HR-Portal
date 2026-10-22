@@ -158,15 +158,22 @@
 
     [Parameter]
     public LeaveApplicationState LeaveState { get; set; } = default!;
+    [Parameter] public int RefreshKey { get; set; }
+    private int? lastRefresh;
     private List<JobLeaveType> jobTypes = new();
     private List<ProcessingLeaveDto> processingLeaves = new();
     private bool isLoading = true;
 
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
-        jobTypes = await LeaveService.GetMyLeaveBalancesAsync();
-        processingLeaves = await LeaveService.GetMyProcessingLeavesAsync();
+        if (lastRefresh == RefreshKey) return;
+        lastRefresh = RefreshKey;
+        jobTypes = LeaveState.ApplicantJobId.HasValue
+            ? await LeaveService.GetApplicantLeaveBalancesAsync(LeaveState.ApplicantJobId.Value)
+            : await LeaveService.GetMyLeaveBalancesAsync();
+        if (LeaveState.Model.JobLeaveTypeId.HasValue)
+            LeaveState.RemainingDays = jobTypes.FirstOrDefault(x => x.JobLeaveTypeId == LeaveState.Model.JobLeaveTypeId)?.RemainingDays ?? 0;
 
         isLoading = false;
     }
@@ -174,7 +181,7 @@
     private async Task ApplyLeaveType(JobLeaveType leave)
     {
 
-        var applicationType = await LeaveService.GetApplicationLeaveTypeAsync(leave.JobLeaveTypeId);
+        var applicationType = await LeaveService.GetApplicationLeaveTypeAsync(leave.JobLeaveTypeId, LeaveState.ApplicantJobId);
         if (applicationType == null)
         {
             ToastService.Warning("No active legacy leave type mapping was found for this leave balance.");

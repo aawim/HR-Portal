@@ -13,16 +13,18 @@ public class LeaveCalendarService(IDbContextFactory<HrmTeContext> factory, IUser
     private const string PlanType = "Planned leave";
     private static DateTime Today => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date;
 
-    public async Task<List<LeaveCalendarEntry>> LoadAsync(DateTime month, bool includeTeam)
+    public async Task<List<LeaveCalendarEntry>> LoadAsync(DateTime month, bool includeTeam, int? applicantJobId = null)
     {
         var actor = await access.RequireContextAsync();
         var start = new DateTime(month.Year, month.Month, 1);
         var end = start.AddMonths(1);
         await using var db = await factory.CreateDbContextAsync();
-        var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == (actor.ActiveJob == null ? 0 : actor.ActiveJob.JobId));
+        var job = applicantJobId.HasValue
+            ? await HRM.Helpers.LeaveApplicantScope.ResolveAsync(db, access, applicantJobId)
+            : await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == (actor.ActiveJob == null ? 0 : actor.ActiveJob.JobId));
         var organisationId = job?.OrganisationID ?? 0;
-        var visible = new HashSet<int> { actor.IndividualId };
-        if (includeTeam && job != null)
+        var visible = new HashSet<int> { applicantJobId.HasValue ? job!.IndividualID : actor.IndividualId };
+        if (includeTeam && job != null && !applicantJobId.HasValue)
         {
             var today = Today;
             var departments = db.OrganisationStructureSupervisors.Where(x => x.SupervisorStaffId == actor.IndividualId && x.IsActive && x.IsValid &&
@@ -51,12 +53,12 @@ public class LeaveCalendarService(IDbContextFactory<HrmTeContext> factory, IUser
         var names = await db.Individuals.AsNoTracking().Where(x => people.Contains(x.BusinessEntityId))
             .ToDictionaryAsync(x => x.BusinessEntityId, x => (x.FirstNameEnglish + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).Trim());
         var entries = plans.Select(x => new LeaveCalendarEntry(x.ScheduleId, x.BusinessEntityId, names.GetValueOrDefault(x.BusinessEntityId, "Employee"),
-            x.StartDate, x.EndDate, x.Name, "Planned", true, x.BusinessEntityId == actor.IndividualId)).ToList();
+            x.StartDate, x.EndDate, x.Name, "Planned", true, !applicantJobId.HasValue && x.BusinessEntityId == actor.IndividualId)).ToList();
         var leaves = await db.Leaves.AsNoTracking().Where(x => people.Contains(x.Job.IndividualID) && x.FromDate < end && x.ToDate >= start &&
             x.LeaveStateId != SharedConfig.LeaveStates.CANCELLED && x.LeaveStateId != SharedConfig.LeaveStates.REJECTED &&
             (x.Job.IndividualID == actor.IndividualId || x.Job.OrganisationID == organisationId))
             .Select(x => new { x.LeaveId, Person = x.Job.IndividualID, x.FromDate, x.ToDate, Title = x.LeaveType.Name, Status = x.LeaveState.StateName }).ToListAsync();
-        entries.AddRange(leaves.Select(x => new LeaveCalendarEntry(x.LeaveId, x.Person, names.GetValueOrDefault(x.Person, "Employee"), x.FromDate, x.ToDate, x.Title, x.Status, false, x.Person == actor.IndividualId)));
+        entries.AddRange(leaves.Select(x => new LeaveCalendarEntry(x.LeaveId, x.Person, names.GetValueOrDefault(x.Person, "Employee"), x.FromDate, x.ToDate, x.Title, x.Status, false, !applicantJobId.HasValue && x.Person == actor.IndividualId)));
         return entries.OrderBy(x => x.From).ThenBy(x => x.Person).ToList();
     }
 

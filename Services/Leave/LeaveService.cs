@@ -275,21 +275,37 @@ namespace HRM.Services.Leave
                 .ToListAsync();
         }
 
-        public async Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId)
+        public async Task<List<LeaveApplicantJob>> GetLeaveApplicantJobsAsync(int staffId)
         {
-            var context = await _access.RequireContextAsync();
-            if (context.ActiveJob == null)
-                return null;
-
+            var org = await LeaveApplicantScope.RequireHrOrganisationAsync(_access);
+            var today = DateTime.UtcNow.AddHours(5).Date;
             await using var db = await _dbFactory.CreateDbContextAsync();
+            return await db.Jobs.AsNoTracking().Where(j => j.IndividualID == staffId && j.OrganisationID == org &&
+                j.JobStateId == 4 && j.JoinedDate <= today && (!j.TerminatedDate.HasValue || j.TerminatedDate > today))
+                .OrderByDescending(j => j.JoinedDate).Select(j => new LeaveApplicantJob(j.JobId,
+                    (j.Individual.FirstNameEnglish + " " + (j.Individual.MiddleNameEnglish ?? "") + " " + (j.Individual.LastNameEnglish ?? "")).Trim(),
+                    j.OrganisationStructure.Name, j.JobType.TypeName)).ToListAsync();
+        }
+
+        public async Task<List<JobLeaveType>> GetApplicantLeaveBalancesAsync(int applicantJobId)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var job = await LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId);
+            return await GetJobLeaveBalancesAsync(job.JobId);
+        }
+
+        public async Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId, int? applicantJobId = null)
+        {
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var applicant = await LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId);
             var balance = await db.JobLeaveTypes.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId &&
-                    x.JobId == context.ActiveJob.JobId && x.IsValid && x.IsLeaveInfoUpdated);
+                    x.JobId == applicant.JobId && x.IsValid && x.IsLeaveInfoUpdated);
             if (balance == null)
                 return null;
 
             var legacyType = await ResolveApplicationLegacyTypeAsync(
-                db, balance, context.ActiveJob.OrganisationId);
+                db, balance, applicant.OrganisationID);
             if (legacyType == null)
                 return null;
 
@@ -433,11 +449,11 @@ namespace HRM.Services.Leave
                 .Select(x => new { x.RequireWorkHandover, x.WorkHandoverAfterDays }).FirstOrDefaultAsync();
             return policy?.RequireWorkHandover == true ? policy.WorkHandoverAfterDays : null;
         }
-        public async Task<LeaveHandoverRulesDto> GetHandoverRulesAsync(int jobLeaveTypeId, DateTime fromDate)
+        public async Task<LeaveHandoverRulesDto> GetHandoverRulesAsync(int jobLeaveTypeId, DateTime fromDate, int? applicantJobId = null)
         {
-            var context = await _access.RequireContextAsync();
-            var jobId = context.ActiveJob?.JobId ?? 0;
             await using var db = await _dbFactory.CreateDbContextAsync();
+            var applicant = await LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId);
+            var jobId = applicant.JobId;
             var balance = await db.JobLeaveTypes.AsNoTracking().FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId && x.JobId == jobId && x.IsValid && x.IsLeaveInfoUpdated)
                 ?? throw new InvalidOperationException("Leave balance was not found.");
             var organisationId = await db.Jobs.Where(x => x.JobId == jobId).Select(x => x.OrganisationID).SingleAsync();
@@ -445,7 +461,7 @@ namespace HRM.Services.Leave
                 ?? throw new InvalidOperationException("Leave type mapping was not found.");
             var threshold = await ResolveHandoverThresholdAsync(db, balance, legacy, organisationId, fromDate);
             var recipients = threshold.HasValue ? await db.Jobs.AsNoTracking()
-                .Where(x => x.OrganisationID == organisationId && x.IndividualID != context.BusinessEntityId && x.TerminatedDate == null && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= fromDate.Date && db.Users.Any(u => u.BusinessEntityID == x.IndividualID))
+                .Where(x => x.OrganisationID == organisationId && x.IndividualID != applicant.IndividualID && x.TerminatedDate == null && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= fromDate.Date && db.Users.Any(u => u.BusinessEntityID == x.IndividualID))
                 .OrderBy(x => x.Individual.FirstNameEnglish)
                 .Select(x => new LeaveHandoverRecipient(x.JobId, x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")))
                 .ToListAsync() : new List<LeaveHandoverRecipient>();
@@ -454,7 +470,7 @@ namespace HRM.Services.Leave
 
         //// SUBMIT LEAVE (MAIN PART)
 
-        public async Task<ServiceResult> SubmitLeave(LeaveApplicationDto model)
+        public async Task<ServiceResult> SubmitLeave(LeaveApplicationDto model, int? applicantJobId = null)
         {
             var context = await _access.RequireContextAsync();
             using var db = await _dbFactory.CreateDbContextAsync();
@@ -466,7 +482,8 @@ namespace HRM.Services.Leave
 
             try
             {
-                int jobId = context.ActiveJob?.JobId ?? 0;
+                var applicant = await LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId);
+                int jobId = applicant.JobId;
 
                 if (jobId == 0)
                 {
@@ -523,7 +540,7 @@ namespace HRM.Services.Leave
                 var handoverSupervisors = new List<int>();
                 if (needsHandover)
                 {
-                    var handoverError = await LeaveHandoverService.ValidateTasksAsync(db, handoverTasks, organisationId, context.BusinessEntityId, model.FromDate);
+                    var handoverError = await LeaveHandoverService.ValidateTasksAsync(db, handoverTasks, organisationId, applicant.IndividualID, model.FromDate);
                     if (handoverError != null) return ServiceResult.Fail(handoverError);
                     handoverSupervisors = await LeaveHandoverService.SupervisorsAsync(db, jobId);
                     if (handoverSupervisors.Count == 0) return ServiceResult.Fail("No active supervisor with a user account is configured for your team or department. Ask HR to assign one under Settings > Organisation > Teams and supervisors.");
@@ -561,7 +578,9 @@ namespace HRM.Services.Leave
                 var operationLog = await _operationLogService.CreateAsync(
                     db,
                     actionId: SharedConfig.OperationLogActionTypes.LEAVE_CREATE,
-                    remarks: "Leave application submitted");
+                    remarks: applicantJobId.HasValue
+                        ? $"Leave application submitted by User {context.UserId} on behalf of Individual {applicant.IndividualID}, Job {jobId}."
+                        : "Leave application submitted");
 
                 await db.SaveChangesAsync();
 
@@ -578,7 +597,7 @@ namespace HRM.Services.Leave
                                 operationLog.OperationLogId,
 
                             ApplicantBusinessEntityId =
-                                context.BusinessEntityId,
+                                applicant.IndividualID,
 
                             OrganisationBusinessEntityId =
                                 organisationId,

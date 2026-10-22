@@ -140,7 +140,7 @@
             LeaveState.Model.HandoverTasks.Clear();
         }
         currentBalanceId = LeaveState.Model.JobLeaveTypeId;
-        if (LeaveState.Model.FromDate == default) LeaveState.Model.FromDate = DateTime.Today;
+        if (LeaveState.Model.FromDate == default) LeaveState.Model.FromDate = DateTime.UtcNow.AddHours(5).Date;
         if (LeaveState.Model.Duration < 1) LeaveState.Model.Duration = 1;
         DurationChanged();
         await LoadHandoverAsync();
@@ -153,7 +153,7 @@
         try
         {
             if (!LeaveState.Model.JobLeaveTypeId.HasValue) throw new InvalidOperationException("Select a leave balance first.");
-            var rules = await LeaveService.GetHandoverRulesAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.Model.FromDate);
+            var rules = await LeaveService.GetHandoverRulesAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.Model.FromDate, LeaveState.ApplicantJobId);
             if (version != handoverLoadVersion) return;
             LeaveState.WorkHandoverAfterDays = rules.AfterDays;
             handoverRecipients = rules.Recipients;

@@ -124,8 +124,17 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Page { get; set; }
-    protected override void OnParametersSet() => activeItem = string.IsNullOrWhiteSpace(Page) ? GetSubItems(CategoryName).FirstOrDefault() :
-        GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Page, x.Route));
+    protected override void OnParametersSet()
+    {
+        if (CategoryName.Equals("manage-leaves", StringComparison.OrdinalIgnoreCase) &&
+            Page is "new-leave-application" or "sick-leave-lodge" or "family-leave-lodge")
+        {
+            Navigation.NavigateTo("/admin/my/workspace/leave", replace: true);
+            return;
+        }
+        activeItem = string.IsNullOrWhiteSpace(Page) ? GetSubItems(CategoryName).FirstOrDefault() :
+            GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Page, x.Route));
+    }
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Route, string Icon, string Description, Type? ComponentType = null);
@@ -177,9 +186,6 @@
         },
         "manage-leaves" => new() {
             new("Search", "search", "🔍", "Find and review past or pending leave applications.", null),
-            new("New Leave Application", "new-leave-application", "📝", "Apply for standard annual, casual, or special leave.", null),
-            new("Sick Leave Lodge", "sick-leave-lodge", "🏥", "Submit medical certificates and lodge sick leave.", null),
-            new("Family Leave Lodge", "family-leave-lodge", "👨‍👩‍👧‍👦", "Apply for maternity, paternity, or family responsibility leave.", null),
             new("Leave Change Request", "leave-change-request", "🔄", "Request modifications or cancellations to approved leave.", null),
             new("Staff Leave Report", "staff-leave-report", "📄", "Generate detailed leave balances and history for specific employees.", null),
             new("Organisation Leave Report", "organisation-leave-report", "📊", "View high-level leave trends and balances across the entire organisation.", null),

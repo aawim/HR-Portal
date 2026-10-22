@@ -32,7 +32,7 @@ public static class AttendanceEligibilityCalendar
                                    select new { link.JobPositionId, request.LastStateChangedDate }).ToListAsync(ct);
 
         var assignments = await db.JobWorkTemplateAssignments.AsNoTracking().Include(a => a.WorkTemplate).ThenInclude(t => t.WorkTemplateSegments)
-            .Where(a => jobIds.Contains(a.JobID) && a.IsActive && a.EffectiveFrom <= to && (!a.EffectiveTo.HasValue || a.EffectiveTo >= from))
+            .Where(a => jobIds.Contains(a.JobID) && a.IsActive && a.SchedulePurpose == "Official" && a.EffectiveFrom <= to && (!a.EffectiveTo.HasValue || a.EffectiveTo >= from))
             .ToListAsync(ct);
         var legacy = await db.JobWorkTemplates.AsNoTracking().Include(a => a.WorkTemplate).ThenInclude(t => t.WorkTemplateSegments)
             .Where(a => jobIds.Contains(a.JobId) && a.IsActive && a.EffectiveFrom <= to && (!a.EffectiveTo.HasValue || a.EffectiveTo >= from))
@@ -40,8 +40,8 @@ public static class AttendanceEligibilityCalendar
         var plans = await db.WorkPlans.AsNoTracking().Where(p => p.IndividualId == individualId && jobIds.Contains(p.JobId) && p.IsValid &&
             p.WorkDate >= from && p.WorkDate <= to)
             .Select(p => new { p.JobId, p.WorkDate,
-                HasSchedule = p.WorkAssignments.Any(a => a.IsValid) || p.WorkPlanSegments.Any(s => s.IsValid),
-                RequiresAttendance = p.WorkAssignments.Any(a => a.IsValid && a.RequiresAttendance) || p.WorkPlanSegments.Any(s => s.IsValid && s.RequiresAttendance) })
+                HasSchedule = p.WorkAssignments.Any(a => a.IsValid && a.SchedulePurpose == "Official") || p.WorkPlanSegments.Any(s => s.IsValid && s.SchedulePurpose == "Official"),
+                RequiresAttendance = p.WorkAssignments.Any(a => a.IsValid && a.SchedulePurpose == "Official" && a.RequiresAttendance) || p.WorkPlanSegments.Any(s => s.IsValid && s.SchedulePurpose == "Official" && s.RequiresAttendance) })
             .ToListAsync(ct);
 
         bool PositionApproved(int id, DateTime day)

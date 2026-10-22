@@ -10,6 +10,8 @@ namespace HRM.Services.State
         // Main Leave Application
         // ==========================
         public LeaveApplicationDto Model { get; set; } = new();
+        // Explicit HR delegation scope; null keeps the normal employee flow.
+        public int? ApplicantJobId { get; set; }
 
         // ==========================
         // Lookup Data

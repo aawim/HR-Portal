@@ -261,6 +261,7 @@ builder.Services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeSe
 builder.Services.AddScoped<HRM.Services.JobTypeConfigurationService>();
 builder.Services.AddScoped<HRM.Services.StaffOnboardingService>();
 builder.Services.AddScoped<HRM.Services.PositionOverviewService>();
+builder.Services.AddScoped<HRM.Services.StaffPositionManagementService>();
 builder.Services.AddScoped<HRM.Services.PermissionSettingsService>();
 builder.Services.AddScoped<HRM.Services.UserSettingsService>();
 builder.Services.AddScoped<HRM.Services.AdminAccessGrantService>();

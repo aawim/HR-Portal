@@ -12,18 +12,22 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _operationLogService;
         private readonly IIndividual _individual;
+        private readonly IUserAccessService _access;
 
-        public AddressService(IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService operationLogService, IIndividual individual)
+        public AddressService(IDbContextFactory<HrmTeContext> dbFactory, IOperationLogService operationLogService, IIndividual individual, IUserAccessService access)
         {
             _dbFactory = dbFactory;
             _operationLogService = operationLogService;
             _individual = individual;
+            _access = access;
         }
 
-        public async Task<List<AddressCardDto>> GetLeaveAddressesAsync()
+        public async Task<List<AddressCardDto>> GetLeaveAddressesAsync(int? applicantJobId = null)
         {
-            var individualId = await _individual.GetIndividualID();
             await using var context = await _dbFactory.CreateDbContextAsync();
+            var individualId = applicantJobId.HasValue
+                ? (await HRM.Helpers.LeaveApplicantScope.ResolveAsync(context, _access, applicantJobId)).IndividualID
+                : await _individual.GetIndividualID();
 
             //     return await context.BusinessEntityLocations
             //.Where(x => x.BusinessEntityId == individualId && x.IsValid)
@@ -120,11 +124,13 @@ namespace HRM.Services
         }
 
 
-        public async Task<ServiceResult> CreateAddressAsync(AddressCreateDto model)
+        public async Task<ServiceResult> CreateAddressAsync(AddressCreateDto model, int? applicantJobId = null)
         {
-            var owner = await _individual.GetIndividualID();
-            if (owner <= 0) return ServiceResult.Fail("Your employee identity is unavailable.");
             await using var db = await _dbFactory.CreateDbContextAsync();
+            var owner = applicantJobId.HasValue
+                ? (await HRM.Helpers.LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId)).IndividualID
+                : await _individual.GetIndividualID();
+            if (owner <= 0) return ServiceResult.Fail("Your employee identity is unavailable.");
             await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
             var audit = await _operationLogService.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.LOCATION_CREATE, $"Created personal address for Individual {owner}");
             var result = await BusinessEntityAddressWriter.SaveAsync(db, owner, new AddressMutation {

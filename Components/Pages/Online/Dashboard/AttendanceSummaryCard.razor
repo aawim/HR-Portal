@@ -122,6 +122,13 @@
                     var isFutureDay =
                     day.Date > DateTime.UtcNow.AddHours(5).Date;
                     var overview = Days?.FirstOrDefault(x => x.Date.Date == day.Date);
+                    if (overview != null)
+                    {
+                        isPresent = overview.IsPresent;
+                        isUnresolvedDay = overview.IsUnresolved;
+                    }
+                    var displayedCheckIn = overview != null ? overview.FirstCheckIn : checkIn?.Date;
+                    var displayedCheckOut = overview != null ? overview.LastCheckOut : checkOut?.Date;
                     var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
                     var isOnLeave = overview?.IsOnLeave == true;
                     var isAbsent = overview?.IsAbsent == true;
@@ -206,7 +213,7 @@
                                     </span>
 
                                     <span class="text-sm font-semibold">
-                                        @checkIn!.Date.ToString("HH:mm")
+                                        @displayedCheckIn?.ToString("HH:mm")
                                     </span>
 
                                 </div>
@@ -219,10 +226,10 @@
                                         Out
                                     </span>
 
-                                    @if (checkOut != null)
+                                    @if (displayedCheckOut.HasValue)
                                     {
                                         <span class="text-sm font-medium">
-                                            @checkOut.Date.ToString("HH:mm")
+                                            @displayedCheckOut.Value.ToString("HH:mm")
                                         </span>
                                     }
                                     else

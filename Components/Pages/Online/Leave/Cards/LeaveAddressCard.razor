@@ -306,7 +306,7 @@
 
         AddressBaseTypes = await AddressService.GetAddressBaseTypesAsync();
 
-        Addresses = await AddressService.GetLeaveAddressesAsync();
+        Addresses = await AddressService.GetLeaveAddressesAsync(LeaveState.ApplicantJobId);
 
         isLoading = false;
     }
@@ -336,7 +336,7 @@
 
     private async Task SaveAddress()
     {
-        var result = await AddressService.CreateAddressAsync(Model);
+        var result = await AddressService.CreateAddressAsync(Model, LeaveState.ApplicantJobId);
 
         if (!result.Success)
         {
@@ -346,7 +346,7 @@
 
         ToastService.Success("Address added successfully.");
 
-        Addresses = await AddressService.GetLeaveAddressesAsync();
+        Addresses = await AddressService.GetLeaveAddressesAsync(LeaveState.ApplicantJobId);
 
         ShowDrawer = false;
     }

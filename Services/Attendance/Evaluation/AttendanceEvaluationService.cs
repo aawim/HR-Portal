@@ -140,8 +140,9 @@ namespace HRM.Services.Attendance
                     .ThenBy(x => x.StartDateTime)
                     .ToList();
             var officialSegments = segments.Where(x => x.SchedulePurpose == "Official").ToList();
-            var attendanceSegments = segments.Where(x => x.RequiresAttendance && x.IsMandatory).ToList();
-            var requiresAttendance = eligibility.CanBeAbsent && !isRestDay && segments.Any(x => x.RequiresAttendance);
+            var attendanceSegments = officialSegments.Where(x => x.RequiresAttendance && x.IsMandatory).ToList();
+            var requiresAttendance = eligibility.CanBeAbsent && !isRestDay && officialSegments.Any(x => x.RequiresAttendance);
+            var officialSegmentIds = officialSegments.Select(x => x.WorkPlanSegmentId).ToHashSet();
             if (isRestDay) attendanceSegments.Clear();
             var templateBySegment = segments.ToDictionary(x => x.WorkPlanSegmentId, x => x.WorkTemplateSegment?.WorkTemplateId ?? 0);
  
@@ -218,6 +219,10 @@ namespace HRM.Services.Attendance
             // EARLIEST valid CheckIn wins.
             // ========================================================
 
+            // Keep physical work coverage separate from official attendance.
+            var allResolvedEvents = resolvedEvents;
+            resolvedEvents = resolvedEvents.Where(x => !x.WorkPlanSegmentId.HasValue ||
+                officialSegmentIds.Contains(x.WorkPlanSegmentId.Value)).ToList();
             var effectiveCheckIn =
                 resolvedEvents
                     .Where(x =>
@@ -351,7 +356,7 @@ namespace HRM.Services.Attendance
                 officialPeriods.Add((plannedStart.Value, plannedEnd.Value));
             var dutyCoverage = HRM.Helpers.WorkHourCoverage.Calculate(officialPeriods,
                 workPlan.WorkAssignments.Where(x => x.IsValid && x.SchedulePurpose == "Duty").Select(x => (x.StartDateTime, x.EndDateTime)));
-            var actualCoverage = HRM.Helpers.WorkHourCoverage.Calculate(officialPeriods, WorkedPeriods(resolvedEvents));
+            var actualCoverage = HRM.Helpers.WorkHourCoverage.Calculate(officialPeriods, WorkedPeriods(allResolvedEvents));
 
 
             // ========================================================
@@ -365,7 +370,7 @@ namespace HRM.Services.Attendance
 
 
 
-            foreach (var segment in isRestDay ? new List<WorkPlanSegment>() : segments)
+            foreach (var segment in isRestDay ? new List<WorkPlanSegment>() : officialSegments)
             {
                 var evaluatedSegment =
                     EvaluateSegment(
@@ -781,13 +786,10 @@ namespace HRM.Services.Attendance
                                 segment.GraceAfterMinutes);
 
 
-                    if (checkIn.Value >
-                        latestOnTime)
+                    var lateMinutes = HRM.Helpers.AttendanceTiming.LateMinutes(checkIn.Value, latestOnTime);
+                    if (lateMinutes > 0)
                     {
-                        result.LateMinutes =
-                            CalculateMinutes(
-                                latestOnTime,
-                                checkIn.Value);
+                        result.LateMinutes = lateMinutes;
 
 
                         result.Issues.Add(

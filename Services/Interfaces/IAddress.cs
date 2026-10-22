@@ -5,7 +5,7 @@ namespace HRM.Services.Interfaces
 {
     public interface IAddress
     {
-        Task<List<AddressCardDto>> GetLeaveAddressesAsync();
+        Task<List<AddressCardDto>> GetLeaveAddressesAsync(int? applicantJobId = null);
         Task<List<Country>> GetCountriesAsync();
 
         Task<List<Atoll>> GetAtollsAsync();
@@ -17,6 +17,6 @@ namespace HRM.Services.Interfaces
 
         Task<List<BusinessEntityLocationType>> GetBusinessEntityLocationTypesAsync();
 
-        Task<ServiceResult> CreateAddressAsync(AddressCreateDto model);
+        Task<ServiceResult> CreateAddressAsync(AddressCreateDto model, int? applicantJobId = null);
     }
 }

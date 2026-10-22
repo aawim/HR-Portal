@@ -896,6 +896,13 @@ namespace HRM.Services
             var scheduleFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, individualId,
                 yearStart, queryEnd.Date, organisationId, cancellationToken, logs);
             var schedulesByDay = scheduleFacts.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
+            // Older resolutions can identify a segment without an assignment.
+            var segmentIds = logs.SelectMany(l => l.AttendanceLogResolutions)
+                .Where(r => r.WorkPlanSegmentId.HasValue).Select(r => r.WorkPlanSegmentId!.Value).Distinct().ToList();
+            var dutySegmentIds = (await db.WorkPlanSegments.AsNoTracking()
+                .Where(s => segmentIds.Contains(s.WorkPlanSegmentId) && s.SchedulePurpose == "Duty")
+                .Select(s => s.WorkPlanSegmentId).ToListAsync(cancellationToken)).ToHashSet();
+            var dutyAssignmentIds = scheduleFacts.Where(s => s.Purpose == "Duty").Select(s => s.WorkAssignmentId).ToHashSet();
 
             // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
@@ -956,6 +963,9 @@ namespace HRM.Services
                             Resolution = resolution
                         };
                     })
+                    .Where(x => x.Resolution == null ||
+                        !(x.Resolution.WorkPlanSegmentId.HasValue && dutySegmentIds.Contains(x.Resolution.WorkPlanSegmentId.Value)) &&
+                        !(x.Resolution.WorkAssignmentId.HasValue && dutyAssignmentIds.Contains(x.Resolution.WorkAssignmentId.Value)))
                     .OrderBy(x => x.Log.Date)
                     .ToList();
 
@@ -1101,20 +1111,20 @@ namespace HRM.Services
                     x.FromDate.Date <= date && x.ToDate.Date >= date);
                 var daySchedules = schedulesByDay.GetValueOrDefault(date) ?? [];
                 var official = daySchedules.Where(s => s.RequiresAttendance && s.Purpose == "Official").ToList();
-                var scheduled = (official.Count > 0 ? official : daySchedules.Where(s => s.RequiresAttendance))
+                var scheduled = official
                     .OrderBy(s => s.ScheduledStart).FirstOrDefault();
                 var actualStart = scheduled?.CheckIn ?? (firstCheckIn?.Resolution?.WorkAssignmentId == null ? firstCheckIn?.Log.Date : null);
                 var lateUntil = actualStart ?? (date == DateTime.UtcNow.AddHours(5).Date ? DateTime.UtcNow.AddHours(5) : (DateTime?)null);
                 var isLate = !isOnLeave && eligibility[date].CanBeAbsent && scheduled != null &&
-                    lateUntil.HasValue && lateUntil.Value > scheduled.ScheduledStart;
-                var lateMinutes = isLate ? (int)Math.Ceiling((lateUntil!.Value - scheduled!.ScheduledStart).TotalMinutes) : 0;
+                    lateUntil.HasValue && HRM.Helpers.AttendanceTiming.LateMinutes(lateUntil.Value, scheduled.ScheduledStart) > 0;
+                var lateMinutes = isLate ? HRM.Helpers.AttendanceTiming.LateMinutes(lateUntil!.Value, scheduled!.ScheduledStart) : 0;
 
                 // Presence is determined by successfully resolved CheckIn.
                 var isPresent =
                     !isOnLeave && eligibility[date].HasApprovedPosition && eligibility[date].HasActiveSchedule && firstCheckIn != null;
-                var requiredSchedules = daySchedules.Where(s => s.RequiresAttendance).ToList();
-                var recordedLateness = requiredSchedules.Where(s => s.CheckIn.HasValue && s.CheckIn.Value > s.ScheduledStart)
-                    .Select(s => (int)Math.Ceiling((s.CheckIn!.Value - s.ScheduledStart).TotalMinutes)).ToList();
+                var requiredSchedules = official;
+                var recordedLateness = requiredSchedules.Where(s => s.CheckIn.HasValue)
+                    .Select(s => HRM.Helpers.AttendanceTiming.LateMinutes(s.CheckIn!.Value, s.ScheduledStart)).Where(m => m > 0).ToList();
                 if (isPresent && recordedLateness.Count > 0)
                 {
                     isLate = true;
@@ -1122,11 +1132,11 @@ namespace HRM.Services
                 }
                 else if (isPresent && !actualStart.HasValue) { isLate = false; lateMinutes = 0; }
                 var completed = requiredSchedules.Count > 0 && requiredSchedules.All(s => s.CheckIn.HasValue && s.CheckOut.HasValue &&
-                    s.CheckOut >= s.CheckIn && s.CheckOut >= s.ScheduledEnd && s.CheckIn <= s.ScheduledStart);
+                    s.CheckOut >= s.CheckIn && s.CheckOut >= s.ScheduledEnd && HRM.Helpers.AttendanceTiming.LateMinutes(s.CheckIn.Value, s.ScheduledStart) == 0);
                 // Legacy unassigned clock pairs still need a known scheduled start
                 // before they can be described as perfectly attended.
                 if (!completed && requiredSchedules.Count == 1 && actualStart.HasValue && scheduled != null &&
-                    actualStart <= scheduled.ScheduledStart && lastCheckOut != null && lastCheckOut.Log.Date >= actualStart && lastCheckOut.Log.Date >= scheduled.ScheduledEnd &&
+                    HRM.Helpers.AttendanceTiming.LateMinutes(actualStart.Value, scheduled.ScheduledStart) == 0 && lastCheckOut != null && lastCheckOut.Log.Date >= actualStart && lastCheckOut.Log.Date >= scheduled.ScheduledEnd &&
                     firstCheckIn?.Resolution?.WorkAssignmentId == null)
                     completed = true;
 
@@ -1141,8 +1151,8 @@ namespace HRM.Services
                     unresolvedEvents.Count > 0;
 
 
-                // Only working days can be absent. Explicit duty and shift patterns
-                // override the normal Sunday–Thursday working week.
+                // Only official working days can be absent. Official shift patterns
+                // override the normal Sunday–Thursday working week; supplemental duty does not.
                 var isRestDay = eligibility[date].HasActiveSchedule && !eligibility[date].IsScheduledDay;
                 var isAbsent =
                     eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave &&
