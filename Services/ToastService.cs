@@ -4,43 +4,51 @@
     {
         public event Action<ToastMessage>? OnShow;
 
-        public void Show(string message, ToastType type = ToastType.Info)
+        public void Show(string message, ToastType type = ToastType.Info, string? title = null)
         {
            OnShow?.Invoke(new ToastMessage
             {
                 Message = message,
+                Title = string.IsNullOrWhiteSpace(title) ? type switch
+                {
+                    ToastType.Success => "Success",
+                    ToastType.Error => "Action failed",
+                    ToastType.Warning => "Attention needed",
+                    _ => "Information"
+                } : title.Trim(),
                 Type = type
             });
         }
 
 
-        public void Success(string message)
+        public void Success(string message, string? title = null)
         {
-            Show(message, ToastType.Success);
+            Show(message, ToastType.Success, title);
         }
 
 
-        public void Error(string message)
+        public void Error(string message, string? title = null)
         {
-            Show(message, ToastType.Error);
+            Show(message, ToastType.Error, title);
         }
 
 
-        public void Warning(string message)
+        public void Warning(string message, string? title = null)
         {
-            Show(message, ToastType.Warning);
+            Show(message, ToastType.Warning, title);
         }
 
 
-        public void Info(string message)
+        public void Info(string message, string? title = null)
         {
-            Show(message, ToastType.Info);
+            Show(message, ToastType.Info, title);
         }
     }
 
 
     public class ToastMessage
     {
+        public string Title { get; set; } = "Information";
         public string Message { get; set; } = "";
         public ToastType Type { get; set; }
     }
