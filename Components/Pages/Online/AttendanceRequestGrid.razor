@@ -1,5 +1,6 @@
 ﻿@page "/online/attendance/attendance-request"
 @using HRM.Components.Shared
+@page "/online/attendance/attendance-request/{TabSection}"
 @using HRM.DTOs
 @using HRM.DTOs.Attendance
 @using HRM.DTOs.Leave
@@ -29,11 +30,26 @@
             <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
             <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
         </div>
+        @if (activeTab != "late-check-in")
+        {
         <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 mb-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Add Request
         </button>
+        }
     </div>
+
+    <nav class="mb-4 flex flex-wrap gap-2 border-b pb-3" aria-label="Attendance request categories">
+        @foreach (var tab in RequestTabs)
+        {
+            <a href="@($"/online/attendance/attendance-request/{tab.Key}")" aria-current="@(activeTab == tab.Key ? "page" : null)"
+               class="app-button @(activeTab == tab.Key ? "bg-blue-600 text-white" : "app-button-secondary")">@tab.Label</a>
+        }
+    </nav>
+    @if (activeTab == "late-check-in")
+    {
+        <LateCheckInRequests />
+    }
 
     @if (!string.IsNullOrWhiteSpace(requestSuccess))
     {
@@ -46,6 +62,8 @@
         </div>
     }
 
+    @if (activeTab == "uneven-log-correction")
+    {
     <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4">
         <h3 class="font-semibold text-slate-800">Uneven-log corrections</h3>
         <p class="mb-3 text-sm text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
@@ -68,7 +86,10 @@
             </div>
         }
     </section>
+    }
 
+    @if (activeTab != "late-check-in")
+    {
     <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
         @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
         {
@@ -135,7 +156,7 @@
     @if (isDataLoaded)
     {
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-            @if (requestsList.Any())
+            @if (VisibleRequests.Any())
             {
                 <div class="overflow-x-auto">
                     <table class="w-full text-sm text-left text-slate-600">
@@ -149,7 +170,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            @foreach (var req in requestsList)
+                            @foreach (var req in VisibleRequests)
                             {
                                 <tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors">
                                     <td class="px-6 py-4 font-medium text-slate-900">@req.ReferenceNo</td>
@@ -181,6 +202,7 @@
         </div>
     }
 
+    }
 </div> 
 
 
@@ -190,7 +212,7 @@
 <div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddPanel ? "translate-x-0" : "translate-x-full")">
 
     <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-        <h3 class="text-lg font-bold text-slate-800">@(isLeaveChange ? "New Leave Change Request" : "New Attendance Request")</h3>
+        <h3 class="text-lg font-bold text-slate-800">@(isLeaveChange ? "New Leave Change Request" : isCorrection ? "New Uneven Log Correction Request" : "New Attendance Request")</h3>
         <button @onclick="CloseAddPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
         </button>
@@ -207,9 +229,15 @@
         <div>
             <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Request type</label>
             <select @bind="requestKind" @bind:after="RequestKindChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
-                <option value="attendance">Missing attendance</option>
-                <option value="correction">Uneven-log correction</option>
-                <option value="leave">Leave change</option>
+                @if (activeTab == "uneven-log-correction")
+                {
+                    <option value="correction">Uneven-log correction</option>
+                }
+                else
+                {
+                    <option value="attendance">Missing attendance</option>
+                    <option value="leave">Leave change</option>
+                }
             </select>
         </div>
         @if (isLeaveChange)
@@ -328,6 +356,16 @@
 </div>
 
 @code {
+    [Parameter] public string? TabSection { get; set; }
+    private string activeTab = "attendance";
+    private static readonly (string Key, string Label)[] RequestTabs =
+    [ ("attendance", "Attendance Requests"), ("late-check-in", "Late check in request"), ("uneven-log-correction", "Uneven log correction request") ];
+    private IEnumerable<AttendanceRequestDto> VisibleRequests => requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
+    protected override void OnParametersSet()
+    {
+        activeTab = RequestTabs.Any(t => t.Key == TabSection) ? TabSection! : "attendance";
+        showAddPanel = false;
+    }
     // Filter Bindings
     private int selectedOrgId = 0;
     private int selectedStatusId = 0;
@@ -385,7 +423,7 @@
     {
         newRequest = new();
         leaveChange = new();
-        isCorrection = false;
+        isCorrection = activeTab == "uneven-log-correction";
         requestError = null;
         showAddPanel = true;
         await RefreshDateInfo();

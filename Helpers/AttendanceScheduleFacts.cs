@@ -28,7 +28,7 @@ public static class AttendanceScheduleFacts
             .ToListAsync(ct);
         return assignments.Select(a =>
         {
-            var events = logs.Select(l => new { l.Date, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
+            var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
                 .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution?.WorkAssignmentId == a.WorkAssignmentId).ToList();
             var start = a.WorkAssignmentSegments.Where(s => s.IsValid && s.ExpectedInOutModeId == 1)
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.StartDateTime).Min();
@@ -40,7 +40,11 @@ public static class AttendanceScheduleFacts
             return new StaffScheduleAttendanceDto(a.WorkPlan.WorkDate.Date, a.Name, a.SchedulePurpose, shift,
                 a.RequiresAttendance || a.WorkAssignmentSegments.Any(s => s.IsValid && s.IsMandatory && s.RequiresAttendance),
                 start, finish, events.Where(e => e.Resolution!.AttendanceClockTypeId == 1).Select(e => (DateTime?)e.Date).Min(),
-                events.Where(e => e.Resolution!.AttendanceClockTypeId == 2).Select(e => (DateTime?)e.Date).Max());
+                events.Where(e => e.Resolution!.AttendanceClockTypeId == 2).Select(e => (DateTime?)e.Date).Max())
+            {
+                WorkAssignmentId = a.WorkAssignmentId,
+                CheckInLogId = events.Where(e => e.Resolution!.AttendanceClockTypeId == 1).OrderBy(e => e.Date).Select(e => (int?)e.AttendanceLogId).FirstOrDefault()
+            };
         }).OrderBy(a => a.Date).ThenBy(a => a.ScheduledStart).ToList();
     }
 }

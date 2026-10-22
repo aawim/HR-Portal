@@ -17,7 +17,10 @@
     }
     @if(error != null) { <p role="alert" class="rounded-lg border p-3">@error</p> }
     @if(loading) { <p role="status">Loading attendance...</p> }
-    <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
+    @if (ShowOverview)
+    {
+        <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
+    }
     @if(!loading && error == null)
     {
         <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
@@ -77,6 +80,7 @@
     [Parameter] public DateTime? InitialFrom { get; set; }
     [Parameter] public DateTime? InitialTo { get; set; }
     [Parameter] public bool ExternalDateFilters { get; set; }
+    [Parameter] public bool ShowOverview { get; set; } = true;
     [Parameter] public bool ShowDutyAttendance { get; set; }
     private (int Staff, DateTime? From, DateTime? To, bool Duty)? loadedSelection;
     private List<StaffScheduleAttendanceDto> dutyAttendance = [];

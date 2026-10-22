@@ -46,7 +46,10 @@
 
     </div>
 
-    <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@(Days == null)" />
+    @if (ShowExports)
+    {
+        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@(Days == null)" />
+    }
 
     <!-- ============================================================
          BODY
@@ -350,6 +353,7 @@
 
 
 @code {
+    [Parameter] public bool ShowExports { get; set; } = true;
     private AttendanceExportReport BuildExport() => new("Weekly attendance summary", $"{WeekStart:dd MMM yyyy} – {WeekEnd:dd MMM yyyy}", [AttendanceReportExport.Daily((Days ?? []).Where(d => d.Date.Date >= WeekStart.Date && d.Date.Date <= WeekEnd.Date))]);
 
     // ==============================================================

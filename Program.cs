@@ -264,6 +264,7 @@ builder.Services.AddScoped<HRM.Services.PositionOverviewService>();
 builder.Services.AddScoped<HRM.Services.PermissionSettingsService>();
 builder.Services.AddScoped<HRM.Services.UserSettingsService>();
 builder.Services.AddScoped<HRM.Services.AdminAccessGrantService>();
+builder.Services.AddScoped<HRM.Services.LateCheckInRequestService>();
 builder.Services.AddScoped<HRM.Services.OrganisationPermissionService>();
 builder.Services.AddScoped<HRM.Services.OrganisationResourceSettingsService>();
 builder.Services.AddScoped<HRM.Services.OrganisationSettingsService>();
