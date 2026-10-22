@@ -19,6 +19,12 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org) || id <= 0) return null;
         await using var db = await factory.CreateDbContextAsync();
+        return await ResolveAsync(db, actor, org, type, id);
+    }
+
+    private static async Task<WorkspaceSearchResult?> ResolveAsync(HrmTeContext db, HRM.DTOs.UserContext.UserContextDto actor, int org, WorkspaceEntityType type, int id)
+    {
+        if (id <= 0) return null;
         if (type == WorkspaceEntityType.Organisation)
             return await db.Organisations.AsNoTracking().Where(x => x.BusinessEntityID == id && (actor.IsSuperAdministrator || x.BusinessEntityID == org))
                 .Select(x => new WorkspaceSearchResult { Id = x.BusinessEntityID, Name = x.OrganisationName, EntityType = WorkspaceEntityType.Organisation }).SingleOrDefaultAsync();
@@ -35,6 +41,7 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
     public async Task<List<WorkspaceSearchResult>> GetAsync()
     {
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
+        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) return [];
         await using var db = await factory.CreateDbContextAsync();
         var preferenceId = await db.Users.Where(x => x.UserId == actor.UserId && x.BusinessEntityID == actor.IndividualId && x.IsActive && x.LocalUserStateId == 1)
             .Select(x => x.UserPreferenceId).SingleOrDefaultAsync();
@@ -42,15 +49,17 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         var json = await db.UserPreferences.Where(x => x.UserPreferenceId == preferenceId).Select(x => x.RecentWorkspaceSearchesJson).SingleOrDefaultAsync();
         var result = new List<WorkspaceSearchResult>();
         foreach (var entry in Read(json).Where(x => x.OrganisationId == org).OrderByDescending(x => x.AtUtc).Take(6))
-        { var item = await ResolveAsync(entry.Type, entry.Id); if(item != null && !result.Any(x => x.Id == item.Id && x.EntityType == item.EntityType)) result.Add(item); }
+        { var item = await ResolveAsync(db, actor, org, entry.Type, entry.Id); if(item != null && !result.Any(x => x.Id == item.Id && x.EntityType == item.EntityType)) result.Add(item); }
         return result;
     }
 
     public async Task<WorkspaceSearchResult?> RememberAsync(WorkspaceSearchResult selected)
     {
-        var item = await ResolveAsync(selected.EntityType, selected.Id); if(item == null) return null;
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
-        await using var db = await factory.CreateDbContextAsync(); await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) return null;
+        await using var db = await factory.CreateDbContextAsync();
+        var item = await ResolveAsync(db, actor, org, selected.EntityType, selected.Id); if(item == null) return null;
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var user = await db.Users.SingleAsync(x => x.UserId == actor.UserId && x.BusinessEntityID == actor.IndividualId && x.IsActive && x.LocalUserStateId == 1);
         var preference = await db.UserPreferences.SingleOrDefaultAsync(x => x.UserPreferenceId == user.UserPreferenceId);
         var shared = preference != null && await db.Users.AnyAsync(x => x.UserId != user.UserId && x.UserPreferenceId == preference.UserPreferenceId);

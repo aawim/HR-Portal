@@ -10,13 +10,18 @@
 @attribute [Authorize]
 @inject HRM.Services.WorkspaceRecentSearchService Recent
 @inject HRM.Services.ToastService Toasts
+@implements IDisposable
 
 
 <div class="space-y-2">
 
     <WorkspaceBreadcrumb SelectedItem="SelectedItem" OnReset="ResetWorkspace" />
   
-    @if (SelectedItem == null)
+    @if (resolvingRoute)
+    {
+        <p role="status" class="rounded-lg border p-4 text-sm">Opening workspace…</p>
+    }
+    else if (SelectedItem == null)
     {
 
         <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-2">
@@ -41,7 +46,7 @@
 
 
 
-    @if (SelectedItem != null)
+    @if (!resolvingRoute && SelectedItem != null)
     {
         <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-2">
             <div class="relative w-full max-w-xl">
@@ -77,29 +82,43 @@
     [SupplyParameterFromQuery(Name = "entityType")] public string? EntityTypeQuery { get; set; }
     [SupplyParameterFromQuery(Name = "entityId")] public int? EntityIdQuery { get; set; }
     string? previousEntityQuery; int recentVersion;
+    private bool resolvingRoute;
+    private int routeVersion;
+    private string? appliedRoute;
+    private bool disposed;
     protected override async Task OnParametersSetAsync()
     {
-        if (NotificationRequestId.HasValue) { SelectedItem = null; ActiveTab = WorkspaceTab.Overview; return; }
+        if (disposed) return;
+        var route = $"{EntityRoute ?? EntityTypeQuery}:{EntityId ?? EntityIdQuery}:{Section}:{NotificationRequestId}";
+        if (appliedRoute == route) return;
+        appliedRoute = route;
+        var version = ++routeVersion;
+        if (NotificationRequestId.HasValue) { resolvingRoute = false; SelectedItem = null; ActiveTab = WorkspaceTab.Overview; return; }
         var entity = EntityRoute ?? EntityTypeQuery;
         var id = EntityId ?? EntityIdQuery;
         var key = $"{entity}:{id}";
         if (previousEntityQuery != key || id.HasValue && SelectedItem == null)
         {
-            previousEntityQuery = key; SelectedItem = null;
+            previousEntityQuery = key;
+            WorkspaceSearchResult? resolved = null;
             if (id.HasValue && System.Enum.TryParse<WorkspaceEntityType>(entity, true, out var type) && System.Enum.IsDefined(type) && type != WorkspaceEntityType.Workspace)
             {
-                try { SelectedItem = await Recent.ResolveAsync(type, id.Value); if (SelectedItem == null) Toasts.Error("This search result is no longer available in the current organisation."); }
-                catch { Toasts.Error("The search result could not be opened."); }
+                resolvingRoute = true;
+                try
+                {
+                    resolved = await Recent.ResolveAsync(type, id.Value);
+                    if (version != routeVersion) return;
+                    if (resolved == null) Toasts.Error("This search result is no longer available in the current organisation.");
+                }
+                catch { if (version == routeVersion) Toasts.Error("The search result could not be opened."); }
             }
+            if (version != routeVersion) return;
+            SelectedItem = resolved;
+            resolvingRoute = false;
         }
         var tab = System.Enum.GetValues<WorkspaceTab>().FirstOrDefault(t => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(t.ToString())));
         ActiveTab = AllowedTabs.Contains(tab) ? tab : WorkspaceTab.Overview;
         navigationVersion++;
-    }
-
-    protected override void OnParametersSet()
-    {
-        if (NotificationRequestId.HasValue) SelectedItem = null;
     }
 
     private WorkspaceSearchResult? SelectedItem;
@@ -120,26 +139,43 @@
 
     private async Task SelectItem(WorkspaceSearchResult item)
     {
-        try { var resolved = await Recent.ResolveAsync(item.EntityType, item.Id); if(resolved == null) { Toasts.Error("This search result is no longer available in the current organisation."); return; } SelectedItem = resolved; }
-        catch { Toasts.Error("The search result could not be opened. Please try again."); return; }
+        var version = ++routeVersion;
+        WorkspaceSearchResult? resolved;
+        try { resolved = await Recent.RememberAsync(item); recentVersion++; }
+        catch
+        {
+            try { resolved = await Recent.ResolveAsync(item.EntityType, item.Id); }
+            catch
+            {
+                if (version == routeVersion) { resolvingRoute = false; Toasts.Error("The search result could not be opened. Please try again."); }
+                return;
+            }
+            if (version == routeVersion) Toasts.Error("Recent searches could not be saved.");
+        }
+        if (version != routeVersion) return;
+        resolvingRoute = false;
+        if (resolved == null) { Toasts.Error("This search result is no longer available in the current organisation."); return; }
+        SelectedItem = resolved;
+        previousEntityQuery = $"{resolved.EntityType.ToString().ToLowerInvariant()}:{resolved.Id}";
+        resolvingRoute = false;
         ActiveTab = WorkspaceTab.Overview;
-        try { await Recent.RememberAsync(SelectedItem); recentVersion++; }
-        catch { Toasts.Error("The item was opened, but recent searches could not be saved."); }
         Navigation.NavigateTo(TabUrl(WorkspaceTab.Overview));
     }
 
     private void ResetWorkspace()
     {
-        SelectedItem = null;
-        ActiveTab = WorkspaceTab.Overview;
         Navigation.NavigateTo("/admin/my/workspace");
     }
 
     private void OnTabChanged(WorkspaceTab tab)
     {
-        ActiveTab = tab;
-        navigationVersion++;
         Navigation.NavigateTo(TabUrl(tab));
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+        routeVersion++;
     }
 
 }

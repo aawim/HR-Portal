@@ -59,6 +59,7 @@
     private UserSessionDto? _session;
     private bool _checkingAccess = true;
     private bool _isAuthenticated;
+    private int _accessLoadVersion;
     private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
     private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
     [CascadingParameter]
@@ -71,15 +72,19 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        _checkingAccess = true;
-        _session = null;
+        var version = ++_accessLoadVersion;
+        _checkingAccess = _session == null;
         var authentication = await (AuthenticationState ?? AuthenticationProvider.GetAuthenticationStateAsync());
+        if (version != _accessLoadVersion) return;
         _isAuthenticated = authentication.User.Identity?.IsAuthenticated == true;
         // Register the eFaas identity as an Individual even when HRM access is not enabled.
         // This does not create a User, employment record, or permission grant.
-        if (_isAuthenticated)
+        var session = await UserContext.GetSessionAsync();
+        if (version != _accessLoadVersion) return;
+        if (_isAuthenticated && session == null)
             await EmployeeContext.GetCurrentAsync();
-        _session = await UserContext.GetSessionAsync();
+        if (version != _accessLoadVersion) return;
+        _session = session;
         PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "", _session?.CanAccessAdminPortal == true);
         if (IsAdminPortal) PortalContext.SwitchToAdmin();
         else PortalContext.SwitchToEmployee();

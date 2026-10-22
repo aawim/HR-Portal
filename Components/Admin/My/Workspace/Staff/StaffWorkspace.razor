@@ -5,7 +5,7 @@
 @using HRM.Models
 
 @using Microsoft.EntityFrameworkCore
-@inject HrmTeContext Db
+@inject IDbContextFactory<HrmTeContext> DbFactory
 
 <div class="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
 
@@ -98,46 +98,22 @@
     [Parameter]
     public WorkspaceTab ActiveTab { get; set; }
 
-     protected override async Task OnParametersSetAsync()
+    private int? loadedStaffId;
+    protected override async Task OnParametersSetAsync()
     {
+        if (loadedStaffId == StaffId) return;
+        var staffId = StaffId;
+        loadedStaffId = staffId;
         Loading = true;
-
-
-        Staff = await Db.Individuals
-
-            .Where(x => x.BusinessEntityId == StaffId)
-
-            .Select(x => new StaffInfo
-                {
-
-                    Name =
-                        x.FirstNameEnglish + " " +
-                        x.LastNameEnglish,
-
-
-                    // Position =
-                    //     x.Jobs
-                    //      .Where(j => j.TerminationDate == null)
-                    //      .Select(j => j.OrganisationStructure.Name)
-                    //      .FirstOrDefault(),
-
-
-                    // Status =
-                    //     x.Jobs.Any(j => j.TerminationDate == null)
-                    //     ? "Staff"
-                    //     : "Terminated"
-
-
-                })
-
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var staff = await db.Individuals.AsNoTracking()
+            .Where(x => x.BusinessEntityId == staffId)
+            .Select(x => new StaffInfo { Name = x.FirstNameEnglish + " " + x.LastNameEnglish })
             .FirstOrDefaultAsync();
-
-
+        if (loadedStaffId != staffId) return;
+        Staff = staff;
         Loading = false;
     }
-
-
-
     public class StaffInfo
     {
         public string Name { get; set; } = "";
