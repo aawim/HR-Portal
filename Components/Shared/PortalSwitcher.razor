@@ -7,38 +7,39 @@
 @inject PortalContext PortalContext
 @inject NavigationManager NavManager
 
-<div class="flex justify-center gap-2 mb-4 -mt-4">
-
-    <button class="px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700 transition-colors w-[90px]"
-            @onclick="SwitchToSelf">
-        Self
-    </button>
-
-    @if (CanAccessAdminPortal && PortalContext.CanAccessAdminPortal)
-    {
-        <button class="px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 transition-colors w-[90px]"
-                @onclick="SwitchToOrganisation">
-            Admin
+@if (CanAccessAdminPortal && PortalContext.CanAccessAdminPortal)
+{
+    <div class="portal-switch-container">
+        <button type="button" role="switch" class="portal-switch"
+                aria-label="Admin portal" aria-checked="@(PortalContext.IsAdminPortal ? "true" : "false")"
+                title="@(PortalContext.IsAdminPortal ? "Switch to Self" : "Switch to Admin")"
+                disabled="@switching" @onclick="TogglePortalAsync">
+            <span class="portal-label @(!PortalContext.IsAdminPortal ? "selected" : "")">Self</span>
+            <span class="portal-track @(PortalContext.IsAdminPortal ? "admin" : "")" aria-hidden="true"><span class="portal-thumb"></span></span>
+            <span class="portal-label @(PortalContext.IsAdminPortal ? "selected" : "")">Admin</span>
         </button>
-    }
-
-</div>
+    </div>
+}
 
 @code
 {
     [Parameter] public bool CanAccessAdminPortal { get; set; }
+    private bool switching;
+    private async Task TogglePortalAsync()
+    {
+        if (switching || !CanAccessAdminPortal || !PortalContext.CanAccessAdminPortal) return;
+        switching = true;
+        try
+        {
+            if (PortalContext.IsAdminPortal) SwitchToSelf();
+            else await SwitchToOrganisation();
+        }
+        finally { switching = false; }
+    }
     protected override async Task OnInitializedAsync()
     {
         var session = await UserContext.GetSessionAsync();
         PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true);
-
-        if (session != null)
-        {
-            PortalContext.Initialize(
-                session.OrganisationId,
-                session.OrganisationName,
-                session.CanAccessAdminPortal);
-        }
 
         DetermineContextFromUrl();
 

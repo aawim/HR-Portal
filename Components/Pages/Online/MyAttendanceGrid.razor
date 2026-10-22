@@ -14,11 +14,13 @@
 @inject HrmTeContext DbContext
 @inject AttendanceLogService AttendanceLogService
 @inject IIndividual _individual
+@inject IAttendanceService AttendanceService
 
 
 <BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
 
 <!-- Header & Action Bar -->
+<AttendanceExportButtons CreateReport="BuildExport" Disabled="@(isLoading || !exportReady)" />
 <div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
     <div>
         <h2 class="text-xl font-bold text-slate-800">My Attendance</h2>
@@ -176,7 +178,7 @@
 
                                                     <td class="px-4 py-3">
                                                         @{
-                                                            string statusBg = record.Status == "Present" ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
+                                                            string statusBg = record.IsLate && record.IsPresent ? "bg-amber-50 text-amber-800 border-amber-100" : record.IsPresent ? "bg-emerald-50 text-emerald-700 border-emerald-100" :
                                                             record.Status == "Absent" ? "bg-rose-50 text-rose-700 border-rose-100" :
                                                             record.Status == "Weekend" ? "bg-slate-100 text-slate-500 border-slate-200" :
                                                             "bg-blue-50 text-blue-700 border-blue-100";
@@ -395,6 +397,11 @@
 
 
 @code {
+    private bool exportReady;
+    private DateTime exportedFrom, exportedTo;
+    private AttendanceExportReport BuildExport() => new("My attendance", $"{exportedFrom:dd MMM yyyy} – {exportedTo:dd MMM yyyy}",
+        [AttendanceReportExport.Daily(attendanceDays), new("Break records", ["Date", "Break out", "Break in"],
+            dailyRecords.Select(d => new object?[] { d.Date.ToString("yyyy-MM-dd"), d.BreakOut, d.BreakIn }).ToList())]);
 
     private bool isLoading = true;
 
@@ -498,25 +505,12 @@
     }
 
 
+    private List<HRM.DTOs.Attendance.YearlyAttendanceDayDto> attendanceDays = [];
     private void CalculateLateRecords()
     {
-        // Assuming rawLogs is already fetched
-        // Example threshold: 08:30:00
- 
-
-
-        var shiftStart = new TimeSpan(8, 30, 0); 
-        
-        lateRecords = rawLogs
-            .Where(l => l.InOutModeId == 1 && l.Date.TimeOfDay > shiftStart &&
-                dailyRecords.Any(r => r.Date.Date == l.Date.Date && r.Status == "Present"))
-            .Select(l => new LateRecord {
-                Date = l.Date,
-                ActualTime = l.Date.TimeOfDay,
-                ScheduledTime = shiftStart,
-                MinutesLate = (int)(l.Date.TimeOfDay - shiftStart).TotalMinutes
-            })
-            .ToList();
+        lateRecords = attendanceDays.Where(d => d.IsPresent && d.IsLate && d.FirstCheckIn.HasValue && d.ScheduledStart.HasValue)
+            .Select(d => new LateRecord { Date = d.Date, ActualTime = d.FirstCheckIn!.Value.TimeOfDay,
+                ScheduledTime = d.ScheduledStart!.Value.TimeOfDay, MinutesLate = d.LateMinutes }).ToList();
     }
 
     private void SetActiveTab(string tabName)
@@ -545,9 +539,9 @@
         {
             new ChartStat { Label = "To Attend", Days = requiredDays, Percentage = requiredDays > 0 ? 100 : 0, ColorClass = "bg-slate-400" },
             new ChartStat { Label = "Absent", Days = TotalAbsentDays, Percentage = (int)Math.Round(100d * TotalAbsentDays / totalDays), ColorClass = "bg-rose-500" },
-            new ChartStat { Label = "Late", Days = 0, Percentage = 0, ColorClass = "bg-amber-400" },
-            new ChartStat { Label = "Perfect", Days = 0, Percentage = 0, ColorClass = "bg-emerald-400" },
-            new ChartStat { Label = "Attended", Days = 0, Percentage = 0, ColorClass = "bg-blue-500" },
+            new ChartStat { Label = "Attended late", Days = dailyRecords.Count(r => r.IsLate), Percentage = (int)Math.Round(100d * dailyRecords.Count(r => r.IsLate) / totalDays), ColorClass = "bg-amber-400" },
+            new ChartStat { Label = "Perfectly attended", Days = dailyRecords.Count(r => r.IsPerfect), Percentage = (int)Math.Round(100d * dailyRecords.Count(r => r.IsPerfect) / totalDays), ColorClass = "bg-emerald-400" },
+            new ChartStat { Label = "Attended", Days = dailyRecords.Count(r => r.IsPresent && !r.IsLate && !r.IsPerfect), Percentage = (int)Math.Round(100d * dailyRecords.Count(r => r.IsPresent && !r.IsLate && !r.IsPerfect) / totalDays), ColorClass = "bg-blue-500" },
             new ChartStat { Label = "Leaves", Days = leaveDays, Percentage = (int)Math.Round(100d * leaveDays / totalDays), ColorClass = "bg-blue-400" }
         };
     }
@@ -558,6 +552,7 @@
     {
 
         isLoading = true;
+        exportReady = false;
         StateHasChanged();
 
         try
@@ -568,6 +563,7 @@
         breakLateRecords.Clear(); // Clears correctly
 
             int individualID = await _individual.GetIndividualID();
+        attendanceDays = await AttendanceService.GetStaffAttendanceRangeAsync(individualID, start, end);
         rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
         var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(DbContext, individualID, start.Date, end.Date);
         var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, individualID, start.Date, end.Date);
@@ -662,9 +658,20 @@
                     }
                 }
             }
+            var overview = attendanceDays.FirstOrDefault(d => d.Date.Date == day.Date);
+            if (overview != null)
+            {
+                row.Status = overview.IsOnLeave ? "Leave" : HRM.Helpers.AttendancePresentation.Status(overview);
+                row.IsPresent = overview.IsPresent; row.IsLate = overview.IsPresent && overview.IsLate;
+                row.IsPerfect = overview.IsPerfectlyAttended;
+                row.ClockIn = overview.FirstCheckIn?.ToString("HH:mm") ?? "--:--";
+                row.ClockOut = overview.LastCheckOut?.ToString("HH:mm") ?? "--:--";
+            }
             dailyRecords.Add(row);
         }
+        CalculateLateRecords();
         LoadChartData();
+        exportedFrom = start.Date; exportedTo = end.Date; exportReady = true;
         StateHasChanged(); // Refresh the UI
 
         }
@@ -712,6 +719,9 @@
 
     private class DailyAttendanceRow
     {
+        public bool IsPresent { get; set; }
+        public bool IsLate { get; set; }
+        public bool IsPerfect { get; set; }
         public bool RequiresAttendance { get; set; }
         public DateTime Date { get; set; }
         public string ClockIn { get; set; } = "--:--";

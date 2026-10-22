@@ -29,6 +29,7 @@
 
             <button type="button"
                     @onclick="PreviousYear"
+                    disabled="@(!AllowYearChange)"
                     class="flex h-8 w-8 items-center justify-center
                            rounded-lg border border-slate-200
                            text-slate-500 transition
@@ -46,7 +47,7 @@
 
             <button type="button"
                     @onclick="NextYear"
-                    disabled="@(Year >= DateTime.Today.Year)"
+                    disabled="@(!AllowYearChange || Year >= DateTime.Today.Year)"
                     class="flex h-8 w-8 items-center justify-center
                            rounded-lg border border-slate-200
                            text-slate-500 transition
@@ -62,6 +63,7 @@
 
     </div>
 
+    @if (ShowExports) { <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@(IsLoading || Days == null)" /> }
     <!-- ============================================================
      YEAR GRID
      ============================================================ -->
@@ -188,7 +190,7 @@
                                         </div>
 
                                         <div class="mt-0.5 text-slate-300">
-                                            @GetStatusText(status)
+                                            @(Days?.FirstOrDefault(x => x.Date.Date == day.Value.Date) is { } attendanceDay ? HRM.Helpers.AttendancePresentation.Status(attendanceDay) : GetStatusText(status))
                                         </div>
 
                                     </div>
@@ -228,7 +230,7 @@
             <div class="mt-1 flex items-center gap-1.5
                     text-xs text-slate-500">
                 <span class="h-2.5 w-2.5 rounded-sm bg-green-500"></span>
-                Present
+                Attended
             </div>
         </div>
 
@@ -373,6 +375,8 @@
 
 </div>
 @code {
+    [Parameter] public bool ShowExports { get; set; } = true;
+    private AttendanceExportReport BuildExport() => new("Yearly attendance overview", $"Year: {Year}", [AttendanceReportExport.Daily((Days ?? []).Where(d => d.Date.Year == Year))]);
 
     // ==============================================================
     // PARAMETERS
@@ -381,6 +385,7 @@
     [Parameter]
     public List<YearlyAttendanceDayDto>? Days { get; set; }
     [Parameter] public int? SelectedYear { get; set; }
+    [Parameter] public bool AllowYearChange { get; set; } = true;
     protected override void OnParametersSet() { if(SelectedYear.HasValue) Year = SelectedYear.Value; }
 
 
@@ -573,6 +578,7 @@
             return AttendanceDayStatus.RestDay;
         }
 
+        if (day.IsLate && day.IsPresent) return AttendanceDayStatus.Late;
         if (day.IsPresent)
         {
             return AttendanceDayStatus.Present;
@@ -602,6 +608,7 @@
     {
         return status switch
         {
+            AttendanceDayStatus.Late => "bg-amber-500",
             AttendanceDayStatus.Present =>
                 "bg-green-500",
 
@@ -642,7 +649,8 @@
         return status switch
         {
             AttendanceDayStatus.Present =>
-                "Present",
+                "Attended",
+            AttendanceDayStatus.Late => "Attended late",
 
             AttendanceDayStatus.Absent =>
                 "Absent",
@@ -680,8 +688,7 @@
     private int PresentDays =>
         GetYearDays()
             .Count(x =>
-                GetDayStatus(x) ==
-                AttendanceDayStatus.Present);
+                GetDayStatus(x) is AttendanceDayStatus.Present or AttendanceDayStatus.Late);
 
 
     // ==============================================================
@@ -789,7 +796,8 @@
         Holiday = 6,
         RestDay = 7,
         NoSchedule = 8,
-        BeforeApproval = 9
+        BeforeApproval = 9,
+        Late = 10
     }
 
 

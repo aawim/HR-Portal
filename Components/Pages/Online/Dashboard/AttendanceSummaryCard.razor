@@ -6,7 +6,7 @@
     <!-- ============================================================
          HEADER
          ============================================================ -->
-    <div class="flex items-center justify-between border-b border-slate-100 px-4 py-2">
+    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-2">
 
         <div>
             <h3 class="text-base font-semibold text-slate-800">
@@ -18,11 +18,12 @@
             </p>
         </div>
 
-        <div class="flex items-center gap-2 text-xs text-slate-500">
+        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            <span class="flex items-center gap-1"><span class="h-2.5 w-2.5 rounded-full bg-amber-500"></span>Late</span>
 
             <span class="flex items-center gap-1">
                 <span class="h-2.5 w-2.5 rounded-full bg-green-500"></span>
-                Present
+                Attended
             </span>
 
             <span class="flex items-center gap-1">
@@ -45,6 +46,7 @@
 
     </div>
 
+    <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@(Days == null)" />
 
     <!-- ============================================================
          BODY
@@ -115,7 +117,7 @@
                     // Future day
                     // ------------------------------------------------
                     var isFutureDay =
-                    day.Date > DateTime.Today;
+                    day.Date > DateTime.UtcNow.AddHours(5).Date;
                     var overview = Days?.FirstOrDefault(x => x.Date.Date == day.Date);
                     var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
                     var isOnLeave = overview?.IsOnLeave == true;
@@ -130,12 +132,14 @@
                     ? "bg-slate-100 text-slate-400"
                     : overview?.EligibilityMessage != null && !isOnLeave
                     ? "bg-slate-100 text-slate-500"
+                    : isOnLeave
+                    ? "bg-blue-500 text-white"
+                    : overview?.IsLate == true
+                    ? "bg-amber-500 text-slate-900"
                     : isPresent
                     ? "bg-green-500 text-white"
                     : isUnresolvedDay
                     ? "bg-slate-500 text-white"
-                    : isOnLeave
-                    ? "bg-blue-500 text-white"
                     : isWeekend
                     ? "bg-slate-100 text-slate-500"
                     : isAbsent ? "bg-red-500 text-white" : "bg-slate-100 text-slate-500";
@@ -150,7 +154,7 @@
                             flex-col items-center justify-center
                             rounded-lg px-2 text-center
                             transition-all duration-200
-                            hover:-translate-y-0.5 hover:shadow-md">
+                            hover:-translate-y-0.5 hover:shadow-md" title="@(overview?.IsLate == true ? $"Late {overview.LateMinutes} min" : null)">
 
 
                             <!-- Date -->
@@ -179,12 +183,18 @@
                             {
                                 <span class="text-xs font-semibold">@eligibilityMessage</span>
                             }
+                            else if (overview?.IsLate == true && !isPresent)
+                            {
+                                <span class="text-sm font-semibold">Late</span>
+                                <span class="mt-1 text-[10px]">Check in overdue</span>
+                            }
                             else if (isWeekend && !hasLogs)
                             {
                                 <span class="text-sm font-semibold">@(HRM.Helpers.StaffScheduleCalendar.IsWeekend(day) ? "Weekend" : "Rest day")</span>
                             }
                             else if (isPresent)
                             {
+                                <span class="text-[10px] font-medium">@(overview != null ? HRM.Helpers.AttendancePresentation.Status(overview) : "Attended")</span>
                                 <!-- Check In -->
                                 <div class="flex items-center justify-center gap-1">
 
@@ -298,7 +308,7 @@
                     </div>
 
                     <div class="text-xs text-slate-500">
-                        Present
+                        Attended
                     </div>
 
                 </div>
@@ -340,6 +350,7 @@
 
 
 @code {
+    private AttendanceExportReport BuildExport() => new("Weekly attendance summary", $"{WeekStart:dd MMM yyyy} – {WeekEnd:dd MMM yyyy}", [AttendanceReportExport.Daily((Days ?? []).Where(d => d.Date.Date >= WeekStart.Date && d.Date.Date <= WeekEnd.Date))]);
 
     // ==============================================================
     // PARAMETERS

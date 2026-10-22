@@ -20,7 +20,7 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="max-w-12xl mx-auto py-0 px-4">
+        <div class="min-w-0 w-full mx-auto">
             <!-- Back Button -->
             <a href="/admin/attendance" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
                 <svg class="w-4 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
@@ -28,9 +28,9 @@
             </a>
 
             <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
-            <div class="flex flex-col md:flex-row gap-1 items-start">
+            <div class="flex min-w-0 flex-col 2xl:flex-row gap-4 items-start">
                 <!-- LEFT: Sidebar Menu (Responsive width) -->
-                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-80" : "w-[60px]")">
+                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full 2xl:w-56" : "w-[60px]")">
 
                     <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
 
@@ -75,7 +75,7 @@
                 </div>
 
                 <!-- RIGHT: Dynamic Data Display -->
-                <div class="w-full md:w-2/3 lg:w-3/4 flex-grow bg-white rounded-2xl border border-slate-200 shadow-sm p-2 md:p-8 min-h-[600px] mt-[40px]">
+                <div class="min-w-0 w-full flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4">
                     @if (activeItem == null)
                     {
                         <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 min-h-[400px]">
@@ -134,7 +134,6 @@
 
     private void SelectItem(SubItem item)
     {
-        activeItem = item;
         Navigation.NavigateTo($"/admin/attendance/{CategoryName}/{item.Route}");
     }
     private bool isSidebarExpanded = true;
@@ -165,9 +164,8 @@
      private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
         "manage-attendance" => new() {
-            new("My Attendance","my-attendance","👤","View your personal attendance logs and time history.",typeof(MyAttendanceGrid)),
             new("Individual Attendance","individual-attendance","🔍","Check detailed attendance records for specific employees.",typeof(IndividualAttendanceGrid)),
-            new("Team Attendance","team-attendance","👥","Monitor daily attendance and time-tracking for your team.",typeof(TeamAttendanceGrid)),
+            new("Department Attendance","department-attendance","👥","Review attendance for staff in approved departments.",typeof(TeamAttendanceGrid)),
             new("Organisation Daily","organisation-daily","🏢","View the daily attendance overview for the entire organisation.",typeof(OrganisationDaily)),
             new("Add Bulk Attendance","add-bulk-attendance","📋","Upload or manually enter attendance for multiple staff at once.",typeof(BulkAttendanceGrid)),
             new("Attendance Requests","attendance-requests","✉️","Review and approve manual attendance entries and adjustments.",typeof(AttendanceRequestGrid)),
@@ -221,10 +219,4 @@
  
     // private List<Leaf>? leaveRequests;
 
-    protected override async Task OnInitializedAsync()
-    {
-        
-        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
-
-    }
 }

@@ -10,7 +10,7 @@ using System.Threading;
 
 namespace HRM.Services
 {
-    public class AttendanceService : IAttendanceService
+    public partial class AttendanceService : IAttendanceService
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IAttendanceLogDataLoader _loader;
@@ -770,7 +770,7 @@ namespace HRM.Services
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var jobs = await db.Jobs.Where(x => x.IndividualID == staffId && x.OrganisationID == org).Select(x => x.JobId).ToListAsync(ct);
             if (jobs.Count == 0) throw new UnauthorizedAccessException("The selected employee is not in the current organisation.");
-            if (actor.IndividualId == staffId || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsSuperAdministrator || await _userAccessService.HasPermissionAsync("Admin")) return org;
+            if (actor.IndividualId == staffId || await CanViewAllStaffAttendanceAsync(actor)) return org;
             foreach (var job in jobs)
                 if ((await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job)).Contains(actor.IndividualId)) return org;
             throw new UnauthorizedAccessException("You cannot view this employee's attendance.");
@@ -806,7 +806,7 @@ namespace HRM.Services
         private async Task<List<YearlyAttendanceDayDto>> GetYearlyAttendanceAsync(int individualId,
             int year,
             int? organisationId,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default, DateTime? rangeFrom = null, DateTime? rangeTo = null)
         {
             // ---------------------------------------------------------
             // Validate year
@@ -846,6 +846,8 @@ namespace HRM.Services
 
             var yearEndExclusive =
                 yearStart.AddYears(1);
+            if (rangeFrom.HasValue) yearStart = rangeFrom.Value.Date;
+            if (rangeTo.HasValue) yearEndExclusive = rangeTo.Value.Date.AddDays(1);
 
 
             // ---------------------------------------------------------
@@ -855,6 +857,7 @@ namespace HRM.Services
                 year == DateTime.UtcNow.AddHours(5).Year
                     ? DateTime.UtcNow.AddHours(5)
                     : yearEndExclusive;
+            if (queryEnd > yearEndExclusive) queryEnd = yearEndExclusive;
 
 
             // ---------------------------------------------------------
@@ -892,6 +895,9 @@ namespace HRM.Services
 
             var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, individualId,
                 yearStart, yearEndExclusive.AddDays(-1), organisationId, ct: cancellationToken);
+            var scheduleFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, individualId,
+                yearStart, queryEnd.Date, organisationId, cancellationToken, logs);
+            var schedulesByDay = scheduleFacts.GroupBy(s => s.Date).ToDictionary(g => g.Key, g => g.ToList());
 
             // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
@@ -913,6 +919,7 @@ namespace HRM.Services
                         year,
                         12,
                         31);
+            if (lastDate >= yearEndExclusive) lastDate = yearEndExclusive.AddDays(-1);
 
 
             var result =
@@ -1094,10 +1101,36 @@ namespace HRM.Services
                 // while physical clock details remain available on the DTO.
                 var isOnLeave = approvedLeaves.Any(x =>
                     x.FromDate.Date <= date && x.ToDate.Date >= date);
+                var daySchedules = schedulesByDay.GetValueOrDefault(date) ?? [];
+                var official = daySchedules.Where(s => s.RequiresAttendance && s.Purpose == "Official").ToList();
+                var scheduled = (official.Count > 0 ? official : daySchedules.Where(s => s.RequiresAttendance))
+                    .OrderBy(s => s.ScheduledStart).FirstOrDefault();
+                var actualStart = scheduled?.CheckIn ?? (firstCheckIn?.Resolution?.WorkAssignmentId == null ? firstCheckIn?.Log.Date : null);
+                var lateUntil = actualStart ?? (date == DateTime.UtcNow.AddHours(5).Date ? DateTime.UtcNow.AddHours(5) : (DateTime?)null);
+                var isLate = !isOnLeave && eligibility[date].CanBeAbsent && scheduled != null &&
+                    lateUntil.HasValue && lateUntil.Value > scheduled.ScheduledStart;
+                var lateMinutes = isLate ? (int)Math.Ceiling((lateUntil!.Value - scheduled!.ScheduledStart).TotalMinutes) : 0;
 
                 // Presence is determined by successfully resolved CheckIn.
                 var isPresent =
                     !isOnLeave && eligibility[date].HasApprovedPosition && eligibility[date].HasActiveSchedule && firstCheckIn != null;
+                var requiredSchedules = daySchedules.Where(s => s.RequiresAttendance).ToList();
+                var recordedLateness = requiredSchedules.Where(s => s.CheckIn.HasValue && s.CheckIn.Value > s.ScheduledStart)
+                    .Select(s => (int)Math.Ceiling((s.CheckIn!.Value - s.ScheduledStart).TotalMinutes)).ToList();
+                if (isPresent && recordedLateness.Count > 0)
+                {
+                    isLate = true;
+                    lateMinutes = recordedLateness.Sum();
+                }
+                else if (isPresent && !actualStart.HasValue) { isLate = false; lateMinutes = 0; }
+                var completed = requiredSchedules.Count > 0 && requiredSchedules.All(s => s.CheckIn.HasValue && s.CheckOut.HasValue &&
+                    s.CheckOut >= s.CheckIn && s.CheckIn <= s.ScheduledStart);
+                // Legacy unassigned clock pairs still need a known scheduled start
+                // before they can be described as perfectly attended.
+                if (!completed && requiredSchedules.Count == 1 && actualStart.HasValue && scheduled != null &&
+                    actualStart <= scheduled.ScheduledStart && lastCheckOut != null && lastCheckOut.Log.Date >= actualStart &&
+                    firstCheckIn?.Resolution?.WorkAssignmentId == null)
+                    completed = true;
 
 
                 // There were physical clock events but none of them
@@ -1126,6 +1159,11 @@ namespace HRM.Services
                     new YearlyAttendanceDayDto
                     {
                         HasActiveSchedule = eligibility[date].HasActiveSchedule,
+                        IsLate = isLate,
+                        LateMinutes = lateMinutes,
+                        ScheduledStart = scheduled?.ScheduledStart,
+                        ScheduledEnd = requiredSchedules.Select(s => (DateTime?)s.ScheduledEnd).Max(),
+                        IsPerfectlyAttended = isPresent && !isLate && completed,
                         HasApprovedPosition = eligibility[date].HasApprovedPosition,
                         RequiresAttendance = eligibility[date].CanBeAbsent,
                         EligibilityMessage = eligibility[date].Message,

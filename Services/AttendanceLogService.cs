@@ -16,10 +16,11 @@ namespace HRM.Services
         private readonly IUserAccessService _access;
         private readonly IAttendanceLogProcessor _attendanceLogProcessor;
         private readonly UserSettingsService? _accounts;
+        private readonly IAttendanceService? _attendance;
         public AttendanceLogService(HrmTeContext context,
             IAttendanceLogProcessor attendanceLogProcessor,
             IOperationLogService operationLogService, 
-            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null)
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null, IAttendanceService? attendance = null)
         {
             _context = context;
             _operationLogService = operationLogService;
@@ -27,12 +28,13 @@ namespace HRM.Services
             _access = access;
             _attendanceLogProcessor = attendanceLogProcessor;
             _accounts = accounts;
+            _attendance = attendance;
         }
        public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
         {
             var context = await _access.RequireContextAsync();
             using var db = await _dbFactory.CreateDbContextAsync();
-            var today = DateTime.Today;
+            var today = DateTime.UtcNow.AddHours(5).Date;
             var organisationId = await _access.GetCurrentOrganisationIdAsync();
 
             // =====================================================
@@ -220,6 +222,18 @@ namespace HRM.Services
 
 
 
+            if (_attendance != null)
+                foreach (var row in result)
+                {
+                    var day = (await _attendance.GetStaffAttendanceRangeAsync(row.StaffID, today, today)).FirstOrDefault();
+                    if (day == null) continue;
+                    row.CheckIn = day.FirstCheckIn; row.CheckOut = day.LastCheckOut;
+                    row.StatusMessage = HRM.Helpers.AttendancePresentation.Status(day);
+                    row.Status = day.IsOnLeave ? AttendanceStatus.Leave : day.IsPresent ?
+                        day.IsLate ? AttendanceStatus.Late : day.IsPerfectlyAttended ? AttendanceStatus.Present : AttendanceStatus.MissingCheckout :
+                        !day.HasActiveSchedule ? AttendanceStatus.NoActiveSchedule : !day.HasApprovedPosition ? AttendanceStatus.BeforePositionApproval :
+                        day.IsRestDay ? AttendanceStatus.RestDay : AttendanceStatus.Absent;
+                }
             return result;
         }
         public async Task AddClockEventAsync(

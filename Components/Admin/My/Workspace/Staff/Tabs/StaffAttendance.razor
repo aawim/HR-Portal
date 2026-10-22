@@ -7,16 +7,36 @@
         <div><h3 class="text-lg font-semibold">Attendance</h3><p class="text-sm text-slate-500">Attendance records for the selected employee.</p></div>
         <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="LoadAsync">Refresh</button>
     </div>
+    @if (!ExternalDateFilters)
+    {
     <div class="flex flex-wrap items-end gap-3 rounded-lg border p-3">
         <label class="text-sm">From <InputDate @bind-Value="from" class="block rounded border bg-transparent p-2" /></label>
         <label class="text-sm">To <InputDate @bind-Value="to" class="block rounded border bg-transparent p-2" /></label>
         <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="ApplyAsync">Show records</button>
     </div>
+    }
     @if(error != null) { <p role="alert" class="rounded-lg border p-3">@error</p> }
     @if(loading) { <p role="status">Loading attendance...</p> }
-    <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" />
+    <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
     @if(!loading && error == null)
     {
+        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
+        @if (ShowDutyAttendance)
+        {
+            <div class="overflow-x-auto rounded-lg border">
+                <table class="w-full whitespace-nowrap text-left text-sm">
+                    <caption class="p-3 text-left font-semibold">Required shift/duty attendance</caption>
+                    <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Schedule</th><th class="p-3">Scheduled time</th><th class="p-3">Status</th><th class="p-3">Check in</th><th class="p-3">Check out</th></tr></thead>
+                    <tbody>@foreach (var duty in dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance))
+                    {
+                        <tr class="border-b"><td class="p-3">@duty.Date.ToString("dd MMM yyyy")</td><td class="p-3">@duty.Purpose · @duty.Name</td>
+                            <td class="p-3">@duty.ScheduledStart.ToString("dd MMM HH:mm") – @duty.ScheduledEnd.ToString("dd MMM HH:mm")</td>
+                            <td class="p-3">@DutyStatus(duty)</td><td class="p-3">@(duty.CheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(duty.CheckOut?.ToString("HH:mm") ?? "—")</td></tr>
+                    }</tbody>
+                </table>
+                @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-sm">No required shift/duty assignments were found for this period.</p> }
+            </div>
+        }
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
             @foreach(var stat in Stats) { <div class="rounded-lg border p-3"><p class="text-xs text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-semibold">@stat.Value</p></div> }
         </div>
@@ -24,7 +44,7 @@
             <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</caption>
                 <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Status</th><th class="p-3">First check in</th><th class="p-3">Last check out</th><th class="p-3">Worked hours</th><th class="p-3">Clock events</th></tr></thead>
                 <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
-                    <tr class="border-b"><td class="whitespace-nowrap p-3">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="p-3 @(day.IsOnLeave ? "text-blue-600" : "")">@Status(day)</td>
+                    <tr class="border-b"><td class="whitespace-nowrap p-3">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="p-3 @(day.IsOnLeave ? "text-blue-600" : day.IsLate ? "text-amber-700" : "")">@Status(day)</td>
                         <td class="p-3">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="p-3">@day.WorkedHours.ToString("0.##")</td><td class="p-3">@day.ClockEventCount</td></tr>
                 }</tbody>
             </table>
@@ -42,14 +62,41 @@
 </section>
 
 @code {
+    private AttendanceExportReport BuildExport()
+    {
+        var tables = new List<AttendanceExportTable> { AttendanceReportExport.Daily(PeriodDays),
+            new("Clock events", ["Date and time", "Event", "Schedule"], events.Select(e => new object?[] { e.Time.ToString("yyyy-MM-dd HH:mm:ss"), e.Event, e.Schedule }).ToList()) };
+        if (ShowDutyAttendance) tables.Add(new("Required shift duty", ["Date", "Schedule", "Scheduled in", "Scheduled out", "Status", "Check in", "Check out"],
+            dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance).Select(d => new object?[] { d.Date.ToString("yyyy-MM-dd"), $"{d.Purpose} · {d.Name}",
+                d.ScheduledStart.ToString("yyyy-MM-dd HH:mm"), d.ScheduledEnd.ToString("yyyy-MM-dd HH:mm"), DutyStatus(d), d.CheckIn?.ToString("HH:mm"), d.CheckOut?.ToString("HH:mm") }).ToList()));
+        return new("Employee attendance", $"{(StaffName ?? $"Employee ID {StaffId}")} · {periodFrom:dd MMM yyyy} – {periodTo:dd MMM yyyy}" +
+            (events.Count == 1000 ? " · Clock events limited to latest 1,000; narrow the period for other events." : ""), tables);
+    }
+    [Parameter] public string? StaffName { get; set; }
     [Parameter] public int StaffId { get; set; }
+    [Parameter] public DateTime? InitialFrom { get; set; }
+    [Parameter] public DateTime? InitialTo { get; set; }
+    [Parameter] public bool ExternalDateFilters { get; set; }
+    [Parameter] public bool ShowDutyAttendance { get; set; }
+    private (int Staff, DateTime? From, DateTime? To, bool Duty)? loadedSelection;
+    private List<StaffScheduleAttendanceDto> dutyAttendance = [];
     static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
     int loadedStaff, year = Today.Year, version; bool loading; string? error;
     DateTime from = new(Today.Year, Today.Month, 1), to = Today, periodFrom, periodTo;
     List<YearlyAttendanceDayDto> days = []; List<StaffAttendanceClockEventDto> events = [];
     IEnumerable<YearlyAttendanceDayDto> PeriodDays => days.Where(x => x.Date >= periodFrom && x.Date <= periodTo);
     IEnumerable<(string Label, string Value)> Stats => new[] { ("Present", PeriodDays.Count(x => x.IsPresent).ToString()), ("Absent", PeriodDays.Count(x => x.IsAbsent).ToString()), ("Leave", PeriodDays.Count(x => x.IsOnLeave).ToString()), ("Rest days", PeriodDays.Count(x => x.IsRestDay).ToString()), ("Worked hours", PeriodDays.Sum(x => x.WorkedHours).ToString("0.##")) };
-    protected override async Task OnParametersSetAsync() { if(loadedStaff == StaffId) return; loadedStaff = StaffId; year = Today.Year; from = new(Today.Year, Today.Month, 1); to = Today; await LoadAsync(); }
+    protected override async Task OnParametersSetAsync()
+    {
+        var selection = (StaffId, InitialFrom, InitialTo, ShowDutyAttendance);
+        if (loadedSelection == selection) return;
+        loadedSelection = selection;
+        loadedStaff = StaffId;
+        from = InitialFrom?.Date ?? new(Today.Year, Today.Month, 1);
+        to = InitialTo?.Date ?? Today;
+        year = from.Year;
+        await LoadAsync();
+    }
     async Task ChangeYearAsync(int value) { year = value; from = new(value, 1, 1); to = value == Today.Year ? Today : new(value, 12, 31); await LoadAsync(); }
     async Task ApplyAsync() { if(from > to || from.Year != to.Year || from.Year < 2000 || to > Today) { error = "Choose dates in the same year, from 2000 through today."; return; } year = from.Year; await LoadAsync(); }
     async Task LoadAsync() {
@@ -58,12 +105,22 @@
             if(selectedFrom > selectedTo || selectedFrom.Year != selectedTo.Year || selectedFrom.Year != year || selectedTo > Today) throw new InvalidOperationException("Choose a valid date range within the selected year, through today.");
             var result = await Attendance.GetStaffYearlyAttendanceAsync(staff, year);
             var clock = await Attendance.GetStaffClockEventsAsync(staff, selectedFrom, selectedTo);
-            if(request == version) { days = result; events = clock; periodFrom = selectedFrom.Date; periodTo = selectedTo.Date; }
+            var duties = ShowDutyAttendance ? await Attendance.GetStaffScheduleAttendanceAsync(staff, selectedFrom, selectedTo) : new List<StaffScheduleAttendanceDto>();
+            if(request == version) { days = result; events = clock; dutyAttendance = duties; periodFrom = selectedFrom.Date; periodTo = selectedTo.Date; }
         }
         catch(UnauthorizedAccessException) { if(request == version) error = "You do not have access to this employee's attendance in the current organisation."; }
         catch(InvalidOperationException ex) { if(request == version) error = ex.Message; }
         catch(Exception) { if(request == version) error = "Attendance could not be loaded. Please try Refresh."; }
         finally { if(request == version) loading = false; }
     }
-    static string Status(YearlyAttendanceDayDto day) => day.IsOnLeave ? $"Leave · {day.LeaveTypeName ?? "Leave"}" : day.IsPresent ? "Present" : day.IsRestDay ? "Rest day" : day.IsHoliday ? "Holiday" : day.IsUnresolved ? "Unresolved" : day.IsAbsent ? "Absent" : day.EligibilityMessage ?? "—";
+    static string Status(YearlyAttendanceDayDto day) => HRM.Helpers.AttendancePresentation.Status(day);
+    private string DutyStatus(StaffScheduleAttendanceDto duty)
+    {
+        var day = days.FirstOrDefault(d => d.Date.Date == duty.Date.Date);
+        if (day?.IsOnLeave == true) return $"Leave · {day.LeaveTypeName}";
+        if (day?.HasApprovedPosition != true || !day.HasActiveSchedule) return day?.EligibilityMessage ?? "Attendance not required";
+        if (duty.CheckIn.HasValue) return HRM.Helpers.AttendancePresentation.Attended(duty.CheckIn > duty.ScheduledStart,
+            (int)Math.Ceiling(Math.Max(0, (duty.CheckIn.Value - duty.ScheduledStart).TotalMinutes)), duty.CheckOut >= duty.CheckIn);
+        return DateTime.UtcNow.AddHours(5) > duty.ScheduledStart ? "Missing check in" : "Upcoming";
+    }
 }

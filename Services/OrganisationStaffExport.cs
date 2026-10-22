@@ -36,9 +36,13 @@ public static class OrganisationStaffExport
         using var stream = new MemoryStream(); book.SaveAs(stream); return stream.ToArray();
     }
     private static readonly object FontLock = new();
-    public static byte[] Pdf(string organisation, string filters, IReadOnlyList<OrganisationStaffRow> rows, string fontPath)
+    internal static void EnsureReportFont(string fontPath)
     {
         lock (FontLock) GlobalFontSettings.FontResolver ??= new ReportFontResolver(File.ReadAllBytes(fontPath));
+    }
+    public static byte[] Pdf(string organisation, string filters, IReadOnlyList<OrganisationStaffRow> rows, string fontPath)
+    {
+        EnsureReportFont(fontPath);
         var document = new Document();
         document.Info.Title = organisation + " - Organisation staff";
         document.Styles[StyleNames.Normal].Font.Name = "StaffReport";

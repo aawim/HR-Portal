@@ -9,6 +9,9 @@ namespace HRM.Services.Interfaces
     {
 
         Task<List<YearlyAttendanceDayDto>>GetMyYearlyAttendanceAsync(int year, CancellationToken cancellationToken = default);
+        Task<AttendanceDirectoryDto> GetAttendanceDirectoryAsync(CancellationToken cancellationToken = default);
+        Task<List<StaffScheduleAttendanceDto>> GetStaffScheduleAttendanceAsync(int staffId, DateTime from, DateTime to, CancellationToken cancellationToken = default);
+        Task<List<YearlyAttendanceDayDto>> GetStaffAttendanceRangeAsync(int staffId, DateTime from, DateTime to, CancellationToken cancellationToken = default);
         Task<List<YearlyAttendanceDayDto>> GetStaffYearlyAttendanceAsync(int staffId, int year, CancellationToken cancellationToken = default);
         Task<List<StaffAttendanceClockEventDto>> GetStaffClockEventsAsync(int staffId, DateTime from, DateTime to, CancellationToken cancellationToken = default);
         Task <List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync();

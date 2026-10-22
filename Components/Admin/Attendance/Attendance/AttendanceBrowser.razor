@@ -1,0 +1,164 @@
+@using HRM.DTOs.Attendance
+@inject HRM.Services.Interfaces.IAttendanceService Attendance
+@inject ILogger<AttendanceBrowser> Logger
+
+<section class="min-w-0 space-y-4">
+    <header><h2 class="text-xl font-semibold">@(TeamMode ? "Department Attendance" : "Individual Attendance")</h2>
+        <p class="mt-1 text-sm text-slate-500">@(directory?.Organisation) · @(TeamMode ? "Review attendance for current department members." : "Select an employee to view attendance, leave and clock events.")</p></header>
+    @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@error</p> }
+    @if (directory == null)
+    {
+        @if (busy) { <p role="status">Loading attendance filters…</p> }
+        else { <button type="button" class="app-button app-button-secondary" @onclick="LoadDirectoryAsync">Retry</button> }
+    }
+    else
+    {
+        <div class="flex flex-wrap items-end gap-3 rounded-xl border p-3">
+            @if (!TeamMode)
+            {
+                <div class="w-full min-w-0">
+                    <HRM.Components.Admin.My.Workspace.WorkspaceSearch @key="searchVersion" StaffOnly="true" AllowedStaffIds="AllowedStaffIds" OnSelected="SelectEmployee" />
+                    @if (selectedEmployee != null) { <p class="mt-2 text-sm font-medium">@selectedEmployee.Name</p> }
+                </div>
+            }
+            else
+            {
+                <label class="min-w-[10rem] flex-1 text-sm">Department type
+                    <select class="mt-1 block w-full rounded border bg-transparent p-2" disabled="@busy" @bind="departmentTypeId" @bind:after="DepartmentTypeChanged">
+                        <option value="0">All types</option>
+                        @foreach (var item in directory.DepartmentTypes) { <option value="@item.Id">@item.Name</option> }
+                    </select>
+                </label>
+                <label class="min-w-[10rem] flex-1 text-sm">Department
+                    <select class="mt-1 block w-full min-w-0 rounded border bg-transparent p-2" disabled="@busy" @bind="departmentId" @bind:after="ClearSelection">
+                        <option value="0">Select department</option>
+                        @foreach (var item in FilteredDepartments) { <option value="@item.Id">@item.Name</option> }
+                    </select>
+                </label>
+            }
+            <label class="min-w-[9rem] flex-1 text-sm">From
+                <InputDate class="mt-1 block w-full min-w-0 rounded border bg-transparent p-2" disabled="@busy" @bind-Value="from" @bind-Value:after="ClearResults" />
+            </label>
+            <label class="min-w-[9rem] flex-1 text-sm">To
+                <InputDate class="mt-1 block w-full min-w-0 rounded border bg-transparent p-2" disabled="@busy" @bind-Value="to" @bind-Value:after="ClearResults" />
+            </label>
+            <div class="flex flex-wrap items-end gap-2">
+                <button type="button" class="app-button bg-blue-600 text-white" disabled="@(busy || (TeamMode ? departmentId == 0 : staffId == 0))" @onclick="ShowAsync">@(busy ? "Loading…" : "Show attendance")</button>
+                <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="Reset">Reset</button>
+            </div>
+        </div>
+        @if (!TeamMode)
+        {
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="showDutyAttendance" @bind:after="ShowAsync" />Show required shift/duty attendance separately</label>
+        }
+        @if (directory.Staff.Count == 0) { <p class="text-sm text-slate-500">No current employees are available within your attendance access.</p> }
+        else if (TeamMode && !FilteredDepartments.Any()) { <p class="text-sm text-slate-500">No approved departments with accessible staff match this type.</p> }
+        else if (!TeamMode && !FilteredStaff.Any()) { <p class="text-sm text-slate-500">No employees match these filters.</p> }
+        @if (busy) { <p role="status" class="text-sm">Loading attendance…</p> }
+        @if (!TeamMode && shownStaff > 0)
+        {
+            <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffAttendance @key="(shownStaff, reportFrom, reportTo, showDutyAttendance)" StaffId="shownStaff" StaffName="@(selectedEmployee?.Name)" InitialFrom="reportFrom" InitialTo="reportTo" ExternalDateFilters="true" ShowDutyAttendance="showDutyAttendance" />
+        }
+        @if (TeamMode && hasReport)
+        {
+            <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="busy" />
+            <p class="text-sm text-slate-500">@rows.Count staff · @reportFrom.ToString("dd MMM yyyy") – @reportTo.ToString("dd MMM yyyy"). Counts use approved employment, schedules, leave and rest days. Worked hours are clocked hours, not approved overtime.</p>
+            <div class="min-w-0 overflow-x-auto rounded-xl border">
+                <table class="w-full whitespace-nowrap text-left text-sm">
+                    <caption class="p-3 text-left font-semibold">Department attendance summary</caption>
+                    <thead><tr class="border-b"><th class="p-3">Employee</th><th class="p-3">Perfectly attended</th><th class="p-3">Attended</th><th class="p-3">Attended late</th><th class="p-3">Late minutes</th><th class="p-3">Absent</th><th class="p-3">Leave</th><th class="p-3">Rest days</th><th class="p-3">Holidays</th><th class="p-3">Unresolved</th><th class="p-3">Worked hours</th><th class="p-3">Clock events</th></tr></thead>
+                    <tbody>@foreach (var row in rows)
+                    {
+                        <tr class="border-b"><td class="p-3"><a class="text-blue-700 underline" href="@($"/admin/attendance/manage-attendance/individual-attendance?staffId={row.Staff.Id}")">@row.Staff.Name</a></td>
+                            <td class="p-3">@row.Days.Count(d => d.IsPerfectlyAttended)</td><td class="p-3">@row.Days.Count(d => d.IsPresent && !d.IsLate && !d.IsPerfectlyAttended)</td>
+                            <td class="p-3 text-amber-700">@row.Days.Count(d => d.IsPresent && d.IsLate)</td><td class="p-3 text-amber-700">@row.Days.Where(d => d.IsPresent && d.IsLate).Sum(d => d.LateMinutes)</td>
+                            <td class="p-3">@row.Days.Count(d => d.IsAbsent)</td>
+                            <td class="p-3 text-blue-700">@row.Days.Count(d => d.IsOnLeave)</td><td class="p-3">@row.Days.Count(d => d.IsRestDay)</td>
+                            <td class="p-3">@row.Days.Count(d => d.IsHoliday)</td><td class="p-3">@row.Days.Count(d => d.IsUnresolved)</td>
+                            <td class="p-3">@row.Days.Sum(d => d.WorkedHours).ToString("0.##")</td><td class="p-3">@row.Days.Sum(d => d.ClockEventCount)</td></tr>
+                    }</tbody>
+                </table>
+                @if (rows.Count == 0) { <p class="p-3 text-sm">No current department members are available within your attendance access.</p> }
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private AttendanceExportReport BuildExport() => new("Department attendance", $"{directory?.Organisation} · {directory?.Departments.FirstOrDefault(d => d.Id == departmentId)?.Name} · {reportFrom:dd MMM yyyy} – {reportTo:dd MMM yyyy}",
+        [new("Department summary", ["Employee", "Perfectly attended", "Attended", "Attended late", "Late minutes", "Absent", "Leave", "Rest days", "Holidays", "Unresolved", "Worked hours", "Clock events"],
+            rows.Select(r => new object?[] { r.Staff.Name, r.Days.Count(d => d.IsPerfectlyAttended), r.Days.Count(d => d.IsPresent && !d.IsLate && !d.IsPerfectlyAttended),
+                r.Days.Count(d => d.IsPresent && d.IsLate), r.Days.Where(d => d.IsPresent && d.IsLate).Sum(d => d.LateMinutes), r.Days.Count(d => d.IsAbsent), r.Days.Count(d => d.IsOnLeave),
+                r.Days.Count(d => d.IsRestDay), r.Days.Count(d => d.IsHoliday), r.Days.Count(d => d.IsUnresolved), r.Days.Sum(d => d.WorkedHours), r.Days.Sum(d => d.ClockEventCount) }).ToList())]);
+    [Parameter] public bool TeamMode { get; set; }
+    [Parameter] public int? InitialStaffId { get; set; }
+    private AttendanceDirectoryDto? directory;
+    private int departmentId, departmentTypeId, staffId, shownStaff, version, searchVersion;
+    private bool showDutyAttendance;
+    private AttendanceDirectoryStaff? selectedEmployee;
+    private IReadOnlyCollection<int> AllowedStaffIds => directory?.Staff.Select(s => s.Id).ToArray() ?? [];
+    private int? appliedStaff;
+    private bool busy, hasReport;
+    private string? error;
+    private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    private DateTime from = new(Today.Year, Today.Month, 1), to = Today, reportFrom, reportTo;
+    private List<(AttendanceDirectoryStaff Staff, List<YearlyAttendanceDayDto> Days)> rows = [];
+    private IEnumerable<AttendanceDirectoryStaff> FilteredStaff => directory?.Staff.Where(s =>
+        (departmentId == 0 || s.DepartmentIds.Contains(departmentId))) ?? [];
+    private IEnumerable<AttendanceDirectoryOption> FilteredDepartments => directory?.Departments.Where(d => departmentTypeId == 0 || d.TypeId == departmentTypeId) ?? [];
+    protected override Task OnInitializedAsync() => LoadDirectoryAsync();
+    protected override void OnParametersSet()
+    {
+        if (directory == null || appliedStaff == InitialStaffId) return;
+        appliedStaff = InitialStaffId;
+        if (!TeamMode && InitialStaffId is > 0)
+        {
+            if (directory.Staff.Any(s => s.Id == InitialStaffId)) { staffId = InitialStaffId.Value; selectedEmployee = directory.Staff.First(s => s.Id == staffId); reportFrom = from; reportTo = to; shownStaff = staffId; }
+            else error = "This employee is not available within your current attendance access.";
+        }
+    }
+    private async Task LoadDirectoryAsync()
+    {
+        busy = true; error = null;
+        try { directory = await Attendance.GetAttendanceDirectoryAsync(); }
+        catch (UnauthorizedAccessException) { error = "You do not have access to attendance in the current organisation."; }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to load attendance directory"); error = "Attendance filters could not be loaded. Please try Retry."; }
+        finally { busy = false; }
+    }
+    private void ClearResults() { version++; shownStaff = 0; rows = []; hasReport = false; error = null; }
+    private void ClearSelection() { staffId = 0; ClearResults(); }
+    private void DepartmentTypeChanged() { departmentId = 0; ClearSelection(); }
+    private void SelectEmployee(HRM.DTOs.WorkspaceSearchResult item)
+    {
+        ClearResults();
+        selectedEmployee = directory?.Staff.FirstOrDefault(s => s.Id == item.Id);
+        staffId = selectedEmployee?.Id ?? 0;
+        if (selectedEmployee == null) error = "This employee is not available within your attendance access.";
+    }
+    private void Reset() { departmentId = departmentTypeId = staffId = 0; selectedEmployee = null; showDutyAttendance = false; searchVersion++; from = new(Today.Year, Today.Month, 1); to = Today; ClearResults(); }
+    private async Task ShowAsync()
+    {
+        if (busy || directory == null) return;
+        ClearResults();
+        if (from.Year != to.Year || from > to || from.Year < 2000 || to > Today) { error = "Choose dates within the same year, from 2000 through today."; return; }
+        if (!TeamMode) { if (directory.Staff.Any(s => s.Id == staffId)) { reportFrom = from.Date; reportTo = to.Date; shownStaff = staffId; } return; }
+        if (!FilteredDepartments.Any(t => t.Id == departmentId)) { error = "Select an available approved department."; return; }
+        if (from.Year != to.Year || from > to || from.Year < 2000 || to > Today) { error = "Choose dates within the same year, from 2000 through today."; return; }
+        var request = ++version; busy = true;
+        var start = from.Date; var end = to.Date;
+        try
+        {
+            var result = new List<(AttendanceDirectoryStaff, List<YearlyAttendanceDayDto>)>();
+            foreach (var staff in FilteredStaff)
+            {
+                var days = await Attendance.GetStaffAttendanceRangeAsync(staff.Id, start, end);
+                if (request != version) return;
+                result.Add((staff, days.Where(d => d.Date >= start && d.Date <= end).ToList()));
+            }
+            if (request == version) { rows = result; reportFrom = start; reportTo = end; hasReport = true; }
+        }
+        catch (UnauthorizedAccessException) { if (request == version) error = "Attendance access changed. Refresh the page and select an available department."; }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to load department attendance"); if (request == version) error = "Department attendance could not be loaded. Please try again."; }
+        finally { busy = false; }
+    }
+}

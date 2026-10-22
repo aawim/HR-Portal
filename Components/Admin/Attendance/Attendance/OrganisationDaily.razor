@@ -8,6 +8,8 @@
 @inject HrmTeContext DbContext
 @inject IOrganisationService OrganisationService
 @inject AttendanceLogService AttendanceLogService
+@inject HRM.Services.Interfaces.IAttendanceService AttendanceService
+@inject HRM.Services.Interfaces.IUserAccessService AttendanceAccess
 
 <!-- Header & Action Bar -->
 <div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
@@ -90,6 +92,7 @@
 
 @if (isDataLoaded)
 {
+    <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
     <!-- 1. Visual Status Chart / KPI Area -->
     <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm mb-6">
         <h3 class="text-slate-800 font-bold mb-4">Daily Attendance Overview</h3>
@@ -229,7 +232,7 @@
                             <td class="py-3 px-4 text-center">
                                 @if (record.LateMins > 0)
                                 {
-                                    <span class="bg-rose-100 text-rose-700 px-2 py-0.5 rounded text-xs font-bold">@record.LateMins m</span>
+                                    <span class="bg-amber-100 text-amber-700 px-2 py-0.5 rounded text-xs font-bold">@record.LateMins m</span>
                                 }
                                 else
                                 {
@@ -264,6 +267,10 @@
 }
 
 @code {
+    private string exportDescription = "";
+    private AttendanceExportReport BuildExport() => new("Organisation daily attendance", exportDescription,
+        [new("Daily staff attendance", ["Employee", "Employee number", "Status", "Scheduled in", "Check in", "Late minutes", "Break out", "Break in", "Break late minutes", "Scheduled out", "Check out"],
+            dailyRecords.Select(r => new object?[] { r.StaffName, r.EmployeeNumber, r.EligibilityMessage, r.ScheduledIn, r.ClockIn, r.LateMins, r.BreakOut, r.BreakIn, r.LateBreakMins, r.ScheduledOut, r.ClockOut }).ToList())]);
     // Dropdown Selections
     private int selectedOrgId = 0;
     private string selectedEmpType = "";
@@ -298,12 +305,16 @@
     protected override async Task OnInitializedAsync()
     {
         organisations = await OrganisationService.GetAllOrganisationsAsync();
+        var org = await AttendanceAccess.GetCurrentOrganisationIdAsync();
+        organisations = organisations.Where(o => o.Id == org).ToList();
+        await OnOrganisationChanged(new ChangeEventArgs { Value = org.ToString() });
     }
 
     private async Task OnOrganisationChanged(ChangeEventArgs e)
     {
         if (int.TryParse(e.Value?.ToString(), out int orgId))
         {
+            if (orgId != 0 && !organisations.Any(o => o.Id == orgId)) return;
             selectedOrgId = orgId;
             selectedDivisionId = 0;
             selectedTeamId = 0;
@@ -315,7 +326,7 @@
                 // divisions = await DbContext.Teams.Where(x => x.OrganisationId == selectedOrgId).ToListAsync();
                 divisions = await DbContext.OrganisationStructures
                 .AsNoTracking()
-                .Where(x => x.OrganisationBusinessEntityID == selectedOrgId)
+                .Where(x => x.OrganisationBusinessEntityID == selectedOrgId && x.OrganisationStructureStateId == 3)
                 .Select(x => new OrganisationStructureDropdownDto
                     {
                         OrganisationStructureId = x.OrganisationStructureId,
@@ -342,6 +353,9 @@
 
     private async Task ExecuteSearch()
     {
+        var directory = await AttendanceService.GetAttendanceDirectoryAsync();
+        var allowedIds = directory.Staff.Select(s => s.Id).ToArray();
+        var currentOrganisation = await AttendanceAccess.GetCurrentOrganisationIdAsync();
         dailyRecords.Clear();
         isDataLoaded = false;
 
@@ -352,7 +366,8 @@
         var query = from s in DbContext.Staffs
                     join i in DbContext.Individuals on s.IndividualId equals i.BusinessEntityId
                     join j in DbContext.Jobs on i.BusinessEntityId equals j.IndividualID
-                    where (j.TerminatedDate == null || j.TerminatedDate > DateTime.Today)
+                    where allowedIds.Contains(i.BusinessEntityId) && j.OrganisationID == currentOrganisation && j.JobStateId == 4 &&
+                        (j.TerminatedDate == null || j.TerminatedDate > DateTime.Today)
                     select new { s, i, j };
 
         if (selectedOrgId > 0)
@@ -474,15 +489,31 @@
                 cntAbsent++;
             }
 
+            var overview = (await AttendanceService.GetStaffAttendanceRangeAsync(staff.StaffId, searchDate, searchDate)).FirstOrDefault();
+            if (overview != null)
+            {
+                record.EligibilityMessage = HRM.Helpers.AttendancePresentation.Status(overview);
+                record.ClockIn = overview.FirstCheckIn?.ToString("HH:mm") ?? "--:--";
+                record.ClockOut = overview.LastCheckOut?.ToString("HH:mm") ?? "--:--";
+                record.ScheduledIn = overview.ScheduledStart?.ToString("HH:mm") ?? "—";
+                record.ScheduledOut = overview.ScheduledEnd?.ToString("HH:mm") ?? "—";
+                record.LateMins = overview.IsPresent ? overview.LateMinutes : 0;
+                record.IsPresent = overview.IsPresent; record.IsLate = overview.IsLate;
+                record.IsAbsent = overview.IsAbsent;
+            }
             dailyRecords.Add(record);
         }
 
         // 3. Calculate Percentages for Chart
+        cntAttended = dailyRecords.Count(r => r.IsPresent);
+        cntOnTime = dailyRecords.Count(r => r.IsPresent && !r.IsLate);
+        cntAbsent = dailyRecords.Count(r => r.IsAbsent);
         pctAttended = ((decimal)cntAttended / totalStaff) * 100;
         pctOnTime = ((decimal)cntOnTime / totalStaff) * 100;
         pctAbsent = ((decimal)cntAbsent / totalStaff) * 100;
         pctSick = ((decimal)cntSick / totalStaff) * 100;
 
+        exportDescription = $"{organisations.FirstOrDefault(o => o.Id == selectedOrgId)?.Name} · {searchDate:dd MMM yyyy} · Employee type: {(string.IsNullOrEmpty(selectedEmpType) ? "All" : selectedEmpType)} · Department: {(selectedDivisionId == 0 ? "All" : divisions.FirstOrDefault(d => d.OrganisationStructureId == selectedDivisionId)?.Name)} · Team: {(selectedTeamId == 0 ? "All" : teams.FirstOrDefault(t => t.TeamId == selectedTeamId)?.Name)}";
         isDataLoaded = true;
     }
 
@@ -502,6 +533,9 @@
     // --- DTO ---
     public class DailyStaffRecordDto
     {
+        public bool IsPresent { get; set; }
+        public bool IsLate { get; set; }
+        public bool IsAbsent { get; set; }
         public string? EligibilityMessage { get; set; }
         public int StaffId { get; set; }
         public string EmployeeNumber { get; set; } = string.Empty;

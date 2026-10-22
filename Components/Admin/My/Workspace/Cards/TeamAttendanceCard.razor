@@ -7,6 +7,7 @@
  
 
 <BaseCard Title="Team Attendance">
+    <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
 
     <!-- Summary -->
     <!-- Summary Tabs -->
@@ -20,7 +21,7 @@
             </div>
 
             <div class="text-xs text-slate-500">
-                Present
+                Perfectly attended
             </div>
 
         </button>
@@ -62,7 +63,7 @@
             </div>
 
             <div class="text-xs text-slate-500">
-                No Check-out
+                Attended
             </div>
 
         </button>
@@ -164,6 +165,8 @@
 </BaseCard>
 
 @code {
+    private AttendanceExportReport BuildExport() => new("Team attendance", $"{DateTime.UtcNow.AddHours(5):dd MMM yyyy} · Filter: {SelectedFilter}",
+        [new("Team attendance", ["Employee", "Status", "Check in", "Check out"], FilteredAttendance.Select(s => new object?[] { s.Name, s.StatusMessage ?? s.Status.ToString(), s.CheckIn?.ToString("HH:mm"), s.CheckOut?.ToString("HH:mm") }).ToList())]);
 
     private List<TeamAttendanceDto> Attendance = new();
 

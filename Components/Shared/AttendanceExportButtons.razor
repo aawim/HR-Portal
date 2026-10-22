@@ -1,0 +1,35 @@
+@using HRM.Services
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
+@inject ILogger<AttendanceExportButtons> Logger
+
+<div class="flex flex-wrap items-center gap-2 p-3" aria-label="Attendance exports">
+    <button type="button" class="app-button app-button-secondary" disabled="@(Disabled || exporting)" @onclick="() => ExportAsync(false)">Export Excel</button>
+    <button type="button" class="app-button app-button-secondary" disabled="@(Disabled || exporting)" @onclick="() => ExportAsync(true)">Export PDF</button>
+    @if (exporting) { <span role="status" class="text-sm">Preparing export…</span> }
+    @if (error != null) { <span role="alert" class="text-sm text-red-600">@error</span> }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Func<AttendanceExportReport> CreateReport { get; set; } = default!;
+    [Parameter] public bool Disabled { get; set; }
+    private bool exporting;
+    private string? error;
+    private async Task ExportAsync(bool pdf)
+    {
+        if (Disabled || exporting) return;
+        exporting = true; error = null;
+        try
+        {
+            var report = CreateReport();
+            var bytes = pdf ? AttendanceReportExport.Pdf(report, Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf")) : AttendanceReportExport.Excel(report);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(bytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"attendance-{DateTime.UtcNow.AddHours(5):yyyyMMdd-HHmmss}.{(pdf ? "pdf" : "xlsx")}",
+                pdf ? "application/pdf" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", reference);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Attendance export failed"); error = "Export could not be completed. Please try again."; }
+        finally { exporting = false; }
+    }
+}

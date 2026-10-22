@@ -34,7 +34,8 @@
                       rounded-xl text-sm
                       bg-white shadow-sm
                       focus:ring-2 focus:ring-blue-500"
-        placeholder="Search staff or organisation..."
+        placeholder="@(StaffOnly ? "Search employee by name or national ID..." : "Search staff or organisation...")"
+        aria-label="@(StaffOnly ? "Search employee" : "Search staff or organisation")"
         @bind="SearchText"
         @bind:event="oninput" />
 
@@ -135,6 +136,8 @@
 
     [Parameter]
     public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
+    [Parameter] public bool StaffOnly { get; set; }
+    [Parameter] public IReadOnlyCollection<int>? AllowedStaffIds { get; set; }
 
     private string _searchText = "";
 
@@ -194,16 +197,19 @@
         await using var Db = await _dbFactory.CreateDbContextAsync();
         var searchText = SearchText.Trim();
         var searchPattern = $"%{searchText}%";
+        var restricted = AllowedStaffIds != null;
+        var allowedIds = AllowedStaffIds?.ToArray() ?? [];
+        var today = DateTime.UtcNow.AddHours(5).Date;
 
 
 
         var isSuperAdministrator =
-            user.IsSuperAdministrator;
+            user.IsSuperAdministrator || await userAccessService.HasPermissionAsync("Super.Admin.Manage");
 
 
             // Never use nullable.Value inside the EF query
             var currentOrganisationId =
-                user.ActiveJob?.OrganisationId ?? 0;
+                await userAccessService.GetCurrentOrganisationIdAsync();
 
             if (!isSuperAdministrator &&
                     currentOrganisationId == 0)
@@ -261,7 +267,8 @@
                     ? " " + i.LastNameDhivehi
                     : "")
 
-            where
+            where (!restricted || allowedIds.Contains(i.BusinessEntityId)) &&
+                (!StaffOnly || job != null && job.OrganisationID == currentOrganisationId && job.JobStateId == 4 && job.TerminatedDate == null && job.JoinedDate <= today) &&
                 // Super Administrator: all organisations.
                 // Other users: only their active-job organisation.
                 (
@@ -365,7 +372,7 @@
                     x.BusinessEntityID == organisationId);
         }
 
-        OrganisationResults = await organisationQuery
+        OrganisationResults = StaffOnly ? new() : await organisationQuery
             .Where(x =>
                 x.OrganisationName != null &&
                 EF.Functions.Like(

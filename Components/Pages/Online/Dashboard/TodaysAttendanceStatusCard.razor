@@ -23,7 +23,7 @@
         {
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <span class="text-sm text-slate-500">Attendance status</span>
-                <span class="@GetStatusClass(_evaluation.Status)">@GetStatusText(_evaluation.Status)</span>
+                <span class="@(_attendanceDay?.IsLate == true ? "rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700" : GetStatusClass(_evaluation.Status))">@(_attendanceDay != null ? HRM.Helpers.AttendancePresentation.Status(_attendanceDay) : GetStatusText(_evaluation.Status))</span>
             </div>
             <dl class="space-y-3 text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
@@ -51,10 +51,10 @@
                     <dd class="m-0 text-xl font-semibold tabular-nums text-slate-900">@FormatMinutes(_evaluation.WorkedMinutes)</dd>
                 </div>
             </dl>
-            @if (_evaluation.LateMinutes > 0 || _evaluation.EarlyDepartureMinutes > 0)
+            @if (ArrivalLateMinutes > 0 || _evaluation.EarlyDepartureMinutes > 0)
             {
                 <div class="flex flex-wrap gap-2">
-                    @if (_evaluation.LateMinutes > 0) { <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700">Late @_evaluation.LateMinutes min</span> }
+                    @if (ArrivalLateMinutes > 0) { <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700">Late @ArrivalLateMinutes min</span> }
                     @if (_evaluation.EarlyDepartureMinutes > 0) { <span class="rounded-full bg-orange-100 px-2.5 py-1 text-xs text-orange-700">Early @_evaluation.EarlyDepartureMinutes min</span> }
                 </div>
             }
@@ -92,6 +92,8 @@
 
 
     private bool _isLoading = true;
+    private YearlyAttendanceDayDto? _attendanceDay;
+    private int ArrivalLateMinutes => _attendanceDay?.LateMinutes ?? _evaluation?.LateMinutes ?? 0;
 
     private string? _errorMessage;
 
@@ -144,7 +146,7 @@
                  * The TimeClockCard is responsible for creating clock events.
                  * This component only displays today's attendance.
             */
-                            var attendanceTime = DateTime.Now;
+                            var attendanceTime = DateTime.UtcNow.AddHours(5);
 
       
 
@@ -159,6 +161,7 @@
 
  
             _evaluation = evaluation;
+            _attendanceDay = (await AttendanceService.GetStaffAttendanceRangeAsync(context.IndividualId, attendanceTime.Date, attendanceTime.Date)).FirstOrDefault();
         }
         catch (Exception ex)
         {

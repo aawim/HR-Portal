@@ -7,6 +7,11 @@
         public bool HasAttendanceLogs { get; set; }
 
         public bool IsPresent { get; set; }
+        public bool IsLate { get; set; }
+        public int LateMinutes { get; set; }
+        public bool IsPerfectlyAttended { get; set; }
+        public DateTime? ScheduledStart { get; set; }
+        public DateTime? ScheduledEnd { get; set; }
 
         public bool IsAbsent { get; set; }
         public bool HasActiveSchedule { get; set; }
