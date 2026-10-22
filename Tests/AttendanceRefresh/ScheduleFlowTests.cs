@@ -124,7 +124,8 @@ static class ScheduleFlowTests
             Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2)), "Temporary dutyRequest did not restore the previous schedule");
         }
         var tomorrow = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today.AddDays(1)));
-        Check(tomorrow!.Assignments.Count == 2 && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan");
+        var expectedTomorrowAssignments = HRM.Helpers.StaffScheduleCalendar.IsWeekend(today.AddDays(1)) ? 1 : 2;
+        Check(tomorrow!.Assignments.Count == expectedTomorrowAssignments && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan");
         dutyRequest.OrganisationBusinessEntityId = 20;
         Check(!(await service.AssignAsync(dutyRequest)).Success, "Duty accepted another tenant");
         dutyRequest.OrganisationBusinessEntityId = 10; dutyRequest.EffectiveTo = today;

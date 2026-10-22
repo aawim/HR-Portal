@@ -4,6 +4,9 @@
 @using HRM.DTOs
 @using HRM.Enum
 @rendermode RenderMode.InteractiveServer
+@attribute [Authorize]
+@inject HRM.Services.WorkspaceRecentSearchService Recent
+@inject HRM.Services.ToastService Toasts
 
 
 <div class="space-y-2">
@@ -25,7 +28,8 @@
         </div>
 
 
-        <WorkspaceContentPage ActiveTab="ActiveTab" NavigationVersion="navigationVersion" NotificationRequestId="NotificationRequestId" />
+        <WorkspaceContentPage ActiveTab="ActiveTab" NavigationVersion="navigationVersion" NotificationRequestId="NotificationRequestId"
+                              OnSearchSelected="SelectItem" RecentSearchVersion="recentVersion" />
          
 
     }
@@ -64,6 +68,20 @@
 
 @code {
     [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
+    [SupplyParameterFromQuery(Name = "entityType")] public string? EntityTypeQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "entityId")] public int? EntityIdQuery { get; set; }
+    string? previousEntityQuery; int recentVersion;
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{EntityTypeQuery}:{EntityIdQuery}";
+        if (previousEntityQuery == key || NotificationRequestId.HasValue) return;
+        previousEntityQuery = key;
+        if (EntityIdQuery.HasValue && System.Enum.TryParse<WorkspaceEntityType>(EntityTypeQuery, out var type))
+        {
+            try { var item = await Recent.ResolveAsync(type, EntityIdQuery.Value); if(item != null) await SelectItem(item); else Toasts.Error("This search result is no longer available in the current organisation."); }
+            catch { Toasts.Error("The search result could not be opened."); }
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -75,10 +93,13 @@
     private WorkspaceTab ActiveTab = WorkspaceTab.Overview;
     private int navigationVersion;
 
-    private void SelectItem(WorkspaceSearchResult item)
+    private async Task SelectItem(WorkspaceSearchResult item)
     {
-        SelectedItem = item;
+        try { var resolved = await Recent.ResolveAsync(item.EntityType, item.Id); if(resolved == null) { Toasts.Error("This search result is no longer available in the current organisation."); return; } SelectedItem = resolved; }
+        catch { Toasts.Error("The search result could not be opened. Please try again."); return; }
         ActiveTab = WorkspaceTab.Overview;
+        try { await Recent.RememberAsync(SelectedItem); recentVersion++; }
+        catch { Toasts.Error("The item was opened, but recent searches could not be saved."); }
     }
 
     private void ResetWorkspace()

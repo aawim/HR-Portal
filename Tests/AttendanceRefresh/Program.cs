@@ -27,6 +27,10 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await WorkspaceStaffDataTests.RunAsync(); Console.WriteLine("PASS Workspace staff data: staff/job mapping, selected employee attendance, clock events, employment dates, leave, weekends and tenant permissions"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Workspace staff data: {ex}"); }
+try { await LeaveEntitlementTests.RunAsync(); Console.WriteLine("PASS Leave entitlements: staff/job identity, recorded balances, effective dates, unconfirmed assignments, refresh and tenant access"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Leave entitlements: {ex}"); }
 try { await DutyRosterTests.RunAsync(); Console.WriteLine("PASS Duty roster: acceptance, supervisor approvals, transfer/swap movements, conflicts, notifications, stale states and tenant boundaries"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Duty roster: {ex}"); }
 if(args.Contains("--duty-only")) return failures == 0 ? 0 : 1;

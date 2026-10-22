@@ -28,14 +28,14 @@ public static class StaffScheduleCalendar
         catch (JsonException) { return []; }
     }
 
-    public static async Task<HashSet<DateTime>> RestDaysAsync(HrmTeContext db, int individualId, DateTime from, DateTime to, CancellationToken ct = default)
+    public static async Task<HashSet<DateTime>> RestDaysAsync(HrmTeContext db, int individualId, DateTime from, DateTime to, CancellationToken ct = default, int? organisationId = null)
     {
-        var assignments = await db.JobWorkTemplateAssignments.AsNoTracking().Where(x => x.IsActive && x.Job.IndividualID == individualId &&
+        var assignments = await db.JobWorkTemplateAssignments.AsNoTracking().Where(x => x.IsActive && x.Job.IndividualID == individualId && (!organisationId.HasValue || x.Job.OrganisationID == organisationId) &&
             x.EffectiveFrom <= to && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);
-        var plans = await db.WorkPlans.AsNoTracking().Where(x => x.IsValid && x.IndividualId == individualId && x.WorkDate >= from && x.WorkDate <= to &&
+        var plans = await db.WorkPlans.AsNoTracking().Where(x => x.IsValid && x.IndividualId == individualId && (!organisationId.HasValue || x.OrganisationBusinessEntityId == organisationId) && x.WorkDate >= from && x.WorkDate <= to &&
             x.WorkAssignments.Any(a => a.IsValid && a.RequiresAttendance && (a.SchedulePurpose == "Duty" || x.IsManual)))
             .Select(x => x.WorkDate).ToListAsync(ct);
-        var legacy = await db.JobWorkTemplates.AsNoTracking().Where(x => x.IsActive && x.Job.IndividualID == individualId &&
+        var legacy = await db.JobWorkTemplates.AsNoTracking().Where(x => x.IsActive && x.Job.IndividualID == individualId && (!organisationId.HasValue || x.Job.OrganisationID == organisationId) &&
             x.EffectiveFrom <= to && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);
         var rest = new HashSet<DateTime>();
         for (var day = from.Date; day <= to.Date; day = day.AddDays(1))

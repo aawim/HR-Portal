@@ -759,15 +759,62 @@ namespace HRM.Services
 
 
 
-        public async Task<List<YearlyAttendanceDayDto>>
-        GetMyYearlyAttendanceAsync(
+        public async Task<List<YearlyAttendanceDayDto>> GetMyYearlyAttendanceAsync(int year, CancellationToken cancellationToken = default)
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            return await GetYearlyAttendanceAsync(actor.IndividualId, year, null, cancellationToken);
+        }
+
+        private async Task<int> RequireStaffAttendanceAccessAsync(int staffId, CancellationToken ct)
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            var org = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (staffId <= 0 || org <= 0 || !await _userAccessService.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select an organisation you can access.");
+            await using var db = await _dbFactory.CreateDbContextAsync(ct);
+            var jobs = await db.Jobs.Where(x => x.IndividualID == staffId && x.OrganisationID == org).Select(x => x.JobId).ToListAsync(ct);
+            if (jobs.Count == 0) throw new UnauthorizedAccessException("The selected employee is not in the current organisation.");
+            if (actor.IndividualId == staffId || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsSuperAdministrator || await _userAccessService.HasPermissionAsync("Admin")) return org;
+            foreach (var job in jobs)
+                if ((await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job)).Contains(actor.IndividualId)) return org;
+            throw new UnauthorizedAccessException("You cannot view this employee's attendance.");
+        }
+
+        public async Task<List<YearlyAttendanceDayDto>> GetStaffYearlyAttendanceAsync(int staffId, int year, CancellationToken cancellationToken = default)
+        {
+            var org = await RequireStaffAttendanceAccessAsync(staffId, cancellationToken);
+            var days = await GetYearlyAttendanceAsync(staffId, year, org, cancellationToken);
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var employment = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == staffId && x.OrganisationID == org && x.JobStateId == 4)
+                .Select(x => new { x.JoinedDate, x.TerminatedDate }).ToListAsync(cancellationToken);
+            return days.Where(x => x.HasAttendanceLogs || x.IsOnLeave || employment.Any(j => j.JoinedDate.Date <= x.Date && (!j.TerminatedDate.HasValue || j.TerminatedDate.Value.Date >= x.Date))).ToList();
+        }
+
+        public async Task<List<StaffAttendanceClockEventDto>> GetStaffClockEventsAsync(int staffId, DateTime from, DateTime to, CancellationToken cancellationToken = default)
+        {
+            var org = await RequireStaffAttendanceAccessAsync(staffId, cancellationToken);
+            if (from.Date > to.Date || (to.Date - from.Date).Days > 366) throw new InvalidOperationException("Select a date range of up to one year.");
+            var end = to.Date.AddDays(1);
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            var logs = await db.AttendanceLogs.AsNoTracking().Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkAssignment)
+                .Where(x => x.IndividualId == staffId && x.OrganisationId == org && x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid && x.Date >= from.Date && x.Date < end)
+                .OrderByDescending(x => x.Date).Take(1000).ToListAsync(cancellationToken);
+            return logs.Select(x => {
+                var resolution = x.AttendanceLogResolutions.Where(r => r.IsValid).OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault();
+                var code = resolution?.AttendanceClockTypeId ?? (x.AttendanceLogResolutions.Count == 0 ? x.InOutModeId : null);
+                var label = code switch { 1 => "Check in", 2 => "Check out", 3 => "Break out", 4 => "Break in", _ => "Unresolved" };
+                return new StaffAttendanceClockEventDto(x.Date, label, resolution?.WorkAssignment == null ? "—" : $"{resolution.WorkAssignment.SchedulePurpose} · {resolution.WorkAssignment.Name}");
+            }).ToList();
+        }
+
+        private async Task<List<YearlyAttendanceDayDto>> GetYearlyAttendanceAsync(int individualId,
             int year,
+            int? organisationId,
             CancellationToken cancellationToken = default)
         {
             // ---------------------------------------------------------
             // Validate year
             // ---------------------------------------------------------
-            if (year < 2000 || year > DateTime.Today.Year)
+            if (year < 2000 || year > DateTime.UtcNow.AddHours(5).Year)
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(year),
@@ -778,8 +825,6 @@ namespace HRM.Services
             // ---------------------------------------------------------
             // Current user
             // ---------------------------------------------------------
-            var userContext =
-                await _userAccessService.RequireContextAsync();
 
 
             // ---------------------------------------------------------
@@ -810,8 +855,8 @@ namespace HRM.Services
             // Do not include future attendance
             // ---------------------------------------------------------
             var queryEnd =
-                year == DateTime.Today.Year
-                    ? DateTime.Now
+                year == DateTime.UtcNow.AddHours(5).Year
+                    ? DateTime.UtcNow.AddHours(5)
                     : yearEndExclusive;
 
 
@@ -824,7 +869,7 @@ namespace HRM.Services
                     x.AttendanceLogResolutions)
                 .Where(x =>
                     x.IndividualId ==
-                        userContext.IndividualId &&
+                        individualId && (!organisationId.HasValue || x.OrganisationId == organisationId) &&
 
                     x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
 
@@ -841,15 +886,15 @@ namespace HRM.Services
             var approvedLeaves = await db.Leaves
                 .AsNoTracking()
                 .Where(x =>
-                    x.Job.IndividualID == userContext.IndividualId &&
+                    x.Job.IndividualID == individualId && (!organisationId.HasValue || x.Job.OrganisationID == organisationId) &&
                     x.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
                     x.FromDate < yearEndExclusive &&
                     x.ToDate >= yearStart)
-                .Select(x => new { x.FromDate, x.ToDate })
+                .Select(x => new { x.FromDate, x.ToDate, Type = x.LeaveType.Name })
                 .ToListAsync(cancellationToken);
 
-            var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, userContext.IndividualId,
-                yearStart, yearEndExclusive.AddDays(-1), cancellationToken);
+            var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, individualId,
+                yearStart, yearEndExclusive.AddDays(-1), cancellationToken, organisationId);
 
             // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
@@ -865,8 +910,8 @@ namespace HRM.Services
             // Determine last date to generate
             // ---------------------------------------------------------
             var lastDate =
-                year == DateTime.Today.Year
-                    ? DateTime.Today
+                year == DateTime.UtcNow.AddHours(5).Year
+                    ? DateTime.UtcNow.AddHours(5).Date
                     : new DateTime(
                         year,
                         12,
@@ -1083,6 +1128,7 @@ namespace HRM.Services
                 result.Add(
                     new YearlyAttendanceDayDto
                     {
+                        LeaveTypeName = isOnLeave ? string.Join(", ", approvedLeaves.Where(x => x.FromDate.Date <= date && x.ToDate.Date >= date).Select(x => x.Type).Distinct()) : null,
                         Date =
                             date,
 

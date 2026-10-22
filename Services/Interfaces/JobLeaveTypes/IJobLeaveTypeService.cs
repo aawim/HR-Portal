@@ -18,6 +18,7 @@ namespace HRM.Services.Interfaces.JobLeaveTypes
         Task<List<JobLeaveTypeDto>> GetJobLeaveType();
 
         Task<List<JobLeaveTypeDto>> GetJobLeaveType(int JobId);
+        Task<List<JobLeaveTypeDto>> GetEntitlementsAsync(int jobId);
 
         Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId);
         

@@ -1,0 +1,23 @@
+@using HRM.DTOs
+@using HRM.Enum
+@using HRM.Components.Cards
+@inject HRM.Services.WorkspaceRecentSearchService Recent
+<BaseCard Title="Recent searches" HeaderClass="px-4 py-4 border-b border-gray-200">
+    <div class="divide-y divide-slate-100">
+    @if(error != null) { <p role="status" class="px-4 py-3 text-sm">@error</p> }
+    else if(items.Count == 0) { <p class="px-4 py-3 text-sm text-slate-500">Employees and organisations you open from search will appear here.</p> }
+    @foreach(var item in items)
+    {
+        <button type="button" class="recent-search-row hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500" @onclick="() => OnSelected.InvokeAsync(item)">
+            <span class="recent-search-dot @(item.EntityType == WorkspaceEntityType.Organisation ? "bg-blue-500" : "bg-green-500")" aria-hidden="true"></span>
+            <span class="recent-search-text"><span class="block text-sm font-medium text-slate-800">@item.Name</span><span class="mt-1 block text-xs text-slate-500">@(item.EntityType == WorkspaceEntityType.Organisation ? "Organisation" : "Employee")</span></span>
+        </button>
+    }
+    </div>
+</BaseCard>
+@code {
+    [Parameter] public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
+    [Parameter] public int Version { get; set; }
+    int loaded = -1; List<WorkspaceSearchResult> items = []; string? error;
+    protected override async Task OnParametersSetAsync() { if(loaded == Version) return; loaded = Version; try { items = await Recent.GetAsync(); error = null; } catch { items = []; error = "Recent searches could not be loaded."; } }
+}

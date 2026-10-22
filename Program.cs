@@ -227,6 +227,7 @@ builder.Services.AddScoped<IUserContextService, UserContextService>();
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<IUserService>(sp => sp.GetRequiredService<UserService>());
 builder.Services.AddScoped<UserPreferenceService>();
+builder.Services.AddScoped<WorkspaceRecentSearchService>();
 builder.Services.AddScoped<RequestNotificationService>();
 builder.Services.AddScoped<HRM.Services.Leave.LeaveAccrualSettingsService>();
 builder.Services.AddScoped<HRM.Services.Leave.LeaveCarryForwardService>();

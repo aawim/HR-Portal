@@ -1,5 +1,69 @@
-﻿<h3>StaffAttendance</h3>
+@using HRM.DTOs.Attendance
+@using HRM.Components.Pages.Online.Dashboard
+@inject HRM.Services.Interfaces.IAttendanceService Attendance
+
+<section class="space-y-4 pt-4" aria-label="Selected employee attendance">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div><h3 class="text-lg font-semibold">Attendance</h3><p class="text-sm text-slate-500">Attendance records for the selected employee.</p></div>
+        <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="LoadAsync">Refresh</button>
+    </div>
+    <div class="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+        <label class="text-sm">From <InputDate @bind-Value="from" class="block rounded border bg-transparent p-2" /></label>
+        <label class="text-sm">To <InputDate @bind-Value="to" class="block rounded border bg-transparent p-2" /></label>
+        <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="ApplyAsync">Show records</button>
+    </div>
+    @if(error != null) { <p role="alert" class="rounded-lg border p-3">@error</p> }
+    @if(loading) { <p role="status">Loading attendance...</p> }
+    <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" />
+    @if(!loading && error == null)
+    {
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            @foreach(var stat in Stats) { <div class="rounded-lg border p-3"><p class="text-xs text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-semibold">@stat.Value</p></div> }
+        </div>
+        <div class="overflow-x-auto rounded-lg border">
+            <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</caption>
+                <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Status</th><th class="p-3">First check in</th><th class="p-3">Last check out</th><th class="p-3">Worked hours</th><th class="p-3">Clock events</th></tr></thead>
+                <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
+                    <tr class="border-b"><td class="whitespace-nowrap p-3">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="p-3 @(day.IsOnLeave ? "text-blue-600" : "")">@Status(day)</td>
+                        <td class="p-3">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="p-3">@day.WorkedHours.ToString("0.##")</td><td class="p-3">@day.ClockEventCount</td></tr>
+                }</tbody>
+            </table>
+            @if(!PeriodDays.Any()) { <p class="p-3 text-sm">No attendance days in this employment period.</p> }
+        </div>
+        <div class="overflow-x-auto rounded-lg border">
+            <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Clock events</caption>
+                <thead><tr class="border-b"><th class="p-3">Date and time</th><th class="p-3">Event</th><th class="p-3">Schedule</th></tr></thead>
+                <tbody>@foreach(var entry in events) { <tr class="border-b"><td class="whitespace-nowrap p-3">@entry.Time.ToString("dd MMM yyyy HH:mm:ss")</td><td class="p-3">@entry.Event</td><td class="p-3">@entry.Schedule</td></tr> }</tbody>
+            </table>
+            @if(events.Count == 0) { <p class="p-3 text-sm">No clock events for this date range.</p> }
+            @if(events.Count == 1000) { <p class="p-3 text-sm">Showing the latest 1,000 events. Narrow the date range to see other events.</p> }
+        </div>
+    }
+</section>
 
 @code {
-
+    [Parameter] public int StaffId { get; set; }
+    static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    int loadedStaff, year = Today.Year, version; bool loading; string? error;
+    DateTime from = new(Today.Year, Today.Month, 1), to = Today, periodFrom, periodTo;
+    List<YearlyAttendanceDayDto> days = []; List<StaffAttendanceClockEventDto> events = [];
+    IEnumerable<YearlyAttendanceDayDto> PeriodDays => days.Where(x => x.Date >= periodFrom && x.Date <= periodTo);
+    IEnumerable<(string Label, string Value)> Stats => new[] { ("Present", PeriodDays.Count(x => x.IsPresent).ToString()), ("Absent", PeriodDays.Count(x => x.IsAbsent).ToString()), ("Leave", PeriodDays.Count(x => x.IsOnLeave).ToString()), ("Rest days", PeriodDays.Count(x => x.IsRestDay).ToString()), ("Worked hours", PeriodDays.Sum(x => x.WorkedHours).ToString("0.##")) };
+    protected override async Task OnParametersSetAsync() { if(loadedStaff == StaffId) return; loadedStaff = StaffId; year = Today.Year; from = new(Today.Year, Today.Month, 1); to = Today; await LoadAsync(); }
+    async Task ChangeYearAsync(int value) { year = value; from = new(value, 1, 1); to = value == Today.Year ? Today : new(value, 12, 31); await LoadAsync(); }
+    async Task ApplyAsync() { if(from > to || from.Year != to.Year || from.Year < 2000 || to > Today) { error = "Choose dates in the same year, from 2000 through today."; return; } year = from.Year; await LoadAsync(); }
+    async Task LoadAsync() {
+        var request = ++version; var staff = StaffId; var selectedFrom = from; var selectedTo = to; loading = true; error = null; days = []; events = [];
+        try {
+            if(selectedFrom > selectedTo || selectedFrom.Year != selectedTo.Year || selectedFrom.Year != year || selectedTo > Today) throw new InvalidOperationException("Choose a valid date range within the selected year, through today.");
+            var result = await Attendance.GetStaffYearlyAttendanceAsync(staff, year);
+            var clock = await Attendance.GetStaffClockEventsAsync(staff, selectedFrom, selectedTo);
+            if(request == version) { days = result; events = clock; periodFrom = selectedFrom.Date; periodTo = selectedTo.Date; }
+        }
+        catch(UnauthorizedAccessException) { if(request == version) error = "You do not have access to this employee's attendance in the current organisation."; }
+        catch(InvalidOperationException ex) { if(request == version) error = ex.Message; }
+        catch(Exception) { if(request == version) error = "Attendance could not be loaded. Please try Refresh."; }
+        finally { if(request == version) loading = false; }
+    }
+    static string Status(YearlyAttendanceDayDto day) => day.IsOnLeave ? $"Leave · {day.LeaveTypeName ?? "Leave"}" : day.IsPresent ? "Present" : day.IsRestDay ? "Rest day" : day.IsHoliday ? "Holiday" : day.IsUnresolved ? "Unresolved" : day.IsAbsent ? "Absent" : "—";
 }

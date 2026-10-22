@@ -36,17 +36,10 @@ namespace HRM.Services
      GetOrganisationLeaveTypesAsync(
          CancellationToken cancellationToken = default)
         {
-            var user =
-                await _userAccessService.GetContextAsync();
-
-            var organisationId = 
-                user.ActiveJob?.OrganisationId;
-
-            if (!organisationId.HasValue ||
-                organisationId.Value <= 0)
-            {
-                return new List<LeaveTypeDto>();
-            }
+            await _userAccessService.RequireContextAsync();
+            int? organisationId = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (organisationId <= 0 || !await _userAccessService.HasOrganisationAccessAsync(organisationId.Value))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
 
             await using var db =
                 await _dbFactory.CreateDbContextAsync(

@@ -386,12 +386,17 @@ namespace HRM.Services.Leave
 
         public async Task<int> GetJobIdByStaffId(int StaffId)
         {
+            await _access.RequireContextAsync();
+            var org = await _access.GetCurrentOrganisationIdAsync();
+            if(org <= 0 || !await _access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select an organisation you can access.");
+            var today = DateTime.UtcNow.AddHours(5).Date;
             await using var db =
               await _dbFactory.CreateDbContextAsync();
 
             return await db.Jobs
             .AsNoTracking()
-            .Where(x => x.IndividualID == StaffId && x.TerminatedDate == null)
+            .Where(x => x.IndividualID == StaffId && x.OrganisationID == org && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= today && x.TerminatedDate == null)
+            .OrderByDescending(x => x.JoinedDate).ThenByDescending(x => x.JobId)
             .Select(x => x.JobId)
             .FirstOrDefaultAsync();
         }

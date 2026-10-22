@@ -264,6 +264,8 @@ namespace HRM.Services.JobLeaveTypes
 
         public async Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId)
         {
+            await ReadEntitlementsAsync(jobId, true);
+            var org = await _userAccessService.GetCurrentOrganisationIdAsync();
             await using var db = await _dbFactory.CreateDbContextAsync();
 
             var assignedLeaveTypeIds = await db.JobLeaveTypes
@@ -273,7 +275,7 @@ namespace HRM.Services.JobLeaveTypes
 
             return await db.LeaveTypes
                 .AsNoTracking()
-                .Where(x => !assignedLeaveTypeIds.Contains(x.LeaveTypeId))
+                .Where(x => !assignedLeaveTypeIds.Contains(x.LeaveTypeId) && (x.OrganisationId == org || x.IsGlobal))
                 .OrderBy(x => x.Name)
                 .Select(x => new LeaveTypeDto
                 {
@@ -584,15 +586,28 @@ namespace HRM.Services.JobLeaveTypes
 
 
 
-        public async Task<List<JobLeaveTypeDto>> GetJobLeaveType(int JobId)
-        {
+        public Task<List<JobLeaveTypeDto>> GetJobLeaveType(int JobId) => ReadEntitlementsAsync(JobId, false);
 
+        public Task<List<JobLeaveTypeDto>> GetEntitlementsAsync(int jobId) => ReadEntitlementsAsync(jobId, true);
+
+        private async Task<List<JobLeaveTypeDto>> ReadEntitlementsAsync(int JobId, bool includeUnconfirmed)
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            var org = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (org <= 0 || !await _userAccessService.HasOrganisationAccessAsync(org))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
             using var db = await _dbFactory.CreateDbContextAsync();
+            var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == JobId && x.OrganisationID == org)
+                ?? throw new UnauthorizedAccessException("This job is not in the current organisation.");
+            if (job.IndividualID != actor.IndividualId && !actor.IsHRStaff && !actor.IsHRHead && !actor.IsHRManager &&
+                !actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Admin") &&
+                !(await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job.JobId)).Contains(actor.IndividualId))
+                throw new UnauthorizedAccessException("You cannot view this staff member's leave balances.");
 
             return await db.JobLeaveTypes
                  .Include(x => x.LeaveType)
                  .Where(x => x.JobId == JobId )
-                 .Where(x => x.IsLeaveInfoUpdated == true && x.IsValid == true)
+                 .Where(x => x.IsValid && (includeUnconfirmed || x.IsLeaveInfoUpdated))
                  .Select(x => new JobLeaveTypeDto
                  {
                      JobLeaveTypeId = x.JobLeaveTypeId,

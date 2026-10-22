@@ -15,6 +15,7 @@
         public bool IsRestDay { get; set; }
 
         public bool IsOnLeave { get; set; }
+        public string? LeaveTypeName { get; set; }
 
         public bool IsHoliday { get; set; }
 

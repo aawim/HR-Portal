@@ -35,9 +35,12 @@
                     <ul class="divide-y divide-slate-100">
                         @foreach (var member in team.Staffs)
                         {
-                            <li @key="member.StaffId" class="px-3 py-2">
-                                <p class="break-words text-sm font-medium text-slate-800">@member.FullName</p>
-                                <p class="mt-0.5 text-xs text-slate-500">@(member.IsSuperVisor ? "Supervisor" : "Team member")</p>
+                            <li @key="member.StaffId">
+                                <a href="@($"/admin/my/workspace?entityType=Staff&entityId={member.StaffId}")"
+                                   class="block px-3 py-2 text-left hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                                    <span class="block break-words text-sm font-medium text-slate-800">@member.FullName</span>
+                                    <span class="mt-0.5 block text-xs text-slate-500">@(member.IsSuperVisor ? "Supervisor" : "Team member")</span>
+                                </a>
                             </li>
                         }
                     </ul>

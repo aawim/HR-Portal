@@ -328,57 +328,10 @@ namespace HRM.Services
         private async Task<int> ResolveCurrentOrganisationAsync(
             CancellationToken cancellationToken)
         {
-            var context =
-                await _userAccessService.GetContextAsync();
-
-            var session =
-                await _userContext.GetSessionAsync();
-
-            if (session is null ||
-                session.OrganisationId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "Current portal organisation could not be resolved.");
-            }
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
-
-            /*
-             * Portal session OrganisationId currently represents
-             * UserOrganisationID.
-             */
-            var organisationId =
-                await db.UserOrganisations
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.UserOrganisationID ==
-                            session.OrganisationId)
-                    .Select(x =>
-                        x.BusinessEntityID)
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
-
-            if (organisationId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "Current organisation could not be resolved.");
-            }
-
-            if (context?.IsSuperAdministrator == true)
-            {
-                return organisationId;
-            }
-
-            if (context?.ActiveJob is null ||
-                context.ActiveJob.OrganisationId !=
-                    organisationId)
-            {
-                throw new UnauthorizedAccessException(
-                    "The selected organisation does not match the current user's active organisation.");
-            }
-
+            await _userAccessService.RequireContextAsync();
+            var organisationId = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (organisationId <= 0 || !await _userAccessService.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
             return organisationId;
         }
 

@@ -13,6 +13,10 @@
 @inject IJobLeaveTypeService JobLeaveTypeService
 @inject ToastService ToastService
 @inject ILeaveDefinitionService leaveDefinitionService;
+@if (loadError != null)
+{
+    <div role="alert" class="mb-3 rounded-lg border p-3 text-sm">@loadError <button type="button" class="app-button app-button-secondary" disabled="@isLoading" @onclick="LoadAsync">Retry</button></div>
+}
 <div class="grid grid-cols-12 gap-6">
 
     <!-- Assigned -->
@@ -353,6 +357,7 @@
     public EventCallback OnChanged { get; set; }
 
     private bool isLoading;
+    private string? loadError;
 
     private List<JobLeaveTypeDto> assigned = new();
 
@@ -373,7 +378,6 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        JobId = await LeaveService.GetJobIdByStaffId(StaffId);
         await LoadAsync();
     }
 
@@ -619,15 +623,19 @@
     private async Task LoadAsync()
     {
         isLoading = true;
+        loadError = null;
+        assigned = []; available = []; availableDefinitions = []; availableLegacyTypes = [];
 
         try
         {
 
   
 
-        assigned = await JobLeaveTypeService.GetJobLeaveType(StaffId);
+        JobId = await LeaveService.GetJobIdByStaffId(StaffId);
+        if(JobId <= 0) throw new InvalidOperationException("This staff member has no active approved job in the current organisation.");
+        assigned = await JobLeaveTypeService.GetEntitlementsAsync(JobId);
 
-        available = await JobLeaveTypeService.GetAvailableLeaveTypesAsync(StaffId);
+        available = await JobLeaveTypeService.GetAvailableLeaveTypesAsync(JobId);
  
         availableDefinitions = await leaveDefinitionService.GetAvailableAsync();
 
@@ -640,6 +648,8 @@
         }
         catch (Exception ex)
         {
+            loadError = ex is UnauthorizedAccessException ? "You do not have access to this staff member's leave assignments in the current organisation."
+                : ex is InvalidOperationException ? ex.Message : "Unable to load staff leave information. Please try Retry.";
             ToastService.Error(
                 "Unable to load staff leave information.");
 
