@@ -177,7 +177,7 @@ public partial class LeaveChangeService
         result.Actions = result.Actions.OrderBy(x => x.ToStateId).ToList();
         if (transitions.Count == 0)
         {
-            result.Message = "No allowed transitions are configured for this Request Type and current state. Configure From State / To State in Settings > State Transitions.";
+            result.Message = "No actions are available right now. Please contact your organisation's HR team for assistance.";
             return result;
         }
         result.Message = blockedByHandover ? "Leave approval is available after the assigned employees and a team or department supervisor approve the work handover." :
@@ -265,7 +265,24 @@ public partial class LeaveChangeService
                 await db.WfWorkflowDefinitions.AnyAsync(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.LeaveRequestKind != null))
                 action.ToStateId = await db.WfWorkflowStages.Where(x => x.WorkflowDefinitionId == instance.WorkflowDefinitionId && x.IsActive)
                     .OrderBy(x => x.StageOrder).Select(x => x.RequestStateId).FirstAsync();
-            await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, action.ToStateId);
+            try
+            {
+                await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, action.ToStateId);
+            }
+            catch (RequestTransitionConfigurationException ex)
+            {
+                var person = user.IndividualId > 0 ? user.IndividualId : user.BusinessEntityId;
+                if (!await access.HasOrganisationAccessAsync(subjectLeave.Job.OrganisationID) ||
+                    person != subjectLeave.Job.IndividualID && !await db.WfRequestApprovals.AnyAsync(x =>
+                        x.RequestStageInstanceId == instance.CurrentRequestStageInstanceId && x.ApproverUserId == user.UserId && x.Decision == "Pending"))
+                    throw new UnauthorizedAccessException("You do not have access to perform this action.");
+                throw new WorkflowConfigurationException(new HRM.DTOs.ApprovalFlow.WorkflowRequestContextDto
+                {
+                    RequestId = requestId, RequestTypeId = request.RequestTypeId, RequestStateId = request.RequestStateId,
+                    OrganisationBusinessEntityId = subjectLeave.Job.OrganisationID, JobTypeId = subjectLeave.Job.JobTypeId,
+                    SubjectJobId = subjectLeave.JobId
+                }, ex.Detail, ex.Message) { ConfigurationUrl = "/admin/settings/states" };
+            }
             var allowed = await AllowedActionsAsync(db, request, subjectLeave, instance, user);
             var selected = allowed.FirstOrDefault(x => x.ToStateId == action.ToStateId)
                 ?? throw new UnauthorizedAccessException("This transition is not allowed for the current request status and your permissions.");
@@ -362,6 +379,7 @@ public partial class LeaveChangeService
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
         {
             await transaction.RollbackAsync();
+            if (ex is WorkflowConfigurationException configuration) await configuration.NotifyAsync(factory);
             return ServiceResult.Fail(ex.Message);
         }
     }

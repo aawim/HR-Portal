@@ -13,7 +13,7 @@
 <div class="mx-auto max-w-5xl space-y-5 p-4">
     <a href="/admin/settings/leaves" class="text-sm text-blue-700 underline">Back to Leaves Management</a>
     <h1 class="text-2xl font-semibold">Request approval flows</h1>
-    @if (message != null) { <p role="status" class="rounded border bg-slate-50 p-3">@message</p> }
+    @if (message != null) { <p role="status" class="whitespace-pre-line rounded border bg-slate-50 p-3">@message</p> }
     @if (loading) { <p role="status">Loading configuration…</p> }
     else if (data == null) { <button type="button" class="rounded border px-4 py-2" @onclick="ReloadAsync">Try again</button> }
     else if (data != null)
@@ -31,7 +31,7 @@
                 <p class="text-sm text-slate-500">@(model.Version == 0 ? "Not configured — new submissions are blocked until a flow is saved." : $"Configured version {model.Version}")</p>
                 @if (model.ImportedFromLegacy)
                 {
-                    <p class="rounded bg-blue-50 p-3 text-sm text-blue-900">Loaded your previous approval flow as a draft. Save it to apply to this Request Type for all staff in the selected Job Type.</p>
+                    <p class="rounded bg-blue-50 p-3 text-sm text-blue-900">Loaded your previous approval flow as a draft. Early Return drafts use Pending HR Approval where available. Review each processing status and save to apply this flow to new requests for the selected Job Type.</p>
                 }
                 @if (model.Version > 0 && model.Stages!.Any(x => x.UserGroupId == 0))
                 {
@@ -51,7 +51,7 @@
                 }
                 else
                 {
-                    <div class="rounded-lg bg-blue-50 p-4 font-medium text-blue-900">Staff → @string.Join(" → ", model.Stages!.Select(x => x.Name)) → Approved</div>
+                    <div class="rounded-lg bg-blue-50 p-4 font-medium text-blue-900">Staff → @string.Join(" → ", model.Stages!.Select(x => $"{x.Name} ({data.States.FirstOrDefault(s => s.Id == x.StateId)?.Name.Trim() ?? x.StateId.ToString()})")) → Approved</div>
                     @for (var i = 0; i < model.Stages!.Count; i++)
                     {
                         var index = i;

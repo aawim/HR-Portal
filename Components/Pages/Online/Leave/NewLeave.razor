@@ -20,20 +20,21 @@
 @inject LeaveStore LeaveStore
 @inject ToastService ToastService
 
-<div class="border-b px-4 ">
+<div class="leave-application">
+<div class="border-b px-1 pb-3">
     <h2 class="text-2xl font-bold text-slate-800">Leave Application</h2>
     <p class="text-sm text-gray-500">Apply for leave and manage details</p>
 
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_350px] gap-2 p-1">
+<div class="leave-application-grid">
        <!-- HEADER -->
    
     <!-- LEFT COLUMN (Flexible) -->
-    <div class="space-y-4">
+    <div class="leave-application-main space-y-4">
 
         <!-- Top: Equal two columns -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div class="leave-application-calendars">
             <div class="p-1 rounded">
                 <LeaveCalendarCard RefreshKey="calendarRefresh" OnChanged="CalendarChanged" OnPlanSelected="UsePlan" />
             </div>
@@ -45,9 +46,9 @@
 
 
         <!-- Bottom: Left bigger than right -->
-        <div class="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-2">
+        <div class="leave-application-details">
 
-            <div >
+            <div class="leave-application-form">
                 <EditForm Model="LeaveState.Model" OnValidSubmit="Submit" class="w-full">
                     <DataAnnotationsValidator />
 
@@ -64,7 +65,7 @@
                 </EditForm>
             </div>
 
-            <div >
+            <div class="leave-application-address">
                 <LeaveAddressCard LeaveState="LeaveState" OnAddressSelected="AddressSelected" />
             </div>
 
@@ -74,11 +75,12 @@
 
 
     <!-- RIGHT COLUMN (Fixed 350px) -->
-    <div >
+    <div class="leave-application-balances">
         <LeaveBalanceCard LeaveState="LeaveState"
                           OnLeaveTypeSelected="LoadLeaveForm" />
     </div>
 
+</div>
 </div>
 
 

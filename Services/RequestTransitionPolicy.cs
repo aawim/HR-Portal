@@ -15,6 +15,6 @@ public static class RequestTransitionPolicy
             .AnyAsync(x => x.RequestTypeId == requestType && x.FromRequestStateId == from && x.ToRequestStateId == to, ct)) return;
         var target = await db.RequestStates.AsNoTracking().Where(x => x.RequestStateId == to).Select(x => x.StateName).SingleOrDefaultAsync(ct);
         var type = await db.RequestTypes.AsNoTracking().Where(x => x.RequestTypeId == requestType).Select(x => x.TypeName).SingleOrDefaultAsync(ct);
-        throw new InvalidOperationException($"Transition not allowed for {type?.Trim() ?? $"Request Type {requestType}"}: {current?.StateName.Trim() ?? from.ToString()} → {target?.Trim() ?? to.ToString()}. Configure this From State / To State in Settings > State Transitions.");
+        throw new RequestTransitionConfigurationException($"Transition not allowed for {type?.Trim() ?? $"Request Type {requestType}"}: {current?.StateName.Trim() ?? from.ToString()} → {target?.Trim() ?? to.ToString()}. Configure this From State / To State in Settings > State Transitions.");
     }
 }

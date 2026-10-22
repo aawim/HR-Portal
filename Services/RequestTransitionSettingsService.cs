@@ -42,6 +42,8 @@ public sealed class RequestTransitionSettingsService(IDbContextFactory<HrmTeCont
         if (!await db.RequestTypes.AnyAsync(x => x.RequestTypeId == requestType) ||
             await db.RequestStates.CountAsync(x => x.RequestStateId == from || x.RequestStateId == to) != 2)
             return ServiceResult.Fail("Select a valid Request Type, From State and To State.");
+        if (allowed && await db.RequestStates.AnyAsync(x => x.RequestStateId == from && x.IsFinalState))
+            return ServiceResult.Fail("A final state cannot have outgoing transitions. Select a processing state as From State. Existing final-state rules can be removed.");
         var row = await db.RequestTypesAllowedRequestStateTransitions.SingleOrDefaultAsync(x => x.RequestTypeId == requestType && x.FromRequestStateId == from && x.ToRequestStateId == to);
         if (allowed && row == null) db.RequestTypesAllowedRequestStateTransitions.Add(new RequestTypesAllowedRequestStateTransition
             { RequestTypeId = requestType, FromRequestStateId = from, ToRequestStateId = to });

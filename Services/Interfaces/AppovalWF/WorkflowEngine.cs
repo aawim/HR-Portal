@@ -142,7 +142,16 @@ namespace HRM.Services.Interfaces.AppovalWF
 
             var firstStage = stages[0];
             if (context.RequestStateId != firstStage.RequestStateId)
+            {
+                try
+                {
                 await RequestTransitionPolicy.RequireAllowedAsync(db, context.RequestTypeId, context.RequestStateId, firstStage.RequestStateId, cancellationToken);
+                }
+                catch (HRM.Services.RequestTransitionConfigurationException ex)
+                {
+                    throw new HRM.Services.WorkflowConfigurationException(context, ex.Detail) { ConfigurationUrl = "/admin/settings/states" };
+                }
+            }
 
             // Validate every stage before accepting a leave submission, so it cannot become stranded later.
             if (scopedRequestFlow)

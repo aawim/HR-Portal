@@ -7,12 +7,13 @@ namespace HRM.Services;
 
 // Keep configuration details out of employee responses. Report only after the failed
 // submission transaction has rolled back, so the alert survives that rollback.
-public sealed class WorkflowConfigurationException(WorkflowRequestContextDto context, string detail)
-    : InvalidOperationException(StaffMessage)
+public sealed class WorkflowConfigurationException(WorkflowRequestContextDto context, string detail, string? staffMessage = null)
+    : InvalidOperationException(staffMessage ?? StaffMessage)
 {
     public const string StaffMessage = "Your request could not be submitted right now. Please contact your organisation's HR team for assistance. No changes have been made.";
     public WorkflowRequestContextDto Context { get; } = context;
     public string Detail { get; } = detail;
+    public string? ConfigurationUrl { get; init; }
 
     public async Task NotifyAsync(IDbContextFactory<HrmTeContext> factory)
     {
@@ -45,17 +46,18 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
                     recipients.Add((user.UserId, user.BusinessEntityID, user.Org));
             }
             // The source organisation is explicit; this link never switches tenant context.
-            var url = $"/admin/settings/leaves/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
-            var message = $"A request could not be submitted in {organisation}. Job Type: {jobType}. Request Type: {requestType}. {Detail} Review Request Approval Flows in this organisation.";
+            var url = ConfigurationUrl ?? $"/admin/settings/leaves/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
+            var kind = ConfigurationUrl == null ? "Approval flow needs attention" : "Request transition needs attention";
+            var message = $"A request action was blocked in {organisation}. Job Type: {jobType}. Request Type: {requestType}. {Detail}";
             if (message.Length > 500) message = message[..497] + "…";
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
             var cutoff = DateTime.UtcNow.AddHours(-24);
             foreach (var recipient in recipients)
             {
                 if (await db.StaffNotifications.AnyAsync(x => x.UserId == recipient.User && x.OrganisationId == recipient.Org &&
-                    x.Kind == "Approval flow needs attention" && x.Url == url && x.CreatedAtUtc >= cutoff)) continue;
+                    x.Kind == kind && x.Url == url && x.Message == message && x.CreatedAtUtc >= cutoff)) continue;
                 db.StaffNotifications.Add(new StaffNotification { UserId = recipient.User, IndividualId = recipient.Person,
-                    OrganisationId = recipient.Org, Kind = "Approval flow needs attention", Message = message, Url = url, CreatedAtUtc = DateTime.UtcNow });
+                    OrganisationId = recipient.Org, Kind = kind, Message = message, Url = url, CreatedAtUtc = DateTime.UtcNow });
             }
             await db.SaveChangesAsync();
             await tx.CommitAsync();

@@ -41,7 +41,7 @@
                     @foreach (var item in inbox.Items)
                     {
                         <li @key="item.Id">
-                            <button type="button" disabled="@saving" class="w-full p-4 text-left hover:bg-slate-50 disabled:opacity-50 @(item.IsRead ? "" : "bg-blue-50")" @onclick="() => OpenAsync(item)">
+                            <div class="w-full select-text p-4 text-left @(item.IsRead ? "" : "bg-blue-50")">
                                 <span class="flex items-start justify-between gap-2">
                                     <span class="text-sm font-semibold text-slate-900">@item.Reference</span>
                                     @if (!item.IsRead) { <span class="shrink-0 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">New</span> }
@@ -61,11 +61,16 @@
                                     <span class="mt-1 block text-sm text-slate-700">@item.FromState → @item.ToState</span>
                                 }
                                 <time class="mt-2 block text-xs text-slate-500" datetime="@item.CreatedAtUtc.ToString("O")">@item.CreatedAtUtc.AddHours(5).ToString("dd MMM yyyy, HH:mm") · Maldives</time>
-                            </button>
+                                <div class="mt-3 flex flex-wrap items-center gap-3">
+                                    <button type="button" disabled="@saving" class="rounded border px-2 py-1 text-xs text-blue-700 disabled:opacity-50" @onclick="() => OpenAsync(item)">Open notification</button>
+                                    <button type="button" class="rounded border px-2 py-1 text-xs text-slate-700" data-notification-copy="@CopyText(item)" aria-label="Copy notification message">Copy message</button>
+                                    <span data-notification-copy-status role="status" aria-live="polite" class="text-xs text-slate-600"></span>
+                                </div>
+                            </div>
                         </li>
                     }
                 </ul>
-                <p class="m-0 border-t border-slate-100 px-4 py-2 text-xs text-slate-500">Latest 30 updates · Select one to view requests</p>
+                <p class="m-0 border-t border-slate-100 px-4 py-2 text-xs text-slate-500">Latest 30 updates · Open a notification to view details</p>
             }
         </section>
     }
@@ -76,6 +81,11 @@
     private readonly CancellationTokenSource cancellation = new();
     private bool open, loading, saving, disposed;
     private string? error;
+    private static string CopyText(HRM.Services.RequestNotificationItem item) => string.Join("\n",
+        new[] { item.Reference, item.Message, item.ActionStage,
+            string.IsNullOrWhiteSpace(item.FromState) ? item.ToState : $"{item.FromState} → {item.ToState}",
+            item.CreatedAtUtc.AddHours(5).ToString("dd MMM yyyy, HH:mm") + " · Maldives" }
+        .Where(x => !string.IsNullOrWhiteSpace(x)));
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
