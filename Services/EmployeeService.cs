@@ -6,10 +6,12 @@ namespace HRM.Services
     public class EmployeeService
     {
         private readonly HrmTeContext _context;
+        private readonly UserSettingsService? _accounts;
 
-        public EmployeeService(HrmTeContext context)
+        public EmployeeService(HrmTeContext context, UserSettingsService? accounts = null)
         {
             _context = context;
+            _accounts = accounts;
         }
  
         // 1. Fetch Profile
@@ -24,9 +26,8 @@ namespace HRM.Services
         // 2. Update Profile
         public async Task<bool> UpdateEmployeeAsync(User updatedEmployee)
         {
-            _context.Users.Update(updatedEmployee);
-            var saved = await _context.SaveChangesAsync();
-            return saved > 0;
+            if (_accounts == null) throw new InvalidOperationException("Use Manage Account to update accounts.");
+            return (await _accounts.SaveLegacyUserAsync(updatedEmployee)).Success;
         }
     }
 }

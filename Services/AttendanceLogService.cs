@@ -15,16 +15,18 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IUserAccessService _access;
         private readonly IAttendanceLogProcessor _attendanceLogProcessor;
+        private readonly UserSettingsService? _accounts;
         public AttendanceLogService(HrmTeContext context,
             IAttendanceLogProcessor attendanceLogProcessor,
             IOperationLogService operationLogService, 
-            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access)
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null)
         {
             _context = context;
             _operationLogService = operationLogService;
             _dbFactory = dbFactory;
             _access = access;
             _attendanceLogProcessor = attendanceLogProcessor;
+            _accounts = accounts;
         }
        public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
         {
@@ -301,39 +303,9 @@ namespace HRM.Services
         }
  
 
-        public async Task AddAttendanceCheckAsync(int individualId, int mode)
-        {
-          
-           var now = DateTime.Now;
-            // Fetch job context
-            var job = await _context.Jobs.FirstOrDefaultAsync(j => j.IndividualID == individualId);
-            if (job == null) throw new Exception("Job profile not found.");
-            var newLog = new AttendanceLog
-            {
-                IndividualId = individualId,
-                OrganisationId = job.OrganisationID,
-                InOutModeId = mode,
-                Date = now,
-                Year = now.Year,
-                Month = now.Month,
-                Day = now.Day,
-                Hour = now.Hour,
-                Minute = now.Minute,
-                Second = now.Second,
-                Uidstamp = $"{individualId}{mode:D2}{now:yyyyMMddHHmmss}",
-                AttendanceLogStateId = 1,
-                AttendanceLogModeId = mode,
-                OrganisationStructureId = job.OrganisationStructureId,
-                OperationLogId = 1 //_operationLogService.CreateAndSaveLogAsync("New Attendance Log remotely", SharedConfig.OperationLogActionTypes.ATTENDANCE_LOG_CREATE),
-            };
-            _context.ChangeTracker.Clear();
-            await _context.AttendanceLogs.AddAsync(newLog);
-            await _context.SaveChangesAsync();
-        }
- 
-        /// <summary>
-        /// Retrieves attendance logs for a specific user within a date range.
-        /// </summary>
+
+        [Obsolete("Use AddClockEventAsync so official and duty events share the same clock processing.")]
+        public Task AddAttendanceCheckAsync(int individualId, int mode) => AddClockEventAsync(individualId);
         public async Task<List<AttendanceLog>> GetAttendanceLogsAsync(int userId, DateTime startDate, DateTime endDate)
         {
             return await _context.AttendanceLogs
@@ -355,26 +327,13 @@ namespace HRM.Services
         /// <summary>
         /// Updates the user's basic profile information in the database.
         /// </summary>
+
+        [Obsolete("Use UserSettingsService.SaveAccountAsync.")]
         public async Task<bool> UpdateUserAsync(User updatedUser)
         {
-            try
-            {
-                // Tells EF Core that this user object has been modified and needs to be saved
-                _context.Users.Update(updatedUser);
-                var changes = await _context.SaveChangesAsync();
-                // Return true if at least one row was affected
-                return changes > 0;
-            }
-            catch (Exception ex)
-            {
-                // In a real production app, log the 'ex.Message' here
-                return false;
-            }
+            if (_accounts == null) throw new InvalidOperationException("Use Manage Account to update accounts.");
+            return (await _accounts.SaveLegacyUserAsync(updatedUser)).Success;
         }
-
-        /// <summary>
-        /// Fetches valid leave balances by traversing from User -> Jobs -> JobLeaveTypes
-        /// </summary>
         public async Task<List<JobLeaveType>> GetUserLeaveBalancesAsync(string identifier)
         {
             return await _context.Users

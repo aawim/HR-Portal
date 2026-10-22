@@ -1,6 +1,6 @@
 namespace HRM.DTOs.Organisation;
 
-public enum OrganisationResourceKind { StructureTypes, Calendar, Locations, LocationTypes, OrganisationTypes, Requests }
+public enum OrganisationResourceKind { StructureTypes, Calendar, Locations, LocationTypes, OrganisationTypes, Requests, StructureRequestTypes }
 public sealed record OrganisationResourceRow(int Id, string Name, string Detail = "", string Status = "", string? Url = null);
 public sealed class OrganisationResourceData
 {

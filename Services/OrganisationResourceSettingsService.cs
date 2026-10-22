@@ -26,12 +26,13 @@ public sealed class OrganisationResourceSettingsService(IDbContextFactory<HrmTeC
             throw new UnauthorizedAccessException("You cannot view organisation settings.");
         return (org, super, edit);
     }
-    public static bool IsCatalogue(OrganisationResourceKind kind) => kind is OrganisationResourceKind.StructureTypes or OrganisationResourceKind.LocationTypes or OrganisationResourceKind.OrganisationTypes;
+    public static bool IsCatalogue(OrganisationResourceKind kind) => kind is OrganisationResourceKind.StructureTypes or OrganisationResourceKind.LocationTypes or OrganisationResourceKind.OrganisationTypes or OrganisationResourceKind.StructureRequestTypes;
     private static async Task<List<OrganisationResourceRow>> Catalogue(HrmTeContext db, OrganisationResourceKind kind) => kind switch
     {
         OrganisationResourceKind.StructureTypes => await db.OrganisationStructureTypes.OrderBy(t => t.TypeName).Select(t => new OrganisationResourceRow(t.OrganisationStructureTypeId, t.TypeName, "", "", null)).ToListAsync(),
         OrganisationResourceKind.LocationTypes => await db.LocationTypes.OrderBy(t => t.TypeName).Select(t => new OrganisationResourceRow(t.LocationTypeId, t.TypeName, "", "", null)).ToListAsync(),
         OrganisationResourceKind.OrganisationTypes => await db.OrganisationTypes.OrderBy(t => t.TypeName).Select(t => new OrganisationResourceRow(t.OrganisationTypeId, t.TypeName, "", "", null)).ToListAsync(),
+        OrganisationResourceKind.StructureRequestTypes => await db.OrganisationStructureRequestTypes.OrderBy(t => t.TypeName).Select(t => new OrganisationResourceRow(t.OrganisationStructureRequestTypeId, t.TypeName, "", "", null)).ToListAsync(),
         _ => throw new InvalidOperationException("Select a valid reference type.")
     };
     public async Task<OrganisationResourceData> LoadAsync(OrganisationResourceKind kind, int? organisationId = null)
@@ -97,6 +98,9 @@ public sealed class OrganisationResourceSettingsService(IDbContextFactory<HrmTeC
                 break;
             case OrganisationResourceKind.OrganisationTypes:
                 if (id == 0) db.OrganisationTypes.Add(new() { TypeName = name }); else (await db.OrganisationTypes.SingleAsync(t => t.OrganisationTypeId == id)).TypeName = name;
+                break;
+            case OrganisationResourceKind.StructureRequestTypes:
+                if (id == 0) db.OrganisationStructureRequestTypes.Add(new() { TypeName = name }); else (await db.OrganisationStructureRequestTypes.SingleAsync(t => t.OrganisationStructureRequestTypeId == id)).TypeName = name;
                 break;
         }
         await db.SaveChangesAsync(); await tx.CommitAsync(); return ServiceResult.Ok("Type saved.");

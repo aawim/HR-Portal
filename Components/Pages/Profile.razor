@@ -10,6 +10,7 @@
 
 @attribute [Authorize]
 @inject HRM.Services.Interfaces.IUserService UserService
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 
 <PageTitle>My Profile - HR Portal</PageTitle>
 
@@ -57,14 +58,10 @@ else
                 <p class="text-slate-500 text-sm mt-1">View and manage your employee information.</p>
             </div>
 
-            <AuthorizeView Roles="HR_Admin, SuperAdmin">
-                <Authorized>
-                    <button @onclick="EnableEditMode" class="bg-blue-50 text-blue-600 hover:bg-blue-100 border border-blue-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm flex items-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
-                        Edit Profile
-                    </button>
-                </Authorized>
-            </AuthorizeView>
+            @if (canManageAccount)
+            {
+                <a href="@($"/admin/settings/user/account?userId={userProfile.UserId}")" class="app-button app-button-secondary">Manage account</a>
+            }
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -106,31 +103,16 @@ else
                 <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
                     <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Contact Details</h3>
 
-                    @if (isEditing)
-                    {
-                        <div class="space-y-3">
-                            <div>
-                                <label class="block text-xs text-slate-500 mb-1">Mobile</label>
-                                <input type="text" @bind="userProfile.Username" class="w-full border border-slate-200 rounded p-2 text-sm focus:ring-2 focus:ring-blue-500" />
-                            </div>
-                            <button @onclick="SaveProfile" class="w-full mt-2 bg-emerald-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-600 transition shadow-sm">
-                                Save Changes
-                            </button>
-                        </div>
-                    }
-                    else
-                    {
                         <ul class="space-y-3 text-sm">
                             <li class="flex items-center gap-3">
                                 <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
-                                <span class="text-slate-700">@(userProfile.ActiveJob)</span>
+                                <span class="text-slate-700">@(userProfile.Email ?? "N/A")</span>
                             </li>
                             <li class="flex items-center gap-3">
                                 <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
                                 <span class="text-slate-700">Mobile: @(userProfile.Mobile ?? "N/A")</span>
                             </li>
                         </ul>
-                    }
                 </div>
             </div>
 
@@ -243,30 +225,16 @@ else
 
     private UserProfileDto? userProfile;
     private bool isLoading = true;
-    private bool isEditing = false;
+    private bool canManageAccount;
 
     protected override async Task OnInitializedAsync()
     {
         userProfile = await UserService.GetMyProfileAsync();
+        var context = await UserAccess.GetContextAsync();
+        canManageAccount = context?.IsSuperAdministrator == true || await UserAccess.HasPermissionAsync("Admin") ||
+            await UserAccess.HasPermissionAsync("Users.Edit") && await UserAccess.HasPermissionAsync("Users.View");
         isLoading = false;
     }
 
-    private void EnableEditMode()
-    {
-        isEditing = true;
-    }
-
-    private async Task SaveProfile()
-    {
-        if (userProfile != null)
-        {
-            var success = await UserService.UpdateUserAsync(userProfile);
-
-            if (success)
-            {
-                isEditing = false;
-            }
-        }
-    }
 }
 

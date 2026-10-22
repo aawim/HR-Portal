@@ -110,42 +110,22 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             .OrderBy(x => x.AddressBase.AddressLine1).Take(30).Select(x => new OrganisationSettingsOption(x.LocationId,
                 (x.AddressBase.AddressLine1 ?? "") + " " + (x.AddressBase.StreetNameEnglish ?? "") + " " + (x.Floor ?? ""))).ToListAsync();
     }
+
     public async Task<ServiceResult> SaveAddressAsync(int id, OrganisationAddressDto model)
     {
         await RequireAsync(id, "Organisation.Edit", "Organisation.Contact.Edit", "UserOrganisations.Edit");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (!await db.Organisations.AnyAsync(x => x.BusinessEntityID == id)) return ServiceResult.Fail("Save the organisation first.");
-        var original = model.LinkId == 0 ? null : await db.BusinessEntityLocations.SingleOrDefaultAsync(x => x.BusinessEntityId == id && x.BusinessEntityLocationId == model.LinkId && x.IsValid);
-        if (model.LinkId != 0 && original == null) return ServiceResult.Fail("Address was not found for this organisation.");
-        if (!await db.BusinessEntityLocationTypes.AnyAsync(x => x.BusinessEntityLocationTypeId == model.UsageId)) return ServiceResult.Fail("Select an address usage.");
-        int locationId;
-        if (model.ExistingLocationId.HasValue)
-        {
-            locationId = model.ExistingLocationId.Value;
-            if (!await db.AddressInstances.AnyAsync(x => x.LocationId == locationId)) return ServiceResult.Fail("Select an existing address location.");
-        }
-        else
-        {
-            if (string.IsNullOrWhiteSpace(model.Line1) || model.Line1.Length > 250 || model.Line2?.Length > 250 || model.Street?.Length > 250 || model.Floor?.Length > 50 || model.PostCode?.Length > 20)
-                return ServiceResult.Fail("Enter an address line and keep address fields within the displayed limits.");
-            if (!await db.AddressBaseTypes.AnyAsync(x => x.AddressBaseTypeId == model.BaseTypeId) || !await db.Countries.AnyAsync(x => x.CountryId == model.CountryId))
-                return ServiceResult.Fail("Select an address type and country.");
-            if (model.IslandId.HasValue && !await db.Islands.AnyAsync(x => x.IslandId == model.IslandId) ||
-                model.WardId.HasValue && !await db.Wards.AnyAsync(x => x.WardId == model.WardId && x.IslandId == model.IslandId)) return ServiceResult.Fail("Select a valid island and ward.");
-            var addressBase = new AddressBasis { AddressLine1 = model.Line1.Trim(), AddressLine2 = model.Line2?.Trim(), StreetNameEnglish = model.Street?.Trim(), PostCode = model.PostCode?.Trim(), AddressBaseTypeId = model.BaseTypeId, WardId = model.WardId, IsCurrent = true };
-            var locationType = await db.LocationTypes.Where(x => x.TypeName == "Address").Select(x => x.LocationTypeId).SingleAsync();
-            var location = new Location { LocationTypeId = locationType, CountryId = model.CountryId };
-            db.AddressBases.Add(addressBase); db.Locations.Add(location); await db.SaveChangesAsync();
-            var address = new Address { LocationId = location.LocationId, IslandId = model.IslandId };
-            db.Addresses.Add(address); db.AddressInstances.Add(new() { LocationId = location.LocationId, AddressBaseId = addressBase.AddressBaseId, Floor = model.Floor?.Trim() });
-            await db.SaveChangesAsync(); locationId = location.LocationId;
-        }
-        if (original != null) original.IsValid = false;
-        var link = await db.BusinessEntityLocations.SingleOrDefaultAsync(x => x.BusinessEntityId == id && x.LocationId == locationId && x.BusinessEntityLocationTypeId == model.UsageId);
-        if (link == null) db.BusinessEntityLocations.Add(new() { BusinessEntityId = id, LocationId = locationId, BusinessEntityLocationTypeId = model.UsageId, IsValid = true });
-        else link.IsValid = true;
-        await db.SaveChangesAsync(); await tx.CommitAsync(); return ServiceResult.Ok(model.LinkId == 0 ? "Address added to the organisation." : "Address updated.");
+        if (!model.ExistingLocationId.HasValue && string.IsNullOrWhiteSpace(model.Line1)) return ServiceResult.Fail("Enter an address line.");
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.LOCATION_CREATE, $"Saved organisation {id} address link {model.LinkId}");
+        var result = await BusinessEntityAddressWriter.SaveAsync(db, id, new AddressMutation {
+            LinkId = model.LinkId, ExistingLocationId = model.ExistingLocationId, UsageId = model.UsageId,
+            BaseTypeId = model.BaseTypeId, CountryId = model.CountryId, IslandId = model.IslandId, WardId = model.WardId,
+            Line1 = model.Line1, Line2 = model.Line2, Street = model.Street, Floor = model.Floor, PostCode = model.PostCode, IsCurrent = true
+        }, audit.OperationLogId);
+        if (!result.Success) { await tx.RollbackAsync(); return result; }
+        await tx.CommitAsync(); return result;
     }
     public async Task<OrganisationAddressDto> GetAddressAsync(int id, int linkId)
     {
@@ -163,17 +143,16 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
                 Floor = x.Location.Address.AddressInstance.Floor, PostCode = x.Location.Address.AddressInstance.AddressBase.PostCode })
             .SingleOrDefaultAsync() ?? throw new InvalidOperationException("Address was not found for this organisation.");
     }
+
     public async Task<ServiceResult> DeleteAddressAsync(int id, int linkId)
     {
         await RequireAsync(id, "Organisation.Edit", "Organisation.Contact.Edit", "UserOrganisations.Edit");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var link = await db.BusinessEntityLocations.SingleOrDefaultAsync(x => x.BusinessEntityId == id && x.BusinessEntityLocationId == linkId && x.IsValid);
-        if (link == null) return ServiceResult.Fail("Address was not found for this organisation.");
-        link.IsValid = false;
-        await db.SaveChangesAsync();
-        await tx.CommitAsync();
-        return ServiceResult.Ok("Address removed from the organisation.");
+        var result = await BusinessEntityAddressWriter.UnlinkAsync(db, id, linkId);
+        if (!result.Success) return result;
+        await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_UPDATE, $"Removed organisation {id} address link {linkId}");
+        await tx.CommitAsync(); return result;
     }
     public async Task<ServiceResult> SaveContactAsync(int id, OrganisationContactDto model)
     {

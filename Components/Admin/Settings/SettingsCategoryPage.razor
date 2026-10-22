@@ -41,7 +41,7 @@
                     <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
 
                         <h2 class="text-xl font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            @CategoryName Management
+                            @ResolvedCategoryName Management
                         </h2>
 
                         <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
@@ -135,7 +135,7 @@
                                 <div class="mt-2">
                                     @if (activeItem.ComponentType != null)
                                     {
-                                        <DynamicComponent @key="(CategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                                        <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
                                     }
                                     else
                                     {
@@ -177,6 +177,8 @@
     [Parameter] public int? OrganisationId { get; set; }
     [Parameter] public string? OrganisationSection { get; set; }
     [Parameter] public string? TeamSection { get; set; }
+    private string ResolvedCategoryName => OrganisationSection != null || TeamSection != null
+        ? "org" : (CategoryName ?? "").Trim().ToLowerInvariant();
     [SupplyParameterFromQuery(Name = "organisationId")] public int? QueryOrganisationId { get; set; }
     private IDictionary<string, object>? SelectedParameters => activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["InitialKind"] = TeamSection == "departments" ? "Department" : "Team" }
@@ -189,6 +191,7 @@
                 "Locations" => HRM.DTOs.Organisation.OrganisationResourceKind.Locations,
                 "Location Types" => HRM.DTOs.Organisation.OrganisationResourceKind.LocationTypes,
                 "Organisation Types" => HRM.DTOs.Organisation.OrganisationResourceKind.OrganisationTypes,
+                "Structure Request Types" => HRM.DTOs.Organisation.OrganisationResourceKind.StructureRequestTypes,
                 _ => HRM.DTOs.Organisation.OrganisationResourceKind.Requests } } : null;
     private IEnumerable<SubItem> VisibleItems => GetSubItems(CategoryName).Where(x =>
         (x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper) &&
@@ -214,7 +217,7 @@
     private void SelectItem(SubItem item)
     {
         activeItem = item;
-        Navigation.NavigateTo($"/admin/settings/{CategoryName.ToLowerInvariant()}/{ItemSlug(item)}");
+        Navigation.NavigateTo($"/admin/settings/{ResolvedCategoryName}/{ItemSlug(item)}");
     }
     private bool isSidebarExpanded = true;
 
@@ -223,7 +226,7 @@
         isSidebarExpanded = !isSidebarExpanded;
     }
 
-    private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
+    private List<SubItem> GetSubItems(string? cat) => (string.IsNullOrWhiteSpace(cat) ? ResolvedCategoryName : cat.Trim().ToLowerInvariant()) switch
     {
         "leaves" => new() {
             new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
@@ -250,8 +253,7 @@
             new("Locations", "📍", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Location Types", "🏷️", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Types", "🏛️", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Requests", "📥", "Review requests in this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
-            new("Request Types", "📋", "Manage existing request types and workflow configuration.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
+            new("Structure Request Types", "📥", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
         },
         "payroll" => new() {
@@ -330,9 +332,11 @@
     private bool canViewCarryForward;
     protected override void OnParametersSet()
     {
+        CategoryName = ResolvedCategoryName;
         if (OrganisationSection != null) { CategoryName = "org"; Section = "manage"; }
         if (TeamSection != null) { CategoryName = "org"; Section = "teams"; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "organisations") Section = "manage";
+        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "requests") Section = "structure-request-types";
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "teams")
         {
             activeItem = new SubItem("Teams and supervisors", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings));

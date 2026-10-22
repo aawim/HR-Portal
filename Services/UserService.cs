@@ -11,12 +11,14 @@ namespace HRM.Services
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IUserAccessService _access;
+        private readonly UserSettingsService? _accounts;
 
         public UserService(
-            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access)
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null)
         {
             _dbFactory = dbFactory;
             _access = access;
+            _accounts = accounts;
         }
 
 
@@ -137,65 +139,14 @@ namespace HRM.Services
             };
         }
 
-        public async Task<bool> UpdateUserProfileAsync(UserProfileDto updatedUser)
-        {
-            try
-            {
-                await using var db = await _dbFactory.CreateDbContextAsync();
-
-                var user = await db.Users
-                    .FirstOrDefaultAsync(x =>
-                        x.UserId == updatedUser.UserId);
-
-                if (user == null)
-                    return false;
-
-
-                user.Username = updatedUser.Username;
-                user.BusinessEntityID = updatedUser.IndividualID;
-
-
-                var changes = await db.SaveChangesAsync();
-
-                return changes > 0;
-            }
-            catch (Exception)
-            {
-                return false;
-            }
-        }
-
+        [Obsolete("Use UserSettingsService.SaveAccountAsync.")]
+        public Task<bool> UpdateUserProfileAsync(UserProfileDto updatedUser) => UpdateUserAsync(updatedUser);
 
         public async Task<bool> UpdateUserAsync(UserProfileDto profile)
         {
-            try
-            {
-                await using var db = await _dbFactory.CreateDbContextAsync();
-
-                var user = await db.Users
-                    .FirstOrDefaultAsync(x =>
-                        x.UserId == profile.UserId);
-
-                if (user == null)
-                    return false;
-
-
-                // Update only editable fields
-                user.Username = profile.Username;
-
-
-                var changes = await db.SaveChangesAsync();
-
-                return changes > 0;
-            }
-            catch (Exception ex)
-            {
-                // TODO: log exception
-                return false;
-            }
+            if (_accounts == null) throw new InvalidOperationException("Use Manage Account to update accounts.");
+            return (await _accounts.SaveLegacyProfileAsync(profile)).Success;
         }
-
-       
     }
 }
  

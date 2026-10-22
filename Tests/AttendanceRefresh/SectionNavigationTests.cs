@@ -15,15 +15,29 @@ static class SectionNavigationTests
             SectionRoutes.Slug("LeaveType") == "leave-type", "Section slugs are inconsistent");
         Check(SectionRoutes.Tab(["Attendance", "Break Late", "Out Of Office"], "break-late", "Attendance") == "Break Late", "Hyphenated tab URL not restored");
         Check(SectionRoutes.Tab(["Attendance", "Break Late"], "unknown", "Attendance") == "Attendance", "Unknown tab fallback failed");
+        var initial = new SettingsPage { CategoryName = null!, OrganisationId = 3, OrganisationSection = "structure" };
+        var initialItems = (System.Collections.IEnumerable)typeof(SettingsPage).GetMethod("GetSubItems", Flags)!.Invoke(initial, [null])!;
+        Check(initialItems.Cast<object>().Any(x => (string?)x.GetType().GetProperty("Title")!.GetValue(x) == "Manage"),
+            "Organisation route crashed or lost its category during the initial async render");
+        Check(Selected(initial) == "Manage", "Organisation route without CategoryName did not resolve Manage");
+        initial = new SettingsPage { CategoryName = null!, TeamSection = "departments" };
+        Check(Selected(initial) == "Teams and supervisors", "Team route without CategoryName did not resolve");
+        initial = new SettingsPage { CategoryName = null! };
+        _ = typeof(SettingsPage).GetMethod("GetSubItems", Flags)!.Invoke(initial, [null]);
+        _ = Selected(initial);
         var page = new SettingsPage { CategoryName = "org", Section = "teams" };
         Check(Selected(page) == "Teams and supervisors", "Organisation team URL did not restore selection");
         page.Section = "permissions";
         Check(Selected(page) == "Organisation Permissions", "Back/forward within a category retained the previous section");
         foreach (var (section, title) in new[] { ("manage", "Manage"), ("types", "Manage type"), ("calendar", "Calendar"),
-            ("locations", "Locations"), ("location-types", "Location Types"), ("organisation-types", "Organisation Types"), ("requests", "Requests"), ("request-types", "Request Types") })
+            ("locations", "Locations"), ("location-types", "Location Types"), ("organisation-types", "Organisation Types"), ("requests", "Structure Request Types"), ("structure-request-types", "Structure Request Types") })
         {
             page.Section = section; Check(Selected(page) == title, $"Organisation section {section} did not restore");
         }
+        page.CategoryName = "org"; page.Section = "request-types";
+        Check(Selected(page) == null, "General request types are still available in Organisation settings");
+        page.CategoryName = "requests";
+        Check(Selected(page) == "Request Types", "General request types were removed from Request settings");
         page.CategoryName = "positions"; page.Section = "overview";
         Check(Selected(page) == "Overview", "Category navigation retained the previous category");
         page.CategoryName = "requests"; page.Section = "state-transitions";

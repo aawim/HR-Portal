@@ -10,8 +10,7 @@ The organisation settings menu follows the User Management layout:
 | Locations | `/admin/settings/org/locations` | Linked organisation locations; open the existing address editor |
 | Location Types | `/admin/settings/org/location-types` | LocationTypes catalogue |
 | Organisation Types | `/admin/settings/org/organisation-types` | OrganisationTypes catalogue |
-| Requests | `/admin/settings/org/requests` | Latest 100 tenant requests, searchable by reference/type and status, linked to existing processing pages |
-| Request Types | `/admin/settings/org/request-types` | Existing request type configuration component |
+| Structure Request Types | `/admin/settings/org/structure-request-types` | OrganisationStructureRequestTypes catalogue for structure changes |
 | Organisation Permissions | `/admin/settings/org/permissions` | Existing permission limits management |
 
 The separate Teams and supervisors menu entry is removed. Teams remain in

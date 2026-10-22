@@ -111,6 +111,7 @@
 
 @code {
     [Parameter] public UserSettingsTab Tab { get; set; }
+    [SupplyParameterFromQuery(Name = "userId")] public int? RequestedUserId { get; set; }
     private UserSettingsData? data;
     private ManagedUserDto? user;
     private ManagedStaffDto staff = new();
@@ -139,7 +140,7 @@
     private async Task ReloadAsync()
     {
         loading = true;
-        try { var selected = SelectedId; data = await Settings.LoadAsync(Tab); organisationPermissions = data.OrganisationPermissionIds.ToList(); if (selected != 0) Select(selected); }
+        try { var selected = RequestedUserId ?? SelectedId; data = await Settings.LoadAsync(Tab); organisationPermissions = data.OrganisationPermissionIds.ToList(); if (selected != 0) Select(selected); }
         catch (Exception ex) { Fail(ex); }
         finally { loading = false; }
     }

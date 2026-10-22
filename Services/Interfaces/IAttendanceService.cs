@@ -14,7 +14,6 @@ namespace HRM.Services.Interfaces
         Task <List<AttendanceLogDto>> GetMyWeeklyAttendanceAsync();
 
       
-        Task AddAttendanceCheckAsync(int individualId, DateTime checkTime, int checkType);
 
         Task<List<AttendanceRawLogDto>> GetLogsAsync(
             int individualId,

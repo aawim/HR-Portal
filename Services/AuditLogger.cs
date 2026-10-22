@@ -26,41 +26,11 @@ namespace HRM.Services
             _navigationManager = navigationManager;
             _authProvider = authProvider;
         }
-        public async Task CreateLogAsync(
-        int dataTypeId,
-        int actionTypeId,
-        int dataItemId,
-        object data)
+
+        public async Task CreateLogAsync(int dataTypeId, int actionTypeId, int dataItemId, object data)
         {
-            var authState = await _authProvider.GetAuthenticationStateAsync();
-
-            var username =
-                authState.User.Identity?.Name ?? "Anonymous";
-
-            var ipAddress =
-                _httpContextAccessor.HttpContext?
-                    .Connection
-                    .RemoteIpAddress?
-                    .ToString() ?? "";
-
-            var auditLog = new AuditLog
-            {
-                AuditLogDataTypeID = dataTypeId,
-                AuditLogActionTypeID = actionTypeId,
-                DataItemID = dataItemId,
-                Data = JsonSerializer.Serialize(data),
-
-                URL = _navigationManager.Uri,
-
-                CreatedByUserID = 0, // lookup actual user id
-                CreatedByIPAddress = ipAddress,
-                CreatedDate = DateTime.UtcNow
-            };
-
-            _auditDb.AuditLogs.Add(auditLog);
-            await _auditDb.SaveChangesAsync();
+            await CreateNewLogAsync(dataTypeId, actionTypeId, dataItemId, data);
         }
-
         public async Task<int> CreateNewLogAsync(
             int dataTypeId,
             int actionTypeId,

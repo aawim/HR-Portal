@@ -46,12 +46,6 @@ namespace HRM.Services
             return (checkIn, checkOut);
         }
 
-        public Task AddAttendanceCheckAsync(int individualId, DateTime checkTime, int checkType)
-        {
-            using var context = _dbFactory.CreateDbContext();
-
-            throw new NotImplementedException();
-        }
 
      
 

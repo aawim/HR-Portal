@@ -107,6 +107,29 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         return ServiceResult.Ok("Account saved.");
     }
 
+    public async Task<ServiceResult> SaveLegacyUserAsync(User model)
+    {
+        var (_, org) = await RequireAsync("Users.Edit");
+        await using var db = await factory.CreateDbContextAsync();
+        var current = await ScopedUserAsync(db, model.UserId, org);
+        if (model.Username != current.Username || model.BusinessEntityID != current.BusinessEntityID)
+            return ServiceResult.Fail("Account identifiers and employee identity cannot be changed through account editing.");
+        return await SaveAccountAsync(new ManagedUserDto { Id = current.UserId, Name = model.FullName ?? current.FullName ?? current.Username,
+            Email = model.Email ?? current.Email, Mobile = model.Mobile, Active = model.IsActive, Approved = model.IsApproved == true, StateId = model.LocalUserStateId });
+    }
+
+    public async Task<ServiceResult> SaveLegacyProfileAsync(UserProfileDto model)
+    {
+        var (_, org) = await RequireAsync("Users.Edit");
+        await using var db = await factory.CreateDbContextAsync();
+        var current = await ScopedUserAsync(db, model.UserId, org);
+        if (model.Username != current.Username || model.IndividualID != current.BusinessEntityID)
+            return ServiceResult.Fail("Account identifiers and employee identity cannot be changed through profile editing.");
+        return await SaveAccountAsync(new ManagedUserDto { Id = current.UserId, Name = current.FullName ?? current.Username,
+            Email = string.IsNullOrWhiteSpace(model.Email) ? current.Email : model.Email, Mobile = model.Mobile,
+            Active = current.IsActive, Approved = current.IsApproved == true, StateId = current.LocalUserStateId });
+    }
+
     private async Task ValidateGrantsAsync(HrmTeContext db, UserContextDto actor, IEnumerable<int> desired, IEnumerable<int> existing)
     {
         var ids = desired.Distinct().ToArray();
@@ -131,11 +154,7 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         var addedGroupPermissions = groups.Where(x => !oldGroups.Contains(x.UserGroupId)).SelectMany(x => x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.RoleId));
         await ValidateGrantsAsync(db, actor, model.DirectPermissionIds.Concat(addedGroupPermissions), oldDirect);
         var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Updated permissions and roles for account {entity.UserId}");
-        foreach (var link in entity.UserRoles.Where(x => x.UserOrganisationId == orgId)) { link.IsActive = model.DirectPermissionIds.Contains(link.RoleId); link.OperationLogId = log.OperationLogId; }
-        foreach (var id in model.DirectPermissionIds.Distinct().Except(entity.UserRoles.Where(x => x.UserOrganisationId == orgId).Select(x => x.RoleId)))
-            entity.UserRoles.Add(new() { RoleId = id, UserOrganisationId = orgId, IsActive = true, OperationLogId = log.OperationLogId });
-        foreach (var link in entity.UserAssignedUserGroups.Where(x => oldGroups.Contains(x.UserGroupId) && !desiredGroups.Contains(x.UserGroupId)).ToList()) db.UserAssignedUserGroups.Remove(link);
-        foreach (var id in desiredGroups.Except(oldGroups)) entity.UserAssignedUserGroups.Add(new() { UserGroupId = id, OperationLogId = log.OperationLogId });
+        await UserAccessAssignmentWriter.ApplyAsync(db, entity, desiredGroups, model.DirectPermissionIds, log.OperationLogId);
         await db.SaveChangesAsync(); await tx.CommitAsync(); await contexts.InvalidateAsync(entity.UserId);
         return ServiceResult.Ok("Account roles and direct permissions saved.");
     }

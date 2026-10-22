@@ -259,11 +259,7 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
                         var submitterPermissions = await new EffectivePermissionService(factory).GetEffectivePermissionsAsync(r.CreatedByUserId);
                         await ValidateSuperGrant(db, groups, permissions, submitterPermissions.Any(p => p.RoleKey == "Super.Admin.Manage"));
                         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Approved Admin access grant {id} for User {target.UserId}");
-                        foreach (var a in target.UserAssignedUserGroups.Where(a => a.UserGroup.UserOrganisationId == target.UserOrganisationId && !groups.Contains(a.UserGroupId)).ToList()) db.UserAssignedUserGroups.Remove(a);
-                        foreach (var g in groups.Except(target.UserAssignedUserGroups.Select(a => a.UserGroupId))) target.UserAssignedUserGroups.Add(new UserAssignedUserGroup { UserGroupId = g, OperationLogId = audit.OperationLogId });
-                        foreach (var p in target.UserRoles.Where(p => p.UserOrganisationId == target.UserOrganisationId)) { p.IsActive = permissions.Contains(p.RoleId); p.OperationLogId = audit.OperationLogId; }
-                        foreach (var p in permissions.Except(target.UserRoles.Where(p => p.UserOrganisationId == target.UserOrganisationId).Select(p => p.RoleId)))
-                            target.UserRoles.Add(new() { RoleId = p, UserOrganisationId = target.UserOrganisationId!.Value, IsActive = true, OperationLogId = audit.OperationLogId });
+                        await UserAccessAssignmentWriter.ApplyAsync(db, target, groups, permissions, audit.OperationLogId);
                         target.AdminPortalAccessEnabled = true; target.AdminPortalAccessOrganisationId = target.UserOrganisationId;
                         target.LastUpdatedByUserId = actor.UserId; target.LastUpdatedDate = DateTime.Now; target.OperationLogId = audit.OperationLogId;
                         r.IsOpen = false; instance.WorkflowStatus = "Approved"; instance.ExecutionStatus = "Succeeded"; instance.CompletedAt = DateTime.UtcNow;

@@ -119,135 +119,22 @@ namespace HRM.Services
 
         }
 
+
         public async Task<ServiceResult> CreateAddressAsync(AddressCreateDto model)
         {
-            await using var context = await _dbFactory.CreateDbContextAsync();
-
-            await using var transaction =
-                await context.Database.BeginTransactionAsync();
-            Console.WriteLine($"Before Location creation: CountryId = {model.CountryId}");
-            try
-            {
-                Console.WriteLine($"Before Location creation: CountryId = {model.CountryId}");
-                var businessEntityId =
-                    await _individual.GetIndividualID();
-
-                if (businessEntityId == 0)
-                {
-                    return new ServiceResult
-                    {
-                        Success = false,
-                        Message = "User not found."
-                    };
-                }
-
-                var operationLog =
-                    await _operationLogService.CreateAsync(
-                        context,
-                        1,
-                        "Address created");
-
-                await context.SaveChangesAsync();
-
-
-                Console.WriteLine($"Before Location creation: CountryId = {model.CountryId}");
-
-                var location = new Location
-                {
-                    CountryId = model.CountryId,
-                    OperationLogId = operationLog.OperationLogId,
-                    LocationTypeId = 1
-                };
-
-                Console.WriteLine($"After Location creation: CountryId = {location.CountryId}");
-
-                context.Locations.Add(location);
-
-                await context.SaveChangesAsync();
-
-                // Address
-                var address = new Address
-                {
-                    LocationId = location.LocationId,
-                    IslandId = model.IslandId
-                };
-
-                context.Addresses.Add(address);
-
-                // Address Base
-                var addressBase = new AddressBasis
-                {
-                    IsCurrent = model.IsCurrent,
-                    AddressBaseTypeId = model.AddressBaseTypeId,
-
-
-                };
-
-                context.AddressBases.Add(addressBase);
-
-                await context.SaveChangesAsync();
-
-                // Address Instance
-                var instance = new AddressInstance
-                {
-                    LocationId = location.LocationId,
-                    Name = model.Name,
-                    Floor = model.Floor,
-                    AddressBaseId = addressBase.AddressBaseId,
-                    AddressInstanceTypeId = model.AddressInstanceTypeId
-                };
-
-                context.AddressInstances.Add(instance);
-
-                // Business Entity Location
-                var bel = new BusinessEntityLocation
-                {
-                    BusinessEntityId = businessEntityId,
-                    LocationId = location.LocationId,
-                    BusinessEntityLocationTypeId =
-                        model.BusinessEntityLocationTypeId,
-                    IsValid = true
-                };
-
-                context.BusinessEntityLocations.Add(bel);
-
-                if (model.IsCurrent)
-                {
-                    var currentAddresses = await context.BusinessEntityLocations
-                        .Where(x => x.BusinessEntityId == businessEntityId)
-                        .Select(x => x.Location.Address.AddressInstance.AddressBase)
-                        .ToListAsync();
-
-                    foreach (var item in currentAddresses)
-                    {
-                        item.IsCurrent = false;
-                    }
-
-                    await context.SaveChangesAsync();
-                }
-
-                await context.SaveChangesAsync();
-
-                await transaction.CommitAsync();
-
-                return new ServiceResult
-                {
-                    Success = true,
-                    Message = "Address added successfully."
-                };
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-
-                return new ServiceResult
-                {
-                    Success = false,
-                    Message = ex.Message
-                };
-            }
+            var owner = await _individual.GetIndividualID();
+            if (owner <= 0) return ServiceResult.Fail("Your employee identity is unavailable.");
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+            var audit = await _operationLogService.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.LOCATION_CREATE, $"Created personal address for Individual {owner}");
+            var result = await BusinessEntityAddressWriter.SaveAsync(db, owner, new AddressMutation {
+                UsageId = model.BusinessEntityLocationTypeId, BaseTypeId = model.AddressBaseTypeId,
+                InstanceTypeId = model.AddressInstanceTypeId, CountryId = model.CountryId, IslandId = model.IslandId,
+                Name = model.Name, Floor = model.Floor, IsCurrent = model.IsCurrent, ClearOtherCurrent = model.IsCurrent
+            }, audit.OperationLogId);
+            if (!result.Success) { await tx.RollbackAsync(); return result; }
+            await tx.CommitAsync(); return result;
         }
-
         public async Task<List<Country>> GetCountriesAsync()
         {
             await using var context = await _dbFactory.CreateDbContextAsync();

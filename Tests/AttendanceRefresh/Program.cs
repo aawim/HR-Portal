@@ -27,6 +27,8 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await CrudConsolidationTests.RunAsync(); Console.WriteLine("PASS CRUD consolidation: shared address creation, owner isolation, current-address handling, canonical account writes and legacy adapters"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL CRUD consolidation: {ex}"); }
 try { await OrganisationResourceSettingsTests.RunAsync(); Console.WriteLine("PASS Organisation resource settings: shared types, tenant-scoped requests, calendar access, duplicate prevention and audit"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Organisation resource settings: {ex}"); }
 try { await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Section navigation: category URLs, direct links, workspace and attendance tabs, protected sections and legacy route compatibility"); }

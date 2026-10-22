@@ -27,6 +27,7 @@ static class OrganisationResourceSettingsTests
             db.Organisations.AddRange(new Organisation { BusinessEntityID = 10, OrganisationName = "Tenant" }, new Organisation { BusinessEntityID = 20, OrganisationName = "Other" });
             db.OrganisationStructureTypes.Add(new OrganisationStructureType { OrganisationStructureTypeId = 1, TypeName = "Department" });
             db.OrganisationTypes.Add(new OrganisationType { OrganisationTypeId = 1, TypeName = "Government" });
+            db.OrganisationStructureRequestTypes.Add(new OrganisationStructureRequestType { OrganisationStructureRequestTypeId = 1, TypeName = "Create structure" });
             db.LocationTypes.Add(new LocationType { LocationTypeId = 1, TypeName = "Office" });
             db.Countries.Add(new Country { CountryId = 1, NameEnglish = "Maldives" });
             db.BusinessEntityLocationTypes.Add(new BusinessEntityLocationType { BusinessEntityLocationTypeId = 1, TypeName = "Head office" });
@@ -42,6 +43,7 @@ static class OrganisationResourceSettingsTests
             await db.SaveChangesAsync();
         }
         var types = await service.LoadAsync(OrganisationResourceKind.StructureTypes);
+        Check((await service.LoadAsync(OrganisationResourceKind.StructureRequestTypes)).Rows.Single().Name == "Create structure", "Structure request types used the generic request catalogue");
         Check(types.Rows.Single().Name == "Department" && !types.CanEdit, "Shared type scope or edit policy is incorrect");
         await Denied(() => service.SaveTypeAsync(OrganisationResourceKind.StructureTypes, 0, "Division", null));
         await Denied(() => service.LoadAsync(OrganisationResourceKind.Requests, 20));
@@ -63,7 +65,8 @@ static class OrganisationResourceSettingsTests
         Check((await service.SaveTypeAsync(OrganisationResourceKind.StructureTypes, 1, "Unit", "Department")).Success, "Type edit failed");
         Check((await service.SaveTypeAsync(OrganisationResourceKind.OrganisationTypes, 0, "Agency", null)).Success, "Organisation type creation failed");
         Check((await service.SaveTypeAsync(OrganisationResourceKind.LocationTypes, 0, "Branch", null)).Success, "Location type creation failed");
-        await using (var db = factory.CreateDbContext()) Check(await db.OperationLogs.CountAsync() == 5, "Resource changes were not audited");
+        Check((await service.SaveTypeAsync(OrganisationResourceKind.StructureRequestTypes, 0, "Restructure", null)).Success, "Structure request type creation failed");
+        await using (var db = factory.CreateDbContext()) Check(await db.OperationLogs.CountAsync() == 6, "Resource changes were not audited");
     }
     private static async Task<OperationLog> Log(HrmTeContext db)
     {
