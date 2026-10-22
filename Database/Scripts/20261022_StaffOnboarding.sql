@@ -1,9 +1,9 @@
 -- Additive onboarding storage. Does not create/activate any staff accounts or employment.
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID('dbo.StaffOnboardingRequests','U') IS NULL
+IF OBJECT_ID('dbo.SO_StaffOnboardingRequests','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.StaffOnboardingRequests (
+    CREATE TABLE dbo.SO_StaffOnboardingRequests (
         RequestId int NOT NULL PRIMARY KEY,
         IndividualId int NOT NULL,
         OrganisationId int NOT NULL,
@@ -28,8 +28,8 @@ BEGIN
         CONSTRAINT FK_Onboarding_Job FOREIGN KEY (JobId) REFERENCES dbo.Jobs(JobID),
         CONSTRAINT FK_Onboarding_User FOREIGN KEY (UserId) REFERENCES dbo.Users(UserID)
     );
-    CREATE UNIQUE INDEX IX_StaffOnboardingRequests_IndividualId ON dbo.StaffOnboardingRequests(IndividualId) WHERE IsOpen=1;
-    CREATE INDEX IX_StaffOnboardingRequests_OrganisationId_IsOpen ON dbo.StaffOnboardingRequests(OrganisationId,IsOpen);
+    CREATE UNIQUE INDEX IX_StaffOnboardingRequests_IndividualId ON dbo.SO_StaffOnboardingRequests(IndividualId) WHERE IsOpen=1;
+    CREATE INDEX IX_StaffOnboardingRequests_OrganisationId_IsOpen ON dbo.SO_StaffOnboardingRequests(OrganisationId,IsOpen);
 END;
 IF NOT EXISTS(SELECT 1 FROM dbo.RequestTypes WHERE TypeName='Job Position Request')
     INSERT dbo.RequestTypes(TypeName,ViewURL,IsSystemType) VALUES('Job Position Request','/admin/hr/onboarding',1);

@@ -1,8 +1,8 @@
-IF OBJECT_ID(N'dbo.LeaveCarryForwards', N'U') IS NULL
+IF OBJECT_ID(N'dbo.LCF_LeaveCarryForwards', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.LeaveCarryForwards (
+    CREATE TABLE dbo.LCF_LeaveCarryForwards (
         Id bigint IDENTITY(1,1) NOT NULL PRIMARY KEY,
-        RuleId int NOT NULL REFERENCES dbo.JobTypeLeaveAccrualRules(Id),
+        RuleId int NOT NULL REFERENCES dbo.LA_JobTypeLeaveAccrualRules(Id),
         RuleVersion int NOT NULL,
         JobId int NOT NULL REFERENCES dbo.Jobs(JobID),
         JobLeaveTypeId int NOT NULL REFERENCES dbo.JobLeaveTypes(JobLeaveTypeID),

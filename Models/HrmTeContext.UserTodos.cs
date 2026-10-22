@@ -10,7 +10,7 @@ public partial class HrmTeContext
     {
         modelBuilder.Entity<UserTodo>(entity =>
         {
-            entity.ToTable("UserTodos", "dbo", table => table.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));
+            entity.ToTable("UT_UserTodos", "dbo", table => table.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));
             entity.HasKey(x => x.UserTodoId);
             entity.Property(x => x.Title).HasMaxLength(200).IsRequired();
             entity.Property(x => x.Notes).HasMaxLength(1000);

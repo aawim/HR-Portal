@@ -23,7 +23,7 @@ public sealed class AdminAccessGrantMapping : IEntityTypeConfiguration<AdminAcce
 {
     public void Configure(EntityTypeBuilder<AdminAccessGrantRequest> b)
     {
-        b.ToTable("AdminAccessGrantRequests"); b.HasKey(x => x.RequestId);
+        b.ToTable("AA_AdminAccessGrantRequests"); b.HasKey(x => x.RequestId);
         b.Property(x => x.RequestId).ValueGeneratedNever();
         b.Property(x => x.Reason).HasMaxLength(1000);
         b.Property(x => x.RowVersion).IsRowVersion();

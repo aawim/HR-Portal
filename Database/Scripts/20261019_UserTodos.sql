@@ -1,9 +1,9 @@
 -- Personal tasks are owned by the authenticated Users.UserID.
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID(N'dbo.UserTodos', N'U') IS NULL
+IF OBJECT_ID(N'dbo.UT_UserTodos', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.UserTodos (
+    CREATE TABLE dbo.UT_UserTodos (
         UserTodoId int IDENTITY(1,1) NOT NULL CONSTRAINT PK_UserTodos PRIMARY KEY,
         UserId int NOT NULL,
         Title nvarchar(200) NOT NULL,
@@ -19,6 +19,6 @@ BEGIN
         CONSTRAINT FK_UserTodos_Users_UserId FOREIGN KEY (UserId) REFERENCES dbo.Users(UserID),
         CONSTRAINT CK_UserTodos_Priority CHECK (Priority IN ('Normal','Medium','High'))
     );
-    CREATE INDEX IX_UserTodos_UserId_IsDeleted_IsCompleted_DueDate ON dbo.UserTodos(UserId,IsDeleted,IsCompleted,DueDate);
+    CREATE INDEX IX_UserTodos_UserId_IsDeleted_IsCompleted_DueDate ON dbo.UT_UserTodos(UserId,IsDeleted,IsCompleted,DueDate);
 END;
 COMMIT;

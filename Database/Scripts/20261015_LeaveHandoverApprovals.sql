@@ -8,8 +8,8 @@ IF COL_LENGTH('dbo.LeaveWorkHandOvers', 'Comments') IS NULL
     ALTER TABLE dbo.LeaveWorkHandOvers ADD Comments nvarchar(250) NULL;
 IF COL_LENGTH('dbo.LeaveWorkHandOvers', 'DecisionAt') IS NULL
     ALTER TABLE dbo.LeaveWorkHandOvers ADD DecisionAt datetime2 NULL;
-IF OBJECT_ID('dbo.LeaveHandoverReviews', 'U') IS NULL
-    CREATE TABLE dbo.LeaveHandoverReviews (
+IF OBJECT_ID('dbo.LH_LeaveHandoverReviews', 'U') IS NULL
+    CREATE TABLE dbo.LH_LeaveHandoverReviews (
         LeaveId int NOT NULL PRIMARY KEY REFERENCES dbo.Leaves(LeaveID),
         Revision int NOT NULL DEFAULT(1),
         SupervisorDecision nvarchar(20) NOT NULL DEFAULT(N'Pending'),
@@ -17,9 +17,9 @@ IF OBJECT_ID('dbo.LeaveHandoverReviews', 'U') IS NULL
         Comments nvarchar(250) NULL,
         DecisionAt datetime2 NULL,
         OperationLogId int NULL REFERENCES dbo.OperationLogs(OperationLogID));
-IF OBJECT_ID('dbo.LeaveHandoverSupervisors', 'U') IS NULL
-    CREATE TABLE dbo.LeaveHandoverSupervisors (
-        LeaveId int NOT NULL REFERENCES dbo.LeaveHandoverReviews(LeaveId),
+IF OBJECT_ID('dbo.LH_LeaveHandoverSupervisors', 'U') IS NULL
+    CREATE TABLE dbo.LH_LeaveHandoverSupervisors (
+        LeaveId int NOT NULL REFERENCES dbo.LH_LeaveHandoverReviews(LeaveId),
         IndividualId int NOT NULL REFERENCES dbo.Staffs(IndividualID),
         PRIMARY KEY(LeaveId, IndividualId));
 COMMIT;

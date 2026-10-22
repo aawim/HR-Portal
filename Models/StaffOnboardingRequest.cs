@@ -27,7 +27,7 @@ public sealed class StaffOnboardingMapping : IEntityTypeConfiguration<StaffOnboa
 {
     public void Configure(EntityTypeBuilder<StaffOnboardingRequest> b)
     {
-        b.ToTable("StaffOnboardingRequests"); b.HasKey(x => x.RequestId);
+        b.ToTable("SO_StaffOnboardingRequests"); b.HasKey(x => x.RequestId);
         b.Property(x => x.RequestId).ValueGeneratedNever();
         b.Property(x => x.JoinedDate).HasColumnType("date");
         b.Property(x => x.Remarks).HasMaxLength(1000);

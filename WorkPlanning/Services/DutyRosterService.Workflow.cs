@@ -149,7 +149,7 @@ public sealed partial class DutyRosterService
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var query = db.Database.IsSqlServer() ? db.DutyChangeRequests.FromSqlInterpolated($"SELECT * FROM dbo.DutyChangeRequests WITH (UPDLOCK,HOLDLOCK) WHERE DutyChangeRequestId={id}") : db.DutyChangeRequests.Where(x => x.DutyChangeRequestId == id);
+            var query = db.Database.IsSqlServer() ? db.DutyChangeRequests.FromSqlInterpolated($"SELECT * FROM dbo.DC_DutyChangeRequests WITH (UPDLOCK,HOLDLOCK) WHERE DutyChangeRequestId={id}") : db.DutyChangeRequests.Where(x => x.DutyChangeRequestId == id);
             var c = await query.Include(x => x.Request).SingleOrDefaultAsync(x => x.OrganisationId == org) ?? throw new UnauthorizedAccessException("Request not found in this organisation.");
             if (!c.IsOpen || c.Request.RequestStateId != expectedState) throw new InvalidOperationException("The request changed. Refresh before acting.");
             var from = c.Request.RequestStateId; var to = from;

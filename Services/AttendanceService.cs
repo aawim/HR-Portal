@@ -577,7 +577,8 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
-            var today = DateTime.Today;
+            var today = DateTime.UtcNow.AddHours(5).Date;
+            var organisation = await _userAccessService.GetCurrentOrganisationIdAsync();
 
             // ---------------------------------------------------------
             // Current week: Sunday -> Saturday
@@ -611,6 +612,7 @@ namespace HRM.Services
             .Include(x => x.AttendanceLogResolutions)
             .Where(x =>
                 x.IndividualId == userContext.IndividualId &&
+                x.OrganisationId == organisation &&
                 x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                 x.Date >= previousWeekStart &&
                 x.Date < currentWeekEndExclusive)
@@ -620,24 +622,14 @@ namespace HRM.Services
 
 
 
-            foreach (var log in logs)
-            {
-                var resolution = log.AttendanceLogResolutions
-                    .OrderByDescending(x =>
-                        x.AttendanceLogResolutionId)
-                    .FirstOrDefault();
- 
-            }
-
-
             var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, userContext.IndividualId,
-                previousWeekStart, currentWeekEnd, userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId);
+                previousWeekStart, currentWeekEnd, organisation);
             logs = logs.Where(x => eligibility[x.Date.Date].HasApprovedPosition && eligibility[x.Date.Date].HasActiveSchedule).ToList();
             var currentWeekHours =
                 CalculateWorkedHours(
                     logs,
                     currentWeekStart,
-                    DateTime.Now);
+                    DateTime.UtcNow.AddHours(5));
 
             var previousWeekHours =
                 CalculateWorkedHours(
@@ -649,8 +641,14 @@ namespace HRM.Services
 
 
 
+            var makeup = await HRM.Helpers.WeeklyAttendanceMakeup.LoadAsync(db, userContext.IndividualId, organisation, currentWeekStart, currentWeekEndExclusive);
             return new WeeklyWorkedHoursDto
             {
+                WeekStart = currentWeekStart,
+                WeekEnd = currentWeekEnd,
+                ApprovedEarlyCheckoutShortfallHours = makeup.ShortfallHours,
+                MakeupCompletedHours = makeup.CompletedHours,
+                MakeupRemainingHours = makeup.RemainingHours,
                 CurrentWeekHours =
                     Math.Round(currentWeekHours, 2),
 
@@ -1124,11 +1122,11 @@ namespace HRM.Services
                 }
                 else if (isPresent && !actualStart.HasValue) { isLate = false; lateMinutes = 0; }
                 var completed = requiredSchedules.Count > 0 && requiredSchedules.All(s => s.CheckIn.HasValue && s.CheckOut.HasValue &&
-                    s.CheckOut >= s.CheckIn && s.CheckIn <= s.ScheduledStart);
+                    s.CheckOut >= s.CheckIn && s.CheckOut >= s.ScheduledEnd && s.CheckIn <= s.ScheduledStart);
                 // Legacy unassigned clock pairs still need a known scheduled start
                 // before they can be described as perfectly attended.
                 if (!completed && requiredSchedules.Count == 1 && actualStart.HasValue && scheduled != null &&
-                    actualStart <= scheduled.ScheduledStart && lastCheckOut != null && lastCheckOut.Log.Date >= actualStart &&
+                    actualStart <= scheduled.ScheduledStart && lastCheckOut != null && lastCheckOut.Log.Date >= actualStart && lastCheckOut.Log.Date >= scheduled.ScheduledEnd &&
                     firstCheckIn?.Resolution?.WorkAssignmentId == null)
                     completed = true;
 

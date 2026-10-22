@@ -4,16 +4,17 @@
 
 <section class="space-y-4 rounded-xl border bg-white p-4" aria-label="Late check-in requests">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 class="font-semibold">@(PendingOnly ? "Pending late check-in requests" : "Late check in request")</h3>
-            @if (!PendingOnly) { <p class="mt-1 text-sm text-slate-500">Explain a recorded late arrival for approval. Clock times and late minutes remain unchanged.</p> }</div>
+        <div><h3 class="font-semibold">@(PendingOnly ? "Pending attendance time changes" : IsEarly ? "Early check out request" : "Late check in request")</h3>
+            @if (!PendingOnly) { <p class="mt-1 text-sm text-slate-500">Request a change to your scheduled hours, before or after clocking in. Check-out is compulsory after approval.</p>
+                @if (IsEarly) { <p class="mt-1 text-sm text-slate-500">Hours missed through approved early check-out must be made up within the same week.</p> }
+            }</div>
         <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
     </div>
     @if (!PendingOnly)
     {
         <div class="flex flex-wrap items-end gap-3">
-            <label class="text-sm">From<InputDate class="mt-1 block rounded border bg-transparent p-2" @bind-Value="from" /></label>
-            <label class="text-sm">To<InputDate class="mt-1 block rounded border bg-transparent p-2" @bind-Value="to" /></label>
-            <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Show requests</button>
+            <label class="text-sm">Date<InputDate class="mt-1 block rounded border bg-transparent p-2" @bind-Value="requestDate" @bind-Value:after="DateChangedAsync" disabled="@busy" /></label>
+            <label class="text-sm">@(IsEarly ? "Requested check-out time" : "Requested check-in time")<input type="time" @bind="requestedTime" step="60" class="mt-1 block rounded border bg-transparent p-2" disabled="@busy" /></label>
         </div>
     }
     @if (error != null) { <p role="alert" class="rounded border p-3 text-sm text-red-600">@error</p> }
@@ -21,29 +22,30 @@
     @if (!PendingOnly && loaded)
     {
         <div class="space-y-3 rounded-lg border p-3">
-            <h4 class="text-sm font-semibold">New late check-in explanation</h4>
-            @if (candidates.Count == 0) { <p class="text-sm text-slate-500">No eligible late check-ins in this period. Check-ins with pending or approved explanations are excluded.</p> }
+            <h4 class="text-sm font-semibold">@(IsEarly ? "Request early check-out" : "Request late check-in")</h4>
+            @if (PreviewError != null) { <p role="status" class="text-sm text-amber-700">@PreviewError</p> }
             else
             {
-                <label class="block text-sm">Late check-in
-                    <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="selected" disabled="@busy">
-                        <option value="">Select a recorded check-in</option>
-                        @foreach (var c in candidates) { <option value="@Key(c)">@c.Date.ToString("dd MMM yyyy") · @c.Name · scheduled @c.ScheduledStart.ToString("HH:mm"), checked in @c.CheckIn?.ToString("HH:mm") · @Minutes(c) minutes late</option> }
-                    </select>
-                </label>
-                <label class="block text-sm">Reason<textarea class="mt-1 block w-full rounded border bg-transparent p-2" rows="3" maxlength="1000" @bind="reason" disabled="@busy"></textarea></label>
-                <button type="button" class="app-button bg-blue-600 text-white" disabled="@(busy || selected.Length == 0 || string.IsNullOrWhiteSpace(reason))" @onclick="SubmitAsync">Submit for approval</button>
+                @if (SelectedSchedule != null)
+                {
+                    <p class="text-sm text-slate-500">Working hours: @SelectedSchedule.ScheduledStart.ToString("HH:mm")–@SelectedSchedule.ScheduledEnd.ToString("HH:mm")</p>
+                    <p class="rounded border p-3 text-sm">After approval: @Preview.Start.ToString("dd MMM yyyy HH:mm") – @Preview.End.ToString("dd MMM yyyy HH:mm"). Check-out at or after @Preview.End.ToString("HH:mm") is compulsory.</p>
+                }
             }
+                <label class="block text-sm">Reason<textarea class="mt-1 block w-full rounded border bg-transparent p-2" rows="3" maxlength="1000" @bind="reason" disabled="@busy"></textarea></label>
+                <button type="button" class="app-button bg-blue-600 text-white" disabled="@(busy || string.IsNullOrWhiteSpace(reason) || PreviewError != null)" @onclick="SubmitAsync">Submit for approval</button>
         </div>
     }
     @foreach (var row in VisibleRows)
     {
         <article @key="row.Id" class="space-y-2 rounded-lg border p-3 text-sm">
             <div class="flex flex-wrap justify-between gap-2"><strong>@row.Reference · @row.Staff</strong><span>@row.Status</span></div>
-            <p>@row.Schedule · @row.ScheduledStart.ToString("dd MMM yyyy HH:mm") scheduled · @row.ActualCheckIn.ToString("dd MMM yyyy HH:mm") checked in</p>
-            <p class="text-amber-700">Attended late by @row.LateMinutes minutes</p>
+            <p>@(row.Kind == "EarlyCheckOut" ? "Early check-out" : "Late check-in") · @row.Schedule</p>
+            <p>Original start: @row.ScheduledStart.ToString("dd MMM yyyy HH:mm") · Check-in: @(row.ActualCheckIn?.ToString("dd MMM yyyy HH:mm") ?? "Not recorded when submitted")</p>
+            @if (row.RequestedStart.HasValue && row.RequestedEnd.HasValue) { <p>Requested hours: @row.RequestedStart.Value.ToString("dd MMM yyyy HH:mm") – @row.RequestedEnd.Value.ToString("dd MMM yyyy HH:mm") · Check-out compulsory</p> }
             <p class="whitespace-pre-wrap break-words">@row.Reason</p>
             @if (!string.IsNullOrEmpty(row.Stage)) { <p>Approval stage: @row.Stage</p> }
+            @if (PendingOnly) { <a class="underline" href="@(row.Kind == "EarlyCheckOut" ? LateCheckInRequestService.EarlyPageUrl : LateCheckInRequestService.PageUrl)">Review request</a> }
             @if (row.History.Count > 0) { <details><summary class="cursor-pointer">Request history</summary><ul class="mt-2 space-y-1">@foreach (var action in row.History) { <li class="whitespace-pre-wrap break-words">@action</li> }</ul></details> }
             @if (!PendingOnly && (row.CanApprove || row.CanCancel))
             {
@@ -59,7 +61,7 @@
             }
         </article>
     }
-    @if (loaded && !VisibleRows.Any()) { <p class="text-sm text-slate-500">@(PendingOnly ? "No late check-in requests need your action." : "No requests found for this period.")</p> }
+    @if (loaded && !VisibleRows.Any()) { <p class="text-sm text-slate-500">@(PendingOnly ? "No attendance time-change requests need your action." : "No requests found for this period.")</p> }
     @if (PendingOnly) { <a class="app-button app-button-secondary" href="@LateCheckInRequestService.PageUrl">View late check-in requests</a> }
     else if (loaded) { <p class="text-xs text-slate-500">Showing up to 200 requests belonging to you or assigned to you in the current organisation.</p> }
 </section>
@@ -67,27 +69,39 @@
 @code {
     [Parameter] public bool PendingOnly { get; set; }
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
-    private DateTime from = new(Today.Year, Today.Month, 1), to = Today;
+    [Parameter] public string Kind { get; set; } = "LateCheckIn";
+    private bool IsEarly => Kind == "EarlyCheckOut";
+    private DateTime requestDate = Today;
+    private TimeOnly? requestedTime;
+    private DateTime RequestedDateTime
+    {
+        get
+        {
+            if (!requestedTime.HasValue) throw new InvalidOperationException("Choose the requested time.");
+            return HRM.Helpers.AttendanceTimeChangeRules.RequestedDateTime(SelectedSchedule, requestedTime.Value);
+        }
+    }
     private bool busy, loaded;
     private string? error;
-    private string selected = "", reason = "";
+    private string reason = "";
     private List<HRM.DTOs.Attendance.StaffScheduleAttendanceDto> candidates = [];
     private List<LateCheckInRow> rows = [];
     private readonly Dictionary<int, string> comments = [];
     private IEnumerable<LateCheckInRow> VisibleRows => PendingOnly ? rows.Where(r => r.CanApprove) : rows;
-    private static string Key(HRM.DTOs.Attendance.StaffScheduleAttendanceDto c) => $"{c.WorkAssignmentId}:{c.CheckInLogId}";
-    private static int Minutes(HRM.DTOs.Attendance.StaffScheduleAttendanceDto c) => (int)Math.Ceiling((c.CheckIn!.Value - c.ScheduledStart).TotalMinutes);
-    protected override async Task OnInitializedAsync() { if (PendingOnly) from = Today.AddDays(-365); await LoadAsync(); }
+    private HRM.DTOs.Attendance.StaffScheduleAttendanceDto SelectedSchedule => HRM.Helpers.AttendanceTimeChangeRules.ResolveSchedule(candidates, requestedTime, Kind);
+    private (DateTime Start, DateTime End) Preview => HRM.Helpers.AttendanceTimeChangeRules.Calculate(SelectedSchedule!.ScheduledStart, SelectedSchedule.ScheduledEnd, RequestedDateTime, Kind);
+    private string? PreviewError { get { try { _ = Preview; return null; } catch (InvalidOperationException ex) { return ex.Message; } } }
+    private async Task DateChangedAsync() { requestedTime = null; await LoadAsync(); }
+    protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()
     {
         if (busy) return;
-        if (from > to || to > Today || (to - from).TotalDays > 366) { error = "Choose a date range of up to one year, ending on or before today."; return; }
+        if (requestDate.Year < 2000 || requestDate > Today.AddDays(366)) { error = "Choose a valid date within the next year."; return; }
         busy = true; loaded = false; error = null; rows = []; candidates = [];
         try
         {
-            rows = await Requests.LoadAsync(from, to);
-            if (!PendingOnly) candidates = await Requests.GetCandidatesAsync(from, to);
-            if (!candidates.Any(c => Key(c) == selected)) selected = "";
+            rows = await Requests.LoadAsync(requestDate, requestDate, PendingOnly ? null : Kind, PendingOnly);
+            if (!PendingOnly) candidates = await Requests.GetCandidatesAsync(requestDate, requestDate, Kind);
             loaded = true;
         }
         catch (Exception ex) { Logger.LogError(ex, "Late check-in requests could not be loaded"); error = "Late check-in requests could not be loaded. Please try Refresh or contact HR."; }
@@ -95,13 +109,12 @@
     }
     private async Task SubmitAsync()
     {
-        var choice = candidates.SingleOrDefault(c => Key(c) == selected);
-        if (busy || choice?.CheckInLogId == null) return;
+        if (busy || !requestedTime.HasValue || PreviewError != null) return;
         busy = true; error = null; bool saved = false;
         try
         {
-            var result = await Requests.SubmitAsync(choice.WorkAssignmentId, choice.CheckInLogId.Value, reason);
-            if (result.Success) { Toasts.Success(result.Message); reason = selected = ""; saved = true; }
+            var result = await Requests.SubmitForDateAsync(requestDate, requestedTime.Value, reason, Kind);
+            if (result.Success) { Toasts.Success(result.Message); reason = ""; saved = true; }
             else error = result.Message;
         }
         catch (Exception ex) { Logger.LogError(ex, "Late check-in submission failed"); error = "Your request could not be submitted. Please try again or contact HR."; }

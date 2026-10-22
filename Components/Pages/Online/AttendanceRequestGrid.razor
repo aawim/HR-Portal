@@ -30,7 +30,7 @@
             <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
             <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
         </div>
-        @if (activeTab != "late-check-in")
+        @if (activeTab is not ("late-check-in" or "early-check-out"))
         {
         <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 mb-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -48,8 +48,9 @@
     </nav>
     @if (activeTab == "late-check-in")
     {
-        <LateCheckInRequests />
+        <LateCheckInRequests @key="activeTab" />
     }
+    @if (activeTab == "early-check-out") { <LateCheckInRequests @key="activeTab" Kind="EarlyCheckOut" /> }
 
     @if (!string.IsNullOrWhiteSpace(requestSuccess))
     {
@@ -88,7 +89,7 @@
     </section>
     }
 
-    @if (activeTab != "late-check-in")
+    @if (activeTab is not ("late-check-in" or "early-check-out"))
     {
     <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
         @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
@@ -101,6 +102,8 @@
 
         <div class="grid grid-cols-12 gap-4 mb-4">
 
+            @if (activeTab != "uneven-log-correction")
+            {
             <div class="col-span-12 md:col-span-5 lg:col-span-5">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Organisation</label>
                 <select @bind="selectedOrgId" disabled class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
@@ -112,7 +115,8 @@
                 </select>
             </div>
 
-            <div class="col-span-12 md:col-span-3 lg:col-span-3">
+            }
+            <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-8" : "md:col-span-3 lg:col-span-3")">
                 <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Request Status</label>
                 <select @bind="selectedStatusId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
                     <option value="0">-- All Statuses --</option>
@@ -359,7 +363,7 @@
     [Parameter] public string? TabSection { get; set; }
     private string activeTab = "attendance";
     private static readonly (string Key, string Label)[] RequestTabs =
-    [ ("attendance", "Attendance Requests"), ("late-check-in", "Late check in request"), ("uneven-log-correction", "Uneven log correction request") ];
+    [ ("attendance", "Attendance Requests"), ("late-check-in", "Late check in request"), ("early-check-out", "Early check out request"), ("uneven-log-correction", "Uneven log correction request") ];
     private IEnumerable<AttendanceRequestDto> VisibleRequests => requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
     protected override void OnParametersSet()
     {

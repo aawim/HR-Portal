@@ -979,9 +979,7 @@ namespace HRM.Services.Attendance
                 // this boundary is not yet an exception.
 
                 result.IsComplete =
-                    checkOut.HasValue ||
-                    evaluationTime <=
-                        segment.EndDateTime;
+                    checkOut.HasValue && checkOut.Value >= segment.StartDateTime;
             }
             else
             {

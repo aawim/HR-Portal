@@ -1,8 +1,8 @@
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID(N'dbo.RequestNotifications', N'U') IS NULL
+IF OBJECT_ID(N'dbo.RN_RequestNotifications', N'U') IS NULL
 BEGIN
-    CREATE TABLE dbo.RequestNotifications (
+    CREATE TABLE dbo.RN_RequestNotifications (
         RequestNotificationId bigint IDENTITY(1,1) NOT NULL CONSTRAINT PK_RequestNotifications PRIMARY KEY,
         UserId int NOT NULL,
         RequestId int NOT NULL,
@@ -17,6 +17,6 @@ BEGIN
         CONSTRAINT FK_RequestNotifications_ToState FOREIGN KEY(ToStateId) REFERENCES dbo.RequestStates(RequestStateID)
     );
     CREATE INDEX IX_RequestNotifications_UserId_ReadAtUtc_CreatedAtUtc
-        ON dbo.RequestNotifications(UserId, ReadAtUtc, CreatedAtUtc);
+        ON dbo.RN_RequestNotifications(UserId, ReadAtUtc, CreatedAtUtc);
 END;
 COMMIT TRANSACTION;

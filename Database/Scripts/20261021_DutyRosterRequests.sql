@@ -1,9 +1,9 @@
 -- Additive, rerunnable installation. Existing request flows and clock records are preserved.
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID('dbo.DutyChangeRequests','U') IS NULL
+IF OBJECT_ID('dbo.DC_DutyChangeRequests','U') IS NULL
 BEGIN
- CREATE TABLE dbo.DutyChangeRequests (
+ CREATE TABLE dbo.DC_DutyChangeRequests (
   DutyChangeRequestId bigint IDENTITY PRIMARY KEY, RequestId int NOT NULL,
   OrganisationId int NOT NULL, Kind nvarchar(12) NOT NULL, SourceAssignmentId bigint NOT NULL,
   SwapAssignmentId bigint NULL, SourceJobId int NOT NULL, TargetJobId int NOT NULL,
@@ -23,15 +23,15 @@ BEGIN
   CONSTRAINT CK_DutyChange_People CHECK(SourceIndividualId <> TargetIndividualId),
   CONSTRAINT CK_DutyChange_Swap CHECK((Kind='Swap' AND SwapAssignmentId IS NOT NULL AND SwapStart IS NOT NULL AND SwapEnd IS NOT NULL AND SwapAssignmentId <> SourceAssignmentId) OR (Kind='Transfer' AND SwapAssignmentId IS NULL AND SwapStart IS NULL AND SwapEnd IS NULL))
  );
- CREATE UNIQUE INDEX IX_DutyChangeRequests_RequestId ON dbo.DutyChangeRequests(RequestId);
- CREATE UNIQUE INDEX IX_DutyChangeRequests_SourceAssignmentId ON dbo.DutyChangeRequests(SourceAssignmentId) WHERE IsOpen=1;
- CREATE INDEX IX_DutyChangeRequests_OrganisationId_IsOpen ON dbo.DutyChangeRequests(OrganisationId,IsOpen);
- CREATE INDEX IX_DutyChangeRequests_SwapAssignmentId ON dbo.DutyChangeRequests(SwapAssignmentId) WHERE IsOpen=1;
+ CREATE UNIQUE INDEX IX_DutyChangeRequests_RequestId ON dbo.DC_DutyChangeRequests(RequestId);
+ CREATE UNIQUE INDEX IX_DutyChangeRequests_SourceAssignmentId ON dbo.DC_DutyChangeRequests(SourceAssignmentId) WHERE IsOpen=1;
+ CREATE INDEX IX_DutyChangeRequests_OrganisationId_IsOpen ON dbo.DC_DutyChangeRequests(OrganisationId,IsOpen);
+ CREATE INDEX IX_DutyChangeRequests_SwapAssignmentId ON dbo.DC_DutyChangeRequests(SwapAssignmentId) WHERE IsOpen=1;
 END;
-IF COL_LENGTH('dbo.DutyChangeRequests','SourceFingerprint') IS NULL
- ALTER TABLE dbo.DutyChangeRequests ADD SourceFingerprint nvarchar(64) NOT NULL CONSTRAINT DF_DutyChange_SourceFingerprint DEFAULT(''), SwapFingerprint nvarchar(64) NULL;
-IF COL_LENGTH('dbo.DutyChangeRequests','SourceAcceptedByUserId') IS NULL
- ALTER TABLE dbo.DutyChangeRequests ADD SourceAcceptedByUserId int NULL, SourceAcceptedAtUtc datetime2 NULL;
+IF COL_LENGTH('dbo.DC_DutyChangeRequests','SourceFingerprint') IS NULL
+ ALTER TABLE dbo.DC_DutyChangeRequests ADD SourceFingerprint nvarchar(64) NOT NULL CONSTRAINT DF_DutyChange_SourceFingerprint DEFAULT(''), SwapFingerprint nvarchar(64) NULL;
+IF COL_LENGTH('dbo.DC_DutyChangeRequests','SourceAcceptedByUserId') IS NULL
+ ALTER TABLE dbo.DC_DutyChangeRequests ADD SourceAcceptedByUserId int NULL, SourceAcceptedAtUtc datetime2 NULL;
 DECLARE @audit int;
 INSERT dbo.OperationLogs(OperationLogActionID,CreatedByContextID,CreatedDate,UpdatedDate,CreatedByIP,UpdatedByIP,Remarks,UpdatedContextID)
 VALUES(18,1,SYSUTCDATETIME(),SYSUTCDATETIME(),'','','User-authorised duty roster configuration: staff acceptance followed by supervisor-only approval; tenant and JobType configurable.',1);

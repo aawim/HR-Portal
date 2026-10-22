@@ -6,7 +6,7 @@ Apply `20261022_StaffOnboarding.sql` before deploying the application. The scrip
 
 1. HR searches `/admin/hr/individuals` and selects **Add as Staff**.
 2. On `/admin/hr/onboarding`, HR selects a department, Job Type and joining date. An existing position is optional; position catalogue management is outside this change. Address and contact details are not required for submission or approval.
-3. Submission creates a central **Job Position Request** and a proposed appointment in `StaffOnboardingRequests`. It creates neither `Jobs` nor `Users` while approval is pending.
+3. Submission creates a central **Job Position Request** and a proposed appointment in `SO_StaffOnboardingRequests`. It creates neither `Jobs` nor `Users` while approval is pending.
 4. The existing tenant/JobType **Request Approval Flows** configuration determines ordered approval stages and User Groups. Supervisor stages resolve against the proposed department because the individual has no approved job yet. The individual cannot approve their own appointment. A submitting HR officer can approve another individual's appointment only when assigned through the configured flow. Level 0 is not enabled.
 5. Assigned approvers receive bell notifications and can open the request directly. The workspace right panel includes **Pending Staff Onboarding**. Reject/cancel require a reason and an allowed request-state transition.
 6. Final approval creates or reuses `Staffs`, creates the approved `Jobs` record and, if selected, `JobPositions`; links `JobRequests`, `RequestJobs` and optionally `JobPositionsRequests`; creates or reuses the individual’s `Users` account. All writes, final workflow state and notifications commit in one transaction.
@@ -18,7 +18,7 @@ No approval stages existed for this request type when this change was installed.
 
 ## Database changes
 
-New table `StaffOnboardingRequests`:
+New table `SO_StaffOnboardingRequests`:
 
 | Column | Purpose |
 | --- | --- |

@@ -40,7 +40,7 @@ Users:
 Existing OperationLogId, LastUpdatedByUserId and LastUpdatedDate record the
 latest update. No new permission is implicitly assigned by this process.
 
-AdminAccessGrantRequests: RequestId (PK/FK), UserId, OrganisationId, JobId,
+AA_AdminAccessGrantRequests: RequestId (PK/FK), UserId, OrganisationId, JobId,
 CreatedByUserId, GroupIdsJson, PermissionIdsJson, Reason, CreatedAtUtc, IsOpen,
 RowVersion. A filtered unique index permits one open request per account.
 Requests and existing Wf tables store the request state, ordered stages,

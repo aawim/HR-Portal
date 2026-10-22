@@ -20,11 +20,11 @@ For an existing installation, `20261021_DutyBothStaffAcceptance.sql` adds `Sourc
 
 ## Storage
 
-New table **DutyChangeRequests**:
+New table **DC_DutyChangeRequests**:
 
 `DutyChangeRequestId`, `RequestId`, `OrganisationId`, `Kind`, `SourceAssignmentId`, `SwapAssignmentId`, `SourceJobId`, `TargetJobId`, `SourceIndividualId`, `TargetIndividualId`, `SourceStart`, `SourceEnd`, `SwapStart`, `SwapEnd`, `Reason`, `SourceFingerprint`, `SwapFingerprint`, `Acceptance`, `CreatedByUserId`, `CreatedAtUtc`, `AcceptedByUserId`, `AcceptedAtUtc`, `IsOpen`, `TargetNewAssignmentId`, `SourceNewAssignmentId`.
 
-Existing `Requests`, `WF_RequestInstances`, `WF_RequestStageInstances`, `WF_RequestApprovals`, `WF_RequestActions`, `RequestNotifications` and `OperationLogs` record the workflow and audit. Final approval updates `WorkAssignments`, `WorkAssignmentOwners`, `WorkAssignmentSegments`, `WorkPlans` and `WorkPlanSegments`. Templates are reused. Original dated plans are retained as manual exceptions so regeneration cannot restore transferred duties.
+Existing `Requests`, `WF_RequestInstances`, `WF_RequestStageInstances`, `WF_RequestApprovals`, `WF_RequestActions`, `RN_RequestNotifications` and `OperationLogs` record the workflow and audit. Final approval updates `WorkAssignments`, `WorkAssignmentOwners`, `WorkAssignmentSegments`, `WorkPlans` and `WorkPlanSegments`. Templates are reused. Original dated plans are retained as manual exceptions so regeneration cannot restore transferred duties.
 
 ## Checks
 

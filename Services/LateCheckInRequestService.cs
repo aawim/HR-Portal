@@ -13,9 +13,10 @@ using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 
 public sealed record LateCheckInRow(int Id, int StateId, string Reference, string Staff, string Schedule, DateTime ScheduledStart,
-    DateTime ActualCheckIn, int LateMinutes, string Reason, string Status, string Stage, bool CanApprove, bool CanCancel, List<string> History);
+    DateTime? ActualCheckIn, int LateMinutes, string Reason, string Status, string Stage, bool CanApprove, bool CanCancel, List<string> History,
+    string Kind, DateTime? RequestedStart, DateTime? RequestedEnd);
 
-public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
+public sealed partial class LateCheckInRequestService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
     IAttendanceService attendance, IRequestService requests, IOperationLogService logs, IWorkflowEngine workflow,
     IWorkflowApproverResolver resolver, IWorkflowRequestContextResolver contextResolver)
 {
@@ -29,53 +30,71 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select your current organisation.");
         return (actor.UserId, actor.IndividualId, org, actor.ActiveJob?.JobId ?? 0);
     }
-    public async Task<List<StaffScheduleAttendanceDto>> GetCandidatesAsync(DateTime from, DateTime to)
+    public const string EarlyTypeName = "Early Check Out Request";
+    public const string EarlyPageUrl = "/online/attendance/attendance-request/early-check-out";
+    public async Task<ServiceResult> SubmitForDateAsync(DateTime date, TimeOnly time, string reason, string kind)
+    {
+        try
+        {
+            var candidates = await GetCandidatesAsync(date.Date, date.Date, kind);
+            var schedule = AttendanceTimeChangeRules.ResolveSchedule(candidates, time, kind);
+            return await SubmitAsync(schedule.WorkAssignmentId, AttendanceTimeChangeRules.RequestedDateTime(schedule, time), reason, kind);
+        }
+        catch (InvalidOperationException ex) { return ServiceResult.Fail(ex.Message); }
+    }
+    public async Task<List<StaffScheduleAttendanceDto>> GetCandidatesAsync(DateTime from, DateTime to, string kind = "LateCheckIn")
     {
         var actor = await Scope();
         var facts = await attendance.GetStaffScheduleAttendanceAsync(actor.Person, from, to);
         await using var db = await factory.CreateDbContextAsync();
         var used = await db.LateCheckInRequests.Where(r => r.OrganisationId == actor.Org && r.IndividualId == actor.Person &&
-            r.Request.RequestStateId != 5 && r.Request.RequestStateId != 6).Select(r => new { r.AttendanceLogId, r.WorkAssignmentId }).ToListAsync();
-        return facts.Where(f => f.RequiresAttendance && f.CheckInLogId.HasValue && f.CheckIn > f.ScheduledStart && f.CheckIn <= DateTime.UtcNow.AddHours(5) && f.Date <= Today &&
-            !used.Any(r => r.AttendanceLogId == f.CheckInLogId && r.WorkAssignmentId == f.WorkAssignmentId)).ToList();
+            r.Kind == kind && r.Request.RequestStateId != 5 && r.Request.RequestStateId != 6).Select(r => r.WorkAssignmentId).ToListAsync();
+        return facts.Where(f => f.RequiresAttendance && f.ScheduledEnd > f.ScheduledStart && !used.Contains(f.WorkAssignmentId)).ToList();
     }
-    public async Task<ServiceResult> SubmitAsync(long assignment, int logId, string reason)
+    public async Task<ServiceResult> SubmitAsync(long assignment, DateTime requestedTime, string reason, string kind = "LateCheckIn")
     {
+        if (kind is not ("LateCheckIn" or "EarlyCheckOut")) return ServiceResult.Fail("Select a valid request type.");
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 1000) return ServiceResult.Fail("Enter a reason of up to 1,000 characters.");
         var actor = await Scope();
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var log = await db.AttendanceLogs.AsNoTracking().SingleOrDefaultAsync(l => l.AttendanceLogId == logId &&
-                l.IndividualId == actor.Person && l.OrganisationId == actor.Org && l.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid)
-                ?? throw new InvalidOperationException("The check-in event is no longer available. Refresh the list.");
-            var facts = await AttendanceScheduleFacts.LoadAsync(db, actor.Person, log.Date.Date.AddDays(-1), log.Date.Date, actor.Org);
-            var fact = facts.SingleOrDefault(f => f.WorkAssignmentId == assignment && f.CheckInLogId == logId && f.RequiresAttendance &&
-                f.CheckIn > f.ScheduledStart && f.CheckIn <= DateTime.UtcNow.AddHours(5) && f.Date <= Today) ?? throw new InvalidOperationException("This event is not a late check-in for your current schedule.");
+            var workDate = await db.WorkAssignments.Where(a => a.WorkAssignmentId == assignment && a.IsValid && a.CancelledDate == null &&
+                a.WorkPlan.IsValid && a.WorkPlan.OrganisationBusinessEntityId == actor.Org).Select(a => (DateTime?)a.WorkPlan.WorkDate).SingleOrDefaultAsync()
+                ?? throw new InvalidOperationException("This schedule is no longer available.");
+            var facts = await AttendanceScheduleFacts.LoadAsync(db, actor.Person, workDate.Date, workDate.Date, actor.Org);
+            var fact = facts.SingleOrDefault(f => f.WorkAssignmentId == assignment && f.RequiresAttendance)
+                ?? throw new InvalidOperationException("Select one of your required schedules in the current organisation.");
+            var proposed = AttendanceTimeChangeRules.Calculate(fact.ScheduledStart, fact.ScheduledEnd, requestedTime, kind);
             var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(j => j.JobId == actor.Job && j.IndividualID == actor.Person && j.OrganisationID == actor.Org &&
-                j.JobStateId == 4 && j.JoinedDate <= fact.Date && (j.TerminatedDate == null || j.TerminatedDate > Today))
+                j.JobStateId == 4 && j.JoinedDate <= fact.Date && (j.TerminatedDate == null || j.TerminatedDate > fact.Date))
                 ?? throw new InvalidOperationException("Active approved employment is required for this request.");
-            var date = fact.Date;
-            if (await db.Leaves.AnyAsync(l => l.Job.IndividualID == actor.Person && l.Job.OrganisationID == actor.Org && l.LeaveStateId == 4 && l.FromDate < date.AddDays(1) && l.ToDate >= date))
+            if (await db.Leaves.AnyAsync(l => l.Job.IndividualID == actor.Person && l.Job.OrganisationID == actor.Org && l.LeaveStateId == 4 &&
+                l.FromDate < fact.Date.AddDays(1) && l.ToDate >= fact.Date))
                 throw new InvalidOperationException("This date is covered by approved leave. Please contact HR to reconcile it first.");
-            if (await db.LateCheckInRequests.AnyAsync(r => r.AttendanceLogId == logId && r.WorkAssignmentId == assignment && r.Request.RequestStateId != 5 && r.Request.RequestStateId != 6))
-                throw new InvalidOperationException("A pending or approved explanation already exists for this check-in.");
-            var type = await db.RequestTypes.SingleAsync(t => t.TypeName == TypeName);
-            var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.ATTENDANCE_LOG_CREATE, "Late check-in explanation submitted; clock event unchanged.");
+            if (await db.LateCheckInRequests.AnyAsync(r => r.WorkAssignmentId == assignment && r.Kind == kind && r.Request.RequestStateId != 5 && r.Request.RequestStateId != 6))
+                throw new InvalidOperationException("A pending or approved request of this type already exists for this schedule.");
+            if (await db.LateCheckInRequests.AnyAsync(r => r.WorkAssignmentId == assignment && r.Request.RequestState.IsProcessingState && !r.Request.RequestState.IsFinalState))
+                throw new InvalidOperationException("This schedule already has a pending time-change request. Complete it before submitting another.");
+            var typeName = kind == "EarlyCheckOut" ? EarlyTypeName : TypeName;
+            var type = await db.RequestTypes.SingleAsync(t => t.TypeName == typeName);
+            var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.ATTENDANCE_LOG_CREATE, typeName + " submitted; schedule changes only after final approval.");
             var request = await requests.CreateAsync(db, new() { RequestTypeId = type.RequestTypeId, ApplicantBusinessEntityId = actor.Person,
-                OrganisationBusinessEntityId = actor.Org, OperationLogId = audit.OperationLogId, EffectiveDate = log.Date });
+                OrganisationBusinessEntityId = actor.Org, OperationLogId = audit.OperationLogId, EffectiveDate = fact.Date });
             db.LateCheckInRequests.Add(new() { RequestId = request.RequestId, Request = request, JobId = job.JobId, OrganisationId = actor.Org,
-                IndividualId = actor.Person, CreatedByUserId = actor.User, AttendanceLogId = logId, WorkAssignmentId = assignment,
-                ScheduleName = fact.Name, ScheduledStart = fact.ScheduledStart, ActualCheckIn = log.Date,
-                LateMinutes = (int)Math.Ceiling((log.Date - fact.ScheduledStart).TotalMinutes), Reason = reason.Trim(), CreatedAtUtc = DateTime.UtcNow });
+                IndividualId = actor.Person, CreatedByUserId = actor.User, AttendanceLogId = fact.CheckInLogId, WorkAssignmentId = assignment,
+                Kind = kind, ScheduleName = fact.Name, ScheduledStart = fact.ScheduledStart, ScheduledEnd = fact.ScheduledEnd, ActualCheckIn = fact.CheckIn,
+                RequestedStart = proposed.Start, RequestedEnd = proposed.End,
+                LateMinutes = (int)Math.Ceiling(Math.Abs((requestedTime - (kind == "EarlyCheckOut" ? fact.ScheduledEnd : fact.ScheduledStart)).TotalMinutes)),
+                Reason = reason.Trim(), CreatedAtUtc = DateTime.UtcNow });
             await db.SaveChangesAsync();
             await workflow.StartAsync(db, request.RequestId, job.JobId);
             await tx.CommitAsync();
-            return ServiceResult.Ok($"{request.ReferenceNumber} submitted for approval. Your recorded check-in time is unchanged.");
+            return ServiceResult.Ok(request.ReferenceNumber + " submitted for approval. Check-out will be compulsory after final approval.");
         }
         catch (InvalidOperationException ex) { await tx.RollbackAsync(); if (ex is WorkflowConfigurationException config) await config.NotifyAsync(factory); return ServiceResult.Fail(ex.Message); }
-        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("The request or attendance record changed. Refresh and try again."); }
+        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("The request or schedule changed. Refresh and try again."); }
     }
     private static Task<WfRequestInstance?> Instance(HrmTeContext db, int requestId) => db.WfRequestInstances
         .Include(i => i.WorkflowDefinition).ThenInclude(d => d.Stages)
@@ -101,13 +120,14 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
         try { return (await Candidates(db, request, stage.WorkflowStageId)).Any(c => c.UserId == user); }
         catch (InvalidOperationException) { return false; }
     }
-    public async Task<List<LateCheckInRow>> LoadAsync(DateTime from, DateTime to)
+    public async Task<List<LateCheckInRow>> LoadAsync(DateTime from, DateTime to, string? kind = null, bool pendingOnly = false)
     {
         if (from > to || (to - from).TotalDays > 366) throw new InvalidOperationException("Choose a date range of up to one year.");
         var actor = await Scope();
         await using var db = await factory.CreateDbContextAsync();
         var rows = await db.LateCheckInRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
-            .Where(r => r.OrganisationId == actor.Org && r.ScheduledStart >= from.Date && r.ScheduledStart < to.Date.AddDays(1) &&
+            .Where(r => r.OrganisationId == actor.Org && (kind == null || r.Kind == kind || kind == "LateCheckIn" && r.Kind == "Explanation") &&
+                (pendingOnly ? r.Request.RequestState.IsProcessingState && !r.Request.RequestState.IsFinalState : r.ScheduledStart >= from.Date && r.ScheduledStart < to.Date.AddDays(1)) &&
                 (r.IndividualId == actor.Person || db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.User && a.RequestStageInstance.WorkflowRequestInstance.RequestId == r.RequestId)))
             .OrderByDescending(r => r.CreatedAtUtc).Take(200).ToListAsync();
         var result = new List<LateCheckInRow>();
@@ -121,7 +141,7 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
                 i?.CurrentStage?.WorkflowStage.StageName ?? "", await CanApprove(db, r, i, actor.User, actor.Person),
                 r.IndividualId == actor.Person && !r.Request.RequestState.IsFinalState && i?.WorkflowStatus == "InProgress",
                 i == null ? [] : await db.WfRequestActions.Where(a => a.WorkflowRequestInstanceId == i.WorkflowRequestInstanceId).OrderBy(a => a.PerformedAt)
-                    .Select(a => a.ActionCode + ": " + (a.Comments ?? "")).ToListAsync()));
+                    .Select(a => a.ActionCode + ": " + (a.Comments ?? "")).ToListAsync(), r.Kind, r.RequestedStart, r.RequestedEnd));
         }
         return result;
     }
@@ -149,8 +169,8 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
             if (action == "Approve")
             {
                 var currentFacts = await AttendanceScheduleFacts.LoadAsync(db, r.IndividualId, r.ScheduledStart.Date.AddDays(-1), r.ScheduledStart.Date, r.OrganisationId);
-                if (!currentFacts.Any(f => f.WorkAssignmentId == r.WorkAssignmentId && f.CheckInLogId == r.AttendanceLogId &&
-                    f.CheckIn == r.ActualCheckIn && f.ScheduledStart == r.ScheduledStart && f.RequiresAttendance))
+                if (!currentFacts.Any(f => f.WorkAssignmentId == r.WorkAssignmentId && f.ScheduledStart == r.ScheduledStart && f.RequiresAttendance &&
+                    (r.Kind == "Explanation" ? f.CheckInLogId == r.AttendanceLogId && f.CheckIn == r.ActualCheckIn : f.ScheduledEnd == r.ScheduledEnd)))
                     throw new InvalidOperationException("The attendance or schedule changed after submission. Reject or cancel this request and submit a new explanation.");
                 var own = stage.Approvals.Single(a => a.ApproverUserId == actor.User);
                 own.Decision = "Approved"; own.Comments = comment; own.DecisionAt = DateTime.UtcNow;
@@ -164,7 +184,11 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
                     await RequestTransitionPolicy.RequireAllowedAsync(db, r.Request.RequestTypeId, from, to);
                     stage.StageStatus = "Completed"; stage.CompletedAt = DateTime.UtcNow;
                     foreach (var a in stage.Approvals.Where(a => a.Decision == "Pending")) a.Decision = "Skipped";
-                    if (next == null) { instance.WorkflowStatus = "Approved"; instance.ExecutionStatus = "Succeeded"; instance.CompletedAt = DateTime.UtcNow; }
+                    if (next == null)
+                    {
+                        if (r.Kind != "Explanation") await ApplyScheduleAsync(db, r);
+                        instance.WorkflowStatus = "Approved"; instance.ExecutionStatus = "Succeeded"; instance.CompletedAt = DateTime.UtcNow;
+                    }
                     else
                     {
                         var candidates = await Candidates(db, r, next.WorkflowStageId);
@@ -195,7 +219,7 @@ public sealed class LateCheckInRequestService(IDbContextFactory<HrmTeContext> fa
             db.WfRequestActions.Add(new() { WorkflowRequestInstance = instance, RequestStageInstance = stage, PerformedByUserId = actor.User,
                 ActionCode = action, FromRequestStateId = from, ToRequestStateId = to, Comments = comment, PerformedAt = DateTime.UtcNow });
             await db.SaveChangesAsync(); await tx.CommitAsync();
-            return ServiceResult.Ok(to == 4 ? "Late check-in explanation approved. The recorded clock time and late minutes remain unchanged." : "Request action saved.");
+            return ServiceResult.Ok(to == 4 ? r.Kind == "Explanation" ? "Late check-in explanation approved." : "Time-change request approved. The schedule has been updated and check-out is compulsory." : "Request action saved.");
         }
         catch (InvalidOperationException ex)
         {

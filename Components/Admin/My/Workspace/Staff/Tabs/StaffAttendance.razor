@@ -124,7 +124,7 @@
         if (day?.IsOnLeave == true) return $"Leave · {day.LeaveTypeName}";
         if (day?.HasApprovedPosition != true || !day.HasActiveSchedule) return day?.EligibilityMessage ?? "Attendance not required";
         if (duty.CheckIn.HasValue) return HRM.Helpers.AttendancePresentation.Attended(duty.CheckIn > duty.ScheduledStart,
-            (int)Math.Ceiling(Math.Max(0, (duty.CheckIn.Value - duty.ScheduledStart).TotalMinutes)), duty.CheckOut >= duty.CheckIn);
+            (int)Math.Ceiling(Math.Max(0, (duty.CheckIn.Value - duty.ScheduledStart).TotalMinutes)), duty.CheckOut >= duty.CheckIn && duty.CheckOut >= duty.ScheduledEnd);
         return DateTime.UtcNow.AddHours(5) > duty.ScheduledStart ? "Missing check in" : "Upcoming";
     }
 }

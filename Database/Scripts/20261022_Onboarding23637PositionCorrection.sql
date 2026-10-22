@@ -4,7 +4,7 @@
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 DECLARE @instance bigint;
-IF NOT EXISTS (SELECT 1 FROM dbo.StaffOnboardingRequests WITH (UPDLOCK,HOLDLOCK)
+IF NOT EXISTS (SELECT 1 FROM dbo.SO_StaffOnboardingRequests WITH (UPDLOCK,HOLDLOCK)
     WHERE RequestId=23637 AND IndividualId=820 AND OrganisationId=3 AND IsOpen=0 AND PositionId IS NULL AND JobId=918 AND UserId=535)
     THROW 51000,'The approved request changed or already has a position. No correction was applied.',1;
 IF NOT EXISTS (SELECT 1 FROM dbo.Positions WHERE PositionID=4 AND Name='IT Executive - eGovernment Development'
@@ -24,19 +24,19 @@ VALUES(122,1,SYSUTCDATETIME(),SYSUTCDATETIME(),'','',
  'Explicit user-authorised correction after onboarding approval: restore originally selected Position 4 (IT Executive - eGovernment Development) to Individual 820, approved Job 918, ONB-3-23637. Original approval decisions are preserved.',1);
 SET @audit=SCOPE_IDENTITY();
 INSERT dbo.JobPositions(PositionID,JobID,FromDate,JobPositionStateID,OperationLogID)
-SELECT 4,918,JoinedDate,4,@audit FROM dbo.StaffOnboardingRequests WHERE RequestId=23637;
+SELECT 4,918,JoinedDate,4,@audit FROM dbo.SO_StaffOnboardingRequests WHERE RequestId=23637;
 SET @positionAssignment=SCOPE_IDENTITY();
 INSERT dbo.JobPositionsRequests(JobPositionID,RequestID,OperationLogID) VALUES(@positionAssignment,23637,@audit);
-UPDATE dbo.StaffOnboardingRequests SET PositionId=4 WHERE RequestId=23637;
+UPDATE dbo.SO_StaffOnboardingRequests SET PositionId=4 WHERE RequestId=23637;
 INSERT dbo.WF_RequestActions(WorkflowRequestInstanceID,RequestStageInstanceID,ActionCode,Comments,PerformedAt)
 SELECT @instance,CurrentRequestStageInstanceID,'UpdatePosition',
     'Explicit user-authorised correction after approval: restored the originally selected IT Executive - eGovernment Development (Position 4) to approved Job 918. The missing position was caused by a form-selection issue. Original approval decisions are preserved.',SYSUTCDATETIME()
 FROM dbo.WF_RequestInstances WHERE WorkflowRequestInstanceID=@instance;
-INSERT dbo.StaffNotifications(UserId,IndividualId,OrganisationId,Kind,Message,Url,CreatedAtUtc)
+INSERT dbo.SN_StaffNotifications(UserId,IndividualId,OrganisationId,Kind,Message,Url,CreatedAtUtc)
 SELECT DISTINCT u.UserID,u.BusinessEntityID,3,'OnboardingUpdate',
     'ONB-3-23637: the appointment position was corrected to IT Executive - eGovernment Development. Please review the updated request.',
     '/admin/hr/onboarding?requestId=23637',SYSUTCDATETIME()
 FROM dbo.Users u JOIN dbo.UserOrganisations o ON o.UserOrganisationID=u.UserOrganisationID
 WHERE u.IsActive=1 AND u.LocalUserStateID=1 AND o.BusinessEntityID=3 AND
- (u.UserID=(SELECT CreatedByUserId FROM dbo.StaffOnboardingRequests WHERE RequestId=23637) OR u.UserID=535);
+ (u.UserID=(SELECT CreatedByUserId FROM dbo.SO_StaffOnboardingRequests WHERE RequestId=23637) OR u.UserID=535);
 COMMIT TRANSACTION;

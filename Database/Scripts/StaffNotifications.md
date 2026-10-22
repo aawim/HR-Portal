@@ -2,7 +2,7 @@
 
 Install the rerunnable `20261022_StaffNotifications.sql` before running the updated application. EF models and DbContext include the new table.
 
-`StaffNotifications` columns: `StaffNotificationId`, `UserId`, `IndividualId`, `OrganisationId`, `Kind`, `Message`, `Url`, `CreatedAtUtc`, `ReadAtUtc`.
+`SN_StaffNotifications` columns: `StaffNotificationId`, `UserId`, `IndividualId`, `OrganisationId`, `Kind`, `Message`, `Url`, `CreatedAtUtc`, `ReadAtUtc`.
 
 The header bell combines request notifications and staff activity, refreshing every three seconds. It uses the authenticated account and selected tenant, and supports opening an item, marking one read, and marking all read. Account ownership and tenant scope are checked again on each read/write.
 

@@ -219,7 +219,7 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var query = db.Database.IsSqlServer() ? db.AdminAccessGrantRequests.FromSqlInterpolated($"SELECT * FROM dbo.AdminAccessGrantRequests WITH (UPDLOCK,HOLDLOCK) WHERE RequestId={id}") : db.AdminAccessGrantRequests.Where(r => r.RequestId == id);
+            var query = db.Database.IsSqlServer() ? db.AdminAccessGrantRequests.FromSqlInterpolated($"SELECT * FROM dbo.AA_AdminAccessGrantRequests WITH (UPDLOCK,HOLDLOCK) WHERE RequestId={id}") : db.AdminAccessGrantRequests.Where(r => r.RequestId == id);
             var r = await query.Include(r => r.Request).SingleOrDefaultAsync(r => r.OrganisationId == org)
                 ?? throw new UnauthorizedAccessException("Request not available in this organisation.");
             if (!r.IsOpen || r.Request.RequestStateId != expectedState) throw new InvalidOperationException("Request changed. Refresh before acting.");

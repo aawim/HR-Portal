@@ -128,6 +128,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var requestItems = rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
             n.ViewUrl == LateCheckInRequestService.PageUrl ? LateCheckInRequestService.PageUrl :
+            n.ViewUrl == LateCheckInRequestService.EarlyPageUrl ? LateCheckInRequestService.EarlyPageUrl :
             n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :
             n.ViewUrl == AdminAccessGrantService.PageUrl ? "/online/admin-access" :
             n.ViewUrl == StaffOnboardingService.PageUrl ? $"{StaffOnboardingService.PageUrl}?requestId={n.RequestId}" :

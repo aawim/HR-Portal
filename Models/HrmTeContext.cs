@@ -722,7 +722,7 @@ public partial class HrmTeContext : DbContext
     {
         modelBuilder.Entity<LeaveCarryForward>(e =>
         {
-            e.ToTable("LeaveCarryForwards"); e.HasKey(x => x.Id);
+            e.ToTable("LCF_LeaveCarryForwards"); e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.RuleId, x.JobId, x.RenewalDate }).IsUnique();
             e.Property(x => x.RenewalDate).HasColumnType("date");
             e.Property(x => x.PreviousBalance).HasPrecision(10, 2);
@@ -739,7 +739,7 @@ public partial class HrmTeContext : DbContext
         });
         modelBuilder.Entity<JobTypeLeaveAccrualRule>(e =>
         {
-            e.ToTable("JobTypeLeaveAccrualRules"); e.HasKey(x => x.Id);
+            e.ToTable("LA_JobTypeLeaveAccrualRules"); e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.OrganisationId, x.JobTypeId, x.LeaveTypeId }).IsUnique();
             e.Property(x => x.GrantDays).HasPrecision(10, 2);
             e.Property(x => x.CarryForwardLimit).HasPrecision(10, 2);
@@ -752,7 +752,7 @@ public partial class HrmTeContext : DbContext
         });
         modelBuilder.Entity<LeaveAccrualPosting>(e =>
         {
-            e.ToTable("LeaveAccrualPostings"); e.HasKey(x => x.Id);
+            e.ToTable("LA_LeaveAccrualPostings"); e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.RuleId, x.JobId, x.DueDate }).IsUnique();
             e.Property(x => x.DueDate).HasColumnType("date");
             e.Property(x => x.GrantedDays).HasPrecision(10, 2); e.Property(x => x.CarryAdjustment).HasPrecision(10, 2);
@@ -763,7 +763,7 @@ public partial class HrmTeContext : DbContext
         });
         modelBuilder.Entity<RequestNotification>(entity =>
         {
-            entity.ToTable("RequestNotifications");
+            entity.ToTable("RN_RequestNotifications");
             entity.HasKey(x => x.RequestNotificationId);
             entity.Property(x => x.ReferenceNumber).HasMaxLength(512);
             entity.Property(x => x.NotificationKind).HasMaxLength(32).HasDefaultValue("StateChanged");
@@ -787,7 +787,7 @@ public partial class HrmTeContext : DbContext
         });
         modelBuilder.Entity<LeaveHandoverReview>(entity =>
         {
-            entity.ToTable("LeaveHandoverReviews"); entity.HasKey(x => x.LeaveId);
+            entity.ToTable("LH_LeaveHandoverReviews"); entity.HasKey(x => x.LeaveId);
             entity.Property(x => x.LeaveId).ValueGeneratedNever();
             entity.Property(x => x.SupervisorDecision).HasMaxLength(20);
             entity.Property(x => x.Comments).HasMaxLength(250);
@@ -797,7 +797,7 @@ public partial class HrmTeContext : DbContext
         });
         modelBuilder.Entity<LeaveHandoverSupervisor>(entity =>
         {
-            entity.ToTable("LeaveHandoverSupervisors"); entity.HasKey(x => new { x.LeaveId, x.IndividualId });
+            entity.ToTable("LH_LeaveHandoverSupervisors"); entity.HasKey(x => new { x.LeaveId, x.IndividualId });
             entity.HasOne<LeaveHandoverReview>().WithMany().HasForeignKey(x => x.LeaveId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.IndividualId).OnDelete(DeleteBehavior.Restrict);
         });

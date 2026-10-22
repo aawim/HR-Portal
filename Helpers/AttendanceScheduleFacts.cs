@@ -11,8 +11,8 @@ public static class AttendanceScheduleFacts
     {
         if (db.Model.FindEntityType(typeof(WorkAssignment)) == null) return [];
         var end = to.Date.AddDays(1);
-        var assignments = await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).Include(a => a.WorkTemplateType)
-            .Include(a => a.WorkAssignmentSegments)
+        var assignments = await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).ThenInclude(p => p.WorkPlanSegments).Include(a => a.WorkTemplateType)
+            .Include(a => a.WorkAssignmentSegments).ThenInclude(s => s.WorkSegmentType)
             .Where(a => a.IsValid && a.CancelledDate == null && a.WorkPlan.IsValid &&
                 (!org.HasValue || a.WorkPlan.OrganisationBusinessEntityId == org) &&
                 a.WorkPlan.WorkDate >= from.Date && a.WorkPlan.WorkDate < end &&
@@ -20,19 +20,25 @@ public static class AttendanceScheduleFacts
                     o.EffectiveFrom <= a.StartDateTime && (o.EffectiveTo == null || o.EffectiveTo >= a.StartDateTime)) ||
                  a.WorkPlan.IndividualId == person && !a.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId != person)))
             .ToListAsync(ct);
-        var ids = assignments.Select(a => a.WorkAssignmentId).ToArray();
+        // Older clock resolutions identify the dated plan event rather than its assignment.
+        // Attribute only unambiguous event matches so official and duty punches stay separate.
+        var snapshotOwners = assignments.SelectMany(a => a.WorkPlan.WorkPlanSegments.Where(p => p.IsValid && p.SchedulePurpose == a.SchedulePurpose &&
+            a.WorkAssignmentSegments.Any(s => s.IsValid && s.WorkTemplateSegmentId == p.WorkTemplateSegmentId && s.WorkSegmentTypeId == p.WorkSegmentTypeId && s.StartDateTime == p.StartDateTime))
+            .Select(p => new { p.WorkPlanSegmentId, a.WorkAssignmentId }))
+            .GroupBy(x => x.WorkPlanSegmentId).Where(g => g.Select(x => x.WorkAssignmentId).Distinct().Count() == 1)
+            .ToDictionary(g => g.Key, g => g.First().WorkAssignmentId);
         var logs = sourceLogs ?? await db.AttendanceLogs.AsNoTracking().Include(l => l.AttendanceLogResolutions)
             .Where(l => l.IndividualId == person && (!org.HasValue || l.OrganisationId == org) &&
-                l.AttendanceLogStateId == HRM.Components.Shared.SharedConfig.AttendanceLogStates.Valid && l.Date >= from.Date && l.Date < end.AddDays(1) &&
-                l.AttendanceLogResolutions.Any(r => r.IsValid && r.WorkAssignmentId.HasValue && ids.Contains(r.WorkAssignmentId.Value)))
+                l.AttendanceLogStateId == HRM.Components.Shared.SharedConfig.AttendanceLogStates.Valid && l.Date >= from.Date && l.Date < end.AddDays(1))
             .ToListAsync(ct);
         return assignments.Select(a =>
         {
             var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
-                .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution?.WorkAssignmentId == a.WorkAssignmentId).ToList();
-            var start = a.WorkAssignmentSegments.Where(s => s.IsValid && s.ExpectedInOutModeId == 1)
+                .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution?.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved &&
+                    (e.Resolution.WorkAssignmentId ?? snapshotOwners.GetValueOrDefault(e.Resolution.WorkPlanSegmentId ?? 0)) == a.WorkAssignmentId).ToList();
+            var start = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 1 || s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.StartDateTime).Min();
-            var finish = a.WorkAssignmentSegments.Where(s => s.IsValid && s.ExpectedInOutModeId == 2)
+            var finish = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 2 || s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.EndDateTime).Max();
             var type = (a.WorkTemplateType?.Name ?? "") + " " + (a.WorkTemplateType?.Code ?? "");
             var shift = a.SchedulePurpose.Equals("Duty", StringComparison.OrdinalIgnoreCase) ||

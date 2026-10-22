@@ -130,7 +130,7 @@ namespace HRM.WorkPlanning.Services
                         -maximumGraceBeforeMinutes);
 
                 var assignmentWindowEnd =
-                    assignment.EndDateTime.AddMinutes(
+                    assignmentSegments.Select(s => s.EndDateTime ?? s.StartDateTime).Append(assignment.EndDateTime).Max().AddMinutes(
                         maximumGraceAfterMinutes);
 
                 if (attendanceDateTime < assignmentWindowStart ||

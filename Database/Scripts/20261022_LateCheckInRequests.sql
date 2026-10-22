@@ -1,8 +1,8 @@
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID('dbo.LateCheckInRequests','U') IS NULL
+IF OBJECT_ID('dbo.LC_LateCheckInRequests','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.LateCheckInRequests (
+    CREATE TABLE dbo.LC_LateCheckInRequests (
         RequestId int NOT NULL PRIMARY KEY REFERENCES dbo.Requests(RequestID),
         JobId int NOT NULL REFERENCES dbo.Jobs(JobID),
         OrganisationId int NOT NULL,
@@ -17,8 +17,8 @@ BEGIN
         Reason nvarchar(1000) NOT NULL,
         CreatedAtUtc datetime2 NOT NULL
     );
-    CREATE INDEX IX_LateCheckInRequests_OrganisationId_IndividualId ON dbo.LateCheckInRequests(OrganisationId,IndividualId);
-    CREATE INDEX IX_LateCheckInRequests_AttendanceLogId_WorkAssignmentId ON dbo.LateCheckInRequests(AttendanceLogId,WorkAssignmentId);
+    CREATE INDEX IX_LateCheckInRequests_OrganisationId_IndividualId ON dbo.LC_LateCheckInRequests(OrganisationId,IndividualId);
+    CREATE INDEX IX_LateCheckInRequests_AttendanceLogId_WorkAssignmentId ON dbo.LC_LateCheckInRequests(AttendanceLogId,WorkAssignmentId);
 END;
 IF NOT EXISTS (SELECT 1 FROM dbo.RequestTypes WHERE TypeName = 'Late Check In Request')
 BEGIN

@@ -3,9 +3,9 @@ BEGIN TRANSACTION;
 -- Decimal values preserve every existing balance and allow 2.5-day monthly credits.
 IF EXISTS (SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID('dbo.JobLeaveTypes') AND name='RemainingDays' AND TYPE_NAME(user_type_id)='int')
     ALTER TABLE dbo.JobLeaveTypes ALTER COLUMN RemainingDays decimal(10,2) NULL;
-IF OBJECT_ID('dbo.JobTypeLeaveAccrualRules','U') IS NULL
+IF OBJECT_ID('dbo.LA_JobTypeLeaveAccrualRules','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.JobTypeLeaveAccrualRules (
+    CREATE TABLE dbo.LA_JobTypeLeaveAccrualRules (
         Id int IDENTITY PRIMARY KEY,
         OrganisationId int NOT NULL REFERENCES dbo.Organisations(BusinessEntityID),
         JobTypeId int NOT NULL REFERENCES dbo.JobTypes(JobTypeID),
@@ -27,11 +27,11 @@ BEGIN
             (IsEnabled=0 OR CarryForwardMode<>'Unspecified'))
     );
 END;
-IF OBJECT_ID('dbo.LeaveAccrualPostings','U') IS NULL
+IF OBJECT_ID('dbo.LA_LeaveAccrualPostings','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.LeaveAccrualPostings (
+    CREATE TABLE dbo.LA_LeaveAccrualPostings (
         Id bigint IDENTITY PRIMARY KEY,
-        RuleId int NOT NULL REFERENCES dbo.JobTypeLeaveAccrualRules(Id),
+        RuleId int NOT NULL REFERENCES dbo.LA_JobTypeLeaveAccrualRules(Id),
         RuleVersion int NOT NULL,
         JobId int NOT NULL REFERENCES dbo.Jobs(JobID),
         JobLeaveTypeId int NOT NULL REFERENCES dbo.JobLeaveTypes(JobLeaveTypeID),
@@ -54,12 +54,12 @@ WHERE l.Name='Annual Leave' AND (l.IsGlobal=1 OR l.OrganisationID=@Tenant)
 ORDER BY (SELECT COUNT(*) FROM dbo.JobLeaveTypes b JOIN dbo.Jobs j ON j.JobID=b.JobID
           WHERE b.LeaveTypeID=l.LeaveTypeID AND j.OrganisationID=@Tenant AND b.IsValid=1) DESC,l.LeaveTypeID;
 IF @Tenant IS NOT NULL AND @Leave IS NOT NULL
-    INSERT dbo.JobTypeLeaveAccrualRules(OrganisationId,JobTypeId,LeaveTypeId,GrantDays,FirstGrantAfterMonths,RepeatEveryMonths,
+    INSERT dbo.LA_JobTypeLeaveAccrualRules(OrganisationId,JobTypeId,LeaveTypeId,GrantDays,FirstGrantAfterMonths,RepeatEveryMonths,
         CarryForwardMode,CarryForwardLimit,MaximumBalance,EffectiveFrom,IsEnabled,Version,OperationLogId)
     SELECT @Tenant,j.JobTypeID,@Leave,CASE WHEN j.TypeName IN ('Contract','Temporary') THEN 2.5 ELSE 30 END,
         CASE j.TypeName WHEN 'Permanent' THEN 12 WHEN 'Political' THEN 0 ELSE 1 END,
         CASE WHEN j.TypeName IN ('Contract','Temporary') THEN 1 ELSE 12 END,
         'Unspecified',NULL,NULL,CONVERT(date,DATEADD(hour,5,SYSUTCDATETIME())),0,1,NULL
     FROM dbo.JobTypes j WHERE j.TypeName IN ('Contract','Permanent','Temporary','Political')
-        AND NOT EXISTS(SELECT 1 FROM dbo.JobTypeLeaveAccrualRules r WHERE r.OrganisationId=@Tenant AND r.JobTypeId=j.JobTypeID AND r.LeaveTypeId=@Leave);
+        AND NOT EXISTS(SELECT 1 FROM dbo.LA_JobTypeLeaveAccrualRules r WHERE r.OrganisationId=@Tenant AND r.JobTypeId=j.JobTypeID AND r.LeaveTypeId=@Leave);
 COMMIT TRANSACTION;

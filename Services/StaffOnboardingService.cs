@@ -277,7 +277,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var query = db.Database.IsSqlServer() ? db.StaffOnboardingRequests.FromSqlInterpolated($"SELECT * FROM dbo.StaffOnboardingRequests WITH (UPDLOCK,HOLDLOCK) WHERE RequestId={requestId}") : db.StaffOnboardingRequests.Where(x => x.RequestId == requestId);
+            var query = db.Database.IsSqlServer() ? db.StaffOnboardingRequests.FromSqlInterpolated($"SELECT * FROM dbo.SO_StaffOnboardingRequests WITH (UPDLOCK,HOLDLOCK) WHERE RequestId={requestId}") : db.StaffOnboardingRequests.Where(x => x.RequestId == requestId);
             var r = await query.Include(x => x.Request).SingleOrDefaultAsync(x => x.OrganisationId == org)
                 ?? throw new UnauthorizedAccessException("This onboarding request is not available in the selected organisation.");
             if (!r.IsOpen || r.Request.RequestStateId != expectedState) throw new InvalidOperationException("The request changed. Refresh before acting.");

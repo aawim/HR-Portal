@@ -38,7 +38,7 @@ namespace HRM.Migrations
                 b.Property<byte[]>("RowVersion").IsRequired().IsConcurrencyToken().ValueGeneratedOnAddOrUpdate().HasColumnType("rowversion");
                 b.HasKey("UserTodoId");
                 b.HasIndex("UserId", "IsDeleted", "IsCompleted", "DueDate");
-                b.ToTable("UserTodos", "dbo", t => t.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));
+                b.ToTable("UT_UserTodos", "dbo", t => t.HasCheckConstraint("CK_UserTodos_Priority", "[Priority] IN ('Normal','Medium','High')"));
                 b.HasOne("HRM.Models.User", null).WithMany().HasForeignKey("UserId").OnDelete(DeleteBehavior.Restrict).IsRequired();
             });
 

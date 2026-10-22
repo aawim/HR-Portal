@@ -1,8 +1,8 @@
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
-IF OBJECT_ID('dbo.AdminAccessGrantRequests','U') IS NULL
+IF OBJECT_ID('dbo.AA_AdminAccessGrantRequests','U') IS NULL
 BEGIN
-    CREATE TABLE dbo.AdminAccessGrantRequests (
+    CREATE TABLE dbo.AA_AdminAccessGrantRequests (
         RequestId int NOT NULL PRIMARY KEY REFERENCES dbo.Requests(RequestID),
         UserId int NOT NULL REFERENCES dbo.Users(UserID),
         OrganisationId int NOT NULL REFERENCES dbo.Organisations(BusinessEntityID),
@@ -17,7 +17,7 @@ BEGIN
         CONSTRAINT CK_AdminAccessGroupsJson CHECK(ISJSON(GroupIdsJson)=1),
         CONSTRAINT CK_AdminAccessPermissionsJson CHECK(ISJSON(PermissionIdsJson)=1)
     );
-    CREATE UNIQUE INDEX IX_AdminAccessGrantRequests_UserId ON dbo.AdminAccessGrantRequests(UserId) WHERE IsOpen=1;
+    CREATE UNIQUE INDEX IX_AdminAccessGrantRequests_UserId ON dbo.AA_AdminAccessGrantRequests(UserId) WHERE IsOpen=1;
 END;
 IF NOT EXISTS(SELECT 1 FROM dbo.RequestTypes WHERE TypeName='Admin access grant')
     INSERT dbo.RequestTypes(TypeName,ViewURL,IsSystemType) VALUES('Admin access grant','/admin/settings/admin-access',1);
