@@ -600,7 +600,7 @@ namespace HRM.Services.JobLeaveTypes
             var job = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == JobId && x.OrganisationID == org)
                 ?? throw new UnauthorizedAccessException("This job is not in the current organisation.");
             if (job.IndividualID != actor.IndividualId && !actor.IsHRStaff && !actor.IsHRHead && !actor.IsHRManager &&
-                !actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Admin") &&
+                !actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Super.Admin.Manage") && !await _userAccessService.HasPermissionAsync("Admin") &&
                 !(await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job.JobId)).Contains(actor.IndividualId))
                 throw new UnauthorizedAccessException("You cannot view this staff member's leave balances.");
 
