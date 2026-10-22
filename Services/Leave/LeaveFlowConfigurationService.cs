@@ -169,7 +169,7 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
                 x.WorkflowJobTypes.Any(j => j.IsActive && j.JobTypeId == context.JobTypeId))
             .OrderByDescending(x => x.VersionNumber).ToListAsync(ct);
         if (matches.Count != 1 || !matches[0].Stages.Any(x => x.IsActive))
-            throw new InvalidOperationException("Configure one approval flow for this organisation, Job Type and Request Type under Settings > Leaves Management > Request Approval Flows before submitting.");
+            throw new WorkflowConfigurationException(context, "Configure exactly one active approval flow with approval stages for this Job Type and Request Type.");
         return matches[0];
     }
 }

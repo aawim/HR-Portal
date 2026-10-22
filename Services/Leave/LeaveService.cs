@@ -687,6 +687,11 @@ namespace HRM.Services.Leave
                 catch (InvalidOperationException ex)
                 {
                     await transaction.RollbackAsync();
+                    if (ex is WorkflowConfigurationException configuration)
+                    {
+                        await configuration.NotifyAsync(_dbFactory);
+                        return ServiceResult.Fail(WorkflowConfigurationException.StaffMessage);
+                    }
                     return ServiceResult.Fail(
                         $"Leave was not submitted because its approval workflow could not start. {ex.Message}");
                 }

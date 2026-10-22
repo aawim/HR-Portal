@@ -146,6 +146,7 @@ public partial class LeaveChangeService(
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
         {
             await transaction.RollbackAsync();
+            if (ex is WorkflowConfigurationException configuration) await configuration.NotifyAsync(factory);
             return ServiceResult.Fail(ex.Message);
         }
     }

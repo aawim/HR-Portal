@@ -51,6 +51,12 @@ namespace HRM.Services.Interfaces.AppovalWF
                 await transaction.CommitAsync(cancellationToken);
                 return instanceId;
             }
+            catch (HRM.Services.WorkflowConfigurationException ex)
+            {
+                await transaction.RollbackAsync(CancellationToken.None);
+                await ex.NotifyAsync(_dbFactory);
+                throw;
+            }
             catch
             {
                 await transaction.RollbackAsync(CancellationToken.None);
@@ -109,12 +115,19 @@ namespace HRM.Services.Interfaces.AppovalWF
             {
                 approvalRequestTypeId = context.FallbackApprovalRequestTypeId.Value;
             }
+            try
+            {
             definition = await _definitionService.ResolveAsync(
                   approvalRequestTypeId,
                   context.OrganisationBusinessEntityId,
                   context.JobTypeId,
                   context.EffectiveDate,
                   cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new HRM.Services.WorkflowConfigurationException(context, ex.Message);
+            }
             }
 
             // 5. Load the first active stage.
@@ -124,7 +137,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                 .ToList();
 
             if (stages.Count == 0)
-                throw new InvalidOperationException(
+                throw new HRM.Services.WorkflowConfigurationException(context,
                     "The workflow has no active stages.");
 
             var firstStage = stages[0];
@@ -142,22 +155,30 @@ namespace HRM.Services.Interfaces.AppovalWF
                     }
                     catch (InvalidOperationException ex)
                     {
-                        throw new InvalidOperationException($"{stage.StageName}: {ex.Message} Check the stage's User Group membership and team/department supervisor configuration.", ex);
+                        throw new HRM.Services.WorkflowConfigurationException(context, $"{stage.StageName}: {ex.Message} Check User Group membership and team/department supervisors.");
                     }
                 }
 
             // 6. Resolve approvers before making changes.
-            var approvers = await _approverResolver.ResolveAsync(
+            IReadOnlyList<WorkflowApproverCandidate> approvers;
+            try
+            {
+            approvers = await _approverResolver.ResolveAsync(
                 firstStage.WorkflowStageId,
                 context,
                 cancellationToken);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new HRM.Services.WorkflowConfigurationException(context, ex.Message);
+            }
 
             if (approvers.Count == 0)
-                throw new InvalidOperationException(
+                throw new HRM.Services.WorkflowConfigurationException(context,
                     "The first stage has no eligible approvers.");
 
             if (approvers.Any(x => x.UserId <= 0))
-                throw new InvalidOperationException(
+                throw new HRM.Services.WorkflowConfigurationException(context,
                     "An approver has an invalid UserID.");
 
             // A user can qualify through more than one rule.

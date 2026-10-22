@@ -7,6 +7,7 @@
 @using HRM.Services.Leave
 @inject LeaveFlowConfigurationService Configuration
 @inject ILogger<LeaveFlowSettings> Logger
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 
 <PageTitle>Request approval flows</PageTitle>
 <div class="mx-auto max-w-5xl space-y-5 p-4">
@@ -85,12 +86,39 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery(Name = "issueOrganisationId")] public int? IssueOrganisationId { get; set; }
+    [SupplyParameterFromQuery(Name = "jobTypeId")] public int? RequestedJobTypeId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestTypeId")] public int? RequestedRequestTypeId { get; set; }
+    private string? loadedAlert;
     private LeaveFlowSettingsData? data;
     private LeaveFlowConfigurationDto? model;
     private int jobType, requestType, level;
     private bool loading = true, busy;
     private string? message;
     protected override Task OnInitializedAsync() => ReloadAsync();
+    protected override async Task OnParametersSetAsync()
+    {
+        if (data == null || !IssueOrganisationId.HasValue) return;
+        var key = $"{IssueOrganisationId}:{RequestedJobTypeId}:{RequestedRequestTypeId}";
+        if (loadedAlert == key) return;
+        loadedAlert = key;
+        try
+        {
+            if (await UserAccess.GetCurrentOrganisationIdAsync() != IssueOrganisationId)
+            {
+                model = null;
+                message = "This alert concerns another organisation. Open that organisation's approved admin context before reviewing its approval flow.";
+                return;
+            }
+            if (data.JobTypes.Any(x => x.Id == RequestedJobTypeId) && data.RequestTypes.Any(x => x.Id == RequestedRequestTypeId))
+            {
+                jobType = RequestedJobTypeId!.Value;
+                requestType = RequestedRequestTypeId!.Value;
+                await LoadFlowAsync();
+            }
+        }
+        catch (Exception ex) { Handle(ex); }
+    }
     private async Task ReloadAsync()
     {
         loading = true;
