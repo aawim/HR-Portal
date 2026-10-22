@@ -15,8 +15,8 @@ public sealed class LeaveFlowConfigurationService(IDbContextFactory<HrmTeContext
     private async Task<int> RequireOrganisationAsync()
     {
         var user = await access.RequireContextAsync();
-        if (!user.IsSuperAdministrator && !user.IsHRStaff && !await access.HasPermissionAsync("Admin"))
-            throw new UnauthorizedAccessException("Only HR or administrators can configure leave approvals.");
+        if (!user.IsSuperAdministrator && !user.IsHRStaff && !await access.HasPermissionAsync("Super.Admin.Manage") && !await access.HasPermissionAsync("Admin"))
+            throw new UnauthorizedAccessException("Only HR, administrators or Super Administrators can configure request approval flows.");
         var org = 0;
         try { org = await access.GetCurrentOrganisationIdAsync(); }
         catch (InvalidOperationException) { /* Some staff contexts contain only an active job. */ }

@@ -102,6 +102,25 @@ static class LeaveFlowTests
             (await contextResolver.ResolveAsync(3, 1)).LeaveRequestKind == 2,
             "Submissions are not classified by new leave, extension and early return");
         var config = new LeaveFlowConfigurationService(factory, access);
+        var superPermission = true;
+        var organisationAllowed = true;
+        var superAccess = Proxy.For<IUserAccessService>((name, args) => name switch
+        {
+            "RequireContextAsync" => Task.FromResult(new UserContextDto { UserId = 425 }),
+            "GetCurrentOrganisationIdAsync" => Task.FromResult(10),
+            "HasOrganisationAccessAsync" => Task.FromResult(organisationAllowed),
+            "HasPermissionAsync" => Task.FromResult(superPermission && (string)args[0]! == "Super.Admin.Manage"),
+            _ => throw new Exception(name)
+        });
+        var superConfig = new LeaveFlowConfigurationService(factory, superAccess);
+        Check((await superConfig.LoadAsync()).Organisation == "Example organisation", "Super Admin permission without legacy flag was denied");
+        await superConfig.GetAsync(1, 105);
+        organisationAllowed = false;
+        await ThrowsAsync(() => superConfig.LoadAsync(), "Super Admin permission bypassed organisation scope");
+        organisationAllowed = true;
+        superPermission = false;
+        await ThrowsAsync(() => superConfig.LoadAsync(), "Missing configuration permission was accepted");
+        await ThrowsAsync(() => superConfig.SaveAsync(new LeaveFlowConfigurationDto()), "Save bypassed configuration permission");
         Check((await contextResolver.ResolveAsync(5, 1)).RequestTypeId == 105 && (await contextResolver.ResolveAsync(6, 1)).RequestTypeId == 106,
             "Independent leave change Request Types are not resolved");
         await ThrowsAsync(() => contextResolver.ResolveAsync(7, 1), "Early Return Request accepted an extension payload");
