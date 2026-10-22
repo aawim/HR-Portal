@@ -1,5 +1,10 @@
 @page "/admin/settings/{CategoryName}"
 @using HRM.Components.Admin.Settings.Positions
+@page "/admin/settings/{CategoryName}/{Section}"
+@page "/admin/settings/org/organisations/{OrganisationId:int}/{OrganisationSection}"
+@page "/admin/settings/org/manage/{OrganisationId:int}/{OrganisationSection}"
+@page "/admin/settings/org/teams/{TeamSection}"
+@inject NavigationManager Navigation
 @using HRM.Components.Admin.Settings.Roles
 @using HRM.Components.Admin.Settings.Users
 @using HRM.Components.Admin.Settings.Workplan
@@ -47,7 +52,7 @@
                     </div>
 
                     <div class="flex flex-col gap-1 mb-4">
-                        @foreach (var item in GetSubItems(CategoryName).Where(x => (x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper) && (x.ComponentType != typeof(LeaveCarryForwardSettings) || canViewCarryForward)))
+                        @foreach (var item in VisibleItems)
                         {
                             <button @onclick="() => SelectItem(item)"
                             title="@(!isSidebarExpanded ? item.Title : null)"
@@ -130,7 +135,7 @@
                                 <div class="mt-2">
                                     @if (activeItem.ComponentType != null)
                                     {
-                                        <DynamicComponent Type="@activeItem.ComponentType" />
+                                        <DynamicComponent @key="(CategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
                                     }
                                     else
                                     {
@@ -168,6 +173,32 @@
 
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
+    [Parameter] public string? Section { get; set; }
+    [Parameter] public int? OrganisationId { get; set; }
+    [Parameter] public string? OrganisationSection { get; set; }
+    [Parameter] public string? TeamSection { get; set; }
+    [SupplyParameterFromQuery(Name = "organisationId")] public int? QueryOrganisationId { get; set; }
+    private IDictionary<string, object>? SelectedParameters => activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)
+        ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["InitialKind"] = TeamSection == "departments" ? "Department" : "Team" }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)
+            ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)OrganisationId!, ["InitialSection"] = OrganisationSection! }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)
+            ? new Dictionary<string, object> { ["Kind"] = activeItem.Title switch {
+                "Manage type" => HRM.DTOs.Organisation.OrganisationResourceKind.StructureTypes,
+                "Calendar" => HRM.DTOs.Organisation.OrganisationResourceKind.Calendar,
+                "Locations" => HRM.DTOs.Organisation.OrganisationResourceKind.Locations,
+                "Location Types" => HRM.DTOs.Organisation.OrganisationResourceKind.LocationTypes,
+                "Organisation Types" => HRM.DTOs.Organisation.OrganisationResourceKind.OrganisationTypes,
+                _ => HRM.DTOs.Organisation.OrganisationResourceKind.Requests } } : null;
+    private IEnumerable<SubItem> VisibleItems => GetSubItems(CategoryName).Where(x =>
+        (x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper) &&
+        (x.ComponentType != typeof(LeaveCarryForwardSettings) || canViewCarryForward));
+    private string ItemSlug(SubItem item) => item.Title switch
+    {
+        "Teams and supervisors" => "teams", "Organisation Permissions" => "permissions", "Manage" => "manage", "Manage type" => "types",
+        "Request Approval Flows" => "approval-flows", "Leave Accrual by Job Type" => "accrual", "Leave Carry Forward" => "carry-forward",
+        _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
+    };
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
@@ -183,6 +214,7 @@
     private void SelectItem(SubItem item)
     {
         activeItem = item;
+        Navigation.NavigateTo($"/admin/settings/{CategoryName.ToLowerInvariant()}/{ItemSlug(item)}");
     }
     private bool isSidebarExpanded = true;
 
@@ -212,9 +244,15 @@
             new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(StaffGrid)),
         },
         "org" => new() {
+            new("Manage", "🏢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
+            new("Manage type", "🏷️", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Calendar", "📅", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Locations", "📍", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Location Types", "🏷️", "Manage the shared location type catalogue.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Organisation Types", "🏛️", "Manage organisation classifications.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Requests", "📥", "Review requests in this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
+            new("Request Types", "📋", "Manage existing request types and workflow configuration.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
             new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
-            new("Teams and supervisors", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)),
-            new("Manage Organisations", "🏢", "Manage organisation details, addresses and contacts.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
         },
         "payroll" => new() {
             new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
@@ -290,12 +328,18 @@
     private List<Leaf>? leaveRequests;
     private bool isDeveloper;
     private bool canViewCarryForward;
-    private string? displayedCategory;
     protected override void OnParametersSet()
     {
-        if (string.Equals(displayedCategory, CategoryName, StringComparison.OrdinalIgnoreCase)) return;
-        displayedCategory = CategoryName;
-        activeItem = CategoryName.Equals("positions", StringComparison.OrdinalIgnoreCase) ? GetSubItems(CategoryName).First() : null;
+        if (OrganisationSection != null) { CategoryName = "org"; Section = "manage"; }
+        if (TeamSection != null) { CategoryName = "org"; Section = "teams"; }
+        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "organisations") Section = "manage";
+        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "teams")
+        {
+            activeItem = new SubItem("Teams and supervisors", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings));
+            return;
+        }
+        activeItem = string.IsNullOrWhiteSpace(Section) ? VisibleItems.FirstOrDefault() :
+            VisibleItems.FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, ItemSlug(x)));
     }
 
     protected override async Task OnInitializedAsync()
@@ -303,6 +347,5 @@
         isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
         canViewCarryForward = await UserAccess.HasPermissionAsync(HRM.Services.Leave.LeaveCarryForwardPermissions.View) &&
             (await UserAccess.HasUserGroupAsync("Human Resource: Staff") || await UserAccess.HasUserGroupAsync("Human Resource :Head"));
-        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
     }
 }

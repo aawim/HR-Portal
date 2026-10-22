@@ -1,6 +1,7 @@
 ﻿@* @page "/admin/attendance/manage-attendance/my-attendance" *@
 @page "/admin/attendance/manage-attendance/my-attendance"
 @using Microsoft.EntityFrameworkCore
+@page "/admin/attendance/manage-attendance/my-attendance/{TabSection}"
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
@@ -439,15 +440,7 @@
 
     protected override async Task OnParametersSetAsync()
     {
-        if (!string.IsNullOrWhiteSpace(QueryTab))
-        {
-            // Use FirstOrDefault to ensure the casing matches your Tabs array exactly
-            activeTab = Tabs.FirstOrDefault(t => t.Equals(QueryTab, StringComparison.OrdinalIgnoreCase)) ?? "Attendance";
-        }
-        else
-        {
-            activeTab = "Attendance";
-        }
+        activeTab = HRM.Helpers.SectionRoutes.Tab(Tabs, TabSection ?? QueryTab, "Attendance");
 
         await SearchDefaultPeriod();
         LoadChartData();
@@ -521,14 +514,9 @@
     private void SetActiveTab(string tabName)
     {
         activeTab = tabName;
-
-        string urlTabName = tabName.Replace(" ", "-");
-        // 2. Generate the new URL with the query parameter
-        var newUrl = Navigation.GetUriWithQueryParameter("tab", urlTabName);
-
-        // 3. Update the browser URL bar silently (replace: true prevents bloating the browser back-button history)
-        Navigation.NavigateTo(newUrl, forceLoad: false, replace: true);
+        HRM.Helpers.SectionRoutes.NavigateTab(Navigation, "/admin/attendance/manage-attendance/my-attendance", tabName);
     }
+    [Parameter] public string? TabSection { get; set; }
 
     // private void SetDefaultSalaryPeriod()
     // {

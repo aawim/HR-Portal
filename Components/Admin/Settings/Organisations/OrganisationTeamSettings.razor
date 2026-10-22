@@ -2,6 +2,7 @@
 @inject HRM.Services.OrganisationSettingsService Settings
 @inject HRM.Services.ToastService Toast
 @inject ILogger<OrganisationTeamSettings> Logger
+@inject NavigationManager Navigation
 
 <section class="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
     <div><h2 class="text-xl font-semibold">Teams and supervisors</h2><p class="mt-1 text-sm text-slate-500">Assign supervisors for organisation teams and departments.</p></div>
@@ -99,6 +100,8 @@
 @code {
     [Parameter] public int? InitialOrganisationId { get; set; }
     [Parameter] public bool ShowOrganisationSelector { get; set; } = true;
+    [Parameter] public string? InitialKind { get; set; }
+    [SupplyParameterFromQuery(Name = "teamView")] public string? QueryKind { get; set; }
     private List<OrganisationSettingsOption> organisations = [];
     private OrganisationTeamSettingsData? data;
     private OrganisationTeamSettingsRow? selected;
@@ -116,6 +119,8 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var requestedKind = InitialKind ?? (QueryKind == "departments" ? "Department" : QueryKind == "teams" ? "Team" : null);
+        if (requestedKind != null && kind != requestedKind) { kind = requestedKind; ApplyStructureFilter(); }
         if (!initialised)
         {
             initialised = true;
@@ -134,7 +139,14 @@
         }
     }
     private void Select(OrganisationTeamSettingsRow row) { selected = row; staffId = 0; removeId = null; }
-    private void ChangeKind(bool teams) { kind = teams ? "Team" : "Department"; search = ""; ApplyStructureFilter(); }
+    private void ChangeKind(bool teams)
+    {
+        kind = teams ? "Team" : "Department"; search = ""; ApplyStructureFilter();
+        var current = new Uri(Navigation.Uri);
+        if (current.AbsolutePath == "/admin/settings/org/team" || current.AbsolutePath.StartsWith("/admin/settings/org/teams", StringComparison.OrdinalIgnoreCase))
+            Navigation.NavigateTo($"/admin/settings/org/teams{(teams ? "" : "/departments")}{current.Query}");
+        else Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("teamView", teams ? "teams" : "departments"));
+    }
     private void ApplyStructureFilter() { selected = Filtered.FirstOrDefault(); staffId = 0; removeId = null; }
     private async Task LoadSettingsAsync()
     {

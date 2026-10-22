@@ -1,5 +1,9 @@
 ﻿@page "/budget/{CategoryName}"
 @using HRM.Components.Admin.Hr.Individual
+@page "/budget/{CategoryName}/{Section}"
+@page "/admin/budget/{CategoryName}"
+@page "/admin/budget/{CategoryName}/{Section}"
+@inject NavigationManager Navigation
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
@@ -122,6 +126,9 @@
 
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
+    [Parameter] public string? Section { get; set; }
+    protected override void OnParametersSet() => activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
+        GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(x.Title)));
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
@@ -131,6 +138,7 @@
     private void SelectItem(SubItem item)
     {
         activeItem = item;
+        Navigation.NavigateTo($"/admin/budget/{CategoryName.ToLowerInvariant()}/{HRM.Helpers.SectionRoutes.Slug(item.Title)}");
     }
     private bool isSidebarExpanded = true;
 

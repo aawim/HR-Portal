@@ -27,6 +27,11 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await OrganisationResourceSettingsTests.RunAsync(); Console.WriteLine("PASS Organisation resource settings: shared types, tenant-scoped requests, calendar access, duplicate prevention and audit"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Organisation resource settings: {ex}"); }
+try { await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Section navigation: category URLs, direct links, workspace and attendance tabs, protected sections and legacy route compatibility"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Section navigation: {ex}"); }
+if(args.Contains("--navigation-only")) return failures == 0 ? 0 : 1;
 try { await OrganisationPermissionTests.RunAsync(); Console.WriteLine("PASS Organisation permissions: direct/group ceilings, tenant boundaries, Super Admin management, stale edits, audit and immediate revocation"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Organisation permissions: {ex}"); }
 try { await AdminAccessGrantTests.RunAsync(); Console.WriteLine("PASS Admin access grants: scoped organisation selection, deferred roles/permissions, ordered approvals, self-approval protection, notifications, transitions, rejection, cancellation and revocation"); }

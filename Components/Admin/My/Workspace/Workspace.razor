@@ -1,6 +1,9 @@
 @page "/admin/my/workspace"
 
 @using HRM.Components.Admin.My.Workspace
+@page "/admin/my/workspace/{Section}"
+@page "/admin/my/workspace/{EntityRoute}/{EntityId:int}/{Section}"
+@inject NavigationManager Navigation
 @using HRM.DTOs
 @using HRM.Enum
 @rendermode RenderMode.InteractiveServer
@@ -67,20 +70,31 @@
 
 
 @code {
+    [Parameter] public string? Section { get; set; }
+    [Parameter] public string? EntityRoute { get; set; }
+    [Parameter] public int? EntityId { get; set; }
     [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
     [SupplyParameterFromQuery(Name = "entityType")] public string? EntityTypeQuery { get; set; }
     [SupplyParameterFromQuery(Name = "entityId")] public int? EntityIdQuery { get; set; }
     string? previousEntityQuery; int recentVersion;
     protected override async Task OnParametersSetAsync()
     {
-        var key = $"{EntityTypeQuery}:{EntityIdQuery}";
-        if (previousEntityQuery == key || NotificationRequestId.HasValue) return;
-        previousEntityQuery = key;
-        if (EntityIdQuery.HasValue && System.Enum.TryParse<WorkspaceEntityType>(EntityTypeQuery, out var type))
+        if (NotificationRequestId.HasValue) { SelectedItem = null; ActiveTab = WorkspaceTab.Overview; return; }
+        var entity = EntityRoute ?? EntityTypeQuery;
+        var id = EntityId ?? EntityIdQuery;
+        var key = $"{entity}:{id}";
+        if (previousEntityQuery != key || id.HasValue && SelectedItem == null)
         {
-            try { var item = await Recent.ResolveAsync(type, EntityIdQuery.Value); if(item != null) await SelectItem(item); else Toasts.Error("This search result is no longer available in the current organisation."); }
-            catch { Toasts.Error("The search result could not be opened."); }
+            previousEntityQuery = key; SelectedItem = null;
+            if (id.HasValue && System.Enum.TryParse<WorkspaceEntityType>(entity, true, out var type) && System.Enum.IsDefined(type) && type != WorkspaceEntityType.Workspace)
+            {
+                try { SelectedItem = await Recent.ResolveAsync(type, id.Value); if (SelectedItem == null) Toasts.Error("This search result is no longer available in the current organisation."); }
+                catch { Toasts.Error("The search result could not be opened."); }
+            }
         }
+        var tab = System.Enum.GetValues<WorkspaceTab>().FirstOrDefault(t => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(t.ToString())));
+        ActiveTab = AllowedTabs.Contains(tab) ? tab : WorkspaceTab.Overview;
+        navigationVersion++;
     }
 
     protected override void OnParametersSet()
@@ -92,6 +106,17 @@
 
     private WorkspaceTab ActiveTab = WorkspaceTab.Overview;
     private int navigationVersion;
+    private WorkspaceTab[] AllowedTabs => (SelectedItem?.EntityType ?? WorkspaceEntityType.Workspace) switch
+    {
+        WorkspaceEntityType.Workspace => [WorkspaceTab.Overview, WorkspaceTab.Calendar, WorkspaceTab.OrgDaily, WorkspaceTab.ShiftWork, WorkspaceTab.Assignments, WorkspaceTab.AssignmentCreate],
+        WorkspaceEntityType.Staff => [WorkspaceTab.Overview, WorkspaceTab.Leave, WorkspaceTab.OT, WorkspaceTab.Attendance, WorkspaceTab.Position, WorkspaceTab.LeaveType, WorkspaceTab.Schedule],
+        WorkspaceEntityType.Individual => [WorkspaceTab.Overview, WorkspaceTab.Documents],
+        WorkspaceEntityType.Organisation => [WorkspaceTab.Overview, WorkspaceTab.Staff, WorkspaceTab.Teams, WorkspaceTab.AssignedRoles, WorkspaceTab.Permissions, WorkspaceTab.LeaveType, WorkspaceTab.Documents],
+        _ => [WorkspaceTab.Overview]
+    };
+    private string TabUrl(WorkspaceTab tab) => SelectedItem == null
+        ? $"/admin/my/workspace/{HRM.Helpers.SectionRoutes.Slug(tab.ToString())}"
+        : $"/admin/my/workspace/{SelectedItem.EntityType.ToString().ToLowerInvariant()}/{SelectedItem.Id}/{HRM.Helpers.SectionRoutes.Slug(tab.ToString())}";
 
     private async Task SelectItem(WorkspaceSearchResult item)
     {
@@ -100,18 +125,21 @@
         ActiveTab = WorkspaceTab.Overview;
         try { await Recent.RememberAsync(SelectedItem); recentVersion++; }
         catch { Toasts.Error("The item was opened, but recent searches could not be saved."); }
+        Navigation.NavigateTo(TabUrl(WorkspaceTab.Overview));
     }
 
     private void ResetWorkspace()
     {
         SelectedItem = null;
         ActiveTab = WorkspaceTab.Overview;
+        Navigation.NavigateTo("/admin/my/workspace");
     }
 
     private void OnTabChanged(WorkspaceTab tab)
     {
         ActiveTab = tab;
         navigationVersion++;
+        Navigation.NavigateTo(TabUrl(tab));
     }
 
 }

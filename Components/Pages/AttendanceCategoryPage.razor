@@ -1,5 +1,6 @@
 ﻿@page "/admin/attendance/{CategoryName}"
 @using HRM.Components.Admin.Attendance.Attendance
+@page "/admin/attendance/{CategoryName}/{Page}"
 @using HRM.Models
 @using HRM.Services
 @using HRM.Services.Interfaces
@@ -123,6 +124,8 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Page { get; set; }
+    protected override void OnParametersSet() => activeItem = string.IsNullOrWhiteSpace(Page) ? GetSubItems(CategoryName).FirstOrDefault() :
+        GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Page, x.Route));
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Route, string Icon, string Description, Type? ComponentType = null);
@@ -132,8 +135,7 @@
     private void SelectItem(SubItem item)
     {
         activeItem = item;
-        // Navigation.NavigateTo(
-        // $"/admin/attendance/{CategoryName}/{item.Route}");
+        Navigation.NavigateTo($"/admin/attendance/{CategoryName}/{item.Route}");
     }
     private bool isSidebarExpanded = true;
 

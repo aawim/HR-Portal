@@ -5,6 +5,7 @@
 @inject OrganisationSettingsService Settings
 @inject ToastService Toast
 @inject ILogger<OrganisationSettingsEditor> Logger
+@inject NavigationManager Navigation
 
 <div class="w-full">
     @if (error != null) { <p role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">@error</p> }
@@ -30,7 +31,7 @@
                         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><OrganisationIcon /></div>
                                 <div><h2 class="text-sm font-semibold text-slate-900">@(model.Id == 0 ? "Add New Organisation" : model.Name)</h2><p class="mt-1 text-xs text-slate-500">@(model.Id == 0 ? "Save the details, then add addresses and contacts below." : "Manage details, addresses and contacts in one place.")</p></div></div>
-                            @if (model.Id > 0) { <button type="button" class="@Secondary" @onclick="NewOrganisation">Add new</button> }
+                            @if (model.Id > 0) { <button type="button" class="@Secondary" @onclick="() => NewOrganisation(true)">Add new</button> }
                         </div>
                         <div class="grid grid-cols-1 gap-5 p-5 md:grid-cols-2">
                             @if (model.Id > 0)
@@ -196,7 +197,21 @@
         Type = data?.Types.FirstOrDefault(x => x.Id == model.TypeId)?.Name ?? "",
         Country = data?.Countries.FirstOrDefault(x => x.Id == model.CountryId)?.Name ?? ""
     };
-    private void ChangeSection(string name) { activeSection = name; ResetForms(); }
+    [Parameter] public int? InitialOrganisationId { get; set; }
+    [Parameter] public string? InitialSection { get; set; }
+    private void ChangeSection(string name) { activeSection = name; ResetForms(); NavigateSection(); }
+    private void NavigateSection()
+    {
+        if (model.Id > 0) Navigation.NavigateTo($"/admin/settings/org/manage/{model.Id}/{HRM.Helpers.SectionRoutes.Slug(activeSection)}");
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if (data == null || InitialOrganisationId is not > 0) return;
+        var item = data.Organisations.FirstOrDefault(o => o.Id == InitialOrganisationId);
+        if (item == null) { error = "This organisation is not available in your current context."; return; }
+        if (model.Id != item.Id) await SelectAsync(item, false);
+        activeSection = HRM.Helpers.SectionRoutes.Tab(OrganisationSections.Select(s => s.Name), InitialSection, "Summary");
+    }
     private const string Danger = "rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50";
     private const string Label = "block text-xs font-bold uppercase tracking-wide text-slate-700";
     private const string Input = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
@@ -206,15 +221,17 @@
     protected override async Task OnInitializedAsync()
     {
         loading = true;
-        try { data = await Settings.LoadAsync(); NewOrganisation(); }
+        try { data = await Settings.LoadAsync(); NewOrganisation(false); }
         catch (Exception ex) { Fail(ex); }
         finally { loading = false; }
     }
-    private void NewOrganisation()
+    private void NewOrganisation() => NewOrganisation(true);
+    private void NewOrganisation(bool navigate)
     {
         activeSection = "Edit";
         model = new() { CountryId = data?.Countries.FirstOrDefault(x => x.Name == "Maldives")?.Id ?? 0 };
         links = new(); error = null; ResetForms();
+        if (navigate) Navigation.NavigateTo("/admin/settings/org/manage");
     }
     private void ResetForms()
     {
@@ -223,7 +240,7 @@
         address = new() { BaseTypeId = data?.AddressTypes.FirstOrDefault()?.Id ?? 0, CountryId = model.CountryId, UsageId = data?.AddressUsages.FirstOrDefault(x => x.Id == 3)?.Id ?? data?.AddressUsages.FirstOrDefault()?.Id ?? 0 };
         contact = new(); addressResults.Clear(); addressSearch = ""; useExisting = false; addingAddress = false; addingContact = false;
     }
-    private async Task SelectAsync(OrganisationSettingsDto item)
+    private async Task SelectAsync(OrganisationSettingsDto item, bool navigate = true)
     {
         busy = true; error = null;
         try
@@ -231,6 +248,7 @@
             var savedLinks = await Settings.GetLinksAsync(item.Id);
             model = new() { Id = item.Id, Name = item.Name, DhivehiName = item.DhivehiName, TypeId = item.TypeId, CountryId = item.CountryId, RegistrationNumber = item.RegistrationNumber, RegistrationDate = item.RegistrationDate, ParentId = item.ParentId };
             links = savedLinks; ResetForms();
+            if (navigate) NavigateSection();
         }
         catch (Exception ex) { Fail(ex); }
         finally { busy = false; }
@@ -276,6 +294,7 @@
             if (refreshList) data = await Settings.LoadAsync();
             if (model.Id > 0) links = await Settings.GetLinksAsync(model.Id);
             ResetForms();
+            if (refreshList && model.Id > 0) NavigateSection();
         }
         catch (Exception ex) { Fail(ex); }
         finally { busy = false; }

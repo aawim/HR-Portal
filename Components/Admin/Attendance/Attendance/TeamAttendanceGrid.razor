@@ -1,5 +1,8 @@
 ﻿@page "/admin/attendance/manage-attendance/team-attendace"
 @using Microsoft.EntityFrameworkCore
+@page "/admin/attendance/manage-attendance/team-attendance"
+@page "/admin/attendance/manage-attendance/team-attendance/{TabSection}"
+@inject NavigationManager Navigation
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
@@ -93,7 +96,7 @@
         <nav class="flex gap-6">
             @foreach (var tab in new[] { "Summary", "Attendance", "Leaves", "Out of Office", "Other" })
             {
-                <button @onclick="() => activeTab = tab" class="pb-3 text-sm font-bold transition-colors border-b-2 @(activeTab == tab ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")">
+                <button @onclick="() => SetActiveTab(tab)" class="pb-3 text-sm font-bold transition-colors border-b-2 @(activeTab == tab ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")">
                     @tab
                 </button>
             }
@@ -240,6 +243,10 @@
 }
  
 @code {
+    [Parameter] public string? TabSection { get; set; }
+    [SupplyParameterFromQuery(Name = "tab")] public string? QueryTab { get; set; }
+    protected override void OnParametersSet() => activeTab = HRM.Helpers.SectionRoutes.Tab(["Summary", "Attendance", "Leaves", "Out of Office", "Other"], TabSection ?? QueryTab, "Summary");
+    private void SetActiveTab(string tab) { activeTab = tab; HRM.Helpers.SectionRoutes.NavigateTab(Navigation, "/admin/attendance/manage-attendance/team-attendance", tab); }
     // Dropdowns
     private int selectedOrgId = 0;
     private int selectedTeamId = 0;
