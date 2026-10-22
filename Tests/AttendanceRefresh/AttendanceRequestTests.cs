@@ -375,6 +375,7 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
             typeof(LeaveChangeRequest), typeof(LeaveTypeMapping), typeof(LeaveDefinition),
             typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
             typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule), typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting), typeof(HRM.Models.LeaveTypes.LeaveCarryForward)];
+        types = types.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         var navigations = new HashSet<(Type, string)>
         {
             (typeof(Leaf), "Job"), (typeof(Leaf), "LeaveType"), (typeof(Request), "RequestState"),

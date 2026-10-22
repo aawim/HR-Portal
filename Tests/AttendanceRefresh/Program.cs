@@ -27,6 +27,18 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await OrganisationPermissionTests.RunAsync(); Console.WriteLine("PASS Organisation permissions: direct/group ceilings, tenant boundaries, Super Admin management, stale edits, audit and immediate revocation"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Organisation permissions: {ex}"); }
+try { await AdminAccessGrantTests.RunAsync(); Console.WriteLine("PASS Admin access grants: scoped organisation selection, deferred roles/permissions, ordered approvals, self-approval protection, notifications, transitions, rejection, cancellation and revocation"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Admin access grants: {ex}"); }
+if(args.Contains("--admin-access-only")) return failures == 0 ? 0 : 1;
+try { await AttendanceEligibilityTests.RunAsync(); Console.WriteLine("PASS Attendance eligibility: position approval date, missing/expired schedules, tenant boundaries, weekends, rotations, manual duty and no false absences"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Attendance eligibility: {ex}"); }
+try { await StaffOnboardingTests.RunAsync(); Console.WriteLine("PASS Staff onboarding: ordered approvals, deferred accounts, optional position/profile, notifications, duplicate prevention, revocation, transitions and tenant isolation"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Staff onboarding: {ex}"); }
+if(args.Contains("--onboarding-only")) return failures == 0 ? 0 : 1;
+try { await StaffNotificationTests.RunAsync(); Console.WriteLine("PASS Staff notifications: business actions, bell delivery, read tracking, disabled users, ownership and tenant isolation"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Staff notifications: {ex}"); }
 try { await WorkspaceStaffDataTests.RunAsync(); Console.WriteLine("PASS Workspace staff data: staff/job mapping, selected employee attendance, clock events, employment dates, leave, weekends and tenant permissions"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Workspace staff data: {ex}"); }
 try { await LeaveEntitlementTests.RunAsync(); Console.WriteLine("PASS Leave entitlements: staff/job identity, recorded balances, effective dates, unconfirmed assignments, refresh and tenant access"); }
@@ -191,9 +203,12 @@ static async Task TestLeaveDays()
     var first = new DateTime(year, 1, 1);
     await using (var db = new TestContext(options))
     {
-        db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1 },
+        db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1, JobStateId = 4, JoinedDate = first.AddDays(-10) },
             new Job { JobId = 2, IndividualID = 2 },
             new Job { JobId = 3, IndividualID = 1, TerminatedDate = first.AddMonths(1) });
+        db.JobPositions.Add(new JobPosition { JobPositionId = 1, JobId = 1, PositionId = 1, JobPositionStateId = 4, FromDate = first.AddDays(-10) });
+        db.WorkTemplates.Add(new HRM.Models.WorkPlanning.WorkTemplate { WorkTemplateId = 1, Name = "Official schedule", IsActive = true, RequiresAttendance = true });
+        db.JobWorkTemplateAssignments.Add(new HRM.Models.WorkPlanning.JobWorkTemplateAssignment { JobID = 1, WorkTemplateID = 1, IsActive = true, EffectiveFrom = first.AddDays(-10), WorkingDaysMask = 31 });
         // Persisted leave-state IDs (SharedConfig is internal to the app).
         const int approved = 4, rejected = 5, cancelled = 6, incomplete = 1;
         db.LeaveTypes.AddRange(new LeaveType { LeaveTypeId = 1, Name = "Annual Leave" },
@@ -568,6 +583,12 @@ sealed class TestRenderer : Renderer
             f.FrameType == RenderTreeFrameType.Attribute && f.AttributeName == "class" &&
             f.AttributeValue is string css && css.Contains("h-full w-full") && css.Contains("bg-blue-400"));
     }
+    public int RedWeeklyDayCount()
+    {
+        var frames = GetCurrentRenderTreeFrames(root);
+        return frames.Array.Take(frames.Count).Count(f => f.FrameType == RenderTreeFrameType.Attribute && f.AttributeName == "class" &&
+            f.AttributeValue is string css && css.Contains("h-28") && css.Contains("bg-red-500"));
+    }
     protected override Task UpdateDisplayAsync(in RenderBatch renderBatch) => Task.CompletedTask;
     protected override void HandleException(Exception exception) => errors.Add(exception);
     public void CheckErrors()
@@ -622,7 +643,7 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
     protected override void OnModelCreating(ModelBuilder builder)
     {
         var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution),
-            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment) };
+            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)

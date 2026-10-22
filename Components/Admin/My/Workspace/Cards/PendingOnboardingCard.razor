@@ -1,0 +1,29 @@
+@using HRM.Services
+@inject StaffOnboardingService Onboarding
+@inject ILogger<PendingOnboardingCard> Logger
+
+<section class="space-y-3 rounded-xl border bg-white p-4">
+    <div class="flex items-center justify-between gap-2"><h2 class="font-semibold">Pending Staff Onboarding</h2><button type="button" class="text-sm underline" @onclick="LoadAsync">Refresh</button></div>
+    @if (error != null) { <p role="alert" class="text-sm">@error</p> }
+    else if (loading) { <p class="text-sm">Loading…</p> }
+    else if (rows.Count == 0) { <p class="text-sm text-slate-500">No pending onboarding requests.</p> }
+    else
+    {
+        <ul class="divide-y">@foreach (var row in rows.Take(5)) { <li class="py-2"><a href="/admin/hr/onboarding?requestId=@row.RequestId" class="block space-y-1"><span class="block text-sm font-semibold">@row.Individual</span><span class="block text-xs text-slate-500">@row.Status · @row.Stage</span></a></li> }</ul>
+    }
+    <a href="/admin/hr/onboarding" class="text-sm underline">View onboarding requests</a>
+</section>
+
+@code {
+    private List<HRM.DTOs.StaffOnboardingRow> rows = [];
+    private bool loading = true;
+    private string? error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        loading = true; error = null; rows = [];
+        try { rows = await Onboarding.GetRequestsAsync(pendingOnly: true); }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load pending onboarding"); error = "Pending onboarding could not be loaded."; }
+        finally { loading = false; }
+    }
+}

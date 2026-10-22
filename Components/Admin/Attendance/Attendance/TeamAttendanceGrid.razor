@@ -357,11 +357,18 @@
 
             // A. ATTENDANCE LOGS
             var logs = await AttendanceLogService.GetAttendanceLogsAsync(staff.BusinessEntityId, startDate, endDate);
+            var organisationId = await DbContext.Teams.Where(t => t.TeamId == selectedTeamId).Select(t => t.OrganisationId).SingleAsync();
+            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, staff.BusinessEntityId, startDate, endDate, organisationId);
+            var approvedLeaves = await DbContext.Leaves.Where(l => l.Job.IndividualID == staff.BusinessEntityId && l.Job.OrganisationID == organisationId &&
+                l.LeaveStateId == 4 && l.FromDate <= endDate && l.ToDate >= startDate).Select(l => new { l.FromDate, l.ToDate }).ToListAsync();
+            var requiredDays = eligibility.Where(x => x.Key <= DateTime.UtcNow.AddHours(5).Date && x.Value.CanBeAbsent &&
+                !approvedLeaves.Any(l => l.FromDate.Date <= x.Key && l.ToDate.Date >= x.Key)).Select(x => x.Key).ToHashSet();
+            report.Att_DaysToAttend = requiredDays.Count;
             
             // Calculate Presents/Absents based on days with punches
             var daysPresent = logs.Select(l => l.Date.Date).Distinct().Count();
             report.Att_AttendedDays = daysPresent;
-            report.Att_Absent = report.Att_DaysToAttend - daysPresent;
+            report.Att_Absent = requiredDays.Count(d => !logs.Any(l => l.Date.Date == d));
             report.Summary_Absent = report.Att_Absent;
 
             // Global Chart Tracking

@@ -542,10 +542,12 @@
 
     private void LoadChartData()
     {
+        var requiredDays = dailyRecords.Count(r => r.RequiresAttendance);
+        var denominator = Math.Max(1, requiredDays);
         attendanceStats = new List<ChartStat>
         {
-            new ChartStat { Label = "To Attend", Days = 30, Percentage = 100, ColorClass = "bg-slate-400" },
-            new ChartStat { Label = "Absent", Days = 30, Percentage = 100, ColorClass = "bg-rose-500" },
+            new ChartStat { Label = "To Attend", Days = requiredDays, Percentage = requiredDays > 0 ? 100 : 0, ColorClass = "bg-slate-400" },
+            new ChartStat { Label = "Absent", Days = TotalAbsentDays, Percentage = (int)Math.Round(100d * TotalAbsentDays / denominator), ColorClass = "bg-rose-500" },
             new ChartStat { Label = "Late", Days = 0, Percentage = 0, ColorClass = "bg-amber-400" },
             new ChartStat { Label = "Perfect", Days = 0, Percentage = 0, ColorClass = "bg-emerald-400" },
             new ChartStat { Label = "Attended", Days = 0, Percentage = 0, ColorClass = "bg-blue-500" },
@@ -570,6 +572,7 @@
             int individualID = await _individual.GetIndividualID();
             rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
             var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(DbContext, individualID, start.Date, end.Date);
+            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, individualID, start.Date, end.Date);
 
             // Define rules
             // var shiftStart = new TimeSpan(8, 30, 0);
@@ -582,13 +585,14 @@
                 var row = new DailyAttendanceRow
                     {
                         Date = day,
-                        Status = restDays.Contains(day.Date) ? "Weekend" : day.Date > DateTime.UtcNow.AddHours(5).Date ? "Upcoming" : "Absent",
+                        RequiresAttendance = eligibility[day.Date].CanBeAbsent,
+                        Status = eligibility[day.Date].Message ?? (!eligibility[day.Date].IsScheduledDay ? "Weekend" : day.Date > DateTime.UtcNow.AddHours(5).Date ? "Upcoming" : eligibility[day.Date].CanBeAbsent ? "Absent" : "Attendance not required"),
                         Details = ""
                     };
 
                 if (dayLogs.Any())
                 {
-                    row.Status = "Present";
+                    if (eligibility[day.Date].HasApprovedPosition && eligibility[day.Date].HasActiveSchedule) row.Status = "Present";
 
                     // Clock In/Out
                     var clockIn = dayLogs.FirstOrDefault(l => l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1) || (!l.AttendanceLogResolutions.Any() && l.InOutModeId == 1));
@@ -602,7 +606,7 @@
                     row.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
 
                     // 1. Calculate Late Arrival
-                    if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                    if (eligibility[day.Date].CanBeAbsent && clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
                     {
                         lateRecords.Add(new LateRecord
                             {
@@ -777,6 +781,7 @@
 
     private class DailyAttendanceRow
     {
+        public bool RequiresAttendance { get; set; }
         public DateTime Date { get; set; }
         public string ClockIn { get; set; } = "--:--";
         public string BreakOut { get; set; } = "--:--";

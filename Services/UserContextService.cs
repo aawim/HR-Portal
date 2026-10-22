@@ -105,6 +105,14 @@ namespace HRM.Services
 
             try
             {
+                // Recheck inside the transaction: another sign-in may have registered
+                // this identity after the initial lookup.
+                if (await db.Idcards.AnyAsync(x => x.IdcardNumber == username))
+                {
+                    await transaction.CommitAsync();
+                    return null;
+                }
+
                 // Use an existing Individual BusinessEntity configuration as the template.
                 var businessEntityTemplate = await (
                     from individuals in db.Individuals.AsNoTracking()

@@ -17,6 +17,10 @@
             <p class="mt-0.5 text-xs text-slate-500">
                 Attendance activity for @Year
             </p>
+            @if (!IsLoading && Days?.OrderByDescending(x => x.Date).FirstOrDefault()?.EligibilityMessage is string eligibilityMessage)
+            {
+                <p role="status" class="mt-2 text-sm text-slate-500">@eligibilityMessage</p>
+            }
         </div>
 
 
@@ -584,7 +588,8 @@
             return AttendanceDayStatus.Absent;
         }
 
-        return AttendanceDayStatus.NoData;
+        return day.EligibilityMessage == HRM.Helpers.AttendanceEligibilityDay.NoScheduleMessage ? AttendanceDayStatus.NoSchedule :
+            day.EligibilityMessage != null ? AttendanceDayStatus.BeforeApproval : AttendanceDayStatus.NoData;
     }
 
 
@@ -659,6 +664,8 @@
 
             AttendanceDayStatus.NoData =>
                 "No attendance data",
+            AttendanceDayStatus.NoSchedule => "No active schedule found",
+            AttendanceDayStatus.BeforeApproval => "Attendance starts from job position approval",
 
             _ =>
                 "No attendance data"
@@ -780,7 +787,9 @@
         Future = 4,
         Leave = 5,
         Holiday = 6,
-        RestDay = 7
+        RestDay = 7,
+        NoSchedule = 8,
+        BeforeApproval = 9
     }
 
 

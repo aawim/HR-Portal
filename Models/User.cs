@@ -29,6 +29,9 @@ public partial class User
 
     public bool IsActive { get; set; }
 
+    public bool AdminPortalAccessEnabled { get; set; }
+    public int? AdminPortalAccessOrganisationId { get; set; }
+
     public string ApplicationName { get; set; } = null!;
 
     public string? Mobile { get; set; }

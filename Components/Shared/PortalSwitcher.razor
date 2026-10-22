@@ -14,7 +14,7 @@
         Self
     </button>
 
-    @if (PortalContext.CanAccessAdminPortal)
+    @if (CanAccessAdminPortal && PortalContext.CanAccessAdminPortal)
     {
         <button class="px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700 transition-colors w-[90px]"
                 @onclick="SwitchToOrganisation">
@@ -26,6 +26,7 @@
 
 @code
 {
+    [Parameter] public bool CanAccessAdminPortal { get; set; }
     protected override async Task OnInitializedAsync()
     {
         var session = await UserContext.GetSessionAsync();
@@ -63,6 +64,7 @@
 
     private async Task SwitchToOrganisation()
     {
+        if (!CanAccessAdminPortal) return;
         var session = await UserContext.GetSessionAsync();
         PortalContext.Initialize(session?.OrganisationId, session?.OrganisationName ?? "", session?.CanAccessAdminPortal == true);
         if (!PortalContext.CanAccessAdminPortal) return;

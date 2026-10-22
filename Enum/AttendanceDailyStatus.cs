@@ -20,6 +20,8 @@
 
         Future = 8,
 
-        InProgress = 9
+        InProgress = 9,
+        NoActiveSchedule = 10,
+        BeforePositionApproval = 11
     }
 }

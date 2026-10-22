@@ -5,8 +5,6 @@
 
 
 @inject NavigationManager Navigation
-@inject PortalContext PortalContext
-@inject IUserContext UserContext
 
 
 
@@ -21,10 +19,12 @@
 
     <AuthorizeView>
         <Authorized>
+            @if (HasSystemAccess)
+            {
             <!-- Active Navigation Links -->
             <nav class="flex-1 overflow-y-auto py-4">
                 <ul class="space-y-1 px-3">
-                    @if (IsAdminPortal)
+                    @if (IsAdminPortal && CanAccessAdminPortal)
                     {
                         <!-- Admin Menu-->
 
@@ -59,7 +59,12 @@
             </nav>
 
 
-            <PortalSwitcher @rendermode="RenderMode.InteractiveServer" />
+            <PortalSwitcher CanAccessAdminPortal="CanAccessAdminPortal" @rendermode="RenderMode.InteractiveServer" />
+            }
+            else
+            {
+                @DisabledEmployeeMenu
+            }
 
 
             <!-- Logout Form -->
@@ -76,17 +81,7 @@
 
         <NotAuthorized>
             <!-- Disabled Navigation State -->
-            <nav class="flex-1 overflow-y-auto py-4 opacity-50 pointer-events-none select-none">
-                <ul class="space-y-1 px-3">
-                    <NavItem Href="javascript:void(0)" Icon="home" Text="Home" />
-                    <NavItem Href="javascript:void(0)" Icon="clock" Text="Attendance" />
-                    <NavItem Href="javascript:void(0)" Icon="currency-dollar" Text="Break Time Request" />
-                    <NavItem Href="javascript:void(0)" Icon="trending-up" Text="Overtime" />
-                    <NavItem Href="javascript:void(0)" Icon="briefcase" Text="Jobs" />
-                    <NavItem Href="javascript:void(0)" Icon="calendar" Text="Leaves" />
-
-                </ul>
-            </nav>
+            @DisabledEmployeeMenu
 
             @*        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -103,6 +98,19 @@
     </AuthorizeView>
 </aside>
 @code {
+    [Parameter] public bool HasSystemAccess { get; set; }
+    [Parameter] public bool CanAccessAdminPortal { get; set; }
+    private RenderFragment DisabledEmployeeMenu => @<nav aria-label="Employee navigation" class="flex-1 overflow-y-auto py-4 opacity-50">
+        <ul class="space-y-1 px-3">
+            <NavItem Href="" Disabled="true" Icon="home" Text="Home" />
+            <NavItem Href="" Disabled="true" Icon="clock" Text="Attendance" />
+            <NavItem Href="" Disabled="true" Icon="calendar" Text="Duty roster" />
+            <NavItem Href="" Disabled="true" Icon="currency-dollar" Text="Break Time Request" />
+            <NavItem Href="" Disabled="true" Icon="trending-up" Text="Overtime" />
+            <NavItem Href="" Disabled="true" Icon="calendar" Text="Leaves" />
+            <NavItem Href="" Disabled="true" Icon="briefcase" Text="Work handovers" />
+        </ul>
+    </nav>;
  
 
     private Task<AuthenticationState>? AuthenticationState { get; set; }
@@ -110,27 +118,9 @@
 
     private bool IsAdminPortal =>
         new Uri(Navigation.Uri).AbsolutePath
-            .StartsWith("/admin", StringComparison.OrdinalIgnoreCase);
+            .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
 
 
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadCurrentUserOrganisation();
-    }
-
-
-    private async Task LoadCurrentUserOrganisation()
-    {
-        var session = await UserContext.GetSessionAsync();
-
-        if (session == null)
-            return;
-
-        PortalContext.Initialize(
-            session.OrganisationId,
-            session.OrganisationName,
-            session.CanAccessAdminPortal);
-    }
 
 
  

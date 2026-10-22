@@ -244,7 +244,8 @@ static class ScheduleFlowTests
         var date = DateTime.UtcNow.AddHours(5).Date.AddDays(-1);
         await using (var db = factory.CreateDbContext())
         {
-            db.Jobs.Add(new Job { JobId = 100, IndividualID = 1000, OrganisationID = 10 });
+            db.Jobs.Add(new Job { JobId = 100, IndividualID = 1000, OrganisationID = 10, JobStateId = 4, JoinedDate = date.AddYears(-1) });
+            db.JobPositions.Add(new JobPosition { JobPositionId = 1, JobId = 100, PositionId = 1, JobPositionStateId = 4, FromDate = date.AddYears(-1) });
             db.WorkAssignmentStates.Add(new WorkAssignmentState { WorkAssignmentStateId = 1, Code = "PLANNED", IsActive = true });
             db.WorkSegmentTypes.AddRange(new WorkSegmentType { WorkSegmentTypeId = 1, Code = "CHECK_IN", Name = "Check in" },
                 new WorkSegmentType { WorkSegmentTypeId = 2, Code = "CHECK_OUT", Name = "Check out" });

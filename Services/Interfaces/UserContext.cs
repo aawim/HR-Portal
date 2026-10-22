@@ -26,7 +26,7 @@ public class UserContext(AuthenticationStateProvider auth, IDbContextFactory<Hrm
    .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).Select(j => j.JobId).FirstOrDefaultAsync();
   var permissions = await new HRM.Services.EffectivePermissionService(factory).GetEffectivePermissionsAsync(user.UserId);
   var ids = permissions.Select(x => x.RoleID).ToList();
-  var canAdmin = await db.Roles.AnyAsync(x => ids.Contains(x.RoleID) && x.ContextId == 1);
+  var canAdmin = user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId && await db.Roles.AnyAsync(x => ids.Contains(x.RoleID) && x.ContextId == 1);
   return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin };
  }
 }

@@ -9,6 +9,10 @@
         public bool IsPresent { get; set; }
 
         public bool IsAbsent { get; set; }
+        public bool HasActiveSchedule { get; set; }
+        public bool HasApprovedPosition { get; set; }
+        public bool RequiresAttendance { get; set; }
+        public string? EligibilityMessage { get; set; }
 
         public bool IsUnresolved { get; set; }
 

@@ -27,7 +27,7 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
         await using var db = await factory.CreateDbContextAsync();
         var department = await DepartmentAsync(db);
         return await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == org && x.JobStateId == SharedConfig.JobStates.APPROVED &&
-            x.TerminatedDate == null && (manage || (department.HasValue && x.OrganisationStructureId == department) || x.IndividualID == user.IndividualId) &&
+            x.JoinedDate <= Now.Date && x.TerminatedDate == null && (manage || (department.HasValue && x.OrganisationStructureId == department) || x.IndividualID == user.IndividualId) &&
             db.Users.Any(u => u.BusinessEntityID == x.IndividualID && u.IsActive && u.LocalUserStateId == 1 && u.UserOrganisation!.BusinessEntityID == org))
             .OrderBy(x => x.Individual.FirstNameEnglish).Select(x => new DutyPartner(x.JobId, x.IndividualID,
                 (x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + x.Individual.LastNameEnglish).Trim())).ToListAsync();
@@ -68,13 +68,14 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
             .Include(x => x.WorkAssignmentOwners).ThenInclude(x => x.Job).ThenInclude(x => x.OrganisationStructure).ToListAsync();
         return rows.OrderBy(x => x.StartDateTime).ThenBy(x => x.Name).Select(x => {
             var owner = x.WorkAssignmentOwners.Where(o => o.IsValid && o.IsCurrentOwner && !o.RelievedDate.HasValue).OrderByDescending(o => o.AssignedDate).FirstOrDefault();
+            var available = x.StartDateTime > Now && !x.WorkPlan.IsFinalized &&
+                !pending.Any(p => p.SourceAssignmentId == x.WorkAssignmentId || p.SwapAssignmentId == x.WorkAssignmentId) &&
+                x.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId == x.WorkPlan.IndividualId && !o.RelievedDate.HasValue);
             return new DutyRosterRow(x.WorkAssignmentId,
             owner?.JobId ?? x.WorkPlan.JobId, owner?.IndividualId ?? x.WorkPlan.IndividualId, Name(owner?.Individual ?? x.WorkPlan.Job.Individual),
             (owner?.Job ?? x.WorkPlan.Job).OrganisationStructure?.Name ?? "",
             x.Name, x.StartDateTime, x.EndDateTime, x.RequiresAttendance, x.RequiresCheckOut,
-            x.StartDateTime > Now && !x.WorkPlan.IsFinalized && (manage || x.WorkPlan.IndividualId == user.IndividualId) &&
-            !pending.Any(p => p.SourceAssignmentId == x.WorkAssignmentId || p.SwapAssignmentId == x.WorkAssignmentId) &&
-            x.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && o.IndividualId == x.WorkPlan.IndividualId && !o.RelievedDate.HasValue)); }).ToList();
+            available && (manage || x.WorkPlan.IndividualId == user.IndividualId)) { CanExchange = available }; }).ToList();
     }
 
     private static string Name(Individual person) => string.Join(" ", new[] { person.FirstNameEnglish, person.MiddleNameEnglish, person.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x)));
@@ -105,12 +106,14 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
         if (job.JobStateId != SharedConfig.JobStates.APPROVED || job.JoinedDate > start || (job.TerminatedDate.HasValue && job.TerminatedDate <= end))
             throw new InvalidOperationException("The receiving staff member needs an approved active job for the complete duty period.");
         var lastDate = end.AddTicks(-1).Date;
-        if (await db.Leaves.AnyAsync(x => x.Job.OrganisationID == job.OrganisationID && x.Job.IndividualID == job.IndividualID && x.LeaveStateId == SharedConfig.LeaveStates.APPROVED && x.FromDate.Date <= lastDate && x.ToDate.Date >= start.Date))
-            throw new InvalidOperationException("The receiving staff member is on approved leave during this duty.");
-        if (await db.WorkAssignments.AnyAsync(x => x.IsValid && x.CancelledDate == null && x.SchedulePurpose == "Duty" && x.WorkPlan.IsValid && x.WorkPlan.OrganisationBusinessEntityId == job.OrganisationID &&
+        var leave = await db.Leaves.Where(x => x.Job.OrganisationID == job.OrganisationID && x.Job.IndividualID == job.IndividualID && x.LeaveStateId == SharedConfig.LeaveStates.APPROVED && x.FromDate.Date <= lastDate && x.ToDate.Date >= start.Date)
+            .OrderBy(x => x.FromDate).Select(x => new { x.FromDate, x.ToDate, Type = x.LeaveType.Name }).FirstOrDefaultAsync();
+        if(leave != null) throw new InvalidOperationException($"The receiving staff member has approved {leave.Type ?? "leave"} from {leave.FromDate:dd MMM yyyy} to {leave.ToDate:dd MMM yyyy}, overlapping this duty ({start:dd MMM yyyy HH:mm}–{end:dd MMM yyyy HH:mm}).");
+        var overlap = await db.WorkAssignments.Where(x => x.IsValid && x.CancelledDate == null && x.SchedulePurpose == "Duty" && x.WorkPlan.IsValid && x.WorkPlan.OrganisationBusinessEntityId == job.OrganisationID &&
             !excluded.Contains(x.WorkAssignmentId) && x.StartDateTime < end && x.EndDateTime > start &&
-            (x.WorkPlan.IndividualId == job.IndividualID || x.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && !o.RelievedDate.HasValue && o.IndividualId == job.IndividualID))))
-            throw new InvalidOperationException("The receiving staff member already has overlapping duty hours.");
+            (x.WorkPlan.IndividualId == job.IndividualID || x.WorkAssignmentOwners.Any(o => o.IsValid && o.IsCurrentOwner && !o.RelievedDate.HasValue && o.IndividualId == job.IndividualID)))
+            .OrderBy(x => x.StartDateTime).Select(x => new { x.Name, x.StartDateTime, x.EndDateTime }).FirstOrDefaultAsync();
+        if(overlap != null) throw new InvalidOperationException($"The receiving staff member has overlapping duty hours: {overlap.Name}, {overlap.StartDateTime:dd MMM yyyy HH:mm}–{overlap.EndDateTime:dd MMM yyyy HH:mm}. Requested duty: {start:dd MMM yyyy HH:mm}–{end:dd MMM yyyy HH:mm}.");
     }
 
     private async Task ValidatePairAsync(HrmTeContext db, DutyChangeRequest change, WorkAssignment source, WorkAssignment? swap)
@@ -199,6 +202,7 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
             db.WfRequestInstances.Add(new HRM.Models.Workflow.WfRequestInstance { RequestId = request.RequestId,
                 WorkflowDefinitionId = definition.WorkflowDefinitionId, WorkflowStatus = "AwaitingAcceptance", StartedAt = DateTime.UtcNow });
             await NotifyAsync(db, change, [change.SourceIndividualId, change.TargetIndividualId], "DutyAcceptance", 10, 10);
+            if(actor.IndividualId != change.SourceIndividualId) await NotifyAsync(db, change, [], "DutySubmitted", 10, 10);
             await db.SaveChangesAsync(); await tx.CommitAsync();
             return ServiceResult.Ok($"{request.ReferenceNumber} needs acceptance from both staff members before supervisor approval.");
         }

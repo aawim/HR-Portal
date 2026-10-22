@@ -31,6 +31,7 @@ namespace HRM.Services
             var context = await _access.RequireContextAsync();
             using var db = await _dbFactory.CreateDbContextAsync();
             var today = DateTime.Today;
+            var organisationId = await _access.GetCurrentOrganisationIdAsync();
 
             // =====================================================
             // 1. Get teams where current user is supervisor
@@ -39,7 +40,7 @@ namespace HRM.Services
             var teamIds = await db.TeamStaffs
                 .Where(x =>
                     x.StaffId == context.IndividualId &&
-                    x.IsSuperVisor &&
+                    x.IsSuperVisor && x.Team.OrganisationId == organisationId &&
                     x.IsValid)
                 .Select(x => x.TeamId)
                 .Distinct()
@@ -115,6 +116,7 @@ namespace HRM.Services
 
                 .Where(x =>
                     staffIds.Contains(x.IndividualId)
+                    && x.OrganisationId == organisationId && x.AttendanceLogStateId == 1
                     &&
                     x.Date >= today
                     &&
@@ -132,6 +134,11 @@ namespace HRM.Services
             // 4. Build result
             // =====================================================
 
+            var eligibility = new Dictionary<int, HRM.Helpers.AttendanceEligibilityDay>();
+            foreach (var person in staffIds)
+                eligibility[person] = (await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, person, today, today, organisationId))[today];
+            var leavePeople = await db.Leaves.Where(l => staffIds.Contains(l.Job.IndividualID) && l.Job.OrganisationID == organisationId &&
+                l.LeaveStateId == 4 && l.FromDate <= today && l.ToDate >= today).Select(l => l.Job.IndividualID).Distinct().ToListAsync();
             var result = teamStaff
                 .Select(staff =>
                 {
@@ -146,7 +153,11 @@ namespace HRM.Services
                     AttendanceStatus status;
 
 
-                    if (!logs.Any())
+                    if (leavePeople.Contains(staff.StaffID)) status = AttendanceStatus.Leave;
+                    else if (!eligibility[staff.StaffID].HasActiveSchedule) status = AttendanceStatus.NoActiveSchedule;
+                    else if (!eligibility[staff.StaffID].HasApprovedPosition) status = AttendanceStatus.BeforePositionApproval;
+                    else if (!eligibility[staff.StaffID].CanBeAbsent) status = AttendanceStatus.RestDay;
+                    else if (!logs.Any())
                     {
                         status = AttendanceStatus.Absent;
                     }
@@ -177,6 +188,7 @@ namespace HRM.Services
                     return new TeamAttendanceDto
                     {
                         StaffID = staff.StaffID,
+                        StatusMessage = eligibility[staff.StaffID].Message,
 
                         TeamID = staff.TeamID,
 

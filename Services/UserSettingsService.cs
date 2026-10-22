@@ -121,6 +121,8 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var entity = await ScopedUserAsync(db, model.Id, org); var orgId = entity.UserOrganisationId!.Value;
+        var allowedIds = await db.UserOrganisationRoles.Where(p => p.UserOrganisationID == orgId && p.IsActive).Select(p => p.RoleID).ToListAsync();
+        if (model.DirectPermissionIds.Except(allowedIds).Any()) return ServiceResult.Fail("Some direct permissions are not enabled for this organisation. Update Organisation Permissions first.");
         var desiredGroups = model.RoleIds.Distinct().ToArray();
         var groups = await db.UserGroups.Include(x => x.UserGroupRoles).Where(x => desiredGroups.Contains(x.UserGroupId) && x.UserOrganisationId == orgId).ToListAsync();
         if (groups.Count != desiredGroups.Length) return ServiceResult.Fail("Select roles from the current organisation.");
@@ -179,18 +181,8 @@ public class UserSettingsService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<ServiceResult> SaveOrganisationAccessAsync(List<int> permissionIds)
     {
-        var (actor, org) = await RequireAsync("UserOrganisations.Roles.Edit");
-        await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var entity = await db.UserOrganisations.Include(x => x.UserOrganisationRoles).SingleAsync(x => x.BusinessEntityID == org);
-        await ValidateGrantsAsync(db, actor, permissionIds, entity.UserOrganisationRoles.Where(x => x.IsActive).Select(x => x.RoleID));
-        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ORGANISATION_ROLE_UPDATE, $"Updated organisation permissions for {org}");
-        foreach (var link in entity.UserOrganisationRoles) { link.IsActive = permissionIds.Contains(link.RoleID); link.OperationLogId = log.OperationLogId; }
-        foreach (var id in permissionIds.Distinct().Except(entity.UserOrganisationRoles.Select(x => x.RoleID)))
-            entity.UserOrganisationRoles.Add(new() { RoleID = id, IsActive = true, OperationLogId = log.OperationLogId });
-        var users = await db.Users.Where(x => x.UserOrganisationId == entity.UserOrganisationID).Select(x => x.UserId).ToListAsync();
-        await db.SaveChangesAsync(); await tx.CommitAsync();
-        foreach (var id in users) await contexts.InvalidateAsync(id);
-        return ServiceResult.Ok("Organisation permissions saved.");
+        var service = new OrganisationPermissionService(factory, access, logs, contexts);
+        var data = await service.LoadAsync();
+        return await service.SaveAsync(data.OrganisationId, permissionIds, data.AllowedIds, "Updated organisation permission limits.");
     }
 }

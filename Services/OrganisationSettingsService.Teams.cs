@@ -44,7 +44,12 @@ public partial class OrganisationSettingsService
         var today = DateTime.Today;
         var departments = await db.OrganisationStructures.AsNoTracking()
             .Where(x => x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3)
-            .OrderBy(x => x.Name).Select(x => new OrganisationTeamSettingsRow { Id = x.OrganisationStructureId, Kind = "Department", Name = x.Name }).ToListAsync();
+            .OrderBy(x => x.Name).Select(x => new OrganisationTeamSettingsRow { Id = x.OrganisationStructureId, Kind = "Department", Name = x.Name,
+                StructureTypeId = x.OrganisationStructureTypeId }).ToListAsync();
+        var structureTypeIds = departments.Select(x => x.StructureTypeId).ToList();
+        var structureTypes = await db.OrganisationStructureTypes.AsNoTracking()
+            .Where(x => structureTypeIds.Contains(x.OrganisationStructureTypeId)).OrderBy(x => x.TypeName)
+            .Select(x => new OrganisationSettingsOption(x.OrganisationStructureTypeId, x.TypeName)).ToListAsync();
         var teams = await db.Teams.AsNoTracking().Where(x => x.OrganisationId == organisationId && x.IsValid == true &&
             (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
             .OrderBy(x => x.Name).Select(x => new OrganisationTeamSettingsRow { Id = x.TeamId, Kind = "Team", Name = x.Name }).ToListAsync();
@@ -81,7 +86,7 @@ public partial class OrganisationSettingsService
         }
         return new()
         {
-            Rows = departments.Concat(teams).ToList(), Staff = staff, SupervisorIssues = issues,
+            Rows = departments.Concat(teams).ToList(), Staff = staff, StructureTypes = structureTypes, SupervisorIssues = issues,
             CanAssignDepartments = await HasTeamPermissionAsync("Organisation.Structure.Supervisor.Add", "Organisation.Edit", "UserOrganisations.Edit"),
             CanRemoveDepartments = await HasTeamPermissionAsync("Organisation.Structure.Supervisor.Edit", "Organisation.Edit", "UserOrganisations.Edit"),
             CanEditTeams = await HasTeamPermissionAsync("Organisation.Teams.Edit", "Organisation.Edit", "UserOrganisations.Edit")

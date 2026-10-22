@@ -98,6 +98,13 @@
     </div>
 
     <!-- Staff List -->
+    @if (Attendance.Any(x => x.StatusMessage != null))
+    {
+        <details class="border-b px-4 py-3 text-sm">
+            <summary class="cursor-pointer">Staff awaiting an active schedule or position approval (@Attendance.Count(x => x.StatusMessage != null))</summary>
+            <ul class="mt-2 space-y-2">@foreach (var staff in Attendance.Where(x => x.StatusMessage != null)) { <li><span class="font-medium">@staff.Name</span> · @staff.StatusMessage</li> }</ul>
+        </details>
+    }
     <div class="divide-y divide-slate-100">
 
         @if (!FilteredAttendance.Any())
@@ -126,7 +133,7 @@
                                 </span>
 
                                 <span class="text-xs text-slate-500">
-                                    @staff.Status
+                                    @(staff.StatusMessage ?? staff.Status.ToString())
                                 </span>
 
                             </div>

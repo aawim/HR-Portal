@@ -16,6 +16,8 @@
         public int RequestStateId { get; set; }
 
         public int? SubjectJobId { get; set; }
+        // Proposed department for onboarding, before an approved Job exists.
+        public int? SubjectOrganisationStructureId { get; set; }
 
         public int? JobTypeId { get; set; }
 

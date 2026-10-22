@@ -17,6 +17,7 @@
         public DateTime? CheckOut { get; set; }
 
         public AttendanceStatus Status { get; set; }
+        public string? StatusMessage { get; set; }
     }
 
     public enum AttendanceStatus
@@ -26,6 +27,10 @@
         MissingCheckout,
         Absent,
         FamilyLeave,
-        SickLeave
+        SickLeave,
+        Leave,
+        NoActiveSchedule,
+        BeforePositionApproval,
+        RestDay
     }
 }

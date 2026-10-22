@@ -1,7 +1,10 @@
 namespace HRM.DTOs.WorkPlanning;
 
 public sealed record DutyRosterRow(long AssignmentId, int JobId, int IndividualId, string Staff, string Department,
-    string Duty, DateTime Start, DateTime End, bool RequiresAttendance, bool RequiresCheckout, bool CanRequest);
+    string Duty, DateTime Start, DateTime End, bool RequiresAttendance, bool RequiresCheckout, bool CanRequest)
+{
+    public bool CanExchange { get; init; }
+}
 public sealed record DutyPartner(int JobId, int IndividualId, string Name);
 public sealed record DutyChangeApplication(long SourceAssignmentId, int TargetJobId, long? SwapAssignmentId, string Reason);
 public sealed class DutyRequestRow

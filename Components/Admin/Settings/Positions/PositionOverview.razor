@@ -1,0 +1,99 @@
+@using HRM.DTOs
+@using HRM.Services
+@inject PositionOverviewService Overview
+@inject ILogger<PositionOverview> Logger
+
+<div class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 class="text-xl font-semibold">Position Overview</h2>
+            <p class="mt-1 text-sm text-slate-500">@data?.Organisation · Existing positions and their staff assignments.</p>
+        </div>
+        <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="LoadAsync">Refresh</button>
+    </div>
+    @if (loading) { <p role="status" class="p-4">Loading positions…</p> }
+    else if (error != null) { <p role="alert" class="rounded-lg border p-4">@error</p> }
+    else if (data != null)
+    {
+        <div class="grid min-w-0 items-start gap-4 xl:grid-cols-3">
+            <section aria-labelledby="legacy-positions-heading" class="min-w-0 space-y-4 rounded-xl border bg-white p-4 xl:col-span-2">
+                <div>
+                    <h3 id="legacy-positions-heading" class="text-lg font-semibold">Legacy positions</h3>
+                    <p class="mt-1 text-sm text-slate-500">@data.Positions.Count active positions · @CurrentStaffCount current staff. Only approved, currently effective job-position assignments are counted.</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-3">
+                    <input aria-label="Search positions or staff" type="search" placeholder="Search position, staff or department…" @bind="search" @bind:event="oninput" class="min-w-0 flex-1 rounded-lg border p-2 text-sm" />
+                </div>
+                @if (!VisiblePositions.Any())
+                {
+                    <p class="rounded-lg border p-4 text-sm text-slate-500">No positions match this search.</p>
+                }
+                <div class="grid items-start gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                @foreach (var position in VisiblePositions)
+                {
+                    var staff = StaffFor(position).ToList();
+                    <details @key="position.Id" class="group min-w-0 overflow-hidden rounded-lg border">
+                        <summary class="cursor-pointer list-none p-3 transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500">
+                            <div class="flex items-start justify-between gap-3">
+                                <span class="min-w-0 break-words text-sm font-semibold">@position.Name</span>
+                                <span aria-hidden="true" class="shrink-0 text-slate-400 transition-transform group-open:rotate-180">⌄</span>
+                            </div>
+                            <p class="mt-2 text-xs text-slate-500">@(position.IsGlobal ? "Global" : "Organisation") · @(position.IsActive ? "Active" : "Inactive")</p>
+                            <div class="mt-3 flex items-end justify-between gap-2">
+                                <span><strong class="text-2xl font-semibold tabular-nums">@staff.Select(x => x.IndividualId).Distinct().Count()</strong><span class="ml-1 text-xs text-slate-500">staff</span></span>
+                                <span class="text-xs text-slate-500">View staff</span>
+                            </div>
+                        </summary>
+                        @if (staff.Count == 0)
+                        {
+                            <p class="border-t p-3 text-sm text-slate-500">No currently assigned staff.</p>
+                        }
+                        else
+                        {
+                            <ul class="divide-y border-t">
+                                @foreach (var employee in staff)
+                                {
+                                    <li class="flex flex-wrap items-start justify-between gap-2 p-3 text-sm">
+                                        <div class="min-w-0">
+                                            <a href="/admin/my/workspace?entityType=Staff&entityId=@employee.IndividualId" class="break-words font-medium underline">@employee.Name</a>
+                                            <p class="mt-1 text-xs text-slate-500">@employee.Department</p>
+                                            <p class="mt-1 text-xs text-slate-500">@employee.From.ToString("dd MMM yyyy") – @(employee.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
+                                        </div>
+                                        <span class="rounded border px-2 py-1 text-xs">@employee.Status</span>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </details>
+                }
+                </div>
+            </section>
+            <section aria-labelledby="new-positions-heading" class="space-y-3 rounded-xl border bg-white p-4">
+                <h3 id="new-positions-heading" class="text-lg font-semibold">New positions</h3>
+                <span class="inline-block rounded-lg border px-3 py-1 text-sm">Not implemented yet</span>
+                <p class="text-sm text-slate-500">The new position management module will appear here when it is available.</p>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    private PositionOverviewData? data;
+    private bool loading = true;
+    private string search = "";
+    private string? error;
+    private int CurrentStaffCount => data?.Positions.SelectMany(x => x.Staff).Where(x => x.IsCurrent).Select(x => x.IndividualId).Distinct().Count() ?? 0;
+    private IEnumerable<PositionOverviewStaff> StaffFor(PositionOverviewRow position) => position.Staff.Where(x => x.IsCurrent);
+    private bool Matches(string value) => value.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase);
+    private IEnumerable<PositionOverviewRow> VisiblePositions => data?.Positions.Where(p => string.IsNullOrWhiteSpace(search) || Matches(p.Name) ||
+        StaffFor(p).Any(s => Matches(s.Name) || Matches(s.Department))) ?? [];
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        loading = true; error = null; data = null;
+        try { data = await Overview.LoadAsync(); }
+        catch (UnauthorizedAccessException ex) { error = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load position overview"); error = "Positions could not be loaded. Please try again."; }
+        finally { loading = false; }
+    }
+}

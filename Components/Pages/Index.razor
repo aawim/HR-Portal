@@ -1,7 +1,6 @@
 @page "/online"
 @page "/"
 
-@implements IDisposable
 
 
 
@@ -23,8 +22,6 @@
 @inject ILeaveService LeaveService
 @inject IAttendanceService AttendanceService
 @inject IAttendancePlanService AttendancePlanService
-@inject IHttpContextAccessor HttpContextAccessor
-@inject PersistentComponentState ApplicationState
 
 @inject IWorkflowEngine WorkFlowEngine
 
@@ -32,17 +29,6 @@
 
 <PageTitle>Dashboard</PageTitle>
 
-@if (_showAccessDeniedMessage)
-{
-    <div class="alert alert-warning mt-4">
-        <h4 class="alert-heading">Access denied</h4>
-
-        <p class="mb-0">
-            You are not registered as an active employee in this system.
-            Please contact your organisation administrator for access.
-        </p>
-    </div>
-}
 
 
 <AuthorizeView>
@@ -60,6 +46,14 @@
                     </p>
 
                 </div>
+            </div>
+        }
+        else if (contextUnavailable)
+        {
+            <div role="alert" class="rounded-xl border bg-white p-4">
+                <p class="font-semibold">Your employee session is unavailable.</p>
+                <p class="mt-1 text-sm">Please sign in again. If this continues, contact your organisation administrator to check your account access.</p>
+                <a href="/Online/Auth/NoAccessLogout" class="app-button app-button-secondary mt-3">Sign in again</a>
             </div>
         }
         else
@@ -268,9 +262,6 @@
 
 
 @code{
-    private const string AccessDeniedStateKey = "AccessDeniedMessage";
-    private bool _showAccessDeniedMessage;
-    private PersistingComponentStateSubscription? _persistingSubscription;
 
 
 
@@ -283,6 +274,7 @@
 
 
     private bool loading = true;
+    private bool contextUnavailable;
 
     private bool isProcessing;
 
@@ -321,33 +313,10 @@
           
         // var workflowInstanceId = await WorkFlowEngine.StartAsync(23600, 915);
 
-        // During interactive render, use the value saved from prerendering.
-        if (!ApplicationState.TryTakeFromJson(
-                AccessDeniedStateKey,
-                out _showAccessDeniedMessage))
-        {
-            // During the first server render, read it from Session.
-            var session = HttpContextAccessor.HttpContext?.Session;
-
-            _showAccessDeniedMessage =
-                session?.GetString(AccessDeniedStateKey) == "1";
-
-            // Remove it only after reading it once.
-            session?.Remove(AccessDeniedStateKey);
-        }
-
-        _persistingSubscription =
-            ApplicationState.RegisterOnPersisting(() =>
-            {
-                ApplicationState.PersistAsJson(
-                    AccessDeniedStateKey,
-                    _showAccessDeniedMessage);
-
-                return Task.CompletedTask;
-            });
 
 
-       var auth = await AuthState!;
+        if (AuthState == null) { ClearDashboardContext(); return; }
+        var auth = await AuthState;
 
         if (!auth.User.Identity?.IsAuthenticated ?? true)
         {
@@ -355,15 +324,13 @@
             return;
         }
         await LoadDisplayNameAsync();
+        if (contextUnavailable) return;
         await LoadAttendance();
+        if (contextUnavailable) return;
         await LoadYearlyAttendance(DateTime.Today.Year);
         loading = false;
     }
 
-    public void Dispose()
-    {
-        _persistingSubscription?.Dispose();
-    }
 
     private async Task LoadYearlyAttendance(int year)
     {
@@ -376,6 +343,7 @@
                 await AttendanceService
                     .GetMyYearlyAttendanceAsync(year);
         }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
         finally
         {
             loadingYearlyAttendance = false;
@@ -387,6 +355,7 @@
     private async Task RefreshAttendanceAfterClock()
     {
         await LoadAttendance();
+        if (contextUnavailable) return;
         await LoadYearlyAttendance(selectedAttendanceYear);
 
         attendanceRefreshKey++;
@@ -400,17 +369,19 @@
 
         var auth = await AuthState;
 
-        if (!auth.User.Identity!.IsAuthenticated)
+        if (auth.User.Identity?.IsAuthenticated != true)
             return;
 
         await LoadDisplayNameAsync();
+        if (contextUnavailable) return;
 
-        await Task.WhenAll(
-            LoadAttendance(),
-            LoadLeaveBalances(),
-      
-            LoadJobHistory()
-        );
+        try
+        {
+            await LoadAttendance();
+            if (contextUnavailable) return;
+            await Task.WhenAll(LoadLeaveBalances(), LoadJobHistory());
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
 
         await InvokeAsync(StateHasChanged);
     }
@@ -418,16 +389,26 @@
     private async Task LoadDisplayNameAsync()
     {
         var context = await _access.GetContextAsync();
-        UserName = string.IsNullOrWhiteSpace(context.FullName) ? context.Username : context.FullName.Trim();
+        if (context == null) { ClearDashboardContext(); return; }
+        contextUnavailable = false;
+        UserName = !string.IsNullOrWhiteSpace(context.FullName) ? context.FullName.Trim()
+            : !string.IsNullOrWhiteSpace(context.Username) ? context.Username.Trim() : "Employee";
+    }
+
+    private void ClearDashboardContext()
+    {
+        contextUnavailable = true; loading = false; UserName = "";
+        weeklyLogs = []; yearlyAttendanceDays = []; leaveBalances = []; jobHistory = []; leaveRequests = []; unevenLogs = [];
+        todayCheckIn = null; todayCheckOut = null; TodayCheckIn = null; TodayCheckOut = null; activeJob = null; _attendancePlan = null;
     }
 
     private async Task LoadAttendance()
     {
         var context = await _access.GetContextAsync();
-         weeklyLogs = await AttendanceService.GetMyWeeklyAttendanceAsync();
-
-        if (weeklyLogs == null)
-            return;
+        if (context == null) { ClearDashboardContext(); return; }
+        try
+        {
+        weeklyLogs = await AttendanceService.GetMyWeeklyAttendanceAsync() ?? [];
 
         var today = weeklyLogs
             .Where(x => x.Date.Date == DateTime.Today)
@@ -441,6 +422,7 @@
         TodayCheckIn = result.checkIn;
         TodayCheckOut = result.checkOut;
 
+        _attendancePlan = null;
         if (context.ActiveJob != null)
         {
             _attendancePlan =
@@ -452,6 +434,8 @@
         }
 
         StateHasChanged(); // IMPORTANT
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
 
     }
 

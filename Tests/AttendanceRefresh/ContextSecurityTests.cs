@@ -48,10 +48,50 @@ static class ContextSecurityTests
             db.UserAssignedUserGroups.Add(new UserAssignedUserGroup { UserId = 1, UserGroupId = 1 });
             await db.SaveChangesAsync();
         }
-        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == true, "Valid Admin context permission was denied");
+        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false, "A User Group granted portal access without explicit approval");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UserOrganisationRoles.Add(new UserOrganisationRole { UserOrganisationID = 1, RoleID = 1, IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        Check(!(await new EffectivePermissionService(factory).GetEffectivePermissionsAsync(1)).Any(),
+            "Organisation defaults bypassed the explicit Admin portal grant");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UserOrganisationRoles.RemoveRange(db.UserOrganisationRoles);
+            await db.SaveChangesAsync();
+        }
+        await using (var db = factory.CreateDbContext())
+        {
+            var user = await db.Users.SingleAsync(x => x.UserId == 1);
+            user.AdminPortalAccessEnabled = true;
+            user.AdminPortalAccessOrganisationId = 1;
+            await db.SaveChangesAsync();
+        }
+        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false, "A User Group exceeded the organisation permission ceiling");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.UserOrganisationRoles.Add(new UserOrganisationRole { UserOrganisationID = 1, RoleID = 1, IsActive = true });
+            await db.SaveChangesAsync();
+        }
+        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == true, "Explicitly granted Admin access was denied");
+        await using (var db = factory.CreateDbContext())
+        {
+            (await db.Users.SingleAsync(x => x.UserId == 1)).AdminPortalAccessEnabled = false;
+            await db.SaveChangesAsync();
+        }
+        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false &&
+            !(await new EffectivePermissionService(factory).GetEffectivePermissionsAsync(1)).Any(),
+            "Revoked portal grant retained Admin permissions");
+        await using (var db = factory.CreateDbContext())
+        {
+            (await db.Users.SingleAsync(x => x.UserId == 1)).AdminPortalAccessEnabled = true;
+            await db.SaveChangesAsync();
+        }
         await using (var db = factory.CreateDbContext())
         {
             db.UserAssignedUserGroups.Remove(await db.UserAssignedUserGroups.SingleAsync(x => x.UserId == 1 && x.UserGroupId == 1));
+            db.UserOrganisationRoles.RemoveRange(db.UserOrganisationRoles);
             await db.SaveChangesAsync();
         }
         Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false, "Revoked Admin access survived session refresh");
@@ -61,7 +101,7 @@ static class ContextSecurityTests
             await db.SaveChangesAsync();
         }
         session = await sessionService.GetSessionAsync();
-        Check(session?.OrganisationId == 20 && session.CanAccessAdminPortal, "Organisation reassignment did not refresh scoped group permissions");
+        Check(session?.OrganisationId == 20 && !session.CanAccessAdminPortal, "Admin portal grant crossed organisations");
 
         var builds = 0;
         var builder = Proxy.For<IUserContextBuilder>((method, args) =>
@@ -90,6 +130,9 @@ static class ContextSecurityTests
             await db.SaveChangesAsync();
         }
         Check(await contexts.GetCurrentAsync() == null && await sessionService.GetSessionAsync() == null, "Disabled account retained access");
+        auth.SignIn("unregistered-efaas-user");
+        Check(await sessionService.GetSessionAsync() == null,
+            "External authentication granted system access without a local HRM account");
         auth.SignOut();
         Check(await contexts.GetCurrentAsync() == null && contexts.Current == null && await sessionService.GetSessionAsync() == null,
             "Sign out retained a user context");

@@ -119,6 +119,7 @@
                     var overview = Days?.FirstOrDefault(x => x.Date.Date == day.Date);
                     var isWeekend = overview?.IsRestDay ?? (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday);
                     var isOnLeave = overview?.IsOnLeave == true;
+                    var isAbsent = overview?.IsAbsent == true;
 
 
                     // ------------------------------------------------
@@ -127,6 +128,8 @@
                     var stateClass =
                     isFutureDay
                     ? "bg-slate-100 text-slate-400"
+                    : overview?.EligibilityMessage != null && !isOnLeave
+                    ? "bg-slate-100 text-slate-500"
                     : isPresent
                     ? "bg-green-500 text-white"
                     : isUnresolvedDay
@@ -135,7 +138,7 @@
                     ? "bg-blue-500 text-white"
                     : isWeekend
                     ? "bg-slate-100 text-slate-500"
-                    : "bg-red-500 text-white";
+                    : isAbsent ? "bg-red-500 text-white" : "bg-slate-100 text-slate-500";
 
 
                     <div class="flex min-w-0 flex-col items-center">
@@ -171,6 +174,10 @@
                             else if (isOnLeave)
                             {
                                 <span class="text-sm font-semibold">Leave</span>
+                            }
+                            else if (overview?.EligibilityMessage is string eligibilityMessage)
+                            {
+                                <span class="text-xs font-semibold">@eligibilityMessage</span>
                             }
                             else if (isWeekend && !hasLogs)
                             {
@@ -231,7 +238,7 @@
                                 <!-- No attendance logs -->
 
                                 <span class="text-sm font-semibold">
-                                    Absent
+                                    @(isAbsent ? "Absent" : overview?.EligibilityMessage ?? "Attendance not required")
                                 </span>
 
                                 <span class="mt-1 text-xs opacity-80">
@@ -465,18 +472,8 @@
 
                     var overview = Days?.FirstOrDefault(x => x.Date.Date == day);
                     if (overview != null) return overview.IsAbsent;
-                    if (day.DayOfWeek == DayOfWeek.Friday || day.DayOfWeek == DayOfWeek.Saturday) return false;
-                    // Unresolved is handled separately.
-                    if (logs.Count > 0 &&
-                        !logs.Any(x =>
-                            x.IsCheckIn ||
-                            x.IsCheckOut))
-                    {
-                        return false;
-                    }
-
-                    return !logs.Any(x =>
-                        x.IsCheckIn);
+                    // A missing clock event alone never proves an absence.
+                    return false;
                 });
         }
     }

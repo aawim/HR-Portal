@@ -35,7 +35,16 @@ namespace HRM.Services.Attendance
 
             var evaluationTime =
                 DateTime.UtcNow.AddHours(5);
-            var isRestDay = (await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, individualId, date, date, cancellationToken)).Contains(date);
+            var eligibility = (await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, individualId, date, date, jobId: jobId, ct: cancellationToken))[date];
+            if (!eligibility.HasActiveSchedule || !eligibility.HasApprovedPosition)
+            {
+                return new AttendanceDailyEvaluationDto { IndividualId = individualId, JobId = jobId, WorkDate = date,
+                    RequiresAttendance = false, HasWorkPlan = false, HasException = false,
+                    Status = !eligibility.HasActiveSchedule ? AttendanceDailyStatus.NoActiveSchedule : AttendanceDailyStatus.BeforePositionApproval,
+                    Issues = [new AttendanceEvaluationIssueDto { Type = AttendanceEvaluationIssueType.NoWorkPlan,
+                        Severity = AttendanceEvaluationIssueSeverity.Warning, Message = eligibility.Message! }] };
+            }
+            var isRestDay = !eligibility.IsScheduledDay;
 
 
 
@@ -113,7 +122,7 @@ namespace HRM.Services.Attendance
                                     .Warning,
 
                             Message =
-                                "No work plan was found."
+                                "No work plan found for the active schedule"
                         }
                     ]
                 };
@@ -132,7 +141,7 @@ namespace HRM.Services.Attendance
                     .ToList();
             var officialSegments = segments.Where(x => x.SchedulePurpose == "Official").ToList();
             var attendanceSegments = segments.Where(x => x.RequiresAttendance && x.IsMandatory).ToList();
-            var requiresAttendance = !isRestDay && segments.Any(x => x.RequiresAttendance);
+            var requiresAttendance = eligibility.CanBeAbsent && !isRestDay && segments.Any(x => x.RequiresAttendance);
             if (isRestDay) attendanceSegments.Clear();
             var templateBySegment = segments.ToDictionary(x => x.WorkPlanSegmentId, x => x.WorkTemplateSegment?.WorkTemplateId ?? 0);
  

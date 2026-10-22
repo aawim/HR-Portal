@@ -222,6 +222,7 @@
                             <td class="py-3 px-4">
                                 <div class="font-bold text-slate-800">@record.StaffName</div>
                                 <div class="text-xs text-slate-500">@record.EmployeeNumber</div>
+                                @if (!string.IsNullOrEmpty(record.EligibilityMessage)) { <div class="mt-1 text-xs text-slate-500">@record.EligibilityMessage</div> }
                             </td>
                             <td class="py-3 px-4 text-center text-slate-500">@record.ScheduledIn</td>
                             <td class="py-3 px-4 text-center font-bold @(record.ClockIn == "--:--" ? "text-slate-300" : "text-slate-800")">@record.ClockIn</td>
@@ -413,6 +414,7 @@
         foreach (var staff in staffList)
         {
             var logs = await AttendanceLogService.GetAttendanceLogsAsync(staff.StaffId, searchDate, searchDate);
+            var eligibility = (await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, staff.StaffId, searchDate, searchDate, selectedOrgId > 0 ? selectedOrgId : null))[searchDate.Date];
 
             var record = new DailyStaffRecordDto
             {
@@ -422,6 +424,8 @@
                 ScheduledIn = shiftStart.ToString(@"hh\:mm"),
                 ScheduledOut = shiftEnd.ToString(@"hh\:mm")
             };
+            record.EligibilityMessage = eligibility.Message;
+            if (!eligibility.CanBeAbsent) { record.ScheduledIn = "—"; record.ScheduledOut = "—"; }
 
             // Assume an external method/query checks for Sick Leave
             bool isOnSickLeave = false; 
@@ -443,14 +447,14 @@
                 record.BreakOut = breakOut != null ? breakOut.Date.ToString("HH:mm") : "--:--";
                 record.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
 
-                cntAttended++;
+                if (eligibility.CanBeAbsent) cntAttended++;
 
                 // Check Late Arrival
-                if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                if (eligibility.CanBeAbsent && clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
                 {
                     record.LateMins = (int)(clockIn.Date.TimeOfDay - shiftStart).TotalMinutes;
                 }
-                else if (clockIn != null)
+                else if (eligibility.CanBeAbsent && clockIn != null)
                 {
                     cntOnTime++;
                 }
@@ -465,7 +469,7 @@
                     }
                 }
             }
-            else
+            else if (eligibility.CanBeAbsent && searchDate.Date <= DateTime.UtcNow.AddHours(5).Date)
             {
                 cntAbsent++;
             }
@@ -498,6 +502,7 @@
     // --- DTO ---
     public class DailyStaffRecordDto
     {
+        public string? EligibilityMessage { get; set; }
         public int StaffId { get; set; }
         public string EmployeeNumber { get; set; } = string.Empty;
         public string StaffName { get; set; } = string.Empty;

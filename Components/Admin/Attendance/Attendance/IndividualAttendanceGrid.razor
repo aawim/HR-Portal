@@ -155,7 +155,7 @@
                                     }
                                     else
                                     {
-                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">Weekend</span>
+                                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600">@record.Status</span>
                                     }
                                 </td>
                                 <td class="py-3 px-5 text-center font-medium @(record.ClockIn == "--:--" ? "text-slate-300" : "text-slate-700")">@record.ClockIn</td>
@@ -344,6 +344,7 @@
             dailyRecords.Clear();
 
             rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(selectedStaffId, startDate, endDate);
+            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, selectedStaffId, startDate.Date, endDate.Date, selectedOrgId > 0 ? selectedOrgId : null);
 
             var shiftStart = new TimeSpan(8, 30, 0);
             var allowedBreakDuration = TimeSpan.FromMinutes(60);
@@ -355,13 +356,13 @@
                 var row = new DailyAttendanceRow
                     {
                         Date = day,
-                        Status = (day.DayOfWeek == System.DayOfWeek.Friday || day.DayOfWeek == System.DayOfWeek.Saturday) ? "Weekend" : "Absent",
+                        Status = eligibility[day.Date].Message ?? (!eligibility[day.Date].IsScheduledDay ? "Weekend" : day.Date > DateTime.UtcNow.AddHours(5).Date ? "Upcoming" : eligibility[day.Date].CanBeAbsent ? "Absent" : "Attendance not required"),
                         Details = ""
                     };
 
                 if (dayLogs.Any())
                 {
-                    row.Status = "Present";
+                    if (eligibility[day.Date].HasApprovedPosition && eligibility[day.Date].HasActiveSchedule) row.Status = "Present";
 
                     var clockIn = dayLogs.LastOrDefault(l => l.InOutModeId == 1);
                     var clockOut = dayLogs.LastOrDefault(l => l.InOutModeId == 2);
@@ -374,7 +375,7 @@
                     row.BreakIn = breakIn != null ? breakIn.Date.ToString("HH:mm") : "--:--";
 
                     // Late Arrival Calculation
-                    if (clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
+                    if (eligibility[day.Date].CanBeAbsent && clockIn != null && clockIn.Date.TimeOfDay > shiftStart)
                     {
                         row.Details += $"Late: {(int)(clockIn.Date.TimeOfDay - shiftStart).TotalMinutes}m ";
                     }

@@ -26,8 +26,16 @@ static class DutyRosterTests
         Check((await consent.Service.SubmitAsync(new(1, 2, null, "Both staff consent"))).Success, "Consent submission failed");
         var consentRow = (await consent.Service.GetRequestsAsync()).Single();
         Check(consentRow.CanAccept && !consentRow.CanApprove && consentRow.SourceAcceptance == "Pending", "Submitting was incorrectly counted as source acceptance");
+        await using(var db = consent.Factory.CreateDbContext()) { db.RequestNotifications.RemoveRange(await db.RequestNotifications.Where(x => x.UserId == 2 && x.NotificationKind == "DutyAcceptance").ToListAsync()); await db.SaveChangesAsync(); }
+        var pendingAuth = new ContextAuthentication(); pendingAuth.SignIn("staff2");
+        var pendingService = new RequestNotificationService(consent.Factory, pendingAuth);
+        await pendingService.GetInboxAsync(); await pendingService.GetInboxAsync();
+        await using(var db = consent.Factory.CreateDbContext()) Check(await db.RequestNotifications.CountAsync(x => x.UserId == 2 && x.NotificationKind == "DutyAcceptance") == 1, "Missing swap acceptance reminders were not reconciled exactly once");
         consent.Actor = 2; Check((await consent.Service.ActAsync(consentRow.Id, 10, "Accept")).Success, "Target-first acceptance failed");
         consentRow = (await consent.Service.GetRequestsAsync()).Single();
+        var consentAuth = new ContextAuthentication(); consentAuth.SignIn("staff2");
+        var acceptedInbox = await new RequestNotificationService(consent.Factory, consentAuth).GetInboxAsync();
+        Check(!acceptedInbox.Items.Any(x => x.Message?.Contains("needs your acceptance") == true) && acceptedInbox.Items.Any(x => x.Message?.Contains("accepted the duty change") == true), "Acceptance alerts are stale or the action update is missing");
         Check(consentRow.StateId == 10 && consentRow.SourceAcceptance == "Pending" && consentRow.TargetAcceptance == "Accepted", "Target alone advanced to supervisor approval");
         Check(!(await consent.Service.ActAsync(consentRow.Id, 10, "Accept")).Success, "One staff member accepted twice");
         consent.Actor = 3; Check(!(await consent.Service.ActAsync(consentRow.Id, 10, "Approve")).Success, "Supervisor bypassed source acceptance");
@@ -51,6 +59,8 @@ static class DutyRosterTests
         f.Eligible = false; Check(!(await f.Service.ActAsync(row.Id, 3, "Approve")).Success, "Revoked approver retained access"); f.Eligible = true;
         Check(!(await f.Service.ActAsync(row.Id, 10, "Approve")).Success, "Stale state accepted");
         result = await f.Service.ActAsync(row.Id, 3, "Approve"); Check(result.Success, result.Message);
+        auth.SignIn("staff2"); alerts = await new RequestNotificationService(f.Factory, auth).GetInboxAsync();
+        Check(alerts.Items.Any(x => x.Message?.Contains("roster has been updated") == true), "Approved duty outcome notification missing");
         Check(!(await f.Service.ActAsync(row.Id, 3, "Approve")).Success, "Final request was approved twice");
         await using (var db = f.Factory.CreateDbContext())
         {
@@ -137,13 +147,29 @@ static class DutyRosterTests
         var page = new HRM.Components.Pages.Online.DutyRoster();
         const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public;
         page.GetType().GetProperty("Duties", flags)!.SetValue(page, ui.Service);
+        page.GetType().GetProperty("Toasts", flags)!.SetValue(page, new ToastService());
         page.GetType().GetField("date", flags)!.SetValue(page, ui.Day);
         await renderer.Dispatcher.InvokeAsync(async () => { renderer.Attach(page); await renderer.Render(); }); renderer.CheckErrors();
-        Check(renderer.RootText().Contains("Staff 1") && renderer.RootButtonCount("Transfer / Swap") == 1, "Roster did not show staff duty/action");
-        await renderer.Dispatcher.InvokeAsync(async () => { await renderer.RootClick("Transfer / Swap");
+        Check(renderer.RootText().Contains("Staff 1") && renderer.RootButtonCount("Transfer") == 1 && renderer.RootButtonCount("Swap") == 1, "Roster did not show separate transfer and swap actions");
+        await renderer.Dispatcher.InvokeAsync(async () => { await renderer.RootClick("Transfer");
             page.GetType().GetField("targetJob", flags)!.SetValue(page, 2); page.GetType().GetField("reason", flags)!.SetValue(page, "UI transfer");
             await renderer.Render(); await renderer.RootClick("Send for acceptance"); }); renderer.CheckErrors();
         Check((await ui.Service.GetRequestsAsync()).Count == 1, "Roster submission did not create the request");
+        var swapUi = await Fixture.CreateAsync(); swapUi.Manage = true;
+        await using(var db = swapUi.Factory.CreateDbContext()) { db.WorkAssignments.Add(Assignment(3, 2, 200, swapUi.Day, "Duty")); await db.SaveChangesAsync(); }
+        await using var swapRenderer = new TestRenderer(providerUi);
+        var swapPage = new HRM.Components.Pages.Online.DutyRoster();
+        swapPage.GetType().GetProperty("Duties", flags)!.SetValue(swapPage, swapUi.Service);
+        swapPage.GetType().GetProperty("Toasts", flags)!.SetValue(swapPage, new ToastService());
+        swapPage.GetType().GetField("date", flags)!.SetValue(swapPage, swapUi.Day);
+        swapPage.GetType().GetField("search", flags)!.SetValue(swapPage, "Staff 2");
+        await swapRenderer.Dispatcher.InvokeAsync(async () => { swapRenderer.Attach(swapPage); await swapRenderer.Render(); await swapRenderer.RootClick("Swap"); }); swapRenderer.CheckErrors();
+        Check(((DutyRosterRow)swapPage.GetType().GetField("selected", flags)!.GetValue(swapPage)!).IndividualId == 200 && !swapRenderer.RootText().Contains("Receiving staff"), "Clicked swap staff was not fixed or still uses a staff dropdown");
+        Check(swapRenderer.RootButtonCount("Staff 1") == 1, "Current staff member disappeared when swapping the other employee's duty");
+        await swapRenderer.Dispatcher.InvokeAsync(async () => {
+            await swapRenderer.RootClick("Staff 1"); swapPage.GetType().GetField("reason", flags)!.SetValue(swapPage, "Swap fixed selected staff");
+            await swapRenderer.Render(); await swapRenderer.RootClick("Send for acceptance"); }); swapRenderer.CheckErrors();
+        await using(var db = swapUi.Factory.CreateDbContext()) { var saved = await db.DutyChangeRequests.SingleAsync(); Check(saved.SourceAssignmentId == 3 && saved.SourceIndividualId == 200 && saved.TargetIndividualId == 100 && saved.SwapAssignmentId == 1, "Swap submitted the wrong fixed staff or exchange assignment"); }
     }
 
     static WorkAssignment Assignment(long id, int job, int person, DateTime day, string purpose) => new() {
@@ -156,7 +182,7 @@ static class DutyRosterTests
 
     sealed class Fixture
     {
-        public int Actor = 1; public bool Eligible = true; public DateTime Day = DateTime.UtcNow.AddHours(5).Date.AddDays(4);
+        public int Actor = 1; public bool Eligible = true, Manage; public DateTime Day = DateTime.UtcNow.AddHours(5).Date.AddDays(4);
         public ReceiptFactory Factory = null!; public DutyRosterService Service = null!;
         public async Task<HRM.DTOs.ServiceResult> SubmitAsync(DutyChangeApplication model)
         {
@@ -174,7 +200,7 @@ static class DutyRosterTests
             var access = Proxy.For<IUserAccessService>((method, args) => method switch {
                 "RequireContextAsync" => Task.FromResult(new UserContextDto { UserId = f.Actor, IndividualId = f.Actor * 100 }),
                 "GetCurrentOrganisationIdAsync" => Task.FromResult(10), "GetCurrentJobIdAsync" => Task.FromResult(f.Actor),
-                "HasOrganisationAccessAsync" => Task.FromResult((int)args[0]! == 10), "HasPermissionAsync" => Task.FromResult(false), _ => throw new Exception(method) });
+                "HasOrganisationAccessAsync" => Task.FromResult((int)args[0]! == 10), "HasPermissionAsync" => Task.FromResult(f.Manage), _ => throw new Exception(method) });
             var log = Proxy.For<IOperationLogService>((_, args) => Log((HrmTeContext)args[0]!));
             var planner = Proxy.For<IWorkPlanGenerator>((_, _) => Task.FromResult<HRM.DTOs.Attendance.AttendanceWorkPlanDto?>(null));
             var resolver = Proxy.For<IWorkflowApproverResolver>((_, _) => Task.FromResult<IReadOnlyList<WorkflowApproverCandidate>>(f.Eligible ? [new(3, 1, 1, true)] : []));

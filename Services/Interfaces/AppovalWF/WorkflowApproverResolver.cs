@@ -60,8 +60,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                         var groupPeople = new List<int>();
                         if (rule.ApproverType.Equals("SupervisorGroup", StringComparison.OrdinalIgnoreCase))
                         {
-                            if (!context.SubjectJobId.HasValue) throw new InvalidOperationException("A subject job is required to resolve the supervisor.");
-                            groupPeople = await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, context.SubjectJobId.Value);
+                            groupPeople = await SupervisorsAsync(db, context, cancellationToken);
                         }
                         var supervisorGroup = rule.ApproverType.Equals("SupervisorGroup", StringComparison.OrdinalIgnoreCase);
                         userIds = await db.Users.Where(u => u.IsActive && u.UserOrganisation != null &&
@@ -72,8 +71,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                             .Select(u => u.UserId).Distinct().ToListAsync(cancellationToken);
                         break;
                     case "SUPERVISOR":
-                        if (!context.SubjectJobId.HasValue) throw new InvalidOperationException("A subject job is required to resolve the supervisor.");
-                        var people = await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, context.SubjectJobId.Value);
+                        var people = await SupervisorsAsync(db, context, cancellationToken);
                         userIds = await db.Users.Where(u => u.IsActive && people.Contains(u.BusinessEntityID) &&
                             u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == context.OrganisationBusinessEntityId &&
                             (referenceId == 0 || u.UserRoles.Any(r => r.IsActive && r.RoleId == referenceId &&
@@ -154,6 +152,18 @@ namespace HRM.Services.Interfaces.AppovalWF
             }
 
             return candidates;
+        }
+
+        private static async Task<List<int>> SupervisorsAsync(HrmTeContext db, WorkflowRequestContextDto context, CancellationToken ct)
+        {
+            if (context.SubjectJobId.HasValue)
+                return await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, context.SubjectJobId.Value);
+            if (!context.SubjectOrganisationStructureId.HasValue)
+                throw new InvalidOperationException("A subject job or proposed department is required to resolve the supervisor.");
+            return await db.OrganisationStructureSupervisors.Where(x => x.IsActive && x.IsValid &&
+                x.OrganisationStructureId == context.SubjectOrganisationStructureId &&
+                x.OrganisationStructure.OrganisationBusinessEntityID == context.OrganisationBusinessEntityId)
+                .Select(x => x.SupervisorStaffId).Distinct().ToListAsync(ct);
         }
     }
 }

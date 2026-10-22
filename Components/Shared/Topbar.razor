@@ -28,6 +28,8 @@
 
         <AuthorizeView>
             <Authorized>
+                @if (HasSystemAccess)
+                {
                 <NotificationBell />
 
                 <!-- Profile Dropdown Container -->
@@ -75,6 +77,11 @@
                         </div>
                     }
                 </div>
+                }
+                else
+                {
+                    <a href="/Online/Auth/NoAccessLogout" class="text-sm underline">Sign out</a>
+                }
             </Authorized>
 
             <NotAuthorized>
@@ -86,6 +93,7 @@
 </header>
 
 @code {
+    [Parameter] public bool HasSystemAccess { get; set; }
     [CascadingParameter]
     private Task<AuthenticationState>? AuthState { get; set; }
 

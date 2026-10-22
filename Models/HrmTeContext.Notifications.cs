@@ -18,6 +18,7 @@ public partial class HrmTeContext
 
     private async Task CaptureStateNotificationsAsync(bool asynchronous, CancellationToken token)
     {
+        await CaptureStaffNotificationsAsync(asynchronous, token);
         if (Model.FindEntityType(typeof(RequestNotification)) == null) return;
         ChangeTracker.DetectChanges();
         foreach (var entry in ChangeTracker.Entries<Request>().Where(x => x.State == EntityState.Added).ToList())
@@ -39,7 +40,8 @@ public partial class HrmTeContext
             }
         }
         var changes = ChangeTracker.Entries<Request>().Where(x => x.State == EntityState.Modified &&
-            x.Property(r => r.RequestStateId).OriginalValue != x.Property(r => r.RequestStateId).CurrentValue).ToList();
+            (x.Property(r => r.RequestStateId).OriginalValue != x.Property(r => r.RequestStateId).CurrentValue ||
+             x.Property(r => r.LastStateChangedDate).IsModified || x.Property(r => r.StateChangeRemarks).IsModified)).ToList();
         foreach (var entry in changes)
         {
             var request = entry.Entity;
@@ -49,6 +51,24 @@ public partial class HrmTeContext
             var leaveOwners = LeaveRequests.Where(x => x.RequestId == request.RequestId).Select(x => x.Leave.Job.IndividualID)
                 .Union(LeaveChangeRequests.Where(x => x.RequestId == request.RequestId).Select(x => x.Leave.Job.IndividualID));
             people.AddRange(asynchronous ? await leaveOwners.ToListAsync(token).ConfigureAwait(false) : leaveOwners.ToList());
+            if(Model.FindEntityType(typeof(HRM.Models.Archives.RequestJob)) != null)
+            {
+                var subjects = RequestJobs.Where(x => x.RequestId == request.RequestId && x.IsValid &&
+                    (request.OrganisationBusinessEntityID == null || x.Job.OrganisationID == request.OrganisationBusinessEntityID)).Select(x => x.Job.IndividualID);
+                people.AddRange(asynchronous ? await subjects.ToListAsync(token) : subjects.ToList());
+            }
+            if(Model.FindEntityType(typeof(AttendanceLogRequest)) != null)
+            {
+                var subjects = AttendanceLogRequests.Where(x => x.RequestId == request.RequestId &&
+                    (request.OrganisationBusinessEntityID == null || x.AttendanceLog.OrganisationId == request.OrganisationBusinessEntityID)).Select(x => x.AttendanceLog.IndividualId);
+                people.AddRange(asynchronous ? await subjects.ToListAsync(token) : subjects.ToList());
+            }
+            if(Model.FindEntityType(typeof(AttendanceLogChangeRequest)) != null)
+            {
+                var subjects = AttendanceLogChangeRequests.Where(x => x.RequestId == request.RequestId &&
+                    (request.OrganisationBusinessEntityID == null || x.AttendanceLog.OrganisationId == request.OrganisationBusinessEntityID)).Select(x => x.AttendanceLog.IndividualId);
+                people.AddRange(asynchronous ? await subjects.ToListAsync(token) : subjects.ToList());
+            }
             var users = Users.Where(x => x.IsActive && x.LocalUserStateId == 1 && people.Contains(x.BusinessEntityID) &&
                 (request.OrganisationBusinessEntityID == null || x.UserOrganisation!.BusinessEntityID == request.OrganisationBusinessEntityID))
                 .Select(x => x.UserId);
@@ -69,6 +89,7 @@ public partial class HrmTeContext
                     x.Entity.RequestId == request.RequestId && x.Entity.UserId == userId &&
                     x.Entity.FromStateId == from && x.Entity.ToStateId == request.RequestStateId)) continue;
                 RequestNotifications.Add(new RequestNotification { UserId = userId, RequestId = request.RequestId,
+                    NotificationKind = from == request.RequestStateId ? "RequestAction" : "StateChanged",
                     FromStateId = from, ToStateId = request.RequestStateId,
                     ReferenceNumber = request.ReferenceNumber ?? $"#{request.RequestId}", CreatedAtUtc = DateTime.UtcNow });
             }

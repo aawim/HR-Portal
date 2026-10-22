@@ -259,8 +259,12 @@ builder.Services.AddScoped<HRM.Services.OrganisationWorkspaceService>();
 builder.Services.AddScoped<IUserTodoService, UserTodoService>();
 builder.Services.AddScoped<ILeaveChangeService, HRM.Services.Leave.LeaveChangeService>();
 builder.Services.AddScoped<HRM.Services.JobTypeConfigurationService>();
+builder.Services.AddScoped<HRM.Services.StaffOnboardingService>();
+builder.Services.AddScoped<HRM.Services.PositionOverviewService>();
 builder.Services.AddScoped<HRM.Services.PermissionSettingsService>();
 builder.Services.AddScoped<HRM.Services.UserSettingsService>();
+builder.Services.AddScoped<HRM.Services.AdminAccessGrantService>();
+builder.Services.AddScoped<HRM.Services.OrganisationPermissionService>();
 builder.Services.AddScoped<HRM.Services.OrganisationSettingsService>();
 
 
@@ -452,7 +456,6 @@ app.MapControllerRoute(
 
 app.MapGet("/Online/Auth/NoAccessLogout", (HttpContext context) =>
 {
-    context.Session.SetString("AccessDeniedMessage", "1");
 
     return Results.SignOut(
         new AuthenticationProperties

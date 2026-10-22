@@ -636,6 +636,9 @@ namespace HRM.Services
             }
 
 
+            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, userContext.IndividualId,
+                previousWeekStart, currentWeekEnd, userContext.Organisation?.OrganisationBusinessEntityId ?? userContext.ActiveJob?.OrganisationId);
+            logs = logs.Where(x => eligibility[x.Date.Date].HasApprovedPosition && eligibility[x.Date.Date].HasActiveSchedule).ToList();
             var currentWeekHours =
                 CalculateWorkedHours(
                     logs,
@@ -893,8 +896,8 @@ namespace HRM.Services
                 .Select(x => new { x.FromDate, x.ToDate, Type = x.LeaveType.Name })
                 .ToListAsync(cancellationToken);
 
-            var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(db, individualId,
-                yearStart, yearEndExclusive.AddDays(-1), cancellationToken, organisationId);
+            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, individualId,
+                yearStart, yearEndExclusive.AddDays(-1), organisationId, ct: cancellationToken);
 
             // Group physical clock events by calendar date for the overview.
             var logsByDate = logs
@@ -1073,7 +1076,7 @@ namespace HRM.Services
                 // -----------------------------------------------------
                 decimal workedHours = 0;
 
-                if (firstCheckIn != null &&
+                if (eligibility[date].HasApprovedPosition && eligibility[date].HasActiveSchedule && firstCheckIn != null &&
                     lastCheckOut != null &&
                     lastCheckOut.Log.Date >
                     firstCheckIn.Log.Date)
@@ -1100,13 +1103,13 @@ namespace HRM.Services
 
                 // Presence is determined by successfully resolved CheckIn.
                 var isPresent =
-                    !isOnLeave && firstCheckIn != null;
+                    !isOnLeave && eligibility[date].HasApprovedPosition && eligibility[date].HasActiveSchedule && firstCheckIn != null;
 
 
                 // There were physical clock events but none of them
                 // resulted in useful attendance.
                 var isUnresolved =
-                    !isOnLeave &&
+                    !isOnLeave && eligibility[date].HasApprovedPosition && eligibility[date].HasActiveSchedule &&
                     dayLogs.Count > 0 &&
                     !isPresent &&
                     resolvedEvents.Count == 0 &&
@@ -1115,9 +1118,9 @@ namespace HRM.Services
 
                 // Only working days can be absent. Explicit duty and shift patterns
                 // override the normal Sunday–Thursday working week.
-                var isRestDay = restDays.Contains(date);
+                var isRestDay = eligibility[date].HasActiveSchedule && !eligibility[date].IsScheduledDay;
                 var isAbsent =
-                    !isRestDay && !isOnLeave &&
+                    eligibility[date].CanBeAbsent && !isRestDay && !isOnLeave &&
                     !isPresent &&
                     !isUnresolved;
 
@@ -1128,6 +1131,10 @@ namespace HRM.Services
                 result.Add(
                     new YearlyAttendanceDayDto
                     {
+                        HasActiveSchedule = eligibility[date].HasActiveSchedule,
+                        HasApprovedPosition = eligibility[date].HasApprovedPosition,
+                        RequiresAttendance = eligibility[date].CanBeAbsent,
+                        EligibilityMessage = eligibility[date].Message,
                         LeaveTypeName = isOnLeave ? string.Join(", ", approvedLeaves.Where(x => x.FromDate.Date <= date && x.ToDate.Date >= date).Select(x => x.Type).Distinct()) : null,
                         Date =
                             date,
@@ -1163,7 +1170,7 @@ namespace HRM.Services
                             isUnresolved,
 
                         IsRestDay =
-                            isRestDay && !isOnLeave && !isPresent && !isUnresolved,
+                            eligibility[date].HasActiveSchedule && eligibility[date].HasApprovedPosition && isRestDay && !isOnLeave && !isPresent && !isUnresolved,
 
                         IsOnLeave =
                             isOnLeave,

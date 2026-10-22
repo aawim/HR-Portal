@@ -65,11 +65,16 @@ public sealed partial class DutyRosterService
                 ApprovalSequence = candidate.SequenceNumber, AssignedAt = DateTime.UtcNow });
         await db.SaveChangesAsync();
         instance.CurrentRequestStageInstanceId = current.RequestStageInstanceId;
+        var actionable = stage.ApprovalMode == "Sequential" ? candidates.Where(x => x.SequenceNumber == candidates.Min(a => a.SequenceNumber)) : candidates;
+        foreach(var candidate in actionable)
+            db.RequestNotifications.Add(new RequestNotification { RequestId = c.RequestId, UserId = candidate.UserId,
+                NotificationKind = "ActionRequired", RequestStageInstanceId = current.RequestStageInstanceId, FromStateId = c.Request.RequestStateId,
+                ToStateId = stage.RequestStateId, ReferenceNumber = c.Request.ReferenceNumber ?? $"DUTY-{c.RequestId}", CreatedAtUtc = DateTime.UtcNow });
     }
 
     private static async Task NotifyAsync(HrmTeContext db, DutyChangeRequest c, int[] people, string kind, int from, int to)
     {
-        var users = await db.Users.Where(x => people.Contains(x.BusinessEntityID) && x.IsActive && x.LocalUserStateId == 1 &&
+        var users = await db.Users.Where(x => (people.Contains(x.BusinessEntityID) || (kind != "DutyAcceptance" && x.UserId == c.CreatedByUserId)) && x.IsActive && x.LocalUserStateId == 1 &&
             x.UserOrganisation!.BusinessEntityID == c.OrganisationId).Select(x => x.UserId).ToListAsync();
         foreach (var user in users.Distinct()) db.RequestNotifications.Add(new RequestNotification { UserId = user, RequestId = c.RequestId,
             ReferenceNumber = c.Request.ReferenceNumber ?? $"DUTY-{c.RequestId}", NotificationKind = kind,
@@ -228,7 +233,8 @@ public sealed partial class DutyRosterService
             c.Request.StateChangeRemarks = comment;
             if (instance != null) db.WfRequestActions.Add(new WfRequestAction { WorkflowRequestInstance = instance, PerformedByUserId = actor.UserId,
                 ActionCode = action.ToUpperInvariant(), FromRequestStateId = from, ToRequestStateId = to, Comments = comment, PerformedAt = DateTime.UtcNow });
-            await NotifyAsync(db, c, [c.SourceIndividualId, c.TargetIndividualId], "DutyUpdate", from, to);
+            var notificationKind = action switch { "Accept" when to != from => "DutyReadyForApproval", "Accept" => "DutyAccepted", "Decline" => "DutyDeclined", "Cancel" => "DutyCancelled", "Reject" => "DutyRejected", "Approve" when to == 4 => "DutyApproved", _ => "DutyVote" };
+            await NotifyAsync(db, c, [c.SourceIndividualId, c.TargetIndividualId], notificationKind, from, to);
             await db.SaveChangesAsync(); await tx.CommitAsync(); return HRM.DTOs.ServiceResult.Ok($"Duty request: {action} recorded.");
         }
         catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or DbUpdateException)

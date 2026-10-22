@@ -2,8 +2,10 @@
 @using HRM.Models
 @using HRM.Services
 @using HRM.Components.Shared
+@using HRM.Services.Interfaces
 
-@inject HrmTeContext DbContext
+@inject IDbContextFactory<HrmTeContext> DbFactory
+@inject IUserAccessService UserAccess
 
 <div class="relative w-full h-full mx-auto py-6">
     <div class="flex flex-col items-left justify-left mb-8 mt-1">
@@ -39,7 +41,11 @@
         </button>
     </div>
 
-    @if (hasSearched)
+    @if (!string.IsNullOrEmpty(searchError))
+    {
+        <p role="alert" class="rounded-lg border p-4">@searchError</p>
+    }
+    else if (hasSearched)
     {
         if (!searchResults.Any())
         {
@@ -64,14 +70,12 @@
                                     </div>
                                     <div>
                                         <h4 class="font-bold text-slate-800 leading-tight">@ind.FullName</h4>
-                                        <p class="text-xs text-slate-500 font-medium mt-0.5">@(string.IsNullOrEmpty(ind.Organisation) ? "No Organisation" : ind.Organisation)</p>
                                     </div>
                                 </div>
-                                <div class="shrink-0 flex gap-2">
-                                    <button @onclick="@(() => OpenDetailsPanel(ind))" title="View Details" class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors border border-blue-100 shadow-sm">
-                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                    </button>
-                                </div>
+                                @if (canOnboard)
+                                {
+                                    <a href="/admin/hr/onboarding?individualId=@ind.BusinessEntityId" class="app-button app-button-secondary">Add as Staff</a>
+                                }
                             </div>
                             <div class="grid grid-cols-2 gap-3 text-sm">
                                 <div class="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
@@ -93,10 +97,9 @@
                             <tr>
                                 <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider w-12">#</th>
                                 <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Name</th>
-                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Organisation</th>
                                 <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">ID Card</th>
                                 <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Passport</th>
-                                <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider text-center">Actions</th>
+                                @if (canOnboard) { <th class="py-3 px-4 font-bold text-slate-500 uppercase tracking-wider">Action</th> }
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
@@ -113,16 +116,13 @@
                                             @ind.FullName
                                         </div>
                                     </td>
-                                    <td class="py-3 px-4 text-slate-600">@(string.IsNullOrEmpty(ind.Organisation) ? "-" : ind.Organisation)</td>
                                     <td class="py-3 px-4 font-medium text-slate-700">@(string.IsNullOrEmpty(ind.IDNumber) ? "-" : ind.IDNumber)</td>
                                     <td class="py-3 px-4 font-medium text-slate-700">@(string.IsNullOrEmpty(ind.PassportNumber) ? "-" : ind.PassportNumber)</td>
-                                    <td class="py-3 px-4 text-center">
-                                        <div class="flex items-center justify-center gap-2">
-                                            <button @onclick="@(() => OpenDetailsPanel(ind))" title="View Details" class="text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 p-2 rounded-lg transition-colors border border-blue-100 shadow-sm">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path></svg>
-                                            </button>
-                                        </div>
-                                    </td>
+                                    @if (canOnboard)
+                                    {
+                                        <td class="py-3 px-4"><a href="/admin/hr/onboarding?individualId=@ind.BusinessEntityId" class="app-button app-button-secondary">Add as Staff</a></td>
+                                    }
+
                                 </tr>
                             }
                         </tbody>
@@ -133,123 +133,20 @@
     }
 </div>
 
-@if (isPanelOpen)
-{
-    <div class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 transition-opacity" @onclick="CloseDetailsPanel"></div>
-}
-
-<div class="fixed inset-y-0 right-0 bg-white shadow-2xl z-50 flex flex-col transform transition-all duration-500 ease-in-out @(isPanelExpanded ? "w-[95vw]" : "w-full max-w-3xl") @(isPanelOpen ? "translate-x-0" : "translate-x-full")">
-
-    @if (selectedIndividual != null)
-    {
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50 shrink-0">
-            <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xl font-bold shadow-inner">
-                    @(string.IsNullOrEmpty(selectedIndividual.FullName) ? "?" : selectedIndividual.FullName.Substring(0, 1).ToUpper())
-                </div>
-                <div>
-                    <h3 class="text-xl font-bold text-slate-800">@selectedIndividual.FullName</h3>
-                    <p class="text-xs text-slate-500 font-medium">ID: @(string.IsNullOrEmpty(selectedIndividual.IDNumber) ? "N/A" : selectedIndividual.IDNumber)</p>
-                </div>
-            </div>
-
-            <div class="flex items-center gap-1">
-                <button @onclick="ToggleExpand" title="@(isPanelExpanded ? "Collapse Panel" : "Expand Panel")" class="text-slate-400 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors">
-                    @if (isPanelExpanded)
-                    {
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7" transform="rotate(180 12 12)"></path></svg>
-                    }
-                    else
-                    {
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7"></path></svg>
-                    }
-                </button>
-                <button @onclick="CloseDetailsPanel" title="Close" class="text-slate-400 hover:text-rose-500 p-2 rounded-full hover:bg-rose-50 transition-colors">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                </button>
-            </div>
-        </div>
-
-        <div class="flex flex-1 overflow-hidden">
-
-            <div class="w-48 bg-slate-50 border-r border-slate-100 overflow-y-auto py-4 shrink-0">
-                <nav class="flex flex-col gap-1 px-3">
-                    @foreach (var tab in panelTabs)
-                    {
-                        <button @onclick="() => SelectTab(tab.Name)" class="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-bold transition-all @(activeTab == tab.Name ? "bg-white text-blue-700 shadow-sm border border-slate-200" : "text-slate-500 hover:bg-slate-200/50 hover:text-slate-800 border border-transparent")">
-                            @((MarkupString)tab.IconSvg)
-                            @tab.Name
-                        </button>
-                    }
-                </nav>
-            </div>
-
-            <div class="flex-1 bg-white overflow-y-auto p-6 custom-scrollbar">
-
-                @if (activeTab == "Summary")
-                {
-                    <div class="max-w-2xl">
-                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Identity Details</h4>
-                        <div class="grid grid-cols-2 gap-6 mb-8">
-                            <div>
-                                <span class="block text-sm text-slate-500 mb-1">National ID</span>
-                                <span class="block text-sm font-bold text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100">@(string.IsNullOrEmpty(selectedIndividual.IDNumber) ? "-" : selectedIndividual.IDNumber)</span>
-                            </div>
-                            <div>
-                                <span class="block text-sm text-slate-500 mb-1">Passport</span>
-                                <span class="block text-sm font-bold text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100">@(string.IsNullOrEmpty(selectedIndividual.PassportNumber) ? "-" : selectedIndividual.PassportNumber)</span>
-                            </div>
-                            <div>
-                                <span class="block text-sm text-slate-500 mb-1">Nationality</span>
-                                <span class="block text-sm font-bold text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100">@(string.IsNullOrEmpty(selectedIndividual.Nationality) ? "-" : selectedIndividual.Nationality)</span>
-                            </div>
-                        </div>
-
-                        <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 border-b border-slate-100 pb-2">Contact Details</h4>
-                        <div class="space-y-4">
-                            <div>
-                                <span class="block text-sm text-slate-500 mb-1">Registered Address</span>
-                                <span class="block text-sm font-medium text-slate-800 bg-slate-50 p-3 rounded-lg border border-slate-100">
-                                    @(string.IsNullOrEmpty(selectedIndividual.Address) ? "No address on file" : selectedIndividual.Address)
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                }
-                else if (activeTab == "Edit")
-                {
-                    // <IndividualEditTab Individual="selectedIndividual" />
-                    <div class="p-8 text-center text-slate-500">Edit Component Goes Here</div>
-                }
-                else if (activeTab == "Jobs")
-                {
-                    // <IndividualJobsTab Individual="selectedIndividual" />
-                    <div class="p-8 text-center text-slate-500">Employment History Goes Here</div>
-                }
-                else
-                {
-                    <div class="flex flex-col items-center justify-center py-12 text-slate-400">
-                        <svg class="w-12 h-12 mb-3 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"></path></svg>
-                        <p class="text-sm font-medium">@activeTab component goes here.</p>
-                    </div>
-                }
-            </div>
-        </div>
-    }
-</div>
-
 @code {
     // --- State Variables ---
     private SearchModel searchModel = new();
     private List<IndividualResultDto> searchResults = new();
     private bool isLoading = false;
     private bool hasSearched = false;
-
-    // --- Panel State ---
-    private bool isPanelOpen = false;
-    private bool isPanelExpanded = false;
-    private string activeTab = "Summary";
-    private IndividualResultDto? selectedIndividual;
+    private string? searchError;
+    private bool canOnboard;
+    protected override async Task OnInitializedAsync()
+    {
+        var actor = await UserAccess.RequireContextAsync();
+        canOnboard = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
+            await UserAccess.HasPermissionAsync("Admin");
+    }
 
     // --- Search Logic ---
     private async Task HandleKeyDown(KeyboardEventArgs e)
@@ -267,18 +164,33 @@
         isLoading = true;
         hasSearched = false;
         searchResults.Clear();
+        searchError = null;
         StateHasChanged();
 
         try
         {
-            var today = DateTime.Today;
+            var actor = await UserAccess.RequireContextAsync();
+            var organisationId = actor.IsSuperAdministrator ? 0 : await UserAccess.GetCurrentOrganisationIdAsync();
+            if (!actor.IsSuperAdministrator && !await UserAccess.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("You do not have access to the selected organisation.");
 
-            var query = from ind in DbContext.Individuals
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
+            var today = DateTime.Today;
+            // The registry is shared until employment is recorded. After that,
+            // only an employing organisation (or a super administrator) may see the person.
+            var individuals = DbContext.Individuals.AsNoTracking().Where(ind =>
+                actor.IsSuperAdministrator ||
+                (!DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId) &&
+                    !DbContext.StaffOnboardingRequests.Any(r => r.IndividualId == ind.BusinessEntityId && r.IsOpen && r.OrganisationId != organisationId)) ||
+                DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId && j.OrganisationID == organisationId));
+
+            var query = from ind in individuals
                         join id in DbContext.Idcards on ind.BusinessEntityId equals id.BusinessEntityId into idGroup
                         from idCard in idGroup.DefaultIfEmpty()
                         join p in DbContext.Passports on ind.BusinessEntityId equals p.BusinessEntityId into pGroup
                         from passport in pGroup.DefaultIfEmpty()
-                        join j in DbContext.Jobs.Where(x => x.TerminatedDate == null || x.TerminatedDate > today)
+                        join j in DbContext.Jobs.Where(x => (actor.IsSuperAdministrator || x.OrganisationID == organisationId) &&
+                            (x.TerminatedDate == null || x.TerminatedDate > today))
                              on ind.BusinessEntityId equals j.IndividualID into jobGroup
                         from activeJob in jobGroup.DefaultIfEmpty()
                         join org in DbContext.Organisations on activeJob.OrganisationID equals org.BusinessEntityID into orgGroup
@@ -297,14 +209,22 @@
             }
             else
             {
-                // SAFE EF-CORE NAME SEARCH
-                query = query.Where(q =>
-                    (q.ind.FirstNameEnglish != null && q.ind.FirstNameEnglish.Contains(term)) ||
-                    (q.ind.MiddleNameEnglish != null && q.ind.MiddleNameEnglish.Contains(term)) ||
-                    (q.ind.LastNameEnglish != null && q.ind.LastNameEnglish.Contains(term)));
+                // Match each word across the name fields, so a full name such as
+                // "Ahmed Farish" also matches separate first/last name columns.
+                foreach (var word in term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var namePart = word;
+                    query = query.Where(q =>
+                        (q.ind.FirstNameEnglish != null && q.ind.FirstNameEnglish.Contains(namePart)) ||
+                        (q.ind.MiddleNameEnglish != null && q.ind.MiddleNameEnglish.Contains(namePart)) ||
+                        (q.ind.LastNameEnglish != null && q.ind.LastNameEnglish.Contains(namePart)) ||
+                        (q.idCard != null && q.idCard.IdcardNumber == term) ||
+                        (q.passport != null && q.passport.PassportNumber == term));
+                }
             }
 
-            var results = await query.Take(50).ToListAsync();
+            var results = await query.OrderBy(q => q.ind.FirstNameEnglish)
+                .ThenBy(q => q.ind.LastNameEnglish).Take(50).ToListAsync();
 
             searchResults = results.Select(q => new IndividualResultDto
                 {
@@ -317,38 +237,19 @@
                     Nationality = q.ind.Country?.ToString() ?? string.Empty
                 }).ToList();
         }
+        catch (UnauthorizedAccessException)
+        {
+            searchError = "You do not have access to search this organisation’s registry. Contact your organisation’s HR administrator.";
+        }
+        catch (InvalidOperationException)
+        {
+            searchError = "The registry search could not be completed. Check your organisation access and try again.";
+        }
         finally
         {
             isLoading = false;
             hasSearched = true;
         }
-    }
-
-    // --- Panel Controls ---
-    private void OpenDetailsPanel(IndividualResultDto ind)
-    {
-        selectedIndividual = ind;
-        activeTab = "Summary";
-        isPanelExpanded = false;
-        isPanelOpen = true;
-        StateHasChanged();
-    }
-
-    private void CloseDetailsPanel()
-    {
-        isPanelOpen = false;
-    }
-
-    private void ToggleExpand()
-    {
-        isPanelExpanded = !isPanelExpanded;
-        StateHasChanged();
-    }
-
-    private void SelectTab(string tabName)
-    {
-        activeTab = tabName;
-        StateHasChanged();
     }
 
     // --- DTOs ---
@@ -369,14 +270,4 @@
         public string Nationality { get; set; } = string.Empty;
     }
 
-    // --- Tabs Configuration ---
-    private record PanelTab(string Name, string IconSvg);
-
-    private List<PanelTab> panelTabs = new()
-    {
-        new("Summary", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>"""),
-        new("Edit", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>"""),
-        new("Jobs", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>"""),
-        new("Documents", """<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>""")
-    };
 }

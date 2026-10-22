@@ -114,7 +114,9 @@ namespace HRM.Services
                 .Where(x =>
                     x.UserId == userId &&
                     x.IsActive && x.User.IsActive && x.User.LocalUserStateId == 1 &&
-                    x.UserOrganisationId == x.User.UserOrganisationId)
+                    x.UserOrganisationId == x.User.UserOrganisationId &&
+                    db.UserOrganisationRoles.Any(o => o.UserOrganisationID == x.User.UserOrganisationId && o.RoleID == x.RoleId && o.IsActive) &&
+                    (x.Role.ContextId != 1 || (x.User.AdminPortalAccessEnabled && x.User.AdminPortalAccessOrganisationId == x.User.UserOrganisationId)))
                 .Select(x => new UserPermissionDto
                 {
                     RoleID = x.RoleId,
@@ -165,7 +167,8 @@ namespace HRM.Services
                 .SelectMany(x =>
                     x.UserGroup.UserGroupRoles
                     .Where(r =>
-                        r.IsActive)
+                        r.IsActive && db.UserOrganisationRoles.Any(o => o.UserOrganisationID == x.User.UserOrganisationId && o.RoleID == r.RoleId && o.IsActive) &&
+                        (r.Role.ContextId != 1 || (x.User.AdminPortalAccessEnabled && x.User.AdminPortalAccessOrganisationId == x.User.UserOrganisationId)))
                     .Select(r => new UserPermissionDto
                     {
                         RoleID =
@@ -223,7 +226,8 @@ namespace HRM.Services
                     x.IsActive &&
                     x.UserOrganisation.Users
                         .Any(u =>
-                            u.UserId == userId && u.IsActive && u.LocalUserStateId == 1))
+                            u.UserId == userId && u.IsActive && u.LocalUserStateId == 1 &&
+                            (x.Role.ContextId != 1 || (u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId))))
                 .Select(x => new UserPermissionDto
                 {
                     RoleID =

@@ -3,6 +3,7 @@
 @using HRM.Services.Attendance.AttendancePlan
 @inject IUserAccessService UserAccess
 @inject IAttendancePlanService Plans
+@inject IAttendanceService Attendance
 @inject ILogger<TodaysWorkPlanCard> Logger
 
 <section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Today's Work Plan">
@@ -14,7 +15,7 @@
         <a href="/online/duty-roster" class="app-button app-button-secondary">Today's duty roster</a>
         @if (loading) { <p role="status" class="text-sm text-slate-500">Loading today's work plan...</p> }
         else if (error != null) { <p role="alert" class="text-sm text-amber-700">@error</p> }
-        else if (plan == null) { <p class="text-sm text-slate-500">No work plan is assigned for today.</p> }
+        else if (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)) { <p class="text-sm text-slate-500">@scheduleMessage</p> }
         else
         {
             @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose).ThenBy(x => x.StartDateTime))
@@ -47,6 +48,7 @@
 </section>
 
 @code {
+    private string scheduleMessage = "No active schedule found";
     [Parameter] public int RefreshKey { get; set; }
     private int loadedKey = int.MinValue;
     private DateTime today = DateTime.UtcNow.AddHours(5).Date;
@@ -67,6 +69,18 @@
             var context = await UserAccess.RequireContextAsync();
             plan = context.ActiveJob == null ? null : await Plans.GetOrGenerateAsync(context.IndividualId,
                 context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
+            scheduleMessage = "No active schedule found";
+            if (context.ActiveJob != null && (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)))
+            {
+                var evaluation = await Attendance.GetEvaluationAsync(context.IndividualId, context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
+                scheduleMessage = evaluation.Status switch
+                {
+                    HRM.Enum.AttendanceDailyStatus.RestDay => "No scheduled work today (rest day)",
+                    HRM.Enum.AttendanceDailyStatus.BeforePositionApproval => "Attendance starts from job position approval",
+                    HRM.Enum.AttendanceDailyStatus.NoActiveSchedule => "No active schedule found",
+                    _ => "No work plan found for the active schedule"
+                };
+            }
         }
         catch (Exception ex) { Logger.LogError(ex, "Loading today's work plan"); error = "Today's work plan could not be loaded. Please try refreshing."; plan = null; }
         finally { loading = false; }

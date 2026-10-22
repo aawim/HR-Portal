@@ -767,6 +767,9 @@ public partial class HrmTeContext : DbContext
             entity.HasKey(x => x.RequestNotificationId);
             entity.Property(x => x.ReferenceNumber).HasMaxLength(512);
             entity.Property(x => x.NotificationKind).HasMaxLength(32).HasDefaultValue("StateChanged");
+            entity.HasIndex(x => new { x.UserId, x.RequestId }).IsUnique()
+                .HasDatabaseName("UX_RequestNotifications_DutyAcceptanceRecipient")
+                .HasFilter("[NotificationKind] = 'DutyAcceptance'");
             entity.HasIndex(x => new { x.UserId, x.RequestStageInstanceId }).IsUnique()
                 .HasDatabaseName("UX_RequestNotifications_ActionRecipientStage")
                 .HasFilter("[NotificationKind] = 'ActionRequired' AND [RequestStageInstanceId] IS NOT NULL");
@@ -6662,6 +6665,8 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
+            entity.Property(e => e.AdminPortalAccessEnabled).HasDefaultValue(false);
+            entity.Property(e => e.AdminPortalAccessOrganisationId);
             entity.HasKey(e => e.UserId);
 
             entity.Property(e => e.UserId)

@@ -206,12 +206,13 @@
         },
         "user" => new() {
             new("Manage Account", "👤", "Edit user account details and account status.", typeof(AccountGrid)),
+            new("Admin Portal Access", "🔐", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
             new("Manage Permissions", "🔐", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
             new("Manage Staff Enrollment Number", "🪪", "Manage organisation staff enrollment numbers.", typeof(StaffEnrollmentNumberGrid)),
             new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(StaffGrid)),
-            new("Manage User Organisation", "🏢", "Manage default permissions for organisation users.",typeof(UserOrganisationGrid)),
         },
         "org" => new() {
+            new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
             new("Teams and supervisors", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)),
             new("Manage Organisations", "🏢", "Manage organisation details, addresses and contacts.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
         },
@@ -227,13 +228,14 @@
            new("State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
            new("Request Types", "📋", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
-        "job-types" => new() {
+        "jobs" => new() {
            new("Job Types", "👥", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
         },
         "config" => new() {
            new("Manage Attendance Clients", "🖥️", "Configure attendance clients and devices.", null),
         },
         "positions" => new() {
+           new("Overview", "📋", "View legacy positions and their assigned staff, with a separate area for new positions.", typeof(PositionOverview)),
            new("Manage Ranks", "🏅", "Configure attendance clients and devices.", typeof(RankGrid)),
            new("Manage Classiffications", "🏷️", "Configure attendance clients and devices.", typeof(ClassifficationGrid)),
            new("Manage Positions", "💼", "Configure attendance clients and devices.", typeof(PositionGrid)),
@@ -288,6 +290,13 @@
     private List<Leaf>? leaveRequests;
     private bool isDeveloper;
     private bool canViewCarryForward;
+    private string? displayedCategory;
+    protected override void OnParametersSet()
+    {
+        if (string.Equals(displayedCategory, CategoryName, StringComparison.OrdinalIgnoreCase)) return;
+        displayedCategory = CategoryName;
+        activeItem = CategoryName.Equals("positions", StringComparison.OrdinalIgnoreCase) ? GetSubItems(CategoryName).First() : null;
+    }
 
     protected override async Task OnInitializedAsync()
     {

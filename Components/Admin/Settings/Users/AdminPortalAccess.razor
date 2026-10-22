@@ -1,0 +1,149 @@
+@page "/admin/settings/admin-access"
+@page "/online/admin-access"
+@using HRM.Services
+@using HRM.DTOs
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject AdminAccessGrantService Grants
+@inject ToastService Toasts
+
+<PageTitle>Admin portal access</PageTitle>
+<div class="space-y-4">
+    <h3 class="text-lg font-semibold">Admin portal access</h3>
+    <p>Choose the account, User Groups and direct permissions, then submit an Admin access grant for approval. Access changes after the final stage.</p>
+    @if (!string.IsNullOrEmpty(message)) { <p role="alert" class="rounded-xl border p-3">@message</p> }
+    @if (data != null)
+    {
+        @if (data.IsSuperAdmin)
+        {
+            <label class="block">Organisation
+                <select class="form-select" value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@busy">
+                    @foreach (var org in data.Organisations) { <option value="@org.Id">@org.Name</option> }
+                </select>
+            </label>
+        }
+        else { <p><strong>Organisation:</strong> @data.Organisations.FirstOrDefault()?.Name</p> }
+        @if (data.CanManage)
+        {
+            <section class="rounded-xl border p-4 space-y-4">
+                <label class="block">Account
+                    <select class="form-select" value="@selected" @onchange="SelectAccount" disabled="@busy">
+                        <option value="0">Select an account</option>
+                        @foreach (var user in data.Accounts) { <option value="@user.Id">@user.Name — @(user.Enabled ? "Admin access granted" : "Employee only")</option> }
+                    </select>
+                </label>
+                <div class="grid gap-4 md:grid-cols-2">
+                    <fieldset class="rounded-xl border p-3"><legend>User Groups</legend>
+                        <div class="max-h-64 overflow-auto space-y-2">
+                            @foreach (var group in data.Groups)
+                            {
+                                <label class="flex items-center gap-2"><input type="checkbox" checked="@groups.Contains(group.Id)" disabled="@busy" @onchange="e => Toggle(groups, group.Id, e)" />@group.Name</label>
+                            }
+                            @if (data.Groups.Count == 0) { <p>No User Groups configured for this organisation.</p> }
+                        </div>
+                    </fieldset>
+                    <fieldset class="rounded-xl border p-3"><legend>Permissions</legend>
+                        <p class="text-sm mb-2">Permissions from selected User Groups are checked automatically. Only permissions enabled for this organisation can provide access.</p>
+                        <a href="/admin/settings/organisation-permissions" class="text-sm underline">Manage organisation permissions</a>
+                        <label class="block">Search permissions<input class="form-control mb-2" @bind="search" @bind:event="oninput" /></label>
+                        <div class="max-h-64 overflow-auto space-y-2">
+                            @foreach (var permission in data.Permissions.Where(p => p.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                var inherited = GroupPermissions.Contains(permission.Id);
+                                var available = data.OrganisationPermissionIds.Contains(permission.Id);
+                                <label class="flex items-center gap-2"><input type="checkbox" checked="@(available && (inherited || permissions.Contains(permission.Id)))" disabled="@(busy || inherited || !available)" @onchange="e => Toggle(permissions, permission.Id, e)" />@permission.Name
+                                    @if (!available) { <span class="text-sm">(Not enabled for organisation)</span> }
+                                    @if (inherited) { <span class="text-sm">(User Group)</span> }
+                                    @if (inherited && permissions.Contains(permission.Id)) { <span class="text-sm">(also direct)</span> }
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                </div>
+                <p class="text-sm">These selections replace the account’s current organisation User Groups and direct permissions after approval. Global group memberships and organisation defaults remain applicable.</p>
+                <label class="block">Reason<textarea class="form-control" maxlength="1000" @bind="reason" disabled="@busy"></textarea></label>
+                <div class="flex flex-wrap gap-3">
+                    <button class="app-button app-button-primary" disabled="@(busy || selected == 0)" @onclick="Submit">Submit for approval</button>
+                    <button class="app-button app-button-secondary" disabled="@(busy || selected == 0)" @onclick="Revoke">Revoke Admin access</button>
+                    <a class="app-button app-button-secondary" href="/admin/settings/leaves">Configure request approval flows</a>
+                </div>
+            </section>
+        }
+        <section class="space-y-3">
+            <div class="flex flex-wrap justify-between gap-3"><h4 class="font-semibold">Admin access grant requests</h4><button class="app-button app-button-secondary" disabled="@busy" @onclick="Refresh">Refresh</button></div>
+            @if (data.Requests.Count == 0) { <p>No access requests found.</p> }
+            @foreach (var request in data.Requests)
+            {
+                <article class="rounded-xl border p-4 space-y-2" @key="request.Id">
+                    <p><strong>@request.Name</strong> · @request.Reference</p>
+                    <p>@request.Status · @request.Stage</p>
+                    <p>@request.Reason</p>
+                    <details><summary>Requested assignments and history</summary><p>@request.Assignments</p>
+                        @foreach (var history in request.History) { <p>@history</p> }
+                    </details>
+                    @if (request.CanApprove || request.CanCancel)
+                    {
+                        <label class="block">Action comment<textarea class="form-control" maxlength="2000" value="@Comment(request.Id)" @oninput="e => comments[request.Id] = e.Value?.ToString() ?? string.Empty" disabled="@busy"></textarea></label>
+                        <div class="flex flex-wrap gap-3">
+                            @if (request.CanApprove)
+                            {
+                                <button class="app-button app-button-primary" disabled="@busy" @onclick='() => Act(request, "Approve")'>Approve stage</button>
+                                <button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Act(request, "Reject")'>Reject</button>
+                            }
+                            @if (request.CanCancel) { <button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Act(request, "Cancel")'>Cancel request</button> }
+                        </div>
+                    }
+                </article>
+            }
+        </section>
+    }
+</div>
+@code {
+    private AdminAccessGrantData? data;
+    private int selected;
+    private string reason = "", message = "", search = "";
+    private bool busy;
+    private HashSet<int> groups = [], permissions = [];
+    private HashSet<int> GroupPermissions => data?.Groups.Where(g => groups.Contains(g.Id))
+        .SelectMany(g => g.PermissionIds).Where(id => data.OrganisationPermissionIds.Contains(id)).ToHashSet() ?? [];
+    private Dictionary<int, string> comments = [];
+    protected override async Task OnInitializedAsync() => await Load();
+    private async Task Refresh() => await Load(data?.OrganisationId);
+    private async Task Load(int? org = null)
+    {
+        try { data = await Grants.LoadAsync(org); }
+        catch (UnauthorizedAccessException ex) { data = null; message = ex.Message; }
+        catch (Exception) { message = "Admin portal access could not be loaded. Please try again."; }
+    }
+    private async Task ChangeOrganisation(ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var org)) return;
+        selected = 0; groups.Clear(); permissions.Clear(); reason = ""; comments.Clear(); message = "";
+        await Load(org);
+    }
+    private void SelectAccount(ChangeEventArgs e)
+    {
+        int.TryParse(e.Value?.ToString(), out selected);
+        var account = data?.Accounts.FirstOrDefault(a => a.Id == selected);
+        groups = account?.GroupIds.ToHashSet() ?? []; permissions = account?.PermissionIds.Where(id => data!.OrganisationPermissionIds.Contains(id)).ToHashSet() ?? [];
+    }
+    private static void Toggle(HashSet<int> values, int id, ChangeEventArgs e) { if (e.Value is true) values.Add(id); else values.Remove(id); }
+    private string Comment(int id) => comments.GetValueOrDefault(id, "");
+    private async Task Submit() => await Execute(() => Grants.SubmitAsync(data!.OrganisationId, selected, groups.ToArray(), permissions.ToArray(), reason));
+    private async Task Revoke() => await Execute(() => Grants.RevokeAsync(data!.OrganisationId, selected, reason));
+    private async Task Act(AdminAccessGrantRow row, string action) => await Execute(() => Grants.ActAsync(data!.OrganisationId, row.Id, row.StateId, action, Comment(row.Id)));
+    private async Task Execute(Func<Task<ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true; message = "";
+        try
+        {
+            var result = await action();
+            if (result.Success) Toasts.Success(result.Message); else message = result.Message;
+            await Load(data?.OrganisationId);
+        }
+        catch (UnauthorizedAccessException ex) { message = ex.Message; }
+        catch (Exception) { message = "The action could not be completed. Refresh and try again."; }
+        finally { busy = false; }
+    }
+}

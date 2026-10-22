@@ -2,8 +2,8 @@
 
 Open **Duty roster** from the employee or admin navigation, or **Today's Work Plan → Today's duty roster**. It defaults to today and displays staff, department, dated duty hours and required clock events. Normal staff see their department and their own duties. Staff with `Schedule.Attach` can view the current tenant and arrange changes on staff members' behalf.
 
-1. Select a future duty and choose **Transfer / Swap**.
-2. Select receiving staff. For swaps, find and select their dated duty to exchange. Enter a reason.
+1. Select a future duty and choose **Transfer** or **Swap** on that staff member's roster row. That person and duty remain fixed.
+2. For transfers, select receiving staff from the dropdown. For swaps, choose another dated duty from the displayed staff-and-duty list; there is no staff dropdown. The other duty's owner sets the other side automatically. Enter a reason.
 3. Both staff members independently accept or decline from Duty requests or their notification bell. Submitting does not count as acceptance. Either person may accept first; the request waits until both accept.
 4. After both accept, approval follows the saved tenant / JobType / Request Type workflow. The installed default is **Supervisor approval**, restricted to the actual supervisor and configured Supervisor UserGroup. Participants and the submitting user cannot approve. The roster changes only after final approval.
 5. The final approval moves dated duty assignments and clock segments to each receiving staff member's daily plan. A swap commits both movements in one database transaction. Official schedules remain in place.

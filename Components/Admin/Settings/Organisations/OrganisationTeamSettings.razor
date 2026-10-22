@@ -25,6 +25,16 @@
         </div>
         <div class="grid grid-cols-1 gap-5 lg:grid-cols-3">
             <div class="space-y-3">
+                @if (kind == "Department")
+                {
+                    <label class="block text-sm">Organisation Structure Type
+                        <select class="mt-1 w-full rounded border p-2" disabled="@busy" @bind="structureTypeId" @bind:after="ApplyStructureFilter">
+                            <option value="0">All structure types</option>
+                            @foreach (var type in data.StructureTypes) { <option value="@type.Id">@type.Name</option> }
+                        </select>
+                    </label>
+                    <p class="text-xs text-slate-500">Only approved organisation structures (state 3) are shown.</p>
+                }
                 <label class="block text-sm">Search @kind.ToLower()s<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Team or department name" @bind="search" @bind:event="oninput" /></label>
                 <div class="max-h-[32rem] space-y-2 overflow-y-auto">
                     @foreach (var row in Filtered)
@@ -93,11 +103,12 @@
     private OrganisationTeamSettingsData? data;
     private OrganisationTeamSettingsRow? selected;
     private bool initialised, busy;
-    private int organisationId, staffId;
+    private int organisationId, staffId, structureTypeId;
     private int? removeId;
     private string kind = "Team", search = "";
     private string? message;
-    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(x => x.Kind == kind && x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(x => x.Kind == kind &&
+        (kind != "Department" || structureTypeId == 0 || x.StructureTypeId == structureTypeId) && x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
     private IEnumerable<OrganisationSettingsOption> AvailableStaff => data?.Staff.Where(x => selected != null && !selected.Supervisors.Any(s => s.Id == x.Id)) ?? [];
     private int EligibleCount(OrganisationTeamSettingsRow row) => row.Supervisors.Count(x => data?.SupervisorIssues.ContainsKey(x.Id) != true);
     private bool CanAssign => data != null && (kind == "Team" ? data.CanEditTeams : data.CanAssignDepartments);
@@ -123,14 +134,20 @@
         }
     }
     private void Select(OrganisationTeamSettingsRow row) { selected = row; staffId = 0; removeId = null; }
-    private void ChangeKind(bool teams) { kind = teams ? "Team" : "Department"; search = ""; selected = data?.Rows.FirstOrDefault(x => x.Kind == kind); staffId = 0; removeId = null; }
+    private void ChangeKind(bool teams) { kind = teams ? "Team" : "Department"; search = ""; ApplyStructureFilter(); }
+    private void ApplyStructureFilter() { selected = Filtered.FirstOrDefault(); staffId = 0; removeId = null; }
     private async Task LoadSettingsAsync()
     {
         if (busy) return;
         if (organisationId <= 0) { data = null; selected = null; return; }
         busy = true;
         var previousId = selected?.Id; selected = null;
-        try { data = await Settings.GetTeamSettingsAsync(organisationId); selected = data.Rows.FirstOrDefault(x => x.Kind == kind && x.Id == previousId) ?? data.Rows.FirstOrDefault(x => x.Kind == kind); staffId = 0; removeId = null; }
+        try
+        {
+            data = await Settings.GetTeamSettingsAsync(organisationId);
+            if (!data.StructureTypes.Any(t => t.Id == structureTypeId)) structureTypeId = 0;
+            selected = Filtered.FirstOrDefault(x => x.Id == previousId) ?? Filtered.FirstOrDefault(); staffId = 0; removeId = null;
+        }
         catch (Exception ex) { data = null; HandleError(ex); }
         finally { busy = false; }
     }

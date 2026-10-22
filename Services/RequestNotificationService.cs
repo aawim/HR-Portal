@@ -11,7 +11,8 @@ public sealed record RequestNotificationItem(long Id, string Reference, string F
     DateTime CreatedAtUtc, bool IsRead, string Url, string? ActionStage = null, string? Message = null);
 public sealed record RequestNotificationInbox(int UnreadCount, List<RequestNotificationItem> Items);
 
-public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeContext> factory, AuthenticationStateProvider authentication)
+public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeContext> factory, AuthenticationStateProvider authentication,
+    HRM.Services.Interfaces.IUserAccessService? access = null)
 {
     private sealed record Actor(int UserId, int PersonId, int? OrganisationId);
 
@@ -20,8 +21,13 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var principal = (await authentication.GetAuthenticationStateAsync()).User;
         var username = principal.FindFirst("idnumber")?.Value;
         if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(username)) return null;
-        return await db.Users.AsNoTracking().Where(x => x.Username == username && x.IsActive && x.LocalUserStateId == 1)
+        var actor = await db.Users.AsNoTracking().Where(x => x.Username == username && x.IsActive && x.LocalUserStateId == 1)
             .Select(x => new Actor(x.UserId, x.BusinessEntityID, (int?)x.UserOrganisation!.BusinessEntityID)).SingleOrDefaultAsync(token);
+        if(actor == null || access == null) return actor;
+        var context = await access.RequireContextAsync();
+        if(context.UserId != actor.UserId || context.IndividualId != actor.PersonId) return null;
+        var org = await access.GetCurrentOrganisationIdAsync();
+        return org > 0 && await access.HasOrganisationAccessAsync(org) ? actor with { OrganisationId = org } : null;
     }
 
     private static IQueryable<WfRequestApproval> PendingFor(HrmTeContext db, Actor actor)
@@ -51,7 +57,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var assigned = handovers.Where(x => x.Kind == "HandoverAssigned").Select(x => x.LeaveId).ToArray();
         var reviews = handovers.Where(x => x.Kind == "HandoverReview").Select(x => x.LeaveId).ToArray();
         var returned = handovers.Where(x => x.Kind == "HandoverReturned").Select(x => x.LeaveId).ToArray();
-        return db.RequestNotifications.Where(n => n.UserId == actor.UserId &&
+        var owned = db.RequestNotifications.Where(n => n.UserId == actor.UserId &&
             (n.NotificationKind != "DutyAcceptance" || n.Request.RequestStateId == 10) &&
             (n.Request.OrganisationBusinessEntityID == null || n.Request.OrganisationBusinessEntityID == actor.OrganisationId) &&
             (n.NotificationKind != "ActionRequired" || (n.RequestStageInstanceId.HasValue && pending.Contains(n.RequestStageInstanceId.Value))) &&
@@ -61,6 +67,14 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                  (n.NotificationKind == "HandoverAssigned" && assigned.Contains(n.LeaveId.Value)) ||
                  (n.NotificationKind == "HandoverReview" && reviews.Contains(n.LeaveId.Value)) ||
                  (n.NotificationKind == "HandoverReturned" && returned.Contains(n.LeaveId.Value))))));
+        if(db.Model.FindEntityType(typeof(HRM.Models.WorkPlanning.DutyChangeRequest)) != null)
+        {
+            var now = DateTime.UtcNow.AddHours(5);
+            owned = owned.Where(n => n.NotificationKind != "DutyAcceptance" || db.DutyChangeRequests.Any(d => d.RequestId == n.RequestId && d.IsOpen &&
+                d.SourceStart > now && (!d.SwapStart.HasValue || d.SwapStart > now) &&
+                ((d.SourceIndividualId == actor.PersonId && d.SourceAcceptedAtUtc == null) || (d.TargetIndividualId == actor.PersonId && d.AcceptedAtUtc == null))));
+        }
+        return owned;
     }
 
     private static async Task EnsureActionNotificationsAsync(HrmTeContext db, Actor actor, CancellationToken token)
@@ -94,6 +108,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var actor = await CurrentActorAsync(db, token);
         if (actor == null) return new(0, []);
         await EnsureActionNotificationsAsync(db, actor, token);
+        await EnsureDutyAcceptanceNotificationsAsync(db, actor, token);
         var handovers = await LoadHandoverAlertsAsync(db, actor, token);
         await EnsureHandoverNotificationsAsync(db, actor, handovers, token);
         var owned = Owned(db, actor, handovers);
@@ -102,7 +117,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                           join fromState in db.RequestStates on n.FromStateId equals fromState.RequestStateId
                           join toState in db.RequestStates on n.ToStateId equals toState.RequestStateId
                           orderby n.CreatedAtUtc descending, n.RequestNotificationId descending
-                          select new { n.RequestNotificationId, n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
+                              select new { n.RequestNotificationId, ReferenceNumber = n.Request.ReferenceNumber ?? n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
                               n.NotificationKind, n.Request.RequestId, n.LeaveId, n.Request.RequestType.ViewUrl,
                               ActionStage = db.WfRequestStageInstances.Where(s => s.RequestStageInstanceId == n.RequestStageInstanceId)
                                   .Select(s => s.WorkflowStage.StageName).FirstOrDefault(),
@@ -110,9 +125,11 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                               IsLeave = db.LeaveRequests.Any(x => x.RequestId == n.RequestId),
                               IsAttendance = n.Request.AttendanceLogChangeRequest != null || n.Request.AttendanceLogRequests.Any() })
                           .Take(30).ToListAsync(token);
-        return new(unread, rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
+        var requestItems = rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
             n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :
+            n.ViewUrl == AdminAccessGrantService.PageUrl ? "/online/admin-access" :
+            n.ViewUrl == StaffOnboardingService.PageUrl ? $"{StaffOnboardingService.PageUrl}?requestId={n.RequestId}" :
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
             n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
@@ -126,9 +143,20 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.NotificationKind switch {
                 "HandoverAssigned" => "Work handover assigned for your supervision. Employee verification is pending.",
                 "RequestSubmitted" => "Your request has been submitted.",
+                "RequestAction" => "An action was recorded on a request related to you. Open it to view the current progress.",
                 "DutyAcceptance" => "A duty transfer or swap needs your acceptance. Open the roster to review it.",
                 "DutyUpdate" => "Your duty request has been updated. Open the roster for its current status.",
-                _ => null })).ToList());
+                "DutyAccepted" => "A staff member accepted the duty change. Both staff must accept before supervisor approval.",
+                "DutyDeclined" => "A staff member declined the duty change. The roster has not changed.",
+                "DutyApproved" => "The duty change was approved. The roster has been updated.",
+                "DutyRejected" => "The duty change was rejected. The roster has not changed.",
+                "DutyCancelled" => "The duty change was cancelled. The roster has not changed.",
+                "DutyVote" => "An approval was recorded for your duty change. Further approval is still pending.",
+                "DutyReadyForApproval" => "Both staff members accepted the duty change. Supervisor approval is now required.",
+                "DutySubmitted" => "Your duty change request was submitted. Both staff members have been notified to accept it.",
+                _ => null })).ToList();
+        var staff = await LoadStaffInboxAsync(db, actor, token);
+        return new(unread + staff.UnreadCount, requestItems.Concat(staff.Items).OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Take(30).ToList());
     }
 
     public async Task MarkReadAsync(long? notificationId = null, CancellationToken token = default)
@@ -139,6 +167,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var owned = Owned(db, actor, await LoadHandoverAlertsAsync(db, actor, token));
         var items = await owned.Where(x => x.ReadAtUtc == null && (!notificationId.HasValue || x.RequestNotificationId == notificationId.Value)).ToListAsync(token);
         foreach (var item in items) item.ReadAtUtc = DateTime.UtcNow;
+        await MarkStaffReadAsync(db, actor, notificationId, token);
         await db.SaveChangesAsync(token);
     }
 }

@@ -3,6 +3,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using HRM.DTOs.WorkPlanning
 @inject HRM.WorkPlanning.Services.DutyRosterService Duties
+@inject HRM.Services.ToastService Toasts
 
 <PageTitle>Duty roster</PageTitle>
 <div class="space-y-4 p-4">
@@ -24,7 +25,10 @@
                 <tr class="border-b"><td class="p-2">@row.Staff<div class="text-xs text-slate-500">@row.Department</div></td><td class="p-2">@row.Duty</td>
                     <td class="p-2 whitespace-nowrap">@row.Start.ToString("dd MMM HH:mm") – @row.End.ToString("dd MMM HH:mm")</td>
                     <td class="p-2">@(row.RequiresAttendance ? "Check in" : "No mandatory check in") @(row.RequiresCheckout ? " · Check out" : "")</td>
-                    <td class="p-2">@if(row.CanRequest) { <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => Select(row)">Transfer / Swap</button> }</td></tr>
+                    <td class="p-2">@if(row.CanRequest) {
+                        <div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Select(row, "Transfer")'>Transfer</button>
+                            <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => SelectSwapAsync(row)">Swap</button></div>
+                    }</td></tr>
             }</tbody>
         </table></div>
         @if (roster.Count == 0) { <p class="py-3">No duties for this date.</p> }
@@ -32,22 +36,39 @@
     @if (selected != null)
     {
         <section class="space-y-3 rounded-xl border p-4" aria-label="Arrange duty change">
-            <h2 class="font-semibold">Change @selected.Staff’s @selected.Duty · @selected.Start.ToString("dd MMM HH:mm")</h2>
+            <h2 class="font-semibold">@kind · @selected.Staff’s @selected.Duty · @selected.Start.ToString("dd MMM HH:mm")</h2>
             <p class="text-sm">Both staff members must accept separately. The supervisor then approves the final roster change.</p>
             <div class="flex flex-wrap gap-3">
-                <label>Request <select @bind="kind" class="block rounded border bg-transparent p-2"><option>Transfer</option><option>Swap</option></select></label>
+                <div class="rounded border p-3"><p class="text-xs text-slate-500">Selected staff</p><p class="font-semibold">@selected.Staff</p><p class="text-sm">@selected.Start.ToString("dd MMM yyyy HH:mm")–@selected.End.ToString("HH:mm")</p></div>
+                @if(kind == "Transfer")
+                {
                 <label>Receiving staff <select @bind="targetJob" class="block rounded border bg-transparent p-2"><option value="0">Select staff</option>
                     @foreach(var p in partners.Where(x => x.IndividualId != selected.IndividualId)) { <option value="@p.JobId">@p.Name</option> }</select></label>
+                <p class="text-xs text-slate-500">Active staff with an account in your permitted organisation and department scope. @selected.Staff is excluded because staff cannot transfer duty to themselves.</p>
+                }
                 @if(kind == "Swap")
                 {
-                    <label>Other duty date <InputDate @bind-Value="swapDate" class="block rounded border bg-transparent p-2" /></label>
+                    <label>Other duty date <InputDate @bind-Value="swapDate" @bind-Value:after="LoadSwapAsync" class="block rounded border bg-transparent p-2" /></label>
                     <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadSwapAsync">Find duties</button>
-                    <label>Duty to exchange <select @bind="swapId" class="block rounded border bg-transparent p-2"><option value="0">Select duty</option>
-                        @foreach(var r in swaps.Where(x => x.JobId == targetJob && x.Start > DateTime.UtcNow.AddHours(5)))
-                        { <option value="@r.AssignmentId">@r.Duty · @r.Start.ToString("dd MMM HH:mm")–@r.End.ToString("HH:mm")</option> }</select></label>
                 }
             </div>
+            @if(kind == "Swap")
+            {
+                <div class="space-y-2" aria-label="Duties available to exchange">
+                    <h3 class="text-sm font-semibold">Select the other staff member’s dated duty</h3>
+                    <p class="text-xs text-slate-500">The staff member above stays selected. Choose a duty below to set the other side of the swap.</p>
+                    @foreach(var duty in ExchangeDuties)
+                    {
+                        <button type="button" disabled="@busy" aria-pressed="@((swapId == duty.AssignmentId).ToString().ToLowerInvariant())"
+                            class="block w-full rounded-lg border p-3 text-left @(swapId == duty.AssignmentId ? "border-blue-500 bg-blue-50" : "")" @onclick="() => SelectExchange(duty)">
+                            <span class="block font-semibold">@duty.Staff</span><span class="block text-sm">@duty.Duty · @duty.Start.ToString("dd MMM yyyy HH:mm")–@duty.End.ToString("HH:mm")</span>
+                        </button>
+                    }
+                    @if(!ExchangeDuties.Any() && !busy) { <p class="text-sm">No other eligible duty assignments on this date. Try another date.</p> }
+                </div>
+            }
             <label class="block">Reason <textarea @bind="reason" maxlength="500" class="block w-full rounded border bg-transparent p-2"></textarea></label>
+            @if(formMessage != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@formMessage</p> }
             <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" disabled="@(busy || targetJob == 0 || string.IsNullOrWhiteSpace(reason) || (kind == "Swap" && swapId == 0))" @onclick="SubmitAsync">Send for acceptance</button>
                 <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => selected = null">Close</button></div>
         </section>
@@ -64,6 +85,7 @@
                 @if(request.SwapStart.HasValue) { <p>In exchange: @request.SwapStart.Value.ToString("dd MMM yyyy HH:mm")–@request.SwapEnd?.ToString("HH:mm")</p> }
                 <p class="text-sm">@request.Source: @request.SourceAcceptance · @request.Target: @request.TargetAcceptance
                     @if(request.Stage != null) { <span> · Approval: @request.Stage</span> }</p><p class="text-sm">@request.Reason</p>
+                @if(actionMessages.TryGetValue(request.Id, out var actionMessage)) { <p role="alert" class="rounded-lg border p-3 text-sm">@actionMessage</p> }
                 <div class="flex flex-wrap gap-2">
                     @if(request.CanAccept) { <button class="app-button app-button-primary" disabled="@busy" @onclick='() => ActAsync(request, "Accept")'>Accept</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => ActAsync(request, "Decline")'>Decline</button> }
                     @if(request.CanApprove) { <button class="app-button app-button-primary" disabled="@busy" @onclick='() => ActAsync(request, "Approve")'>Approve</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => ActAsync(request, "Reject")'>Reject</button> }
@@ -77,7 +99,8 @@
 
 @code {
     DateTime date = DateTime.UtcNow.AddHours(5).Date, swapDate = DateTime.UtcNow.AddHours(5).Date;
-    bool busy; string? message; string search = "", kind = "Transfer", reason = "", comment = "";
+    bool busy; string? message, formMessage; string search = "", kind = "Transfer", reason = "", comment = "";
+    Dictionary<long, string> actionMessages = [];
     int targetJob; long swapId; DutyRosterRow? selected;
     List<DutyRosterRow> roster = [], swaps = []; List<DutyPartner> partners = []; List<DutyRequestRow> requests = [];
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -85,12 +108,18 @@
         catch(Exception ex) when(ex is InvalidOperationException or UnauthorizedAccessException) { message = ex.Message; }
         catch(Exception) { message = "The roster could not be loaded. Please try again."; } finally { busy = false; } }
     async Task TodayAsync() { date = DateTime.UtcNow.AddHours(5).Date; await LoadAsync(); }
-    void Select(DutyRosterRow row) { selected = row; targetJob = 0; swapId = 0; swaps = []; reason = ""; kind = "Transfer"; swapDate = row.Start.Date; }
-    async Task LoadSwapAsync() { busy = true; try { swaps = await Duties.GetRosterAsync(swapDate); swapId = 0; } catch(Exception) { message = "Could not load duties for exchange."; } finally { busy = false; } }
-    async Task SubmitAsync() { if(selected == null || busy) return; busy = true;
-        try { var result = await Duties.SubmitAsync(new(selected.AssignmentId, targetJob, kind == "Swap" ? swapId : null, reason)); message = result.Message; if(result.Success) selected = null; }
-        catch(Exception) { message = "The request could not be saved. Refresh and try again."; } finally { busy = false; } await LoadAsync(); }
-    async Task ActAsync(DutyRequestRow row, string action) { if(busy) return; busy = true;
-        try { var result = await Duties.ActAsync(row.Id, row.StateId, action, comment); message = result.Message; comment = ""; }
-        catch(Exception) { message = "The action could not be saved. Refresh and try again."; } finally { busy = false; } await LoadAsync(); }
+    void Select(DutyRosterRow row, string requestKind) { selected = row; targetJob = 0; swapId = 0; swaps = []; reason = ""; formMessage = null; kind = requestKind; swapDate = row.Start.Date; }
+    async Task SelectSwapAsync(DutyRosterRow row) { Select(row, "Swap"); await LoadSwapAsync(); }
+    IEnumerable<DutyRosterRow> ExchangeDuties => swaps.Where(x => x.CanExchange && x.IndividualId != selected?.IndividualId && partners.Any(p => p.JobId == x.JobId));
+    void SelectExchange(DutyRosterRow row) { if(!ExchangeDuties.Any(x => x.AssignmentId == row.AssignmentId)) return; swapId = row.AssignmentId; targetJob = row.JobId; formMessage = null; }
+    async Task LoadSwapAsync() { busy = true; swaps = []; swapId = 0; targetJob = 0; formMessage = null; try { swaps = await Duties.GetRosterAsync(swapDate); } catch(Exception) { formMessage = "Could not load duties for exchange."; } finally { busy = false; } }
+    async Task SubmitAsync() { if(selected == null || busy) return; busy = true; formMessage = null;
+        if(kind == "Swap") { var exchange = ExchangeDuties.SingleOrDefault(x => x.AssignmentId == swapId); if(exchange == null) { formMessage = "Select a dated duty to exchange."; busy = false; return; } targetJob = exchange.JobId; }
+        try { var result = await Duties.SubmitAsync(new(selected.AssignmentId, targetJob, kind == "Swap" ? swapId : null, reason));
+            if(result.Success) { selected = null; Toasts.Success(result.Message); } else formMessage = result.Message; }
+        catch(Exception) { formMessage = "The request could not be saved. Refresh and try again."; } finally { busy = false; } await LoadAsync(); }
+    async Task ActAsync(DutyRequestRow row, string action) { if(busy) return; busy = true; actionMessages.Remove(row.Id);
+        try { var result = await Duties.ActAsync(row.Id, row.StateId, action, comment);
+            if(result.Success) { comment = ""; Toasts.Success(result.Message); } else actionMessages[row.Id] = result.Message; }
+        catch(Exception) { actionMessages[row.Id] = "The action could not be saved. Refresh and try again."; } finally { busy = false; } await LoadAsync(); }
 }

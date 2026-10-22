@@ -34,6 +34,10 @@ namespace HRM.Services
                 where userRole.UserId == userId
                       &&
                       userRole.IsActive
+                      && userRole.User.IsActive && userRole.User.LocalUserStateId == 1
+                      && userRole.UserOrganisationId == userRole.User.UserOrganisationId
+                      && db.UserOrganisationRoles.Any(o => o.UserOrganisationID == userRole.User.UserOrganisationId && o.RoleID == role.RoleID && o.IsActive)
+                      && (role.ContextId != 1 || userRole.User.AdminPortalAccessEnabled && userRole.User.AdminPortalAccessOrganisationId == userRole.User.UserOrganisationId)
 
 
                 select new UserPermissionDto
