@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using HRM.DTOs.ApprovalFlow;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
@@ -46,7 +46,7 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
                     recipients.Add((user.UserId, user.BusinessEntityID, user.Org));
             }
             // The source organisation is explicit; this link never switches tenant context.
-            var url = ConfigurationUrl ?? $"/admin/settings/leaves/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
+            var url = ConfigurationUrl ?? $"/admin/settings/config/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
             var kind = ConfigurationUrl == null ? "Approval flow needs attention" : "Request transition needs attention";
             var message = $"A request action was blocked in {organisation}. Job Type: {jobType}. Request Type: {requestType}. {Detail}";
             if (message.Length > 500) message = message[..497] + "…";

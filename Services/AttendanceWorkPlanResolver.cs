@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Attendance;
+using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
@@ -94,27 +94,27 @@ namespace HRM.Services
                 selectedPlanId.Value;
  
 
-            var segments =
-                await db.WorkPlanSegments
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.WorkPlanId == workPlanId &&
-                        x.IsValid)
-                    .OrderBy(x => x.SequenceNumber)
-                    .Select(x => new
-                    {
-                        x.WorkPlanSegmentId,
-                        x.Name,
-                        x.StartDateTime,
-                        x.EndDateTime,
-                        x.SequenceNumber,
-                        TemplateId = x.WorkTemplateSegment == null ? (int?)null : x.WorkTemplateSegment.WorkTemplateId,
-                            WorkSegmentTypeCode = x.WorkSegmentType.Code,
-                        x.RequiresAttendance,
-                        x.GraceBeforeMinutes,
-                        x.GraceAfterMinutes
-                    })
-                    .ToListAsync(cancellationToken);
+            var amendmentRows = await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, organisationBusinessEntityId,
+                clockTime.Date.AddDays(-1), clockTime.Date, cancellationToken);
+            var segmentEntities = await db.WorkPlanSegments.AsNoTracking().Include(x => x.WorkSegmentType)
+                .Where(x => x.WorkPlanId == workPlanId && x.IsValid).OrderBy(x => x.SequenceNumber)
+                .Select(x => new { x.WorkPlanSegmentId, x.Name, x.StartDateTime, x.EndDateTime, x.SequenceNumber,
+                    x.SchedulePurpose, TemplateId = x.WorkTemplateSegment == null ? (int?)null : x.WorkTemplateSegment.WorkTemplateId,
+                    WorkSegmentTypeCode = x.WorkSegmentType.Code, x.RequiresAttendance, x.GraceBeforeMinutes, x.GraceAfterMinutes })
+                .ToListAsync(cancellationToken);
+            var hourAssignments = await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).Where(a => a.WorkPlanId == workPlanId && a.IsValid).ToListAsync(cancellationToken);
+            var hourAdjustments = await HRM.Helpers.TemporaryWorkingHours.AdjustmentsAsync(db, hourAssignments, cancellationToken);
+            var segments = segmentEntities.Select(x =>
+            {
+                var adjusted = (Start: x.StartDateTime, End: x.EndDateTime);
+                var matches = hourAdjustments.Values.Where(a => x.SchedulePurpose == "Official" && (a.TemplateId == x.TemplateId || hourAdjustments.Count == 1)).ToList();
+                if (matches.Count == 1) adjusted = HRM.Helpers.TemporaryWorkingHours.Segment(matches[0], x.WorkSegmentTypeCode, adjusted.Start, adjusted.End);
+                var timing = HRM.Helpers.OfficialScheduleAmendments.Segment(amendmentRows, organisationBusinessEntityId,
+                    x.SchedulePurpose, x.WorkSegmentTypeCode, adjusted.Start, adjusted.End, x.GraceBeforeMinutes);
+                return new { x.WorkPlanSegmentId, x.Name, StartDateTime = timing.Start, EndDateTime = timing.End,
+                    x.SequenceNumber, x.TemplateId, x.SchedulePurpose, x.WorkSegmentTypeCode, x.RequiresAttendance,
+                    GraceBeforeMinutes = timing.GraceBefore, x.GraceAfterMinutes };
+            }).ToList();
 
             if (segments.Count == 0)
             {
@@ -312,8 +312,14 @@ namespace HRM.Services
                         expectedTime.AddMinutes(
                             -EarlyCheckInResolutionMinutes);
 
-                    var windowEnd =
-                        segment.EndDateTime;
+                    var windowEnd = segment.EndDateTime;
+                    if (segment.SchedulePurpose is "Duty" or "Official")
+                    {
+                        var dutyEnd = segments.Where(s => s.SchedulePurpose == segment.SchedulePurpose && s.TemplateId == segment.TemplateId &&
+                            RequiresCheckOut(s.WorkSegmentTypeCode) && s.StartDateTime > expectedTime)
+                            .Select(s => (DateTime?)s.StartDateTime).Min();
+                        if (dutyEnd.HasValue && dutyEnd.Value.AddTicks(-1) > windowEnd) windowEnd = dutyEnd.Value.AddTicks(-1);
+                    }
 
                     if (clockTime >= windowStart &&
                         clockTime <= windowEnd)

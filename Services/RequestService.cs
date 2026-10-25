@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.Models;
 using HRM.Services.Interfaces;
@@ -117,6 +117,9 @@ namespace HRM.Services
 
             if (request == null)
                 return false;
+
+            if (await db.StaffPositionChangeRequests.AnyAsync(r => r.RequestId == requestId))
+                throw new InvalidOperationException("Position requests must be processed through their assigned approval workflow.");
 
             await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, requestStateId);
             request.RequestStateId = requestStateId;

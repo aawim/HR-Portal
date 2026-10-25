@@ -1,4 +1,4 @@
-﻿@page "/budget/{CategoryName}"
+@page "/budget/{CategoryName}"
 @using HRM.Components.Admin.Hr.Individual
 @page "/budget/{CategoryName}/{Section}"
 @page "/admin/budget/{CategoryName}"
@@ -127,8 +127,15 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
-    protected override void OnParametersSet() => activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
+    protected override void OnParametersSet()
+    {
+        if(CategoryName.Equals("reports",StringComparison.OrdinalIgnoreCase) && Section is "groups" or "group-types")
+        {
+            Navigation.NavigateTo("/admin/hr/groups/management"+(Section=="group-types"?"?tab=types":""),replace:true);return;
+        }
+        activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
         GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(x.Title)));
+    }
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
@@ -137,6 +144,10 @@
 
     private void SelectItem(SubItem item)
     {
+        if(item.Title is "Manage Groups" or "Manage Group Types")
+        {
+            Navigation.NavigateTo("/admin/hr/groups/management"+(item.Title=="Manage Group Types"?"?tab=types":""));return;
+        }
         activeItem = item;
         Navigation.NavigateTo($"/admin/budget/{CategoryName.ToLowerInvariant()}/{HRM.Helpers.SectionRoutes.Slug(item.Title)}");
     }

@@ -1,13 +1,16 @@
 @using HRM.DTOs.StaffSchedule
 <section class="min-w-0 rounded-xl border bg-white p-5 shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-3">
-        <h3 class="font-semibold">@(SchedulePurpose == "Official" ? "Official working hours" : "Duty schedule")</h3>
-        <button type="button" class="app-button app-button-secondary" disabled="@IsDisabled" @onclick="() => OnAssignRequested.InvokeAsync()">
-            @(CurrentAssignment == null ? SchedulePurpose == "Duty" ? "Add duty" : "Set working hours" : "Change")
+        <h3 class="font-semibold">@(SchedulePurpose == "Official" ? "Default official working hours" : $"Duty schedules ({DisplayAssignments.Count})")</h3>
+        <button type="button" class="app-button app-button-secondary" disabled="@(IsDisabled || SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule)" @onclick="() => OnAssignRequested.InvokeAsync()">
+            @(SchedulePurpose == "Duty" ? "Add duty" : CurrentAssignment == null ? "Set default working hours" : "Change")
         </button>
     </div>
-    @if (CurrentAssignment is { } current)
+    @if (SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule) { <p class="mt-3 text-sm">Set default official working hours before adding duty schedules.</p> }
+    @if (DisplayAssignments.Count > 0)
     {
+        @foreach (var current in DisplayAssignments)
+        {
         @if (current.ScheduleMode == "Rotation")
         {
             <p class="mt-4 font-semibold">Rotating shifts · @HRM.Helpers.StaffScheduleCalendar.Parse(current.RotationTemplateIds).Count-day cycle</p>
@@ -20,6 +23,7 @@
         else { <p class="text-xs text-slate-500">Every day within the assigned dates</p> }
         }
         <p class="mt-1 break-words text-sm">@current.TemplateName</p>
+        @if(current.IsInherited){<p class="mt-1 text-xs text-slate-500">Inherited from @current.InheritedFrom</p><a class="text-xs underline" href="/admin/settings/workplaning/schedule-assignments">Manage shared schedule assignments</a>}
         <p class="mt-2 text-xs text-slate-500">@current.EffectiveFrom.ToString("dd MMM yyyy") @(current.EffectiveTo.HasValue ? $"through {current.EffectiveTo:dd MMM yyyy}" : "onwards")</p>
         <div class="mt-3 space-y-1 text-sm">
             @if (current.DefaultStartTime.HasValue && current.ScheduleMode != "Rotation")
@@ -28,7 +32,8 @@
                 @foreach (var offset in current.MandatoryCheckOutOffsets) { <p>Check out at <strong>@current.DefaultStartTime.Value.AddMinutes(offset).ToString("HH:mm")</strong> · required</p> }
             }
         </div>
-        <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" disabled="@IsDisabled" @onclick="() => OnRemoveRequested.InvokeAsync(current)">End schedule</button></div>
+        <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" disabled="@(IsDisabled || current.IsInherited)" @onclick="() => OnRemoveRequested.InvokeAsync(current)">End schedule</button></div>
+        }
     }
     else
     {
@@ -52,6 +57,9 @@
     [Parameter] public int JobId { get; set; }
     [Parameter] public int OrganisationBusinessEntityId { get; set; }
     [Parameter] public string SchedulePurpose { get; set; } = "Official";
+    [Parameter] public IReadOnlyList<CurrentWorkTemplateAssignmentDto> CurrentAssignments { get; set; } = [];
+    [Parameter] public bool HasDefaultOfficialSchedule { get; set; } = true;
+    private IReadOnlyList<CurrentWorkTemplateAssignmentDto> DisplayAssignments => CurrentAssignments.Count > 0 ? CurrentAssignments : CurrentAssignment == null ? [] : [CurrentAssignment];
     [Parameter] public CurrentWorkTemplateAssignmentDto? CurrentAssignment { get; set; }
     [Parameter] public IReadOnlyList<JobWorkTemplateAssignmentHistoryDto> History { get; set; } = [];
     [Parameter] public bool IsDisabled { get; set; }

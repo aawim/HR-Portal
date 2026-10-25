@@ -133,6 +133,10 @@ namespace HRM.Services.Attendance
             // SEGMENTS
             // ========================================================
 
+            await HRM.Helpers.TemporaryWorkingHours.ApplyAsync(db, workPlan, cancellationToken);
+            HRM.Helpers.OfficialScheduleAmendments.Apply(workPlan,
+                await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, workPlan.OrganisationBusinessEntityId, date, date, cancellationToken));
+
             var segments =
                 workPlan.WorkPlanSegments
                     .Where(x => x.IsValid)

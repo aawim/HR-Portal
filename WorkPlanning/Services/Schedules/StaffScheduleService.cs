@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs.StaffSchedule;
 using HRM.Models;
 using HRM.WorkPlanning.Abstractions.Schedules;
@@ -123,7 +123,7 @@ namespace HRM.WorkPlanning.Services.Schedules
                     activeJob.JobId,
                     today,
                     cancellationToken);
-            schedule.CurrentTemplate = schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == "Official") ?? schedule.CurrentTemplates.FirstOrDefault();
+            schedule.CurrentTemplate = schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == "Official");
             var windows = schedule.CurrentTemplates.Where(x => x.DefaultStartTime.HasValue && x.DefaultEndTime.HasValue)
                 .Select(x => (x.SchedulePurpose, Start: today.Add(x.DefaultStartTime!.Value.TimeOfDay),
                     End: today.Add(x.DefaultEndTime!.Value.TimeOfDay).AddDays(x.EndsNextDay || x.DefaultEndTime.Value.TimeOfDay <= x.DefaultStartTime.Value.TimeOfDay ? 1 : 0))).ToList();
@@ -169,71 +169,10 @@ namespace HRM.WorkPlanning.Services.Schedules
                 DateTime effectiveDate,
                 CancellationToken cancellationToken)
         {
-            var date = effectiveDate.Date;
-            var nextDate = date.AddDays(1);
+            var job=await db.Jobs.AsNoTracking().SingleAsync(j=>j.JobId==jobId,cancellationToken);
+            var candidates=await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,effectiveDate.Date,effectiveDate.Date,cancellationToken);
+            return HRM.Helpers.EffectiveStaffSchedules.On(candidates,effectiveDate.Date).Select(HRM.Helpers.EffectiveStaffSchedules.ToDto).ToList();
 
-            return await db.JobWorkTemplateAssignments
-                .AsNoTracking()
-                .Where(x =>
-                    x.JobID == jobId &&
-                    x.IsActive &&
-                    x.EffectiveFrom < nextDate &&
-                    (
-                        x.EffectiveTo == null ||
-                        x.EffectiveTo >= date
-                    ) &&
-                    x.WorkTemplate.IsActive)
-                .OrderByDescending(x => x.EffectiveFrom)
-                .ThenByDescending(x =>
-                    x.JobWorkTemplateAssignmentID)
-                .Select(x => new CurrentWorkTemplateAssignmentDto
-                {
-                    EndsNextDay = x.WorkTemplate.EndsNextDay,
-                    MandatoryCheckOutOffsets = x.WorkTemplate.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
-                        (s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT" || s.WorkSegmentType.Code == "BREAK_START"))
-                        .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
-                    MandatoryCheckInOffsets = x.WorkTemplate.WorkTemplateSegments.Where(s => s.IsActive && s.IsMandatory && s.RequiresAttendance &&
-                        (s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN" || s.WorkSegmentType.Code == "BREAK_END"))
-                        .OrderBy(s => s.SequenceNumber).Select(s => s.OffsetMinutes).ToList(),
-                    SchedulePurpose = x.SchedulePurpose,
-                    ScheduleMode = x.ScheduleMode, WorkingDaysMask = x.WorkingDaysMask,
-                    RotationAnchorDate = x.RotationAnchorDate, RotationTemplateIds = x.RotationTemplateIds,
-                    JobWorkTemplateAssignmentId =
-                        x.JobWorkTemplateAssignmentID,
-
-                    JobId =
-                        x.JobID,
-
-                    WorkTemplateId =
-                        x.WorkTemplateID,
-
-                    TemplateName =
-                        x.WorkTemplate.Name,
-
-                    TemplateCode =
-                        x.WorkTemplate.Code,
-
-                    TemplateTypeName =
-                        x.WorkTemplate.WorkTemplateType.Name,
-
-                    EffectiveFrom =
-                        x.EffectiveFrom,
-
-                    EffectiveTo =
-                        x.EffectiveTo,
-
-                    IsActive =
-                        x.IsActive,
-
-                    DefaultStartTime = x.WorkTemplate.DefaultStartTime.HasValue
-                    ? DateTime.MinValue.Add(x.WorkTemplate.DefaultStartTime.Value.ToTimeSpan())
-                    : null,
-
-                    DefaultEndTime = x.WorkTemplate.DefaultEndTime.HasValue
-                    ? DateTime.MinValue.Add(x.WorkTemplate.DefaultEndTime.Value.ToTimeSpan())
-                    : null
-                })
-                .ToListAsync(cancellationToken);
         }
 
         private static async Task<List<JobWorkTemplateAssignmentHistoryDto>>

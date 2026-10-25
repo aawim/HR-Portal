@@ -1,7 +1,9 @@
-﻿namespace HRM.DTOs.StaffSchedule
+namespace HRM.DTOs.StaffSchedule
 {
     public sealed class CurrentWorkTemplateAssignmentDto
     {
+        public bool IsInherited { get; set; }
+        public string? InheritedFrom { get; set; }
         public string SchedulePurpose { get; set; } = "Official";
         public string ScheduleMode { get; set; } = "Standard";
         public int WorkingDaysMask { get; set; } = 31;

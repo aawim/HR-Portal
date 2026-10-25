@@ -1,4 +1,4 @@
-﻿@using HRM.DTOs
+@using HRM.DTOs
 @using HRM.Enum
 @using HRM.Models
 @using HRM.Services
@@ -137,6 +137,8 @@
     [Parameter]
     public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
     [Parameter] public bool StaffOnly { get; set; }
+    [Parameter] public bool RequireActivePosition { get; set; }
+    [Parameter] public int? OrganisationId { get; set; }
     [Parameter] public IReadOnlyCollection<int>? AllowedStaffIds { get; set; }
 
     private string _searchText = "";
@@ -211,6 +213,13 @@
             var currentOrganisationId =
                 await userAccessService.GetCurrentOrganisationIdAsync();
 
+            if (OrganisationId.HasValue)
+            {
+                if (OrganisationId <= 0 || (!isSuperAdministrator && OrganisationId != currentOrganisationId))
+                    throw new UnauthorizedAccessException("Use your current organisation.");
+                currentOrganisationId = OrganisationId.Value;
+            }
+
             if (!isSuperAdministrator &&
                     currentOrganisationId == 0)
             {
@@ -268,11 +277,15 @@
                     : "")
 
             where (!restricted || allowedIds.Contains(i.BusinessEntityId)) &&
-                (!StaffOnly || job != null && job.OrganisationID == currentOrganisationId && job.JobStateId == 4 && job.TerminatedDate == null && job.JoinedDate <= today) &&
+                (!RequireActivePosition || job != null && job.JobStateId == 4 && job.JoinedDate <= today &&
+                    (!job.TerminatedDate.HasValue || job.TerminatedDate > today) &&
+                    Db.JobPositions.Any(p => p.JobId == job.JobId && p.JobPositionStateId == 4 &&
+                        p.FromDate.Date <= today && (!p.ToDate.HasValue || p.ToDate.Value.Date > today))) &&
+                (!StaffOnly || job != null && job.OrganisationID == currentOrganisationId && job.JobStateId == 4 && (!job.TerminatedDate.HasValue || job.TerminatedDate > today) && job.JoinedDate <= today) &&
                 // Super Administrator: all organisations.
                 // Other users: only their active-job organisation.
                 (
-                    isSuperAdministrator ||
+                    (isSuperAdministrator && !OrganisationId.HasValue) ||
                     (
                         job != null &&
                         job.OrganisationID ==

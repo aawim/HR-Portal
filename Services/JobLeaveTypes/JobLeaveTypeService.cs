@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+using Azure.Core;
 using HRM.Components.Admin.Settings.Users;
 using HRM.Components.Pages;
 using HRM.Components.Shared;
@@ -616,7 +616,11 @@ namespace HRM.Services.JobLeaveTypes
 
                      LeaveTypeId = x.LeaveTypeId,
 
-                     LeaveTypeName = x.LeaveType.Name,
+                     LeaveDefinitionId = x.LeaveDefinitionId,
+                     LeaveTypeName = x.LeaveDefinition != null && !string.IsNullOrWhiteSpace(x.LeaveDefinition.Name)
+                         ? x.LeaveDefinition.Name : x.LeaveType != null ? x.LeaveType.Name : "",
+                     LeaveTypeNameDv = x.LeaveDefinition != null && !string.IsNullOrWhiteSpace(x.LeaveDefinition.NameDhivehi)
+                         ? x.LeaveDefinition.NameDhivehi : x.LeaveType != null ? x.LeaveType.NameDhivehi ?? "" : "",
 
                      RemainingDays = x.RemainingDays ?? 0,
 

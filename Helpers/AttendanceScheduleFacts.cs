@@ -31,6 +31,8 @@ public static class AttendanceScheduleFacts
             .Where(l => l.IndividualId == person && (!org.HasValue || l.OrganisationId == org) &&
                 l.AttendanceLogStateId == HRM.Components.Shared.SharedConfig.AttendanceLogStates.Valid && l.Date >= from.Date && l.Date < end.AddDays(1))
             .ToListAsync(ct);
+        var amendments = await OfficialScheduleAmendments.LoadAsync(db, org, from, to, ct);
+        var adjustments = await TemporaryWorkingHours.AdjustmentsAsync(db, assignments, ct);
         return assignments.Select(a =>
         {
             var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
@@ -40,8 +42,10 @@ public static class AttendanceScheduleFacts
                     (e.Resolution.WorkAssignmentId ?? snapshotOwners.GetValueOrDefault(e.Resolution.WorkPlanSegmentId ?? 0)) == a.WorkAssignmentId).ToList();
             var start = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 1 || s.WorkSegmentType.Code == "CHECK_IN" || s.WorkSegmentType.Code == "DUTY_CHECK_IN"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.StartDateTime).Min();
+            start = OfficialScheduleAmendments.Start(amendments, a.WorkPlan.OrganisationBusinessEntityId, a.SchedulePurpose, start);
             var finish = a.WorkAssignmentSegments.Where(s => s.IsValid && (s.ExpectedInOutModeId == 2 || s.WorkSegmentType.Code == "CHECK_OUT" || s.WorkSegmentType.Code == "DUTY_CHECK_OUT"))
                 .Select(s => s.StartDateTime).DefaultIfEmpty(a.EndDateTime).Max();
+            if (adjustments.TryGetValue(a.WorkAssignmentId, out var adjustment) && !adjustment.HasEarlyCheckout) finish = finish.AddMinutes(adjustment.DeltaMinutes);
             var type = (a.WorkTemplateType?.Name ?? "") + " " + (a.WorkTemplateType?.Code ?? "");
             var shift = a.SchedulePurpose.Equals("Duty", StringComparison.OrdinalIgnoreCase) ||
                 type.Contains("shift", StringComparison.OrdinalIgnoreCase) || type.Contains("rotat", StringComparison.OrdinalIgnoreCase);

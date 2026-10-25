@@ -43,6 +43,12 @@ using HRM.Services.Interfaces.AppovalWF;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<WorkingHoursSettingsService>();
+builder.Services.AddScoped<JobTypeOvertimeSettingsService>();
+builder.Services.AddScoped<ScopeScheduleSettingsService>();
+builder.Services.AddScoped<GroupsManagementService>();
+builder.Services.AddScoped<WeeklyWorkingHoursService>();
+builder.Services.AddScoped<WeeklyHourExceptionService>();
 
 
 
@@ -325,6 +331,7 @@ builder.Services.AddAuthentication(options =>
     options.ClientSecret = builder.Configuration["Authentication:OpenIdConnect:ClientSecret"];
 
     options.CallbackPath = "/Online/Auth/Callback";
+    options.SignedOutRedirectUri = "/Online/Auth/login";
     options.ResponseType = "code";
     options.UsePkce = true;
     options.RequireHttpsMetadata = true;

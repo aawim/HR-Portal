@@ -281,7 +281,7 @@ public partial class LeaveChangeService
                     RequestId = requestId, RequestTypeId = request.RequestTypeId, RequestStateId = request.RequestStateId,
                     OrganisationBusinessEntityId = subjectLeave.Job.OrganisationID, JobTypeId = subjectLeave.Job.JobTypeId,
                     SubjectJobId = subjectLeave.JobId
-                }, ex.Detail, ex.Message) { ConfigurationUrl = "/admin/settings/states" };
+                }, ex.Detail, ex.Message) { ConfigurationUrl = "/admin/settings/config/state-transitions" };
             }
             var allowed = await AllowedActionsAsync(db, request, subjectLeave, instance, user);
             var selected = allowed.FirstOrDefault(x => x.ToStateId == action.ToStateId)

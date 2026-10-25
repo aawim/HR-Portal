@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Attendance;
+using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Attendance.AttendancePlan;
@@ -237,6 +237,9 @@ namespace HRM.Services
                 .OrderBy(x => x.SequenceNumber)
                 .Select(x => new AttendanceWorkSegmentDto
                 {
+                    WorkAssignmentId = db.WorkAssignments.Where(a=>a.IsValid && a.WorkPlanId==x.WorkPlanId && a.SchedulePurpose==x.SchedulePurpose &&
+                        a.WorkAssignmentSegments.Any(s=>s.IsValid && s.WorkTemplateSegmentId==x.WorkTemplateSegmentId && s.WorkSegmentTypeId==x.WorkSegmentTypeId && s.StartDateTime==x.StartDateTime))
+                        .Select(a=>(long?)a.WorkAssignmentId).FirstOrDefault(),
                     SchedulePurpose = x.SchedulePurpose,
                     WorkPlanSegmentId =
                         x.WorkPlanSegmentId,
@@ -390,7 +393,7 @@ namespace HRM.Services
             // ---------------------------------------------------------
             // 5. Return complete Today's WorkPlan
             // ---------------------------------------------------------
-            return new AttendanceWorkPlanDto
+            var result = new AttendanceWorkPlanDto
             {
                 WorkPlanId =
                     plan.WorkPlanId,
@@ -425,6 +428,7 @@ namespace HRM.Services
                 Segments =
                     segments
             };
+            return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, result, cancellationToken);
         }
 
 

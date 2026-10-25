@@ -83,7 +83,7 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         data.Permissions = await db.Roles.OrderBy(r => r.RoleKey).Select(r => new AdminAccessOption(r.RoleID, r.RoleKey + " · " + r.Name)).ToListAsync();
         if (manage)
             data.Accounts = await db.Users.Where(u => u.UserOrganisationId == userOrg).OrderBy(u => u.FullName)
-                .Select(u => new AdminAccessAccount { Id = u.UserId, Name = u.FullName ?? u.Username,
+                .Select(u => new AdminAccessAccount { Id = u.UserId, IndividualId = u.BusinessEntityID, Name = u.FullName ?? u.Username,
                     Enabled = u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId,
                     GroupIds = u.UserAssignedUserGroups.Where(g => g.UserGroup.UserOrganisationId == userOrg).Select(g => g.UserGroupId).ToList(),
                     PermissionIds = u.UserRoles.Where(r => r.IsActive && r.UserOrganisationId == userOrg).Select(r => r.RoleId).ToList() }).ToListAsync();
@@ -146,7 +146,9 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
             if (await db.AdminAccessGrantRequests.AnyAsync(r => r.UserId == userId && r.IsOpen)) throw new InvalidOperationException("This account already has a pending access request.");
             var today = DateTime.UtcNow.AddHours(5).Date;
             var job = await db.Jobs.Where(j => j.IndividualID == target.BusinessEntityID && j.OrganisationID == org && j.JobStateId == 4 &&
-                j.JoinedDate <= today && (j.TerminatedDate == null || j.TerminatedDate > today)).OrderByDescending(j => j.JoinedDate).FirstOrDefaultAsync()
+                j.JoinedDate <= today && (j.TerminatedDate == null || j.TerminatedDate > today) &&
+                db.JobPositions.Any(p => p.JobId == j.JobId && p.JobPositionStateId == 4 && p.FromDate.Date <= today &&
+                    (!p.ToDate.HasValue || p.ToDate.Value.Date > today))).OrderByDescending(j => j.JoinedDate).FirstOrDefaultAsync()
                 ?? throw new InvalidOperationException("The account needs active approved employment to resolve the Job Type approval flow.");
             var type = await db.RequestTypes.SingleOrDefaultAsync(t => t.TypeName == TypeName)
                 ?? throw new InvalidOperationException("Apply the Admin access grant database setup.");
@@ -251,6 +253,10 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
                         if (job.IndividualID != target.BusinessEntityID || job.JobStateId != 4 || job.OrganisationID != org ||
                             job.TerminatedDate.HasValue && job.TerminatedDate <= DateTime.UtcNow.AddHours(5).Date)
                             throw new InvalidOperationException("The approved employment changed. Submit a new request.");
+                        var positionDay = DateTime.UtcNow.AddHours(5).Date;
+                        if (job.JoinedDate > positionDay || !await db.JobPositions.AnyAsync(p => p.JobId == job.JobId &&
+                            p.JobPositionStateId == 4 && p.FromDate.Date <= positionDay && (!p.ToDate.HasValue || p.ToDate.Value.Date > positionDay)))
+                            throw new InvalidOperationException("This employee no longer has an approved active job position. Admin access cannot be granted.");
                         if (!await db.WfWorkflowDefinitions.AnyAsync(d => d.WorkflowDefinitionId == instance.WorkflowDefinitionId &&
                             (!d.WorkflowJobTypes.Any() || d.WorkflowJobTypes.Any(j => j.IsActive && j.JobTypeId == job.JobTypeId))))
                             throw new InvalidOperationException("The employment Job Type changed. Submit a new request with the applicable approval flow.");

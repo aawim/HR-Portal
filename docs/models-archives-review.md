@@ -4,7 +4,7 @@ The initial review counted EF registration as usage. The corrected review checke
 
 Removed 139 unused legacy model files, their DbSets, entity configurations and navigation properties. Retained 80 archived models in `Models`, including CheckListItem and the shared request-type checklist mapping used by JobTypeConfigurationService. Existing CLR namespaces and scalar foreign-key columns on retained models are preserved.
 
-No database tables, records or applied migrations were changed. Historical snapshots retain the legacy schema. Future migrations must be reviewed to prevent table drops from this runtime-model cleanup; database retirement is a separate operation.
+No database tables, records or applied migrations were changed. A metadata-only migration (`20261025120100_WorkingHoursRuntimeModelBaseline`) now aligns the EF snapshot with the runtime model without dropping legacy tables. Database retirement is a separate operation.
 
 The test clock remains enabled for Developer users in Development.
 

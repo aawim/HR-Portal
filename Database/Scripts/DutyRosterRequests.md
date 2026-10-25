@@ -12,7 +12,7 @@ The admin workspace has **Pending duty requests** linking to acceptance and appr
 
 ## Configuration and installation
 
-Run `20261021_DutyRosterRequests.sql` once per database; it is rerunnable. It adds Duty Transfer Request and Duty Swap Request and supervisor defaults for active JobTypes in tenants with work planning configured. Existing custom flows are preserved. For new tenants or JobTypes, configure the two Request Types in **Settings → Leaves Management → Request Approval Flows**. Multiple sequential stages remain supported; Level 0 remains reserved.
+Run `20261021_DutyRosterRequests.sql` once per database; it is rerunnable. It adds Duty Transfer Request and Duty Swap Request and supervisor defaults for active JobTypes in tenants with work planning configured. Existing custom flows are preserved. For new tenants or JobTypes, configure the two Request Types in **Settings → Configurations → Request Approval Flows**. Multiple sequential stages remain supported; Level 0 remains reserved.
 
 The Request Type state-transition table remains authoritative. Defaults: Incomplete (1) → Pending staff completion (10) → Pending approval (3) → Approved (4), with cancellation (5) and rejection/decline (6) from states 10 and 3. Additional configured stages need their exact transitions and cancellation/rejection routes configured by a developer in State Transitions. State 10 is reserved for both staff members' acceptance. The workflow version is saved at submission.
 

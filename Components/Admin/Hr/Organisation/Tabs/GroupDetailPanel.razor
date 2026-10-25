@@ -4,8 +4,10 @@
 @using HRM.Services.Interfaces
 @using Microsoft.EntityFrameworkCore
 
-@inject IOperationLogService LogService
+@inject HRM.Services.GroupsManagementService GroupManagement
+@inject HRM.Services.ToastService Toasts
 @inject HrmTeContext DbContext
+@inject IUserAccessService ScheduleAccess
 
 
 <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] transition-opacity duration-300 ease-in-out @(IsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
@@ -305,10 +307,7 @@
                                 <h4 class="text-lg font-bold text-slate-800">Assigned Schedules</h4>
                                 <p class="text-xs text-slate-500 mt-1">Manage working shifts and schedules applied to this group.</p>
                             </div>
-                            <button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-                                Assign Schedule
-                            </button>
+                            <a class="app-button app-button-primary" href="@($"/admin/settings/workplaning/schedule-assignments?scope=Group&groupId={Group?.GroupID}")">Manage schedule assignments</a>
                         </div>
 
                         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -393,12 +392,7 @@
                                                 </td>
                                                 <td class="py-3 px-4 text-center">
                                                     <div class="flex items-center justify-center gap-2">
-                                                        <button aria-label="View Detail" class="text-slate-600 hover:text-slate-800 font-bold text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1.5 rounded transition-colors border border-slate-200">
-                                                            Detail
-                                                        </button>
-                                                        <button aria-label="Remove" class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100">
-                                                            Remove
-                                                        </button>
+                                                        <a class="app-button app-button-secondary" href="@($"/admin/settings/workplaning/schedule-assignments?scope=Group&groupId={Group?.GroupID}")">Manage</a>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -417,10 +411,13 @@
                                 <h4 class="text-lg font-bold text-slate-800">Assigned Leave Sets</h4>
                                 <p class="text-xs text-slate-500 mt-1">Manage the leave policies and allowances available to this group.</p>
                             </div>
+                            @if(canManageGroup)
+                            {
                             <button @onclick="OpenAssignLeaveSetPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                 Assign Leave Set
                             </button>
+                            }
                         </div>
 
                         <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-x-auto">
@@ -584,6 +581,7 @@
     public OrganisationGroupsTab.GroupDto? Group { get; set; }
 
     private string activeTab = "Summary";
+    private bool canManageGroup;
     private bool isLoadingStaff = true;
     private List<GroupStaffDto> groupStaff = new();
     private List<GroupStaffDto> formerStaff = new();
@@ -606,6 +604,8 @@
         // When the panel opens, reset tab to Summary. If Staffs is selected, load data.
         if (IsOpen && Group != null)
         {
+            try { canManageGroup = await GroupManagement.CanManageGroupAsync(Group.GroupID); }
+            catch (UnauthorizedAccessException) { IsOpen = false; await IsOpenChanged.InvokeAsync(false); return; }
             if (activeTab != "Summary") activeTab = "Summary";
             await LoadSummaryData();
         }
@@ -616,6 +616,7 @@
         try
         {
             if (Group == null || Group.GroupID == 0) return;
+            await GroupManagement.RequireGroupAsync(Group.GroupID);
 
             // 1. Fetch only the dates from the DB (Very fast, safe from EF translation errors)
             var staffDates = await DbContext.GroupStaffs
@@ -703,31 +704,14 @@
         try
         {
             if (Group == null || Group.GroupID == 0) return;
+            await GroupManagement.RequireGroupAsync(Group.GroupID);
 
-            // 1. Safe query from DB without C# string manipulation
-            var baseQuery = from gs in DbContext.GroupSchedules
-                            where gs.GroupId == Group.GroupID
-                            join s in DbContext.Schedules on gs.ScheduleId equals s.ScheduleId
-                            select new { gs, s };
-
-            var records = await baseQuery.ToListAsync();
-
-            // 2. Map to DTO in memory, ordering by Active first, then by Start Date
-            groupSchedules = records.Select(x => new GroupScheduleDto
-            {
-                GroupScheduleID = x.gs.GroupScheduleId,
-                ScheduleID = x.s.ScheduleId,
-                Name = x.s.Name ?? "Unnamed Schedule",
-                Description = x.s.Description,
-                IsActive = x.gs.IsActive ,
-                IsGlobal = x.s.IsGlobal ,
-                IsRamazan = x.s.IsRamazan ?? false,
-                StartDate = x.s.StartDate,
-                EndDate = x.s.EndDate
-            })
-            .OrderByDescending(s => s.IsActive)
-            .ThenByDescending(s => s.StartDate)
-            .ToList();
+            var org=await GroupManagement.RequireGroupAsync(Group.GroupID);
+            groupSchedules = await DbContext.ScopeScheduleAssignments.AsNoTracking()
+                .Where(a=>a.GroupId==Group.GroupID && a.OrganisationId==org)
+                .OrderByDescending(a=>a.IsActive).ThenByDescending(a=>a.EffectiveFrom)
+                .Select(a=>new GroupScheduleDto {GroupScheduleID=a.Id,ScheduleID=a.WorkTemplateId,Name=a.WorkTemplate.Name,Description=a.SchedulePurpose+" · "+a.ScheduleMode,
+                    IsActive=a.IsActive,IsGlobal=a.WorkTemplate.IsGlobal,StartDate=a.EffectiveFrom,EndDate=a.EffectiveTo}).ToListAsync();
         }
         catch (Exception ex)
         {
@@ -747,6 +731,7 @@
         try
         {
             if (Group == null || Group.GroupID == 0) return;
+            await GroupManagement.RequireGroupAsync(Group.GroupID);
 
             // 1. Create a base query to handle the JOIN securely in SQL
             var baseQuery = from gs in DbContext.GroupStaffs
@@ -808,6 +793,7 @@
         try
         {
             if (Group == null || Group.GroupID == 0) return;
+            await GroupManagement.RequireGroupAsync(Group.GroupID);
 
             // Step 1: Fetch the base Leave Sets
             var records = await (from gls in DbContext.GroupLeaveSets
@@ -886,6 +872,7 @@
         try
         {
             if (Group == null || Group.GroupID == 0) return;
+            await GroupManagement.RequireGroupAsync(Group.GroupID);
 
             var groupEntity = await DbContext.Groups.FirstOrDefaultAsync(g => g.GroupId == Group.GroupID);
             if (groupEntity == null) return;
@@ -938,22 +925,8 @@
         isSubmittingLeaveSet = true;
         try
         {
-            int newLogId = await LogService.CreateLogAsync(SharedConfig.OperationLogActionTypes.GROUP_LEAVE_SET_CREATE, "Assigned Leave Set ID 12 to Group 3");
-            var newAssignment = new GroupLeaveSet
-                {
-                // Note the simple 'd' to match your Entity Model
-                    GroupId = Group.GroupID,
-                    LeaveSetId = selectedNewLeaveSetId,
-                    IsValid = true,
-
-                // 🛑 CRITICAL FIX: Because OperationLogId is an 'int' and not 'int?',
-                // it is REQUIRED by the database. You MUST pass a valid ID here.
-                // Replace '1' with however you normally track the current user/session log in your app.
-                    OperationLogId = 1
-                };
-
-            DbContext.GroupLeaveSets.Add(newAssignment);
-            await DbContext.SaveChangesAsync();
+            await GroupManagement.AssignLeaveSetAsync(Group.GroupID, selectedNewLeaveSetId);
+            Toasts.Success("Leave set assigned to group.");
 
             // Refresh the table and close panel
             await LoadGroupLeaveSets();
@@ -963,8 +936,7 @@
         {
             // PRO TIP: Using 'InnerException' reveals the ACTUAL SQL error instead of a generic EF error
             Console.Error.WriteLine(ex);
-            string errorMsg = "The group could not be updated. Please refresh and try again.";
-            Console.WriteLine($"❌ Error assigning leave set: {errorMsg}");
+            Toasts.Error(ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "The group could not be updated. Please refresh and try again.");
         }
         finally
         {

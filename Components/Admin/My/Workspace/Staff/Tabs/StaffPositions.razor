@@ -8,7 +8,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h3 class="text-lg font-semibold text-slate-800">Staff positions</h3>
-            <p class="text-sm text-slate-500">Manage assignments and effective dates. End an assignment to remove it while keeping its history.</p>
+            <p class="text-sm text-slate-500">Manage assignments and effective dates. Changes and removals follow the configured approval flow. The approved assignment stays unchanged until final approval.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             @if (data?.CanManage == true && data.Jobs.Count > 0)
@@ -64,7 +64,7 @@
                     </label>
                 </fieldset>
                 <div class="flex flex-wrap gap-2">
-                    <button type="submit" class="app-button app-button-primary" disabled="@busy">@(busy ? "Saving…" : "Save")</button>
+                    <button type="submit" class="app-button app-button-primary" disabled="@busy">@(busy ? "Submitting…" : "Submit for approval")</button>
                     <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => editing = false">Cancel</button>
                 </div>
             </form>
@@ -87,15 +87,13 @@
                                 <td class="p-3 whitespace-nowrap">@(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</td>
                                 <td class="p-3">@Status(assignment)</td>
                                 <td class="p-3">
-                                    @if (data.CanManage && assignment.StateId == 4)
+                                    @if (data.CanManage && assignment.StateId == 4 &&
+                                        (!assignment.To.HasValue || assignment.To.Value.Date > Today))
                                     {
                                         <div class="flex flex-wrap gap-2">
                                             <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment)">Edit dates</button>
-                                            @if (!assignment.To.HasValue || assignment.To.Value.Date >= Today)
-                                            {
                                                 <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment, change: true)">Change position</button>
                                                 <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => Edit(assignment, end: true)">End / remove</button>
-                                            }
                                         </div>
                                     }
                                 </td>
@@ -106,6 +104,7 @@
             </div>
         }
     }
+    <HRM.Components.Shared.StaffPositionRequests StaffId="StaffId" RefreshVersion="requestVersion" OnChanged="LoadAsync" />
 </section>
 
 @code {
@@ -113,7 +112,7 @@
     private Data? data;
     private Assignment? original;
     private bool loading, busy, editing, changing, ending;
-    private int jobId, positionId;
+    private int jobId, positionId, requestVersion;
     private DateTime from = Today;
     private DateTime? to;
     private string reason = "";
@@ -148,8 +147,9 @@
         busy = true;
         try
         {
-            await Positions.SaveAsync(StaffId, jobId, positionId, from, to, reason, original, changing);
-            Toasts.Success("Staff position saved.");
+            await Positions.SaveAsync(StaffId, jobId, positionId, from, to, reason, original, changing, ending);
+            Toasts.Success("Position request submitted for approval.");
+            requestVersion++;
             await LoadAsync();
         }
         catch (UnauthorizedAccessException ex) { message = ex.Message; Toasts.Error(message); }
@@ -157,6 +157,18 @@
         catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
         finally { busy = false; }
     }
-    private static string Status(Assignment a) => a.StateId != 4 ? a.State : a.From.Date > Today ? "Scheduled" :
-        a.To.HasValue && a.To.Value.Date < Today ? "Ended" : "Current";
+    private static string Status(Assignment a)
+    {
+        var status = a.StateId != 4 ? a.State :
+            a.To.HasValue && a.To.Value.Date < Today ? (a.HasApprovedRemoval ? "Removed" : "Ended") :
+            a.To.HasValue && a.To.Value.Date == Today ? "Ends today" :
+            a.From.Date > Today ? "Scheduled" :
+            a.HasApprovedRemoval ? "Removal scheduled" : "Current";
+        return a.PendingAction == null ? status : status + " · " + (a.PendingAction switch
+        {
+            "Remove" => "Removal pending approval",
+            "Change" => "Position change pending approval",
+            _ => "Date change pending approval"
+        });
+    }
 }

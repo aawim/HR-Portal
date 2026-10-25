@@ -132,7 +132,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                 (!x.WorkflowJobTypes.Any() || x.WorkflowJobTypes.Any(j => j.JobTypeId == r.JobTypeId && j.IsActive)))
             .OrderByDescending(x => x.OrganisationBusinessEntityId.HasValue).ThenByDescending(x => x.WorkflowJobTypes.Any())
             .ThenByDescending(x => x.VersionNumber).FirstOrDefaultAsync()
-            ?? throw new InvalidOperationException("Configure Job Position Request approval stages for this tenant and Job Type in Settings → Leaves → Request Approval Flows.");
+            ?? throw new InvalidOperationException("Configure Job Position Request approval stages for this tenant and Job Type in Settings → Configurations → Request Approval Flows.");
         var stages = definition.Stages.Where(x => x.IsActive).OrderBy(x => x.StageOrder).ToList();
         if (stages.Count == 0) throw new InvalidOperationException("Level 0 is reserved for later. Configure at least one approval stage.");
         if (stages.Select(x => x.RequestStateId).Distinct().Count() != stages.Count)

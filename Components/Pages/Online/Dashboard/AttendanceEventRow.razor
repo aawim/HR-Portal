@@ -1,0 +1,26 @@
+<li class="py-1" title="@Hint">
+    <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-sm">
+        <time class="shrink-0 font-semibold tabular-nums" datetime="@Timestamp.ToString("O")" title="@Timestamp.ToString("HH:mm:ss")">@Timestamp.ToString("HH:mm")</time>
+        <span aria-hidden="true" class="text-slate-400">–</span>
+        <span class="min-w-0 break-words">@Event</span>
+        @if(!string.IsNullOrWhiteSpace(Condition))
+        {
+            <span aria-hidden="true" class="text-slate-400">–</span>
+            <span class="@ConditionClass">@Condition</span>
+        }
+    </div>
+    @if(!string.IsNullOrWhiteSpace(Description)){<p class="mt-1 break-words text-xs text-slate-500">@Description</p>}
+</li>
+@code {
+    [Parameter] public DateTime Timestamp { get; set; }
+    [Parameter] public string Event { get; set; } = "";
+    [Parameter] public string? Condition { get; set; }
+    [Parameter] public string Tone { get; set; } = "muted";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string? Hint { get; set; }
+    private string ConditionClass => Tone switch {
+        "late" => "text-xs font-medium text-amber-700 dark:text-amber-400",
+        "success" => "text-xs font-medium text-emerald-700 dark:text-emerald-400",
+        "info" => "text-xs font-medium text-blue-600 dark:text-blue-400",
+        _ => "text-xs text-slate-500" };
+}

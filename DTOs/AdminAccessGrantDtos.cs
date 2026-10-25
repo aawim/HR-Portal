@@ -19,6 +19,7 @@ public sealed class AdminAccessGrantData
 public sealed class AdminAccessAccount
 {
     public int Id { get; set; }
+    public int IndividualId { get; set; }
     public string Name { get; set; } = "";
     public bool Enabled { get; set; }
     public List<int> GroupIds { get; set; } = [];

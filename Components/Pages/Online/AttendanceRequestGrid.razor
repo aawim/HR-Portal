@@ -1,4 +1,4 @@
-﻿@page "/online/attendance/attendance-request"
+@page "/online/attendance/attendance-request"
 @using HRM.Components.Shared
 @page "/online/attendance/attendance-request/{TabSection}"
 @using HRM.DTOs
@@ -30,7 +30,7 @@
             <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
             <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
         </div>
-        @if (activeTab is not ("late-check-in" or "early-check-out"))
+        @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
         {
         <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 mb-2">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
@@ -50,6 +50,7 @@
     {
         <LateCheckInRequests @key="activeTab" />
     }
+    @if (activeTab == "weekly-hours-exception") { <HRM.Components.Shared.WeeklyHoursExceptions /> }
     @if (activeTab == "early-check-out") { <LateCheckInRequests @key="activeTab" Kind="EarlyCheckOut" /> }
 
     @if (!string.IsNullOrWhiteSpace(requestSuccess))
@@ -89,7 +90,7 @@
     </section>
     }
 
-    @if (activeTab is not ("late-check-in" or "early-check-out"))
+    @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
     {
     <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
         @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
@@ -363,7 +364,7 @@
     [Parameter] public string? TabSection { get; set; }
     private string activeTab = "attendance";
     private static readonly (string Key, string Label)[] RequestTabs =
-    [ ("attendance", "Attendance Requests"), ("late-check-in", "Late check in request"), ("early-check-out", "Early check out request"), ("uneven-log-correction", "Uneven log correction request") ];
+    [ ("attendance", "Attendance Requests"), ("weekly-hours-exception", "Weekly hours exception"), ("late-check-in", "Late check in request"), ("early-check-out", "Early check out request"), ("uneven-log-correction", "Uneven log correction request") ];
     private IEnumerable<AttendanceRequestDto> VisibleRequests => requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
     protected override void OnParametersSet()
     {

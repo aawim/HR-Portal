@@ -13,7 +13,7 @@ Early Return Request (ER numbering), and 106, Leave Extension Request (LEX
 numbering). The script rejects ID collisions and is safe to rerun. Existing
 requests of type 48 remain supported without rewriting their workflow history.
 
-Open **Settings → Leaves Management → Request Approval Flows** (`/admin/settings/leaves/approval-flows`) as HR
+Open **Settings → Configurations → Request Approval Flows** (`/admin/settings/config/approval-flows`) as HR
 or an administrator. Select the current organisation in the app, then select
 Job Type, Request Type and approval level. Early Return Request and Leave
 Extension Request are independent Request Types; there is no request-kind
@@ -46,7 +46,7 @@ RequestStates 1, 2 and 3 must be processing/non-final states. States 4, 5 and 6
 (Approved, Cancelled, Rejected) must be final. Saving a flow validates these
 flags and requires the stage transitions to already exist in
 RequestTypesAllowedRequestStateTransitions. Manage them under
-Settings → State Transitions (`/admin/settings/states`). Saving a workflow does
+Settings → Configurations → Request State Transitions (`/admin/settings/config/state-transitions`). Saving a workflow does
 not grant access to that page: reading or modifying transition configuration
 requires membership in the Developer user group; administrator privileges alone
 do not bypass this requirement. Saving a workflow does

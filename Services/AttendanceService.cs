@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Attendance;
+using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Components.Shared;
 using HRM.Models;
@@ -460,19 +460,21 @@ namespace HRM.Services
             var nextDate =
                 date.AddDays(1);
 
+            var organisation = await db.Jobs.Where(j => j.JobId == jobId && j.IndividualID == individualId).Select(j => (int?)j.OrganisationID).SingleOrDefaultAsync(cancellationToken);
+            if (!organisation.HasValue) return [];
             var logs =
         await (
             from log in db.AttendanceLogs.AsNoTracking()
 
             where
-                log.IndividualId == individualId &&
+                log.IndividualId == individualId && log.OrganisationId == organisation.Value &&
                 log.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
                 log.Date >= date &&
                 log.Date < nextDate
 
             join resolution in
                 db.AttendanceLogResolutions.AsNoTracking()
-                .Where(x => x.IsValid)
+                .Where(x => x.IsValid && !db.AttendanceLogResolutions.Any(newer => newer.IsValid && newer.AttendanceLogId == x.AttendanceLogId && newer.AttendanceLogResolutionId > x.AttendanceLogResolutionId))
 
                 on log.AttendanceLogId
                 equals resolution.AttendanceLogId
@@ -498,6 +500,9 @@ namespace HRM.Services
                 AttendanceLogId =
                     log.AttendanceLogId,
 
+                InOutModeId = log.InOutModeId,
+                WorkAssignmentId = resolution != null ? resolution.WorkAssignmentId : null,
+                SchedulePurpose = segment != null ? segment.SchedulePurpose : null,
                 IndividualId =
                     log.IndividualId,
 
@@ -550,6 +555,7 @@ namespace HRM.Services
             })
             .ToListAsync(cancellationToken);
 
+            await HRM.Helpers.DutyClockEventPresentation.ApplyAsync(db, logs, individualId, jobId, organisation.Value, date, cancellationToken);
             return logs;
 
 
@@ -571,188 +577,16 @@ namespace HRM.Services
         }
         public async Task<WeeklyWorkedHoursDto> GetMyWeeklyWorkedHoursAsync()
         {
-            var userContext =
-                await _userAccessService.RequireContextAsync();
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync();
-
-            var today = DateTime.UtcNow.AddHours(5).Date;
-            var organisation = await _userAccessService.GetCurrentOrganisationIdAsync();
-
-            // ---------------------------------------------------------
-            // Current week: Sunday -> Saturday
-            // ---------------------------------------------------------
-            var currentWeekStart =
-                today.AddDays(-(int)today.DayOfWeek);
-
-            var currentWeekEnd =
-                currentWeekStart.AddDays(6);
-
-            // Exclusive boundary for database queries
-            var currentWeekEndExclusive =
-                currentWeekStart.AddDays(7);
-
-            // ---------------------------------------------------------
-            // Previous week: Sunday -> Saturday
-            // ---------------------------------------------------------
-            var previousWeekStart =
-                currentWeekStart.AddDays(-7);
-
-            var previousWeekEnd =
-                currentWeekStart.AddDays(-1);
-
-            // Exclusive boundary
-            var previousWeekEndExclusive =
-                currentWeekStart;
-
-
-            var logs = await db.AttendanceLogs
-            .AsNoTracking()
-            .Include(x => x.AttendanceLogResolutions)
-            .Where(x =>
-                x.IndividualId == userContext.IndividualId &&
-                x.OrganisationId == organisation &&
-                x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
-                x.Date >= previousWeekStart &&
-                x.Date < currentWeekEndExclusive)
-            .OrderBy(x => x.Date)
-            .ToListAsync();
-
-
-
-
-            var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, userContext.IndividualId,
-                previousWeekStart, currentWeekEnd, organisation);
-            logs = logs.Where(x => eligibility[x.Date.Date].HasApprovedPosition && eligibility[x.Date.Date].HasActiveSchedule).ToList();
-            var currentWeekHours =
-                CalculateWorkedHours(
-                    logs,
-                    currentWeekStart,
-                    DateTime.UtcNow.AddHours(5));
-
-            var previousWeekHours =
-                CalculateWorkedHours(
-                    logs,
-                    previousWeekStart,
-                    previousWeekEndExclusive);
-
-
-
-
-
-            var makeup = await HRM.Helpers.WeeklyAttendanceMakeup.LoadAsync(db, userContext.IndividualId, organisation, currentWeekStart, currentWeekEndExclusive);
-            return new WeeklyWorkedHoursDto
-            {
-                WeekStart = currentWeekStart,
-                WeekEnd = currentWeekEnd,
-                ApprovedEarlyCheckoutShortfallHours = makeup.ShortfallHours,
-                MakeupCompletedHours = makeup.CompletedHours,
-                MakeupRemainingHours = makeup.RemainingHours,
-                CurrentWeekHours =
-                    Math.Round(currentWeekHours, 2),
-
-                PreviousWeekHours =
-                    Math.Round(previousWeekHours, 2)
-            };
+            var actor = await _userAccessService.RequireContextAsync();
+            var org = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (org <= 0 || !await _userAccessService.HasOrganisationAccessAsync(org))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
+            await using var db = await _dbFactory.CreateDbContextAsync();
+            var result = await HRM.Helpers.WeeklyWorkingHours.LoadAsync(db, actor.IndividualId, org, DateTime.UtcNow.AddHours(5).Date);
+            var previous = await HRM.Helpers.WeeklyWorkingHours.LoadAsync(db, actor.IndividualId, org, result.WeekStart.AddDays(-1));
+            result.PreviousWeekHours = previous.CurrentWeekHours;
+            return result;
         }
-
-
-        private decimal CalculateWorkedHours(
-            List<AttendanceLog> logs,
-            DateTime fromDate,
-            DateTime toDate)
-        {
-            decimal totalMinutes = 0;
-
-            // ---------------------------------------------------------
-            // Get all resolved events in the requested period
-            // ---------------------------------------------------------
-            var resolvedEvents = logs
-                .Where(x =>
-                    x.Date >= fromDate &&
-                    x.Date <= toDate)
-                .SelectMany(log =>
-                {
-                    var resolution = log.AttendanceLogResolutions
-                        .OrderByDescending(x =>
-                            x.AttendanceLogResolutionId)
-                        .Take(1);
-
-                    return resolution.Select(r => new
-                    {
-                        Log = log,
-                        Resolution = r
-                    });
-                })
-                .Where(x =>
-                    x.Resolution.WorkPlanId > 0)
-                .OrderBy(x => x.Log.Date)
-                .ToList();
-
-            // ---------------------------------------------------------
-            // Group by WorkPlan instead of calendar date
-            // ---------------------------------------------------------
-            var workPlans = resolvedEvents
-                .GroupBy(x => x.Resolution.WorkPlanId)
-                .ToList();
-
-            foreach (var workPlan in workPlans)
-            {
-                var events = workPlan
-                    .OrderBy(x => x.Log.Date)
-                    .ToList();
-
-                // -----------------------------------------------------
-                // First valid CheckIn
-                // -----------------------------------------------------
-                var checkIn = events
-                    .FirstOrDefault(x =>
-                        x.Resolution.AttendanceClockTypeId ==
-                        (int)AttendanceClockType.CheckIn);
-
-                if (checkIn == null)
-                {
-                    continue;
-                }
-
-                // -----------------------------------------------------
-                // Last CheckOut AFTER CheckIn
-                // -----------------------------------------------------
-                var checkOut = events
-                    .Where(x =>
-                        x.Resolution.AttendanceClockTypeId ==
-                            (int)AttendanceClockType.CheckOut &&
-                        x.Log.Date > checkIn.Log.Date)
-                    .OrderByDescending(x => x.Log.Date)
-                    .FirstOrDefault();
-
-                if (checkOut == null)
-                {
-                    continue;
-                }
-
-                // -----------------------------------------------------
-                // Calculate duration
-                // -----------------------------------------------------
-                var workedMinutes =
-                    (checkOut.Log.Date - checkIn.Log.Date)
-                    .TotalMinutes;
-
-                if (workedMinutes <= 0)
-                {
-                    continue;
-                }
-
-                totalMinutes +=
-                    (decimal)workedMinutes;
-            }
-
-            return totalMinutes / 60m;
-        }
-
-
-
 
         public async Task<List<YearlyAttendanceDayDto>> GetMyYearlyAttendanceAsync(int year, CancellationToken cancellationToken = default)
         {

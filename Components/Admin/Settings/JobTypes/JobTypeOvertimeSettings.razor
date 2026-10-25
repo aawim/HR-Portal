@@ -1,0 +1,66 @@
+@using HRM.Models
+@inject HRM.Services.JobTypeOvertimeSettingsService Settings
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<JobTypeOvertimeSettings> Logger
+
+<section class="space-y-3 rounded-xl border p-4" aria-label="Overtime policy">
+    <h3 class="font-semibold">Overtime (OT) — @JobTypeName</h3>
+    <p class="text-sm text-slate-500">This policy applies to this Job Type in the current organisation. Official working hours continue to come from assigned templates.</p>
+    @if(error != null){<p role="alert" class="text-sm text-amber-700 dark:text-amber-400">@error</p>}
+    @if(model == null)
+    {
+        <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">@(busy ? "Loading…" : "Reload OT policy")</button>
+    }
+    else
+    {
+        @if(model.Id == 0){<p class="text-sm text-slate-500">No OT policy has been saved for this Job Type. Overtime is not allowed until configured.</p>}
+        <fieldset disabled="@busy" class="space-y-3">
+            <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="model.IsAllowed" /> Allow overtime</label>
+            @if(model.IsAllowed)
+            {
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <label class="text-sm">Maximum OT hours per week<InputNumber @bind-Value="model.MaximumWeeklyHours" min="0.01" max="168" step="0.01" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                    <label class="text-sm">Maximum OT hours per day (optional)<InputNumber @bind-Value="model.MaximumDailyHours" min="0.01" max="24" step="0.01" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                </div>
+                <p class="text-xs text-slate-500">Limits apply to overtime hours, in addition to normal working hours. Leave the daily limit blank to use only the weekly limit. The week follows the Job Type's working-hours week start, or Sunday if none is configured.</p>
+            }
+            <button class="app-button app-button-primary" @onclick="SaveAsync">@(busy ? "Saving…" : "Save OT policy")</button>
+        </fieldset>
+        <p class="text-xs text-slate-500">These are eligibility limits. Saving a policy does not approve overtime or create an overtime payment.</p>
+    }
+</section>
+
+@code {
+    [Parameter] public int JobTypeId { get; set; }
+    [Parameter] public string JobTypeName { get; set; } = "";
+    private JobTypeOvertimeRule? model;
+    private bool busy;
+    private string? error;
+    private int loadedJobTypeId;
+    protected override async Task OnParametersSetAsync()
+    {
+        if(loadedJobTypeId == JobTypeId) return;
+        loadedJobTypeId = JobTypeId;
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        busy = true; error = null; model = null;
+        try { model = await Settings.LoadAsync(JobTypeId); }
+        catch(Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private async Task SaveAsync()
+    {
+        if(model == null || busy) return;
+        busy = true; error = null;
+        try { await Settings.SaveAsync(model); model = await Settings.LoadAsync(JobTypeId); Toasts.Success("Overtime policy saved."); }
+        catch(Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private void Fail(Exception ex)
+    {
+        Logger.LogError(ex, "Managing Job Type overtime policy");
+        error = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "The OT policy could not be loaded or saved. Please try again.";
+    }
+}

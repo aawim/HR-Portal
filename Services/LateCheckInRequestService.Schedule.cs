@@ -23,8 +23,11 @@ public sealed partial class LateCheckInRequestService
         if (checkout.Count == 0)
             throw new InvalidOperationException("This schedule has no check-out event. Ask HR to add a check-out event to the dated schedule before approving this request.");
         var start = request.RequestedStart.Value; var finish = request.RequestedEnd.Value;
+        var amendments = await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, request.OrganisationId,
+            assignment.WorkPlan.WorkDate, assignment.WorkPlan.WorkDate);
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
             $"Approved {request.Kind} request {request.RequestId}: assignment {assignment.WorkAssignmentId}, {request.ScheduledStart:O}–{request.ScheduledEnd:O} → {start:O}–{finish:O}; compulsory check-out.");
+        var hourAdjustments = await HRM.Helpers.TemporaryWorkingHours.AdjustmentsAsync(db, new[] { assignment });
         var changedBoundaries = new Dictionary<int, WorkAssignmentSegment>();
         foreach (var segment in assignment.WorkAssignmentSegments.Where(s => s.IsValid))
         {
@@ -34,6 +37,17 @@ public sealed partial class LateCheckInRequestService
             if (snapshots.Count != 1)
                 throw new InvalidOperationException("This schedule's event details need review. Please contact HR before approving this request.");
             var snapshot = snapshots[0];
+            // Materialise the same effective schedule used when the staff request
+            // was submitted before applying its personal time change.
+            var baseTiming = (Start: segment.StartDateTime, End: segment.EndDateTime ?? segment.StartDateTime);
+            if (hourAdjustments.TryGetValue(assignment.WorkAssignmentId, out var hourAdjustment))
+                baseTiming = HRM.Helpers.TemporaryWorkingHours.Segment(hourAdjustment, segment.WorkSegmentType.Code, baseTiming.Start, baseTiming.End);
+            var amended = HRM.Helpers.OfficialScheduleAmendments.Segment(amendments, request.OrganisationId,
+                assignment.SchedulePurpose, segment.WorkSegmentType.Code, baseTiming.Start,
+                baseTiming.End, segment.GraceBeforeMinutes);
+            segment.StartDateTime = amended.Start;
+            if (segment.EndDateTime.HasValue) segment.EndDateTime = amended.End;
+            segment.GraceBeforeMinutes = amended.GraceBefore;
             var shift = start - request.ScheduledStart;
             var latestWindow = (segment.EndDateTime ?? segment.StartDateTime) - segment.StartDateTime;
             if (request.Kind == "LateCheckIn")

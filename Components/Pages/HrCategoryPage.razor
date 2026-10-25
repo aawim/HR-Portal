@@ -1,4 +1,4 @@
-﻿@page "/admin/hr/{CategoryName}"
+@page "/admin/hr/{CategoryName}"
 @using HRM.Components.Admin.Hr.Group
 @page "/admin/hr/{CategoryName}/{Section}"
 @inject NavigationManager Navigation
@@ -122,18 +122,36 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
-    protected override void OnParametersSet() => activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
-        GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, HRM.Helpers.SectionRoutes.Slug(x.Title)));
+    protected override void OnParametersSet()
+    {
+        if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section != "management")
+        {
+            var current=new Uri(Navigation.Uri);
+            var target="/admin/hr/groups/management"+current.Query;
+            if(Section is "group-types" or "manage-group-types")target=Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target,"tab","types");
+            Navigation.NavigateTo(target+current.Fragment,replace:true);return;
+        }
+        activeItem = string.IsNullOrWhiteSpace(Section) ? GetSubItems(CategoryName).FirstOrDefault() :
+            GetSubItems(CategoryName).FirstOrDefault(x => HRM.Helpers.SectionRoutes.Matches(Section, ItemSlug(x)));
+    }
 
     // Fixed Record: Replaced 'Url' with 'ComponentType' to match your dynamic rendering goals
     private record SubItem(string Title, string Icon, string Description, Type? ComponentType = null);
+
+    private static string ItemSlug(SubItem item) => item.Title switch
+    {
+        "Manage Staff" => "manage",
+        "Groups Management" => "management",
+        "Staff Enrollment" => "enrollment",
+        _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
+    };
 
     private SubItem? activeItem;
 
     private void SelectItem(SubItem item)
     {
         activeItem = item;
-        Navigation.NavigateTo($"/admin/hr/{CategoryName.ToLowerInvariant()}/{HRM.Helpers.SectionRoutes.Slug(item.Title)}");
+        Navigation.NavigateTo($"/admin/hr/{CategoryName.ToLowerInvariant()}/{ItemSlug(item)}");
     }
     private bool isSidebarExpanded = true;
 
@@ -150,6 +168,8 @@
  
         "staff" => new() {
             new("Search", "🔍", "Find active and past employee records.", typeof(StaffSearchGrid)),
+            new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffGrid)),
+            new("Staff Enrollment", "🪪", "Manage organisation staff enrollment numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffEnrollmentNumberGrid)),
             new("Staff Onboarding", "💼", "Submit appointments and review approvals before employee accounts are created.", typeof(StaffOnboardingPage)),
             // new("Manage Key Holders", "🔑", "Assign and track physical or system access keys.", null),
             // new("Fetch From CSC Viuga", "🔄", "Sync and import employee data directly from the CSC network.", null),
@@ -157,8 +177,7 @@
     },
 
         "groups" => new() {
-            new("Manage Groups", "👥", "Create and manage committees, teams, or operational groups.", typeof(ManageGroupsGrid)),
-            new("Manage Group Types", "🏷️", "Define categories and permissions for different group types.", typeof(ManageGroupTypesGrid)),
+            new("Groups Management", "👥", "Manage operational groups, group types and related information.", typeof(ManageGroupsGrid)),
     },
 
         "viuga" => new() {

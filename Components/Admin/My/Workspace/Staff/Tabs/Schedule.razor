@@ -1,4 +1,4 @@
-﻿@using HRM.DTOs.StaffSchedule
+@using HRM.DTOs.StaffSchedule
 @using HRM.Enum
 @using HRM.WorkPlanning.Abstractions.Schedules
 @using HRM.Services
@@ -94,6 +94,8 @@
                                 JobId="@schedule.JobId"
                                 OrganisationBusinessEntityId="@schedule.OrganisationBusinessEntityId"
                                 CurrentAssignment="@schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose)"
+                                CurrentAssignments="@schedule.CurrentTemplates.Where(x => x.SchedulePurpose == purpose).ToList()"
+                                HasDefaultOfficialSchedule="@(schedule.CurrentTemplates.Any(x=>x.SchedulePurpose=="Official") || schedule.TemplateHistory.Any(x => x.SchedulePurpose == "Official" && x.IsActive && (!x.EffectiveTo.HasValue || x.EffectiveTo.Value.Date >= DateTime.UtcNow.AddHours(5).Date)))"
                                 History="@schedule.TemplateHistory.Where(x => x.SchedulePurpose == purpose).ToList()"
                                 IsDisabled="@(!schedule.HasActiveJob || !canManageSchedules)"
                                 OnAssignRequested="@(() => OpenTemplateAssignmentForPurposeAsync(purpose))"
@@ -295,7 +297,7 @@
         }
 
         selectedSchedulePurpose = purpose;
-        selectedTemplateAssignment = schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose);
+        selectedTemplateAssignment = purpose == "Duty" ? null : schedule.CurrentTemplates.FirstOrDefault(x => x.SchedulePurpose == purpose);
 
         selectedManualAssignment =
             null;

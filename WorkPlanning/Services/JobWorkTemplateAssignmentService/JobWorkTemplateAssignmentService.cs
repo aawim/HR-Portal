@@ -49,67 +49,11 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                 effectiveDate.Date;
             await RequireJobAccessAsync(db, jobId, cancellationToken);
 
-            return await db.JobWorkTemplateAssignments
-                .AsNoTracking()
-                .Where(x =>
-                    x.JobID == jobId &&
-                    x.SchedulePurpose == "Official" &&
-                    x.IsActive &&
-                    x.EffectiveFrom <= date &&
-                    (
-                        x.EffectiveTo == null ||
-                        x.EffectiveTo >= date
-                    ) &&
-                    x.WorkTemplate.IsActive)
-                .OrderByDescending(x =>
-                    x.EffectiveFrom)
-                .ThenByDescending(x =>
-                    x.JobWorkTemplateAssignmentID)
-                .Select(x =>
-                    new CurrentWorkTemplateAssignmentDto
-                    {
-                        SchedulePurpose = x.SchedulePurpose,
-                        ScheduleMode = x.ScheduleMode, WorkingDaysMask = x.WorkingDaysMask,
-                        RotationAnchorDate = x.RotationAnchorDate, RotationTemplateIds = x.RotationTemplateIds,
-                        JobWorkTemplateAssignmentId =
-                            x.JobWorkTemplateAssignmentID,
+            var job=await db.Jobs.AsNoTracking().SingleAsync(j=>j.JobId==jobId,cancellationToken);
+            var candidates=await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,date,date,cancellationToken);
+            var current=HRM.Helpers.EffectiveStaffSchedules.On(candidates,date).FirstOrDefault(c=>c.Assignment.SchedulePurpose=="Official");
+            return current==null?null:HRM.Helpers.EffectiveStaffSchedules.ToDto(current);
 
-                        JobId =
-                            x.JobID,
-
-                        WorkTemplateId =
-                            x.WorkTemplateID,
-
-                        TemplateName =
-                            x.WorkTemplate.Name,
-
-                        TemplateCode =
-                            x.WorkTemplate.Code,
-
-                        TemplateTypeName =
-                            x.WorkTemplate.WorkTemplateType.Name,
-
-                        EffectiveFrom =
-                            x.EffectiveFrom,
-
-                        EffectiveTo =
-                            x.EffectiveTo,
-
-                        IsActive =
-                            x.IsActive,
-  
-                       DefaultStartTime = x.WorkTemplate.DefaultStartTime.HasValue
-                                        ? DateTime.MinValue.Add(x.WorkTemplate.DefaultStartTime.Value.ToTimeSpan())
-                                        : null,
-
-                        DefaultEndTime = x.WorkTemplate.DefaultEndTime.HasValue
-                                        ? DateTime.MinValue.Add(x.WorkTemplate.DefaultEndTime.Value.ToTimeSpan())
-                                        : null
-
-
-                    })
-                .FirstOrDefaultAsync(
-                    cancellationToken);
         }
 
         public async Task<List<JobWorkTemplateAssignmentHistoryDto>>
@@ -295,7 +239,10 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
                     return ServiceResult.Failed($"These working hours are available from {template.EffectiveFrom.Value:dd MMM yyyy}. Choose that date or later.");
                 if (template.EffectiveTo.HasValue && (from > template.EffectiveTo.Value.Date || !to.HasValue || to.Value > template.EffectiveTo.Value.Date))
                     return ServiceResult.Failed($"These working hours are available until {template.EffectiveTo.Value:dd MMM yyyy}. Choose an end date on or before that day.");
+                if (dto.SchedulePurpose == "Duty" && !await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, dto.OrganisationBusinessEntityId, from, to, ct))
+                    return ServiceResult.Failed(HRM.Helpers.OfficialSchedulePrerequisite.Message);
                 var overlaps = await db.JobWorkTemplateAssignments.Where(x => x.JobID == dto.JobId && x.SchedulePurpose == dto.SchedulePurpose && x.IsActive &&
+                    (dto.SchedulePurpose == "Official" || x.WorkTemplateID == dto.WorkTemplateId) &&
                     (!to.HasValue || x.EffectiveFrom <= to.Value) && (x.EffectiveTo == null || x.EffectiveTo >= from)).ToListAsync(ct);
                 var rotationJson = dto.ScheduleMode == "Rotation" ? System.Text.Json.JsonSerializer.Serialize(dto.RotationTemplateIds) : null;
                 var mask = dto.ScheduleMode == "Standard" ? 31 : dto.WorkingDaysMask;
@@ -378,6 +325,20 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
             if (assignment.EffectiveTo.HasValue && removalDate > assignment.EffectiveTo.Value.Date.AddDays(1))
                 return ServiceResult.Failed("This schedule already ends earlier. Use Change to extend it.");
 
+            if (assignment.SchedulePurpose == "Official")
+            {
+                var duties = await db.JobWorkTemplateAssignments.AsNoTracking().Where(a => a.JobID == dto.JobId && a.IsActive && a.SchedulePurpose == "Duty" &&
+                    (!a.EffectiveTo.HasValue || a.EffectiveTo >= removalDate)).ToListAsync(cancellationToken);
+                foreach (var duty in duties)
+                    if (!await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, org,
+                        duty.EffectiveFrom.Date > removalDate ? duty.EffectiveFrom.Date : removalDate, duty.EffectiveTo, cancellationToken, assignment.JobWorkTemplateAssignmentID))
+                        return ServiceResult.Failed("End the dependent duty schedules or assign replacement default official hours before ending this schedule.");
+                var datedDuties = await db.WorkAssignments.Where(a => a.IsValid && a.SchedulePurpose == "Duty" && a.WorkPlan.JobId == dto.JobId && a.WorkPlan.IsValid && a.WorkPlan.WorkDate >= removalDate)
+                    .Select(a => a.WorkPlan.WorkDate).Distinct().ToListAsync(cancellationToken);
+                foreach (var day in datedDuties)
+                    if (!await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, org, day, day, cancellationToken, assignment.JobWorkTemplateAssignmentID))
+                        return ServiceResult.Failed("This default schedule has dated duties. End those duties or assign replacement default official hours first.");
+            }
             if (removalDate <
                 assignment.EffectiveFrom.Date)
             {

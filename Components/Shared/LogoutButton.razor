@@ -1,0 +1,41 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<LogoutButton> Logger
+
+<button type="button" class="@Class" disabled="@busy" aria-busy="@busy" @onclick="LogoutAsync">
+    @ChildContent
+</button>
+
+@code {
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private bool busy;
+    private IJSObjectReference? module;
+
+    private async Task LogoutAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/logout.js?v=20261025-1");
+            await module.InvokeVoidAsync("submitLogout");
+        }
+        catch (JSDisconnectedException) { }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not submit sign-out");
+            busy = false;
+            Toasts.Error("Sign out could not be completed. Please try again.");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (module == null) return;
+        try { await module.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+        catch (TaskCanceledException) { }
+    }
+}

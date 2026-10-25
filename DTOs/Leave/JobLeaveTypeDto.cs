@@ -19,6 +19,7 @@ namespace HRM.DTOs.Leave
         public bool IsValid { get; set; }
 
         public int? LeaveTypeId { get; set; }
+        public int? LeaveDefinitionId { get; set; }
 
         public DateTime? LastLeaveTakenDate { get; set; }
 

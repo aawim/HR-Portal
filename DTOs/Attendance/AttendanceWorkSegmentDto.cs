@@ -1,8 +1,10 @@
-﻿namespace HRM.DTOs.Attendance
+namespace HRM.DTOs.Attendance
 {
     public sealed class AttendanceWorkSegmentDto
     {
+        public long? WorkAssignmentId { get; set; }
         public string SchedulePurpose { get; set; } = "Official";
+        public string WorkSegmentTypeCode { get; set; } = "";
         public int WorkPlanSegmentId { get; set; }
 
         public long WorkPlanId { get; set; }

@@ -40,40 +40,45 @@ namespace HRM.WorkPlanning
                 .SingleOrDefaultAsync(x => x.JobId == jobId && x.WorkDate == date && x.IsValid, cancellationToken);
             if (plan != null && (plan.IndividualId != individualId || plan.OrganisationBusinessEntityId != organisationBusinessEntityId))
                 throw new UnauthorizedAccessException("The existing work plan belongs to another staff member or organisation.");
-            if (plan?.IsFinalized == true) return MapToDto(plan);
+            if (plan?.IsFinalized == true) return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
 
             var selections = new List<(WorkTemplate Template, TimeOnly? Start, int Priority, string Purpose)>();
-            var attached = await db.JobWorkTemplateAssignments.AsNoTracking()
-                .Include(x => x.WorkTemplate).ThenInclude(x => x.WorkTemplateSegments)
-                .Where(x => x.JobID == jobId && x.IsActive && x.EffectiveFrom <= date &&
-                    (x.EffectiveTo == null || x.EffectiveTo >= date) && x.WorkTemplate.IsActive &&
-                    (x.WorkTemplate.IsGlobal || x.WorkTemplate.OrganisationBusinessEntityId == organisationBusinessEntityId) &&
-                    (!x.WorkTemplate.EffectiveFrom.HasValue || x.WorkTemplate.EffectiveFrom <= date) &&
-                    (!x.WorkTemplate.EffectiveTo.HasValue || x.WorkTemplate.EffectiveTo >= date))
-                .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.JobWorkTemplateAssignmentID).ToListAsync(cancellationToken);
-            foreach (var item in attached.GroupBy(x => x.SchedulePurpose).Select(x => x.First()))
+            var job = await db.Jobs.AsNoTracking().SingleAsync(j=>j.JobId==jobId && j.OrganisationID==organisationBusinessEntityId, cancellationToken);
+            var candidates = await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,date,date,cancellationToken);
+            var attached = HRM.Helpers.EffectiveStaffSchedules.On(candidates,date).Select(c=>c.Assignment).ToList();
+            foreach (var item in attached)
             {
-                var templateId = HRM.Helpers.StaffScheduleCalendar.TemplateOn(item, date);
-                if (templateId == 0) continue;
-                var template = templateId == item.WorkTemplateID ? item.WorkTemplate : await db.WorkTemplates.AsNoTracking()
-                    .Include(x => x.WorkTemplateSegments).SingleOrDefaultAsync(x => x.WorkTemplateId == templateId && x.IsActive &&
-                        (x.IsGlobal || x.OrganisationBusinessEntityId == organisationBusinessEntityId) &&
-                        (!x.EffectiveFrom.HasValue || x.EffectiveFrom <= date) && (!x.EffectiveTo.HasValue || x.EffectiveTo >= date), cancellationToken);
-                if (template == null) throw new InvalidOperationException("The rotating shift is no longer available. Ask HR to update the schedule.");
-                selections.Add((template, item.ScheduleMode == "Rotation" ? null : item.ScheduledStartTime, 0, item.SchedulePurpose));
+                if(item.SchedulePurpose=="Duty" && !attached.Any(a=>a.SchedulePurpose=="Official")) continue;
+                var templateId = HRM.Helpers.StaffScheduleCalendar.TemplateOn(item,date);
+                if(templateId==0) continue;
+                var template = templateId==item.WorkTemplateID ? item.WorkTemplate : await db.WorkTemplates.AsNoTracking().Include(t=>t.WorkTemplateSegments)
+                    .SingleOrDefaultAsync(t=>t.WorkTemplateId==templateId && t.IsActive && (t.IsGlobal || t.OrganisationBusinessEntityId==organisationBusinessEntityId) &&
+                        (!t.EffectiveFrom.HasValue || t.EffectiveFrom<=date) && (!t.EffectiveTo.HasValue || t.EffectiveTo>=date),cancellationToken);
+                if(template==null) throw new InvalidOperationException("A schedule template is unavailable. Please contact HR.");
+                selections.Add((template,item.ScheduleMode=="Rotation"?null:item.ScheduledStartTime,0,item.SchedulePurpose));
             }
-            if (attached.Count == 0)
+            var hasRecordedAttendance = plan != null && (plan.WorkPlanSegments.Any(s=>s.IsCompleted || s.AttendanceId.HasValue) ||
+                await db.AttendanceLogResolutions.AnyAsync(r=>r.WorkPlanId==plan.WorkPlanId,cancellationToken) ||
+                await db.AttendanceLogs.AnyAsync(l=>l.IndividualId==individualId && l.OrganisationId==organisationBusinessEntityId && l.Date.Date==date,cancellationToken));
+            if(plan!=null && !plan.IsManual && !hasRecordedAttendance)
             {
-                // Preserve the older weekday-based assignment path for staff not yet migrated.
-                var legacy = await db.JobWorkTemplates.AsNoTracking().Include(x => x.WorkTemplate).ThenInclude(x => x.WorkTemplateSegments)
-                    .Where(x => x.JobId == jobId && x.IsActive && x.EffectiveFrom <= date &&
-                        (x.EffectiveTo == null || x.EffectiveTo >= date) && x.WorkTemplate.IsActive &&
-                        (x.WorkTemplate.IsGlobal || x.WorkTemplate.OrganisationBusinessEntityId == organisationBusinessEntityId))
-                    .OrderByDescending(x => x.Priority).ThenByDescending(x => x.EffectiveFrom).ToListAsync(cancellationToken);
-                foreach (var item in legacy.Where(x => AppliesOnDay(x, date.DayOfWeek)).GroupBy(x => x.WorkTemplateId).Select(x => x.First()))
-                    selections.Add((item.WorkTemplate, null, item.Priority, "Official"));
+                foreach(var assignment in plan.WorkAssignments.Where(a=>a.IsValid && a.AssignmentSource==WorkAssignmentSource.Template))
+                {
+                    var desired=selections.Where(s=>s.Template.WorkTemplateId==assignment.WorkTemplateId && s.Purpose==assignment.SchedulePurpose).ToList();
+                    if(desired.Count==1 && (desired[0].Start??desired[0].Template.DefaultStartTime) is TimeOnly clock && assignment.StartDateTime==date.Add(clock.ToTimeSpan())) continue;
+                    foreach(var snapshot in plan.WorkPlanSegments.Where(s=>s.IsValid && s.SchedulePurpose==assignment.SchedulePurpose &&
+                        assignment.WorkAssignmentSegments.Any(a=>a.IsValid && a.WorkTemplateSegmentId==s.WorkTemplateSegmentId && a.WorkSegmentTypeId==s.WorkSegmentTypeId && a.StartDateTime==s.StartDateTime))) snapshot.IsValid=false;
+                    assignment.IsValid=false;
+                    foreach(var segment in assignment.WorkAssignmentSegments)segment.IsValid=false;
+                    foreach(var owner in assignment.WorkAssignmentOwners)owner.IsValid=false;
+                }
             }
-            if (selections.Count == 0) return plan == null || !plan.IsManual ? null : MapToDto(plan);
+            if(selections.Count==0)
+            {
+                if(plan!=null && !plan.IsManual && !hasRecordedAttendance) plan.IsValid=false;
+                await db.SaveChangesAsync(cancellationToken);await tx.CommitAsync(cancellationToken);
+                return plan==null || !plan.IsManual && !hasRecordedAttendance ? null : await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db,MapToDto(plan),cancellationToken);
+            }
             var state = await db.WorkAssignmentStates.Where(x => x.IsActive && x.Code == PlannedAssignmentStateCode)
                 .Select(x => (int?)x.WorkAssignmentStateId).SingleOrDefaultAsync(cancellationToken)
                 ?? throw new InvalidOperationException("An active PLANNED work-assignment state is required.");
@@ -88,6 +93,7 @@ namespace HRM.WorkPlanning
             }
             foreach (var selection in selections)
             {
+                if(selection.Purpose=="Official" && (hasRecordedAttendance || plan.IsManual) && plan.WorkAssignments.Any(a=>a.IsValid && a.SchedulePurpose=="Official")) continue;
                 if (selection.Purpose == "Duty" && plan.WorkAssignments.Any(x => x.WorkTemplateId == selection.Template.WorkTemplateId &&
                     x.SchedulePurpose == "Duty" && x.CancellationReason != null && x.CancellationReason.StartsWith(HRM.WorkPlanning.Services.DutyRosterService.MovementMarker))) continue;
                 if (plan.WorkAssignments.Any(x => x.IsValid && x.WorkTemplateId == selection.Template.WorkTemplateId && x.SchedulePurpose == selection.Purpose)) continue;
@@ -97,15 +103,8 @@ namespace HRM.WorkPlanning
             plan.WorkTemplateId = ids.Count == 1 ? ids[0] : null;
             await db.SaveChangesAsync(cancellationToken);
             await tx.CommitAsync(cancellationToken);
-            return MapToDto(plan);
+            return await HRM.Helpers.OfficialScheduleAmendments.ApplyAsync(db, MapToDto(plan), cancellationToken);
         }
-
-        private static bool AppliesOnDay(JobWorkTemplate x, DayOfWeek day) => day switch
-        {
-            DayOfWeek.Monday => x.Monday, DayOfWeek.Tuesday => x.Tuesday, DayOfWeek.Wednesday => x.Wednesday,
-            DayOfWeek.Thursday => x.Thursday, DayOfWeek.Friday => x.Friday, DayOfWeek.Saturday => x.Saturday,
-            DayOfWeek.Sunday => x.Sunday, _ => false
-        };
 
         private static void AddTemplate(WorkPlan plan, WorkTemplate template, TimeOnly? assignedStart, int priority, int state, DateTime now, DateOnly date, string purpose)
         {
@@ -210,6 +209,9 @@ namespace HRM.WorkPlanning
                         .OrderBy(x => x.SequenceNumber)
                         .Select(x => new AttendanceWorkSegmentDto
                         {
+                            WorkAssignmentId = plan.WorkAssignments.Where(a=>a.IsValid && a.SchedulePurpose==x.SchedulePurpose &&
+                                a.WorkAssignmentSegments.Any(s=>s.IsValid && s.WorkTemplateSegmentId==x.WorkTemplateSegmentId && s.WorkSegmentTypeId==x.WorkSegmentTypeId && s.StartDateTime==x.StartDateTime))
+                                .Select(a=>(long?)a.WorkAssignmentId).FirstOrDefault(),
                             SchedulePurpose = x.SchedulePurpose,
                             WorkPlanSegmentId = x.WorkPlanSegmentId,
                             WorkPlanId = x.WorkPlanId,

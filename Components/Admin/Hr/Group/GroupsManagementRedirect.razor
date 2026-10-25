@@ -1,0 +1,14 @@
+@page "/admin/hr/manage-groups"
+@page "/admin/hr/manage-group-types"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject NavigationManager Navigation
+@code {
+    protected override void OnParametersSet()
+    {
+        var current=new Uri(Navigation.Uri);
+        var target="/admin/hr/groups/management"+current.Query+current.Fragment;
+        if(current.AbsolutePath.EndsWith("manage-group-types",StringComparison.OrdinalIgnoreCase))
+            target=Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString("/admin/hr/groups/management"+current.Query,"tab","types")+current.Fragment;
+        Navigation.NavigateTo(target,replace:true);
+    }
+}

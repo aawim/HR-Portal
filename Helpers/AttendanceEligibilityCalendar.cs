@@ -20,7 +20,7 @@ public static class AttendanceEligibilityCalendar
         var jobs = await db.Jobs.AsNoTracking().Where(j => j.IndividualID == individualId && j.JobStateId == 4 &&
             (!organisationId.HasValue || j.OrganisationID == organisationId) && (!jobId.HasValue || j.JobId == jobId) &&
             j.JoinedDate <= to && (!j.TerminatedDate.HasValue || j.TerminatedDate >= from))
-            .Select(j => new { j.JobId, j.JoinedDate, j.TerminatedDate }).ToListAsync(ct);
+            .ToListAsync(ct);
         var jobIds = jobs.Select(j => j.JobId).ToList();
         var positions = await db.JobPositions.AsNoTracking().Where(p => jobIds.Contains(p.JobId) && p.JobPositionStateId == 4 &&
             p.FromDate <= to && (!p.ToDate.HasValue || p.ToDate >= from))
@@ -31,12 +31,8 @@ public static class AttendanceEligibilityCalendar
                                    where positionIds.Contains(link.JobPositionId) && request.RequestStateId == 4 && request.RequestTypeId == 32
                                    select new { link.JobPositionId, request.LastStateChangedDate }).ToListAsync(ct);
 
-        var assignments = await db.JobWorkTemplateAssignments.AsNoTracking().Include(a => a.WorkTemplate).ThenInclude(t => t.WorkTemplateSegments)
-            .Where(a => jobIds.Contains(a.JobID) && a.IsActive && a.SchedulePurpose == "Official" && a.EffectiveFrom <= to && (!a.EffectiveTo.HasValue || a.EffectiveTo >= from))
-            .ToListAsync(ct);
-        var legacy = await db.JobWorkTemplates.AsNoTracking().Include(a => a.WorkTemplate).ThenInclude(t => t.WorkTemplateSegments)
-            .Where(a => jobIds.Contains(a.JobId) && a.IsActive && a.EffectiveFrom <= to && (!a.EffectiveTo.HasValue || a.EffectiveTo >= from))
-            .ToListAsync(ct);
+        var effective = new Dictionary<int,List<StaffScheduleCandidate>>();
+        foreach(var job in jobs) effective[job.JobId]=await EffectiveStaffSchedules.LoadAsync(db,job,from,to,ct);
         var plans = await db.WorkPlans.AsNoTracking().Where(p => p.IndividualId == individualId && jobIds.Contains(p.JobId) && p.IsValid &&
             p.WorkDate >= from && p.WorkDate <= to)
             .Select(p => new { p.JobId, p.WorkDate,
@@ -65,26 +61,16 @@ public static class AttendanceEligibilityCalendar
         for (var day = from; day <= to; day = day.AddDays(1))
         {
             var eligibleJobs = jobs.Where(j => PositionApproved(j.JobId, day)).Select(j => j.JobId).ToHashSet();
-            var active = assignments.Where(a => a.EffectiveFrom.Date <= day && (!a.EffectiveTo.HasValue || a.EffectiveTo.Value.Date >= day))
-                .GroupBy(a => new { a.JobID, a.SchedulePurpose }).Select(g => g.OrderByDescending(a => a.EffectiveFrom).ThenByDescending(a => a.JobWorkTemplateAssignmentID).First())
-                .Where(a => TemplateValid(a.WorkTemplate, day)).ToList();
-            var old = legacy.Where(a => a.EffectiveFrom.Date <= day && (!a.EffectiveTo.HasValue || a.EffectiveTo.Value.Date >= day) &&
-                    !active.Any(n => n.JobID == a.JobId && n.SchedulePurpose == "Official") && TemplateValid(a.WorkTemplate, day))
-                .GroupBy(a => a.JobId).Select(g => g.OrderByDescending(a => a.Priority).ThenByDescending(a => a.EffectiveFrom).ThenByDescending(a => a.JobWorkTemplateId).First()).ToList();
+            var active = effective.Values.SelectMany(list=>EffectiveStaffSchedules.On(list,day)).Select(c=>c.Assignment)
+                .Where(a=>a.SchedulePurpose=="Official" && TemplateValid(a.WorkTemplate,day)).ToList();
             var dated = plans.Where(p => p.WorkDate.Date == day && p.HasSchedule).ToList();
-            var hasSchedule = active.Count > 0 || old.Count > 0 || dated.Count > 0;
+            var hasSchedule = active.Count > 0 || dated.Count > 0;
             var required = active.Any(a => eligibleJobs.Contains(a.JobID) && StaffScheduleCalendar.TemplateOn(a, day) > 0 && TemplateRequires(a.WorkTemplate)) ||
-                old.Any(a => eligibleJobs.Contains(a.JobId) && LegacyWorks(a, day) && TemplateRequires(a.WorkTemplate)) ||
                 dated.Any(p => eligibleJobs.Contains(p.JobId) && p.RequiresAttendance);
-            var working = active.Any(a => StaffScheduleCalendar.TemplateOn(a, day) > 0) || old.Any(a => LegacyWorks(a, day)) || dated.Any(p => p.RequiresAttendance);
+            var working = active.Any(a => StaffScheduleCalendar.TemplateOn(a, day) > 0) || dated.Any(p => p.RequiresAttendance);
             result[day] = new(eligibleJobs.Count > 0, hasSchedule, working, required);
         }
         return result;
     }
 
-    private static bool LegacyWorks(JobWorkTemplate a, DateTime day) => day.DayOfWeek switch
-    {
-        DayOfWeek.Sunday => a.Sunday, DayOfWeek.Monday => a.Monday, DayOfWeek.Tuesday => a.Tuesday,
-        DayOfWeek.Wednesday => a.Wednesday, DayOfWeek.Thursday => a.Thursday, DayOfWeek.Friday => a.Friday, _ => a.Saturday
-    };
 }

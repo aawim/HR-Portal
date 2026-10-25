@@ -1,4 +1,4 @@
-﻿namespace HRM.DTOs.Attendance
+namespace HRM.DTOs.Attendance
 {
     public sealed class AttendanceWorkPlanDto
     {
@@ -19,6 +19,8 @@
         public bool IsGenerated { get; set; }
 
         public bool IsManual { get; set; }
+        public string? TemporaryWorkingHoursMessage { get; set; }
+        public string? ScheduleAmendmentMessage { get; set; }
 
         public List<AttendanceWorkSegmentDto> Segments { get; set; } = [];
         public List<AttendanceWorkAssignmentDto> Assignments { get; set; } = [];

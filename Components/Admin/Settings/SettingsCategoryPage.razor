@@ -1,4 +1,4 @@
-﻿@page "/admin/settings/{CategoryName}"
+@page "/admin/settings/{CategoryName}"
 @using HRM.Components.Admin.Settings.Positions
 @page "/admin/settings/{CategoryName}/{Section}"
 @page "/admin/settings/org/organisations/{OrganisationId:int}/{OrganisationSection}"
@@ -199,6 +199,8 @@
     private string ItemSlug(SubItem item) => item.Title switch
     {
         "Teams and supervisors" => "teams", "Organisation Permissions" => "permissions", "Manage" => "manage", "Manage type" => "types",
+        "Job Type Configuration" => "job-types",
+        "Request State Transitions" => "state-transitions",
         "Request Approval Flows" => "approval-flows", "Leave Accrual by Job Type" => "accrual", "Leave Carry Forward" => "carry-forward",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
     };
@@ -229,7 +231,6 @@
     private List<SubItem> GetSubItems(string? cat) => (string.IsNullOrWhiteSpace(cat) ? ResolvedCategoryName : cat.Trim().ToLowerInvariant()) switch
     {
         "leaves" => new() {
-            new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
             new("Leave Accrual by Job Type", "📅", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
             new("Leave Carry Forward", "📅", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
             new("Manage Leave Types", "🌴", "Define leave accruals and policies.", typeof(LeaveTypesGrid)),
@@ -243,8 +244,6 @@
             new("Manage Account", "👤", "Edit user account details and account status.", typeof(AccountGrid)),
             new("Admin Portal Access", "🔐", "Explicitly grant or revoke access to the Admin portal.", typeof(AdminPortalAccess)),
             new("Manage Permissions", "🔐", "Assign account roles and direct permissions.", typeof(AccountPermissionsGrid)),
-            new("Manage Staff Enrollment Number", "🪪", "Manage organisation staff enrollment numbers.", typeof(StaffEnrollmentNumberGrid)),
-            new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(StaffGrid)),
         },
         "org" => new() {
             new("Manage", "🏢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
@@ -265,13 +264,13 @@
             new("Roles", "🛡️", "Manage user groups and their assigned permissions.", typeof(HRM.Components.Admin.Settings.Roles.AccessRolesGrid)),
         },
         "requests" => new() {
-           new("State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
            new("Request Types", "📋", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
-        "jobs" => new() {
-           new("Job Types", "👥", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
-        },
         "config" => new() {
+            new("Request State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
+            new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
+
+           new("Job Type Configuration", "👥", "Manage job types and staff approval workflows.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
            new("Manage Attendance Clients", "🖥️", "Configure attendance clients and devices.", null),
         },
         "positions" => new() {
@@ -281,6 +280,8 @@
            new("Manage Positions", "💼", "Configure attendance clients and devices.", typeof(PositionGrid)),
         },
         "workplaning" => new() {
+           new("Schedule assignments", "📅", "Assign official defaults and duties to organisations, structures and staff groups.", typeof(ScopeScheduleSettings)),
+           new("Working Hours", "🕒", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
            new("Duty roster", "📅", "View dated duties and arrange staff acceptance, transfers and swaps.", typeof(HRM.Components.Pages.Online.DutyRoster)),
            new("Templates", "💼", "Define working hours and required clock events using ordered segments.", typeof(WorkTemplateManagement)),
            new("Plans", "💼", "Generate assigned schedules or add manual duty to a staff member's daily plan.", typeof(WorkPlanManagement)),
@@ -330,6 +331,18 @@
     protected override void OnParametersSet()
     {
         CategoryName = ResolvedCategoryName;
+        if (CategoryName == "jobs" && (string.IsNullOrWhiteSpace(Section) || Section is "job-types" or "job-type-configuration"))
+        {
+            Navigation.NavigateTo("/admin/settings/config/job-types", replace: true);
+            return;
+        }
+        if (CategoryName == "staff" || CategoryName == "user" && Section is "staff" or "manage-staff" or "staff-enrollment-number" or "manage-staff-enrollment-number")
+        {
+            var section = Section is "enrollment" or "staff-enrollment-number" or "manage-staff-enrollment-number" ? "enrollment" : "manage";
+            var current = new Uri(Navigation.Uri);
+            Navigation.NavigateTo($"/admin/hr/staff/{section}{current.Query}{current.Fragment}", replace: true);
+            return;
+        }
         if (OrganisationSection != null) { CategoryName = "org"; Section = "manage"; }
         if (TeamSection != null) { CategoryName = "org"; Section = "teams"; }
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "organisations") Section = "manage";

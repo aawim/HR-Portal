@@ -1,8 +1,7 @@
-﻿@page "/admin/settings"
+@page "/admin/settings"
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
-@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 
  
 
@@ -22,7 +21,7 @@
 
             <!-- Grid: 4 columns on large screens, 2 on medium -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories.Where(x => x.Url != "states" || isDeveloper))
+                @foreach (var cat in mainCategories)
                 {
                     <a href="/admin/settings/@cat.Url"
                        class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
@@ -51,20 +50,19 @@
         private record Category(string Title, string Url, string Icon, string Description);
 
         private List<Category> mainCategories = new() {
-            new("User", "user", "👥", "Manage accounts, staff enrollment, and system roles."),
+            new("User", "user", "👥", "Manage user accounts and admin portal access."),
+            new("Jobs", "jobs", "💼", "Open Job Type Configuration, including overtime policies."),
             new("Organisation", "org", "🏢", "Configure organizational structure and hierarchy."),
             new("Document Types", "documents", "📄", "Define system document classifications."),
             new("Request Types", "requests", "📝", "Manage workflows for leave and internal requests."),
-            new("Job", "jobs", "💼", "Manage job types, employment configuration and staff approval workflows."),
             new("Teams", "teams", "🤝", "Manage departments and internal work teams."),
             new("Schedules", "schedules", "⏰", "Configure work shifts, breaks, and special days."),
             new("Leaves", "leaves", "🌴", "Setup leave types, sets, and global policies."),
             new("Payroll", "payroll", "💰", "Manage periods, wage codes, and payroll items."),
             new("Performance", "performance", "📈", "Define checklists and work priorities."),
-            new("Configurations", "config", "⚙️", "Global system-wide variables and settings."),
+            new("Configurations", "config", "⚙️", "Manage job types, request approval flows and application configuration."),
             new("Roles & Permissions", "roles", "🔐", "Manage roles (user groups) and grouped permissions."),
             new("Positions", "positions", "💼", "Manage job positions and configurations."),
-            new("State Transitions", "states", "🔄", "Configure workflow status transitions."),
             new("Work Planning", "workplaning","💼", "Manage work templates, schedules."
         )
          };
@@ -80,10 +78,3 @@
         </div>
     </NotAuthorized>
 </AuthorizeView>
-
-@code {
-    private bool isDeveloper;
-    protected override async Task OnInitializedAsync() => isDeveloper = await UserAccess.HasUserGroupAsync("Developer");
-
-  
-}

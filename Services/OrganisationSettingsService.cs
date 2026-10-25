@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
@@ -177,12 +177,13 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
     {
         await RequireAsync(id, "UserOrganisations.View", "UserOrganisations.Admin.View", "Organisation.Edit", "Organisation.Contact.View");
         await using var db = await factory.CreateDbContextAsync();
-        return await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == id)
+        var rows = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == id)
             .OrderBy(x => x.Individual.FirstNameEnglish).ThenBy(x => x.JobId)
             .Select(x => new OrganisationStaffRow(x.JobId,
                 x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? ""),
                 x.Staff.EmployeeNumber, x.OrganisationStructure.Name, x.JobType.TypeName, x.JobState.StateName) { IndividualId = x.IndividualID })
             .ToListAsync();
+        return rows.Select(row => row with { Name = string.Join(" ", row.Name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) }).ToList();
     }
     public async Task<ServiceResult> DeleteContactAsync(int id, int contactId)
     {

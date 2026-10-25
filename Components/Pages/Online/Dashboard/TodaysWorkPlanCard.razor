@@ -7,41 +7,37 @@
 @inject ILogger<TodaysWorkPlanCard> Logger
 
 <section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Today's Work Plan">
-    <div class="flex flex-wrap items-center justify-between gap-2 border-b p-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
         <div><h3 class="font-semibold">Today's Work Plan</h3><p class="mt-1 text-xs text-slate-500">@today.ToString("dd MMM yyyy")</p></div>
         <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="LoadAsync" aria-label="Refresh today's work plan"><i class="fas fa-sync" aria-hidden="true"></i></button>
     </div>
-    <div class="space-y-3 p-4">
+    <div class="space-y-2 px-4 py-2">
         <a href="/online/duty-roster" class="app-button app-button-secondary">Today's duty roster</a>
         @if (loading) { <p role="status" class="text-sm text-slate-500">Loading today's work plan...</p> }
         else if (error != null) { <p role="alert" class="text-sm text-amber-700">@error</p> }
         else if (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)) { <p class="text-sm text-slate-500">@scheduleMessage</p> }
         else
         {
-            @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose).ThenBy(x => x.StartDateTime))
+            @if (plan.TemporaryWorkingHoursMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.TemporaryWorkingHoursMessage</p> }
+            @if (plan.ScheduleAmendmentMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.ScheduleAmendmentMessage</p> }
+            @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime))
             {
-                <div class="rounded-lg border p-3">
-                    <p class="text-xs font-medium text-slate-500">@assignment.SchedulePurpose schedule</p>
-                    <p class="mt-1 break-words text-sm font-semibold">@assignment.Name</p>
-                    <p class="mt-1 text-sm tabular-nums">@Time(ScheduledStart(assignment))–@Time(ScheduledEnd(assignment))</p>
-                </div>
+                <section class="border-t pt-2" aria-label="@assignment.Name">
+                    <h4 class="break-words text-sm font-semibold">@assignment.Name</h4>
+                    <ol class="mt-1 divide-y">
+                        @foreach(var item in EventsFor(assignment))
+                        {
+                            <AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)"
+                                Condition="@EventCondition(item)" Tone="@(IsClockEvent(item.Name) && item.IsMandatory && item.RequiresAttendance ? "info" : "muted")" />
+                        }
+                    </ol>
+                </section>
             }
-            <ol class="divide-y">
-                @foreach (var item in plan.Segments.OrderBy(x => x.StartDateTime).ThenBy(x => x.SequenceNumber))
-                {
-                    <li class="flex items-start gap-3 py-3">
-                        <time class="shrink-0 text-sm font-semibold tabular-nums" datetime="@item.StartDateTime.ToString("O")">@Time(item.StartDateTime)</time>
-                        <div class="min-w-0 flex-1">
-                            <p class="break-words text-sm font-medium">@EventName(item.Name)</p>
-                            <p class="mt-1 text-xs text-slate-500">@item.SchedulePurpose
-                                @if (!IsClockEvent(item.Name) && item.EndDateTime > item.StartDateTime) { <span> · until @Time(item.EndDateTime)</span> }
-                            </p>
-                            @if (IsClockEvent(item.Name) && item.IsMandatory && item.RequiresAttendance)
-                            { <span class="mt-1 inline-block text-xs font-semibold text-blue-600">Required</span> }
-                        </div>
-                    </li>
-                }
-            </ol>
+            @if (!plan.Assignments.Any(x=>x.IsValid) && plan.Segments.Count>0)
+            {
+                <ol class="divide-y">@foreach(var item in plan.Segments.OrderBy(x=>x.StartDateTime).ThenBy(x=>x.SequenceNumber))
+                {<AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)" Condition="@EventCondition(item)" />}</ol>
+            }
             @if (plan.Segments.Count == 0) { <p class="text-sm text-slate-500">No events are configured for this plan.</p> }
         }
     </div>
@@ -86,19 +82,25 @@
         finally { loading = false; }
     }
     private static string Time(DateTime value) => value.ToString("HH:mm");
-    // Older assignments include their late clocking window in EndDateTime.
-    // Show the scheduled boundary rather than that permitted clocking limit.
-    private DateTime ScheduledStart(AttendanceWorkAssignmentDto assignment) => plan!.Segments
-        .Where(x => x.SchedulePurpose == assignment.SchedulePurpose && EventName(x.Name) == "Check in")
-        .Select(x => x.StartDateTime).DefaultIfEmpty(assignment.StartDateTime).Min();
-    private DateTime ScheduledEnd(AttendanceWorkAssignmentDto assignment) => plan!.Segments
-        .Where(x => x.SchedulePurpose == assignment.SchedulePurpose && EventName(x.Name) == "Check out")
-        .Select(x => x.StartDateTime).DefaultIfEmpty(assignment.EndDateTime).Max();
+    private IEnumerable<AttendanceWorkSegmentDto> EventsFor(AttendanceWorkAssignmentDto assignment)
+    {
+        var matching=plan!.Segments.Where(s=>s.WorkAssignmentId==assignment.WorkAssignmentId).ToList();
+        if(matching.Count==0)
+            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.Name.Contains(" · ",StringComparison.Ordinal) &&
+                s.Name[..s.Name.LastIndexOf(" · ",StringComparison.Ordinal)]==assignment.Name && plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && a.Name==assignment.Name)==1).ToList();
+        if(matching.Count==0)
+            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.StartDateTime>=assignment.StartDateTime && s.StartDateTime<=assignment.EndDateTime &&
+                plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && s.StartDateTime>=a.StartDateTime && s.StartDateTime<=a.EndDateTime)==1).ToList();
+        return matching.OrderBy(s=>s.StartDateTime).ThenBy(s=>s.SequenceNumber);
+    }
+    private static string? EventCondition(AttendanceWorkSegmentDto item)=>IsClockEvent(item.Name)
+        ? item.IsMandatory && item.RequiresAttendance ? "Required" : "Optional"
+        : item.EndDateTime>item.StartDateTime ? $"Until {Time(item.EndDateTime)}" : null;
     private static string EventName(string value)
     {
         var name = value.Split(" · ").Last();
         var normalized = string.Concat(name.Where(char.IsLetterOrDigit)).ToUpperInvariant();
-        return normalized switch { "CHECKIN" or "CLOCKIN" or "DUTYCHECKIN" => "Check in", "CHECKOUT" or "CLOCKOUT" or "DUTYCHECKOUT" => "Check out", _ => name };
+        return normalized switch { "CHECKIN" or "CLOCKIN" or "DUTYCHECKIN" => "Clock in", "CHECKOUT" or "CLOCKOUT" or "DUTYCHECKOUT" => "Clock out", _ => name };
     }
-    private static bool IsClockEvent(string value) => EventName(value) is "Check in" or "Check out";
+    private static bool IsClockEvent(string value) => EventName(value) is "Clock in" or "Clock out";
 }

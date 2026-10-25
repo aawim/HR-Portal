@@ -6,7 +6,7 @@ Admin-context direct/group assignments, excluding organisation-default grants.
 
 Also run `20261022_AdminAccessGrantWorkflow.sql` to register **Admin access
 grant** and its request storage. Configure its tenant/JobType approval stages
-under **Settings → Leaves → Request Approval Flows**. No approvers are guessed;
+under **Settings → Configurations → Request Approval Flows**. No approvers are guessed;
 submission requires a configured flow with independent active approvers who
 already have Admin portal access.
 

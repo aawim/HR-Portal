@@ -1,4 +1,4 @@
-﻿using Azure.Core;
+using Azure.Core;
 using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
@@ -149,6 +149,10 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
                     "The selected work template is not actively " +
                     "assigned to this job for the requested date.");
             }
+
+            if (jobTemplateAssignment.SchedulePurpose == "Duty" && !await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, request.JobId,
+                request.OrganisationBusinessEntityId, request.WorkDate.Date, request.WorkDate.Date, cancellationToken))
+                return Failure(HRM.Helpers.OfficialSchedulePrerequisite.Message);
 
             var planningProvider =
                 await ResolvePlanningProviderAsync(
@@ -958,41 +962,14 @@ public  class WorkAssignmentGeneratorService : IWorkAssignmentGenerator
             GenerateWorkPlanRequest request,
             CancellationToken cancellationToken)
     {
-        //var workDate = request.WorkDate.Date;
+        var job=await db.Jobs.AsNoTracking().SingleOrDefaultAsync(j=>j.JobId==request.JobId && j.OrganisationID==request.OrganisationBusinessEntityId,cancellationToken);
+        if(job==null) return null;
+        var candidates=await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db,job,request.WorkDate.Date,request.WorkDate.Date,cancellationToken);
+        var assignment=HRM.Helpers.EffectiveStaffSchedules.On(candidates,request.WorkDate.Date).Select(c=>c.Assignment)
+            .FirstOrDefault(a=>HRM.Helpers.StaffScheduleCalendar.TemplateOn(a,request.WorkDate.Date)==request.WorkTemplateId);
+        return assignment==null ? null : new JobTemplateAssignmentModel { SchedulePurpose=assignment.SchedulePurpose,JobWorkTemplateAssignmentId=assignment.JobWorkTemplateAssignmentID,
+            JobId=job.JobId,WorkTemplateId=request.WorkTemplateId,EffectiveFrom=assignment.EffectiveFrom,EffectiveTo=assignment.EffectiveTo };
 
-        DateOnly workDate = DateOnly.FromDateTime(request.WorkDate.Date);
-
-        return await db.JobWorkTemplateAssignments
-            .AsNoTracking()
-            .Where(x =>
-                x.JobID == request.JobId &&
-                x.WorkTemplateID ==
-                    request.WorkTemplateId &&
-                x.IsActive &&
-                x.EffectiveFrom <= request.WorkDate.Date &&
-                (
-                    x.EffectiveTo == null ||
-                    x.EffectiveTo >= request.WorkDate.Date
-                ))
-            .OrderByDescending(x =>
-                x.EffectiveFrom)
-            .Select(x => new JobTemplateAssignmentModel
-            {
-                SchedulePurpose = x.SchedulePurpose,
-                JobWorkTemplateAssignmentId =
-                    x.JobWorkTemplateAssignmentID,
-
-                JobId =
-                    x.JobID,
-
-                WorkTemplateId =
-                    x.WorkTemplateID,
-
-                EffectiveFrom = x.EffectiveFrom,
-
-                EffectiveTo = x.EffectiveTo.HasValue ? x.EffectiveTo.Value : null
-            })
-            .FirstOrDefaultAsync(cancellationToken);
     }
 
    

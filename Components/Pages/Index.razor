@@ -1,4 +1,4 @@
-﻿@page "/online"
+@page "/online"
 @page "/"
 
 
@@ -64,12 +64,6 @@
                         <h1 class="text-3xl font-bold text-slate-800">
                             User Dashboard
                         </h1>
-                        <p class="text-slate-500 mt-1">
-                            Welcome back,
-                            <span class="font-semibold text-slate-700">
-                                @UserName
-                            </span>
-                        </p>
                     </div>
                 </div>
 
@@ -93,6 +87,7 @@
                         }
 
                         <TodaysAttendanceLogCard RefreshKey="attendanceRefreshKey" />
+                        <UnevenLogsCard />
                     </div>
 
                     <!-- CENTER -->
@@ -115,16 +110,14 @@
 
                      <!-- RIGHT -->
 
-                    <div class="xl:col-span-3 min-w-0 space-y-4">
+                    <div class="xl:col-span-3 min-w-0 space-y-2">
+                        <HRM.Components.Pages.Online.Leave.Cards.LeaveCalendarCard IncludeTeam="true" />
                         <TodaysWorkPlanCard RefreshKey="attendanceRefreshKey" />
 
-                        <TodaysAttendanceStatusCard RefreshKey="attendanceRefreshKey" />
                         <WeeklyWorkedHoursCard RefreshKey="attendanceRefreshKey" />
 
                         <WorkHandoverInboxCard />
                         <LeaveBalanceCard />
-                        <HRM.Components.Pages.Online.Leave.Cards.LeaveCalendarCard IncludeTeam="true" />
-                        <UnevenLogsCard  />
 
                     </div>
 
@@ -431,10 +424,11 @@
         {
             _attendancePlan =
                 await AttendancePlanService
-                    .GetPlanAsync(
+                    .GetOrGenerateAsync(
                         context.IndividualId,
                         context.ActiveJob.JobId,
-                        DateTime.Today);
+                        context.ActiveJob.OrganisationId,
+                        DateTime.UtcNow.AddHours(5).Date);
         }
 
         StateHasChanged(); // IMPORTANT

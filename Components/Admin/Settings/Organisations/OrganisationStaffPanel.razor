@@ -40,8 +40,13 @@
     private string? exportError;
     private string? error;
     private IEnumerable<OrganisationStaffRow> Filtered => Filter(rows ?? [], search, jobType);
-    public static IEnumerable<OrganisationStaffRow> Filter(IEnumerable<OrganisationStaffRow> source, string query, string type) => source.Where(x =>
-        (type.Length == 0 || x.JobType == type) && (x.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || (x.EmployeeNumber ?? "").Contains(query, StringComparison.OrdinalIgnoreCase) || x.Department.Contains(query, StringComparison.OrdinalIgnoreCase)));
+    private static string Normalise(string? value) => string.Join(" ", (value??"").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    public static IEnumerable<OrganisationStaffRow> Filter(IEnumerable<OrganisationStaffRow> source, string query, string type)
+    {
+        var needle=Normalise(query);
+        return source.Where(x=>(string.IsNullOrEmpty(type)||x.JobType==type) &&
+            (Normalise(x.Name).Contains(needle,StringComparison.OrdinalIgnoreCase) || Normalise(x.EmployeeNumber).Contains(needle,StringComparison.OrdinalIgnoreCase) || Normalise(x.Department).Contains(needle,StringComparison.OrdinalIgnoreCase)));
+    }
     private async Task ExportAsync(bool pdf)
     {
         if (exporting) return;
@@ -60,9 +65,12 @@
         catch (Exception ex) { Logger.LogError(ex, "Organisation staff export failed"); exportError = "Export failed. Please try again."; }
         finally { exporting = false; }
     }
-    protected override async Task OnInitializedAsync()
+    private int loadedOrganisationId;
+    protected override async Task OnParametersSetAsync()
     {
-        try { rows = await Settings.GetStaffAsync(OrganisationId); }
+        if(loadedOrganisationId==OrganisationId)return;
+        var requested=OrganisationId;loadedOrganisationId=requested;rows=null;error=null;exportError=null;search="";jobType="";
+        try { var result=await Settings.GetStaffAsync(requested); if(OrganisationId==requested)rows=result; }
         catch (Exception ex) { Logger.LogError(ex, "Could not load organisation staff"); error = "Staff could not be loaded. Please try again."; }
     }
 }

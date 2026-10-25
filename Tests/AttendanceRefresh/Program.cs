@@ -28,6 +28,9 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await WorkingHoursTests.RunAsync(); Console.WriteLine("PASS Working hours: rain amendments, weekly targets, make-up, duty overlap, overnight shifts, leave, eligibility, approvals, notifications, stale edits and tenant permissions"); }
+catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Working hours: {ex}"); }
+if (args.Contains("--working-hours-only")) return failures == 0 ? 0 : 1;
 try { await SecurityHardeningTests.RunAsync(); Console.WriteLine("PASS Security hardening: retired endpoints, CSRF, configured database providers, clock ownership, developer-only diagnostics, leave-type privileges and tenant isolation"); }
 catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Security hardening: {ex}"); }
 if (args.Contains("--security-only")) return failures == 0 ? 0 : 1;

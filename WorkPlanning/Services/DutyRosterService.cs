@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.WorkPlanning;
@@ -103,6 +103,8 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
 
     private static async Task CheckAvailabilityAsync(HrmTeContext db, Job job, DateTime start, DateTime end, IReadOnlyList<long> excluded)
     {
+        if (!await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, job.JobId, job.OrganisationID, start.Date, start.Date))
+            throw new InvalidOperationException(HRM.Helpers.OfficialSchedulePrerequisite.Message);
         if (job.JobStateId != SharedConfig.JobStates.APPROVED || job.JoinedDate > start || (job.TerminatedDate.HasValue && job.TerminatedDate <= end))
             throw new InvalidOperationException("The receiving staff member needs an approved active job for the complete duty period.");
         var lastDate = end.AddTicks(-1).Date;

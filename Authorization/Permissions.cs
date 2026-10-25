@@ -74,6 +74,9 @@
         public const string AttendanceReject = "Attendance.Reject";
         public const string AttendanceCancel = "Attendance.Cancel";
         public const string AttendanceCreate = "Attendance.Create";
+        public const string WorkingHoursConfigure = "Attendance.WorkingHours.Configure";
+        public const string WorkingHoursReview = "Attendance.WorkingHours.Review";
+        public const string OfficialScheduleAmend = "Attendance.Schedule.Amend";
 
         // =========================
         // Administration

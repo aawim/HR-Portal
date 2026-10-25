@@ -149,7 +149,7 @@ namespace HRM.Services.Interfaces.AppovalWF
                 }
                 catch (HRM.Services.RequestTransitionConfigurationException ex)
                 {
-                    throw new HRM.Services.WorkflowConfigurationException(context, ex.Detail) { ConfigurationUrl = "/admin/settings/states" };
+                    throw new HRM.Services.WorkflowConfigurationException(context, ex.Detail) { ConfigurationUrl = "/admin/settings/config/state-transitions" };
                 }
             }
 

@@ -24,7 +24,7 @@
                 <div class="mb-5 flex items-center gap-3 px-1"><span class="text-indigo-600"><OrganisationIcon /></span><h1 class="text-xl font-semibold text-slate-900">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                <section class="min-w-0 space-y-6 @(activeSection == "Structure" ? "xl:col-span-10" : "xl:col-span-8")">
+                <section class="min-w-0 space-y-6 @(activeSection is "Structure" or "Schedules" ? "xl:col-span-10" : "xl:col-span-8")">
                     @if (model.Id == 0 || activeSection == "Edit")
                     {
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -153,12 +153,16 @@
                     {
                         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationGroupsTab Org="SelectedOrganisation" @key="model.Id" /></div>
                     }
-                    @if (model.Id > 0 && (activeSection == "Schedules" || activeSection == "Documents"))
+                    @if (model.Id > 0 && activeSection == "Schedules")
+                    {
+                        <HRM.Components.Admin.Settings.Workplan.ScopeScheduleSettings OrganisationId="model.Id" OrganisationOnly="true" @key="model.Id" />
+                    }
+                    @if (model.Id > 0 && activeSection == "Documents")
                     {
                         <section class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h3 class="text-sm font-semibold text-slate-900">@activeSection</h3><p class="mt-2 text-sm text-slate-500">Organisation @activeSection.ToLowerInvariant() management is not yet available.</p></section>
                     }
                 </section>
-                <aside class="min-w-0 @(activeSection == "Structure" ? "xl:col-span-2" : "xl:col-span-4")">
+                <aside class="min-w-0 @(activeSection is "Structure" or "Schedules" ? "xl:col-span-2" : "xl:col-span-4")">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="border-b border-slate-200 px-5 py-4"><div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">Organisations</h2><p class="mt-1 text-xs text-slate-500">@data.Organisations.Count organisations</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-label="Add organisation" @onclick="NewOrganisation"><OrganisationIcon Name="Add" /></button></div>
                             <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" aria-label="Search organisations" placeholder="Search name or registration number…" @bind="search" @bind:event="oninput" /></div>
