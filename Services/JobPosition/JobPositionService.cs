@@ -34,7 +34,8 @@ namespace HRM.Services.JobPosition
             }
 
 
-            var activeJob = _jobService.GetActiveJobAsync(StaffId, cancellationToken);
+            var activeJob = await _jobService.GetActiveJobAsync(StaffId, cancellationToken);
+            if (activeJob == null) return null;
 
  
                 await using var db =
@@ -51,7 +52,7 @@ namespace HRM.Services.JobPosition
                         on jobPosition.JobPositionStateId equals
                            state.JobPositionStateId
 
-                    where jobPosition.JobId == activeJob.Result.JobId
+                    where jobPosition.JobId == activeJob.JobId
                           && jobPosition.JobPositionStateId ==
                                 SharedConfig.JobPositionStates.APPROVED
                           && jobPosition.ToDate == null
@@ -107,6 +108,8 @@ namespace HRM.Services.JobPosition
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
+
+            await HRM.Helpers.StaffDataAccess.RequireJobAsync(db, _userAccessService, jobId);
 
             var history =
                 await
@@ -222,6 +225,10 @@ namespace HRM.Services.JobPosition
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
                     cancellationToken);
+
+            var scope = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
+            if (scope.HasValue && scope.Value != organisationId)
+                throw new UnauthorizedAccessException("Position history is outside the current organisation.");
 
             var jobs =
                 await

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
@@ -43,7 +43,7 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
             Types = await db.OrganisationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.OrganisationTypeId, x.TypeName)).ToListAsync(),
             Countries = await db.Countries.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationSettingsOption(x.CountryId, x.NameEnglish)).ToListAsync(),
             AddressTypes = await db.AddressBaseTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.AddressBaseTypeId, x.TypeName)).ToListAsync(),
-            AddressUsages = await db.BusinessEntityLocationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.BusinessEntityLocationTypeId, x.TypeName)).ToListAsync(),
+            AddressUsages = await db.BusinessEntityLocationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.BusinessEntityLocationTypeId, x.TypeName ?? "Address")).ToListAsync(),
             ContactTypes = await db.ContactInformationTypes.AsNoTracking().Select(x => new OrganisationSettingsOption(x.ContactInformationTypeId, x.TypeName)).ToListAsync(),
             Islands = await db.Islands.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.IslandId, x.AtollId, x.NameEnglish)).ToListAsync(),
             Wards = await db.Wards.AsNoTracking().OrderBy(x => x.NameEnglish).Select(x => new OrganisationAreaOption(x.WardId, x.IslandId, x.NameEnglish)).ToListAsync()

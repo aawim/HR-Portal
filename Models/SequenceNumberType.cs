@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -22,5 +22,4 @@ public partial class SequenceNumberType
 
     public virtual ICollection<RequestType> RequestTypes { get; set; } = new List<RequestType>();
 
-    public virtual ICollection<ServiceType> ServiceTypes { get; set; } = new List<ServiceType>();
 }

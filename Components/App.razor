@@ -7,6 +7,7 @@
     <base href="/" />
     <script src="js/theme.js"></script>
     <link rel="stylesheet" href="bootstrap/bootstrap.min.css" />
+    <link rel="stylesheet" href="css/tailwind.css?v=20261025-1" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="HRM.styles.css" />
     <link rel="stylesheet" href="css/theme.css" />
@@ -19,16 +20,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <HeadOutlet />
+    <HeadOutlet @rendermode="new InteractiveServerRenderMode(prerender: false)" />
 </head>
 
 <body>
-    @*
-
-    LATER NEED TO UNCOMMENT
-    <Routes/> *@
-    <Routes @rendermode="InteractiveServer" />
+    @* Load account context and dashboard data once, after the interactive circuit starts. *@
+    <Routes @rendermode="new InteractiveServerRenderMode(prerender: false)" />
     <script src="_framework/blazor.web.js"></script>
     <script type="module" src="js/notification-copy.js?v=20261022-1"></script>
 

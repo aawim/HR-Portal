@@ -45,7 +45,7 @@
                 OnEmployeeSelected="SelectEmployee" />
 
 @* <WorkPlanSegmentsDrawer IsOpen="@showSegmentPanel"
-                        IsLoading="@isLoadingSegments"
+                        IsLoading="@isLoadingPlan"
                         IsPreviewMode="@isPreviewMode"
                         Segments="@DisplayedSegments"
                         TemplateName="@selectedPlan?.WorkTemplateName"
@@ -55,7 +55,7 @@
 
 
 <WorkPlanSegmentsDrawer IsOpen="@showSegmentPanel"
-                        IsLoading="@isLoadingSegments"
+                        IsLoading="@isLoadingPlan"
                         IsPreviewMode="@isPreviewMode"
                         IsSaving="@isSaving"
                         Segments="@DisplayedSegments"
@@ -83,7 +83,6 @@
 
     private bool isLoading;
     private bool isLoadingPlan;
-    private bool isLoadingSegments;
     private bool isSaving;
 
     private bool showPlanPanel;
@@ -151,7 +150,8 @@
         }
         catch (Exception ex)
         {
-            ToastService.Error($"Unable to generate the work plan: {ex.Message}");
+            Console.Error.WriteLine(ex);
+            ToastService.Error("The work plan could not be generated. Please refresh and try again.");
         }
         finally
         {

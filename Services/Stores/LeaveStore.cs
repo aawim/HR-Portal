@@ -17,7 +17,7 @@ namespace HRM.Services.Stores
             {
                 JobId = x.JobId,
                 LeaveTypeId = x.LeaveTypeId,
-                LeaveTypeName = x.LeaveType?.Name,
+                LeaveTypeName = x.LeaveType?.Name ?? string.Empty,
                 RemainingDays = x.RemainingDays ?? 0,
             })
             .ToList();

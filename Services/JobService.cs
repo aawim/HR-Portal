@@ -29,16 +29,18 @@ namespace HRM.Services
         {
             using var db = await _dbFactory.CreateDbContextAsync();
 
-            return await JobHistoryQuery.LoadAsync(db, individualId);
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
+            return await JobHistoryQuery.LoadAsync(db, individualId, organisationId: organisation);
         }
         public async Task<int?> GetOrganisationIdByIndividualAsync(int individualId)
         {
             using var db = await _dbFactory.CreateDbContextAsync();
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
 
             return await db.Jobs
                 .AsNoTracking()
                 .Where(x =>
-                    x.IndividualID == individualId &&
+                    x.IndividualID == individualId && (!organisation.HasValue || x.OrganisationID == organisation.Value) &&
                     x.JobStateId == SharedConfig.JobStates.APPROVED &&
                     x.TerminatedDate == null)
                 .Select(x => (int?)x.OrganisationID)
@@ -47,11 +49,12 @@ namespace HRM.Services
         public async Task<ActiveJobDto?> GetActiveJobAsync(int individualId, CancellationToken cancellationToken = default)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, individualId);
 
             return await db.Jobs
                  .AsNoTracking()
                  .Where(x =>
-                     x.IndividualID == individualId &&
+                     x.IndividualID == individualId && (!organisation.HasValue || x.OrganisationID == organisation.Value) &&
                      x.JobStateId == SharedConfig.JobStates.APPROVED &&
                      x.TerminatedDate == null)
                  .OrderByDescending(x => x.JoinedDate)
@@ -85,7 +88,7 @@ namespace HRM.Services
                 })
                .FirstOrDefaultAsync();
         }
-        public async Task<ActiveJobDto> GetMyActiveJobAsync()
+        public async Task<ActiveJobDto?> GetMyActiveJobAsync()
         {
             var context = await _access.RequireContextAsync();
 
@@ -108,6 +111,7 @@ namespace HRM.Services
                 await _dbFactory.CreateDbContextAsync();
 
             // 2. Removed the (int?) cast so it returns a normal int default (0) if not found
+            await HRM.Helpers.StaffDataAccess.RequireJobAsync(db, _access, jobId);
             return await db.Jobs
                 .AsNoTracking()
                 .Where(x =>

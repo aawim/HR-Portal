@@ -6,7 +6,7 @@ namespace HRM.Services;
 
 internal static class JobHistoryQuery
 {
-    public static Task<List<JobDto>> LoadAsync(HrmTeContext db, int individualId, CancellationToken token = default)
+    public static Task<List<JobDto>> LoadAsync(HrmTeContext db, int individualId, CancellationToken token = default, int? organisationId = null)
         => (from job in db.Jobs.AsNoTracking()
             join organisation in db.Organisations on job.OrganisationID equals organisation.BusinessEntityID into organisations
             from organisation in organisations.DefaultIfEmpty()
@@ -16,7 +16,7 @@ internal static class JobHistoryQuery
             from state in states.DefaultIfEmpty()
             join type in db.JobTypes on job.JobTypeId equals type.JobTypeId into types
             from type in types.DefaultIfEmpty()
-            where job.IndividualID == individualId
+            where job.IndividualID == individualId && (!organisationId.HasValue || job.OrganisationID == organisationId.Value)
             orderby job.JoinedDate descending, job.JobId descending
             select new JobDto
             {

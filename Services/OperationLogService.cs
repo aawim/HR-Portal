@@ -135,7 +135,7 @@ namespace HRM.Services
                 UpdatedDate = null,
                 UpdatedByIndividualId = null,
                 UpdatedByUserId = null,
-                CreatedByIp = ipAddress.ToString(),
+                CreatedByIp = ipAddress?.ToString() ?? string.Empty,
                 UpdatedByIp = string.Empty,
                 Remarks = remarks,
                 UpdatedContextId = (int)_portalContext.CurrentContext,

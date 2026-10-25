@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -24,13 +24,9 @@ public partial class Role
 
     public int? ModuleId { get; set; }
 
-    public virtual ICollection<BusinessEntityRelationAssignedRole> BusinessEntityRelationAssignedRoles { get; set; } = new List<BusinessEntityRelationAssignedRole>();
-
     public virtual Context Context { get; set; } = null!;
 
     public virtual Module? Module { get; set; }
-
-    public virtual ICollection<NavigationLink> NavigationLinks { get; set; } = new List<NavigationLink>();
 
     public virtual OperationLog? OperationLog { get; set; }
 

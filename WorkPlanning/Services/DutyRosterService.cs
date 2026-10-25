@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.WorkPlanning;
@@ -149,7 +149,7 @@ public sealed partial class DutyRosterService(IDbContextFactory<HrmTeContext> fa
             var receivingJob = await db.Jobs.AsNoTracking().SingleOrDefaultAsync(x => x.JobId == model.TargetJobId && x.OrganisationID == org)
                 ?? throw new UnauthorizedAccessException("Select receiving staff in the current organisation.");
             var manage = await access.HasPermissionAsync("Schedule.Attach");
-            if (!manage && (preview.WorkPlan.IndividualId != actor.IndividualId || preview.WorkPlan.Job.OrganisationStructureId == null ||
+            if (!manage && (preview.WorkPlan.IndividualId != actor.IndividualId || preview.WorkPlan.Job.OrganisationStructureId <= 0 ||
                 receivingJob.OrganisationStructureId != preview.WorkPlan.Job.OrganisationStructureId))
                 throw new UnauthorizedAccessException("Choose your own duty and receiving staff in your department.");
             await PreparePlansAsync(receivingJob.JobId, receivingJob.IndividualID, org, preview.StartDateTime, preview.EndDateTime);

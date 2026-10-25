@@ -15,7 +15,6 @@ using HRM.WorkPlanning.Abstractions;
 using HRM.WorkPlanning.Builders;
 using HRM.WorkPlanning.Services;
 
-using HRM.WorkPlanning.Services.TestServicesToBeRemoved;
 using HRM.Services.WorkPlanning;
 using HRM.Services.Attendance.Repositories;
 using HRM.Services.Attendance.Abstraction;
@@ -44,8 +43,6 @@ using HRM.Services.Interfaces.AppovalWF;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddHttpContextAccessor();
-builder.Services.AddDistributedMemoryCache();
-builder.Services.AddSession();
 
 
 
@@ -56,26 +53,27 @@ builder.Logging.AddConsole();
 builder.Services.AddServerSideBlazor()
     .AddCircuitOptions(options =>
     {
-        options.DetailedErrors = true;
+        options.DetailedErrors = builder.Environment.IsDevelopment();
     });
 
 
 
-builder.Services.AddDbContextFactory<HrmTeContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+var mainConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    builder.Configuration.GetConnectionString("DefaultConnection"), builder.Environment.IsDevelopment(), "ConnectionStrings:DefaultConnection");
+var configuredAuditConnection = builder.Configuration.GetConnectionString("AuditConnection");
+if (string.IsNullOrWhiteSpace(configuredAuditConnection)) configuredAuditConnection = builder.Configuration["AuditConnectionStrings:DefaultConnection"];
+var auditConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
+    configuredAuditConnection, builder.Environment.IsDevelopment(), "ConnectionStrings:AuditConnection");
+builder.Services.AddDbContextFactory<HrmTeContext>(options => options.UseSqlServer(mainConnection));
 
 builder.Services.AddDbContextFactory<AuditDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("AuditConnectionStrings")));
+    options.UseSqlServer(auditConnection));
 
 builder.Services.AddScoped<ISequenceNumberService, SequenceNumberService>();
 builder.Services.AddScoped<IRequestService, RequestService>();
 
 
 
-/// Should be removed
-builder.Services.AddScoped<IWorkPlanningTestService,WorkPlanningTestService>();
-
-builder.Services.AddScoped<WorkAssignmentResolverTestService>();
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -297,13 +295,6 @@ builder.Services.AddScoped<ITeam, TeamService>();
 
 
 
-builder.Services.AddScoped(sp =>
-{
-    // We use NavigationManager to automatically get the current URL (e.g., https://localhost:7123/)
-    // This ensures your relative API calls like "api/leavetypes" work perfectly.
-    var navManager = sp.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>();
-    return new HttpClient { BaseAddress = new Uri(navManager.BaseUri) };
-});
 
 
 // 1. Add Blazor Services
@@ -311,7 +302,9 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 // 2. Add Controller Services (Required to trigger the Login/Logout redirects)
-builder.Services.AddControllers();
+// MVC antiforgery authorization filters require the view-feature services.
+builder.Services.AddControllersWithViews();
+builder.Services.AddAuthorization();
 
 // 3. Configure OpenID Connect & Cookie Authentication
 builder.Services.AddAuthentication(options =>
@@ -319,7 +312,12 @@ builder.Services.AddAuthentication(options =>
     options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
 })
-.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme)
+.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
+{
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
+})
 .AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
 {
     options.Authority = builder.Configuration["Authentication:OpenIdConnect:Authority"];
@@ -328,6 +326,8 @@ builder.Services.AddAuthentication(options =>
 
     options.CallbackPath = "/Online/Auth/Callback";
     options.ResponseType = "code";
+    options.UsePkce = true;
+    options.RequireHttpsMetadata = true;
     options.SaveTokens = true;
 
     options.GetClaimsFromUserInfoEndpoint = true;
@@ -349,7 +349,6 @@ builder.Services.AddAuthentication(options =>
 
     options.Scope.Clear();
     options.Scope.Add("openid");
-    options.Scope.Add("efaas.profile");
     options.Scope.Add("efaas.profile");
     options.Scope.Add("efaas.email");
     options.Scope.Add("efaas.mobile");
@@ -383,11 +382,6 @@ builder.Services.AddAuthentication(options =>
 
 // 4. Add Blazor Cascading Authentication State
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddControllers();
-
-builder.Services.AddControllersWithViews();
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
 
 
 var app = builder.Build();
@@ -411,9 +405,17 @@ app.UseHttpsRedirection();
 
 app.UseStaticFiles();
 
+app.Use(async (context, next) =>
+{
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["X-Frame-Options"] = "SAMEORIGIN";
+    context.Response.Headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
+    context.Response.Headers["Content-Security-Policy"] = "frame-ancestors 'self'; object-src 'none'; base-uri 'self'";
+    await next();
+});
+
 app.UseRouting();
 
-app.UseSession();
 
 
 
@@ -457,19 +459,23 @@ app.MapControllerRoute(
 //})
 //.AllowAnonymous();
 
-app.MapGet("/Online/Auth/NoAccessLogout", (HttpContext context) =>
-{
+// Direct links open confirmation; only the antiforgery-protected POST signs out.
+app.MapGet("/Online/Auth/Logout", () => Results.LocalRedirect("/Online/Auth/NoAccessLogout"))
+    .AllowAnonymous();
 
-    return Results.SignOut(
-        new AuthenticationProperties
-        {
-            RedirectUri = "/"
-        },
-        new[]
-        {
-            "Cookies",
-            OpenIdConnectDefaults.AuthenticationScheme
-        });
+// Legacy GET links show confirmation. Only the antiforgery-protected POST signs out.
+app.MapGet("/Online/Auth/NoAccessLogout", (HttpContext context, Microsoft.AspNetCore.Antiforgery.IAntiforgery antiforgery) =>
+{
+    var tokens = antiforgery.GetAndStoreTokens(context);
+    var field = System.Net.WebUtility.HtmlEncode(tokens.FormFieldName);
+    var token = System.Net.WebUtility.HtmlEncode(tokens.RequestToken);
+    context.Response.Headers.CacheControl = "no-store";
+    return Results.Content($"""
+        <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign out</title></head>
+        <body><main><h1>Sign out</h1><p>Sign out of your current account to sign in again.</p>
+        <form action="/Online/Auth/Logout" method="post"><input type="hidden" name="{field}" value="{token}"><button type="submit">Sign out</button></form>
+        <p><a href="/">Return to home</a></p></main></body></html>
+        """, "text/html; charset=utf-8");
 })
 .AllowAnonymous();
 

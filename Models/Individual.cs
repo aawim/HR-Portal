@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -29,8 +29,6 @@ public partial class Individual
     public virtual BusinessEntity BusinessEntity { get; set; } = null!;
 
     public virtual Country? Country { get; set; }
-
-    public virtual GenderType GenderType { get; set; } = null!;
 
     public virtual ICollection<Idcard> Idcards { get; set; } = new List<Idcard>();
 

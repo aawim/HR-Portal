@@ -17,10 +17,13 @@ namespace HRM.Services
         private readonly IAttendanceLogProcessor _attendanceLogProcessor;
         private readonly UserSettingsService? _accounts;
         private readonly IAttendanceService? _attendance;
+        private readonly IHostEnvironment? _environment;
+        private readonly IConfiguration? _configuration;
         public AttendanceLogService(HrmTeContext context,
             IAttendanceLogProcessor attendanceLogProcessor,
             IOperationLogService operationLogService, 
-            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null, IAttendanceService? attendance = null)
+            IDbContextFactory<HrmTeContext> dbFactory, IUserAccessService access, UserSettingsService? accounts = null, IAttendanceService? attendance = null,
+            IHostEnvironment? environment = null, IConfiguration? configuration = null)
         {
             _context = context;
             _operationLogService = operationLogService;
@@ -29,6 +32,8 @@ namespace HRM.Services
             _attendanceLogProcessor = attendanceLogProcessor;
             _accounts = accounts;
             _attendance = attendance;
+            _environment = environment;
+            _configuration = configuration;
         }
        public async Task<List<TeamAttendanceDto>> GetMyTeamAttendanceTodayAsync()
         {
@@ -236,19 +241,28 @@ namespace HRM.Services
                 }
             return result;
         }
+        public async Task<bool> CanUseTestClockAsync() => _environment?.IsDevelopment() == true &&
+            _configuration?.GetValue<bool>("Security:AllowTestClock") == true && await _access.HasUserGroupAsync("Developer");
+
         public async Task AddClockEventAsync(
             int individualId,
             DateTime? checkTime = null)
         {
+            var actor = await _access.RequireContextAsync();
+            if (individualId <= 0 || actor.IndividualId != individualId)
+                throw new UnauthorizedAccessException("You can only clock attendance for your own employee account.");
+            if (checkTime.HasValue && !await CanUseTestClockAsync())
+                throw new UnauthorizedAccessException("Custom clock times are restricted to explicitly enabled development diagnostics.");
             var clockTime =
-                checkTime ?? DateTime.Now;
+                checkTime ?? DateTime.UtcNow.AddHours(5);
 
             var job =
                 await _context.Jobs
                     .AsNoTracking()
                     .Where(x =>
-                        x.IndividualID == individualId &&
-                        x.TerminatedDate == null)
+                        x.IndividualID == individualId && x.JobId == (actor.ActiveJob == null ? 0 : actor.ActiveJob.JobId) &&
+                        x.JobStateId == 4 && x.JoinedDate <= clockTime.Date &&
+                        (!x.TerminatedDate.HasValue || x.TerminatedDate.Value > clockTime.Date))
                     .OrderByDescending(x => x.JobId)
                     .FirstOrDefaultAsync();
 
@@ -261,6 +275,9 @@ namespace HRM.Services
             const int automaticInOutModeId = 3;
             const int attendanceLogModeId = 2;
             const int attendanceLogStateId = 1;
+            var audit = await _operationLogService.CreateAsync(_context,
+                HRM.Components.Shared.SharedConfig.OperationLogActionTypes.ATTENDANCE_LOG_CREATE,
+                $"Employee clock event for Individual {individualId}, Job {job.JobId} at {clockTime:O}.");
 
             var log =
                 new AttendanceLog
@@ -304,7 +321,7 @@ namespace HRM.Services
 
                     AttendanceLogModeId = attendanceLogModeId,
 
-                    OperationLogId = 1
+                    OperationLogId = audit.OperationLogId
                 };
             _context.ChangeTracker.Clear();
             await _context.AttendanceLogs.AddAsync(log);
@@ -322,10 +339,12 @@ namespace HRM.Services
         public Task AddAttendanceCheckAsync(int individualId, int mode) => AddClockEventAsync(individualId);
         public async Task<List<AttendanceLog>> GetAttendanceLogsAsync(int userId, DateTime startDate, DateTime endDate)
         {
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(_context, _access, userId);
             return await _context.AttendanceLogs
                 .Include(x => x.AttendanceLogResolutions)
                 // 1. Filter by the user (Update 'IndividualId' to match your actual Foreign Key property name)
-                .Where(log => log.IndividualId == userId && log.AttendanceLogStateId == 1)
+                .Where(log => log.IndividualId == userId && log.AttendanceLogStateId == 1 &&
+                    (!organisation.HasValue || log.OrganisationId == organisation.Value))
 
                 // 2. Filter by the date range. 
                 // We use .Date to strip out the time component and ensure accurate inclusive boundaries.
@@ -350,10 +369,12 @@ namespace HRM.Services
         }
         public async Task<List<JobLeaveType>> GetUserLeaveBalancesAsync(string identifier)
         {
+            var person = await _context.Users.Where(u => u.Username == identifier).Select(u => u.BusinessEntityID).SingleOrDefaultAsync();
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(_context, _access, person);
             return await _context.Users
                 .Where(u => u.Username == identifier) // Find the user
                 .SelectMany(u => u.Jobs) // Jump into their jobs
-                .Where(j => j.JobStateId == 4) // Optional: Uncomment this to only check ACTIVE jobs
+                .Where(j => j.JobStateId == 4 && (!organisation.HasValue || j.OrganisationID == organisation.Value))
                 .SelectMany(j => j.JobLeaveTypes) // Jump into the leave types for those jobs
                 .Where(jlt => jlt.IsValid == true) // Only get valid balances
                 .Where(jlt => jlt.IsLeaveInfoUpdated == true) // Only get valid balances
@@ -364,6 +385,7 @@ namespace HRM.Services
    
         public async Task<List<AttendanceLog>> GetUnevenLogsAsync(int individualId)
         {
+            var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(_context, _access, individualId);
             // Define the salary period dates (15th and 16th of current month)
             int year = DateTime.Today.Year;
             int month = DateTime.Today.Month;
@@ -375,7 +397,8 @@ namespace HRM.Services
 
             // Fetch all logs for this specific period
             var logs = await _context.AttendanceLogs
-                .Where(a => a.IndividualId == individualId && a.Date >= start && a.Date <= end)
+                .Where(a => a.IndividualId == individualId && a.Date >= start && a.Date <= end &&
+                    (!organisation.HasValue || a.OrganisationId == organisation.Value))
                 .ToListAsync();
 
             var uneven = new List<AttendanceLog>();
@@ -407,6 +430,7 @@ namespace HRM.Services
 
         public async Task<List<Leaf>> GetLeaveRequestsAsync(int jobId)
         {
+            await HRM.Helpers.StaffDataAccess.RequireJobAsync(_context, _access, jobId);
             return await _context.Leaves
              .Include(l => l.LeaveType)  // Fetches the Type name
              .Include(l => l.LeaveState) // Fetches the Status name
@@ -427,7 +451,7 @@ namespace HRM.Services
  
             public DateTime Time { get; set; }
  
-            public string Comments { get; set; }
+            public string Comments { get; set; } = string.Empty;
  
             public int RelatedAttendanceLogID { get; set; }
 

@@ -158,6 +158,7 @@ namespace HRM.Services
             LeaveTypeSaveRequest request,
             CancellationToken cancellationToken = default)
         {
+            await RequireManageAsync();
             var validationMessage = Validate(request);
 
             if (validationMessage is not null)
@@ -286,10 +287,8 @@ namespace HRM.Services
             LeaveTypeSaveRequest request,
             CancellationToken cancellationToken = default)
         {
-            var context =
-                await _userAccessService.GetContextAsync();
-
-            var isSuperAdmin = context?.IsSuperAdministrator == false;
+            var context = await RequireManageAsync();
+            var isSuperAdmin = context.IsSuperAdministrator;
 
             if (request.LeaveTypeId <= 0)
             {
@@ -339,7 +338,7 @@ namespace HRM.Services
                 var leaveType = await db.LeaveTypes
                     .FirstOrDefaultAsync(
                         x => x.LeaveTypeId == request.LeaveTypeId &&
-                             (isSuperAdmin || x.OrganisationId == organisationId),
+                             (x.OrganisationId == organisationId || isSuperAdmin && x.IsGlobal),
                         cancellationToken);
 
 
@@ -407,6 +406,9 @@ namespace HRM.Services
                 // 4. UPDATE LEGACY LEAVE TYPE
                 // =========================================================
 
+                var audit = await _logService.CreateAsync(db, OperationLogActionTypes.LEAVE_TYPE_UDPATE,
+                    $"Updated leave type {leaveType.LeaveTypeId} in organisation {organisationId}.");
+                leaveType.OperationLogId = audit.OperationLogId;
                 leaveType.Name =
                     name;
 
@@ -663,92 +665,21 @@ namespace HRM.Services
         private async Task<int> GetCurrentOrganisationIdAsync(
            CancellationToken cancellationToken = default)
         {
-            var context =
-                await _userAccessService.GetContextAsync();
+            await _userAccessService.RequireContextAsync();
+            var org = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (org <= 0 || !await _userAccessService.HasOrganisationAccessAsync(org))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
+            return org;
+        }
 
-            var session =
-                await _userContext.GetSessionAsync();
-
-            if (context is null)
-            {
-                throw new InvalidOperationException(
-                    "The current user context could not be resolved.");
-            }
-
-            if (session is null ||
-                session.OrganisationId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "The current portal organisation could not be resolved.");
-            }
-
-            /*
-             * session.OrganisationId is actually UserOrganisationId.
-             */
-            var selectedUserOrganisationId =
-                session.OrganisationId;
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
-
-            /*
-             * Convert UserOrganisationId
-             *      1
-             *
-             * into the real organisation BusinessEntityId
-             *      3
-             */
-            var selectedOrganisationBusinessEntityId =
-                await db.UserOrganisations
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.UserOrganisationID ==
-                        selectedUserOrganisationId)
-                    .Select(x =>
-                        x.BusinessEntityID)
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
-
-            if (selectedOrganisationBusinessEntityId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "The selected organisation could not be resolved.");
-            }
-
-            /*
-             * Super Administrator may work with the organisation
-             * selected through the portal switcher.
-             */
-            if (context.IsSuperAdministrator)
-            {
-                return selectedOrganisationBusinessEntityId;
-            }
-
-            if (context.ActiveJob is null ||
-                context.ActiveJob.OrganisationId <= 0)
-            {
-                throw new UnauthorizedAccessException(
-                    "The current user does not have an active organisation.");
-            }
-
-            /*
-             * Compare organisation BusinessEntityId to
-             * organisation BusinessEntityId.
-             *
-             * Example:
-             *
-             * ActiveJob.OrganisationId = 3
-             * selectedOrganisationBusinessEntityId = 3
-             */
-            if (context.ActiveJob.OrganisationId !=
-                selectedOrganisationBusinessEntityId)
-            {
-                throw new UnauthorizedAccessException(
-                    "You do not have access to the selected organisation.");
-            }
-
-            return selectedOrganisationBusinessEntityId;
+        private async Task<HRM.DTOs.UserContext.UserContextDto> RequireManageAsync()
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            await GetCurrentOrganisationIdAsync();
+            if (!actor.IsSuperAdministrator && !actor.IsHRStaff && !actor.IsHRHead && !actor.IsHRManager &&
+                !actor.IsOrganisationAdmin && !await _userAccessService.HasPermissionAsync("Admin"))
+                throw new UnauthorizedAccessException("Only authorised HR staff or administrators can manage leave types.");
+            return actor;
         }
 
         private static string? Validate(
@@ -775,8 +706,7 @@ namespace HRM.Services
                 return "Service duration cannot be negative.";
             }
 
-            if (request.IncludePay  &&
-                request.PayPercentage < 0 &&
+            if (request.IncludePay &&
                 (
                     request.PayPercentage < 0 ||
                     request.PayPercentage > 100

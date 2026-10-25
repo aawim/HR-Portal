@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -28,17 +28,9 @@ public partial class Organisation
 
     public virtual BusinessEntity BusinessEntity { get; set; } = null!;
 
-    public virtual ICollection<AssignedWorkType> AssignedWorkTypes { get; set; } = new List<AssignedWorkType>();
-
-    public virtual ICollection<AttachedPayrollItemsProcessingWhiteList> AttachedPayrollItemsProcessingWhiteLists { get; set; } = new List<AttachedPayrollItemsProcessingWhiteList>();
-
-    public virtual ICollection<AttendanceClientInstance> AttendanceClientInstances { get; set; } = new List<AttendanceClientInstance>();
-
     public virtual ICollection<AttendanceLog> AttendanceLogs { get; set; } = new List<AttendanceLog>();
 
     public virtual ICollection<BreakTime> BreakTimes { get; set; } = new List<BreakTime>();
-
-    public virtual ICollection<BudgetTransaction> BudgetTransactions { get; set; } = new List<BudgetTransaction>();
 
     
 
@@ -64,15 +56,7 @@ public partial class Organisation
 
     public virtual OnlineSignInOrganisation? OnlineSignInOrganisation { get; set; }
 
-    public virtual ICollection<OrganisationBudget> OrganisationBudgets { get; set; } = new List<OrganisationBudget>();
-
-    public virtual ICollection<OrganisationDeductionType> OrganisationDeductionTypes { get; set; } = new List<OrganisationDeductionType>();
-
-    public virtual ICollection<OrganisationPayrollItemType> OrganisationPayrollItemTypes { get; set; } = new List<OrganisationPayrollItemType>();
-
     public virtual ICollection<OrganisationPayrollPeriod> OrganisationPayrollPeriods { get; set; } = new List<OrganisationPayrollPeriod>();
-
-    public virtual ICollection<OrganisationSapexception> OrganisationSapexceptions { get; set; } = new List<OrganisationSapexception>();
 
     public virtual ICollection<OrganisationStructureHistory> OrganisationStructureHistories { get; set; } = new List<OrganisationStructureHistory>();
 
@@ -85,14 +69,6 @@ public partial class Organisation
     public virtual ICollection<OutOfOfficeRequest> OutOfOfficeRequests { get; set; } = new List<OutOfOfficeRequest>();
 
     public virtual Organisation? ParentOrganisationBusinessEntity { get; set; }
-
-    public virtual ICollection<PayrollConfigurableValue> PayrollConfigurableValues { get; set; } = new List<PayrollConfigurableValue>();
-
-    public virtual ICollection<PayrollItemTypeProcessingCode> PayrollItemTypeProcessingCodes { get; set; } = new List<PayrollItemTypeProcessingCode>();
-
-    public virtual ICollection<PayrollItemType> PayrollItemTypes { get; set; } = new List<PayrollItemType>();
-
-    public virtual ICollection<PayrollItemsProcessingWhiteList> PayrollItemsProcessingWhiteLists { get; set; } = new List<PayrollItemsProcessingWhiteList>();
 
     public virtual ICollection<PositionClassification> PositionClassifications { get; set; } = new List<PositionClassification>();
 

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -11,8 +11,6 @@ public partial class Address
     public int? IslandId { get; set; }
 
     public virtual AddressInstance? AddressInstance { get; set; }
-
-    public virtual Dhafthar? Dhafthar { get; set; }
 
     public virtual Island? Island { get; set; }
 

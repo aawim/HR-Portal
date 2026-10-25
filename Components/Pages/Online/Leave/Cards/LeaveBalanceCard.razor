@@ -162,7 +162,7 @@
     private int? lastRefresh;
     private List<JobLeaveType> jobTypes = new();
     private List<ProcessingLeaveDto> processingLeaves = new();
-    private bool isLoading = true;
+
 
 
     protected override async Task OnParametersSetAsync()
@@ -175,7 +175,6 @@
         if (LeaveState.Model.JobLeaveTypeId.HasValue)
             LeaveState.RemainingDays = jobTypes.FirstOrDefault(x => x.JobLeaveTypeId == LeaveState.Model.JobLeaveTypeId)?.RemainingDays ?? 0;
 
-        isLoading = false;
     }
 
     private async Task ApplyLeaveType(JobLeaveType leave)

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -32,8 +32,6 @@ public partial class Job
 
     public int? ServiceId { get; set; }
 
-    public virtual ICollection<AssignedWorkType> AssignedWorkTypes { get; set; } = new List<AssignedWorkType>();
-
     public virtual Staff Staff { get; set; } = null!;
 
     public virtual Individual Individual { get; set; } = null!;
@@ -59,8 +57,6 @@ public partial class Job
 
     public virtual ICollection<OtpreApproval> OtpreApprovals { get; set; } = new List<OtpreApproval>();
 
-    public virtual ICollection<Otrequest> Otrequests { get; set; } = new List<Otrequest>();
-
     public virtual ICollection<RequestJob> RequestJobs { get; set; } = new List<RequestJob>();
 
     public virtual Service? Service { get; set; }
@@ -69,15 +65,12 @@ public partial class Job
 
     public virtual ICollection<StaffPayrollItemType> StaffPayrollItemTypes { get; set; } = new List<StaffPayrollItemType>();
 
-    public virtual ICollection<StaffSalary> StaffSalaries { get; set; } = new List<StaffSalary>();
-
     [ForeignKey("IndividualID")]
     [InverseProperty("Jobs")]
-    public virtual User User { get; set; }
+    public virtual User User { get; set; } = null!;
 
     [ForeignKey("OrganisationID")]
-    public virtual Organisation Organisation { get; set; }
+    public virtual Organisation Organisation { get; set; } = null!;
 
 
 }
- 

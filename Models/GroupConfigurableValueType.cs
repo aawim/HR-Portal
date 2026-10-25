@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -16,5 +16,4 @@ public partial class GroupConfigurableValueType
 
     public string? Comment { get; set; }
 
-    public virtual ICollection<GroupConfigurableValue> GroupConfigurableValues { get; set; } = new List<GroupConfigurableValue>();
 }

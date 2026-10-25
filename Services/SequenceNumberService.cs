@@ -41,7 +41,7 @@ namespace HRM.Services
                     // Requires a LastResetYear column
                 }
 
-                var number = sequence.NextNumber;
+                var number = sequence.NextNumber ?? throw new InvalidOperationException("The request numbering sequence is not configured.");
 
                 sequence.NextNumber++;
 
@@ -49,7 +49,7 @@ namespace HRM.Services
 
                 await transaction.CommitAsync();
 
-                return BuildReference(sequence, (int)number);
+                return BuildReference(sequence, number);
             }
             catch
             {

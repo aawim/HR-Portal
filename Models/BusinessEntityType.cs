@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -12,5 +12,4 @@ public partial class BusinessEntityType
 
     public virtual ICollection<BusinessEntity> BusinessEntities { get; set; } = new List<BusinessEntity>();
 
-    public virtual ICollection<BusinessEntityRelatedLocationType> BusinessEntityRelatedLocationTypes { get; set; } = new List<BusinessEntityRelatedLocationType>();
 }

@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using HRM.DTOs.UserContext;
@@ -78,8 +78,8 @@ namespace HRM.Services
                     IndividualID = x.BusinessEntityID,
 
                     FullName =
-                        x.BusinessEntity.FirstNameEnglish + " " +
-                        x.BusinessEntity.LastNameEnglish
+                        x.BusinessEntity == null ? x.FullName ?? x.Username :
+                        x.BusinessEntity.FirstNameEnglish + " " + x.BusinessEntity.LastNameEnglish
                 })
                 .FirstOrDefaultAsync();
         }

@@ -182,6 +182,8 @@ namespace HRM.Services.Leave
                         x.IsValid &&
                         x.IsLeaveInfoUpdated == true);
 
+                await StaffDataAccess.RequireJobAsync(db, _access, jobId);
+
                 if (leaveTypeId.HasValue && leaveTypeId.Value > 0)
                 {
                     query = query.Where(x =>
@@ -243,6 +245,7 @@ namespace HRM.Services.Leave
         public async Task<List<Leaf>> GetLeaveRequestsAsync(int jobId)
         {
             await using var context = await _dbFactory.CreateDbContextAsync();
+            await StaffDataAccess.RequireJobAsync(context, _access, jobId);
 
             return await context.Leaves
              .AsNoTracking()
@@ -656,7 +659,7 @@ namespace HRM.Services.Leave
                         LeaveId = leave.LeaveId,
                         CountryId = model.CountryId,
                         IslandId = model.IslandId,
-                        Address = model.Address,
+                        Address = model.Address ?? string.Empty,
                         OperationLogId = operationLog.OperationLogId
                     };
 

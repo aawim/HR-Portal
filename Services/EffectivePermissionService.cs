@@ -150,7 +150,7 @@ namespace HRM.Services
                         x.UserOrganisation.BusinessEntityID,
 
                     IsGlobal = 
-                        x.UserOrganisationId == null
+                        false
                 })
                 .ToListAsync();
         }

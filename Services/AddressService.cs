@@ -75,25 +75,27 @@ namespace HRM.Services
             {
                 LocationId = x.LocationId,
 
-                Title = x.Location.Address.AddressInstance.AddressInstanceType.TypeName,
+                Title = x.Location.Address != null && x.Location.Address.AddressInstance != null && x.Location.Address.AddressInstance.AddressInstanceType != null
+                    ? x.Location.Address.AddressInstance.AddressInstanceType.TypeName : "Address",
                 CountryId = x.Location.CountryId,
                 AtollId = x.Location.Address != null && x.Location.Address.Island != null
                     ? x.Location.Address.Island.AtollId : null,
                 IslandId = x.Location.Address != null ? x.Location.Address.IslandId : null,
 
-                Address = x.Location.Address.AddressInstance.Name,
+                Address = x.Location.Address != null && x.Location.Address.AddressInstance != null ? x.Location.Address.AddressInstance.Name ?? "" : "",
 
-                Floor = x.Location.Address.AddressInstance.Floor,
+                Floor = x.Location.Address != null && x.Location.Address.AddressInstance != null ? x.Location.Address.AddressInstance.Floor : null,
 
-                Island = x.Location.Address.Island.NameEnglish,
+                Island = x.Location.Address != null && x.Location.Address.Island != null ? x.Location.Address.Island.NameEnglish : "",
 
-                Atoll = x.Location.Address.Island.Atoll.NameEnglish,
+                Atoll = x.Location.Address != null && x.Location.Address.Island != null ? x.Location.Address.Island.Atoll.NameEnglish : "",
 
                 Country = x.Location.Country.NameEnglish,
 
-                LocationType = x.BusinessEntityLocationType.TypeName,
+                LocationType = x.BusinessEntityLocationType.TypeName ?? "Address",
 
-                IsCurrent = (bool) x.Location.Address.AddressInstance.AddressBase.IsCurrent
+                IsCurrent = x.Location.Address != null && x.Location.Address.AddressInstance != null &&
+                    x.Location.Address.AddressInstance.AddressBase.IsCurrent == true
             })
             .ToListAsync();
 

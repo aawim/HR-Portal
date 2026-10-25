@@ -22,7 +22,7 @@ namespace HRM.Services
         public async Task<List<JobLeaveType>> GetJobLeaveTypesAsync()
         {
             var context = await _userAccessService.RequireContextAsync();
-            return await _repo.GetJobLeaveTypes(context.ActiveJob.JobId);
+            return context.ActiveJob == null ? [] : await _repo.GetJobLeaveTypes(context.ActiveJob.JobId);
         }
 
 

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -40,10 +40,6 @@ public partial class OperationLog
 
     public virtual ICollection<AttachedBreakTimesDay> AttachedBreakTimesDays { get; set; } = new List<AttachedBreakTimesDay>();
 
-    public virtual ICollection<AttachedPayrollItemsProcessingWhiteList> AttachedPayrollItemsProcessingWhiteLists { get; set; } = new List<AttachedPayrollItemsProcessingWhiteList>();
-
-    public virtual ICollection<AttendanceClientInstance> AttendanceClientInstances { get; set; } = new List<AttendanceClientInstance>();
-
     public virtual ICollection<AttendanceDevice> AttendanceDevices { get; set; } = new List<AttendanceDevice>();
 
     public virtual ICollection<AttendanceLog> AttendanceLogs { get; set; } = new List<AttendanceLog>();
@@ -60,8 +56,6 @@ public partial class OperationLog
 
     public virtual ICollection<BusinessEntityCalendar> BusinessEntityCalendars { get; set; } = new List<BusinessEntityCalendar>();
 
-    public virtual ICollection<BusinessEntityRelation> BusinessEntityRelations { get; set; } = new List<BusinessEntityRelation>();
-
     public virtual ICollection<BusinessEntitySchedule> BusinessEntitySchedules { get; set; } = new List<BusinessEntitySchedule>();
 
     public virtual ICollection<BussinessEntityContactInformation> BussinessEntityContactInformations { get; set; } = new List<BussinessEntityContactInformation>();
@@ -74,21 +68,13 @@ public partial class OperationLog
 
     public virtual ICollection<Calendar> Calendars { get; set; } = new List<Calendar>();
 
-    public virtual ICollection<CheckListItem> CheckListItems { get; set; } = new List<CheckListItem>();
-
     public virtual Individual? CreatedByIndividual { get; set; }
 
     public virtual User? CreatedByUser { get; set; }
 
     public virtual UserOrganisation? CreatedByUserOrganisation { get; set; }
 
-    public virtual ICollection<CurrencyExchangeRate> CurrencyExchangeRates { get; set; } = new List<CurrencyExchangeRate>();
-
     public virtual ICollection<DataCorrectionRequest> DataCorrectionRequests { get; set; } = new List<DataCorrectionRequest>();
-
-    public virtual ICollection<DeductionTypeAmount> DeductionTypeAmounts { get; set; } = new List<DeductionTypeAmount>();
-
-    public virtual ICollection<DerivedOnPayrollItemType> DerivedOnPayrollItemTypes { get; set; } = new List<DerivedOnPayrollItemType>();
 
     public virtual ICollection<Document> Documents { get; set; } = new List<Document>();
 
@@ -114,15 +100,7 @@ public partial class OperationLog
 
     public virtual ICollection<JobType> JobTypes { get; set; } = new List<JobType>();
 
-    public virtual ICollection<KeyHolder> KeyHolders { get; set; } = new List<KeyHolder>();
-
-    public virtual ICollection<Kpidocument> Kpidocuments { get; set; } = new List<Kpidocument>();
-
     public virtual ICollection<LeaveChangeRequest> LeaveChangeRequests { get; set; } = new List<LeaveChangeRequest>();
-
-    public virtual ICollection<LeaveDocument> LeaveDocuments { get; set; } = new List<LeaveDocument>();
-
-    public virtual ICollection<LeaveForm> LeaveForms { get; set; } = new List<LeaveForm>();
 
     public virtual ICollection<LeaveSetLeaveType> LeaveSetLeaveTypes { get; set; } = new List<LeaveSetLeaveType>();
 
@@ -134,27 +112,15 @@ public partial class OperationLog
 
     public virtual ICollection<Leaf> Leaves { get; set; } = new List<Leaf>();
 
-    public virtual ICollection<LeavesBulkUploadedDocument> LeavesBulkUploadedDocuments { get; set; } = new List<LeavesBulkUploadedDocument>();
-
     public virtual ICollection<Location> Locations { get; set; } = new List<Location>();
 
     public virtual ICollection<Month> Months { get; set; } = new List<Month>();
 
-    public virtual ICollection<NoPayLeaf> NoPayLeaves { get; set; } = new List<NoPayLeaf>();
-
     public virtual ICollection<Note> Notes { get; set; } = new List<Note>();
-
-    public virtual ICollection<OnlineLocation> OnlineLocations { get; set; } = new List<OnlineLocation>();
 
     public virtual ICollection<OnlineSignInOrganisation> OnlineSignInOrganisations { get; set; } = new List<OnlineSignInOrganisation>();
 
     public virtual OperationLogActionType OperationLogAction { get; set; } = null!;
-
-    public virtual ICollection<OrganisationDeductionType> OrganisationDeductionTypes { get; set; } = new List<OrganisationDeductionType>();
-
-    public virtual ICollection<OrganisationPayrollItemType> OrganisationPayrollItemTypes { get; set; } = new List<OrganisationPayrollItemType>();
-
-    public virtual ICollection<OrganisationPayrollPeriodJobType> OrganisationPayrollPeriodJobTypes { get; set; } = new List<OrganisationPayrollPeriodJobType>();
 
     public virtual ICollection<OrganisationPayrollPeriod> OrganisationPayrollPeriods { get; set; } = new List<OrganisationPayrollPeriod>();
 
@@ -170,31 +136,7 @@ public partial class OperationLog
 
     public virtual ICollection<OtherSalaryRateDefinition> OtherSalaryRateDefinitions { get; set; } = new List<OtherSalaryRateDefinition>();
 
-    public virtual ICollection<OtpreApprovalTime> OtpreApprovalTimes { get; set; } = new List<OtpreApprovalTime>();
-
-    public virtual ICollection<Ot> Ots { get; set; } = new List<Ot>();
-
     public virtual ICollection<Passport> Passports { get; set; } = new List<Passport>();
-
-    public virtual ICollection<PayrollCycleLinkedRequest> PayrollCycleLinkedRequests { get; set; } = new List<PayrollCycleLinkedRequest>();
-
-    public virtual ICollection<PayrollItemDailySapsheetDetail> PayrollItemDailySapsheetDetails { get; set; } = new List<PayrollItemDailySapsheetDetail>();
-
-    public virtual ICollection<PayrollItemProcessingFlow> PayrollItemProcessingFlows { get; set; } = new List<PayrollItemProcessingFlow>();
-
-    public virtual ICollection<PayrollItemTypeAmount> PayrollItemTypeAmounts { get; set; } = new List<PayrollItemTypeAmount>();
-
-    public virtual ICollection<PayrollItemTypeDependencyAmount> PayrollItemTypeDependencyAmounts { get; set; } = new List<PayrollItemTypeDependencyAmount>();
-
-    public virtual ICollection<PayrollItemTypeDependencyTimePeriodAmount> PayrollItemTypeDependencyTimePeriodAmounts { get; set; } = new List<PayrollItemTypeDependencyTimePeriodAmount>();
-
-    public virtual ICollection<PayrollItemTypeProcessingCode> PayrollItemTypeProcessingCodes { get; set; } = new List<PayrollItemTypeProcessingCode>();
-
-    public virtual ICollection<PayrollItemType> PayrollItemTypes { get; set; } = new List<PayrollItemType>();
-
-    public virtual ICollection<PayrollItemsProcessingWhiteList> PayrollItemsProcessingWhiteLists { get; set; } = new List<PayrollItemsProcessingWhiteList>();
-
-    public virtual ICollection<PercentageVariableDeductionAmount> PercentageVariableDeductionAmounts { get; set; } = new List<PercentageVariableDeductionAmount>();
 
     public virtual ICollection<PositionBasicSalary> PositionBasicSalaries { get; set; } = new List<PositionBasicSalary>();
 
@@ -220,19 +162,11 @@ public partial class OperationLog
 
     public virtual ICollection<SalaryRateDefinition> SalaryRateDefinitions { get; set; } = new List<SalaryRateDefinition>();
 
-    public virtual ICollection<Sapexception> Sapexceptions { get; set; } = new List<Sapexception>();
-
     public virtual ICollection<ScheduleElement> ScheduleElements { get; set; } = new List<ScheduleElement>();
 
     public virtual ICollection<ScheduleOwner> ScheduleOwners { get; set; } = new List<ScheduleOwner>();
 
     public virtual ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
-
-    public virtual ICollection<ServiceCheckListVerification> ServiceCheckListVerifications { get; set; } = new List<ServiceCheckListVerification>();
-
-    public virtual ICollection<ServiceDocumentVerification> ServiceDocumentVerifications { get; set; } = new List<ServiceDocumentVerification>();
-
-    public virtual ICollection<ServiceDocument> ServiceDocuments { get; set; } = new List<ServiceDocument>();
 
     public virtual ICollection<Service> Services { get; set; } = new List<Service>();
 
@@ -246,11 +180,7 @@ public partial class OperationLog
 
     public virtual ICollection<Staff> Staff { get; set; } = new List<Staff>();
 
-    public virtual ICollection<StaffAssignedDeductionAmount> StaffAssignedDeductionAmounts { get; set; } = new List<StaffAssignedDeductionAmount>();
-
     public virtual ICollection<StaffAssignedDeduction> StaffAssignedDeductions { get; set; } = new List<StaffAssignedDeduction>();
-
-    public virtual ICollection<StaffDailyAttendanceSummery> StaffDailyAttendanceSummeries { get; set; } = new List<StaffDailyAttendanceSummery>();
 
     public virtual ICollection<StaffEnrollmentNumber> StaffEnrollmentNumbers { get; set; } = new List<StaffEnrollmentNumber>();
 
@@ -259,12 +189,6 @@ public partial class OperationLog
     public virtual ICollection<StaffPayrollItemTypeSchedule> StaffPayrollItemTypeSchedules { get; set; } = new List<StaffPayrollItemTypeSchedule>();
 
     public virtual ICollection<StaffPayrollItemType> StaffPayrollItemTypes { get; set; } = new List<StaffPayrollItemType>();
-
-    public virtual ICollection<StaffSalary> StaffSalaries { get; set; } = new List<StaffSalary>();
-
-    public virtual ICollection<StaffSalaryDeduction> StaffSalaryDeductions { get; set; } = new List<StaffSalaryDeduction>();
-
-    public virtual ICollection<StaffSalaryPayrollItem> StaffSalaryPayrollItems { get; set; } = new List<StaffSalaryPayrollItem>();
 
     public virtual ICollection<Team> Teams { get; set; } = new List<Team>();
 
@@ -292,7 +216,7 @@ public partial class OperationLog
 
     public virtual ICollection<WorkShift> WorkShifts { get; set; } = new List<WorkShift>();
 
-    public virtual ICollection<WorkShiftsBreakTime> WorkShiftsBreakTimes { get; set; } = new List<WorkShiftsBreakTime>();
-
     public virtual ICollection<WorkingDay> WorkingDays { get; set; } = new List<WorkingDay>();
+
+    public virtual ICollection<CheckListItem> CheckListItems { get; set; } = new List<CheckListItem>();
 }

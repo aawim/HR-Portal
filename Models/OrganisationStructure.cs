@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -20,8 +20,6 @@ public partial class OrganisationStructure
     public int OrganisationStructureStateId { get; set; }
 
     public int OperationLogId { get; set; }
-
-    public virtual ICollection<AttendanceClientInstance> AttendanceClientInstances { get; set; } = new List<AttendanceClientInstance>();
 
     public virtual ICollection<AttendanceLog> AttendanceLogs { get; set; } = new List<AttendanceLog>();
 
@@ -55,8 +53,6 @@ public partial class OrganisationStructure
     public virtual ICollection<OrganisationStructureSupervisor> OrganisationStructureSupervisors { get; set; } = new List<OrganisationStructureSupervisor>();
 
     public virtual OrganisationStructureType OrganisationStructureType { get; set; } = null!;
-
-    public virtual ICollection<OrganisationalStructureSapexception> OrganisationalStructureSapexceptions { get; set; } = new List<OrganisationalStructureSapexception>();
 
     public virtual ICollection<OutOfOfficeRequest> OutOfOfficeRequests { get; set; } = new List<OutOfOfficeRequest>();
 

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -48,8 +48,6 @@ public partial class AttendanceLog
 
     public virtual ICollection<AttendanceLogChangeRequest> AttendanceLogChangeRequests { get; set; } = new List<AttendanceLogChangeRequest>();
 
-    public virtual AttendanceLogMode AttendanceLogMode { get; set; } = null!;
-
     public virtual ICollection<AttendanceLogRequest> AttendanceLogRequests { get; set; } = new List<AttendanceLogRequest>();
 
     public virtual AttendanceLogState AttendanceLogState { get; set; } = null!;
@@ -65,10 +63,6 @@ public partial class AttendanceLog
     public virtual Organisation Organisation { get; set; } = null!;
 
     public virtual OrganisationStructure OrganisationStructure { get; set; } = null!;
-
-    public virtual ICollection<Ot> OtEndAttendanceLogs { get; set; } = new List<Ot>();
-
-    public virtual ICollection<Ot> OtStartAttendanceLogs { get; set; } = new List<Ot>();
 
     public virtual AttendanceLog? RelatedAttendanceLog { get; set; }
 

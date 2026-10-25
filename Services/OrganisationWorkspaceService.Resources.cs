@@ -1,4 +1,4 @@
-using HRM.DTOs;
+﻿using HRM.DTOs;
 using HRM.Enum;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,7 +26,7 @@ public partial class OrganisationWorkspaceService
                 .OrderBy(x => x.GroupName).Select(x => new
                 {
                     x.UserGroupId, x.GroupName,
-                    Users = x.UserAssignedUserGroups.Where(a => a.User.IsActive && a.User.UserOrganisation.BusinessEntityID == organisationId).Select(a => a.User.FullName ?? a.User.Username).ToList(),
+                    Users = x.UserAssignedUserGroups.Where(a => a.User.IsActive && a.User.UserOrganisation != null && a.User.UserOrganisation.BusinessEntityID == organisationId).Select(a => a.User.FullName ?? a.User.Username).ToList(),
                     Permissions = x.UserGroupRoles.Where(r => r.IsActive).Select(r => r.Role.RoleKey).ToList()
                 }).ToListAsync();
             return groups.Select(x => new OrganisationWorkspaceResource { Id = x.UserGroupId, Name = x.GroupName,

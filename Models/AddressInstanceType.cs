@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -12,5 +12,4 @@ public partial class AddressInstanceType
 
     public virtual ICollection<AddressInstance> AddressInstances { get; set; } = new List<AddressInstance>();
 
-    public virtual ICollection<OnlineAddressInstance> OnlineAddressInstances { get; set; } = new List<OnlineAddressInstance>();
 }

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -12,8 +12,6 @@ public partial class Staff
 
     public int OperationLogId { get; set; }
 
-    public virtual ICollection<AttendanceDeviceStaff> AttendanceDeviceStaffs { get; set; } = new List<AttendanceDeviceStaff>();
-
     public virtual ICollection<AttendanceLog> AttendanceLogs { get; set; } = new List<AttendanceLog>();
 
     public virtual ICollection<GroupStaff> GroupStaffs { get; set; } = new List<GroupStaff>();
@@ -21,8 +19,6 @@ public partial class Staff
     public virtual Individual Individual { get; set; } = null!;
 
     public virtual ICollection<Job> Jobs { get; set; } = new List<Job>();
-
-    public virtual ICollection<KeyHolder> KeyHolders { get; set; } = new List<KeyHolder>();
 
     public virtual OperationLog OperationLog { get; set; } = null!;
 

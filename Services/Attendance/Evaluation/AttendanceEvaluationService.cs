@@ -663,7 +663,7 @@ namespace HRM.Services.Attendance
 
 
 
-            if (IsPairedBreakSegment(segment.WorkSegmentType.Code))
+            if (IsPairedBreakSegment(segment.WorkSegmentType?.Code))
             {
                 EvaluateLunchBreak(
                     result,

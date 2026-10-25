@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -27,8 +27,6 @@ public partial class Island
     public virtual City? City { get; set; }
 
     public virtual ICollection<LeaveSpendingLocation> LeaveSpendingLocations { get; set; } = new List<LeaveSpendingLocation>();
-
-    public virtual ICollection<OnlineAddress> OnlineAddresses { get; set; } = new List<OnlineAddress>();
 
     public virtual ICollection<Ward> Wards { get; set; } = new List<Ward>();
 }

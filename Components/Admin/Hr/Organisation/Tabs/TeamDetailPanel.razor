@@ -1,4 +1,4 @@
-@using HRM.Components.Shared
+﻿@using HRM.Components.Shared
 @using HRM.DTOs
 @using HRM.Models
 @using HRM.Models.Archives
@@ -581,16 +581,16 @@
     private List<TeamStaffDto> formerStaff = new();
 
     // --- State: Schedules ---
-    private bool isLoadingSchedules = true;
+
     private List<TeamScheduleDto> teamSchedules = new();
 
     // --- State: Leave Sets ---
-    private bool isLoadingLeaveSets = true;
+
     // private List<TeamLeaveSetDto> teamLeaveSets = new();
 
     // --- State: Assign Panel ---
     private bool showAssignLeavePanel = false;
-    private bool isSubmittingLeaveSet = false;
+
     private bool isFetchingDropdown = false;
     private int selectedNewLeaveSetId = 0;
     private List<LeaveSet> availableLeaveSets = new();
@@ -719,7 +719,7 @@
                 {
                     Id = x.ts.TeamStaffsId,
                     Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
-                    EmployeeNumber = x.s.EmployeeNumber, // Official ID from Staffs table
+                    EmployeeNumber = x.s.EmployeeNumber ?? string.Empty, // Official ID from Staffs table
                     EffectiveStartDate = x.ts.StartDate,
                     EffectiveEndDate = x.ts.EndDate
                 }).ToList();
@@ -737,7 +737,7 @@
                 {
                     Id = x.ts.TeamStaffsId,
                     Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
-                    EmployeeNumber = x.s.EmployeeNumber,
+                    EmployeeNumber = x.s.EmployeeNumber ?? string.Empty,
                     EffectiveStartDate = x.ts.StartDate,
                     EffectiveEndDate = x.ts.EndDate
                 }).ToList();
@@ -804,7 +804,7 @@
     //                 Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
 
     //             // NEW: Use the real EmployeeNumber from the joined Staffs table
-    //                 EmployeeNumber = x.s.EmployeeNumber,
+    //                 EmployeeNumber = x.s.EmployeeNumber ?? string.Empty,
 
     //                 EffectiveStartDate = x.ts.StartDate,
     //                 EffectiveEndDate = x.ts.EndDate
@@ -824,7 +824,7 @@
     //                 Name = $"{x.ind.FirstNameEnglish} {x.ind.MiddleNameEnglish} {x.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
 
     //             // NEW: Use the real EmployeeNumber from the joined Staffs table
-    //                 EmployeeNumber = x.s.EmployeeNumber,
+    //                 EmployeeNumber = x.s.EmployeeNumber ?? string.Empty,
 
     //                 EffectiveStartDate = x.ts.StartDate,
     //                 EffectiveEndDate = x.ts.EndDate

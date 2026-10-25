@@ -19,10 +19,6 @@ namespace HRM.Services
 
         private readonly IAttendanceRequestResourceBuilder _attendanceRequestBuilder;
 
-        // Later
-        // private readonly IJobResourceBuilder _jobBuilder;
-        // private readonly IAttendanceResourceBuilder _attendanceBuilder;
-        // private readonly IPayrollResourceBuilder _payrollBuilder;
 
         public BusinessAccessService(
             IUserAccessService access,
@@ -125,8 +121,7 @@ namespace HRM.Services
 
 
             // 4. Business rule
-            var context =
-                await _access.GetContextAsync();
+            var context = await _access.RequireContextAsync();
 
 
             var canEdit =

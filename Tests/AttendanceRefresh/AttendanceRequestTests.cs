@@ -209,6 +209,9 @@ static class AttendanceRequestTests
             await renderer.Render();
         });
         renderer.CheckErrors();
+        await renderer.Dispatcher.InvokeAsync(() => renderer.Render(ParameterView.FromDictionary(
+            new Dictionary<string, object?> { ["TabSection"] = "uneven-log-correction" })));
+        renderer.CheckErrors();
         Check(renderer.RootButtonCount("Request correction") == 2, "Blocked leave-date correction button is still visible, or eligible buttons were hidden");
         await renderer.Dispatcher.InvokeAsync(() => renderer.RootClick("Request correction"));
         renderer.CheckErrors();
@@ -262,6 +265,7 @@ static class AttendanceRequestTests
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
             await renderer.RootClick("Cancel");
+            await renderer.Render(ParameterView.FromDictionary(new Dictionary<string, object?> { ["TabSection"] = "uneven-log-correction" }));
             await renderer.RootClick("Request correction");
         });
         renderer.CheckErrors();
@@ -276,6 +280,7 @@ static class AttendanceRequestTests
         await renderer.Dispatcher.InvokeAsync(async () =>
         {
             await renderer.RootClick("Cancel");
+            await renderer.Render(ParameterView.FromDictionary(new Dictionary<string, object?> { ["TabSection"] = "attendance" }));
             await renderer.RootClick("Add Request");
             model = (AttendanceRequestApplicationDto)typeof(RequestPage).GetField("newRequest", flags)!.GetValue(page)!;
             model.Date = DateOnly.FromDateTime(today.AddDays(4));

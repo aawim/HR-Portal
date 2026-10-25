@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -28,10 +28,6 @@ public partial class Leaf
 
     public virtual ICollection<LeaveChangeRequest> LeaveChangeRequests { get; set; } = new List<LeaveChangeRequest>();
 
-    public virtual ICollection<LeaveDocument> LeaveDocuments { get; set; } = new List<LeaveDocument>();
-
-    public virtual LeaveForm? LeaveForm { get; set; }
-
     public virtual LeaveReason? LeaveReason { get; set; }
 
     public virtual LeaveRequest? LeaveRequest { get; set; }
@@ -42,11 +38,7 @@ public partial class Leaf
 
     public virtual LeaveType LeaveType { get; set; } = null!;
 
-    public virtual LeaveWorkHandOverTask? LeaveWorkHandOverTask { get; set; }
-
     public virtual ICollection<LeaveWorkHandOver> LeaveWorkHandOvers { get; set; } = new List<LeaveWorkHandOver>();
-
-    public virtual NoPayLeaf? NoPayLeaf { get; set; }
 
     public virtual OfficialTripDetail? OfficialTripDetail { get; set; }
 

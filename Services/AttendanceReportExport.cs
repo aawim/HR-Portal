@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using HRM.DTOs.Attendance;
 using HRM.Helpers;
 using MigraDoc.DocumentObjectModel;
@@ -55,8 +55,9 @@ public static class AttendanceReportExport
     {
         OrganisationStaffExport.EnsureReportFont(fontPath);
         var document = new Document(); document.Info.Title = report.Title;
-        document.Styles[StyleNames.Normal].Font.Name = "StaffReport";
-        document.Styles[StyleNames.Normal].Font.Size = 8;
+        var normalStyle = document.Styles[StyleNames.Normal] ?? throw new InvalidOperationException("The report normal style is unavailable.");
+        normalStyle.Font.Name = "StaffReport";
+        normalStyle.Font.Size = 8;
         foreach (var data in report.Tables)
         {
             var section = document.AddSection();

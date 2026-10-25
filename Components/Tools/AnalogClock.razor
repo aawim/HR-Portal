@@ -54,17 +54,21 @@
     private double SecondRotation =>
         CurrentTime.Second * 6;
 
-    protected override async Task OnInitializedAsync()
+    protected override void OnInitialized()
     {
         timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
 
         _ = Task.Run(async () =>
         {
-            while (await timer.WaitForNextTickAsync(cts.Token))
+            try
             {
-                CurrentTime = DateTime.Now;
-                await InvokeAsync(StateHasChanged);
+                while (await timer.WaitForNextTickAsync(cts.Token))
+                {
+                    CurrentTime = DateTime.UtcNow.AddHours(5);
+                    await InvokeAsync(StateHasChanged);
+                }
             }
+            catch (OperationCanceledException) when (cts.IsCancellationRequested) { }
         });
     }
 

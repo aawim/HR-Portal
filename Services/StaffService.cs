@@ -68,8 +68,8 @@ namespace HRM.Services
                     IDNumber = q.idCard != null ? q.idCard.IdcardNumber : string.Empty,
                     PassportNumber = q.passport != null ? q.passport.PassportNumber : string.Empty,
                     Organisation = q.organisation != null ? q.organisation.OrganisationName : string.Empty,
-                    Address = q.ind.CountryId.ToString(),
-                    Nationality = q.ind.CountryId.ToString()
+                    Address = q.ind.CountryId.HasValue ? q.ind.CountryId.Value.ToString() : string.Empty,
+                    Nationality = q.ind.CountryId.HasValue ? q.ind.CountryId.Value.ToString() : string.Empty
                 })
                 .ToListAsync();
             }

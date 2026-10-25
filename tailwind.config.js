@@ -1,7 +1,9 @@
 ﻿/** @type {import('tailwindcss').Config} */
 module.exports = {
     content: [
-        "./**/*.{razor,html,cshtml}",
+        "./Components/**/*.{razor,cs}",
+        "./Helpers/**/*.cs",
+        "./Views/**/*.cshtml",
     ],
     theme: {
         extend: {
@@ -39,7 +41,6 @@ module.exports = {
             }
         },
     },
-    plugins: [
-        require('@tailwindcss/forms'), // Highly recommended for clean form inputs in HR apps
-    ],
+    // Match the previous browser runtime's default form styling.
+    plugins: [],
 }

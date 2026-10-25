@@ -1,4 +1,4 @@
-using Azure.Core;
+﻿using Azure.Core;
 using HRM.Components.Shared;
 using HRM.DTOs.WorkPlanning;
 using HRM.Enum;
@@ -82,7 +82,7 @@ namespace HRM.WorkPlanning.Services
                       && (
                           fullName.Contains(searchText) ||
                           (staff != null &&
-                           staff.EmployeeNumber.Contains(searchText))
+                           (staff.EmployeeNumber ?? string.Empty).Contains(searchText))
                       )
 
                 orderby fullName
@@ -204,7 +204,7 @@ namespace HRM.WorkPlanning.Services
 
                     Version = x.Version,
 
-                    Remarks = x.Remarks,
+                    Remarks = x.Remarks ?? string.Empty,
 
                     Segments = x.WorkPlanSegments
                         .Where(s => s.IsValid)
@@ -372,7 +372,7 @@ namespace HRM.WorkPlanning.Services
                         x.WorkPlan.IsFinalized,
 
                     Remarks =
-                        x.WorkPlan.Remarks,
+                        x.WorkPlan.Remarks ?? string.Empty,
 
                     GeneratedDate =
                         x.WorkPlan.GeneratedDate,

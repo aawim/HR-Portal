@@ -1,4 +1,4 @@
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using HRM.DTOs.Organisation;
 using MigraDoc.DocumentObjectModel;
 using MigraDoc.DocumentObjectModel.Tables;
@@ -45,8 +45,9 @@ public static class OrganisationStaffExport
         EnsureReportFont(fontPath);
         var document = new Document();
         document.Info.Title = organisation + " - Organisation staff";
-        document.Styles[StyleNames.Normal].Font.Name = "StaffReport";
-        document.Styles[StyleNames.Normal].Font.Size = 10;
+        var normalStyle = document.Styles[StyleNames.Normal] ?? throw new InvalidOperationException("The report normal style is unavailable.");
+        normalStyle.Font.Name = "StaffReport";
+        normalStyle.Font.Size = 10;
         var section = document.AddSection();
         section.PageSetup.PageFormat = PageFormat.A4; section.PageSetup.Orientation = Orientation.Landscape;
         section.PageSetup.TopMargin = Unit.FromCentimeter(1.5); section.PageSetup.BottomMargin = Unit.FromCentimeter(1.5);

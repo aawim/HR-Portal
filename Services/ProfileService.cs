@@ -296,7 +296,6 @@ namespace HRM.Services
                         team.IsValid == true &&
                         team.OrganisationId == organisationId &&
                         (
-                            teamStaff.StartDate == null ||
                             teamStaff.StartDate <= today
                         ) &&
                         (
@@ -442,7 +441,7 @@ namespace HRM.Services
                     OrganisationId =
                         userOrganisation.UserOrganisationID,
 
-                    IsSystemRole = (bool)role.IsSystemRole,
+                    IsSystemRole = role.IsSystemRole == true,
 
                     IsActive =
                         userRole.IsActive,
@@ -696,7 +695,6 @@ namespace HRM.Services
                     teamStaff.IsValid == true &&
 
                     (
-                        teamStaff.StartDate == null ||
                         teamStaff.StartDate <= today
                     ) &&
 

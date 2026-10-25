@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace HRM.Models.Archives;
@@ -17,9 +17,9 @@ public partial class RequestCheckListVerification
 
     public int OperationLogId { get; set; }
 
-    public virtual CheckListItem CheckListItem { get; set; } = null!;
-
     public virtual OperationLog OperationLog { get; set; } = null!;
 
     public virtual Request Request { get; set; } = null!;
+
+    public virtual CheckListItem CheckListItem { get; set; } = null!;
 }

@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Organisation;
@@ -56,7 +56,7 @@ public sealed class OrganisationResourceSettingsService(IDbContextFactory<HrmTeC
         else if (kind == OrganisationResourceKind.Locations)
         {
             result.Rows = await db.BusinessEntityLocations.Where(l => l.BusinessEntityId == org && l.IsValid).OrderBy(l => l.LocationId)
-                .Select(l => new OrganisationResourceRow(l.BusinessEntityLocationId, l.BusinessEntityLocationType.TypeName,
+                .Select(l => new OrganisationResourceRow(l.BusinessEntityLocationId, l.BusinessEntityLocationType.TypeName ?? "Address",
                     (l.Location.Address == null || l.Location.Address.AddressInstance == null ? "No postal address" :
                         (l.Location.Address.AddressInstance.AddressBase.AddressLine1 ?? "") + " " + (l.Location.Address.AddressInstance.AddressBase.StreetNameEnglish ?? "")) + " · " + l.Location.Country.NameEnglish,
                     l.Location.LocationType.TypeName, $"/admin/settings/org/manage/{org}/address")).ToListAsync();

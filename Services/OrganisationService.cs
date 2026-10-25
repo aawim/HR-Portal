@@ -32,7 +32,7 @@ namespace HRM.Services
 
                     OrganisationName = x.OrganisationName,
 
-                    OrganisationNameDhivehi = x.OrganisationNameDhivehi,
+                    OrganisationNameDhivehi = x.OrganisationNameDhivehi ?? string.Empty,
 
                     ParentOrganisationBusinessEntityId = x.ParentOrganisationBusinessEntityId
                 })
@@ -71,7 +71,7 @@ namespace HRM.Services
 
                     OrganisationName = org.OrganisationName,
 
-                    OrganisationNameDhivehi = org.OrganisationNameDhivehi,
+                    OrganisationNameDhivehi = org.OrganisationNameDhivehi ?? string.Empty,
 
                     ParentOrganisationBusinessEntityId = org.ParentOrganisationBusinessEntityId
                 })

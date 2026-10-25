@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -86,12 +86,6 @@ public partial class User
 
     public virtual ICollection<DataCorrectionRequest> DataCorrectionRequestLastUpdatedByUsers { get; set; } = new List<DataCorrectionRequest>();
 
-    public virtual ICollection<Kpidocument> Kpidocuments { get; set; } = new List<Kpidocument>();
-
-    public virtual ICollection<LeaveDocument> LeaveDocuments { get; set; } = new List<LeaveDocument>();
-
-    public virtual ICollection<LeavesBulkUploadedDocument> LeavesBulkUploadedDocuments { get; set; } = new List<LeavesBulkUploadedDocument>();
-
     public virtual LocalUserState LocalUserState { get; set; } = null!;
 
     public virtual OperationLog? OperationLog { get; set; }
@@ -117,7 +111,7 @@ public partial class User
 
     [Key]
     public int BusinessEntityID { get; set; }
-    public virtual ICollection<Job> Jobs { get; set; }
+    public virtual ICollection<Job> Jobs { get; set; } = new List<Job>();
 
 
 

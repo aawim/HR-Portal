@@ -26,7 +26,7 @@ static class CrudConsolidationTests
         var individual = Proxy.For<IIndividual>((m, a) => m == "GetIndividualID" ? Task.FromResult(100) : throw new Exception(m));
         var accounts = new UserSettingsService(factory, access, logs, contexts);
         var organisations = new OrganisationSettingsService(factory, access, logs);
-        var personal = new AddressService(factory, logs, individual);
+        var personal = new AddressService(factory, logs, individual, access);
         await using (var db = factory.CreateDbContext())
         {
             db.Organisations.AddRange(new Organisation { BusinessEntityID = 10, OrganisationName = "First" }, new Organisation { BusinessEntityID = 20, OrganisationName = "Other" });

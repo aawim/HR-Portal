@@ -1,4 +1,4 @@
-@page "/online"
+﻿@page "/online"
 @page "/"
 
 
@@ -21,11 +21,10 @@
 @inject IUserAccessService _access
 @inject ILeaveService LeaveService
 @inject IAttendanceService AttendanceService
+@inject AttendanceLogService AttendanceLogService
 @inject IAttendancePlanService AttendancePlanService
 
 @inject IWorkflowEngine WorkFlowEngine
-
-@rendermode RenderMode.InteractiveServer
 
 <PageTitle>Dashboard</PageTitle>
 
@@ -85,10 +84,13 @@
 
                              OnClock="RefreshAttendanceAfterClock" />
 
-                        <TestTimeClockCard 
+                        @if (allowTestClock)
+                        {
+                        <TestTimeClockCard
                             TodayCheckIn="TodayCheckIn"
                             TodayCheckOut="TodayCheckOut"
                             OnClock="RefreshAttendanceAfterClock" />
+                        }
 
                         <TodaysAttendanceLogCard RefreshKey="attendanceRefreshKey" />
                     </div>
@@ -277,7 +279,6 @@
     private bool loading = true;
     private bool contextUnavailable;
 
-    private bool isProcessing;
 
     private string UserName = "";
 
@@ -307,8 +308,10 @@
     private AttendanceWorkPlanDto? _attendancePlan;
 
 
+    private bool allowTestClock;
     protected override async Task OnInitializedAsync()
     {
+        allowTestClock = await AttendanceLogService.CanUseTestClockAsync();
 
          
           

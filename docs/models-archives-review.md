@@ -1,0 +1,156 @@
+# Archived models review
+
+The initial review counted EF registration as usage. The corrected review checked application types, DbSet usage, navigation properties, test fixtures and shared-type mappings, excluding registration and historical migrations as evidence of feature usage.
+
+Removed 139 unused legacy model files, their DbSets, entity configurations and navigation properties. Retained 80 archived models in `Models`, including CheckListItem and the shared request-type checklist mapping used by JobTypeConfigurationService. Existing CLR namespaces and scalar foreign-key columns on retained models are preserved.
+
+No database tables, records or applied migrations were changed. Historical snapshots retain the legacy schema. Future migrations must be reviewed to prevent table drops from this runtime-model cleanup; database retirement is a separate operation.
+
+The test clock remains enabled for Developer users in Development.
+
+## Removed model files
+
+- `Models/AdditionDeductionTypeDependencyTimePeriodAmount.cs`
+- `Models/AdditionOrDeductionType.cs`
+- `Models/AggregatedSalary.cs`
+- `Models/AmountType.cs`
+- `Models/AssignedWorkType.cs`
+- `Models/AttachedPayrollItemsProcessingWhiteList.cs`
+- `Models/AttendanceClientInstance.cs`
+- `Models/AttendanceClientState.cs`
+- `Models/AttendanceDependentType.cs`
+- `Models/AttendanceDeviceInOutType.cs`
+- `Models/AttendanceDeviceStaff.cs`
+- `Models/AttendanceDeviceState.cs`
+- `Models/AttendanceLogChangeRequestType.cs`
+- `Models/AttendanceLogMode.cs`
+- `Models/AttendanceLogsTemp.cs`
+- `Models/BudgetItem.cs`
+- `Models/BudgetTransaction.cs`
+- `Models/BudgetTransactionType.cs`
+- `Models/BulkUploadedDocumentSummary.cs`
+- `Models/BusinessEntityRelatedLocationType.cs`
+- `Models/BusinessEntityRelation.cs`
+- `Models/BusinessEntityRelationAssignedRole.cs`
+- `Models/BusinessEntityRelationState.cs`
+- `Models/BusinessEntityRelationType.cs`
+- `Models/BusinessEntityState.cs`
+- `Models/CommercialIslandType.cs`
+- `Models/ConfigurableValue.cs`
+- `Models/Currency.cs`
+- `Models/CurrencyExchangeRate.cs`
+- `Models/CurrencyType.cs`
+- `Models/DataCorrectionActionType.cs`
+- `Models/DataCorrectionAttribute.cs`
+- `Models/DataCorrectionAttributeLookupType.cs`
+- `Models/DataCorrectionRequestAttributeValue.cs`
+- `Models/DataCorrectionRequestState.cs`
+- `Models/DataCorrectionRequestType.cs`
+- `Models/DataCorrectionRequestTypeAttribute.cs`
+- `Models/DayType.cs`
+- `Models/DeductionAmountType.cs`
+- `Models/DeductionTypeAmount.cs`
+- `Models/DependencyType.cs`
+- `Models/DerivedAdditionDeductionType.cs`
+- `Models/DerivedAdditionDeductionTypeItem.cs`
+- `Models/DerivedOnPayrollItemType.cs`
+- `Models/DerivedOnType.cs`
+- `Models/Dhafthar.cs`
+- `Models/DnrlookupCache.cs`
+- `Models/DocumentState.cs`
+- `Models/EventType.cs`
+- `Models/GenderType.cs`
+- `Models/GroupConfigurableValue.cs`
+- `Models/KeyHolder.cs`
+- `Models/Kpidocument.cs`
+- `Models/Language.cs`
+- `Models/LeaveDocument.cs`
+- `Models/LeaveForm.cs`
+- `Models/LeaveWorkHandOverTask.cs`
+- `Models/LeavesBulkUploadedDocument.cs`
+- `Models/LinkType.cs`
+- `Models/Mimetype.cs`
+- `Models/NavigationLink.cs`
+- `Models/NavigationLinkFacilityType.cs`
+- `Models/NoPayLeaf.cs`
+- `Models/NoPayLeaveType.cs`
+- `Models/NoteReason.cs`
+- `Models/OnlineAddress.cs`
+- `Models/OnlineAddressBasis.cs`
+- `Models/OnlineAddressInstance.cs`
+- `Models/OnlineArea.cs`
+- `Models/OnlineBusinessEntityLocation.cs`
+- `Models/OnlineDhafthar.cs`
+- `Models/OnlineLocation.cs`
+- `Models/OrganisationBudget.cs`
+- `Models/OrganisationBudgetMonthlySummary.cs`
+- `Models/OrganisationBudgetSummary.cs`
+- `Models/OrganisationBudgetSummeryAggregate.cs`
+- `Models/OrganisationDeductionType.cs`
+- `Models/OrganisationPayrollItemType.cs`
+- `Models/OrganisationPayrollPeriodJobType.cs`
+- `Models/OrganisationSapexception.cs`
+- `Models/OrganisationalStructureSapexception.cs`
+- `Models/Ot.cs`
+- `Models/OtpreApprovalTime.cs`
+- `Models/Otrequest.cs`
+- `Models/Ottype.cs`
+- `Models/OwnerType.cs`
+- `Models/PassportState.cs`
+- `Models/PayrollConfigurableValue.cs`
+- `Models/PayrollConfigurableValueType.cs`
+- `Models/PayrollCycleLinkedRequest.cs`
+- `Models/PayrollCycleProcessingState.cs`
+- `Models/PayrollItemDailySapsheetDetail.cs`
+- `Models/PayrollItemProcessingFlow.cs`
+- `Models/PayrollItemType.cs`
+- `Models/PayrollItemTypeAmount.cs`
+- `Models/PayrollItemTypeDependencyAmount.cs`
+- `Models/PayrollItemTypeDependencyTimePeriodAmount.cs`
+- `Models/PayrollItemTypeProcessingCode.cs`
+- `Models/PayrollItemsProcessingWhiteList.cs`
+- `Models/PercentageVariableDeductionAmount.cs`
+- `Models/PrimaryPayrollItemTypeSapwageType.cs`
+- `Models/RecurrenceType.cs`
+- `Models/Region.cs`
+- `Models/RequestsView.cs`
+- `Models/SalaryRateDefinitionForType.cs`
+- `Models/Sapexception.cs`
+- `Models/SapexceptionActionType.cs`
+- `Models/SapexceptionType.cs`
+- `Models/Sapsheet.cs`
+- `Models/SapwageType.cs`
+- `Models/ServiceCheckListVerification.cs`
+- `Models/ServiceDocument.cs`
+- `Models/ServiceDocumentVerification.cs`
+- `Models/ServiceState.cs`
+- `Models/ServiceType.cs`
+- `Models/ServiceTypesAllowedServiceStateTransition.cs`
+- `Models/SickLeaveLodgeType.cs`
+- `Models/SpecialDayShift.cs`
+- `Models/StaffAssignedDeductionAmount.cs`
+- `Models/StaffDailyAttandanceSummaryIssue.cs`
+- `Models/StaffDailyAttandanceSummaryIssueType.cs`
+- `Models/StaffDailyAttendanceSummery.cs`
+- `Models/StaffPayrollItemDetail.cs`
+- `Models/StaffSalary.cs`
+- `Models/StaffSalaryDeduction.cs`
+- `Models/StaffSalaryPayrollItem.cs`
+- `Models/StaffSalaryPayrollItemSapdetail.cs`
+- `Models/VerifiedState.cs`
+- `Models/VwLeaveChangeRequest.cs`
+- `Models/VwLeaveRequest.cs`
+- `Models/VwMergedRequestDatum.cs`
+- `Models/VwOtRequest.cs`
+- `Models/VwOutOfOfficeRequest.cs`
+- `Models/VwTeamRequest.cs`
+- `Models/VwWorkTeamRequest.cs`
+- `Models/WebServiceRequestLog.cs`
+- `Models/WorkShiftsBreakTime.cs`
+- `Models/WorkType.cs`
+- `Models/WorkingDayShift.cs`
+
+## Verification
+
+- Application build: 0 warnings, 0 errors.
+- EF model constructed successfully with 213 entity mappings and the request-type checklist mapping present, without opening a database connection.

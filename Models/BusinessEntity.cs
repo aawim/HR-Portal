@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -33,15 +33,7 @@ public partial class BusinessEntity
 
     public virtual ICollection<BusinessEntityLocation> BusinessEntityLocations { get; set; } = new List<BusinessEntityLocation>();
 
-    public virtual ICollection<BusinessEntityRelation> BusinessEntityRelationDelegateeBusinessEntities { get; set; } = new List<BusinessEntityRelation>();
-
-    public virtual ICollection<BusinessEntityRelation> BusinessEntityRelationDelegatorBusinessEntities { get; set; } = new List<BusinessEntityRelation>();
-
-    public virtual ICollection<BusinessEntityRelationType> BusinessEntityRelationTypes { get; set; } = new List<BusinessEntityRelationType>();
-
     public virtual ICollection<BusinessEntitySchedule> BusinessEntitySchedules { get; set; } = new List<BusinessEntitySchedule>();
-
-    public virtual BusinessEntityState? BusinessEntityState { get; set; }
 
     public virtual BusinessEntityType BusinessEntityType { get; set; } = null!;
 
@@ -53,13 +45,10 @@ public partial class BusinessEntity
 
     public virtual User? LastStateChangedByUser { get; set; }
 
-    public virtual ICollection<OnlineBusinessEntityLocation> OnlineBusinessEntityLocations { get; set; } = new List<OnlineBusinessEntityLocation>();
-
     public virtual OperationLog? OperationLog { get; set; }
 
     public virtual Organisation Organisation { get; set; } = null!;
 
     public virtual User? VerifiedByNavigation { get; set; }
 
-    public virtual VerifiedState? VerifiedState { get; set; }
 }

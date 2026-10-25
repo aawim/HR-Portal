@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Configuration;
 using Dashboard = HRM.Components.Pages.Index;
 using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 
@@ -27,6 +28,9 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
 var failures = 0;
+try { await SecurityHardeningTests.RunAsync(); Console.WriteLine("PASS Security hardening: retired endpoints, CSRF, configured database providers, clock ownership, developer-only diagnostics, leave-type privileges and tenant isolation"); }
+catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Security hardening: {ex}"); }
+if (args.Contains("--security-only")) return failures == 0 ? 0 : 1;
 try { await CrudConsolidationTests.RunAsync(); Console.WriteLine("PASS CRUD consolidation: shared address creation, owner isolation, current-address handling, canonical account writes and legacy adapters"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL CRUD consolidation: {ex}"); }
 try { await OrganisationResourceSettingsTests.RunAsync(); Console.WriteLine("PASS Organisation resource settings: shared types, tenant-scoped requests, calendar access, duplicate prevention and audit"); }
@@ -264,7 +268,9 @@ static async Task TestLeaveDays()
     var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
     typeof(MyAttendance).GetProperty("DbContext", flags)!.SetValue(grid, gridDb);
     typeof(MyAttendance).GetProperty("AttendanceLogService", flags)!.SetValue(grid,
-        new AttendanceLogService(gridDb, null!, null!, null!, null!));
+        new AttendanceLogService(gridDb, null!, null!, null!, access));
+    typeof(MyAttendance).GetProperty("AttendanceService", flags)!.SetValue(grid,
+        Proxy.For<IAttendanceService>((method, _) => method == "GetStaffAttendanceRangeAsync" ? Task.FromResult(days) : throw new Exception(method)));
     typeof(MyAttendance).GetProperty("_individual", flags)!.SetValue(grid,
         Proxy.For<IIndividual>((_, _) => Task.FromResult(1)));
     typeof(MyAttendance).GetField("startDate", flags)!.SetValue(grid, first);
@@ -302,6 +308,7 @@ static async Task TestRefresh(Type clockType)
     var access = Proxy.For<IUserAccessService>((name, _) => name switch
     {
         "GetContextAsync" or "RequireContextAsync" => Task.FromResult(user),
+        "HasUserGroupAsync" => Task.FromResult(true),
         _ => throw new InvalidOperationException(name)
     });
     var plans = Proxy.For<IAttendancePlanService>((_, _) =>
@@ -319,7 +326,7 @@ static async Task TestRefresh(Type clockType)
         }));
     await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
-    db.Jobs.Add(new Job { JobId = 2, IndividualID = 1, OrganisationID = 3 });
+    db.Jobs.Add(new Job { JobId = 2, IndividualID = 1, OrganisationID = 3, JobStateId = 4, JoinedDate = DateTime.UtcNow.AddYears(-1) });
     await db.SaveChangesAsync();
     var processor = Proxy.For<IAttendanceLogProcessor>((_, args) => Process((int)args[0]!));
     async Task<AttendanceProcessingResult> Process(int logId)
@@ -334,7 +341,10 @@ static async Task TestRefresh(Type clockType)
         .AddLogging()
         .AddSingleton(attendance).AddSingleton(access).AddSingleton(plans)
         .AddSingleton(Proxy.For<IAttendanceResolver>((name, _) => throw new Exception(name)))
-        .AddSingleton(new AttendanceLogService(db, processor, null!, null!, access))
+        .AddSingleton(new AttendanceLogService(db, processor,
+            Proxy.For<IOperationLogService>((name, _) => name == "CreateAsync" ? Task.FromResult(new OperationLog { OperationLogId = 1 }) : throw new Exception(name)),
+            null!, access, environment: new SecurityTestEnvironment(), configuration:
+                new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Security:AllowTestClock"] = "true" }).Build()))
         .AddSingleton<IComponentActivator, TestActivator>()
         .BuildServiceProvider();
     await using var renderer = new TestRenderer(services);
@@ -343,6 +353,7 @@ static async Task TestRefresh(Type clockType)
     SetProperty(page, "_access", access);
     SetProperty(page, "AttendancePlanService", plans);
     SetField(page, "loading", false);
+    SetField(page, "allowTestClock", true);
     await renderer.Dispatcher.InvokeAsync(async () =>
     {
         renderer.Attach(page);
@@ -407,6 +418,9 @@ sealed class AttendanceData
         "GetMyWeeklyAttendanceAsync" => Yield(Revision == 0 ? new List<AttendanceLogDto>() : new List<AttendanceLogDto> { Log }),
         "GetTodayStatusAsync" => Yield<(AttendanceLogDto?, AttendanceLogDto?)>((Revision == 0 ? null : Log, null)),
         "GetMyYearlyAttendanceAsync" => Yearly((int)args[0]!),
+        "GetStaffAttendanceRangeAsync" => Yield(new List<YearlyAttendanceDayDto> {
+            new() { Date = DateTime.UtcNow.AddHours(5).Date, IsPresent = Revision > 0, FirstCheckIn = Revision > 0 ? Timestamp : null,
+                HasActiveSchedule = true, HasApprovedPosition = true } }),
         "GetLogsAsync" => Logs(),
         "GetEvaluationAsync" => Evaluation(),
         _ => throw new InvalidOperationException($"Unexpected attendance call: {name}")
@@ -416,7 +430,8 @@ sealed class AttendanceData
         LastYear = year;
         return Yield(new List<YearlyAttendanceDayDto>
         {
-            new() { Date = DateTime.Today, IsPresent = Revision > 0, HasAttendanceLogs = Revision > 0, ClockEventCount = Revision }
+            new() { Date = DateTime.UtcNow.AddHours(5).Date, IsPresent = Revision > 0, FirstCheckIn = Revision > 0 ? Timestamp : null,
+                HasAttendanceLogs = Revision > 0, ClockEventCount = Revision, HasActiveSchedule = true, HasApprovedPosition = true }
         });
     }
     private static async Task<T> Yield<T>(T result)
@@ -498,7 +513,7 @@ sealed class TestRenderer : Renderer
     private int root;
     private readonly List<Exception> errors = [];
     public override Dispatcher Dispatcher { get; } = Dispatcher.CreateDefault();
-    public TestRenderer(IServiceProvider services) : base(services, services.GetRequiredService<ILoggerFactory>()) { }
+    public TestRenderer(IServiceProvider services) : base(new RenderServices(services), services.GetRequiredService<ILoggerFactory>()) { }
     protected override IComponent ResolveComponentForRenderMode(Type componentType, int? parentComponentId,
         IComponentActivator componentActivator, IComponentRenderMode renderMode) => componentActivator.CreateInstance(componentType);
     public void Attach(IComponent component) => root = AssignRootComponentId(component);

@@ -371,7 +371,6 @@
 
     private string assignedSearch = "";
 
-    private string availableSearch = "";
 
 
 
@@ -393,7 +392,7 @@
     private void SelectAvailable(LeaveTypeDto leaveType)
     {
 
-        if (JobId == null)
+        if (JobId <= 0)
             return;
 
 
@@ -502,7 +501,7 @@
 
 
 
-    private async Task RemoveSelected()
+    private void RemoveSelected()
     {
         if (selectedAssigned == null)
             return;
@@ -515,7 +514,7 @@
     private async Task AssignLeaveDefinitionAsync(
        LeaveDefinitionDto definition)
     {
-        if (assigningDefinition)
+        if (assigningDefinition || assigningLegacy)
             return;
 
         try
@@ -568,12 +567,12 @@
     private async Task AssignLegacyLeaveType(
         LeaveTypeDto leaveType)
     {
-        if (assigningDefinition)
+        if (assigningLegacy || assigningDefinition)
             return;
 
         try
         {
-            assigningDefinition = true;
+            assigningLegacy = true;
 
             var dto = new AssignLegacyLeaveTypeDto
                 {
@@ -612,7 +611,7 @@
         }
         finally
         {
-            assigningDefinition = false;
+            assigningLegacy = false;
         }
     }
  

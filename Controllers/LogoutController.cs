@@ -9,6 +9,7 @@ namespace HRM.Controllers
         public class LogoutController : Controller
         {
             [HttpPost("Logout")]
+            [ValidateAntiForgeryToken]
             public IActionResult Logout()
             {
                 // The URL the user should be sent to after the Identity Provider successfully logs them out.

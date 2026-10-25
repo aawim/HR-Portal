@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using HRM.Models.Archives;
 using HRM.Models.LeaveTypes;
@@ -46,13 +46,10 @@ public partial class HrmTeContext : DbContext
         => Set<WfRequestAction>();
 
 
+    public virtual DbSet<CheckListItem> CheckListItems { get; set; }
+
     public virtual DbSet<WfWorkflowJobType> WfWorkflowJobTypes
     { get; set; }
-
-
-
-
-
 
     public virtual DbSet<LeaveDefinition> LeaveDefinitions { get; set; }
 
@@ -68,9 +65,6 @@ public partial class HrmTeContext : DbContext
     public DbSet<JobWorkTemplate> JobWorkTemplates { get; set; }
 
     public virtual DbSet<PlanningProvider> PlanningProviders { get; set; }
-
-
-    
 
     public virtual DbSet<JobWorkTemplateAssignment> JobWorkTemplateAssignments { get; set; }
     public virtual DbSet<OrganisationWorkPlanningSetting>OrganisationWorkPlanningSettings{ get; set; }
@@ -102,10 +96,6 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<WorkAssignmentTransfer>WorkAssignmentTransfers{ get; set; }
 
-    public virtual DbSet<AdditionDeductionTypeDependencyTimePeriodAmount> AdditionDeductionTypeDependencyTimePeriodAmounts { get; set; }
-
-    public virtual DbSet<AdditionOrDeductionType> AdditionOrDeductionTypes { get; set; }
-
     public virtual DbSet<Address> Addresses { get; set; }
 
     public virtual DbSet<AddressBaseType> AddressBaseTypes { get; set; }
@@ -116,61 +106,29 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<AddressInstanceType> AddressInstanceTypes { get; set; }
 
-    public virtual DbSet<AggregatedSalary> AggregatedSalaries { get; set; }
-
-    public virtual DbSet<AmountType> AmountTypes { get; set; }
-
-    public virtual DbSet<AssignedWorkType> AssignedWorkTypes { get; set; }
-
     public virtual DbSet<Atoll> Atolls { get; set; }
 
     public virtual DbSet<AttachedBreakTime> AttachedBreakTimes { get; set; }
 
     public virtual DbSet<AttachedBreakTimesDay> AttachedBreakTimesDays { get; set; }
 
-    public virtual DbSet<AttachedPayrollItemsProcessingWhiteList> AttachedPayrollItemsProcessingWhiteLists { get; set; }
-
-    public virtual DbSet<AttendanceClientInstance> AttendanceClientInstances { get; set; }
-
-    public virtual DbSet<AttendanceClientState> AttendanceClientStates { get; set; }
-
-    public virtual DbSet<AttendanceDependentType> AttendanceDependentTypes { get; set; }
-
     public virtual DbSet<AttendanceDevice> AttendanceDevices { get; set; }
-
-    public virtual DbSet<AttendanceDeviceInOutType> AttendanceDeviceInOutTypes { get; set; }
-
-    public virtual DbSet<AttendanceDeviceStaff> AttendanceDeviceStaffs { get; set; }
-
-    public virtual DbSet<AttendanceDeviceState> AttendanceDeviceStates { get; set; }
 
     public virtual DbSet<AttendanceLog> AttendanceLogs { get; set; }
 
     public virtual DbSet<AttendanceLogChangeRequest> AttendanceLogChangeRequests { get; set; }
 
-    public virtual DbSet<AttendanceLogChangeRequestType> AttendanceLogChangeRequestTypes { get; set; }
-
-    public virtual DbSet<AttendanceLogMode> AttendanceLogModes { get; set; }
-
     public virtual DbSet<AttendanceLogRequest> AttendanceLogRequests { get; set; }
 
     public virtual DbSet<AttendanceLogState> AttendanceLogStates { get; set; }
 
-    public virtual DbSet<AttendanceLogsTemp> AttendanceLogsTemps { get; set; }
 
     public virtual DbSet<BasicSalary> BasicSalaries { get; set; }
 
     public virtual DbSet<BreakTime> BreakTimes { get; set; }
 
-    public virtual DbSet<BudgetItem> BudgetItems { get; set; }
-
-    public virtual DbSet<BudgetTransaction> BudgetTransactions { get; set; }
-
-    public virtual DbSet<BudgetTransactionType> BudgetTransactionTypes { get; set; }
-
     public virtual DbSet<BulkUploadedDocument> BulkUploadedDocuments { get; set; }
 
-    public virtual DbSet<BulkUploadedDocumentSummary> BulkUploadedDocumentSummaries { get; set; }
 
     public virtual DbSet<BusinessEntitiesDocument> BusinessEntitiesDocuments { get; set; }
 
@@ -182,19 +140,8 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<BusinessEntityLocationType> BusinessEntityLocationTypes { get; set; }
 
-    public virtual DbSet<BusinessEntityRelatedLocationType> BusinessEntityRelatedLocationTypes { get; set; }
-
-    public virtual DbSet<BusinessEntityRelation> BusinessEntityRelations { get; set; }
-
-    public virtual DbSet<BusinessEntityRelationAssignedRole> BusinessEntityRelationAssignedRoles { get; set; }
-
-    public virtual DbSet<BusinessEntityRelationState> BusinessEntityRelationStates { get; set; }
-
-    public virtual DbSet<BusinessEntityRelationType> BusinessEntityRelationTypes { get; set; }
-
     public virtual DbSet<BusinessEntitySchedule> BusinessEntitySchedules { get; set; }
 
-    public virtual DbSet<BusinessEntityState> BusinessEntityStates { get; set; }
 
     public virtual DbSet<BusinessEntityType> BusinessEntityTypes { get; set; }
 
@@ -210,13 +157,8 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<CalendarType> CalendarTypes { get; set; }
 
-    public virtual DbSet<CheckListItem> CheckListItems { get; set; }
 
     public virtual DbSet<City> Cities { get; set; }
-
-    public virtual DbSet<CommercialIslandType> CommercialIslandTypes { get; set; }
-
-    public virtual DbSet<ConfigurableValue> ConfigurableValues { get; set; }
 
     public virtual DbSet<ContactInformationType> ContactInformationTypes { get; set; }
 
@@ -224,69 +166,25 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<Country> Countries { get; set; }
 
-    public virtual DbSet<Currency> Currencies { get; set; }
-
-    public virtual DbSet<CurrencyExchangeRate> CurrencyExchangeRates { get; set; }
-
-    public virtual DbSet<CurrencyType> CurrencyTypes { get; set; }
-
-    public virtual DbSet<DataCorrectionActionType> DataCorrectionActionTypes { get; set; }
-
-    public virtual DbSet<DataCorrectionAttribute> DataCorrectionAttributes { get; set; }
-
-    public virtual DbSet<DataCorrectionAttributeLookupType> DataCorrectionAttributeLookupTypes { get; set; }
-
     public virtual DbSet<DataCorrectionRequest> DataCorrectionRequests { get; set; }
-
-    public virtual DbSet<DataCorrectionRequestAttributeValue> DataCorrectionRequestAttributeValues { get; set; }
-
-    public virtual DbSet<DataCorrectionRequestState> DataCorrectionRequestStates { get; set; }
-
-    public virtual DbSet<DataCorrectionRequestType> DataCorrectionRequestTypes { get; set; }
-
-    public virtual DbSet<DataCorrectionRequestTypeAttribute> DataCorrectionRequestTypeAttributes { get; set; }
 
     //public virtual DbSet<DayOfWeek> DayOfWeeks { get; set; }
 
-    public virtual DbSet<DayType> DayTypes { get; set; }
-
-    public virtual DbSet<DeductionAmountType> DeductionAmountTypes { get; set; }
-
     public virtual DbSet<DeductionType> DeductionTypes { get; set; }
-
-    public virtual DbSet<DeductionTypeAmount> DeductionTypeAmounts { get; set; }
-
-    public virtual DbSet<DependencyType> DependencyTypes { get; set; }
-
-    public virtual DbSet<DerivedAdditionDeductionType> DerivedAdditionDeductionTypes { get; set; }
-
-    public virtual DbSet<DerivedAdditionDeductionTypeItem> DerivedAdditionDeductionTypeItems { get; set; }
-
-    public virtual DbSet<DerivedOnPayrollItemType> DerivedOnPayrollItemTypes { get; set; }
-
-    public virtual DbSet<DerivedOnType> DerivedOnTypes { get; set; }
-
-    public virtual DbSet<Dhafthar> Dhafthars { get; set; }
-
-    public virtual DbSet<DnrlookupCache> DnrlookupCaches { get; set; }
 
     public virtual DbSet<Document> Documents { get; set; }
 
-    public virtual DbSet<DocumentState> DocumentStates { get; set; }
 
     public virtual DbSet<DocumentType> DocumentTypes { get; set; }
 
     public virtual DbSet<Element> Elements { get; set; }
 
-    public virtual DbSet<EventType> EventTypes { get; set; }
 
     public virtual DbSet<FacilityRegistrationType> FacilityRegistrationTypes { get; set; }
 
-    public virtual DbSet<GenderType> GenderTypes { get; set; }
 
     public virtual DbSet<Group> Groups { get; set; }
 
-    public virtual DbSet<GroupConfigurableValue> GroupConfigurableValues { get; set; }
 
     public virtual DbSet<GroupConfigurableValueType> GroupConfigurableValueTypes { get; set; }
 
@@ -334,12 +232,6 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<JobTypesException> JobTypesExceptions { get; set; }
 
-    public virtual DbSet<KeyHolder> KeyHolders { get; set; }
-
-    public virtual DbSet<Kpidocument> Kpidocuments { get; set; }
-
-    public virtual DbSet<Language> Languages { get; set; }
-
     public virtual DbSet<Leaf> Leaves { get; set; }
 
     public virtual DbSet<LeaveChangeRequest> LeaveChangeRequests { get; set; }
@@ -349,10 +241,6 @@ public partial class HrmTeContext : DbContext
     public virtual DbSet<LeaveConfigurableValue> LeaveConfigurableValues { get; set; }
 
     public virtual DbSet<LeaveConfigurableValueType> LeaveConfigurableValueTypes { get; set; }
-
-    public virtual DbSet<LeaveDocument> LeaveDocuments { get; set; }
-
-    public virtual DbSet<LeaveForm> LeaveForms { get; set; }
 
     public virtual DbSet<LeaveLodgeType> LeaveLodgeTypes { get; set; }
 
@@ -374,55 +262,25 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<LeaveWorkHandOver> LeaveWorkHandOvers { get; set; }
 
-    public virtual DbSet<LeaveWorkHandOverTask> LeaveWorkHandOverTasks { get; set; }
-
-    public virtual DbSet<LeavesBulkUploadedDocument> LeavesBulkUploadedDocuments { get; set; }
-
-    public virtual DbSet<LinkType> LinkTypes { get; set; }
-
     public virtual DbSet<LocalUserState> LocalUserStates { get; set; }
 
     public virtual DbSet<Location> Locations { get; set; }
 
     public virtual DbSet<LocationType> LocationTypes { get; set; }
 
-    public virtual DbSet<Mimetype> Mimetypes { get; set; }
 
     public virtual DbSet<Module> Modules { get; set; }
 
     public virtual DbSet<Month> Months { get; set; }
 
-    public virtual DbSet<NavigationLink> NavigationLinks { get; set; }
-
-    public virtual DbSet<NavigationLinkFacilityType> NavigationLinkFacilityTypes { get; set; }
-
-    public virtual DbSet<NoPayLeaf> NoPayLeaves { get; set; }
-
-    public virtual DbSet<NoPayLeaveType> NoPayLeaveTypes { get; set; }
-
     public virtual DbSet<Note> Notes { get; set; }
 
-    public virtual DbSet<NoteReason> NoteReasons { get; set; }
 
     public virtual DbSet<OfficialTripDetail> OfficialTripDetails { get; set; }
 
     public virtual DbSet<OfficialTripLocation> OfficialTripLocations { get; set; }
 
     public virtual DbSet<OfficialTripType> OfficialTripTypes { get; set; }
-
-    public virtual DbSet<OnlineAddress> OnlineAddresses { get; set; }
-
-    public virtual DbSet<OnlineAddressBasis> OnlineAddressBases { get; set; }
-
-    public virtual DbSet<OnlineAddressInstance> OnlineAddressInstances { get; set; }
-
-    public virtual DbSet<OnlineArea> OnlineAreas { get; set; }
-
-    public virtual DbSet<OnlineBusinessEntityLocation> OnlineBusinessEntityLocations { get; set; }
-
-    public virtual DbSet<OnlineDhafthar> OnlineDhafthars { get; set; }
-
-    public virtual DbSet<OnlineLocation> OnlineLocations { get; set; }
 
     public virtual DbSet<OnlineSignInOrganisation> OnlineSignInOrganisations { get; set; }
 
@@ -432,23 +290,7 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<Organisation> Organisations { get; set; }
 
-    public virtual DbSet<OrganisationBudget> OrganisationBudgets { get; set; }
-
-    public virtual DbSet<OrganisationBudgetMonthlySummary> OrganisationBudgetMonthlySummaries { get; set; }
-
-    public virtual DbSet<OrganisationBudgetSummary> OrganisationBudgetSummaries { get; set; }
-
-    public virtual DbSet<OrganisationBudgetSummeryAggregate> OrganisationBudgetSummeryAggregates { get; set; }
-
-    public virtual DbSet<OrganisationDeductionType> OrganisationDeductionTypes { get; set; }
-
-    public virtual DbSet<OrganisationPayrollItemType> OrganisationPayrollItemTypes { get; set; }
-
     public virtual DbSet<OrganisationPayrollPeriod> OrganisationPayrollPeriods { get; set; }
-
-    public virtual DbSet<OrganisationPayrollPeriodJobType> OrganisationPayrollPeriodJobTypes { get; set; }
-
-    public virtual DbSet<OrganisationSapexception> OrganisationSapexceptions { get; set; }
 
     public virtual DbSet<OrganisationStructure> OrganisationStructures { get; set; }
 
@@ -480,57 +322,18 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<OrganisationType> OrganisationTypes { get; set; }
 
-    public virtual DbSet<OrganisationalStructureSapexception> OrganisationalStructureSapexceptions { get; set; }
-
-    public virtual DbSet<Ot> Ots { get; set; }
-
     public virtual DbSet<OtherSalaryRateDefinition> OtherSalaryRateDefinitions { get; set; }
 
     public virtual DbSet<OtpreApproval> OtpreApprovals { get; set; }
-
-    public virtual DbSet<OtpreApprovalTime> OtpreApprovalTimes { get; set; }
-
-    public virtual DbSet<Otrequest> Otrequests { get; set; }
-
-    public virtual DbSet<Ottype> Ottypes { get; set; }
 
     public virtual DbSet<OutOfOfficeRequest> OutOfOfficeRequests { get; set; }
 
     public virtual DbSet<OutOfficeRequestType> OutOfficeRequestTypes { get; set; }
 
-    public virtual DbSet<OwnerType> OwnerTypes { get; set; }
 
     public virtual DbSet<Passport> Passports { get; set; }
 
-    public virtual DbSet<PassportState> PassportStates { get; set; }
-
-    public virtual DbSet<PayrollConfigurableValue> PayrollConfigurableValues { get; set; }
-
-    public virtual DbSet<PayrollConfigurableValueType> PayrollConfigurableValueTypes { get; set; }
-
     public virtual DbSet<PayrollCycle> PayrollCycles { get; set; }
-
-    public virtual DbSet<PayrollCycleLinkedRequest> PayrollCycleLinkedRequests { get; set; }
-
-    public virtual DbSet<PayrollCycleProcessingState> PayrollCycleProcessingStates { get; set; }
-
-    public virtual DbSet<PayrollItemDailySapsheetDetail> PayrollItemDailySapsheetDetails { get; set; }
-
-    public virtual DbSet<PayrollItemProcessingFlow> PayrollItemProcessingFlows { get; set; }
-
-    public virtual DbSet<PayrollItemType> PayrollItemTypes { get; set; }
-
-    public virtual DbSet<PayrollItemTypeAmount> PayrollItemTypeAmounts { get; set; }
-
-    public virtual DbSet<PayrollItemTypeDependencyAmount> PayrollItemTypeDependencyAmounts { get; set; }
-
-    public virtual DbSet<PayrollItemTypeDependencyTimePeriodAmount> PayrollItemTypeDependencyTimePeriodAmounts { get; set; }
-
-    public virtual DbSet<PayrollItemTypeProcessingCode> PayrollItemTypeProcessingCodes { get; set; }
-
-    public virtual DbSet<PayrollItemsProcessingWhiteList> PayrollItemsProcessingWhiteLists { get; set; }
-
-    public virtual DbSet<PercentageVariableDeductionAmount> PercentageVariableDeductionAmounts { get; set; }
 
     public virtual DbSet<Position> Positions { get; set; }
 
@@ -541,12 +344,6 @@ public partial class HrmTeContext : DbContext
     public virtual DbSet<PositionRank> PositionRanks { get; set; }
 
     public virtual DbSet<PositionType> PositionTypes { get; set; }
-
-    public virtual DbSet<PrimaryPayrollItemTypeSapwageType> PrimaryPayrollItemTypeSapwageTypes { get; set; }
-
-    public virtual DbSet<RecurrenceType> RecurrenceTypes { get; set; }
-
-    public virtual DbSet<Region> Regions { get; set; }
 
     public virtual DbSet<Request> Requests { get; set; }
 
@@ -572,23 +369,10 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<RequestTypesStatesRequiredRolesForProcessing> RequestTypesStatesRequiredRolesForProcessings { get; set; }
 
-    public virtual DbSet<RequestsView> RequestsViews { get; set; }
 
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<SalaryRateDefinition> SalaryRateDefinitions { get; set; }
-
-    public virtual DbSet<SalaryRateDefinitionForType> SalaryRateDefinitionForTypes { get; set; }
-
-    public virtual DbSet<Sapexception> Sapexceptions { get; set; }
-
-    public virtual DbSet<SapexceptionActionType> SapexceptionActionTypes { get; set; }
-
-    public virtual DbSet<SapexceptionType> SapexceptionTypes { get; set; }
-
-    public virtual DbSet<Sapsheet> Sapsheets { get; set; }
-
-    public virtual DbSet<SapwageType> SapwageTypes { get; set; }
 
     public virtual DbSet<Schedule> Schedules { get; set; }
 
@@ -602,29 +386,15 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<Service> Services { get; set; }
 
-    public virtual DbSet<ServiceCheckListVerification> ServiceCheckListVerifications { get; set; }
-
-    public virtual DbSet<ServiceDocument> ServiceDocuments { get; set; }
-
-    public virtual DbSet<ServiceDocumentVerification> ServiceDocumentVerifications { get; set; }
-
-    public virtual DbSet<ServiceState> ServiceStates { get; set; }
-
-    public virtual DbSet<ServiceType> ServiceTypes { get; set; }
-
-    public virtual DbSet<ServiceTypesAllowedServiceStateTransition> ServiceTypesAllowedServiceStateTransitions { get; set; }
-
     public virtual DbSet<ShiftSchedule> ShiftSchedules { get; set; }
 
     public virtual DbSet<ShiftScheduleDay> ShiftScheduleDays { get; set; }
 
     public virtual DbSet<SickLeaveForm> SickLeaveForms { get; set; }
 
-    public virtual DbSet<SickLeaveLodgeType> SickLeaveLodgeTypes { get; set; }
 
     public virtual DbSet<SpecialDay> SpecialDays { get; set; }
 
-    public virtual DbSet<SpecialDayShift> SpecialDayShifts { get; set; }
 
     public virtual DbSet<SpecialDayType> SpecialDayTypes { get; set; }
 
@@ -634,31 +404,14 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<StaffAssignedDeduction> StaffAssignedDeductions { get; set; }
 
-    public virtual DbSet<StaffAssignedDeductionAmount> StaffAssignedDeductionAmounts { get; set; }
-
-    public virtual DbSet<StaffDailyAttandanceSummaryIssue> StaffDailyAttandanceSummaryIssues { get; set; }
-
-    public virtual DbSet<StaffDailyAttandanceSummaryIssueType> StaffDailyAttandanceSummaryIssueTypes { get; set; }
-
-    public virtual DbSet<StaffDailyAttendanceSummery> StaffDailyAttendanceSummeries { get; set; }
-
     public virtual DbSet<StaffEnrollmentNumber> StaffEnrollmentNumbers { get; set; }
 
-    public virtual DbSet<StaffPayrollItemDetail> StaffPayrollItemDetails { get; set; }
 
     public virtual DbSet<StaffPayrollItemType> StaffPayrollItemTypes { get; set; }
 
     public virtual DbSet<StaffPayrollItemTypeAmount> StaffPayrollItemTypeAmounts { get; set; }
 
     public virtual DbSet<StaffPayrollItemTypeSchedule> StaffPayrollItemTypeSchedules { get; set; }
-
-    public virtual DbSet<StaffSalary> StaffSalaries { get; set; }
-
-    public virtual DbSet<StaffSalaryDeduction> StaffSalaryDeductions { get; set; }
-
-    public virtual DbSet<StaffSalaryPayrollItem> StaffSalaryPayrollItems { get; set; }
-
-    public virtual DbSet<StaffSalaryPayrollItemSapdetail> StaffSalaryPayrollItemSapdetails { get; set; }
 
     public virtual DbSet<Team> Teams { get; set; }
 
@@ -684,39 +437,19 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<UserServiceRole> UserServiceRoles { get; set; }
 
-    public virtual DbSet<VerifiedState> VerifiedStates { get; set; }
-
-    public virtual DbSet<VwLeaveChangeRequest> VwLeaveChangeRequests { get; set; }
-
-    public virtual DbSet<VwLeaveRequest> VwLeaveRequests { get; set; }
-
-    public virtual DbSet<VwMergedRequestDatum> VwMergedRequestData { get; set; }
-
-    public virtual DbSet<VwOtRequest> VwOtRequests { get; set; }
-
-    public virtual DbSet<VwOutOfOfficeRequest> VwOutOfOfficeRequests { get; set; }
-
-    public virtual DbSet<VwTeamRequest> VwTeamRequests { get; set; }
-
-    public virtual DbSet<VwWorkTeamRequest> VwWorkTeamRequests { get; set; }
-
     public virtual DbSet<Ward> Wards { get; set; }
 
-    public virtual DbSet<WebServiceRequestLog> WebServiceRequestLogs { get; set; }
 
     public virtual DbSet<WorkShift> WorkShifts { get; set; }
 
-    public virtual DbSet<WorkShiftsBreakTime> WorkShiftsBreakTimes { get; set; }
-
-    public virtual DbSet<WorkType> WorkTypes { get; set; }
-
     public virtual DbSet<WorkingDay> WorkingDays { get; set; }
 
-    public virtual DbSet<WorkingDayShift> WorkingDayShifts { get; set; }
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-#warning To protect potentially sensitive information in your connection string, you should move it out of source code. You can avoid scaffolding the connection string by using the Name= syntax to read it from configuration - see https://go.microsoft.com/fwlink/?linkid=2131148. For more guidance on storing connection strings, see https://go.microsoft.com/fwlink/?LinkId=723263.
-        => optionsBuilder.UseSqlServer("Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=NewHRM_DB;Integrated Security=True;TrustServerCertificate=True;");
+    {
+        if (!optionsBuilder.IsConfigured)
+            throw new InvalidOperationException("Configure HrmTeContext through dependency injection or a design-time factory. A database connection is never inferred from source code.");
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -835,28 +568,6 @@ public partial class HrmTeContext : DbContext
             });
         });
 
-
-
-        modelBuilder.Entity<AdditionDeductionTypeDependencyTimePeriodAmount>(entity =>
-        {
-            entity.HasKey(e => e.PayrollItemTypeDependencyTimePeriodAmountID);
-
-            entity.Property(e => e.PayrollItemTypeDependencyTimePeriodAmountID).HasColumnName("PayrollItemTypeDependencyTimePeriodAmountID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-        });
-
-        modelBuilder.Entity<AdditionOrDeductionType>(entity =>
-        {
-            entity.Property(e => e.AdditionOrDeductionTypeId).HasColumnName("AdditionOrDeductionTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-        });
-
         modelBuilder.Entity<Address>(entity =>
         {
             entity.HasKey(e => e.LocationId).HasName("PK_Address");
@@ -940,63 +651,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName).HasMaxLength(250);
         });
 
-        modelBuilder.Entity<AggregatedSalary>(entity =>
-        {
-            entity.Property(e => e.AggregatedSalaryId).HasColumnName("AggregatedSalaryID");
-            entity.Property(e => e.AbsentFine).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.Additions).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.CalculatedSalaryAmount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.Deductions).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.FinalSalary).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.LateFine).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.Ottotal)
-                .HasColumnType("decimal(38, 8)")
-                .HasColumnName("OTTotal");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.AggregatedSalaries)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AggregatedSalaries_StaffSalaries");
-        });
-
-        modelBuilder.Entity<AmountType>(entity =>
-        {
-            entity.Property(e => e.AmountTypeId).HasColumnName("AmountTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<AssignedWorkType>(entity =>
-        {
-            entity.Property(e => e.AssignedWorkTypeId).HasColumnName("AssignedWorkTypeID");
-            entity.Property(e => e.AssignedByUserId).HasColumnName("AssignedByUserID");
-            entity.Property(e => e.IsValid).HasDefaultValue(true);
-            entity.Property(e => e.JobId).HasColumnName("JobID");
-            entity.Property(e => e.Location).HasMaxLength(250);
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.WorkTypeId).HasColumnName("WorkTypeID");
-
-            entity.HasOne(d => d.Job).WithMany(p => p.AssignedWorkTypes)
-                .HasForeignKey(d => d.JobId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AssignedWorkTypes_Jobs");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.AssignedWorkTypes)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AssignedWorkTypes_Organisations");
-
-            entity.HasOne(d => d.WorkType).WithMany(p => p.AssignedWorkTypes)
-                .HasForeignKey(d => d.WorkTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AssignedWorkTypes_WorkTypes");
-        });
-
         modelBuilder.Entity<Atoll>(entity =>
         {
             entity.Property(e => e.AtollId).HasColumnName("AtollID");
@@ -1027,10 +681,7 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_AttachedBreakTimes_OperationLogs");
 
-            entity.HasOne(d => d.OwnerType).WithMany(p => p.AttachedBreakTimes)
-                .HasForeignKey(d => d.OwnerTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttachedBreakTimes_OwnerTypes");
+
         });
 
         //// This forces EF Core to understand there is only ONE relationship
@@ -1069,76 +720,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_AttachedBreakTimesDays_OperationLogs");
         });
 
-        modelBuilder.Entity<AttachedPayrollItemsProcessingWhiteList>(entity =>
-        {
-            entity.Property(e => e.AttachedPayrollItemsProcessingWhiteListId).HasColumnName("AttachedPayrollItemsProcessingWhiteListID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.PayrollItemsProcessingWhiteListId).HasColumnName("PayrollItemsProcessingWhiteListID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.AttachedPayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttachedPayrollItemsProcessingWhiteLists_OperationLogs");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.AttachedPayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttachedPayrollItemsProcessingWhiteLists_Organisations");
-
-            entity.HasOne(d => d.PayrollItemsProcessingWhiteList).WithMany(p => p.AttachedPayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.PayrollItemsProcessingWhiteListId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttachedPayrollItemsProcessingWhiteLists_PayrollItemsProcessingWhiteLists");
-        });
-
-        modelBuilder.Entity<AttendanceClientInstance>(entity =>
-        {
-            entity.HasKey(e => e.AttendanceClientId).HasName("PK_AttendanceClients_1");
-
-            entity.Property(e => e.AttendanceClientId).HasColumnName("AttendanceClientID");
-            entity.Property(e => e.AttendanceClientStateId).HasColumnName("AttendanceClientStateID");
-            entity.Property(e => e.LastAttendanceManualUpdateRecord).HasColumnType("datetime");
-            entity.Property(e => e.LastAttendanceManuallyUpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.Name).HasMaxLength(250);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-
-            entity.HasOne(d => d.AttendanceClientState).WithMany(p => p.AttendanceClientInstances)
-                .HasForeignKey(d => d.AttendanceClientStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceClients_AttendanceClientStates1");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.AttendanceClientInstances)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_AttendanceClientInstances_OperationLogs");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.AttendanceClientInstances)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceClients_Organisations1");
-
-            entity.HasOne(d => d.OrganisationStructure).WithMany(p => p.AttendanceClientInstances)
-                .HasForeignKey(d => d.OrganisationStructureId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceClients_OrganisationStructure1");
-        });
-
-        modelBuilder.Entity<AttendanceClientState>(entity =>
-        {
-            entity.Property(e => e.AttendanceClientStateId).HasColumnName("AttendanceClientStateID");
-            entity.Property(e => e.StateName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<AttendanceDependentType>(entity =>
-        {
-            entity.Property(e => e.AttendanceDependentTypeId).HasColumnName("AttendanceDependentTypeID");
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-        });
-
         modelBuilder.Entity<AttendanceDevice>(entity =>
         {
             entity.Property(e => e.AttendanceDeviceId).HasColumnName("AttendanceDeviceID");
@@ -1153,60 +734,9 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.Location).HasMaxLength(250);
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
 
-            entity.HasOne(d => d.AttendanceClient).WithMany(p => p.AttendanceDevices)
-                .HasForeignKey(d => d.AttendanceClientId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceDevices_AttendanceClients");
-
-            entity.HasOne(d => d.AttendanceDeviceInOutType).WithMany(p => p.AttendanceDevices)
-                .HasForeignKey(d => d.AttendanceDeviceInOutTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceDevices_AttendanceDeviceInOutTypeID");
-
-            entity.HasOne(d => d.AttendanceDeviceState).WithMany(p => p.AttendanceDevices)
-                .HasForeignKey(d => d.AttendanceDeviceStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceDevices_AttendanceDeviceStates");
-
             entity.HasOne(d => d.OperationLog).WithMany(p => p.AttendanceDevices)
                 .HasForeignKey(d => d.OperationLogId)
                 .HasConstraintName("FK_AttendanceDevices_OperationLogs");
-        });
-
-        modelBuilder.Entity<AttendanceDeviceInOutType>(entity =>
-        {
-            entity.HasKey(e => e.AttendanceDeviceInOutTypeId).HasName("PK__Attendan__696D3B51D59EE0C4");
-
-            entity.ToTable("AttendanceDeviceInOutType");
-
-            entity.Property(e => e.AttendanceDeviceInOutTypeId).HasColumnName("AttendanceDeviceInOutTypeID");
-            entity.Property(e => e.AttendanceDeviceInOutTypeName)
-                .HasMaxLength(20)
-                .IsFixedLength();
-        });
-
-        modelBuilder.Entity<AttendanceDeviceStaff>(entity =>
-        {
-            entity.Property(e => e.AttendanceDeviceStaffId).HasColumnName("AttendanceDeviceStaffID");
-            entity.Property(e => e.AttendanceDeviceId).HasColumnName("AttendanceDeviceID");
-            entity.Property(e => e.EnrollmentNumber).HasMaxLength(250);
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-
-            entity.HasOne(d => d.AttendanceDevice).WithMany(p => p.AttendanceDeviceStaffs)
-                .HasForeignKey(d => d.AttendanceDeviceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceDeviceStaffs_AttendanceDevices");
-
-            entity.HasOne(d => d.Individual).WithMany(p => p.AttendanceDeviceStaffs)
-                .HasForeignKey(d => d.IndividualId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceDeviceStaffs_Staffs");
-        });
-
-        modelBuilder.Entity<AttendanceDeviceState>(entity =>
-        {
-            entity.Property(e => e.AttendanceDeviceStateId).HasColumnName("AttendanceDeviceStateID");
-            entity.Property(e => e.StateName).HasMaxLength(250);
         });
 
         modelBuilder.Entity<AttendanceLog>(entity =>
@@ -1244,11 +774,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.AttendanceDevice).WithMany(p => p.AttendanceLogs)
                 .HasForeignKey(d => d.AttendanceDeviceId)
                 .HasConstraintName("FK_AttendanceLogs_AttendanceDevices");
-
-            entity.HasOne(d => d.AttendanceLogMode).WithMany(p => p.AttendanceLogs)
-                .HasForeignKey(d => d.AttendanceLogModeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AttendanceLogs_AttendanceLogModes");
 
             entity.HasOne(d => d.AttendanceLogState).WithMany(p => p.AttendanceLogs)
                 .HasForeignKey(d => d.AttendanceLogStateId)
@@ -1307,21 +832,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_AttendanceLogRequests_Requests");
         });
 
-        modelBuilder.Entity<AttendanceLogChangeRequestType>(entity =>
-        {
-            entity.HasKey(e => e.AttendanceLogChangeRequestTypeId).HasName("PK_AttendanceLogRequestTypes");
-
-            entity.Property(e => e.AttendanceLogChangeRequestTypeId).HasColumnName("AttendanceLogChangeRequestTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<AttendanceLogMode>(entity =>
-        {
-            entity.Property(e => e.AttendanceLogModeId).HasColumnName("AttendanceLogModeID");
-            entity.Property(e => e.Description).HasColumnType("text");
-            entity.Property(e => e.Name).HasMaxLength(100);
-        });
-
         modelBuilder.Entity<AttendanceLogRequest>(entity =>
         {
             entity.HasKey(e => e.AttendanceLogRequestId).HasName("PK_ManualAttendanceLogRequests");
@@ -1346,26 +856,6 @@ public partial class HrmTeContext : DbContext
         {
             entity.Property(e => e.AttendanceLogStateId).HasColumnName("AttendanceLogStateID");
             entity.Property(e => e.Name).HasMaxLength(50);
-        });
-
-        modelBuilder.Entity<AttendanceLogsTemp>(entity =>
-        {
-            entity.HasKey(e => e.AttendanceLogId);
-
-            entity.ToTable("AttendanceLogsTemp");
-
-            entity.HasIndex(e => new { e.IndividualId, e.OrganisationId, e.Date }, "IX_AttendanceLogsTemp_LookUpByIndividualAndDate");
-
-            entity.Property(e => e.AttendanceLogId).HasColumnName("AttendanceLogID");
-            entity.Property(e => e.AttendanceDeviceId).HasColumnName("AttendanceDeviceID");
-            entity.Property(e => e.Date).HasColumnType("datetime");
-            entity.Property(e => e.InOutModeId).HasColumnName("InOutModeID");
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.Uidstamp)
-                .HasMaxLength(100)
-                .HasColumnName("UIDStamp");
         });
 
         modelBuilder.Entity<BasicSalary>(entity =>
@@ -1405,51 +895,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_BreakTimes_OrganisationStructure");
         });
 
-        modelBuilder.Entity<BudgetItem>(entity =>
-        {
-            entity.HasKey(e => e.BudgetItemId).HasName("PK_BudgetCodeSet");
-
-            entity.Property(e => e.BudgetItemId).HasColumnName("BudgetItemID");
-            entity.Property(e => e.DhivehiName).HasMaxLength(500);
-            entity.Property(e => e.EnglishName).HasMaxLength(500);
-            entity.Property(e => e.ItemTypeId).HasColumnName("ItemTypeID");
-            entity.Property(e => e.ParentBudgetItemId).HasColumnName("ParentBudgetItemID");
-        });
-
-        modelBuilder.Entity<BudgetTransaction>(entity =>
-        {
-            entity.HasKey(e => e.BudgetTransactionId).HasName("PK_BudgetAdditionDeductions");
-
-            entity.Property(e => e.BudgetTransactionId).HasColumnName("BudgetTransactionID");
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.BudgetItemId).HasColumnName("BudgetItemID");
-            entity.Property(e => e.LetterNumber).HasMaxLength(100);
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.ReferenceNumber).HasMaxLength(100);
-            entity.Property(e => e.TransactionTypeId).HasColumnName("TransactionTypeID");
-
-            entity.HasOne(d => d.BudgetItem).WithMany(p => p.BudgetTransactions)
-                .HasForeignKey(d => d.BudgetItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BudgetTransactions_BudgetItems");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.BudgetTransactions)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BudgetTransactions_Organisations");
-
-            entity.HasOne(d => d.TransactionType).WithMany(p => p.BudgetTransactions)
-                .HasForeignKey(d => d.TransactionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BudgetTransactions_BudgetTransactionTypes");
-        });
-
-        modelBuilder.Entity<BudgetTransactionType>(entity =>
-        {
-            entity.Property(e => e.Id).ValueGeneratedNever();
-            entity.Property(e => e.TypeName).HasMaxLength(50);
-        });
-
         modelBuilder.Entity<BulkUploadedDocument>(entity =>
         {
             entity.HasKey(e => e.DocumentId);
@@ -1467,11 +912,6 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_BulkUploadedDocuments_Documents");
 
-            entity.HasOne(d => d.DocumentState).WithMany(p => p.BulkUploadedDocuments)
-                .HasForeignKey(d => d.DocumentStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BulkUploadedDocuments_DocumentStates");
-
             entity.HasOne(d => d.OperationLog).WithMany(p => p.BulkUploadedDocuments)
                 .HasForeignKey(d => d.OperationLogId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -1481,20 +921,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.UploadedByUserId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_BulkUploadedDocuments_Users");
-        });
-
-        modelBuilder.Entity<BulkUploadedDocumentSummary>(entity =>
-        {
-            entity.Property(e => e.BulkUploadedDocumentSummaryId).HasColumnName("BulkUploadedDocumentSummaryID");
-            entity.Property(e => e.DocumentId).HasColumnName("DocumentID");
-            entity.Property(e => e.IndexName).HasMaxLength(250);
-            entity.Property(e => e.Remarks).HasMaxLength(500);
-            entity.Property(e => e.RowId).HasColumnName("RowID");
-
-            entity.HasOne(d => d.Document).WithMany(p => p.BulkUploadedDocumentSummaries)
-                .HasForeignKey(d => d.DocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BulkUploadedDocumentSummaries_BulkUploadedDocuments");
         });
 
         modelBuilder.Entity<BusinessEntitiesDocument>(entity =>
@@ -1533,10 +959,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.VerifiedDate).HasColumnType("datetime");
             entity.Property(e => e.VerifiedStateId).HasColumnName("VerifiedStateID");
 
-            entity.HasOne(d => d.BusinessEntityState).WithMany(p => p.BusinessEntities)
-                .HasForeignKey(d => d.BusinessEntityStateId)
-                .HasConstraintName("FK_BusinessEntities_BusinessEntityStates");
-
             entity.HasOne(d => d.BusinessEntityType).WithMany(p => p.BusinessEntities)
                 .HasForeignKey(d => d.BusinessEntityTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -1554,9 +976,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.VerifiedBy)
                 .HasConstraintName("FK_BusinessEntities_VerifiedByUser");
 
-            entity.HasOne(d => d.VerifiedState).WithMany(p => p.BusinessEntities)
-                .HasForeignKey(d => d.VerifiedStateId)
-                .HasConstraintName("FK_BusinessEntities_VerifiedStates");
+
         });
 
         modelBuilder.Entity<BusinessEntityCalendar>(entity =>
@@ -1621,117 +1041,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName).HasMaxLength(250);
         });
 
-        modelBuilder.Entity<BusinessEntityRelatedLocationType>(entity =>
-        {
-            entity.Property(e => e.BusinessEntityRelatedLocationTypeId).HasColumnName("BusinessEntityRelatedLocationTypeID");
-            entity.Property(e => e.BusinessEntityTypeId).HasColumnName("BusinessEntityTypeID");
-            entity.Property(e => e.LocationTypeId).HasColumnName("LocationTypeID");
-
-            entity.HasOne(d => d.BusinessEntityType).WithMany(p => p.BusinessEntityRelatedLocationTypes)
-                .HasForeignKey(d => d.BusinessEntityTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelatedLocationTypes_BusinessEntityTypes1");
-
-            entity.HasOne(d => d.LocationType).WithMany(p => p.BusinessEntityRelatedLocationTypes)
-                .HasForeignKey(d => d.LocationTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelatedLocationTypes_LocationTypes1");
-        });
-
-        modelBuilder.Entity<BusinessEntityRelation>(entity =>
-        {
-            entity.Property(e => e.BusinessEntityRelationId).HasColumnName("BusinessEntityRelationID");
-            entity.Property(e => e.BusinessEntityRelationStateId).HasColumnName("BusinessEntityRelationStateID");
-            entity.Property(e => e.BusinessEntityRelationTypeId).HasColumnName("BusinessEntityRelationTypeID");
-            entity.Property(e => e.DelegateeBusinessEntityId).HasColumnName("DelegateeBusinessEntityID");
-            entity.Property(e => e.DelegatorBusinessEntityId).HasColumnName("DelegatorBusinessEntityID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PreviousBusinessEntityRelationSateId).HasColumnName("PreviousBusinessEntityRelationSateID");
-
-            entity.HasOne(d => d.BusinessEntityRelationState).WithMany(p => p.BusinessEntityRelations)
-                .HasForeignKey(d => d.BusinessEntityRelationStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelations_BusinessEntityRelationStates");
-
-            entity.HasOne(d => d.BusinessEntityRelationType).WithMany(p => p.BusinessEntityRelations)
-                .HasForeignKey(d => d.BusinessEntityRelationTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelations_BusinessEntityRelationTypes");
-
-            entity.HasOne(d => d.DelegateeBusinessEntity).WithMany(p => p.BusinessEntityRelationDelegateeBusinessEntities)
-                .HasForeignKey(d => d.DelegateeBusinessEntityId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelations_Delegatee");
-
-            entity.HasOne(d => d.DelegatorBusinessEntity).WithMany(p => p.BusinessEntityRelationDelegatorBusinessEntities)
-                .HasForeignKey(d => d.DelegatorBusinessEntityId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelations_Delegator");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.BusinessEntityRelations)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_BusinessEntityRelations_OperationLogs");
-
-            entity.HasMany(d => d.Requests).WithMany(p => p.BusinessEntityRelations)
-                .UsingEntity<Dictionary<string, object>>(
-                    "BusinessEntityRequest",
-                    r => r.HasOne<Request>().WithMany()
-                        .HasForeignKey("RequestId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_BusinessEntityRequests_Requests"),
-                    l => l.HasOne<BusinessEntityRelation>().WithMany()
-                        .HasForeignKey("BusinessEntityRelationId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_BusinessEntityRequests_BusinessEntityRelations"),
-                    j =>
-                    {
-                        j.HasKey("BusinessEntityRelationId", "RequestId");
-                        j.ToTable("BusinessEntityRequests");
-                        j.IndexerProperty<int>("BusinessEntityRelationId").HasColumnName("BusinessEntityRelationID");
-                        j.IndexerProperty<int>("RequestId").HasColumnName("RequestID");
-                    });
-        });
-
-        modelBuilder.Entity<BusinessEntityRelationAssignedRole>(entity =>
-        {
-            entity.HasKey(e => e.BsinessEntityRelationAssignedRoleId);
-
-            entity.Property(e => e.BsinessEntityRelationAssignedRoleId).HasColumnName("BsinessEntityRelationAssignedRoleID");
-            entity.Property(e => e.BusinessEntityRelationId).HasColumnName("BusinessEntityRelationID");
-            entity.Property(e => e.RoleId).HasColumnName("RoleID");
-
-            entity.HasOne(d => d.BusinessEntityRelation).WithMany(p => p.BusinessEntityRelationAssignedRoles)
-                .HasForeignKey(d => d.BusinessEntityRelationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelationAssignedRoles_BusinessEntityRelations");
-
-            entity.HasOne(d => d.Role).WithMany(p => p.BusinessEntityRelationAssignedRoles)
-                .HasForeignKey(d => d.RoleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_BusinessEntityRelationAssignedRoles_Roles");
-        });
-
-        modelBuilder.Entity<BusinessEntityRelationState>(entity =>
-        {
-            entity.Property(e => e.BusinessEntityRelationStateId).HasColumnName("BusinessEntityRelationStateID");
-            entity.Property(e => e.StateName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<BusinessEntityRelationType>(entity =>
-        {
-            entity.Property(e => e.BusinessEntityRelationTypeId).HasColumnName("BusinessEntityRelationTypeID");
-            entity.Property(e => e.BusinessEntityId).HasColumnName("BusinessEntityID");
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-
-            entity.HasOne(d => d.BusinessEntity).WithMany(p => p.BusinessEntityRelationTypes)
-                .HasForeignKey(d => d.BusinessEntityId)
-                .HasConstraintName("FK_BusinessEntityRelationTypes_BusinessEntities1");
-        });
-
         modelBuilder.Entity<BusinessEntitySchedule>(entity =>
         {
             entity.Property(e => e.BusinessEntityScheduleId).HasColumnName("BusinessEntityScheduleID");
@@ -1754,14 +1063,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.ScheduleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_BusinessEntitySchedules_Schedules");
-        });
-
-        modelBuilder.Entity<BusinessEntityState>(entity =>
-        {
-            entity.Property(e => e.BusinessEntityStateId).HasColumnName("BusinessEntityStateID");
-            entity.Property(e => e.StateName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
         });
 
         modelBuilder.Entity<BusinessEntityType>(entity =>
@@ -1793,6 +1094,41 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.OperationLog).WithMany(p => p.BussinessEntityContactInformations)
                 .HasForeignKey(d => d.OperationLogId)
                 .HasConstraintName("FK_BussinessEntityContactInformations_OperationLogs");
+        });
+
+        modelBuilder.Entity<CheckListItem>(entity =>
+        {
+            entity.Property(e => e.CheckListItemId).HasColumnName("CheckListItemID");
+            entity.Property(e => e.CheckListItemName)
+                .HasMaxLength(500)
+                .IsUnicode(false);
+            entity.Property(e => e.Description).HasColumnType("text");
+            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
+
+            entity.HasOne(d => d.OperationLog).WithMany(p => p.CheckListItems)
+                .HasForeignKey(d => d.OperationLogId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_CheckListItems_OperationLogs");
+
+            entity.HasMany(d => d.RequestTypes).WithMany(p => p.CheckListItems)
+                .UsingEntity<Dictionary<string, object>>(
+                    "RequestTypeSpecificCheckListItem",
+                    r => r.HasOne<RequestType>().WithMany()
+                        .HasForeignKey("RequestTypeId")
+                        .OnDelete(DeleteBehavior.ClientSetNull)
+                        .HasConstraintName("FK_RequestTypeSpecificCheckListItems_RequestTypes"),
+                    l => l.HasOne<CheckListItem>().WithMany()
+                        .HasForeignKey("CheckListItemId")
+                        .OnDelete(DeleteBehavior.ClientSetNull)
+                        .HasConstraintName("FK_RequestTypeSpecificCheckListItems_CheckListItems"),
+                    j =>
+                    {
+                        j.HasKey("CheckListItemId", "RequestTypeId");
+                        j.ToTable("RequestTypeSpecificCheckListItems");
+                        j.IndexerProperty<int>("CheckListItemId").HasColumnName("CheckListItemID");
+                        j.IndexerProperty<int>("RequestTypeId").HasColumnName("RequestTypeID");
+                    });
+
         });
 
         modelBuilder.Entity<Calendar>(entity =>
@@ -1947,80 +1283,12 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_CalendarVariants_OperationLogs");
         });
 
-        modelBuilder.Entity<CheckListItem>(entity =>
-        {
-            entity.Property(e => e.CheckListItemId).HasColumnName("CheckListItemID");
-            entity.Property(e => e.CheckListItemName)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.Description).HasColumnType("text");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.CheckListItems)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CheckListItems_OperationLogs");
-
-            entity.HasMany(d => d.RequestTypes).WithMany(p => p.CheckListItems)
-                .UsingEntity<Dictionary<string, object>>(
-                    "RequestTypeSpecificCheckListItem",
-                    r => r.HasOne<RequestType>().WithMany()
-                        .HasForeignKey("RequestTypeId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RequestTypeSpecificCheckListItems_RequestTypes"),
-                    l => l.HasOne<CheckListItem>().WithMany()
-                        .HasForeignKey("CheckListItemId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_RequestTypeSpecificCheckListItems_CheckListItems"),
-                    j =>
-                    {
-                        j.HasKey("CheckListItemId", "RequestTypeId");
-                        j.ToTable("RequestTypeSpecificCheckListItems");
-                        j.IndexerProperty<int>("CheckListItemId").HasColumnName("CheckListItemID");
-                        j.IndexerProperty<int>("RequestTypeId").HasColumnName("RequestTypeID");
-                    });
-
-            entity.HasMany(d => d.ServiceTypes).WithMany(p => p.CheckListItems)
-                .UsingEntity<Dictionary<string, object>>(
-                    "ServiceTypeSpecificCheckListItem",
-                    r => r.HasOne<ServiceType>().WithMany()
-                        .HasForeignKey("ServiceTypeId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_ServiceTypeSpecificCheckListItems_ServiceTypes"),
-                    l => l.HasOne<CheckListItem>().WithMany()
-                        .HasForeignKey("CheckListItemId")
-                        .OnDelete(DeleteBehavior.ClientSetNull)
-                        .HasConstraintName("FK_ServiceTypeSpecificCheckListItems_CheckListItems"),
-                    j =>
-                    {
-                        j.HasKey("CheckListItemId", "ServiceTypeId");
-                        j.ToTable("ServiceTypeSpecificCheckListItems");
-                        j.IndexerProperty<int>("CheckListItemId").HasColumnName("CheckListItemID");
-                        j.IndexerProperty<int>("ServiceTypeId").HasColumnName("ServiceTypeID");
-                    });
-        });
-
         modelBuilder.Entity<City>(entity =>
         {
             entity.Property(e => e.CityId).HasColumnName("CityID");
             entity.Property(e => e.Name)
                 .HasMaxLength(250)
                 .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<CommercialIslandType>(entity =>
-        {
-            entity.Property(e => e.CommercialIslandTypeId).HasColumnName("CommercialIslandTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<ConfigurableValue>(entity =>
-        {
-            entity.Property(e => e.ConfigurableValueId).HasColumnName("ConfigurableValueID");
-            entity.Property(e => e.Comment).HasColumnType("text");
-            entity.Property(e => e.Name).HasMaxLength(60);
-            entity.Property(e => e.Type).HasMaxLength(50);
-            entity.Property(e => e.Value).HasColumnType("text");
         });
 
         modelBuilder.Entity<ContactInformationType>(entity =>
@@ -2060,98 +1328,7 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.NationalityEnglish).HasMaxLength(250);
             entity.Property(e => e.RegionId).HasColumnName("RegionID");
 
-            entity.HasOne(d => d.Region).WithMany(p => p.Countries)
-                .HasForeignKey(d => d.RegionId)
-                .HasConstraintName("FK_Countries_Regions");
-        });
 
-        modelBuilder.Entity<Currency>(entity =>
-        {
-            entity.Property(e => e.CurrencyId)
-                .ValueGeneratedNever()
-                .HasColumnName("currencyId");
-            entity.Property(e => e.CurrencyAbbreviation)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("currencyAbbreviation");
-            entity.Property(e => e.CurrencyName)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("currencyName");
-            entity.Property(e => e.Iso4217exponent)
-                .HasMaxLength(3)
-                .HasColumnName("ISO4217Exponent");
-            entity.Property(e => e.Iso4217number)
-                .HasMaxLength(3)
-                .IsFixedLength()
-                .HasColumnName("ISO4217Number");
-            entity.Property(e => e.Iso4271code)
-                .HasMaxLength(3)
-                .IsFixedLength()
-                .HasColumnName("ISO4271Code");
-        });
-
-        modelBuilder.Entity<CurrencyExchangeRate>(entity =>
-        {
-            entity.Property(e => e.CurrencyExchangeRateId).HasColumnName("CurrencyExchangeRateID");
-            entity.Property(e => e.CurrencyTpeId).HasColumnName("CurrencyTpeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-
-            entity.HasOne(d => d.CurrencyTpe).WithMany(p => p.CurrencyExchangeRates)
-                .HasForeignKey(d => d.CurrencyTpeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CurrencyExchangeRates_CurrencyTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.CurrencyExchangeRates)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_CurrencyExchangeRates_OperationLogs");
-        });
-
-        modelBuilder.Entity<CurrencyType>(entity =>
-        {
-            entity.Property(e => e.CurrencyTypeId).HasColumnName("CurrencyTypeID");
-            entity.Property(e => e.Abbreviation).HasMaxLength(250);
-            entity.Property(e => e.Iso4217exponent)
-                .HasMaxLength(3)
-                .HasColumnName("ISO4217Exponent");
-            entity.Property(e => e.Iso4217number)
-                .HasMaxLength(3)
-                .IsFixedLength()
-                .HasColumnName("ISO4217Number");
-            entity.Property(e => e.Iso4271code)
-                .HasMaxLength(3)
-                .IsFixedLength()
-                .HasColumnName("ISO4271Code");
-            entity.Property(e => e.Name).HasMaxLength(250);
-            entity.Property(e => e.Symbol).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<DataCorrectionActionType>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionActionTypeId).HasColumnName("DataCorrectionActionTypeID");
-            entity.Property(e => e.ActionTypeName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<DataCorrectionAttribute>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionAttributeId).HasColumnName("DataCorrectionAttributeID");
-            entity.Property(e => e.AttributeCode).HasMaxLength(50);
-            entity.Property(e => e.AttributeName).HasMaxLength(250);
-            entity.Property(e => e.DataCorrectionAttributeLookupTypeId).HasColumnName("DataCorrectionAttributeLookupTypeID");
-            entity.Property(e => e.IsActive).HasDefaultValue(true);
-            entity.Property(e => e.ValueType).HasMaxLength(50);
-
-            entity.HasOne(d => d.DataCorrectionAttributeLookupType).WithMany(p => p.DataCorrectionAttributes)
-                .HasForeignKey(d => d.DataCorrectionAttributeLookupTypeId)
-                .HasConstraintName("FK_DataCorrectionAttributes_DataCorrectionAttributeLookupTypes");
-        });
-
-        modelBuilder.Entity<DataCorrectionAttributeLookupType>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionAttributeLookupTypeId).HasColumnName("DataCorrectionAttributeLookupTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
         });
 
         modelBuilder.Entity<DataCorrectionRequest>(entity =>
@@ -2172,16 +1349,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.BusinessEntity).WithMany(p => p.DataCorrectionRequests)
                 .HasForeignKey(d => d.BusinessEntityId)
                 .HasConstraintName("FK_DataCorrectionRequests_BusinessEntities");
-
-            entity.HasOne(d => d.DataCorrectionRequestState).WithMany(p => p.DataCorrectionRequests)
-                .HasForeignKey(d => d.DataCorrectionRequestStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequests_DataCorrectionRequestStates");
-
-            entity.HasOne(d => d.DataCorrectionRequestType).WithMany(p => p.DataCorrectionRequests)
-                .HasForeignKey(d => d.DataCorrectionRequestTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequests_DataCorrectionRequestTypes");
 
             entity.HasOne(d => d.LastStateChangedByUser).WithMany(p => p.DataCorrectionRequestLastStateChangedByUsers)
                 .HasForeignKey(d => d.LastStateChangedByUserId)
@@ -2207,86 +1374,11 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_DataCorrectionRequests_Services");
         });
 
-        modelBuilder.Entity<DataCorrectionRequestAttributeValue>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionRequestAttributeValueId).HasColumnName("DataCorrectionRequestAttributeValueID");
-            entity.Property(e => e.DataCorrectionActionTypeId).HasColumnName("DataCorrectionActionTypeID");
-            entity.Property(e => e.DataCorrectionAttributeId).HasColumnName("DataCorrectionAttributeID");
-            entity.Property(e => e.DataCorrectionRequestId).HasColumnName("DataCorrectionRequestID");
-
-            entity.HasOne(d => d.DataCorrectionActionType).WithMany(p => p.DataCorrectionRequestAttributeValues)
-                .HasForeignKey(d => d.DataCorrectionActionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestAttributeValues_DataCorrectionActionTypes");
-
-            entity.HasOne(d => d.DataCorrectionAttribute).WithMany(p => p.DataCorrectionRequestAttributeValues)
-                .HasForeignKey(d => d.DataCorrectionAttributeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestAttributeValues_DataCorrectionAttributes");
-
-            entity.HasOne(d => d.DataCorrectionRequest).WithMany(p => p.DataCorrectionRequestAttributeValues)
-                .HasForeignKey(d => d.DataCorrectionRequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestAttributeValues_DataCorrectionRequests");
-        });
-
-        modelBuilder.Entity<DataCorrectionRequestState>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionRequestStateId).HasColumnName("DataCorrectionRequestStateID");
-            entity.Property(e => e.IsFinalState).HasDefaultValue(false);
-            entity.Property(e => e.IsProcessingState).HasDefaultValue(false);
-            entity.Property(e => e.StateName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<DataCorrectionRequestType>(entity =>
-        {
-            entity.Property(e => e.DataCorrectionRequestTypeId).HasColumnName("DataCorrectionRequestTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<DataCorrectionRequestTypeAttribute>(entity =>
-        {
-            entity.HasKey(e => new { e.DataCorrectionRequestTypeId, e.DataCorrectionAttributeId, e.DataCorrectionActionTypeId });
-
-            entity.Property(e => e.DataCorrectionRequestTypeId).HasColumnName("DataCorrectionRequestTypeID");
-            entity.Property(e => e.DataCorrectionAttributeId).HasColumnName("DataCorrectionAttributeID");
-            entity.Property(e => e.DataCorrectionActionTypeId).HasColumnName("DataCorrectionActionTypeID");
-
-            entity.HasOne(d => d.DataCorrectionActionType).WithMany(p => p.DataCorrectionRequestTypeAttributes)
-                .HasForeignKey(d => d.DataCorrectionActionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestTypeAttributes_DataCorrectionActionTypes");
-
-            entity.HasOne(d => d.DataCorrectionAttribute).WithMany(p => p.DataCorrectionRequestTypeAttributes)
-                .HasForeignKey(d => d.DataCorrectionAttributeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestTypeAttributes_DataCorrectionAttributes");
-
-            entity.HasOne(d => d.DataCorrectionRequestType).WithMany(p => p.DataCorrectionRequestTypeAttributes)
-                .HasForeignKey(d => d.DataCorrectionRequestTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DataCorrectionRequestTypeAttributes_DataCorrectionRequestTypes");
-        });
-
         //modelBuilder.Entity<DayOfWeek>(entity =>
         //{
         //    entity.Property(e => e.DayOfWeekId).HasColumnName("DayOfWeekID");
         //    entity.Property(e => e.Name).HasMaxLength(50);
         //});
-
-        modelBuilder.Entity<DayType>(entity =>
-        {
-            entity.Property(e => e.DayTypeId).HasColumnName("DayTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(50);
-        });
-
-        modelBuilder.Entity<DeductionAmountType>(entity =>
-        {
-            entity.Property(e => e.DeductionAmountTypeId).HasColumnName("DeductionAmountTypeID");
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
 
         modelBuilder.Entity<DeductionType>(entity =>
         {
@@ -2306,18 +1398,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeNameDhivehi).HasMaxLength(50);
             entity.Property(e => e.TypeNameEnglish).HasMaxLength(50);
 
-            entity.HasOne(d => d.CurrencyType).WithMany(p => p.DeductionTypes)
-                .HasForeignKey(d => d.CurrencyTypeId)
-                .HasConstraintName("FK_DeductionTypes_CurrencyTypes");
-
-            entity.HasOne(d => d.DeductionAmountType).WithMany(p => p.DeductionTypes)
-                .HasForeignKey(d => d.DeductionAmountTypeId)
-                .HasConstraintName("FK_DeductionTypes_DeductionAmountTypes");
-
-            entity.HasOne(d => d.DerivedOnType).WithMany(p => p.DeductionTypes)
-                .HasForeignKey(d => d.DerivedOnTypeId)
-                .HasConstraintName("FK_DeductionTypes_DerivedOnTypes");
-
             entity.HasOne(d => d.OwnerOrganisation).WithMany(p => p.DeductionTypes)
                 .HasForeignKey(d => d.OwnerOrganisationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -2326,138 +1406,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.Request).WithMany(p => p.DeductionTypes)
                 .HasForeignKey(d => d.RequestId)
                 .HasConstraintName("FK_DeductionTypes_Requests");
-        });
-
-        modelBuilder.Entity<DeductionTypeAmount>(entity =>
-        {
-            entity.Property(e => e.DeductionTypeAmountId).HasColumnName("DeductionTypeAmountID");
-            entity.Property(e => e.DeductionTypeId).HasColumnName("DeductionTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.DeductionType).WithMany(p => p.DeductionTypeAmounts)
-                .HasForeignKey(d => d.DeductionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DeductionTypeAmounts_DeductionTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.DeductionTypeAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DeductionTypeAmounts_OperationLogs");
-        });
-
-        modelBuilder.Entity<DependencyType>(entity =>
-        {
-            entity.HasKey(e => e.DependencyTypeId).HasName("PK_DependencyType");
-
-            entity.Property(e => e.DependencyTypeId).HasColumnName("DependencyTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.IsValid)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<DerivedAdditionDeductionType>(entity =>
-        {
-            entity.Property(e => e.DerivedAdditionDeductionTypeId).HasColumnName("DerivedAdditionDeductionTypeID");
-            entity.Property(e => e.DeductionTypeId).HasColumnName("DeductionTypeID");
-            entity.Property(e => e.DerivedAdditionDeductionTypeItemId).HasColumnName("DerivedAdditionDeductionTypeItemID");
-
-            entity.HasOne(d => d.DeductionType).WithMany(p => p.DerivedAdditionDeductionTypes)
-                .HasForeignKey(d => d.DeductionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DerivedAdditionDeductionTypes_DeductionTypes");
-
-            entity.HasOne(d => d.DerivedAdditionDeductionTypeItem).WithMany(p => p.DerivedAdditionDeductionTypes)
-                .HasForeignKey(d => d.DerivedAdditionDeductionTypeItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DerivedAdditionDeductionTypes_DerivedAdditionDeductionTypeItems");
-        });
-
-        modelBuilder.Entity<DerivedAdditionDeductionTypeItem>(entity =>
-        {
-            entity.Property(e => e.DerivedAdditionDeductionTypeItemId).HasColumnName("DerivedAdditionDeductionTypeItemID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<DerivedOnPayrollItemType>(entity =>
-        {
-            entity.Property(e => e.DerivedOnPayrollItemTypeId).HasColumnName("DerivedOnPayrollItemTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OtherPayrollItemTypeId).HasColumnName("OtherPayrollItemTypeID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.DerivedOnPayrollItemTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DerivedOnPayrollItemTypes_OperationLogs");
-
-            entity.HasOne(d => d.OtherPayrollItemType).WithMany(p => p.DerivedOnPayrollItemTypeOtherPayrollItemTypes)
-                .HasForeignKey(d => d.OtherPayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DerivedOnPayrollItemTypes_PayrollItemTypes1");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.DerivedOnPayrollItemTypePayrollItemTypes)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DerivedOnPayrollItemTypes_PayrollItemTypes");
-        });
-
-        modelBuilder.Entity<DerivedOnType>(entity =>
-        {
-            entity.Property(e => e.DerivedOnTypeId).HasColumnName("DerivedOnTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<Dhafthar>(entity =>
-        {
-            entity.HasKey(e => e.LocationId);
-
-            entity.ToTable("Dhafthar");
-
-            entity.Property(e => e.LocationId)
-                .ValueGeneratedNever()
-                .HasColumnName("LocationID");
-            entity.Property(e => e.DhaftharNumber).HasMaxLength(50);
-
-            entity.HasOne(d => d.Location).WithOne(p => p.Dhafthar)
-                .HasForeignKey<Dhafthar>(d => d.LocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Dhafthar_Address");
-        });
-
-        modelBuilder.Entity<DnrlookupCache>(entity =>
-        {
-            entity.HasKey(e => e.IdcardNo);
-
-            entity.ToTable("DNRLookupCache");
-
-            entity.Property(e => e.IdcardNo)
-                .HasMaxLength(10)
-                .HasColumnName("IDCardNo");
-            entity.Property(e => e.CreatedByIpaddress)
-                .HasMaxLength(50)
-                .HasColumnName("CreatedByIPAddress");
-            entity.Property(e => e.CreatedDate).HasColumnType("datetime");
-            entity.Property(e => e.LastUpdatedByIpaddress)
-                .HasMaxLength(50)
-                .HasColumnName("LastUpdatedByIPAddress");
-            entity.Property(e => e.LastUpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.LookupData).HasColumnType("xml");
         });
 
         modelBuilder.Entity<Document>(entity =>
@@ -2482,12 +1430,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_Documents_OperationLogs");
         });
 
-        modelBuilder.Entity<DocumentState>(entity =>
-        {
-            entity.Property(e => e.DocumentStateId).HasColumnName("DocumentStateID");
-            entity.Property(e => e.StateName).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<DocumentType>(entity =>
         {
             entity.Property(e => e.DocumentTypeId).HasColumnName("DocumentTypeID");
@@ -2500,9 +1442,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OrganisationId)
                 .HasConstraintName("FK_DocumentTypes_Organisations");
 
-            entity.HasOne(d => d.ServiceType).WithMany(p => p.DocumentTypes)
-                .HasForeignKey(d => d.ServiceTypeId)
-                .HasConstraintName("FK_DocumentTypes_ServiceTypes");
+
         });
 
         modelBuilder.Entity<Element>(entity =>
@@ -2534,12 +1474,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_ScheduleElements_WorkShifts");
         });
 
-        modelBuilder.Entity<EventType>(entity =>
-        {
-            entity.Property(e => e.EventTypeId).HasColumnName("EventTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<FacilityRegistrationType>(entity =>
         {
             entity.Property(e => e.FacilityRegistrationTypeId).HasColumnName("FacilityRegistrationTypeID");
@@ -2552,13 +1486,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName)
                 .HasMaxLength(250)
                 .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<GenderType>(entity =>
-        {
-            entity.Property(e => e.GenderTypeId).HasColumnName("GenderTypeID");
-            entity.Property(e => e.Abbreviation).HasMaxLength(10);
-            entity.Property(e => e.Name).HasMaxLength(50);
         });
 
         modelBuilder.Entity<Group>(entity =>
@@ -2591,23 +1518,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OrganisationStructureId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Groups_OrganisationStructure");
-        });
-
-        modelBuilder.Entity<GroupConfigurableValue>(entity =>
-        {
-            entity.Property(e => e.GroupConfigurableValueId).HasColumnName("GroupConfigurableValueID");
-            entity.Property(e => e.GroupConfigurableValueTypeId).HasColumnName("GroupConfigurableValueTypeID");
-            entity.Property(e => e.GroupId).HasColumnName("GroupID");
-
-            entity.HasOne(d => d.GroupConfigurableValueType).WithMany(p => p.GroupConfigurableValues)
-                .HasForeignKey(d => d.GroupConfigurableValueTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_GroupConfigurableValues_GroupConfigurableValueTypes");
-
-            entity.HasOne(d => d.Group).WithMany(p => p.GroupConfigurableValues)
-                .HasForeignKey(d => d.GroupId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_GroupConfigurableValues_Groups");
         });
 
         modelBuilder.Entity<GroupConfigurableValueType>(entity =>
@@ -2781,10 +1691,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.CountryId)
                 .HasConstraintName("FK_Individuals_Countries");
 
-            entity.HasOne(d => d.GenderType).WithMany(p => p.Individuals)
-                .HasForeignKey(d => d.GenderTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Individuals_GenderTypes");
+
         });
 
         modelBuilder.Entity<Island>(entity =>
@@ -2887,8 +1794,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(e => e.ServiceId)
                 .HasConstraintName("FK_Jobs_Services");
         });
-
-        
 
         modelBuilder.Entity<JobLeaveType>(entity =>
         {
@@ -2999,8 +1904,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName(
                     "FK_JobLeaves_OperationLogs");
         });
-
-
 
         modelBuilder.Entity<JobPosition>(entity =>
             {
@@ -3121,10 +2024,7 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_JobSAPExceptions_Jobs");
 
-            entity.HasOne(d => d.Sapexception).WithOne(p => p.JobSapexception)
-                .HasForeignKey<JobSapexception>(d => d.SapexceptionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_JobSAPExceptions_SAPExceptions");
+
         });
 
         modelBuilder.Entity<JobState>(entity =>
@@ -3171,64 +2071,7 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_JobTypesExceptions_JobTypes");
 
-            entity.HasOne(d => d.Sapexception).WithOne(p => p.JobTypesException)
-                .HasForeignKey<JobTypesException>(d => d.SapexceptionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_JobTypesExceptions_SAPExceptions");
-        });
 
-        modelBuilder.Entity<KeyHolder>(entity =>
-        {
-            entity.HasKey(e => e.KeyHolderId).HasName("PK_KeyHolder");
-
-            entity.Property(e => e.KeyHolderId).HasColumnName("KeyHolderID");
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.Individual).WithMany(p => p.KeyHolders)
-                .HasForeignKey(d => d.IndividualId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_KeyHolders_Staffs");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.KeyHolders)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_KeyHolders_OperationLogs");
-        });
-
-        modelBuilder.Entity<Kpidocument>(entity =>
-        {
-            entity.ToTable("KPIDocuments");
-
-            entity.Property(e => e.KpidocumentId).HasColumnName("KPIDocumentID");
-            entity.Property(e => e.DocumentId).HasColumnName("DocumentID");
-            entity.Property(e => e.Kpiid).HasColumnName("KPIID");
-            entity.Property(e => e.LinkedByUserId).HasColumnName("LinkedByUserID");
-            entity.Property(e => e.LinkedDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.Document).WithMany(p => p.Kpidocuments)
-                .HasForeignKey(d => d.DocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_KPIDocuments_Documents");
-
-            entity.HasOne(d => d.LinkedByUser).WithMany(p => p.Kpidocuments)
-                .HasForeignKey(d => d.LinkedByUserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_KPIDocuments_Users");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.Kpidocuments)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_KPIDocuments_OperationLogs");
-        });
-
-        modelBuilder.Entity<Language>(entity =>
-        {
-            entity.Property(e => e.LanguageId).HasColumnName("LanguageID");
-            entity.Property(e => e.CultureName).HasMaxLength(250);
-            entity.Property(e => e.Name).HasMaxLength(250);
-            entity.Property(e => e.NameDhivehi).HasMaxLength(250);
         });
 
         modelBuilder.Entity<Leaf>(entity =>
@@ -3342,56 +2185,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.Name).HasMaxLength(250);
             entity.Property(e => e.Type).HasMaxLength(50);
             entity.Property(e => e.Unit).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<LeaveDocument>(entity =>
-        {
-            entity.Property(e => e.LeaveDocumentId).HasColumnName("LeaveDocumentID");
-            entity.Property(e => e.DocumentId).HasColumnName("DocumentID");
-            entity.Property(e => e.LeaveId).HasColumnName("LeaveID");
-            entity.Property(e => e.LinkedByUserId).HasColumnName("LinkedByUserID");
-            entity.Property(e => e.LinkedDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.Document).WithMany(p => p.LeaveDocuments)
-                .HasForeignKey(d => d.DocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveDocuments_Documents");
-
-            entity.HasOne(d => d.Leave).WithMany(p => p.LeaveDocuments)
-                .HasForeignKey(d => d.LeaveId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveDocuments_Leaves");
-
-            entity.HasOne(d => d.LinkedByUser).WithMany(p => p.LeaveDocuments)
-                .HasForeignKey(d => d.LinkedByUserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveDocuments_Users");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.LeaveDocuments)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_LeaveDocuments_OperationLogs");
-        });
-
-        modelBuilder.Entity<LeaveForm>(entity =>
-        {
-            entity.HasKey(e => e.LeaveId).HasName("PK_LeaveForms_1");
-
-            entity.Property(e => e.LeaveId)
-                .ValueGeneratedNever()
-                .HasColumnName("LeaveID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ReportedDateTime).HasColumnType("datetime");
-
-            entity.HasOne(d => d.Leave).WithOne(p => p.LeaveForm)
-                .HasForeignKey<LeaveForm>(d => d.LeaveId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveForms_Leaves");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.LeaveForms)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveForms_OperationLogs");
         });
 
         modelBuilder.Entity<LeaveLodgeType>(entity =>
@@ -3575,60 +2368,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_LeaveWorkHandOvers_Leaves1");
         });
 
-        modelBuilder.Entity<LeaveWorkHandOverTask>(entity =>
-        {
-            entity.HasKey(e => e.LeaveId);
-
-            entity.Property(e => e.LeaveId)
-                .ValueGeneratedNever()
-                .HasColumnName("LeaveID");
-            entity.Property(e => e.TaskDetails).HasMaxLength(250);
-
-            entity.HasOne(d => d.Leave).WithOne(p => p.LeaveWorkHandOverTask)
-                .HasForeignKey<LeaveWorkHandOverTask>(d => d.LeaveId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeaveWorkHandOverTasks_Leaves");
-        });
-
-        modelBuilder.Entity<LeavesBulkUploadedDocument>(entity =>
-        {
-            entity.HasKey(e => e.DocumentId);
-
-            entity.Property(e => e.DocumentId)
-                .ValueGeneratedNever()
-                .HasColumnName("DocumentID");
-            entity.Property(e => e.DocumentStateId).HasColumnName("DocumentStateID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.UploadedByUserId).HasColumnName("UploadedByUserID");
-            entity.Property(e => e.UploadedDate).HasColumnType("datetime");
-
-            entity.HasOne(d => d.Document).WithOne(p => p.LeavesBulkUploadedDocument)
-                .HasForeignKey<LeavesBulkUploadedDocument>(d => d.DocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeavesBulkUploadedDocuments_Documents");
-
-            entity.HasOne(d => d.DocumentState).WithMany(p => p.LeavesBulkUploadedDocuments)
-                .HasForeignKey(d => d.DocumentStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeavesBulkUploadedDocuments_DocumentStates");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.LeavesBulkUploadedDocuments)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeavesBulkUploadedDocuments_OperationLogs");
-
-            entity.HasOne(d => d.UploadedByUser).WithMany(p => p.LeavesBulkUploadedDocuments)
-                .HasForeignKey(d => d.UploadedByUserId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_LeavesBulkUploadedDocuments_Users");
-        });
-
-        modelBuilder.Entity<LinkType>(entity =>
-        {
-            entity.Property(e => e.LinkTypeId).HasColumnName("LinkTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<LocalUserState>(entity =>
         {
             entity.Property(e => e.LocalUserStateId).HasColumnName("LocalUserStateID");
@@ -3665,18 +2404,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName).HasMaxLength(250);
         });
 
-        modelBuilder.Entity<Mimetype>(entity =>
-        {
-            entity.HasKey(e => e.Extension);
-
-            entity.ToTable("MIMETypes");
-
-            entity.Property(e => e.Extension).HasMaxLength(20);
-            entity.Property(e => e.Mimetype1)
-                .HasMaxLength(250)
-                .HasColumnName("MIMEType");
-        });
-
         modelBuilder.Entity<Module>(entity =>
         {
             entity.HasKey(e => e.ModuleId).HasName("PK_Module");
@@ -3707,94 +2434,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_Months_OperationLogs");
         });
 
-        modelBuilder.Entity<NavigationLink>(entity =>
-        {
-            entity.Property(e => e.NavigationLinkId).HasColumnName("NavigationLinkID");
-            entity.Property(e => e.ContextId).HasColumnName("ContextID");
-            entity.Property(e => e.LinkName).HasMaxLength(250);
-            entity.Property(e => e.LinkNameDhivehiName).HasMaxLength(250);
-            entity.Property(e => e.LinkTypeId).HasColumnName("LinkTypeID");
-            entity.Property(e => e.ModuleId)
-                .HasDefaultValue(1)
-                .HasColumnName("ModuleID");
-            entity.Property(e => e.ParentNavigationLinkId).HasColumnName("ParentNavigationLinkID");
-            entity.Property(e => e.RoleId).HasColumnName("RoleID");
-            entity.Property(e => e.Url)
-                .HasMaxLength(250)
-                .HasColumnName("URL");
-
-            entity.HasOne(d => d.Context).WithMany(p => p.NavigationLinks)
-                .HasForeignKey(d => d.ContextId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NavigationLinks_Context");
-
-            entity.HasOne(d => d.LinkType).WithMany(p => p.NavigationLinks)
-                .HasForeignKey(d => d.LinkTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NavigationLinks_LinkTypes");
-
-            entity.HasOne(d => d.Module).WithMany(p => p.NavigationLinks)
-                .HasForeignKey(d => d.ModuleId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NavigationLinks_Modules");
-
-            entity.HasOne(d => d.ParentNavigationLink).WithMany(p => p.InverseParentNavigationLink)
-                .HasForeignKey(d => d.ParentNavigationLinkId)
-                .HasConstraintName("FK_NavigationLinks_NavigationLinks");
-
-            entity.HasOne(d => d.Role).WithMany(p => p.NavigationLinks)
-                .HasForeignKey(d => d.RoleId)
-                .HasConstraintName("FK_NavigationLinks_Roles");
-        });
-
-        modelBuilder.Entity<NavigationLinkFacilityType>(entity =>
-        {
-            entity.Property(e => e.NavigationLinkFacilityTypeId).HasColumnName("NavigationLinkFacilityTypeID");
-            entity.Property(e => e.FacilityTypeId).HasColumnName("FacilityTypeID");
-            entity.Property(e => e.NavigationLinkId).HasColumnName("NavigationLinkID");
-
-            entity.HasOne(d => d.FacilityType).WithMany(p => p.NavigationLinkFacilityTypes)
-                .HasForeignKey(d => d.FacilityTypeId)
-                .HasConstraintName("FK_NavigationLinkFacilityTypes_FacilityRegistrationTypes");
-
-            entity.HasOne(d => d.NavigationLink).WithMany(p => p.NavigationLinkFacilityTypes)
-                .HasForeignKey(d => d.NavigationLinkId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NavigationLinkFacilityTypes_NavigationLinks");
-        });
-
-        modelBuilder.Entity<NoPayLeaf>(entity =>
-        {
-            entity.HasKey(e => e.LeaveId).HasName("PK_NoPayLeaves_1");
-
-            entity.Property(e => e.LeaveId)
-                .ValueGeneratedNever()
-                .HasColumnName("LeaveID");
-            entity.Property(e => e.NoPayLeaveTypeId).HasColumnName("NoPayLeaveTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.Leave).WithOne(p => p.NoPayLeaf)
-                .HasForeignKey<NoPayLeaf>(d => d.LeaveId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NoPayLeaves_Leaves");
-
-            entity.HasOne(d => d.NoPayLeaveType).WithMany(p => p.NoPayLeaves)
-                .HasForeignKey(d => d.NoPayLeaveTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NoPayLeaves_NoPayLeaveTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.NoPayLeaves)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_NoPayLeaves_OperationLogs");
-        });
-
-        modelBuilder.Entity<NoPayLeaveType>(entity =>
-        {
-            entity.Property(e => e.NoPayLeaveTypeId).HasColumnName("NoPayLeaveTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<Note>(entity =>
         {
             entity.Property(e => e.NoteId).HasColumnName("NoteID");
@@ -3802,21 +2441,10 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.Text).HasColumnType("text");
 
-            entity.HasOne(d => d.NoteReason).WithMany(p => p.Notes)
-                .HasForeignKey(d => d.NoteReasonId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Notes_NoteReasons1");
-
             entity.HasOne(d => d.OperationLog).WithMany(p => p.Notes)
                 .HasForeignKey(d => d.OperationLogId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Notes_OperationLogs1");
-        });
-
-        modelBuilder.Entity<NoteReason>(entity =>
-        {
-            entity.Property(e => e.NoteReasonId).HasColumnName("NoteReasonID");
-            entity.Property(e => e.Name).HasMaxLength(250);
         });
 
         modelBuilder.Entity<OfficialTripDetail>(entity =>
@@ -3871,158 +2499,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.OfficialTripTypeId).HasColumnName("OfficialTripTypeID");
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<OnlineAddress>(entity =>
-        {
-            entity.HasKey(e => e.OnlineLocationId);
-
-            entity.Property(e => e.OnlineLocationId)
-                .ValueGeneratedNever()
-                .HasColumnName("OnlineLocationID");
-            entity.Property(e => e.CountryId).HasColumnName("CountryID");
-            entity.Property(e => e.IslandId).HasColumnName("IslandID");
-
-            entity.HasOne(d => d.Country).WithMany(p => p.OnlineAddresses)
-                .HasForeignKey(d => d.CountryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAddresses_Countries");
-
-            entity.HasOne(d => d.Island).WithMany(p => p.OnlineAddresses)
-                .HasForeignKey(d => d.IslandId)
-                .HasConstraintName("FK_OnlineAddresses_Islands");
-
-            entity.HasOne(d => d.OnlineLocation).WithOne(p => p.OnlineAddress)
-                .HasForeignKey<OnlineAddress>(d => d.OnlineLocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAddresses_OnlineLocations");
-        });
-
-        modelBuilder.Entity<OnlineAddressBasis>(entity =>
-        {
-            entity.HasKey(e => e.OnlineAddressBaseId);
-
-            entity.Property(e => e.OnlineAddressBaseId).HasColumnName("OnlineAddressBaseID");
-            entity.Property(e => e.AddressBaseTypeId).HasColumnName("AddressBaseTypeID");
-            entity.Property(e => e.AddressLine1).HasMaxLength(250);
-            entity.Property(e => e.AddressLine2).HasMaxLength(250);
-            entity.Property(e => e.MunicipalityNumber).HasMaxLength(50);
-            entity.Property(e => e.PostCode).HasMaxLength(50);
-            entity.Property(e => e.StreetNameDhivehi).HasMaxLength(250);
-            entity.Property(e => e.StreetNameEnglish).HasMaxLength(250);
-            entity.Property(e => e.WardId).HasColumnName("WardID");
-
-            entity.HasOne(d => d.AddressBaseType).WithMany(p => p.OnlineAddressBases)
-                .HasForeignKey(d => d.AddressBaseTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAddressBases_AddressBaseTypes");
-
-            entity.HasOne(d => d.Ward).WithMany(p => p.OnlineAddressBases)
-                .HasForeignKey(d => d.WardId)
-                .HasConstraintName("FK_OnlineAddressBases_Wards");
-        });
-
-        modelBuilder.Entity<OnlineAddressInstance>(entity =>
-        {
-            entity.HasKey(e => e.OnlineLocationId);
-
-            entity.Property(e => e.OnlineLocationId)
-                .ValueGeneratedNever()
-                .HasColumnName("OnlineLocationID");
-            entity.Property(e => e.AddressInstanceTypeId).HasColumnName("AddressInstanceTypeID");
-            entity.Property(e => e.Floor).HasMaxLength(250);
-            entity.Property(e => e.Name).HasMaxLength(250);
-            entity.Property(e => e.OnlineAddressBaseId).HasColumnName("OnlineAddressBaseID");
-
-            entity.HasOne(d => d.AddressInstanceType).WithMany(p => p.OnlineAddressInstances)
-                .HasForeignKey(d => d.AddressInstanceTypeId)
-                .HasConstraintName("FK_OnlineAddressInstances_AddressInstanceTypes");
-
-            entity.HasOne(d => d.OnlineAddressBase).WithMany(p => p.OnlineAddressInstances)
-                .HasForeignKey(d => d.OnlineAddressBaseId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAddressInstances_OnlineAddressBases");
-
-            entity.HasOne(d => d.OnlineLocation).WithOne(p => p.OnlineAddressInstance)
-                .HasForeignKey<OnlineAddressInstance>(d => d.OnlineLocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAddressInstances_OnlineAddresses");
-        });
-
-        modelBuilder.Entity<OnlineArea>(entity =>
-        {
-            entity.HasKey(e => e.OnlineLocationId);
-
-            entity.Property(e => e.OnlineLocationId)
-                .ValueGeneratedNever()
-                .HasColumnName("OnlineLocationID");
-            entity.Property(e => e.AreaName).HasMaxLength(250);
-            entity.Property(e => e.WardId).HasColumnName("WardID");
-
-            entity.HasOne(d => d.OnlineLocation).WithOne(p => p.OnlineArea)
-                .HasForeignKey<OnlineArea>(d => d.OnlineLocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineAreas_OnlineAddresses");
-
-            entity.HasOne(d => d.Ward).WithMany(p => p.OnlineAreas)
-                .HasForeignKey(d => d.WardId)
-                .HasConstraintName("FK_OnlineAreas_Wards");
-        });
-
-        modelBuilder.Entity<OnlineBusinessEntityLocation>(entity =>
-        {
-            entity.Property(e => e.OnlineBusinessEntityLocationId).HasColumnName("OnlineBusinessEntityLocationID");
-            entity.Property(e => e.BusinessEntityId).HasColumnName("BusinessEntityID");
-            entity.Property(e => e.BusinessEntityLocationTypeId).HasColumnName("BusinessEntityLocationTypeID");
-            entity.Property(e => e.OnlineLocationId).HasColumnName("OnlineLocationID");
-
-            entity.HasOne(d => d.BusinessEntity).WithMany(p => p.OnlineBusinessEntityLocations)
-                .HasForeignKey(d => d.BusinessEntityId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineBusinessEntityLocations_BusinessEntities");
-
-            entity.HasOne(d => d.BusinessEntityLocationType).WithMany(p => p.OnlineBusinessEntityLocations)
-                .HasForeignKey(d => d.BusinessEntityLocationTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineBusinessEntityLocations_BusinessEntityLocationTypes");
-
-            entity.HasOne(d => d.OnlineLocation).WithMany(p => p.OnlineBusinessEntityLocations)
-                .HasForeignKey(d => d.OnlineLocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineBusinessEntityLocations_OnlineLocations1");
-        });
-
-        modelBuilder.Entity<OnlineDhafthar>(entity =>
-        {
-            entity.HasKey(e => e.OnlineLocationId);
-
-            entity.ToTable("OnlineDhafthar");
-
-            entity.Property(e => e.OnlineLocationId)
-                .ValueGeneratedNever()
-                .HasColumnName("OnlineLocationID");
-            entity.Property(e => e.DhaftharNumber).HasMaxLength(50);
-
-            entity.HasOne(d => d.OnlineLocation).WithOne(p => p.OnlineDhafthar)
-                .HasForeignKey<OnlineDhafthar>(d => d.OnlineLocationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineDhafthar_OnlineAddresses");
-        });
-
-        modelBuilder.Entity<OnlineLocation>(entity =>
-        {
-            entity.Property(e => e.OnlineLocationId).HasColumnName("OnlineLocationID");
-            entity.Property(e => e.LocationTypeId).HasColumnName("LocationTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-
-            entity.HasOne(d => d.LocationType).WithMany(p => p.OnlineLocations)
-                .HasForeignKey(d => d.LocationTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OnlineLocations_LocationTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.OnlineLocations)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_OnlineLocations_OperationLogs");
         });
 
         modelBuilder.Entity<OnlineSignInOrganisation>(entity =>
@@ -4118,11 +2594,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.RegistrationDate).HasColumnType("datetime");
             entity.Property(e => e.RegistrationNumber).HasMaxLength(50);
 
-
- 
-
- 
-
             entity.HasOne(d => d.Country).WithMany(p => p.Organisations)
                 .HasForeignKey(d => d.CountryId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -4136,130 +2607,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.ParentOrganisationBusinessEntity).WithMany(p => p.InverseParentOrganisationBusinessEntity)
                 .HasForeignKey(d => d.ParentOrganisationBusinessEntityId)
                 .HasConstraintName("FK_Organisations_Organisations");
-        });
-
-        modelBuilder.Entity<OrganisationBudget>(entity =>
-        {
-            entity.HasKey(e => e.OrganisationBudgetId).HasName("PK_Budgets");
-
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.BudgetCodeId).HasColumnName("BudgetCodeID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-
-            entity.HasOne(d => d.BudgetCode).WithMany(p => p.OrganisationBudgets)
-                .HasForeignKey(d => d.BudgetCodeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Budgets_BudgetCodes");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.OrganisationBudgets)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Budgets_Organisations");
-        });
-
-        modelBuilder.Entity<OrganisationBudgetMonthlySummary>(entity =>
-        {
-            entity.HasIndex(e => e.BudgetItemId, "IX_OrganisationBudgetMonthlySummaries");
-
-            entity.HasIndex(e => e.ParentBudgetItemId, "IX_OrganisationBudgetMonthlySummaries_1");
-
-            entity.Property(e => e.DhivehiName).HasMaxLength(500);
-            entity.Property(e => e.EnglishName).HasMaxLength(500);
-            entity.Property(e => e.ExpenditureThisMonth).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.ExpenditureTotal).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.ParentDhivehiName).HasMaxLength(500);
-            entity.Property(e => e.ParentEnglishName).HasMaxLength(500);
-            entity.Property(e => e.RemainingTotal).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.TransferTotal).HasColumnType("decimal(38, 8)");
-        });
-
-        modelBuilder.Entity<OrganisationBudgetSummary>(entity =>
-        {
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Amount)
-                .HasColumnType("decimal(38, 8)")
-                .HasColumnName("amount");
-            entity.Property(e => e.BudgetItemId).HasColumnName("budgetItemId");
-            entity.Property(e => e.BudgetItemTypeId).HasColumnName("budgetItemTypeId");
-            entity.Property(e => e.Code).HasColumnName("code");
-            entity.Property(e => e.DhivehiName)
-                .HasMaxLength(500)
-                .HasColumnName("dhivehiName");
-            entity.Property(e => e.EnglishName)
-                .HasMaxLength(500)
-                .HasColumnName("englishName");
-            entity.Property(e => e.OrganisationId).HasColumnName("organisationID");
-            entity.Property(e => e.ParentCode).HasColumnName("parentCode");
-            entity.Property(e => e.ParentDhivehiName)
-                .HasMaxLength(500)
-                .HasColumnName("parentDhivehiName");
-            entity.Property(e => e.ParentEnglishName)
-                .HasMaxLength(500)
-                .HasColumnName("parentEnglishName");
-            entity.Property(e => e.ParentbudgdetItemId).HasColumnName("parentbudgdetItemId");
-            entity.Property(e => e.Year).HasColumnName("year");
-        });
-
-        modelBuilder.Entity<OrganisationBudgetSummeryAggregate>(entity =>
-        {
-            entity.HasKey(e => e.Id).HasName("PK_OrganisationBudgetSummeryAggregate");
-
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.OrganisationId).HasColumnName("organisationID");
-            entity.Property(e => e.ParentBudgetItemId).HasColumnName("parentBudgetItemID");
-            entity.Property(e => e.Sum)
-                .HasColumnType("decimal(18, 0)")
-                .HasColumnName("sum");
-            entity.Property(e => e.Year).HasColumnName("year");
-        });
-
-        modelBuilder.Entity<OrganisationDeductionType>(entity =>
-        {
-            entity.Property(e => e.OrganisationDeductionTypeId).HasColumnName("OrganisationDeductionTypeID");
-            entity.Property(e => e.DeductionTypeId).HasColumnName("DeductionTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-
-            entity.HasOne(d => d.DeductionType).WithMany(p => p.OrganisationDeductionTypes)
-                .HasForeignKey(d => d.DeductionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationDeductionTypes_DeductionTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.OrganisationDeductionTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationDeductionTypes_OperationLogs");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.OrganisationDeductionTypes)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationDeductionTypes_Organisations");
-        });
-
-        modelBuilder.Entity<OrganisationPayrollItemType>(entity =>
-        {
-            entity.HasKey(e => e.OrganisationPayrollItemTypeId).HasName("PK_OrganisationAllowanceTypes");
-
-            entity.Property(e => e.OrganisationPayrollItemTypeId).HasColumnName("OrganisationPayrollItemTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.OrganisationPayrollItemTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationAllowanceTypes_OperationLogs");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.OrganisationPayrollItemTypes)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationAllowanceTypes_Organisations");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.OrganisationPayrollItemTypes)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationAllowanceTypes_Allowances");
         });
 
         modelBuilder.Entity<OrganisationPayrollPeriod>(entity =>
@@ -4276,50 +2623,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OrganisationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_OrganisationPayrollPeriods_Organisations");
-        });
-
-        modelBuilder.Entity<OrganisationPayrollPeriodJobType>(entity =>
-        {
-            entity.Property(e => e.OrganisationPayrollPeriodJobTypeId).HasColumnName("OrganisationPayrollPeriodJobTypeID");
-            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OrganisationPayrollPeriodId).HasColumnName("OrganisationPayrollPeriodID");
-
-            entity.HasOne(d => d.JobType).WithMany(p => p.OrganisationPayrollPeriodJobTypes)
-                .HasForeignKey(d => d.JobTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationPayrollPeriodJobTypes_JobTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.OrganisationPayrollPeriodJobTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_OrganisationPayrollPeriodJobTypes_OperationLogs");
-
-            entity.HasOne(d => d.OrganisationPayrollPeriod).WithMany(p => p.OrganisationPayrollPeriodJobTypes)
-                .HasForeignKey(d => d.OrganisationPayrollPeriodId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationPayrollPeriodJobTypes_OrganisationPayrollPeriods");
-        });
-
-        modelBuilder.Entity<OrganisationSapexception>(entity =>
-        {
-            entity.HasKey(e => e.SapexceptionId);
-
-            entity.ToTable("OrganisationSAPExceptions");
-
-            entity.Property(e => e.SapexceptionId)
-                .ValueGeneratedNever()
-                .HasColumnName("SAPExceptionID");
-            entity.Property(e => e.OrganisationBusinessEntityID).HasColumnName("OrganisationBusinessEntityID");
-
-            entity.HasOne(d => d.OrganisationBusinessEntity).WithMany(p => p.OrganisationSapexceptions)
-                .HasForeignKey(d => d.OrganisationBusinessEntityID)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationSAPExceptions_Organisations");
-
-            entity.HasOne(d => d.Sapexception).WithOne(p => p.OrganisationSapexception)
-                .HasForeignKey<OrganisationSapexception>(d => d.SapexceptionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationSAPExceptions_SAPExceptions");
         });
 
         modelBuilder.Entity<OrganisationStructure>(entity =>
@@ -4606,59 +2909,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName).HasMaxLength(250);
         });
 
-        modelBuilder.Entity<OrganisationalStructureSapexception>(entity =>
-        {
-            entity.HasKey(e => e.SapexceptionId);
-
-            entity.ToTable("OrganisationalStructureSAPExceptions");
-
-            entity.Property(e => e.SapexceptionId)
-                .ValueGeneratedNever()
-                .HasColumnName("SAPExceptionID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-
-            entity.HasOne(d => d.OrganisationStructure).WithMany(p => p.OrganisationalStructureSapexceptions)
-                .HasForeignKey(d => d.OrganisationStructureId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationalStructureSAPExceptions_OrganisationStructure");
-
-            entity.HasOne(d => d.Sapexception).WithOne(p => p.OrganisationalStructureSapexception)
-                .HasForeignKey<OrganisationalStructureSapexception>(d => d.SapexceptionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OrganisationalStructureSAPExceptions_SAPExceptions");
-        });
-
-        modelBuilder.Entity<Ot>(entity =>
-        {
-            entity.ToTable("OT");
-
-            entity.Property(e => e.Otid).HasColumnName("OTID");
-            entity.Property(e => e.EndAttendanceLogId).HasColumnName("EndAttendanceLogID");
-            entity.Property(e => e.IsValid).HasDefaultValue(true);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OtrequestId).HasColumnName("OTRequestID");
-            entity.Property(e => e.StartAttendanceLogId).HasColumnName("StartAttendanceLogID");
-            entity.Property(e => e.WorkDone).HasMaxLength(250);
-
-            entity.HasOne(d => d.EndAttendanceLog).WithMany(p => p.OtEndAttendanceLogs)
-                .HasForeignKey(d => d.EndAttendanceLogId)
-                .HasConstraintName("FK_OT_AttendanceLogs1");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.Ots)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OT_OperationLogs");
-
-            entity.HasOne(d => d.Otrequest).WithMany(p => p.Ots)
-                .HasForeignKey(d => d.OtrequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OT_OTRequests");
-
-            entity.HasOne(d => d.StartAttendanceLog).WithMany(p => p.OtStartAttendanceLogs)
-                .HasForeignKey(d => d.StartAttendanceLogId)
-                .HasConstraintName("FK_OT_AttendanceLogs");
-        });
-
         modelBuilder.Entity<OtherSalaryRateDefinition>(entity =>
         {
             entity.Property(e => e.OtherSalaryRateDefinitionId).HasColumnName("OtherSalaryRateDefinitionID");
@@ -4670,11 +2920,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OperationLogId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_OtherSalaryRateDefinitions_OperationLogs");
-
-            entity.HasOne(d => d.SalaryRateDefinitionForType).WithMany(p => p.OtherSalaryRateDefinitions)
-                .HasForeignKey(d => d.SalaryRateDefinitionForTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OtherSalaryRateDefinitions_SalaryRateDefinitionForTypes");
 
             entity.HasOne(d => d.SalaryRateDefinition).WithMany(p => p.OtherSalaryRateDefinitions)
                 .HasForeignKey(d => d.SalaryRateDefinitionId)
@@ -4698,11 +2943,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.SupervisorId).HasColumnName("SupervisorID");
             entity.Property(e => e.Works).HasMaxLength(250);
 
-            entity.HasOne(d => d.Ottype).WithMany(p => p.OtpreApprovals)
-                .HasForeignKey(d => d.OttypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTPreApprovals_OTTypes");
-
             entity.HasOne(d => d.Request).WithOne(p => p.OtpreApproval)
                 .HasForeignKey<OtpreApproval>(d => d.RequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -4717,77 +2957,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.SupervisorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_OTPreApprovals_Staffs2");
-        });
-
-        modelBuilder.Entity<OtpreApprovalTime>(entity =>
-        {
-            entity.ToTable("OTPreApprovalTimes");
-
-            entity.Property(e => e.OtpreApprovalTimeId).HasColumnName("OTPreApprovalTimeID");
-            entity.Property(e => e.DayTypeId).HasColumnName("DayTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-
-            entity.HasOne(d => d.DayType).WithMany(p => p.OtpreApprovalTimes)
-                .HasForeignKey(d => d.DayTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTPreApprovalTimes_DayTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.OtpreApprovalTimes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTPreApprovalTimes_OperationLogs");
-
-            entity.HasOne(d => d.Request).WithMany(p => p.OtpreApprovalTimes)
-                .HasForeignKey(d => d.RequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTPreApprovalTimes_OTPreApprovals");
-        });
-
-        modelBuilder.Entity<Otrequest>(entity =>
-        {
-            entity.HasKey(e => e.RequestId);
-
-            entity.ToTable("OTRequests");
-
-            entity.HasIndex(e => e.StaffJobId, "IDX_OTRequests_JOBID");
-
-            entity.HasIndex(e => e.Date, "NonClusteredIndex-20160804-141927").IsDescending();
-
-            entity.Property(e => e.RequestId)
-                .ValueGeneratedNever()
-                .HasColumnName("RequestID");
-            entity.Property(e => e.Date).HasColumnType("datetime");
-            entity.Property(e => e.OtpreApprovalRequestId).HasColumnName("OTPreApprovalRequestID");
-            entity.Property(e => e.OttypeId).HasColumnName("OTTypeID");
-            entity.Property(e => e.StaffJobId).HasColumnName("StaffJobID");
-
-            entity.HasOne(d => d.OtpreApprovalRequest).WithMany(p => p.Otrequests)
-                .HasForeignKey(d => d.OtpreApprovalRequestId)
-                .HasConstraintName("FK_OTRequests_OTPreApprovals");
-
-            entity.HasOne(d => d.Ottype).WithMany(p => p.Otrequests)
-                .HasForeignKey(d => d.OttypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTRequests_OTTypes");
-
-            entity.HasOne(d => d.Request).WithOne(p => p.Otrequest)
-                .HasForeignKey<Otrequest>(d => d.RequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTRequests_Requests");
-
-            entity.HasOne(d => d.StaffJob).WithMany(p => p.Otrequests)
-                .HasForeignKey(d => d.StaffJobId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_OTRequests_Jobs");
-        });
-
-        modelBuilder.Entity<Ottype>(entity =>
-        {
-            entity.ToTable("OTTypes");
-
-            entity.Property(e => e.OttypeId).HasColumnName("OTTypeID");
-            entity.Property(e => e.Name).HasMaxLength(250);
         });
 
         modelBuilder.Entity<OutOfOfficeRequest>(entity =>
@@ -4843,12 +3012,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TypeName).HasMaxLength(150);
         });
 
-        modelBuilder.Entity<OwnerType>(entity =>
-        {
-            entity.Property(e => e.OwnerTypeId).HasColumnName("OwnerTypeID");
-            entity.Property(e => e.Name).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<Passport>(entity =>
         {
             entity.Property(e => e.PassportId).HasColumnName("PassportID");
@@ -4874,48 +3037,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OperationLogId)
                 .HasConstraintName("FK_Passports_OperationLogs");
 
-            entity.HasOne(d => d.PassportState).WithMany(p => p.Passports)
-                .HasForeignKey(d => d.PassportStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Passports_PassportStates");
-        });
 
-        modelBuilder.Entity<PassportState>(entity =>
-        {
-            entity.Property(e => e.PassportStateId).HasColumnName("PassportStateID");
-            entity.Property(e => e.StateName).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<PayrollConfigurableValue>(entity =>
-        {
-            entity.Property(e => e.PayrollConfigurableValueId).HasColumnName("PayrollConfigurableValueID");
-            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
-            entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
-            entity.Property(e => e.PayrollConfigurableValueTypeId).HasColumnName("PayrollConfigurableValueTypeID");
-            entity.Property(e => e.Value).HasColumnType("text");
-
-            entity.HasOne(d => d.JobType).WithMany(p => p.PayrollConfigurableValues)
-                .HasForeignKey(d => d.JobTypeId)
-                .HasConstraintName("FK_PayrollConfigurableValues_JobTypes");
-
-            entity.HasOne(d => d.Organisation).WithMany(p => p.PayrollConfigurableValues)
-                .HasForeignKey(d => d.OrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollConfigurableValues_Organisations");
-
-            entity.HasOne(d => d.PayrollConfigurableValueType).WithMany(p => p.PayrollConfigurableValues)
-                .HasForeignKey(d => d.PayrollConfigurableValueTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollConfigurableValues_PayrollConfigurableValueTypes");
-        });
-
-        modelBuilder.Entity<PayrollConfigurableValueType>(entity =>
-        {
-            entity.Property(e => e.PayrollConfigurableValueTypeId).HasColumnName("PayrollConfigurableValueTypeID");
-            entity.Property(e => e.Comment).HasColumnType("text");
-            entity.Property(e => e.IsJobTypeDependant).HasColumnName("isJobTypeDependant");
-            entity.Property(e => e.Name).HasMaxLength(250);
-            entity.Property(e => e.Type).HasMaxLength(50);
         });
 
         modelBuilder.Entity<PayrollCycle>(entity =>
@@ -4936,310 +3058,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey<PayrollCycle>(d => d.RequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_PayrollCycles_Requests");
-        });
-
-        modelBuilder.Entity<PayrollCycleLinkedRequest>(entity =>
-        {
-            entity.HasIndex(e => new { e.PayrollCycleRequestId, e.RequestId, e.StaffSalaryId }, "IX_PayrollCycleLinkedRequests");
-
-            entity.Property(e => e.PayrollCycleLinkedRequestId).HasColumnName("PayrollCycleLinkedRequestID");
-            entity.Property(e => e.LastUpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollCycleRequestId).HasColumnName("PayrollCycleRequestID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollCycleLinkedRequests)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycleLinkedRequests_OperationLogs");
-
-            entity.HasOne(d => d.PayrollCycleRequest).WithMany(p => p.PayrollCycleLinkedRequests)
-                .HasForeignKey(d => d.PayrollCycleRequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycleLinkedRequests_PayrollCycles");
-
-            entity.HasOne(d => d.Request).WithMany(p => p.PayrollCycleLinkedRequests)
-                .HasForeignKey(d => d.RequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycleLinkedRequests_Requests");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.PayrollCycleLinkedRequests)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycleLinkedRequests_StaffSalaries1");
-        });
-
-        modelBuilder.Entity<PayrollCycleProcessingState>(entity =>
-        {
-            entity.Property(e => e.PayrollCycleProcessingStateId).HasColumnName("PayrollCycleProcessingStateID");
-            entity.Property(e => e.Name).HasMaxLength(500);
-        });
-
-        modelBuilder.Entity<PayrollItemDailySapsheetDetail>(entity =>
-        {
-            entity.ToTable("PayrollItemDailySAPSheetDetails");
-
-            entity.Property(e => e.PayrollItemDailySapsheetDetailId).HasColumnName("PayrollItemDailySAPSheetDetailID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemDailySapsheetDetails)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemDailySAPSheetDetails_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemDailySapsheetDetails)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemDailySAPSheetDetails_PayrollItemTypes");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.PayrollItemDailySapsheetDetails)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemDailySAPSheetDetails_StaffSalaries");
-        });
-
-        modelBuilder.Entity<PayrollItemProcessingFlow>(entity =>
-        {
-            entity.Property(e => e.PayrollItemProcessingFlowId).HasColumnName("PayrollItemProcessingFlowID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ParentPayrollItemTypeProcessingCodeId).HasColumnName("ParentPayrollItemTypeProcessingCodeID");
-            entity.Property(e => e.PayrollItemTypeProcessingCodeId).HasColumnName("PayrollItemTypeProcessingCodeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemProcessingFlows)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_PayrollItemProcessingFlows_OperationLogs");
-
-            entity.HasOne(d => d.ParentPayrollItemTypeProcessingCode).WithMany(p => p.PayrollItemProcessingFlowParentPayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.ParentPayrollItemTypeProcessingCodeId)
-                .HasConstraintName("FK_PayrollItemProcessingFlows_PayrollItemTypeProcessingCodes1");
-
-            entity.HasOne(d => d.PayrollItemTypeProcessingCode).WithMany(p => p.PayrollItemProcessingFlowPayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.PayrollItemTypeProcessingCodeId)
-                .HasConstraintName("FK_PayrollItemProcessingFlows_PayrollItemTypeProcessingCodes");
-        });
-
-        modelBuilder.Entity<PayrollItemType>(entity =>
-        {
-            entity.HasKey(e => e.PayrollItemTypeId).HasName("PK_Allowances");
-
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.AdditionOrDeductionTypeId).HasColumnName("AdditionOrDeductionTypeID");
-            entity.Property(e => e.AmountTypeId).HasColumnName("AmountTypeID");
-            entity.Property(e => e.AttendanceDependentTypeId).HasColumnName("AttendanceDependentTypeID");
-            entity.Property(e => e.Code)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.CurrencyTypeId).HasColumnName("CurrencyTypeID");
-            entity.Property(e => e.DependencyTypeId).HasColumnName("DependencyTypeID");
-            entity.Property(e => e.DerivedOnTypeId).HasColumnName("DerivedOnTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.EffectiveDate).HasColumnType("datetime");
-            entity.Property(e => e.EndDate).HasColumnType("datetime");
-            entity.Property(e => e.NameDhivehi).HasMaxLength(50);
-            entity.Property(e => e.NameEnglish).HasMaxLength(50);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OwnerOrganisationId).HasColumnName("ownerOrganisationID");
-            entity.Property(e => e.ReccurencePattern)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.RecurrenceTypeId).HasColumnName("RecurrenceTypeID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.Sapcode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("SAPCode");
-            entity.Property(e => e.SapsheetId).HasColumnName("SAPSheetID");
-
-            entity.HasOne(d => d.AdditionOrDeductionType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.AdditionOrDeductionTypeId)
-                .HasConstraintName("FK_PayrollItemTypes_AdditionOrDeductionTypes");
-
-            entity.HasOne(d => d.AmountType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.AmountTypeId)
-                .HasConstraintName("FK_Allowances_AmountTypes");
-
-            entity.HasOne(d => d.AttendanceDependentType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.AttendanceDependentTypeId)
-                .HasConstraintName("FK_PayrollItemTypes_AttendanceDependentTypes");
-
-            entity.HasOne(d => d.CurrencyType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.CurrencyTypeId)
-                .HasConstraintName("FK_Allowances_CurrencyTypes");
-
-            entity.HasOne(d => d.DependencyType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.DependencyTypeId)
-                .HasConstraintName("FK_Allowances_DependencyTypes");
-
-            entity.HasOne(d => d.DerivedOnType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.DerivedOnTypeId)
-                .HasConstraintName("FK_Allowances_DerivedOnTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_Allowances_OperationLogs");
-
-            entity.HasOne(d => d.OwnerOrganisation).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.OwnerOrganisationId)
-                .HasConstraintName("FK_Allowances_Organisations");
-
-            entity.HasOne(d => d.RecurrenceType).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.RecurrenceTypeId)
-                .HasConstraintName("FK_Allowances_RecurrenceTypes");
-
-            entity.HasOne(d => d.Request).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.RequestId)
-                .HasConstraintName("FK_Allowances_Requests");
-
-            entity.HasOne(d => d.Sapsheet).WithMany(p => p.PayrollItemTypes)
-                .HasForeignKey(d => d.SapsheetId)
-                .HasConstraintName("FK_PayrollItemTypes_SAPSheets");
-        });
-
-        modelBuilder.Entity<PayrollItemTypeAmount>(entity =>
-        {
-            entity.HasKey(e => e.PayrollItemTypeAmountId).HasName("PK_AmountType");
-
-            entity.Property(e => e.PayrollItemTypeAmountId).HasColumnName("PayrollItemTypeAmountID");
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemTypeAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AllowanceAmounts_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemTypeAmounts)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AllowanceAmounts_Allowances");
-        });
-
-        modelBuilder.Entity<PayrollItemTypeDependencyAmount>(entity =>
-        {
-            entity.HasKey(e => e.PayrollItemTypeDependencyAmountId).HasName("PK_AllowanceDependencyAmount");
-
-            entity.Property(e => e.PayrollItemTypeDependencyAmountId).HasColumnName("PayrollItemTypeDependencyAmountID");
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.DependencyId).HasColumnName("DependencyID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemTypeDependencyAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AllowanceDependencyAmounts_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemTypeDependencyAmounts)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AllowanceDependencyAmounts_Allowances");
-        });
-
-        modelBuilder.Entity<PayrollItemTypeDependencyTimePeriodAmount>(entity =>
-        {
-            entity.HasKey(e => e.PayrollItemTypeDependencyTimePeriodAmounts).HasName("PK_AllowanceDependencyTimePeriodAmounts_1");
-
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemTypeDependencyTimePeriodAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_AllowanceDependencyTimePeriodAmounts_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemTypeDependencyTimePeriodAmounts)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemTypeDependencyTimePeriodAmounts_PayrollItemTypes");
-        });
-
-        modelBuilder.Entity<PayrollItemTypeProcessingCode>(entity =>
-        {
-            entity.Property(e => e.PayrollItemTypeProcessingCodeId).HasColumnName("PayrollItemTypeProcessingCodeID");
-            entity.Property(e => e.AdditionOrDeductionTypeId).HasColumnName("AdditionOrDeductionTypeID");
-            entity.Property(e => e.Code)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OwnerOrganisationBusinessEntityId).HasColumnName("OwnerOrganisationBusinessEntityID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.Sapcode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("SAPCode");
-
-            entity.HasOne(d => d.AdditionOrDeductionType).WithMany(p => p.PayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.AdditionOrDeductionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemTypeProcessingCodes_AdditionOrDeductionTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_PayrollItemTypeProcessingCodes_OperationLogs");
-
-            entity.HasOne(d => d.OwnerOrganisationBusinessEntity).WithMany(p => p.PayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.OwnerOrganisationBusinessEntityId)
-                .HasConstraintName("FK_PayrollItemTypeProcessingCodes_Organisations");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemTypeProcessingCodes)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .HasConstraintName("FK_PayrollItemTypeProcessingCodes_PayrollItemTypes");
-        });
-
-        modelBuilder.Entity<PayrollItemsProcessingWhiteList>(entity =>
-        {
-            entity.Property(e => e.PayrollItemsProcessingWhiteListId).HasColumnName("PayrollItemsProcessingWhiteListID");
-            entity.Property(e => e.JobTypeId).HasColumnName("JobTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OwnerOrganisationId).HasColumnName("OwnerOrganisationID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.JobType).WithMany(p => p.PayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.JobTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemsProcessingWhiteLists_JobTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_PayrollItemsProcessingWhiteLists_OperationLogs");
-
-            entity.HasOne(d => d.OwnerOrganisation).WithMany(p => p.PayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.OwnerOrganisationId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemsProcessingWhiteLists_Organisations");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.PayrollItemsProcessingWhiteLists)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollItemsProcessingWhiteLists_PayrollItemTypes");
-        });
-
-        modelBuilder.Entity<PercentageVariableDeductionAmount>(entity =>
-        {
-            entity.Property(e => e.PercentageVariableDeductionAmountId).HasColumnName("PercentageVariableDeductionAmountID");
-            entity.Property(e => e.DeductionTypeId).HasColumnName("DeductionTypeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.Percentage).HasColumnType("decimal(5, 2)");
-
-            entity.HasOne(d => d.DeductionType).WithMany(p => p.PercentageVariableDeductionAmounts)
-                .HasForeignKey(d => d.DeductionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PercentageVariableDeductionAmounts_DeductionTypes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.PercentageVariableDeductionAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PercentageVariableDeductionAmounts_OperationLogs");
         });
 
         modelBuilder.Entity<Position>(entity =>
@@ -5343,52 +3161,6 @@ public partial class HrmTeContext : DbContext
                 .IsUnicode(false);
         });
 
-        modelBuilder.Entity<PrimaryPayrollItemTypeSapwageType>(entity =>
-        {
-            entity.HasKey(e => new { e.SapwageTypeId, e.PayrollItemTypeId });
-
-            entity.ToTable("PrimaryPayrollItemTypeSAPWageTypes");
-
-            entity.HasIndex(e => e.PayrollItemTypeId, "IX_PrimaryPayrollItemTypeSAPWageTypes_Unique_PayrollItemTypeID").IsUnique();
-
-            entity.Property(e => e.SapwageTypeId).HasColumnName("SAPWageTypeID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-
-            entity.HasOne(d => d.PayrollItemType).WithOne(p => p.PrimaryPayrollItemTypeSapwageType)
-                .HasForeignKey<PrimaryPayrollItemTypeSapwageType>(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PrimaryPayrollItemTypeSAPWageTypes_PayrollItemTypes");
-
-            entity.HasOne(d => d.SapwageType).WithMany(p => p.PrimaryPayrollItemTypeSapwageTypes)
-                .HasForeignKey(d => d.SapwageTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PrimaryPayrollItemTypeSAPWageTypes_SAPWageTypes");
-        });
-
-        modelBuilder.Entity<RecurrenceType>(entity =>
-        {
-            entity.HasKey(e => e.RecurrenceTypeId).HasName("PK_RecurrenceType");
-
-            entity.Property(e => e.RecurrenceTypeId).HasColumnName("RecurrenceTypeID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<Region>(entity =>
-        {
-            entity.Property(e => e.RegionId).HasColumnName("RegionID");
-            entity.Property(e => e.Code)
-                .HasMaxLength(10)
-                .IsUnicode(false);
-            entity.Property(e => e.Name)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-        });
-
         modelBuilder.Entity<Request>(entity =>
         {
             entity.HasIndex(e => new { e.OrganisationBusinessEntityID, e.RequestTypeId, e.RequestStateId, e.ApplicationDate }, "IX_Requests_RequestType_RequestState").IsDescending(false, false, false, true);
@@ -5448,11 +3220,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.Comment).HasColumnType("text");
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.RequestId).HasColumnName("RequestID");
-
-            entity.HasOne(d => d.CheckListItem).WithMany(p => p.RequestCheckListVerifications)
-                .HasForeignKey(d => d.CheckListItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_RequestCheckListVerifications_CheckListItems");
 
             entity.HasOne(d => d.OperationLog).WithMany(p => p.RequestCheckListVerifications)
                 .HasForeignKey(d => d.OperationLogId)
@@ -5591,9 +3358,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.SequenceNumberTypeId)
                 .HasConstraintName("FK_RequestTypes_SequenceNumberTypes");
 
-            entity.HasOne(d => d.ServiceType).WithMany(p => p.RequestTypes)
-                .HasForeignKey(d => d.ServiceTypeId)
-                .HasConstraintName("FK_RequestTypes_ServiceTypes");
+
         });
 
         modelBuilder.Entity<RequestTypeSpecificDocumentType>(entity =>
@@ -5701,28 +3466,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_RequestTypesStatesRequiredRolesForProcessing_RequestStates1");
         });
 
-        modelBuilder.Entity<RequestsView>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("RequestsView");
-
-            entity.Property(e => e.AttendanceLogDate).HasColumnType("datetime");
-            entity.Property(e => e.AttendanceOrganisationId).HasColumnName("AttendanceOrganisationID");
-            entity.Property(e => e.JobId).HasColumnName("JobID");
-            entity.Property(e => e.LastUpdatedDate).HasColumnType("datetime");
-            entity.Property(e => e.LeaveFromDate).HasColumnType("datetime");
-            entity.Property(e => e.LeaveToDate).HasColumnType("datetime");
-            entity.Property(e => e.Otdate)
-                .HasColumnType("datetime")
-                .HasColumnName("OTDate");
-            entity.Property(e => e.OutOfOfficeDate).HasColumnType("datetime");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.RequestStateId).HasColumnName("RequestStateID");
-            entity.Property(e => e.RequestTypeId).HasColumnName("RequestTypeID");
-            entity.Property(e => e.StaffId).HasColumnName("StaffID");
-        });
-
         modelBuilder.Entity<Role>(entity =>
         {
             entity.Property(e => e.RoleID).HasColumnName("RoleID");
@@ -5770,109 +3513,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.RequestId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_SalaryRateDefinitions_Requests");
-        });
-
-        modelBuilder.Entity<SalaryRateDefinitionForType>(entity =>
-        {
-            entity.Property(e => e.SalaryRateDefinitionForTypeId).HasColumnName("SalaryRateDefinitionForTypeID");
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<Sapexception>(entity =>
-        {
-            entity.ToTable("SAPExceptions");
-
-            entity.Property(e => e.SapexceptionId).HasColumnName("SAPExceptionID");
-            entity.Property(e => e.EffectiveStartDate).HasColumnType("datetime");
-            entity.Property(e => e.EndDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.SapexceptionActionTypeId).HasColumnName("SAPExceptionActionTypeID");
-            entity.Property(e => e.SapexceptionTypeId).HasColumnName("SAPExceptionTypeID");
-            entity.Property(e => e.SapwageTypeId).HasColumnName("SAPWageTypeID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.Sapexceptions)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_SAPExceptions_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.Sapexceptions)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SAPExceptions_NewPayrollItemTypes");
-
-            entity.HasOne(d => d.SapexceptionActionType).WithMany(p => p.Sapexceptions)
-                .HasForeignKey(d => d.SapexceptionActionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SAPExceptions_SAPExceptionActionTypes");
-
-            entity.HasOne(d => d.SapexceptionType).WithMany(p => p.Sapexceptions)
-                .HasForeignKey(d => d.SapexceptionTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SAPExceptions_SAPExceptionTypes");
-
-            entity.HasOne(d => d.SapwageType).WithMany(p => p.Sapexceptions)
-                .HasForeignKey(d => d.SapwageTypeId)
-                .HasConstraintName("FK_SAPExceptions_SAPWageTypes");
-        });
-
-        modelBuilder.Entity<SapexceptionActionType>(entity =>
-        {
-            entity.ToTable("SAPExceptionActionTypes");
-
-            entity.Property(e => e.SapexceptionActionTypeId).HasColumnName("SAPExceptionActionTypeID");
-            entity.Property(e => e.Description).IsUnicode(false);
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<SapexceptionType>(entity =>
-        {
-            entity.ToTable("SAPExceptionTypes");
-
-            entity.Property(e => e.SapexceptionTypeId).HasColumnName("SAPExceptionTypeID");
-            entity.Property(e => e.Name).HasMaxLength(250);
-        });
-
-        modelBuilder.Entity<Sapsheet>(entity =>
-        {
-            entity.ToTable("SAPSheets");
-
-            entity.Property(e => e.SapsheetId).HasColumnName("SAPSheetID");
-            entity.Property(e => e.Description)
-                .HasMaxLength(1000)
-                .IsUnicode(false);
-            entity.Property(e => e.SheetName)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<SapwageType>(entity =>
-        {
-            entity.ToTable("SAPWageTypes");
-
-            entity.HasIndex(e => e.WageTypeCode, "IX_SAPWageTypes").IsUnique();
-
-            entity.Property(e => e.SapwageTypeId).HasColumnName("SAPWageTypeID");
-            entity.Property(e => e.Description).IsUnicode(false);
-            entity.Property(e => e.Glcode)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("GLCode");
-            entity.Property(e => e.Name)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.SheetId).HasColumnName("SheetID");
-            entity.Property(e => e.WageTypeCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-
-            entity.HasOne(d => d.Sheet).WithMany(p => p.SapwageTypes)
-                .HasForeignKey(d => d.SheetId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SAPWageTypes_SAPSheets");
         });
 
         modelBuilder.Entity<Schedule>(entity =>
@@ -5937,11 +3577,6 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_ScheduleOwners_OperationLogs");
 
-            entity.HasOne(d => d.OwnerType).WithMany(p => p.ScheduleOwners)
-                .HasForeignKey(d => d.OwnerTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ScheduleOwners_OwnerTypes");
-
             entity.HasOne(d => d.Schedule).WithMany(p => p.ScheduleOwners)
                 .HasForeignKey(d => d.ScheduleId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -5985,123 +3620,6 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Services_OperationLogs");
 
-            entity.HasOne(d => d.ServiceState).WithMany(p => p.Services)
-                .HasForeignKey(d => d.ServiceStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Services_ServiceStates");
-
-            entity.HasOne(d => d.ServiceType).WithMany(p => p.Services)
-                .HasForeignKey(d => d.ServiceTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Services_ServiceTypes");
-        });
-
-        modelBuilder.Entity<ServiceCheckListVerification>(entity =>
-        {
-            entity.Property(e => e.ServiceCheckListVerificationId).HasColumnName("ServiceCheckListVerificationID");
-            entity.Property(e => e.CheckListItemId).HasColumnName("CheckListItemID");
-            entity.Property(e => e.Comment).HasColumnType("text");
-            entity.Property(e => e.OprationLogId).HasColumnName("OprationLogID");
-            entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
-
-            entity.HasOne(d => d.CheckListItem).WithMany(p => p.ServiceCheckListVerifications)
-                .HasForeignKey(d => d.CheckListItemId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceCheckListVerifications_CheckListItems");
-
-            entity.HasOne(d => d.OprationLog).WithMany(p => p.ServiceCheckListVerifications)
-                .HasForeignKey(d => d.OprationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceCheckListVerifications_OperationLogs");
-
-            entity.HasOne(d => d.Service).WithMany(p => p.ServiceCheckListVerifications)
-                .HasForeignKey(d => d.ServiceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceCheckListVerifications_Services");
-        });
-
-        modelBuilder.Entity<ServiceDocument>(entity =>
-        {
-            entity.Property(e => e.ServiceDocumentId).HasColumnName("ServiceDocumentID");
-            entity.Property(e => e.DocumentId).HasColumnName("DocumentID");
-            entity.Property(e => e.LinkedByUserId).HasColumnName("LinkedByUserID");
-            entity.Property(e => e.LinkedDate).HasColumnType("datetime");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
-
-            entity.HasOne(d => d.Document).WithMany(p => p.ServiceDocuments)
-                .HasForeignKey(d => d.DocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceDocuments_Documents");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.ServiceDocuments)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_ServiceDocuments_OperationLogs");
-
-            entity.HasOne(d => d.Service).WithMany(p => p.ServiceDocuments)
-                .HasForeignKey(d => d.ServiceId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceDocuments_Services");
-        });
-
-        modelBuilder.Entity<ServiceDocumentVerification>(entity =>
-        {
-            entity.Property(e => e.ServiceDocumentVerificationId).HasColumnName("ServiceDocumentVerificationID");
-            entity.Property(e => e.Comments).HasColumnType("text");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.ServiceDocumentId).HasColumnName("ServiceDocumentID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.ServiceDocumentVerifications)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceDocumentVerifications_OperationLogs");
-
-            entity.HasOne(d => d.ServiceDocument).WithMany(p => p.ServiceDocumentVerifications)
-                .HasForeignKey(d => d.ServiceDocumentId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceDocumentVerifications_ServiceDocuments");
-        });
-
-        modelBuilder.Entity<ServiceState>(entity =>
-        {
-            entity.Property(e => e.ServiceStateId).HasColumnName("ServiceStateID");
-            entity.Property(e => e.StateName)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<ServiceType>(entity =>
-        {
-            entity.HasKey(e => e.ServiceTypeId).HasName("PK_ProductTypes");
-
-            entity.Property(e => e.ServiceTypeId).HasColumnName("ServiceTypeID");
-            entity.Property(e => e.SequenceNumberTypeId).HasColumnName("SequenceNumberTypeID");
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-
-            entity.HasOne(d => d.SequenceNumberType).WithMany(p => p.ServiceTypes)
-                .HasForeignKey(d => d.SequenceNumberTypeId)
-                .HasConstraintName("FK_ServiceTypes_SequenceNumberTypes");
-        });
-
-        modelBuilder.Entity<ServiceTypesAllowedServiceStateTransition>(entity =>
-        {
-            entity.HasKey(e => new { e.ServiceTypeId, e.FromServiceStateId, e.ToServiceStateId });
-
-            entity.Property(e => e.ServiceTypeId).HasColumnName("ServiceTypeID");
-            entity.Property(e => e.FromServiceStateId).HasColumnName("FromServiceStateID");
-            entity.Property(e => e.ToServiceStateId).HasColumnName("ToServiceStateID");
-
-            entity.HasOne(d => d.ServiceType).WithMany(p => p.ServiceTypesAllowedServiceStateTransitions)
-                .HasForeignKey(d => d.ServiceTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceTypesAllowedServiceStateTransitions_ServiceTypes");
-
-            entity.HasOne(d => d.ToServiceState).WithMany(p => p.ServiceTypesAllowedServiceStateTransitions)
-                .HasForeignKey(d => d.ToServiceStateId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ServiceTypesAllowedServiceStateTransitions_ServiceStates");
         });
 
         modelBuilder.Entity<ShiftSchedule>(entity =>
@@ -6169,12 +3687,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_SickLeaveForms_OperationLogs");
         });
 
-        modelBuilder.Entity<SickLeaveLodgeType>(entity =>
-        {
-            entity.Property(e => e.SickLeaveLodgeTypeId).HasColumnName("SickLeaveLodgeTypeID");
-            entity.Property(e => e.TypeName).HasMaxLength(250);
-        });
-
         modelBuilder.Entity<SpecialDay>(entity =>
         {
             entity.Property(e => e.SpecialDayId).HasColumnName("SpecialDayID");
@@ -6191,18 +3703,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_SpecialDays_OperationLogs");
         });
 
-        modelBuilder.Entity<SpecialDayShift>(entity =>
-        {
-            entity.Property(e => e.SpecialDayShiftId).HasColumnName("SpecialDayShiftID");
-            entity.Property(e => e.SpecialDayId).HasColumnName("SpecialDayID");
-            entity.Property(e => e.WorkShiftId).HasColumnName("WorkShiftID");
-
-            entity.HasOne(d => d.SpecialDay).WithMany(p => p.SpecialDayShifts)
-                .HasForeignKey(d => d.SpecialDayId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SpecialDayShifts_SpecialDays");
-        });
-
         modelBuilder.Entity<SpecialDayType>(entity =>
         {
             entity.Property(e => e.SpecialDayTypeId).HasColumnName("SpecialDayTypeID");
@@ -6211,11 +3711,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.OrganisationId).HasColumnName("OrganisationID");
             entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-
-            entity.HasOne(d => d.DayType).WithMany(p => p.SpecialDayTypes)
-                .HasForeignKey(d => d.DayTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_SpecialDayTypes_DayTypes");
 
             entity.HasOne(d => d.OperationLog).WithMany(p => p.SpecialDayTypes)
                 .HasForeignKey(d => d.OperationLogId)
@@ -6276,10 +3771,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
             entity.Property(e => e.RequestId).HasColumnName("RequestID");
 
-            entity.HasOne(d => d.CurrencyType).WithMany(p => p.StaffAssignedDeductions)
-                .HasForeignKey(d => d.CurrencyTypeId)
-                .HasConstraintName("FK_StaffAssignedDeductions_CurrencyTypes");
-
             entity.HasOne(d => d.DeductionType).WithMany(p => p.StaffAssignedDeductions)
                 .HasForeignKey(d => d.DeductionTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -6298,86 +3789,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.Request).WithMany(p => p.StaffAssignedDeductions)
                 .HasForeignKey(d => d.RequestId)
                 .HasConstraintName("FK_StaffAssignedDeductions_Requests");
-        });
-
-        modelBuilder.Entity<StaffAssignedDeductionAmount>(entity =>
-        {
-            entity.Property(e => e.StaffAssignedDeductionAmountId).HasColumnName("StaffAssignedDeductionAmountID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.StaffAssignedDeductionId).HasColumnName("StaffAssignedDeductionID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.StaffAssignedDeductionAmounts)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffAssignedDeductionAmounts_OperationLogs");
-
-            entity.HasOne(d => d.StaffAssignedDeduction).WithMany(p => p.StaffAssignedDeductionAmounts)
-                .HasForeignKey(d => d.StaffAssignedDeductionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffAssignedDeductionAmounts_StaffAssignedDeductions");
-        });
-
-        modelBuilder.Entity<StaffDailyAttandanceSummaryIssue>(entity =>
-        {
-            entity.Property(e => e.StaffDailyAttandanceSummaryIssueId).HasColumnName("StaffDailyAttandanceSummaryIssueID");
-            entity.Property(e => e.CheckedDate).HasColumnType("datetime");
-            entity.Property(e => e.Comments)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.PayrollCycleProcessingStateId).HasColumnName("PayrollCycleProcessingStateID");
-            entity.Property(e => e.StaffDailyAttendanceSummeryId).HasColumnName("StaffDailyAttendanceSummeryID");
-
-            entity.HasOne(d => d.PayrollCycleProcessingState).WithMany(p => p.StaffDailyAttandanceSummaryIssues)
-                .HasForeignKey(d => d.PayrollCycleProcessingStateId)
-                .HasConstraintName("FK_StaffDailyAttandanceSummaryIssues_PayrollCycleProcessingStates");
-
-            entity.HasOne(d => d.StaffDailyAttandanceSummaryIssueType).WithMany(p => p.StaffDailyAttandanceSummaryIssues)
-                .HasForeignKey(d => d.StaffDailyAttandanceSummaryIssueTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffDailyAttandanceSummaryIssues_StaffDailyAttandanceSummaryIssueTypes");
-
-            entity.HasOne(d => d.StaffDailyAttendanceSummery).WithMany(p => p.StaffDailyAttandanceSummaryIssues)
-                .HasForeignKey(d => d.StaffDailyAttendanceSummeryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffDailyAttandanceSummaryIssues_StaffDailyAttendanceSummeries");
-        });
-
-        modelBuilder.Entity<StaffDailyAttandanceSummaryIssueType>(entity =>
-        {
-            entity.Property(e => e.TypeName)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<StaffDailyAttendanceSummery>(entity =>
-        {
-            entity.Property(e => e.StaffDailyAttendanceSummeryId).HasColumnName("StaffDailyAttendanceSummeryID");
-            entity.Property(e => e.AbsentFine).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.Comments)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.JobPositionId).HasColumnName("JobPositionID");
-            entity.Property(e => e.LateFine).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.Otamount)
-                .HasColumnType("decimal(38, 8)")
-                .HasColumnName("OTAmount");
-            entity.Property(e => e.Otduration).HasColumnName("OTDuration");
-            entity.Property(e => e.SalaryAmount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.SalaryToPayReason).HasMaxLength(250);
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.JobPosition).WithMany(p => p.StaffDailyAttendanceSummeries)
-                .HasForeignKey(d => d.JobPositionId)
-                .HasConstraintName("FK_StaffDailyAttendanceSummeries_JobPositions");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.StaffDailyAttendanceSummeries)
-                .HasForeignKey(d => d.OperationLogId)
-                .HasConstraintName("FK_StaffDailyAttendanceSummeries_OperationLogs");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.StaffDailyAttendanceSummeries)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .HasConstraintName("FK_StaffDailyAttendanceSummeries_StaffSalaries");
         });
 
         modelBuilder.Entity<StaffEnrollmentNumber>(entity =>
@@ -6402,40 +3813,6 @@ public partial class HrmTeContext : DbContext
             entity.HasOne(d => d.Organisation).WithMany(p => p.StaffEnrollmentNumbers)
                 .HasForeignKey(d => d.OrganisationId)
                 .HasConstraintName("FK_StaffEnrollmentNumbers_Organisations");
-        });
-
-        modelBuilder.Entity<StaffPayrollItemDetail>(entity =>
-        {
-            entity.HasKey(e => e.StaffPayrollItemDetailsId);
-
-            entity.Property(e => e.StaffPayrollItemDetailsId)
-                .ValueGeneratedNever()
-                .HasColumnName("StaffPayrollItemDetailsID");
-            entity.Property(e => e.BillNo)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Cifno)
-                .HasMaxLength(50)
-                .IsUnicode(false)
-                .HasColumnName("CIFNo");
-            entity.Property(e => e.DealNo)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.FacilityType)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.Installment)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.RefNo)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.StaffPayrollItemTypeId).HasColumnName("StaffPayrollItemTypeID");
-
-            entity.HasOne(d => d.StaffPayrollItemType).WithMany(p => p.StaffPayrollItemDetails)
-                .HasForeignKey(d => d.StaffPayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffPayrollItemDetails_StaffPayrollItemTypes");
         });
 
         modelBuilder.Entity<StaffPayrollItemType>(entity =>
@@ -6465,11 +3842,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OperationLogId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_StaffAllowances_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.StaffPayrollItemTypes)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffAllowances_Allowances");
 
             entity.HasOne(d => d.Request).WithMany(p => p.StaffPayrollItemTypes)
                 .HasForeignKey(d => d.RequestId)
@@ -6519,103 +3891,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.StaffPayrollItemTypeId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_StaffPayrollItemTypeSchedules_StaffPayrollItemTypes");
-        });
-
-        modelBuilder.Entity<StaffSalary>(entity =>
-        {
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-            entity.Property(e => e.Comments)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.JobId).HasColumnName("JobID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollCycleRequestId).HasColumnName("PayrollCycleRequestID");
-
-            entity.HasOne(d => d.Job).WithMany(p => p.StaffSalaries)
-                .HasForeignKey(d => d.JobId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaries_Jobs");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.StaffSalaries)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaries_OperationLogs");
-
-            entity.HasOne(d => d.PayrollCycleRequest).WithMany(p => p.StaffSalaries)
-                .HasForeignKey(d => d.PayrollCycleRequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaries_PayrollCycles1");
-        });
-
-        modelBuilder.Entity<StaffSalaryDeduction>(entity =>
-        {
-            entity.Property(e => e.StaffSalaryDeductionId).HasColumnName("StaffSalaryDeductionID");
-            entity.Property(e => e.Details)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.StaffAssignedDeductionId).HasColumnName("StaffAssignedDeductionID");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.StaffSalaryDeductions)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaryDeductions_OperationLogs");
-
-            entity.HasOne(d => d.StaffAssignedDeduction).WithMany(p => p.StaffSalaryDeductions)
-                .HasForeignKey(d => d.StaffAssignedDeductionId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaryDeductions_StaffAssignedDeductions");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.StaffSalaryDeductions)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaryDeductions_StaffSalaries");
-        });
-
-        modelBuilder.Entity<StaffSalaryPayrollItem>(entity =>
-        {
-            entity.HasKey(e => e.StaffSalaryPayrollItemId).HasName("PK_StaffSalaryAdditions");
-
-            entity.Property(e => e.StaffSalaryPayrollItemId).HasColumnName("StaffSalaryPayrollItemID");
-            entity.Property(e => e.Amount).HasColumnType("decimal(38, 8)");
-            entity.Property(e => e.Details)
-                .HasMaxLength(500)
-                .IsUnicode(false);
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.StaffPayrollItemTypeId).HasColumnName("StaffPayrollItemTypeID");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.StaffSalaryPayrollItems)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaryAdditions_OperationLogs");
-
-            entity.HasOne(d => d.PayrollItemType).WithMany(p => p.StaffSalaryPayrollItems)
-                .HasForeignKey(d => d.PayrollItemTypeId)
-                .HasConstraintName("FK_StaffSalaryPayrollItems_PayrollItemTypes");
-
-            entity.HasOne(d => d.StaffPayrollItemType).WithMany(p => p.StaffSalaryPayrollItems)
-                .HasForeignKey(d => d.StaffPayrollItemTypeId)
-                .HasConstraintName("FK_StaffSalaryPayrollItems_StaffPayrollItemTypes");
-
-            entity.HasOne(d => d.StaffSalary).WithMany(p => p.StaffSalaryPayrollItems)
-                .HasForeignKey(d => d.StaffSalaryId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_StaffSalaryAdditions_StaffSalaries");
-        });
-
-        modelBuilder.Entity<StaffSalaryPayrollItemSapdetail>(entity =>
-        {
-            entity.ToTable("StaffSalaryPayrollItemSAPDetails");
-
-            entity.Property(e => e.StaffSalaryPayrollItemSapdetailId).HasColumnName("StaffSalaryPayrollItemSAPDetailID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.PayrollItemTypeId).HasColumnName("PayrollItemTypeID");
-            entity.Property(e => e.SapwageTypeId).HasColumnName("SAPWageTypeID");
-            entity.Property(e => e.StaffSalaryId).HasColumnName("StaffSalaryID");
-            entity.Property(e => e.StaffSalaryPayrollItemId).HasColumnName("StaffSalaryPayrollItemID");
         });
 
         modelBuilder.Entity<Team>(entity =>
@@ -6821,9 +4096,6 @@ public partial class HrmTeContext : DbContext
             //    .OnDelete(DeleteBehavior.ClientSetNull)
             //    .HasConstraintName("FK_UserOrganisations_Organisations");
 
-         
-
-
             entity.HasKey(e => e.UserOrganisationID);
 
             entity.HasOne(uo => uo.Organisation)
@@ -6832,8 +4104,6 @@ public partial class HrmTeContext : DbContext
                 .HasPrincipalKey(o => o.BusinessEntityID)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_UserOrganisations_Organisations");
-
-
 
             entity.HasOne(d => d.OperationLog).WithMany(p => p.UserOrganisations)
                 .HasForeignKey(d => d.OperationLogId)
@@ -6859,9 +4129,6 @@ public partial class HrmTeContext : DbContext
             //entity.HasOne(d => d.Role)
             //    .WithMany(p => p.UserOrganisationRoles)
             //    .HasForeignKey(d => d.RoleID);
-
-
-
 
             entity.HasOne(d => d.OperationLog).WithMany(p => p.UserOrganisationRoles)
                 .HasForeignKey(d => d.OperationLogId)
@@ -6922,9 +4189,7 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.SelectedContextId)
                 .HasConstraintName("FK_UserPreferences_Context");
 
-            entity.HasOne(d => d.SelectedLanguage).WithMany(p => p.UserPreferences)
-                .HasForeignKey(d => d.SelectedLanguageId)
-                .HasConstraintName("FK_UserPreferences_Languages");
+
         });
 
         modelBuilder.Entity<UserRole>(entity =>
@@ -6989,103 +4254,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_UserServiceRoles_Users");
         });
 
-        modelBuilder.Entity<VerifiedState>(entity =>
-        {
-            entity.Property(e => e.VerifiedStateId).HasColumnName("VerifiedStateID");
-            entity.Property(e => e.StateName)
-                .HasMaxLength(250)
-                .IsUnicode(false);
-        });
-
-        modelBuilder.Entity<VwLeaveChangeRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_LeaveChangeRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
-        modelBuilder.Entity<VwLeaveRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_LeaveRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
-        modelBuilder.Entity<VwMergedRequestDatum>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_MergedRequestData");
-
-            entity.Property(e => e.AttendanceLogDate).HasColumnType("datetime");
-            entity.Property(e => e.Date).HasColumnType("datetime");
-            entity.Property(e => e.Otdate)
-                .HasColumnType("datetime")
-                .HasColumnName("OTDate");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.RequestStateId).HasColumnName("RequestStateID");
-            entity.Property(e => e.RequestTypeId).HasColumnName("RequestTypeID");
-            entity.Property(e => e.UpdatedDate).HasColumnType("datetime");
-        });
-
-        modelBuilder.Entity<VwOtRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_OtRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
-        modelBuilder.Entity<VwOutOfOfficeRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_OutOfOfficeRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
-        modelBuilder.Entity<VwTeamRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_TeamRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
-        modelBuilder.Entity<VwWorkTeamRequest>(entity =>
-        {
-            entity
-                .HasNoKey()
-                .ToView("vw_WorkTeamRequests");
-
-            entity.Property(e => e.IndividualId).HasColumnName("IndividualID");
-            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
-            entity.Property(e => e.RequestId).HasColumnName("RequestID");
-            entity.Property(e => e.TeamId).HasColumnName("TeamID");
-        });
-
         modelBuilder.Entity<Ward>(entity =>
         {
             entity.Property(e => e.WardId).HasColumnName("WardID");
@@ -7100,19 +4268,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.IslandId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Wards_Islands");
-        });
-
-        modelBuilder.Entity<WebServiceRequestLog>(entity =>
-        {
-            entity.HasKey(e => e.RequestLogId);
-
-            entity.Property(e => e.Action).HasMaxLength(50);
-            entity.Property(e => e.Controller).HasMaxLength(50);
-            entity.Property(e => e.DateTime).HasColumnType("datetime");
-            entity.Property(e => e.Ip)
-                .HasMaxLength(15)
-                .IsFixedLength()
-                .HasColumnName("IP");
         });
 
         modelBuilder.Entity<WorkShift>(entity =>
@@ -7139,42 +4294,6 @@ public partial class HrmTeContext : DbContext
                 .HasConstraintName("FK_WorkShifts_OrganisationStructure");
         });
 
-        modelBuilder.Entity<WorkShiftsBreakTime>(entity =>
-        {
-            entity.HasKey(e => e.WorkShiftsBreakTimesId);
-
-            entity.Property(e => e.WorkShiftsBreakTimesId).HasColumnName("WorkShiftsBreakTimesID");
-            entity.Property(e => e.BreakTimeId).HasColumnName("BreakTimeID");
-            entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.WorkShiftId).HasColumnName("WorkShiftID");
-
-            entity.HasOne(d => d.BreakTime).WithMany(p => p.WorkShiftsBreakTimes)
-                .HasForeignKey(d => d.BreakTimeId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_WorkShiftsBreakTimes_BreakTimes");
-
-            entity.HasOne(d => d.OperationLog).WithMany(p => p.WorkShiftsBreakTimes)
-                .HasForeignKey(d => d.OperationLogId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_WorkShiftsBreakTimes_OperationLogs");
-
-            entity.HasOne(d => d.WorkShift).WithMany(p => p.WorkShiftsBreakTimes)
-                .HasForeignKey(d => d.WorkShiftId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_WorkShiftsBreakTimes_WorkShifts");
-        });
-
-        modelBuilder.Entity<WorkType>(entity =>
-        {
-            entity.HasKey(e => e.WorkTypeId).HasName("PK__WorkType__CCC06CC09CD52C96");
-
-            entity.Property(e => e.WorkTypeId)
-                .ValueGeneratedNever()
-                .HasColumnName("WorkTypeID");
-            entity.Property(e => e.IsValid).HasDefaultValue(true);
-            entity.Property(e => e.Name).HasMaxLength(100);
-        });
-
         modelBuilder.Entity<WorkingDay>(entity =>
         {
             entity.Property(e => e.WorkingDayId).HasColumnName("WorkingDayID");
@@ -7187,20 +4306,6 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_WorkingDays_OperationLogs");
         });
-
-        modelBuilder.Entity<WorkingDayShift>(entity =>
-        {
-            entity.Property(e => e.WorkingDayShiftId).HasColumnName("WorkingDayShiftID");
-            entity.Property(e => e.WorkShiftId).HasColumnName("WorkShiftID");
-            entity.Property(e => e.WorkingDayId).HasColumnName("WorkingDayID");
-
-            entity.HasOne(d => d.WorkingDay).WithMany(p => p.WorkingDayShifts)
-                .HasForeignKey(d => d.WorkingDayId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_WorkingDayShifts_WorkingDays");
-        });
-
-
 
         modelBuilder.Entity<WorkAssignment>().Property(x => x.SchedulePurpose).HasMaxLength(20).HasDefaultValue("Official");
         modelBuilder.Entity<WorkPlanSegment>().Property(x => x.SchedulePurpose).HasMaxLength(20).HasDefaultValue("Official");
@@ -7306,8 +4411,6 @@ public partial class HrmTeContext : DbContext
             entity.Property(x => x.JobId)
                 .HasColumnName("JobID");
 
-      
-
             entity.Property(e => e.PlanGuid)
                 .HasDefaultValueSql("(newid())");
 
@@ -7373,8 +4476,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(e => e.WorkTemplateId)
                 .OnDelete(DeleteBehavior.Restrict);
 
-
-
             entity.HasOne(x => x.Job)
                 .WithMany()
                 .HasForeignKey(x => x.JobId)
@@ -7410,8 +4511,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(x => x.OperationLogId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_WorkPlans_OperationLogs");
-
-      
 
             entity.HasIndex(x => new
             {
@@ -7643,8 +4742,6 @@ public partial class HrmTeContext : DbContext
                 e.OrganisationBusinessEntityID,
                 e.Code
             }).IsUnique();
-
-
 
             entity.Property(x => x.Name)
                 .HasMaxLength(100)
@@ -7919,8 +5016,6 @@ public partial class HrmTeContext : DbContext
         });
     }
 
-
-
     private static void ConfigureWorkflowJobType(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<WfWorkflowJobType>(entity =>
@@ -7964,12 +5059,5 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.NoAction);
         });
     }
-
-
-
-
-
-
-
 
 }

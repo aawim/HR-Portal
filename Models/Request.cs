@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -60,15 +60,9 @@ public partial class Request
 
     public virtual OtpreApproval? OtpreApproval { get; set; }
 
-    public virtual Otrequest? Otrequest { get; set; }
-
     public virtual OutOfOfficeRequest? OutOfOfficeRequest { get; set; }
 
     public virtual PayrollCycle? PayrollCycle { get; set; }
-
-    public virtual ICollection<PayrollCycleLinkedRequest> PayrollCycleLinkedRequests { get; set; } = new List<PayrollCycleLinkedRequest>();
-
-    public virtual ICollection<PayrollItemType> PayrollItemTypes { get; set; } = new List<PayrollItemType>();
 
     public virtual ICollection<RequestCheckListVerification> RequestCheckListVerifications { get; set; } = new List<RequestCheckListVerification>();
 
@@ -92,5 +86,4 @@ public partial class Request
 
     public virtual ICollection<User> Users { get; set; } = new List<User>();
 
-    public virtual ICollection<BusinessEntityRelation> BusinessEntityRelations { get; set; } = new List<BusinessEntityRelation>();
 }

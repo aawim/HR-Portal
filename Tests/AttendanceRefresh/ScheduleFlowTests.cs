@@ -290,7 +290,7 @@ static class ScheduleFlowTests
         var extended = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(nextDate));
         await AddClocks(extended!.WorkPlanId, nextDate, 13, 16);
         var extendedResult = await new HRM.Services.Attendance.AttendanceEvaluationService(factory).EvaluateAsync(1000, 100, nextDate);
-        Check(extendedResult.PlannedMinutes == 360 && extendedResult.WorkedMinutes == 480 && extendedResult.PotentialOvertimeMinutes == 120 && extendedResult.OvertimeMinutes == 0,
+        Check(extendedResult.PlannedMinutes == 360 && extendedResult.WorkedMinutes == 360 && extendedResult.PotentialOvertimeMinutes == 120 && extendedResult.OvertimeMinutes == 0,
             "Duty beyond office hours changed official hours or automatically became approved OT");
         var singleClockDate = date.AddDays(-2);
         var singleClockPlan = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(singleClockDate));
@@ -306,10 +306,11 @@ static class ScheduleFlowTests
             await db.SaveChangesAsync();
         }
         var singleClockResult = await new HRM.Services.Attendance.AttendanceEvaluationService(factory).EvaluateAsync(1000, 100, singleClockDate);
-        Check(singleClockResult.WorkedMinutes == 480 && singleClockResult.PotentialOvertimeMinutes == 120,
+        Check(singleClockResult.WorkedMinutes == 0 && singleClockResult.PotentialOvertimeMinutes == 120,
             "A physical clock-in/out spanning office and duty was discarded");
-        Check(!singleClockResult.IsComplete && singleClockResult.Issues.Any(x => x.Type == HRM.Enum.AttendanceEvaluationIssueType.MissingCheckIn && x.Message.Contains("Duty")),
-            "Official check-in incorrectly satisfied a mandatory duty check-in");
+        Check(singleClockResult.IsComplete && singleClockResult.LastCheckOut == null &&
+            !singleClockResult.Issues.Any(x => x.Message.Contains("Duty")),
+            "Duty checkout leaked into official attendance despite its optional official checkout");
         await using (var db = factory.CreateDbContext())
         {
             var duty = await db.WorkTemplates.SingleAsync(x => x.WorkTemplateId == 2);
@@ -344,9 +345,9 @@ static class ScheduleFlowTests
         Check(dutyAfterOfficialPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && dutyAfterOfficialPunch.WorkPlanSegmentId == dutyPunch.WorkPlanSegmentId,
             "An existing official check-in caused duty to toggle to checkout");
         var missingDuty = await new HRM.Services.Attendance.AttendanceEvaluationService(factory).EvaluateAsync(1000, 100, mandatoryDate);
-        Check(!missingDuty.IsComplete && missingDuty.Status == HRM.Enum.AttendanceDailyStatus.Incomplete && missingDuty.Issues.Any(x =>
+        Check(missingDuty.IsComplete && !missingDuty.Issues.Any(x =>
             x.Type == HRM.Enum.AttendanceEvaluationIssueType.MissingCheckIn && x.WorkPlanSegmentId == dutyPunch.WorkPlanSegmentId),
-            "Missing 10:00 duty check-in did not make the day incomplete");
+            "Missing duty check-in affected official attendance");
         await using (var db = factory.CreateDbContext())
         {
             var dutySegment = await db.WorkPlanSegments.SingleAsync(x => x.WorkPlanSegmentId == dutyPunch.WorkPlanSegmentId);

@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -32,5 +32,4 @@ public partial class JobPosition
 
     public virtual Position Position { get; set; } = null!;
 
-    public virtual ICollection<StaffDailyAttendanceSummery> StaffDailyAttendanceSummeries { get; set; } = new List<StaffDailyAttendanceSummery>();
 }

@@ -1,4 +1,4 @@
-using System.Data;
+﻿using System.Data;
 using HRM.DTOs.ApprovalFlow;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
@@ -30,7 +30,7 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
                     x.AdminPortalAccessEnabled && x.AdminPortalAccessOrganisationId == x.UserOrganisationId &&
                     db.UserOrganisationRoles.Any(r => r.UserOrganisationID == x.UserOrganisationId && r.IsActive &&
                         (r.Role.RoleKey == "Super.Admin.Manage" || r.Role.RoleKey == "Developer")))
-                .Select(x => new { x.UserId, x.BusinessEntityID, Org = x.UserOrganisation.BusinessEntityID }).ToListAsync();
+                .Select(x => new { x.UserId, x.BusinessEntityID, Org = x.UserOrganisation == null ? 0 : x.UserOrganisation.BusinessEntityID }).ToListAsync();
             var groups = await db.UserAssignedUserGroups.AsNoTracking()
                 .Where(x => x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId)
                 .Select(x => new { x.UserId, x.UserGroup.GroupName, x.UserGroup.IsGlobal }).ToListAsync();

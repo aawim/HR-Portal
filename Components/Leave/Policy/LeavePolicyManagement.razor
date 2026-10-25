@@ -1031,7 +1031,7 @@
                                 StringComparison.OrdinalIgnoreCase)
                         ) ||
 
-                        x.LeaveTypeCode.Contains(
+                        (x.LeaveTypeCode ?? string.Empty).Contains(
                             search,
                             StringComparison.OrdinalIgnoreCase));
             }
@@ -1082,7 +1082,7 @@
         }
         catch (Exception exception)
         {
-            _message = exception.Message;
+            _message = "Leave policy information could not be loaded. Please try again.";
             // "Unable to load leave policy data.";
 
             _saveSucceeded =

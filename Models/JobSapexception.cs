@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -12,5 +12,4 @@ public partial class JobSapexception
 
     public virtual Job Job { get; set; } = null!;
 
-    public virtual Sapexception Sapexception { get; set; } = null!;
 }

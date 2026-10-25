@@ -194,7 +194,7 @@
 
     private async Task SubmitTeam()
     {
-        if (string.IsNullOrWhiteSpace(newTeam.Name)) return;
+        if (string.IsNullOrWhiteSpace(newTeam.Name) || !newTeam.StartDate.HasValue) return;
 
         isSubmitting = true;
         try
@@ -204,7 +204,7 @@
                     Name = newTeam.Name,
                     NameDhivehi = newTeam.NameDhivehi,
                     OrganisationId = Org.BusinessEntityID,
-                    StartDate = (DateTime) newTeam.StartDate,
+                    StartDate = newTeam.StartDate.Value,
                     IsValid = true // Set default active status
                 };
 

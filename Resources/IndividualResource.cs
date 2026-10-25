@@ -18,7 +18,6 @@
         /// <summary>
         /// Is the Individual currently employed?
         /// </summary>
-        public bool IsActive { get; set; }
 
         /// <summary>
         /// Is the current logged-in user viewing their own record?
@@ -48,4 +47,3 @@
         public int? CurrentUserIndividualID { get; set; }
     }
 }
- 

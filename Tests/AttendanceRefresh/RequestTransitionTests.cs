@@ -49,7 +49,7 @@ static class RequestTransitionTests
         var logs = Proxy.For<IOperationLogService>((_, _) => Task.FromResult(new OperationLog { OperationLogId = ++audits }));
         var leaves = new LeaveService(factory, logs, null!, null!, access, null!, null!);
         var deniedCancel = await leaves.CancelLeaveAsync(1);
-        Check(!deniedCancel.Success && deniedCancel.Message.Contains("Transition not allowed") && audits == 0, "Cancellation bypassed the transition table or wrote an audit before validation");
+        Check(!deniedCancel.Success && deniedCancel.Message.Contains("contact your organisation's HR") && audits == 0, "Cancellation bypassed the transition table or wrote an audit before validation");
         await DeniedAsync(() => requests.ChangeStateAsync(3, 4));
         await using (var db = factory.CreateDbContext())
         {
@@ -112,7 +112,7 @@ static class RequestTransitionTests
     static async Task DeniedAsync(Func<Task> action)
     {
         try { await action(); } catch (InvalidOperationException ex)
-        { Check(ex.Message.Contains("Transition not allowed") || ex.Message.Contains("already final"), "Missing transition did not explain why it was blocked"); return; }
+        { Check(ex is RequestTransitionConfigurationException || ex.Message.Contains("already final"), "Missing transition did not explain why it was blocked"); return; }
         throw new Exception("Disallowed state transition proceeded");
     }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }

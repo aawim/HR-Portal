@@ -1,4 +1,4 @@
-﻿using HRM.Models.Archives;
+using HRM.Models.Archives;
 using System;
 using System.Collections.Generic;
 
@@ -19,8 +19,6 @@ public partial class Group
     public int OperationLogId { get; set; }
 
     public virtual Organisation BusinessEntityOrganisation { get; set; } = null!;
-
-    public virtual ICollection<GroupConfigurableValue> GroupConfigurableValues { get; set; } = new List<GroupConfigurableValue>();
 
     public virtual ICollection<GroupLeaveSet> GroupLeaveSets { get; set; } = new List<GroupLeaveSet>();
 

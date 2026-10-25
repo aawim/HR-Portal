@@ -1,4 +1,4 @@
-@using HRM.DTOs.Attendance
+﻿@using HRM.DTOs.Attendance
 @using HRM.Enum
 @using HRM.Services.Attendance.Abstraction
 @using HRM.Services.Interfaces
@@ -326,6 +326,11 @@
             _errorMessage = null;
 
             var context = await UserAccessService.RequireContextAsync();
+            if (context.ActiveJob == null)
+            {
+                _errorMessage = "No active job is available for today's clock events.";
+                return;
+            }
 
             /*
             * This card represents TODAY.
@@ -334,7 +339,7 @@
                  * The TimeClockCard is responsible for creating clock events.
                  * This component only displays today's attendance.
             */
-                            var attendanceTime = DateTime.Now;
+                            var attendanceTime = DateTime.UtcNow.AddHours(5);
 
             var logs =
                                 await AttendanceService.GetLogsAsync(
@@ -353,13 +358,14 @@
         }
         catch (Exception ex)
         {
+            Console.Error.WriteLine(ex);
             _attendanceLogs = [];
 
         
 
 
             _errorMessage =
-                ex.Message;
+                "Clock events could not be loaded. Please refresh or contact HR.";
         }
         finally
         {
