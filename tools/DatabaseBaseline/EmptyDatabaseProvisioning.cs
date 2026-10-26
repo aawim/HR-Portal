@@ -47,6 +47,8 @@ internal static class EmptyDatabaseProvisioning
             await CreateAsync(db);await db.Database.MigrateAsync();
             await UnifiedLeaveTypeUpgrade.VerifyAsync(db);
             if((await db.Database.GetPendingMigrationsAsync()).Any())throw new InvalidOperationException("Fresh schema has pending migrations.");
+            if(await db.RequestTypes.CountAsync(x=>x.TypeName=="Overtime Preapproval Request"||x.TypeName=="Overtime Clock Event Request")!=2)
+                throw new InvalidOperationException("New OT request metadata missing on fresh install.");
             if(!await db.RequestTypes.AnyAsync(x=>x.TypeName=="Overtime Claim Request"))throw new InvalidOperationException("Overtime metadata missing on fresh install.");
             if(await db.RequestTypes.CountAsync(x=>x.TypeName=="Supervisor Assignment Request"||x.TypeName=="Supervisor Removal Request")!=2)
                 throw new InvalidOperationException("Supervisor approval request types missing on fresh install.");
@@ -56,7 +58,7 @@ internal static class EmptyDatabaseProvisioning
             // Rehearse the additive upgrade with a preserved business catalogue record.
             var sentinel = new JobType { TypeName = "Integration preservation check", IsActive = true };
             db.JobTypes.Add(sentinel); await db.SaveChangesAsync();
-            await db.Database.ExecuteSqlRawAsync("DROP TABLE dbo.OT_OvertimeRequests; DROP TABLE dbo.LS_JobTypeLeaveSets; DELETE dbo.__EFMigrationsHistory WHERE MigrationId IN ('20261025120600_SystemGapHardening','20261025120700_PreserveTransferHistory','20261026050306_JobTypeLeaveSetAssignments');");
+            await db.Database.ExecuteSqlRawAsync("DROP TABLE dbo.OT_OvertimeRequests; DROP TABLE dbo.OT_WorkTasks; DROP TABLE dbo.OT_WorkRequests; DROP TABLE dbo.LS_JobTypeLeaveSets; DELETE dbo.__EFMigrationsHistory WHERE MigrationId IN ('20261026085804_OvertimeWorkRequests','20261025120600_SystemGapHardening','20261025120700_PreserveTransferHistory','20261026050306_JobTypeLeaveSetAssignments');");
             await db.Database.MigrateAsync(); await db.Database.MigrateAsync();
             if (!await db.JobTypes.AnyAsync(x => x.JobTypeId == sentinel.JobTypeId && x.TypeName == sentinel.TypeName) ||
                 (await db.Database.GetPendingMigrationsAsync()).Any()) throw new InvalidOperationException("Upgrade lost existing data or left pending migrations.");

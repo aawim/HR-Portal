@@ -8,6 +8,22 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--audit-ot-policy"))
+{
+    var rows=await db.JobTypeOvertimeRules.AsNoTracking().OrderBy(x=>x.OrganisationId).ThenBy(x=>x.JobTypeId).ToListAsync();
+    Console.WriteLine($"OT policies loaded successfully: {rows.Count}");
+    foreach(var row in rows)Console.WriteLine($"Organisation {row.OrganisationId}, Job Type {row.JobTypeId}, allowed {row.IsAllowed}, weekly {row.MaximumWeeklyHours}, daily {row.MaximumDailyHours}, version {row.Version}, audit {row.OperationLogId}");
+    return 0;
+}
+if(args.Contains("--verify-overtime-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true);return 0;}
+if(args.Contains("--apply-overtime-upgrade"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261026085804_OvertimeWorkRequests"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"OT work requests: {await db.OvertimeWorkRequests.CountAsync()}; tasks: {await db.OvertimeWorkTasks.CountAsync()}; existing claims: {await db.OvertimeRequests.CountAsync()}");
+    return 0;
+}
 if(args.Contains("--audit-admin-access")){await AdminAccessAudit.RunAsync(db);return 0;}
 if(args.Contains("--repair-annual-leave-reasons")){await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_RepairAnnualLeaveReasons.sql"));await LeaveApplicationAudit.RunAsync(db);return 0;}
 if(args.Contains("--repair-annual-leave-routing")){await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_RepairAnnualLeaveRequestTypes.sql"));await LeaveApplicationAudit.RunAsync(db);return 0;}

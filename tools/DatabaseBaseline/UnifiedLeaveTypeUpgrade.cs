@@ -7,7 +7,7 @@ internal static class UnifiedLeaveTypeUpgrade
 {
     private static string Identifier(string value) => "[" + value.Replace("]", "]]") + "]";
     private static string Literal(string value) => "N'" + value.Replace("'", "''") + "'";
-    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false)
+    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false)
     {
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnection);
         var source = sourceBuilder.InitialCatalog;
@@ -40,12 +40,23 @@ internal static class UnifiedLeaveTypeUpgrade
             var testBuilder = new SqlConnectionStringBuilder(sourceConnection) { InitialCatalog = name, Pooling = false };
             await using var db = new HrmTeContext(new DbContextOptionsBuilder<HrmTeContext>().UseSqlServer(testBuilder.ConnectionString).Options);
             db.Database.SetCommandTimeout(300);
+            var beforeClaims = await db.OvertimeRequests.AsNoTracking().OrderBy(x => x.RequestId)
+                .Select(x => new { x.RequestId, x.OrganisationId, x.IndividualId, x.JobId, x.WorkDate, x.Minutes, x.Reason, x.PaidAtUtc, x.PaymentReference }).ToListAsync();
             var beforeBalances = await db.JobLeaveTypes.AsNoTracking().OrderBy(x=>x.JobLeaveTypeId).Select(x=>new{x.JobLeaveTypeId,x.JobId,x.LeaveTypeId,x.RemainingDays,x.IsValid}).ToListAsync();
             var beforeLeaves = await db.Leaves.AsNoTracking().OrderBy(x=>x.LeaveId).Select(x=>new{x.LeaveId,x.JobId,x.LeaveTypeId,x.FromDate,x.ToDate,x.Duration,x.LeaveStateId}).ToListAsync();
             if (!scopedHandover)
                 await db.Database.ExecuteSqlRawAsync("INSERT dbo.LeaveDefinitions(Code,Name,OwnerOrganisationID,IsSystemType,IsGlobal,IsActive,CreatedDate) SELECT 'UPGRADE-SMOKE','Upgrade preservation fixture',MIN(BusinessEntityID),0,0,1,SYSUTCDATETIME() FROM dbo.Organisations;");
             await db.Database.MigrateAsync();
             await VerifyAsync(db);
+            if (overtime)
+            {
+                var afterClaims = await db.OvertimeRequests.AsNoTracking().OrderBy(x => x.RequestId)
+                    .Select(x => new { x.RequestId, x.OrganisationId, x.IndividualId, x.JobId, x.WorkDate, x.Minutes, x.Reason, x.PaidAtUtc, x.PaymentReference }).ToListAsync();
+                if (!beforeClaims.SequenceEqual(afterClaims)) throw new InvalidOperationException("OT upgrade changed existing claims.");
+                if (await db.RequestTypes.CountAsync(x => x.TypeName == "Overtime Preapproval Request" || x.TypeName == "Overtime Clock Event Request") != 2)
+                    throw new InvalidOperationException("OT request metadata missing.");
+                Console.WriteLine($"PASS OT upgrade: preserved {afterClaims.Count} existing claims; new work requests {await db.OvertimeWorkRequests.CountAsync()}, tasks {await db.OvertimeWorkTasks.CountAsync()}.");
+            }
             if (!scopedHandover && !await db.LeaveTypes.AnyAsync(t=>t.Code=="UPGRADE-SMOKE"))throw new InvalidOperationException("An unmapped definition was lost.");
             if(scopedHandover)
             {

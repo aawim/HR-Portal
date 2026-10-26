@@ -45,3 +45,5 @@ Supervisor additions/removals use `SV_SupervisorChangeRequests`; shared workflow
 Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccrualRules`. Migration `20261026061841_PrefixLeavePolicyTables` performs in-place, data-preserving renames. Existing constraint and index names remain unchanged. Applied historical migrations retain the names used when they were deployed.
 
 `LH_LeaveHandoverRules` and `LH_LeaveHandoverRuleTypes` store scoped, effective-dated work-handover requirements and selected leave types. They share the established `LH_` handover prefix. Existing `Leaves` receives nullable `HandoverRuleSnapshot`; historical rows are not rewritten.
+
+`OT_WorkRequests` stores dated OT preapproval and missing-clock requests; `OT_WorkTasks` stores their task list. `OT_OvertimeRequests` retains claims and gains saved clock event references, timestamp snapshots, claim source and an optional approved task reference.

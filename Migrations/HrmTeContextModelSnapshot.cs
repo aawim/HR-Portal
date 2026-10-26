@@ -6455,7 +6455,20 @@ namespace HRM.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<string>("ClaimSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)")
+                        .HasDefaultValue("Legacy");
+
                     b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("EndLogId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("EndedAt")
                         .HasColumnType("datetime2");
 
                     b.Property<int>("IndividualId")
@@ -6480,10 +6493,19 @@ namespace HRM.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<int?>("PreapprovalTaskId")
+                        .HasColumnType("int");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("StartLogId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("datetime2");
 
                     b.Property<DateTime>("WeekStart")
                         .HasColumnType("date");
@@ -6493,9 +6515,15 @@ namespace HRM.Migrations
 
                     b.HasKey("RequestId");
 
+                    b.HasIndex("EndLogId");
+
                     b.HasIndex("JobId");
 
                     b.HasIndex("PaidByUserId");
+
+                    b.HasIndex("PreapprovalTaskId");
+
+                    b.HasIndex("StartLogId");
 
                     b.HasIndex("OrganisationId", "IndividualId", "WorkDate");
 
@@ -6503,6 +6531,87 @@ namespace HRM.Migrations
                         {
                             t.HasCheckConstraint("CK_OT_OvertimeRequests_Minutes", "[Minutes] > 0 AND [Minutes] <= 1440");
                         });
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimeWorkRequest", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("EndLogId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ProposedEnd")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime?>("ProposedStart")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("StartLogId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("ToDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("EndLogId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("StartLogId");
+
+                    b.HasIndex("OrganisationId", "IndividualId", "FromDate");
+
+                    b.ToTable("OT_WorkRequests", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimeWorkTask", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("WorkRequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("WorkRequestId");
+
+                    b.ToTable("OT_WorkTasks", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Position", b =>
@@ -12695,6 +12804,11 @@ namespace HRM.Migrations
 
             modelBuilder.Entity("HRM.Models.OvertimeRequest", b =>
                 {
+                    b.HasOne("HRM.Models.AttendanceLog", null)
+                        .WithMany()
+                        .HasForeignKey("EndLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HRM.Models.Job", null)
                         .WithMany()
                         .HasForeignKey("JobId")
@@ -12712,13 +12826,67 @@ namespace HRM.Migrations
                         .HasForeignKey("PaidByUserId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("HRM.Models.OvertimeWorkTask", null)
+                        .WithMany()
+                        .HasForeignKey("PreapprovalTaskId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.HasOne("HRM.Models.Request", "Request")
                         .WithOne()
                         .HasForeignKey("HRM.Models.OvertimeRequest", "RequestId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
+                    b.HasOne("HRM.Models.AttendanceLog", null)
+                        .WithMany()
+                        .HasForeignKey("StartLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimeWorkRequest", b =>
+                {
+                    b.HasOne("HRM.Models.AttendanceLog", null)
+                        .WithMany()
+                        .HasForeignKey("EndLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", "Request")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.OvertimeWorkRequest", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.AttendanceLog", null)
+                        .WithMany()
+                        .HasForeignKey("StartLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimeWorkTask", b =>
+                {
+                    b.HasOne("HRM.Models.OvertimeWorkRequest", "WorkRequest")
+                        .WithMany("Tasks")
+                        .HasForeignKey("WorkRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("WorkRequest");
                 });
 
             modelBuilder.Entity("HRM.Models.Position", b =>
@@ -14856,6 +15024,11 @@ namespace HRM.Migrations
             modelBuilder.Entity("HRM.Models.OrganisationType", b =>
                 {
                     b.Navigation("Organisations");
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimeWorkRequest", b =>
+                {
+                    b.Navigation("Tasks");
                 });
 
             modelBuilder.Entity("HRM.Models.Position", b =>

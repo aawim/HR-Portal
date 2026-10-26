@@ -47,6 +47,12 @@ public sealed class JobTypeOvertimeSettingsService(IDbContextFactory<HrmTeContex
         var entity = await db.JobTypeOvertimeRules.SingleOrDefaultAsync(r => r.OrganisationId == org && r.JobTypeId == model.JobTypeId);
         if (entity != null && (entity.Id != model.Id || entity.Version != model.Version) || entity == null && model.Id != 0)
             throw new InvalidOperationException("This OT policy changed. Reload it before saving.");
+        // The audit service saves every tracked entity. Persist the audit before
+        // tracking a new policy, whose required audit foreign key is not set yet.
+        var weekly = model.IsAllowed ? model.MaximumWeeklyHours : 0;
+        var daily = model.IsAllowed ? model.MaximumDailyHours : null;
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE,
+            $"OT policy: organisation {org}, Job Type {model.JobTypeId}, allowed {model.IsAllowed}, weekly maximum {weekly}, daily maximum {daily}. Previous policy ID {model.Id}, version {model.Version}.");
         if (entity == null)
         {
             entity = new JobTypeOvertimeRule { OrganisationId = org, JobTypeId = model.JobTypeId };
@@ -54,10 +60,8 @@ public sealed class JobTypeOvertimeSettingsService(IDbContextFactory<HrmTeContex
         }
         else entity.Version++;
         entity.IsAllowed = model.IsAllowed;
-        entity.MaximumWeeklyHours = model.IsAllowed ? model.MaximumWeeklyHours : 0;
-        entity.MaximumDailyHours = model.IsAllowed ? model.MaximumDailyHours : null;
-        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE,
-            $"OT policy: organisation {org}, Job Type {model.JobTypeId}, allowed {entity.IsAllowed}, weekly maximum {entity.MaximumWeeklyHours}, daily maximum {entity.MaximumDailyHours}. Previous policy ID {model.Id}, version {model.Version}.");
+        entity.MaximumWeeklyHours = weekly;
+        entity.MaximumDailyHours = daily;
         entity.OperationLogId = audit.OperationLogId;
         await db.SaveChangesAsync();
         await tx.CommitAsync();

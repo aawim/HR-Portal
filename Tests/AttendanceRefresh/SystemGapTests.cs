@@ -96,13 +96,14 @@ static class SystemGapTests
             db.WorkAssignments.Add(new(){WorkAssignmentId=90,WorkPlanId=90,WorkTemplateTypeId=90,Name="Official",SchedulePurpose="Official",IsValid=true,StartDateTime=workDate.AddHours(8),EndDateTime=workDate.AddHours(14)});
             db.AttendanceLogs.AddRange(new AttendanceLog{AttendanceLogId=90,IndividualId=200,OrganisationId=10,AttendanceLogStateId=1,Date=workDate.AddHours(8),AttendanceLogResolutions=[new(){IsValid=true,AttendanceResolutionStatusId=HRM.Constants.AttendanceResolutionStatusIds.Resolved,WorkAssignmentId=90,AttendanceClockTypeId=1}]},
                 new AttendanceLog{AttendanceLogId=91,IndividualId=200,OrganisationId=10,AttendanceLogStateId=1,Date=workDate.AddHours(15),AttendanceLogResolutions=[new(){IsValid=true,AttendanceResolutionStatusId=HRM.Constants.AttendanceResolutionStatusIds.Resolved,WorkAssignmentId=90,AttendanceClockTypeId=2}]});
+            db.AttendanceLogs.Add(new AttendanceLog{AttendanceLogId=92,IndividualId=200,OrganisationId=10,AttendanceLogStateId=1,Date=workDate.AddHours(14)});
             await db.SaveChangesAsync();
         }
         var create=Proxy.For<IRequestService>((m,a)=>m=="CreateAsync"?CreateOt((HrmTeContext)a[0]!,(HRM.DTOs.CreateRequestDto)a[1]!):throw new Exception(m));
         var start=Proxy.For<IWorkflowEngine>((m,a)=>m=="StartAsync"?StartOt((HrmTeContext)a[0]!,Convert.ToInt32(a[1])):throw new Exception(m));
         ot=new OvertimeRequestService(factory,access,create,logs,start,resolver,contexts);
-        var submitted=await ot.SubmitAsync(workDate,60,"Completed extra hours");Check(submitted.Success,"Completed OT could not be submitted: "+submitted.Message);
-        Check(!(await ot.SubmitAsync(workDate,1,"Over cumulative daily/weekly cap")).Success,"Pending OT did not consume allowance");
+        var submitted=await ot.SubmitClaimAsync(92,91,"Completed extra hours");Check(submitted.Success,"Completed OT could not be submitted: "+submitted.Message);
+        Check(!(await ot.SubmitClaimAsync(92,91,"Over cumulative daily/weekly cap")).Success,"Pending OT did not consume allowance");
         int claim;await using(var db=factory.CreateDbContext())claim=await db.OvertimeRequests.Select(r=>r.RequestId).SingleAsync();
         await Denied(()=>ot.ActAsync(claim,2,"Approve","Self approval"));
         actor.IndividualId=100;

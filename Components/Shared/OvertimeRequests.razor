@@ -4,30 +4,133 @@
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<OvertimeRequests> Logger
 <section class="space-y-3 rounded-xl border p-4">
-    <div class="flex flex-wrap items-center justify-between gap-2"><h1 class="font-semibold">@(PendingOnly?"Pending overtime claims":"Overtime claims")</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
+    <div class="flex flex-wrap items-center justify-between gap-2"><h1 class="font-semibold">@(PendingOnly?"Pending overtime requests":"Overtime requests")</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
     @if(!PendingOnly)
     {
-        <p class="text-sm text-slate-500">Claim completed overtime outside official hours. Paired clock events are required. Your Job Type's daily and weekly limits include pending claims.</p>
-        <fieldset disabled="@busy" class="space-y-3"><div class="flex flex-wrap gap-3"><label>Work date<InputDate @bind-Value="date" class="mt-1 block rounded border bg-transparent p-2" /></label><label>Hours<InputNumber @bind-Value="hours" min="0.25" max="24" step="0.25" class="mt-1 block rounded border bg-transparent p-2" /></label></div><label class="block">Reason<textarea @bind="reason" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><button class="app-button app-button-primary" @onclick="SubmitAsync">Submit for approval</button></fieldset>
+        <nav class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Overtime request types">
+            @foreach(var option in tabs)
+            { <button type="button" class="app-button @(tab==option.Key ? "app-button-primary" : "app-button-secondary")" disabled="@busy" @onclick="()=>ChangeTab(option.Key)">@option.Value</button> }
+        </nav>
+        <fieldset disabled="@busy" class="space-y-3">
+        @if(tab=="Preapproval")
+        {
+            <div class="flex flex-wrap gap-3"><label>From date<input type="date" @bind="from" class="mt-1 block rounded border bg-transparent p-2" /></label><label>To date<input type="date" @bind="to" class="mt-1 block rounded border bg-transparent p-2" /></label></div>
+            <label class="block">Tasks to perform<textarea @bind="taskText" maxlength="15000" rows="3" placeholder="One task per line" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
+        }
+        else if(tab=="ClockEvents")
+        {
+            <p class="text-sm text-slate-500">Request missing OT punches. They become saved clock events only after approval.</p>
+            <div class="flex flex-wrap gap-3"><label>Start date<input type="date" @bind="from" class="mt-1 block rounded border bg-transparent p-2" /></label><label>Start time<input type="time" @bind="startTime" class="mt-1 block rounded border bg-transparent p-2" /></label><label>End date<input type="date" @bind="to" class="mt-1 block rounded border bg-transparent p-2" /></label><label>End time<input type="time" @bind="endTime" class="mt-1 block rounded border bg-transparent p-2" /></label></div>
+        }
+        else
+        {
+            @if(tab=="Planned")
+            {
+                <div class="grid gap-3 sm:grid-cols-2"><label>Approved OT request<select class="mt-1 block w-full rounded border bg-transparent p-2" value="@preapprovalId" @onchange="SelectPreapproval"><option value="0">Select request</option>@foreach(var group in tasks.GroupBy(t=>t.RequestId)){var first=group.First();<option value="@group.Key">@first.Reference · @first.From.ToString("dd MMM")–@first.To.ToString("dd MMM yyyy")</option>}</select></label>
+                <label>Task<select class="mt-1 block w-full rounded border bg-transparent p-2" @bind="taskId"><option value="0">Select task</option>@foreach(var task in tasks.Where(t=>t.RequestId==preapprovalId)){<option value="@task.Id">@task.Task</option>}</select></label></div>
+            }
+            <div class="flex flex-wrap items-end gap-3"><label>Work date<input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="DateChanged" class="mt-1 block rounded border bg-transparent p-2" /></label><button type="button" class="app-button app-button-secondary" @onclick="LoadEvents">Refresh clock events</button></div>
+            <div class="overflow-hidden rounded-lg border" aria-busy="@loadingEvents">
+                <h2 class="border-b px-3 py-2 text-sm font-semibold">Clock events outside official hours</h2>
+                @if(loadingEvents){<p class="px-3 py-3 text-sm text-slate-500">Loading clock events…</p>}
+                else if(clocks.Count==0){<p class="px-3 py-3 text-sm text-slate-500">No saved clock events outside official hours for this date. Request missing punches under OT clock events.</p>}
+                else
+                {
+                    @foreach(var clock in clocks)
+                    {
+                        <div @key="clock.Id" class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 last:border-b-0">
+                            <time datetime="@clock.Time.ToString("yyyy-MM-ddTHH:mm:ss")" class="text-sm font-medium">@clock.Time.ToString("dd MMM yyyy · HH:mm:ss")</time>
+                            <div class="flex gap-2">
+                                <button type="button" class="app-button @(startId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(startId==clock.Id)" @onclick="()=>SelectStart(clock.Id)">@(startId==clock.Id?"Start selected":"Use as start")</button>
+                                <button type="button" class="app-button @(endId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(endId==clock.Id)" disabled="@(SelectedStart==null||clock.Time<=SelectedStart.Time)" @onclick="()=>endId=clock.Id">@(endId==clock.Id?"End selected":"Use as end")</button>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+            @if(SelectedStart!=null)
+            {
+                <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm" aria-live="polite">
+                    <span>Start: <strong>@SelectedStart.Time.ToString("dd MMM HH:mm:ss")</strong></span>
+                    <span>End: <strong>@(SelectedEnd?.Time.ToString("dd MMM HH:mm:ss")??"Select an event")</strong></span>
+                    @if(SelectedEnd!=null){<span>Duration: <strong>@((SelectedEnd.Time-SelectedStart.Time).TotalHours.ToString("0.##")) hours</strong></span>}
+                </div>
+            }
+            <p class="text-xs text-slate-500">Only saved events outside official time are listed. Missing punches can be requested in OT clock events.</p>
+        }
+        <label class="block">@(tab=="Preapproval" ? "Purpose" : "Work performed / reason")<textarea @bind="reason" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
+        <button class="app-button app-button-primary" @onclick="SubmitAsync">Submit for approval</button>
+        </fieldset>
     }
     @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    @foreach(var work in workRows)
+    {
+        <article class="space-y-2 border-t pt-3 text-sm" @key="work">
+            <p class="font-semibold">@work.Reference · @work.Staff · @(work.Kind=="Preapproval" ? "OT preapproval" : "OT clock events")</p>
+            <p>@work.From.ToString("dd MMM yyyy") – @work.To.ToString("dd MMM yyyy") · @work.Status</p>
+            @if(work.Start.HasValue){<p>@work.Start.Value.ToString("dd MMM HH:mm") – @work.End?.ToString("dd MMM HH:mm")</p>}
+            <p>@work.Reason</p>
+            @if(work.Tasks.Count>0){<ul class="list-disc pl-5">@foreach(var task in work.Tasks){<li>@task</li>}</ul>}
+            @if(work.CanApprove||work.CanCancel)
+            {
+                <label class="block">Action comment<textarea @bind="comments[work.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
+                <div class="flex flex-wrap gap-2">@if(work.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>ActWork(work,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Reject")'>Reject</button>}@if(work.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Cancel")'>Cancel</button>}</div>
+            }
+        </article>
+    }
     @foreach(var row in rows)
     {
-        <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id"><p class="font-semibold">@row.Reference · @row.Staff</p><p>@row.Date.ToString("dd MMM yyyy") · @((row.Minutes/60m).ToString("0.##")) hours · @row.Status</p><p>@row.Reason</p>
+        <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id"><p class="font-semibold">@row.Reference · @row.Staff</p><p>@row.Date.ToString("dd MMM yyyy") · @((row.Minutes/60m).ToString("0.##")) hours · @row.Status</p><p>@row.Source · @row.Start?.ToString("dd MMM HH:mm:ss") – @row.End?.ToString("dd MMM HH:mm:ss")</p>@if(row.Task!=null){<p>Task: @row.Task</p>}<p>@row.Reason</p>
         @if(row.PaymentReference!=null){<p>Payroll/payment reference: @row.PaymentReference</p>}
         @if(row.CanApprove||row.CanCancel){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
         @if(row.CanPay){<label class="block">Completed payroll/payment reference<input @bind="payments[row.Id]" maxlength="200" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Pay(row.Id)">Record payment</button>}
         </article>
     }
-    @if(!busy&&rows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
+    @if(!busy&&rows.Count==0&&workRows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
 </section>
 @code {
     [Parameter] public bool PendingOnly {get;set;}
     private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> payments=[];
-    private DateTime date=DateTime.UtcNow.AddHours(5).Date;private decimal hours;private string reason="";private bool busy;private string? error;
+    private DateTime date=DateTime.UtcNow.AddHours(5).Date;private string reason="";private bool busy;private string? error;
+    private string tab="Preapproval",taskText="";
+    private TimeOnly? startTime,endTime;
+    private DateTime from=DateTime.UtcNow.AddHours(5).Date,to=DateTime.UtcNow.AddHours(5).Date;
+    private int startId,endId,taskId,preapprovalId;
+    private bool loadingEvents;
+    private int eventLoadVersion;
+    private HRM.Services.OvertimeClockOption? SelectedStart=>clocks.FirstOrDefault(c=>c.Id==startId);
+    private HRM.Services.OvertimeClockOption? SelectedEnd=>clocks.FirstOrDefault(c=>c.Id==endId);
+    private void SelectStart(int id){startId=id;if(SelectedEnd!=null&&SelectedEnd.Time<=SelectedStart!.Time)endId=0;}
+    private List<HRM.Services.OvertimeWorkRow> workRows=[];
+    private List<HRM.Services.OvertimeTaskOption> tasks=[];
+    private List<HRM.Services.OvertimeClockOption> clocks=[];
+    private readonly Dictionary<string,string> tabs=new(){{"Preapproval","OT preapproval"},{"Planned","Planned OT claim"},{"Unplanned","Unplanned OT claim"},{"ClockEvents","OT clock events"}};
+    private async Task ChangeTab(string value){tab=value;error=null;startId=endId=0;if(value is "Planned" or "Unplanned")await LoadEvents();}
+    private void SelectPreapproval(ChangeEventArgs e){preapprovalId=int.TryParse(e.Value?.ToString(),out var id)?id:0;taskId=0;}
+    private async Task DateChanged(ChangeEventArgs e){if(DateTime.TryParse(e.Value?.ToString(),out var value)){date=value.Date;await LoadEvents();}}
+    private async Task LoadEvents()
+    {
+        var version=++eventLoadVersion;var selectedDate=date;
+        startId=endId=0;clocks=[];loadingEvents=true;error=null;
+        try{var result=await Requests.LoadClockEventsAsync(selectedDate);if(version==eventLoadVersion)clocks=result;}
+        catch(Exception ex){if(version==eventLoadVersion)Fail(ex);}
+        finally{if(version==eventLoadVersion)loadingEvents=false;}
+    }
     protected override Task OnInitializedAsync()=>LoadAsync();
-    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}}catch(Exception ex){Fail(ex);}finally{busy=false;}}
-    private Task SubmitAsync()=>Execute(()=>Requests.SubmitAsync(date,(int)Math.Round(hours*60),reason));
+    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private Task SubmitAsync()
+    {
+        if(tab=="Preapproval")return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,taskText.Split('\n').ToList()));
+        if(tab=="ClockEvents")
+        {
+            if(startTime is not { } start || endTime is not { } finish){error="Select the missing start and end times.";return Task.CompletedTask;}
+            return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,[],from.Date.Add(start.ToTimeSpan()),to.Date.Add(finish.ToTimeSpan())));
+        }
+        if(loadingEvents||SelectedStart==null||SelectedEnd==null){error="Select a saved clock event as the start and a later event as the end.";return Task.CompletedTask;}
+        if(tab=="Planned"&&taskId==0){error="Select an approved request and task.";return Task.CompletedTask;}
+        return Execute(()=>Requests.SubmitClaimAsync(startId,endId,reason,tab=="Planned"?taskId:null));
+    }
+    private Task ActWork(HRM.Services.OvertimeWorkRow row,string action)=>Execute(()=>Requests.ActWorkAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
     private Task Act(HRM.Services.OvertimeRow row,string action)=>Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
     private Task Pay(int id)=>Execute(()=>Requests.RecordPaymentAsync(id,payments.GetValueOrDefault(id,"")));
     private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
