@@ -32,8 +32,6 @@ public partial class HrmTeContext
         {
             switch (entry.Entity)
             {
-                case AttendanceLog clock when clock.AttendanceLogStateId == 1 && Changed(entry, nameof(AttendanceLog.Date), nameof(AttendanceLog.InOutModeId), nameof(AttendanceLog.AttendanceLogStateId)):
-                    alerts.Add((clock.IndividualId, clock.OrganisationId, "Clock event", $"A clock event was {(entry.State == EntityState.Added ? "recorded" : entry.State == EntityState.Deleted ? "removed" : "updated")} for you at {clock.Date:dd MMM yyyy HH:mm:ss}.", "/online/attendance/my-attendance")); break;
                 case AttendanceLogRequest attendanceRequest when entry.State == EntityState.Added:
                     await AddAttendanceRequest(attendanceRequest.RequestId, attendanceRequest.AttendanceLogId); break;
                 case AttendanceLogChangeRequest correction when entry.State == EntityState.Added:

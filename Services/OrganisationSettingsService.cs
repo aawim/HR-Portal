@@ -12,31 +12,28 @@ namespace HRM.Services;
 
 public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
 {
-    private async Task<bool> GlobalAsync(UserContextDto user) => user.IsSuperAdministrator ||
-        await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("UserOrganisations.Admin.View") || await access.HasPermissionAsync("UserOrganisations.Edit");
     private async Task RequireAsync(int id, params string[] keys)
     {
         var user = await access.RequireContextAsync();
         var allowed = user.IsSuperAdministrator || await access.HasPermissionAsync("Admin");
         foreach (var key in keys) allowed |= await access.HasPermissionAsync(key);
         if (!allowed) throw new UnauthorizedAccessException("You do not have permission to manage organisation records.");
-        if (id > 0 && !await GlobalAsync(user) && !await access.HasOrganisationAccessAsync(id))
-            throw new UnauthorizedAccessException("You cannot manage this organisation.");
+        if (!user.IsSuperAdministrator)
+        {
+            var current = await access.GetCurrentOrganisationIdAsync();
+            if (current <= 0 || id > 0 && id != current || !await access.HasOrganisationAccessAsync(current))
+                throw new UnauthorizedAccessException("You can access only your current organisation.");
+        }
     }
     public async Task<OrganisationSettingsData> LoadAsync()
     {
         await RequireAsync(0, "UserOrganisations.View", "UserOrganisations.Admin.View", "Organisation.Edit", "Organisation.Contact.View");
         var user = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync();
-        var organisations = await db.Organisations.AsNoTracking().OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsDto
+        var currentOrganisation = user.IsSuperAdministrator ? 0 : await access.GetCurrentOrganisationIdAsync();
+        var organisations = await db.Organisations.AsNoTracking().Where(o => user.IsSuperAdministrator || o.BusinessEntityID == currentOrganisation).OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsDto
         { Id = x.BusinessEntityID, Name = x.OrganisationName, DhivehiName = x.OrganisationNameDhivehi, RegistrationNumber = x.RegistrationNumber ?? "",
             RegistrationDate = x.RegistrationDate, TypeId = x.OrganisationTypeId, CountryId = x.CountryId, ParentId = x.ParentOrganisationBusinessEntityId }).ToListAsync();
-        if (!await GlobalAsync(user))
-        {
-            var scoped = new List<OrganisationSettingsDto>();
-            foreach (var item in organisations) if (await access.HasOrganisationAccessAsync(item.Id)) scoped.Add(item);
-            organisations = scoped;
-        }
         return new()
         {
             Organisations = organisations,
@@ -66,6 +63,8 @@ public partial class OrganisationSettingsService(IDbContextFactory<HrmTeContext>
     }
     public async Task<ServiceResult> SaveDetailsAsync(OrganisationSettingsDto model)
     {
+        if (model.Id == 0 && !(await access.RequireContextAsync()).IsSuperAdministrator)
+            throw new UnauthorizedAccessException("Only a Super Administrator can create organisations.");
         await RequireAsync(model.Id, model.Id == 0 ? "UserOrganisations.Add" : "Organisation.Edit", "UserOrganisations.Edit");
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 250 || model.DhivehiName?.Length > 250 ||
             string.IsNullOrWhiteSpace(model.RegistrationNumber) || model.RegistrationNumber.Length > 50)

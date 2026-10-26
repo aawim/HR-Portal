@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs.JobPosition;
 using HRM.Models;
 using HRM.Services.Interfaces;
@@ -55,7 +55,7 @@ namespace HRM.Services.JobPosition
                     where jobPosition.JobId == activeJob.JobId
                           && jobPosition.JobPositionStateId ==
                                 SharedConfig.JobPositionStates.APPROVED
-                          && jobPosition.ToDate == null
+                          && (jobPosition.FromDate.Date <= DateTime.UtcNow.AddHours(5).Date && (!jobPosition.ToDate.HasValue || jobPosition.ToDate.GetValueOrDefault().Date > DateTime.UtcNow.AddHours(5).Date))
 
 
 
@@ -82,7 +82,7 @@ namespace HRM.Services.JobPosition
                             jobPosition.ToDate,
 
                         IsCurrent =
-                            jobPosition.ToDate == null,
+                            (jobPosition.FromDate.Date <= DateTime.UtcNow.AddHours(5).Date && (!jobPosition.ToDate.HasValue || jobPosition.ToDate.GetValueOrDefault().Date > DateTime.UtcNow.AddHours(5).Date)),
 
                         JobPositionStateId =
                             jobPosition.JobPositionStateId,
@@ -192,7 +192,7 @@ namespace HRM.Services.JobPosition
                         IsCurrent =
                             jobPosition.JobPositionStateId ==
                                 SharedConfig.JobPositionStates.APPROVED &&
-                            jobPosition.ToDate == null
+                            (jobPosition.FromDate.Date <= DateTime.UtcNow.AddHours(5).Date && (!jobPosition.ToDate.HasValue || jobPosition.ToDate.GetValueOrDefault().Date > DateTime.UtcNow.AddHours(5).Date))
                     }
                 )
                 .ToListAsync(cancellationToken);
@@ -381,7 +381,7 @@ namespace HRM.Services.JobPosition
                         IsCurrent =
                             jobPosition.JobPositionStateId ==
                                 SharedConfig.JobPositionStates.APPROVED &&
-                            jobPosition.ToDate == null
+                            (jobPosition.FromDate.Date <= DateTime.UtcNow.AddHours(5).Date && (!jobPosition.ToDate.HasValue || jobPosition.ToDate.GetValueOrDefault().Date > DateTime.UtcNow.AddHours(5).Date))
                     }
                 )
                 .ToListAsync(cancellationToken);
@@ -566,7 +566,7 @@ namespace HRM.Services.JobPosition
         //                jobPosition.ToDate,
 
         //            IsCurrent =
-        //                jobPosition.ToDate == null
+        //                (jobPosition.FromDate.Date <= DateTime.UtcNow.AddHours(5).Date && (!jobPosition.ToDate.HasValue || jobPosition.ToDate.GetValueOrDefault().Date > DateTime.UtcNow.AddHours(5).Date))
         //        };
 
         //    var rawHistory =

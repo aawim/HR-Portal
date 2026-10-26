@@ -23,7 +23,7 @@ static class AttendanceRequestTests
 {
     public static async Task RunAsync()
     {
-        var today = DateTime.Today;
+        var today = DateTime.UtcNow.AddHours(5).Date;
         Check(new AttendanceRequestApplicationDto().Date == DateOnly.FromDateTime(today), "New panel date is not today");
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();

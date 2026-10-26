@@ -33,3 +33,9 @@ Entity class and DbSet names remain descriptive C# names. Physical names are set
 - `OT_` is the overtime policy feature prefix. `OT_JobTypeOvertimeRules` stores tenant-specific Job Type eligibility and daily/weekly OT caps.
 
 - `SP_StaffPositionChangeRequests`: staff position assignment, change, date and removal requests. Stores proposed changes; approved JobPositions change only at final workflow approval.
+
+- `OT_OvertimeRequests`: tenant-scoped overtime claims, immutable approval policy snapshots and payroll payment references.
+
+Supervisor additions/removals use `SV_SupervisorChangeRequests`; shared workflow history remains in the `WF_` tables.
+
+`LS_JobTypeLeaveSets` stores current-tenant Job Type to leave-set assignments. Existing `LeaveSets` and `LeaveSetLeaveTypes` remain in place; no historical tables are replaced.

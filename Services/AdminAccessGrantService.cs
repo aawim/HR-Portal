@@ -97,7 +97,7 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
             data.Requests.Add(new AdminAccessGrantRow { Id = r.RequestId, StateId = r.Request.RequestStateId,
                 Reference = r.Request.ReferenceNumber ?? $"AAG-{r.RequestId}", Reason = r.Reason,
                 Name = await db.Users.Where(u => u.UserId == r.UserId).Select(u => u.FullName ?? u.Username).SingleAsync(),
-                Status = (r.Request.RequestState.IsFinalState ? "" : "Processing · ") + r.Request.RequestState.StateName.Trim(),
+                Status = !r.IsOpen && !r.Request.RequestState.IsFinalState ? "Closed · Admin access revoked" : (r.Request.RequestState.IsFinalState ? "" : "Processing · ") + r.Request.RequestState.StateName.Trim(),
                 Stage = instance?.CurrentStage?.WorkflowStage.StageName ?? "", CanCancel = r.IsOpen && r.CreatedByUserId == actor.UserId,
                 CanApprove = await CanApprove(db, r, instance?.CurrentStage, actor.UserId),
                 Assignments = "User Groups: " + string.Join(", ", data.Groups.Where(g => Ids(r.GroupIdsJson).Contains(g.Id)).Select(g => g.Name)) +
@@ -305,8 +305,19 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var target = await Target(db, userId, org);
-        if (await db.AdminAccessGrantRequests.AnyAsync(r => r.UserId == userId && r.IsOpen))
-            return ServiceResult.Fail("Cancel or reject the pending access request before revoking access.");
+        var pendingGrants=await db.AdminAccessGrantRequests.Include(r=>r.Request).Where(r=>r.UserId==userId&&r.OrganisationId==org&&r.IsOpen).ToListAsync();
+        foreach(var pending in pendingGrants)
+        {
+            pending.IsOpen=false;
+            var instance=await Instance(db,pending.RequestId);
+            if(instance!=null)
+            {
+                instance.WorkflowStatus="AccessRevoked";instance.ExecutionStatus="Revoked";instance.CompletedAt=DateTime.UtcNow;
+                if(instance.CurrentStage!=null){instance.CurrentStage.StageStatus="Revoked";instance.CurrentStage.CompletedAt=DateTime.UtcNow;foreach(var approval in instance.CurrentStage.Approvals.Where(a=>a.Decision=="Pending"))approval.Decision="Skipped";}
+                db.WfRequestActions.Add(new(){WorkflowRequestInstance=instance,PerformedByUserId=actor.UserId,ActionCode="EmergencyRevoke",FromRequestStateId=pending.Request.RequestStateId,ToRequestStateId=pending.Request.RequestStateId,Comments=reason.Trim(),PerformedAt=DateTime.UtcNow});
+            }
+            db.RequestNotifications.Add(new(){RequestId=pending.RequestId,UserId=target.UserId,NotificationKind="RequestAction",FromStateId=pending.Request.RequestStateId,ToStateId=pending.Request.RequestStateId,ReferenceNumber=pending.Request.ReferenceNumber??"Access request closed",CreatedAtUtc=DateTime.UtcNow});
+        }
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE, $"Revoked Admin access for User {userId}: {reason.Trim()}");
         target.AdminPortalAccessEnabled = false; target.AdminPortalAccessOrganisationId = null;
         target.OperationLogId = audit.OperationLogId; target.LastUpdatedByUserId = actor.UserId; target.LastUpdatedDate = DateTime.Now;

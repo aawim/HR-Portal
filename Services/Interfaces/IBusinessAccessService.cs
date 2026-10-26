@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Security;
+using HRM.DTOs.Security;
 using HRM.Resources;
 
 namespace HRM.Services.Interfaces
@@ -20,11 +20,8 @@ namespace HRM.Services.Interfaces
 
         #region Job
 
-        Task<AccessResultDto> CanViewJobAsync(int jobId);
 
-        Task<AccessResultDto> CanEditJobAsync(int jobId);
 
-        Task<AccessResultDto> CanTerminateJobAsync(int jobId);
 
         #endregion
 
@@ -82,11 +79,8 @@ namespace HRM.Services.Interfaces
 
         #region Payroll
 
-        Task<AccessResultDto> CanViewPayrollAsync(int payrollId);
 
-        Task<AccessResultDto> CanProcessPayrollAsync(int payrollId);
 
-        Task<AccessResultDto> CanApprovePayrollAsync(int payrollId);
 
         #endregion
     }

@@ -1,0 +1,35 @@
+@page "/online/overtime-requests"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HRM.Services.OvertimeRequestService Requests
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<OvertimeRequests> Logger
+<section class="space-y-3 rounded-xl border p-4">
+    <div class="flex flex-wrap items-center justify-between gap-2"><h1 class="font-semibold">@(PendingOnly?"Pending overtime claims":"Overtime claims")</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
+    @if(!PendingOnly)
+    {
+        <p class="text-sm text-slate-500">Claim completed overtime outside official hours. Paired clock events are required. Your Job Type's daily and weekly limits include pending claims.</p>
+        <fieldset disabled="@busy" class="space-y-3"><div class="flex flex-wrap gap-3"><label>Work date<InputDate @bind-Value="date" class="mt-1 block rounded border bg-transparent p-2" /></label><label>Hours<InputNumber @bind-Value="hours" min="0.25" max="24" step="0.25" class="mt-1 block rounded border bg-transparent p-2" /></label></div><label class="block">Reason<textarea @bind="reason" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><button class="app-button app-button-primary" @onclick="SubmitAsync">Submit for approval</button></fieldset>
+    }
+    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    @foreach(var row in rows)
+    {
+        <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id"><p class="font-semibold">@row.Reference · @row.Staff</p><p>@row.Date.ToString("dd MMM yyyy") · @((row.Minutes/60m).ToString("0.##")) hours · @row.Status</p><p>@row.Reason</p>
+        @if(row.PaymentReference!=null){<p>Payroll/payment reference: @row.PaymentReference</p>}
+        @if(row.CanApprove||row.CanCancel){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
+        @if(row.CanPay){<label class="block">Completed payroll/payment reference<input @bind="payments[row.Id]" maxlength="200" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Pay(row.Id)">Record payment</button>}
+        </article>
+    }
+    @if(!busy&&rows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
+</section>
+@code {
+    [Parameter] public bool PendingOnly {get;set;}
+    private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> payments=[];
+    private DateTime date=DateTime.UtcNow.AddHours(5).Date;private decimal hours;private string reason="";private bool busy;private string? error;
+    protected override Task OnInitializedAsync()=>LoadAsync();
+    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private Task SubmitAsync()=>Execute(()=>Requests.SubmitAsync(date,(int)Math.Round(hours*60),reason));
+    private Task Act(HRM.Services.OvertimeRow row,string action)=>Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
+    private Task Pay(int id)=>Execute(()=>Requests.RecordPaymentAsync(id,payments.GetValueOrDefault(id,"")));
+    private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
+    private void Fail(Exception ex){Logger.LogError(ex,"Overtime claim processing");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Overtime claims could not be loaded or saved. Please refresh or contact HR.";}
+}

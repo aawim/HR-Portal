@@ -1,4 +1,4 @@
-﻿using HRM.Authorization;
+using HRM.Authorization;
 using HRM.DTOs.Security;
 using HRM.Enum;
 using HRM.Resources;
@@ -520,20 +520,11 @@ namespace HRM.Services
 
         #region Job
 
-        public Task<AccessResultDto> CanViewJobAsync(int jobId)
-        {
-            throw new NotImplementedException();
-        }
 
-        public Task<AccessResultDto> CanEditJobAsync(int jobId)
-        {
-            throw new NotImplementedException();
-        }
 
-        public Task<AccessResultDto> CanTerminateJobAsync(int jobId)
-        {
-            throw new NotImplementedException();
-        }
+
+
+
 
         #endregion
 
@@ -764,20 +755,11 @@ namespace HRM.Services
 
         #region Payroll
 
-        public Task<AccessResultDto> CanViewPayrollAsync(int payrollId)
-        {
-            throw new NotImplementedException();
-        }
 
-        public Task<AccessResultDto> CanProcessPayrollAsync(int payrollId)
-        {
-            throw new NotImplementedException();
-        }
 
-        public Task<AccessResultDto> CanApprovePayrollAsync(int payrollId)
-        {
-            throw new NotImplementedException();
-        }
+
+
+
 
         #endregion
 

@@ -24,7 +24,7 @@ static class AttendanceEligibilityTests
             db.JobPositions.Add(new JobPosition { JobPositionId = 1, PositionId = 1, JobId = 1, FromDate = start, JobPositionStateId = 4 });
             db.Requests.Add(new Request { RequestId = 1, RequestTypeId = 32, RequestStateId = 4, LastStateChangedDate = start.AddDays(4).AddHours(3) });
             db.JobPositionsRequests.Add(new JobPositionsRequest { JobPositionsRequestId = 1, JobPositionId = 1, RequestId = 1 });
-            db.WorkTemplates.Add(new WorkTemplate { WorkTemplateId = 1, Name = "Official", RequiresAttendance = true, IsActive = true });
+            db.WorkTemplates.Add(new WorkTemplate { WorkTemplateId = 1, Name = "Official", OrganisationBusinessEntityId = 10, RequiresAttendance = true, IsActive = true });
             db.JobWorkTemplateAssignments.Add(new JobWorkTemplateAssignment { JobWorkTemplateAssignmentID = 1, JobID = 1, WorkTemplateID = 1,
                 IsActive = true, EffectiveFrom = start.AddDays(2), EffectiveTo = start.AddDays(9), WorkingDaysMask = 31 });
             await db.SaveChangesAsync();

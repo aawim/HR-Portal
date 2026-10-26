@@ -28,7 +28,7 @@ public static class AttendanceEligibilityCalendar
         var positionIds = positions.Select(p => p.JobPositionId).ToList();
         var approvalDates = await (from link in db.JobPositionsRequests.AsNoTracking()
                                    join request in db.Requests.AsNoTracking() on link.RequestId equals request.RequestId
-                                   where positionIds.Contains(link.JobPositionId) && request.RequestStateId == 4 && request.RequestTypeId == 32
+                                   where positionIds.Contains(link.JobPositionId) && request.RequestStateId == 4
                                    select new { link.JobPositionId, request.LastStateChangedDate }).ToListAsync(ct);
 
         var effective = new Dictionary<int,List<StaffScheduleCandidate>>();
@@ -50,7 +50,7 @@ public static class AttendanceEligibilityCalendar
                 // recorded effective date. Known approval dates never backdate absence.
                 var approved = approvalDates.Where(a => a.JobPositionId == p.JobPositionId && a.LastStateChangedDate.Year >= 1900)
                     .Select(a => a.LastStateChangedDate.AddHours(5).Date).DefaultIfEmpty(p.FromDate.Date).Max();
-                return day >= p.FromDate.Date && day >= approved && (!p.ToDate.HasValue || day <= p.ToDate.Value.Date);
+                return day >= approved && PositionLifecycle.Contains(p.FromDate,p.ToDate,day);
             });
         }
         static bool TemplateValid(HRM.Models.WorkPlanning.WorkTemplate? t, DateTime day) => t?.IsActive == true &&

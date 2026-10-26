@@ -10,6 +10,7 @@ static class ScheduleTestModel
         ((type == typeof(JobWorkTemplateAssignment) || type == typeof(JobWorkTemplate)) && (property == "Job" || property == "WorkTemplate")) ||
         (type == typeof(WorkPlan) && (property == "WorkAssignments" || property == "WorkPlanSegments")) ||
         (type == typeof(WorkTemplate) && property == "WorkTemplateSegments") ||
+        (type == typeof(WorkTemplateSegment) && property == "WorkSegmentType") ||
         (type == typeof(WorkAssignment) && property is "WorkPlan" or "WorkTemplateType" or "WorkAssignmentSegments" or "WorkAssignmentOwners") ||
         (type == typeof(WorkAssignmentSegment) && property is "WorkAssignment" or "WorkSegmentType") ||
         (type == typeof(WorkAssignmentOwner) && property == "WorkAssignment");
@@ -31,6 +32,7 @@ static class ScheduleTestModel
         builder.Entity<Request>().HasKey(x => x.RequestId);
         builder.Entity<WorkTemplate>().HasKey(x => x.WorkTemplateId);
         builder.Entity<WorkTemplateSegment>().HasKey(x => x.WorkTemplateSegmentId);
+        builder.Entity<WorkTemplateSegment>().HasOne(x=>x.WorkSegmentType).WithMany().HasForeignKey(x=>x.WorkSegmentTypeId);
         builder.Entity<WorkPlanSegment>().HasKey(x => x.WorkPlanSegmentId);
         builder.Entity<JobWorkTemplateAssignment>().HasOne(x => x.WorkTemplate).WithMany().HasForeignKey(x => x.WorkTemplateID);
         builder.Entity<JobWorkTemplate>().HasOne(x => x.WorkTemplate).WithMany().HasForeignKey(x => x.WorkTemplateId);

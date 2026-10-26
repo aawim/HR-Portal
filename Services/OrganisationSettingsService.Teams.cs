@@ -3,6 +3,7 @@ using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Organisation;
 using HRM.Models;
+using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
@@ -28,12 +29,9 @@ public partial class OrganisationSettingsService
         await RequireAsync(0, TeamViewKeys);
         var user = await access.RequireContextAsync();
         await using var db = await factory.CreateDbContextAsync();
-        var options = await db.Organisations.AsNoTracking().OrderBy(x => x.OrganisationName)
-            .Select(x => new OrganisationSettingsOption(x.BusinessEntityID, x.OrganisationName)).ToListAsync();
-        if (await GlobalAsync(user)) return options;
-        var scoped = new List<OrganisationSettingsOption>();
-        foreach (var item in options) if (await access.HasOrganisationAccessAsync(item.Id)) scoped.Add(item);
-        return scoped;
+        var current = user.IsSuperAdministrator ? 0 : await access.GetCurrentOrganisationIdAsync();
+        return await db.Organisations.AsNoTracking().Where(o => user.IsSuperAdministrator || o.BusinessEntityID == current)
+            .OrderBy(x => x.OrganisationName).Select(x => new OrganisationSettingsOption(x.BusinessEntityID, x.OrganisationName)).ToListAsync();
     }
 
     public async Task<OrganisationTeamSettingsData> GetTeamSettingsAsync(int organisationId)
@@ -41,7 +39,7 @@ public partial class OrganisationSettingsService
         if (organisationId <= 0) throw new InvalidOperationException("Select an organisation.");
         await RequireAsync(organisationId, TeamViewKeys);
         await using var db = await factory.CreateDbContextAsync();
-        var today = DateTime.Today;
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var departments = await db.OrganisationStructures.AsNoTracking()
             .Where(x => x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3)
             .OrderBy(x => x.Name).Select(x => new OrganisationTeamSettingsRow { Id = x.OrganisationStructureId, Kind = "Department", Name = x.Name,
@@ -65,15 +63,31 @@ public partial class OrganisationSettingsService
             row.Supervisors = departmentAssignments.Where(x => x.Id == row.Id).DistinctBy(x => x.Person).Select(x => new OrganisationSettingsOption(x.Person, x.Name.Trim())).ToList();
         foreach (var row in teams)
             row.Supervisors = teamAssignments.Where(x => x.Id == row.Id).DistinctBy(x => x.Person).Select(x => new OrganisationSettingsOption(x.Person, x.Name.Trim())).ToList();
+        var activeJobs = db.Jobs.AsNoTracking().Where(j => j.OrganisationID == organisationId && j.JobStateId == SharedConfig.JobStates.APPROVED &&
+            j.JoinedDate <= today && (!j.TerminatedDate.HasValue || j.TerminatedDate > today));
+        var departmentIds = departments.Select(d => d.Id).ToList();
+        var departmentMembers = await activeJobs.Where(j => departmentIds.Contains(j.OrganisationStructureId))
+            .Select(j => new { TargetId=j.OrganisationStructureId, Person=j.IndividualID,
+                Name=(j.Individual.FirstNameEnglish ?? "")+" "+(j.Individual.MiddleNameEnglish ?? "")+" "+(j.Individual.LastNameEnglish ?? "") }).ToListAsync();
+        var teamIds = teams.Select(t => t.Id).ToList();
+        var teamMembers = await db.TeamStaffs.AsNoTracking().Where(m => teamIds.Contains(m.TeamId) && m.IsValid && m.StartDate <= today &&
+            (!m.EndDate.HasValue || m.EndDate >= today) && activeJobs.Any(j => j.IndividualID == m.StaffId))
+            .Select(m => new { TargetId=m.TeamId, Person=m.StaffId,
+                Name=(m.Staff.Individual.FirstNameEnglish ?? "")+" "+(m.Staff.Individual.MiddleNameEnglish ?? "")+" "+(m.Staff.Individual.LastNameEnglish ?? "") }).ToListAsync();
+        static string StaffName(string name) => string.Join(" ",name.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));
+        foreach (var row in departments)
+            row.Members = departmentMembers.Where(m => m.TargetId == row.Id).DistinctBy(m => m.Person).Select(m => new OrganisationSettingsOption(m.Person,StaffName(m.Name))).OrderBy(m => m.Name).ToList();
+        foreach (var row in teams)
+            row.Members = teamMembers.Where(m => m.TargetId == row.Id).DistinctBy(m => m.Person).Select(m => new OrganisationSettingsOption(m.Person,StaffName(m.Name))).OrderBy(m => m.Name).ToList();
         var staff = await db.Staffs.AsNoTracking().Where(x =>
             db.Jobs.Any(j => j.IndividualID == x.IndividualId && j.OrganisationID == organisationId &&
                 j.JobStateId == SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today) &&
-            db.Users.Any(u => u.BusinessEntityID == x.IndividualId && u.IsActive))
+            db.Users.Any(u => u.BusinessEntityID == x.IndividualId && u.IsActive && u.LocalUserStateId == 1 && u.UserOrganisation!.BusinessEntityID == organisationId))
             .OrderBy(x => x.Individual.FirstNameEnglish)
             .Select(x => new OrganisationSettingsOption(x.IndividualId,
                 x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? ""))).ToListAsync();
         var assignedPeople = departmentAssignments.Select(x => x.Person).Concat(teamAssignments.Select(x => x.Person)).Distinct().ToList();
-        var accountPeople = await db.Users.AsNoTracking().Where(x => x.IsActive && assignedPeople.Contains(x.BusinessEntityID))
+        var accountPeople = await db.Users.AsNoTracking().Where(x => x.IsActive && x.LocalUserStateId == 1 && x.UserOrganisation!.BusinessEntityID == organisationId && assignedPeople.Contains(x.BusinessEntityID))
             .Select(x => x.BusinessEntityID).Distinct().ToListAsync();
         var employedPeople = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && assignedPeople.Contains(x.IndividualID) &&
             x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today)
@@ -95,7 +109,7 @@ public partial class OrganisationSettingsService
 
     private static async Task SynchronisePendingHandoversAsync(HrmTeContext db, int organisationId, string kind, int targetId)
     {
-        var today = DateTime.Today;
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var members = db.TeamStaffs.Where(x => x.TeamId == targetId && x.IsValid &&
             x.StartDate <= today && (x.EndDate == null || x.EndDate >= today)).Select(x => x.StaffId);
         var affectedJobs = db.Jobs.Where(x => x.OrganisationID == organisationId &&
@@ -124,9 +138,12 @@ public partial class OrganisationSettingsService
         var permission = kind == "Team" ? "Organisation.Teams.Edit" :
             assign ? "Organisation.Structure.Supervisor.Add" : "Organisation.Structure.Supervisor.Edit";
         await RequireAsync(organisationId, permission, "Organisation.Edit", "UserOrganisations.Edit");
-        await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var today = DateTime.Today;
+        return ServiceResult.Fail("Submit a supervisor assignment or removal request for approval.");
+    }
+
+    internal static async Task<ServiceResult> ValidateSupervisorChangeAsync(HrmTeContext db, IOperationLogService logs, int organisationId, string kind, int teamId, int staffId, bool assign, bool apply)
+    {
+        var today = DateTime.UtcNow.AddHours(5).Date;
         var targetName = kind == "Department"
             ? await db.OrganisationStructures.Where(x => x.OrganisationStructureId == teamId &&
                 x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3).Select(x => x.Name).SingleOrDefaultAsync()
@@ -136,14 +153,15 @@ public partial class OrganisationSettingsService
         if (assign && (!await db.Staffs.AnyAsync(x => x.IndividualId == staffId) ||
             !await db.Jobs.AnyAsync(x => x.IndividualID == staffId && x.OrganisationID == organisationId &&
                 x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today) ||
-            !await db.Users.AnyAsync(x => x.BusinessEntityID == staffId && x.IsActive)))
+            !await db.Users.AnyAsync(x => x.BusinessEntityID == staffId && x.IsActive && x.LocalUserStateId == 1 && x.UserOrganisation!.BusinessEntityID == organisationId)))
             return ServiceResult.Fail("A supervisor must have an active approved job and user account in this organisation.");
         if (kind == "Department")
         {
             var current = await db.OrganisationStructureSupervisors.Where(x => x.OrganisationStructureId == teamId &&
                 x.SupervisorStaffId == staffId && x.IsActive && x.IsValid).ToListAsync();
-            if (assign && current.Count > 0) return ServiceResult.Ok("This staff member is already a supervisor.");
+            if (assign && current.Count > 0) return ServiceResult.Fail("This staff member is already a supervisor.");
             if (!assign && current.Count == 0) return ServiceResult.Fail("This supervisor assignment is no longer active.");
+            if (!apply) return ServiceResult.Ok();
             var log = await logs.CreateAsync(db, assign ? SharedConfig.OperationLogActionTypes.ORGANISATION_STRUCTURE_SUPERVISOR_CREATE :
                 SharedConfig.OperationLogActionTypes.ORGANISATION_STRUCTURE_SUPERVISOR_UPDATE,
                 $"{(assign ? "Assigned" : "Removed")} staff {staffId} as supervisor of department {teamId} ({targetName}), organisation {organisationId}.");
@@ -154,8 +172,9 @@ public partial class OrganisationSettingsService
         {
             var memberships = await db.TeamStaffs.Where(x => x.TeamId == teamId && x.StaffId == staffId &&
                 x.IsValid && x.StartDate <= today && (x.EndDate == null || x.EndDate >= today)).ToListAsync();
-            if (assign && memberships.Any(x => x.IsSuperVisor)) return ServiceResult.Ok("This staff member is already a supervisor.");
+            if (assign && memberships.Any(x => x.IsSuperVisor)) return ServiceResult.Fail("This staff member is already a supervisor.");
             if (!assign && !memberships.Any(x => x.IsSuperVisor)) return ServiceResult.Fail("This supervisor assignment is no longer active.");
+            if (!apply) return ServiceResult.Ok();
             var log = await logs.CreateAsync(db, assign ? SharedConfig.OperationLogActionTypes.ORGANISATION_STRUCTURE_SUPERVISOR_CREATE :
                 SharedConfig.OperationLogActionTypes.ORGANISATION_STRUCTURE_SUPERVISOR_UPDATE,
                 $"{(assign ? "Assigned" : "Removed")} staff {staffId} as supervisor of team {teamId} ({targetName}), organisation {organisationId}.");
@@ -166,7 +185,7 @@ public partial class OrganisationSettingsService
         }
         await db.SaveChangesAsync();
         await SynchronisePendingHandoversAsync(db, organisationId, kind, teamId);
-        await db.SaveChangesAsync(); await tx.CommitAsync();
+        await db.SaveChangesAsync();
         return ServiceResult.Ok(assign ? "Supervisor assigned successfully." : "Supervisor removed successfully.");
     }
 }

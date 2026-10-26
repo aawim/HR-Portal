@@ -36,7 +36,7 @@
             <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
             <div class="flex flex-col md:flex-row gap-1 items-start">
                 <!-- LEFT: Sidebar Menu (Responsive width) -->
-                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-80" : "w-20")">
+                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? (ResolvedCategoryName=="leaves"?"w-full md:w-60":"w-full md:w-80") : "w-20")">
 
                     <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
 
@@ -59,12 +59,12 @@
                             class="text-left p-1 rounded-xl border shadow-sm transition-all duration-200 group flex items-center gap-3 overflow-hidden
                        @(activeItem?.Title == item.Title ? "bg-blue-50 border-blue-50" : "bg-white border-slate-50 hover:shadow-md hover:border-blue-50 hover:bg-slate-50")">
 
-                                @*      <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
+                                @*      <div class="@(ResolvedCategoryName=="leaves"?"w-8 h-8":"w-10 h-12") flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
                         @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
                                 @item.Icon
                             </div> *@
 
-                                <div class="w-10 h-12 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
+                                <div class="@(ResolvedCategoryName=="leaves"?"w-8 h-8":"w-10 h-12") flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
                         @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-white")">
                                     @item.Icon
                                 </div>
@@ -73,9 +73,7 @@
                                     <h3 class="font-bold text-sm mb-0.5 truncate @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
                                         @item.Title
                                     </h3>
-                                    <p class="text-slate-500 text-xs leading-tight line-clamp-2">
-                                        @item.Description
-                                    </p>
+                                    @if(ResolvedCategoryName!="leaves"){<p class="text-slate-500 text-xs leading-tight line-clamp-2">@item.Description</p>}
                                 </div>
 
                                 <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
@@ -112,7 +110,7 @@
 
                     <div class="flex flex-col lg:flex-row gap-2 mt-1">
 
-                        <div class="flex-1 bg-white rounded-2xl border border-slate-200 shadow-sm p-2 min-h-[600px]">
+                        <div class="flex-1 min-w-0 bg-white rounded-xl border border-slate-200 p-3 @(ResolvedCategoryName=="leaves"?"":"min-h-[600px]")">
 
                             @if (activeItem == null)
                             {
@@ -140,7 +138,7 @@
                                     else
                                     {
                                         <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                            <p>Component not yet assigned for <strong>@activeItem.Title</strong>.</p>
+                                            <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
                                         </div>
                                     }
                                 </div>
@@ -193,12 +191,13 @@
                 "Organisation Types" => HRM.DTOs.Organisation.OrganisationResourceKind.OrganisationTypes,
                 "Structure Request Types" => HRM.DTOs.Organisation.OrganisationResourceKind.StructureRequestTypes,
                 _ => HRM.DTOs.Organisation.OrganisationResourceKind.Requests } } : null;
-    private IEnumerable<SubItem> VisibleItems => GetSubItems(CategoryName).Where(x =>
+    private IEnumerable<SubItem> VisibleItems => GetSubItems(CategoryName).Where(x => x.ComponentType != null &&
         (x.ComponentType != typeof(RequestStateTransitionSettings) || isDeveloper) &&
         (x.ComponentType != typeof(LeaveCarryForwardSettings) || canViewCarryForward));
     private string ItemSlug(SubItem item) => item.Title switch
     {
         "Teams and supervisors" => "teams", "Organisation Permissions" => "permissions", "Manage" => "manage", "Manage type" => "types",
+        "Leave Set Management" => "manage-leave-sets",
         "Job Type Configuration" => "job-types",
         "Request State Transitions" => "state-transitions",
         "Request Approval Flows" => "approval-flows", "Leave Accrual by Job Type" => "accrual", "Leave Carry Forward" => "carry-forward",
@@ -231,10 +230,10 @@
     private List<SubItem> GetSubItems(string? cat) => (string.IsNullOrWhiteSpace(cat) ? ResolvedCategoryName : cat.Trim().ToLowerInvariant()) switch
     {
         "leaves" => new() {
+            new("Leave Set Management", "🗂️", "", typeof(LeaveSetsGrid)),
             new("Leave Accrual by Job Type", "📅", "Configure this tenant's accrual rates, waiting periods and carry-forward for every Job Type.", typeof(LeaveAccrualSettings)),
             new("Leave Carry Forward", "📅", "HR reviews unused days and processes carry-forward at service-year renewal.", typeof(LeaveCarryForwardSettings)),
             new("Manage Leave Types", "🌴", "Define leave accruals and policies.", typeof(LeaveTypesGrid)),
-            new("Manage Leave Sets", "🗓️", "Group leave types into sets.", typeof(LeaveSetsGrid)),
             new("Manage Configurable", "⚙️", "Global leave system variables.", typeof(LeaveConfigGrid)),
             new("Manage New LT", "⚙️", "Global leave system variables.", typeof(LeaveTypeManagement)),
             new("Manage Leave Policy", "⚙️", "Global leave system variables.", typeof(LeavePolicyManagement)),
@@ -247,6 +246,7 @@
         },
         "org" => new() {
             new("Manage", "🏢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
+            new("Document Types", "📄", "Manage organisation document classifications and image requirements.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationDocumentTypes)),
             new("Manage type", "🏷️", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Calendar", "📅", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Locations", "📍", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
@@ -331,6 +331,8 @@
     protected override void OnParametersSet()
     {
         CategoryName = ResolvedCategoryName;
+        if(CategoryName=="leaves" && Section=="leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return; }
+        if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
         if (CategoryName == "jobs" && (string.IsNullOrWhiteSpace(Section) || Section is "job-types" or "job-type-configuration"))
         {
             Navigation.NavigateTo("/admin/settings/config/job-types", replace: true);
@@ -349,7 +351,10 @@
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "requests") Section = "structure-request-types";
         if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section == "teams")
         {
-            activeItem = new SubItem("Teams and supervisors", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings));
+            var current = new Uri(Navigation.Uri);
+            var target = "/admin/hr/supervisors/management" + current.Query;
+            if (TeamSection == "departments") target = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target,"teamView","departments");
+            Navigation.NavigateTo(target + current.Fragment, replace: true);
             return;
         }
         activeItem = string.IsNullOrWhiteSpace(Section) ? VisibleItems.FirstOrDefault() :

@@ -26,12 +26,12 @@ static class LeaveHistoryTests
         await connection.OpenAsync();
         var options = new DbContextOptionsBuilder<HrmTeContext>().UseSqlite(connection).Options;
         var factory = new HistoryFactory(options);
-        var start = DateTime.Today.AddDays(-30);
+        var start = DateTime.UtcNow.AddHours(5).Date.AddDays(-30);
         await using (var db = factory.CreateDbContext())
         {
             await db.Database.EnsureCreatedAsync();
             db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1 },
-                new Job { JobId = 2, IndividualID = 1, TerminatedDate = DateTime.Today.AddDays(-60) },
+                new Job { JobId = 2, IndividualID = 1, TerminatedDate = DateTime.UtcNow.AddHours(5).Date.AddDays(-60) },
                 new Job { JobId = 3, IndividualID = 2 });
             db.LeaveTypes.Add(new LeaveType { LeaveTypeId = 1, Name = "Annual Leave" });
             db.LeaveStates.AddRange(new LeaveState { LeaveStateId = 2, StateName = "Pending verification" },

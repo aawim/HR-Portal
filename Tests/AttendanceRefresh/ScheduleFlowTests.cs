@@ -79,13 +79,17 @@ static class ScheduleFlowTests
         await using (var db = factory.CreateDbContext())
             Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 1 && x.IsActive && x.EffectiveTo == null), "Changing duty closed the official schedule");
         var changed = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today));
-        Check(changed!.Assignments.Count == 2 && changed.Assignments.Any(x => x.WorkTemplateId == 3) && !changed.Assignments.Any(x => x.WorkTemplateId == 2), "Unused plan was not rebuilt after duty change");
+        Check(changed!.Assignments.Count == 3 && changed.Assignments.Any(x => x.WorkTemplateId == 3) && changed.Assignments.Any(x => x.WorkTemplateId == 2), "Unused plan was not rebuilt after duty change");
         var current = (await new StaffScheduleService(factory, access).GetScheduleAsync(1000)).Schedule!;
-        var duty = current.CurrentTemplates.Single(x => x.SchedulePurpose == "Duty");
+        var duty = current.CurrentTemplates.Single(x => x.SchedulePurpose == "Duty" && x.WorkTemplateId == 3);
         Check((await service.RemoveAsync(new RemoveJobWorkTemplateDto { JobId = 100, JobWorkTemplateAssignmentId = duty.JobWorkTemplateAssignmentId, EffectiveDate = today })).Success,
             "Removing duty schedule failed");
         var removed = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today));
-        Check(removed!.Assignments.Count == 1 && removed.Assignments[0].WorkTemplateId == 1, "Removing duty removed official hours or retained stale duty hours");
+        Check(removed!.Assignments.Count == 2 && removed.Assignments.Any(x => x.WorkTemplateId == 1) && removed.Assignments.Any(x => x.WorkTemplateId == 2) && !removed.Assignments.Any(x => x.WorkTemplateId == 3), "Removing duty removed official hours or retained stale duty hours");
+        var remainingDuty=(await new StaffScheduleService(factory,access).GetScheduleAsync(1000)).Schedule!.CurrentTemplates.Single(x=>x.SchedulePurpose=="Duty"&&x.WorkTemplateId==2);
+        Check((await service.RemoveAsync(new RemoveJobWorkTemplateDto{JobId=100,JobWorkTemplateAssignmentId=remainingDuty.JobWorkTemplateAssignmentId,EffectiveDate=today})).Success,"Second duty could not be ended independently");
+        removed=await generator.GenerateOrGetAsync(1000,100,10,DateOnly.FromDateTime(today));
+        Check(removed!.Assignments.Count==1&&removed.Assignments[0].WorkTemplateId==1,"Ending all duties affected official hours");
         await using (var db = factory.CreateDbContext())
         {
             db.PlanningProviders.Add(new PlanningProvider { PlanningProviderId = 1, OrganisationBusinessEntityID = 10, Code = "WORK_PLANNING", IsActive = true });
@@ -94,7 +98,8 @@ static class ScheduleFlowTests
             db.AttendanceLogs.Add(new AttendanceLog { AttendanceLogId = 1, IndividualId = 1000, OrganisationId = 10, Date = today.AddHours(8) });
             await db.SaveChangesAsync();
         }
-        Check((await service.AssignAsync(Request(2, "Duty"))).Success, "Duty could not be attached to an already used day");
+        var sameDayDuty = Request(2, "Duty"); sameDayDuty.EffectiveTo = today;
+        Check((await service.AssignAsync(sameDayDuty)).Success, "Duty could not be attached to an already used day");
         var manualGenerator = new HRM.Services.WorkPlanning.WorkAssignmentGeneratorService(factory,
             NullLogger<HRM.Services.WorkPlanning.WorkAssignmentGeneratorService>.Instance, access);
         var manualRequest = new HRM.DTOs.WorkPlanning.GenerateWorkPlanRequest { JobId = 100, IndividualId = 1000,
@@ -121,11 +126,11 @@ static class ScheduleFlowTests
                 "Duty assignment duplicated templates or segments");
             Check(await db.JobWorkTemplateAssignments.CountAsync() == assignmentCount, "Saving the same duty twice duplicated staff assignments");
             Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 1 && x.IsActive && x.EffectiveTo == null), "Duty replaced official hours");
-            Check(await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2)), "Temporary dutyRequest did not restore the previous schedule");
+            Check(!await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2)), "Temporary duty unexpectedly revived a separately ended duty template");
         }
         var tomorrow = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today.AddDays(1)));
         var expectedTomorrowAssignments = HRM.Helpers.StaffScheduleCalendar.IsWeekend(today.AddDays(1)) ? 1 : 2;
-        Check(tomorrow!.Assignments.Count == expectedTomorrowAssignments && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan");
+        Check(tomorrow!.Assignments.Count == expectedTomorrowAssignments && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan: "+string.Join(",",tomorrow!.Assignments.Select(x=>$"{x.WorkTemplateId}:{x.SchedulePurpose}:{x.IsValid}")));
         dutyRequest.OrganisationBusinessEntityId = 20;
         Check(!(await service.AssignAsync(dutyRequest)).Success, "Duty accepted another tenant");
         dutyRequest.OrganisationBusinessEntityId = 10; dutyRequest.EffectiveTo = today;

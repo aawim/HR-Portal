@@ -22,10 +22,13 @@
     <Authorized>
         <div class="max-w-12xl mx-auto py-0 px-4">
             <!-- Back Button -->
+            @if (!CategoryName.Equals("departments", StringComparison.OrdinalIgnoreCase))
+            {
             <a href="/admin/hr" class="text-slate-400 hover:text-slate-600 text-sm mb-2 flex items-center gap-1 transition-colors w-fit">
                 <svg class="w-4 h-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
-                Back to Settings Hub
+                Back to HR
             </a>
+            }
 
             <!-- Main Responsive Layout: Stacks vertically on mobile, side-by-side on md+ screens -->
             <div class="flex flex-col md:flex-row gap-1 items-start">
@@ -45,7 +48,7 @@
                         </button>
                     </div>
 
-                    @foreach (var item in GetSubItems(CategoryName))
+                    @foreach (var item in GetSubItems(CategoryName).Where(x => x.ComponentType != null))
                     {
                         <button @onclick="() => SelectItem(item)"
                                 title="@(!isSidebarExpanded ? item.Title : null)"
@@ -95,12 +98,12 @@
                         <div class="mt-4">
                             @if (activeItem.ComponentType != null)
                             {
-                                <DynamicComponent Type="@activeItem.ComponentType" />
+                                <DynamicComponent @key="(CategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
                             }
                             else
                             {
                                 <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                    <p>Component not yet assigned for <strong>@activeItem.Title</strong>.</p>
+                                    <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
                                 </div>
                             }
                         </div>
@@ -122,8 +125,12 @@
 @code {
     [Parameter] public string CategoryName { get; set; } = string.Empty;
     [Parameter] public string? Section { get; set; }
+    [SupplyParameterFromQuery(Name = "organisationId")] public int? QueryOrganisationId { get; set; }
+    private IDictionary<string, object>? SelectedParameters => activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)
+        ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)QueryOrganisationId! } : null;
     protected override void OnParametersSet()
     {
+        if(CategoryName.Equals("leave-sets",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return;}
         if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section != "management")
         {
             var current=new Uri(Navigation.Uri);
@@ -141,6 +148,9 @@
     private static string ItemSlug(SubItem item) => item.Title switch
     {
         "Manage Staff" => "manage",
+        "Departments Management" => "management",
+        "Received Requests" => "received",
+        "Supervisors Management" => "management",
         "Groups Management" => "management",
         "Staff Enrollment" => "enrollment",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
@@ -176,6 +186,15 @@
             new("Employee Bulk Upload", "📤", "Import multiple employee records using a spreadsheet.", typeof(EmployeeBulkUpload))
     },
 
+        "departments" => new() {
+            new("Departments Management", "🏢", "View approved departments, supervisors and staff.", typeof(HRM.Components.Admin.Hr.Group.DepartmentManagement)),
+        },
+        "requests" => new() {
+            new("Received Requests", "📥", "Received requests grouped by Request Type.", typeof(HRM.Components.Admin.Hr.Group.HrRequestsInbox)),
+        },
+        "supervisors" => new() {
+            new("Supervisors Management", "👥", "Assign department and team supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamSettings)),
+        },
         "groups" => new() {
             new("Groups Management", "👥", "Manage operational groups, group types and related information.", typeof(ManageGroupsGrid)),
     },

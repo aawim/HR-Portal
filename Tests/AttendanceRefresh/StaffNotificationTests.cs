@@ -23,9 +23,9 @@ static class StaffNotificationTests
         await using(var db = factory.CreateDbContext())
         {
             db.JobLeaveTypes.Add(new() { JobId = 1, IsValid = true, RemainingDays = 17.5m });
-            db.JobWorkTemplateAssignments.Add(new() { JobID = 1, WorkTemplateID = 1, IsActive = true, SchedulePurpose = "Duty", EffectiveFrom = DateTime.Today });
-            db.TeamStaffs.Add(new() { TeamId = 1, StaffId = 100, IsValid = true, StartDate = DateTime.Today });
-            db.JobPositions.Add(new() { JobId = 1, PositionId = 1, FromDate = DateTime.Today });
+            db.JobWorkTemplateAssignments.Add(new() { JobID = 1, WorkTemplateID = 1, IsActive = true, SchedulePurpose = "Duty", EffectiveFrom = DateTime.UtcNow.AddHours(5).Date });
+            db.TeamStaffs.Add(new() { TeamId = 1, StaffId = 100, IsValid = true, StartDate = DateTime.UtcNow.AddHours(5).Date });
+            db.JobPositions.Add(new() { JobId = 1, PositionId = 1, FromDate = DateTime.UtcNow.AddHours(5).Date });
             await db.SaveChangesAsync();
             var notifications = await db.StaffNotifications.ToListAsync();
             Check(notifications.Count == 4 && notifications.All(x => x.UserId == 1 && x.OrganisationId == 10), "Staff activity was missing, broadcast, or sent across tenants");
@@ -35,7 +35,7 @@ static class StaffNotificationTests
             await db.SaveChangesAsync(); Check(await db.StaffNotifications.CountAsync() == 5, "Unchanged save duplicated activity alerts");
             var schedule = await db.JobWorkTemplateAssignments.SingleAsync(); schedule.IsActive = false; await db.SaveChangesAsync();
             Check(await db.StaffNotifications.AnyAsync(x => x.Kind == "Schedule" && x.Message.Contains("ended")), "Schedule removal alert missing");
-            (await db.Jobs.FindAsync(1))!.TerminatedDate = DateTime.Today; await db.SaveChangesAsync();
+            (await db.Jobs.FindAsync(1))!.TerminatedDate = DateTime.UtcNow.AddHours(5).Date; await db.SaveChangesAsync();
             Check(await db.StaffNotifications.AnyAsync(x => x.Kind == "Employment"), "Employment status alert missing");
         }
         var auth = new ContextAuthentication(); auth.SignIn("notify1"); var inboxService = new RequestNotificationService(factory, auth);
@@ -49,6 +49,12 @@ static class StaffNotificationTests
         await using(var db = factory.CreateDbContext()) Check(await db.StaffNotifications.CountAsync() == 7, "Reading the inbox generated extra business notifications");
         await using(var db = factory.CreateDbContext())
         {
+            var notificationCount = await db.StaffNotifications.CountAsync();
+            var quietClock = new AttendanceLog { AttendanceLogId = 2, IndividualId = 100, OrganisationId = 10, AttendanceLogStateId = 1, Date = DateTime.UtcNow.AddHours(5), InOutModeId = 1 };
+            db.AttendanceLogs.Add(quietClock); await db.SaveChangesAsync();
+            quietClock.Date = quietClock.Date.AddMinutes(1); quietClock.InOutModeId = 2; db.SaveChanges();
+            db.AttendanceLogs.Remove(quietClock); await db.SaveChangesAsync();
+            Check(await db.StaffNotifications.CountAsync() == notificationCount, "Creating, editing or deleting a clock event sent a notification");
             db.AttendanceLogs.Add(new AttendanceLog { AttendanceLogId = 1, IndividualId = 100, OrganisationId = 10, AttendanceLogStateId = 1, Date = DateTime.UtcNow.AddHours(5), InOutModeId = 1 });
             db.RequestTypes.Add(new HRM.Models.Archives.RequestType { RequestTypeId = 1, TypeName = "Attendance" });
             db.RequestStates.AddRange(new HRM.Models.Archives.RequestState { RequestStateId = 2, StateName = "Pending", IsProcessingState = true }, new HRM.Models.Archives.RequestState { RequestStateId = 4, StateName = "Approved", IsFinalState = true });
@@ -59,7 +65,7 @@ static class StaffNotificationTests
             (await db.Requests.FindAsync(1))!.RequestStateId = 4; await db.SaveChangesAsync();
         }
         inbox = await inboxService.GetInboxAsync();
-        Check(inbox.Items.Any(x => x.Reference == "Clock event") && inbox.Items.Any(x => x.Reference == "AttendanceRequest") && inbox.Items.Any(x => x.ToState == "Approved"), "Clock events or requests submitted on behalf of staff were not notified");
+        Check(!inbox.Items.Any(x => x.Reference == "Clock event") && inbox.Items.Any(x => x.Reference == "AttendanceRequest") && inbox.Items.Any(x => x.ToState == "Approved"), "Clock events were notified or attendance request notifications were lost");
         var scope = Proxy.For<HRM.Services.Interfaces.IUserAccessService>((method, _) => method switch {
             "RequireContextAsync" => Task.FromResult(new HRM.DTOs.UserContext.UserContextDto { UserId = 1, IndividualId = 100 }),
             "GetCurrentOrganisationIdAsync" => Task.FromResult(20), "HasOrganisationAccessAsync" => Task.FromResult(true), _ => throw new Exception(method) });

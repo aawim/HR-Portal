@@ -1,0 +1,59 @@
+@implements IDisposable
+@inject HRM.Services.HrRequestInboxService Requests
+@inject ILogger<HrRequestsInbox> Logger
+<section class="space-y-4 p-4" aria-busy="@busy">
+    <h1 class="text-xl font-semibold">Received Requests</h1>
+    <p class="text-sm text-slate-500">All received requests appear newest first. Filter by Request Type or open a request to use its existing approval process.</p>
+    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
+    <fieldset class="flex flex-wrap items-end gap-3"><label class="w-full text-sm sm:w-80 lg:w-96">Search<input class="mt-1 block w-full rounded border bg-transparent p-2" placeholder="Reference, staff or request type" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label><label class="text-sm">Status<select id="hr-request-status" class="mt-1 block rounded border bg-transparent p-2" @bind="status" @bind:after="ApplyFilters"><option value="all">All statuses</option><optgroup label="Status groups"><option value="processing">Processing</option><option value="final">Final</option></optgroup><optgroup label="Request statuses">@foreach(var item in statuses){<option value="@item.Id">@item.Name</option>}</optgroup></select></label><label class="text-sm">From<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-from" type="date" @bind="from" @bind:after="ApplyFilters" /></label><label class="text-sm">To<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-to" type="date" @bind="to" @bind:after="ApplyFilters" /></label><button class="app-button app-button-secondary" @onclick="Reset">Reset</button></fieldset>
+    @if(data!=null)
+    {
+        <p class="text-sm">@data.Organisation · @(data.OrganisationWide?"Organisation requests":"Requests received or assigned to you") · @data.Groups.Sum(g=>g.Count) requests</p>
+        <div class="grid items-start gap-4 xl:grid-cols-3"><nav class="space-y-2" aria-label="Request types"><button class="block w-full rounded-lg border p-3 text-left text-sm @(data.TypeId==0?"bg-blue-50 text-blue-700":"")" disabled="@busy" @onclick="()=>Select(0)"><span class="block font-medium">All requests</span><span class="text-xs">@data.Groups.Sum(g=>g.Count) requests</span></button>@foreach(var group in data.Groups){<button class="block w-full rounded-lg border p-3 text-left text-sm @(data.TypeId==group.Id?"bg-blue-50 text-blue-700":"")" disabled="@busy" @onclick="()=>Select(group.Id)"><span class="block font-medium">@group.Name</span><span class="text-xs">@group.Count requests · @group.Processing processing</span></button>}</nav>
+        <div class="min-w-0 space-y-3 xl:col-span-2"><h2 class="font-semibold">@(data.TypeId==0?"All requests":data.Groups.FirstOrDefault(g=>g.Id==data.TypeId)?.Name??"Requests")</h2>
+        @foreach(var row in data.Items){<article class="space-y-2 rounded-xl border p-4 text-sm" @key="row.Id"><h3 class="font-semibold">@row.Reference</h3><p class="text-xs text-slate-500">@row.Type</p><p>@row.Applicant · @row.AppliedAt.ToString("dd MMM yyyy HH:mm")</p><p>@row.Status</p>@if(row.Url!=null){<a class="app-button app-button-secondary" href="@row.Url">Open request</a>}else{<p class="text-xs text-slate-500">Additional details are not available for this request.</p>}</article>}
+        @if(data.TotalPages>1){<div class="flex items-center gap-3"><button class="app-button app-button-secondary" disabled="@(busy||data.Page<=1)" @onclick="()=>Page(data.Page-1)">Previous</button><span class="text-sm">Page @data.Page of @data.TotalPages</span><button class="app-button app-button-secondary" disabled="@(busy||data.Page>=data.TotalPages)" @onclick="()=>Page(data.Page+1)">Next</button></div>}
+        @if(data.Items.Count==0){<p class="rounded border p-4 text-sm">No matching received requests.</p>}
+        </div></div>
+    }
+    @if(busy){<p role="status">Loading requests…</p>}
+</section>
+@code {
+    private HRM.Services.HrInboxData? data;
+    private List<HRM.Services.HrRequestStatus> statuses=[];
+    private string search="",status="all";
+    private DateTime? from,to;
+    private bool busy,disposed;
+    private string? error;
+    private int selectedType,selectedPage=1,loadVersion;
+    private CancellationTokenSource? pendingLoad;
+    protected override Task OnInitializedAsync()=>Load();
+    private Task SearchChanged(){selectedPage=1;return Load(true);}
+    private Task ApplyFilters(){selectedPage=1;return Load();}
+    private Task Select(int id){selectedType=id;selectedPage=1;return Load();}
+    private Task Page(int page){selectedPage=page;return Load();}
+    private Task Reset(){search="";status="all";from=to=null;selectedType=0;selectedPage=1;return Load();}
+    private async Task Load(bool debounce=false)
+    {
+        pendingLoad?.Cancel();pendingLoad?.Dispose();pendingLoad=new();
+        var token=pendingLoad.Token;var version=++loadVersion;
+        var type=selectedType;var page=selectedPage;var text=search;var state=status;var start=from;var end=to;
+        busy=true;error=null;
+        try
+        {
+            if(debounce)await Task.Delay(300,token);
+            var result=await Requests.LoadAsync(type,page,text,state,start,end,token);
+            if(disposed||version!=loadVersion||token.IsCancellationRequested)return;
+            data=result;statuses=result.Statuses;selectedPage=result.Page;
+        }
+        catch(OperationCanceledException) when(token.IsCancellationRequested) { }
+        catch(Exception ex)
+        {
+            if(disposed||version!=loadVersion)return;
+            data=null;Logger.LogError(ex,"Loading HR request inbox");
+            error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Received requests could not be loaded. Refresh or contact HR.";
+        }
+        finally {if(!disposed&&version==loadVersion)busy=false;}
+    }
+    public void Dispose(){disposed=true;loadVersion++;pendingLoad?.Cancel();pendingLoad?.Dispose();}
+}

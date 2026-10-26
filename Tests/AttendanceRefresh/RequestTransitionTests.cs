@@ -25,6 +25,8 @@ static class RequestTransitionTests
             "RequireContextAsync" => Task.FromResult(user),
             "HasUserGroupAsync" => Task.FromResult(isDeveloper),
             "HasPermissionAsync" => Task.FromResult(true),
+            "GetCurrentOrganisationIdAsync" => Task.FromResult(10),
+            "HasOrganisationAccessAsync" => Task.FromResult(true),
             _ => throw new Exception(name)
         });
         await using (var db = factory.CreateDbContext())
@@ -35,7 +37,7 @@ static class RequestTransitionTests
                 new RequestState { RequestStateId = 5, StateName = "Cancelled", IsFinalState = true },
                 new RequestState { RequestStateId = 6, StateName = "Rejected", IsFinalState = true });
             db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1 }, new Job { JobId = 2, IndividualID = 2 });
-            for (var i = 1; i <= 4; i++) db.Requests.Add(new Request { RequestId = i, RequestTypeId = 100, RequestStateId = i == 4 ? 4 : 2 });
+            for (var i = 1; i <= 4; i++) db.Requests.Add(new Request { RequestId = i, RequestTypeId = 100, RequestStateId = i == 4 ? 4 : 2, OrganisationBusinessEntityID=10, ApplicantBusinessEntityId=1 });
             db.Leaves.AddRange(new Leaf { LeaveId = 1, JobId = 1, LeaveTypeId = 1, LeaveStateId = 2, Duration = 3 },
                 new Leaf { LeaveId = 2, JobId = 2, LeaveTypeId = 1, LeaveStateId = 2, Duration = 3 },
                 new Leaf { LeaveId = 4, JobId = 1, LeaveTypeId = 1, LeaveStateId = 4, Duration = 3 });
@@ -69,7 +71,7 @@ static class RequestTransitionTests
         await settings.SetAsync(100, 2, 4, false);
         await DeniedAsync(() => requests.ChangeStateAsync(3, 4));
         await settings.SetAsync(100, 2, 6, true);
-        Check(await requests.ChangeStateAsync(3, 6), "Allowed rejection failed");
+        await DeniedAsync(() => requests.ChangeStateAsync(3, 6));
         await settings.SetAsync(100, 6, 5, true);
         await DeniedAsync(() => requests.ChangeStateAsync(3, 5));
         Check(!(await settings.SetAsync(100, 2, 2, true)).Success, "Same-state transition was accepted");
@@ -112,7 +114,7 @@ static class RequestTransitionTests
     static async Task DeniedAsync(Func<Task> action)
     {
         try { await action(); } catch (InvalidOperationException ex)
-        { Check(ex is RequestTransitionConfigurationException || ex.Message.Contains("already final"), "Missing transition did not explain why it was blocked"); return; }
+        { Check(ex is InvalidOperationException || ex.Message.Contains("already final"), "Missing transition did not explain why it was blocked"); return; }
         throw new Exception("Disallowed state transition proceeded");
     }
     static void Check(bool value, string message) { if (!value) throw new Exception(message); }

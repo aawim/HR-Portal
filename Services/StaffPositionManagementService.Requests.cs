@@ -69,7 +69,7 @@ public sealed partial class StaffPositionManagementService
             var person = action == "Cancel" && r.CreatedByUserId == actor.User ? r.IndividualId : actor.Person;
             await Processing.ExecuteAsync(db,Subject(r),expectedState,action,comment,actor.User,person,
                 ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",false),
-                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",true));
+                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",true,r.RequestId));
             await tx.CommitAsync(); return ServiceResult.Ok("Position request action saved.");
         }
         catch(InvalidOperationException ex)

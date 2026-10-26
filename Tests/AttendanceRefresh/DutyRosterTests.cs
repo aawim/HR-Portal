@@ -225,6 +225,8 @@ static class DutyRosterTests
             }
             db.WorkTemplates.Add(new WorkTemplate { WorkTemplateId = 1, WorkTemplateTypeId = 1, IsActive = true, OrganisationBusinessEntityId = 10, Name = "Duty", DefaultStartTime = new(10,0), DefaultEndTime = new(12,0),
                 WorkTemplateSegments = [new() { WorkTemplateSegmentId = 10, WorkSegmentTypeId = 1, IsActive = true, Name = "In", DurationMinutes = 30, SequenceNumber = 1 }, new() { WorkTemplateSegmentId = 11, WorkSegmentTypeId = 2, IsActive = true, Name = "Out", OffsetMinutes = 120, DurationMinutes = 30, SequenceNumber = 2 }] });
+            db.WorkTemplates.Add(new WorkTemplate{WorkTemplateId=99,IsActive=true,OrganisationBusinessEntityId=10,Name="Official default",DefaultStartTime=new(8,0),DefaultEndTime=new(14,0)});
+            for(var jobId=1;jobId<=3;jobId++)db.JobWorkTemplateAssignments.Add(new(){JobID=jobId,WorkTemplateID=99,SchedulePurpose="Official",ScheduleMode="Standard",WorkingDaysMask=31,EffectiveFrom=f.Day.AddYears(-1),IsActive=true});
             db.WorkAssignmentStates.Add(new WorkAssignmentState { WorkAssignmentStateId = 7, Code = "PLANNED", IsActive = true });
             db.JobWorkTemplateAssignments.Add(new JobWorkTemplateAssignment { JobID = 1, WorkTemplateID = 1, SchedulePurpose = "Duty", ScheduleMode = "Standard", EffectiveFrom = f.Day, IsActive = true });
             var source = Assignment(1, 1, 100, f.Day, "Duty"); db.WorkAssignments.Add(source);

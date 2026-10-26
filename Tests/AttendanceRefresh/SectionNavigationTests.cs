@@ -21,15 +21,15 @@ static class SectionNavigationTests
             "Organisation route crashed or lost its category during the initial async render");
         Check(Selected(initial) == "Manage", "Organisation route without CategoryName did not resolve Manage");
         initial = new SettingsPage { CategoryName = null!, TeamSection = "departments" };
-        Check(Selected(initial) == "Teams and supervisors", "Team route without CategoryName did not resolve");
+        Check(Selected(initial) == null, "Legacy team route retained a duplicate settings editor");
         initial = new SettingsPage { CategoryName = null! };
         _ = typeof(SettingsPage).GetMethod("GetSubItems", Flags)!.Invoke(initial, [null]);
         _ = Selected(initial);
         var page = new SettingsPage { CategoryName = "org", Section = "teams" };
-        Check(Selected(page) == "Teams and supervisors", "Organisation team URL did not restore selection");
+        Check(Selected(page) == null, "Organisation team URL retained a duplicate settings editor");
         page.Section = "permissions";
         Check(Selected(page) == "Organisation Permissions", "Back/forward within a category retained the previous section");
-        foreach (var (section, title) in new[] { ("manage", "Manage"), ("types", "Manage type"), ("calendar", "Calendar"),
+        foreach (var (section, title) in new[] { ("manage", "Manage"), ("document-types", "Document Types"), ("types", "Manage type"), ("calendar", "Calendar"),
             ("locations", "Locations"), ("location-types", "Location Types"), ("organisation-types", "Organisation Types"), ("requests", "Structure Request Types"), ("structure-request-types", "Structure Request Types") })
         {
             page.Section = section; Check(Selected(page) == title, $"Organisation section {section} did not restore");
@@ -49,6 +49,24 @@ static class SectionNavigationTests
         Check(Route("/admin/settings/org/permissions") == typeof(SettingsPage), "Organisation permissions URL resolves to the wrong page");
         Check(Route("/admin/settings/org/organisations/3/structure") == typeof(SettingsPage), "Organisation record section URL is missing");
         Check(Route("/admin/settings/workplaning/templates") == typeof(SettingsPage), "Work planning section URL is missing");
+        Check(Route("/admin/settings/leaves/manage-leave-sets")==typeof(SettingsPage),"Canonical leave set settings route is missing");
+        var setsPage=new SettingsPage{CategoryName="leaves",Section="manage-leave-sets"};
+        Check(Selected(setsPage)=="Leave Set Management","Settings did not select canonical leave set management");
+        var legacySets=new HRM.Components.Pages.HrCategoryPage{CategoryName="leave-sets",Section="management"};var setNavigation=new SupervisorTestNavigation();
+        legacySets.GetType().GetProperty("Navigation",Flags)!.SetValue(legacySets,setNavigation);
+        legacySets.GetType().GetMethod("OnParametersSet",Flags)!.Invoke(legacySets,null);
+        Check(setNavigation.Uri.EndsWith("/admin/settings/leaves/manage-leave-sets"),"Legacy HR link did not redirect to canonical Settings management");
+        Check(Route("/admin/hr/departments/management")==typeof(HRM.Components.Pages.HrCategoryPage),"HR departments route is missing");
+        Check(Route("/admin/hr/work-handovers")==typeof(HRM.Components.Pages.Online.Leave.WorkHandovers),"HR handover route is missing or ambiguous");
+        Check(Route("/admin/hr/work-handovers/42")==typeof(HRM.Components.Pages.Online.Leave.WorkHandovers),"HR handover detail route is missing or ambiguous");
+        Check(Route("/online/leave-handovers")==typeof(HRM.Components.Pages.Online.Leave.WorkHandovers),"Employee handovers were lost during the admin navigation move");
+        Check(Route("/admin/hr/requests/received")==typeof(HRM.Components.Pages.HrCategoryPage),"HR received requests route is missing");
+        Check(Route("/admin/hr/supervisors/management") == typeof(HRM.Components.Pages.HrCategoryPage), "HR supervisor management route is missing");
+        var oldSupervisors = new SettingsPage { CategoryName="org", TeamSection="departments" };
+        var navigation = new SupervisorTestNavigation();
+        typeof(SettingsPage).GetProperty("Navigation", Flags)!.SetValue(oldSupervisors,navigation);
+        Selected(oldSupervisors);
+        Check(navigation.Uri.Contains("/admin/hr/supervisors/management") && navigation.Uri.Contains("organisationId=10") && navigation.Uri.Contains("teamView=departments"), "Legacy supervisor redirect lost organisation or department selection");
         Check(Route("/admin/hr/individuals/search") == typeof(HRM.Components.Pages.HrCategoryPage), "Individual search was captured by the organisation search route");
         Check(Route("/admin/hr/staff/staff-onboarding") == typeof(HRM.Components.Pages.HrCategoryPage), "HR section URL is missing");
         Check(Route("/admin/payroll/payroll/payroll-period") == typeof(HRM.Components.Pages.PayrollCategoryPage), "Payroll section URL is missing");
@@ -63,6 +81,8 @@ static class SectionNavigationTests
     }
     private static string? Selected(SettingsPage page)
     {
+        if (typeof(SettingsPage).GetProperty("Navigation", Flags)!.GetValue(page) == null)
+            typeof(SettingsPage).GetProperty("Navigation", Flags)!.SetValue(page,new SupervisorTestNavigation());
         typeof(SettingsPage).GetMethod("OnParametersSet", Flags)!.Invoke(page, null);
         var item = typeof(SettingsPage).GetField("activeItem", Flags)!.GetValue(page);
         return item?.GetType().GetProperty("Title")!.GetValue(item)?.ToString();
@@ -83,4 +103,11 @@ static class SectionNavigationTests
         Check(matches.Count(m => m.Rank == best.Rank) <= 1, $"Ambiguous section URL {path}");
         return best.Type;
     }
+}
+
+sealed class SupervisorTestNavigation : Microsoft.AspNetCore.Components.NavigationManager
+{
+    public SupervisorTestNavigation() { Initialize("https://localhost/", "https://localhost/admin/settings/org/teams?organisationId=10"); }
+    protected override void NavigateToCore(string uri, bool forceLoad) => Uri=ToAbsoluteUri(uri).AbsoluteUri;
+    protected override void NavigateToCore(string uri, Microsoft.AspNetCore.Components.NavigationOptions options) => Uri=ToAbsoluteUri(uri).AbsoluteUri;
 }

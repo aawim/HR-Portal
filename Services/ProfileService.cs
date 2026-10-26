@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs.JobPosition;
 using HRM.DTOs.Profile;
 using HRM.DTOs.Profile.ProfileAccess;
@@ -571,7 +571,7 @@ namespace HRM.Services
 
                         (
                             jobPosition.ToDate == null ||
-                            jobPosition.ToDate >= today
+                            jobPosition.ToDate > today
                         )
 
                     orderby

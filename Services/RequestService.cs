@@ -91,54 +91,18 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
-            return await db.Requests
-                .Include(x => x.RequestState)
-                .Include(x => x.RequestType)
-                .FirstOrDefaultAsync(x =>
-                    x.RequestId == requestId);
+            var actor=await _access.RequireContextAsync();var org=await _access.GetCurrentOrganisationIdAsync();
+            var allowed=actor.IsSuperAdministrator||await _access.HasPermissionAsync("Admin")||await _access.HasPermissionAsync("Requests.View");
+            if(org<=0||!await _access.HasOrganisationAccessAsync(org))throw new UnauthorizedAccessException("Select your current organisation.");
+            return await db.Requests.Include(x=>x.RequestState).Include(x=>x.RequestType)
+                .SingleOrDefaultAsync(x=>x.RequestId==requestId&&x.OrganisationBusinessEntityID==org&&
+                    (allowed||x.ApplicantBusinessEntityId==actor.IndividualId||db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.UserId&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==x.RequestId)));
         }
 
-        public async Task<bool> ChangeStateAsync(
-            int requestId,
-            int requestStateId,
-            string? remarks = null)
+        public async Task<bool> ChangeStateAsync(int requestId,int requestStateId,string? remarks=null)
         {
-            await using var db =
-                await _dbFactory.CreateDbContextAsync();
-            await using var transaction = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-
-            var context =
-                await _access.RequireContextAsync();
-
-            var request =
-                await db.Requests
-                    .FirstOrDefaultAsync(x =>
-                        x.RequestId == requestId);
-
-            if (request == null)
-                return false;
-
-            if (await db.StaffPositionChangeRequests.AnyAsync(r => r.RequestId == requestId))
-                throw new InvalidOperationException("Position requests must be processed through their assigned approval workflow.");
-
-            await RequestTransitionPolicy.RequireAllowedAsync(db, request.RequestTypeId, request.RequestStateId, requestStateId);
-            request.RequestStateId = requestStateId;
-
-            request.StateChangeRemarks = remarks;
-
-            request.LastStateChangedByUserId =
-                context.UserId;
-
-            request.LastStateChangedDate =
-                DateTime.Now;
-
-            await db.SaveChangesAsync();
-
-            await transaction.CommitAsync();
-            return true;
+            _ = await GetByIdAsync(requestId) ?? throw new UnauthorizedAccessException("Request unavailable in this organisation.");
+            throw new InvalidOperationException("Use the request's assigned approval workflow to perform this action.");
         }
-
-    
-
     }
 }

@@ -1,4 +1,9 @@
-:root { color-scheme: light; --app-border-color: #e2e8f0; }
+:root {
+    color-scheme: light; --app-border-color: #e2e8f0;
+    --select-bg: #ffffff; --select-text: #0f172a; --select-muted: #64748b;
+    --select-popup-bg: #ffffff; --select-hover: #f1f5f9;
+    --select-selected-bg: #dbeafe; --select-selected-text: #1e3a8a;
+}
 :root[data-theme="dark"] { color-scheme: dark; --app-border-color: #3b4b63; --app-toast-bg: #1e293b; --app-toast-text: #f1f5f9; --app-toast-muted: #cbd5e1; --app-toast-hover: #334155; }
 .theme-toggle {
     display: inline-flex; align-items: center; justify-content: center;
@@ -15,6 +20,27 @@
 
 /* Shared palette covers existing Tailwind cards and Bootstrap forms and dialogs. */
 @media screen {
+    /* Native popup items do not reliably inherit the closed select's palette. */
+    :root select { color-scheme: light; background-color: var(--select-bg) !important; color: var(--select-text) !important; }
+    :root[data-theme="dark"] select { color-scheme: dark; }
+    :root select:disabled { color: var(--select-muted) !important; }
+    :root select :is(option, optgroup) { background-color: var(--select-bg) !important; color: var(--select-text) !important; }
+    :root select option:checked { background-color: var(--select-selected-bg) !important; color: var(--select-selected-text) !important; }
+    :root select :is(option, optgroup):disabled { color: var(--select-muted) !important; }
+
+    /* Searchable selects follow the app theme, independently of the OS theme. */
+    :root .search-select-trigger, :root .search-select-search {
+        background-color: var(--select-bg) !important; color: var(--select-text) !important;
+        border-color: var(--app-border-color);
+    }
+    :root .search-select-popup { background-color: var(--select-popup-bg); color: var(--select-text); border-color: var(--app-border-color); }
+    :root .search-select-option { background-color: transparent; color: var(--select-text); }
+    :root .search-select-option:hover, :root .search-select-option-active { background-color: var(--select-hover); color: var(--select-text); }
+    :root .search-select-option[aria-selected="true"] { background-color: var(--select-selected-bg); color: var(--select-selected-text); }
+    :root .search-select-clear { background-color: transparent; color: var(--select-text); border-color: var(--app-border-color); }
+    :root .search-select-clear:hover { background-color: var(--select-hover); }
+    :root .search-select-trigger:disabled { color: var(--select-muted) !important; }
+
     /* Bare `border` cards must use the same colour as explicitly styled cards. */
     :where([data-theme]) .border { border-color: var(--app-border-color); }
     :root :is(div, section, article):is(.bg-white, .bg-light).border {
@@ -22,6 +48,9 @@
     }
     :root .card { --bs-card-border-color: var(--app-border-color); border-color: var(--app-border-color); }
     [data-theme="dark"] {
+        --select-bg: #0f172a; --select-text: #e2e8f0; --select-muted: #94a3b8;
+        --select-popup-bg: #1e293b; --select-hover: #334155;
+        --select-selected-bg: #193657; --select-selected-text: #bfdbfe;
         --bs-body-bg: #0f172a; --bs-body-color: #e2e8f0;
         --bs-emphasis-color: #f8fafc; --bs-secondary-color: #b6c4d6;
         --bs-secondary-bg: #243247; --bs-tertiary-bg: #182438;

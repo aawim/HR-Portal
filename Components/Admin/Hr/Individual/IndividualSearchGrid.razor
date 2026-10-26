@@ -1,4 +1,4 @@
-﻿@using Microsoft.EntityFrameworkCore
+@using Microsoft.EntityFrameworkCore
 @using HRM.Models
 @using HRM.Services
 @using HRM.Components.Shared
@@ -10,7 +10,7 @@
 <div class="relative w-full h-full mx-auto py-6">
     <div class="flex flex-col items-left justify-left mb-8 mt-1">
         <h2 class="text-2xl font-bold text-slate-800">Search Individual</h2>
-        <p class="text-sm text-slate-500 mt-1 text-left">Search the registry by Name, National ID, or Passport Number.</p>
+        <p class="text-sm text-slate-500 mt-1 text-left">Only individuals with no organisation employment attached are listed. Search by Name, National ID, or Passport Number.</p>
     </div>
 
     <div class="bg-white p-2 rounded-2xl border border-slate-200 shadow-sm mb-8 flex items-center gap-2 transition-shadow focus-within:shadow-md focus-within:border-blue-300">
@@ -171,41 +171,32 @@
         {
             var actor = await UserAccess.RequireContextAsync();
             var organisationId = actor.IsSuperAdministrator ? 0 : await UserAccess.GetCurrentOrganisationIdAsync();
-            if (!actor.IsSuperAdministrator && !await UserAccess.HasOrganisationAccessAsync(organisationId))
+            if (!actor.IsSuperAdministrator && (organisationId <= 0 || !await UserAccess.HasOrganisationAccessAsync(organisationId)))
                 throw new UnauthorizedAccessException("You do not have access to the selected organisation.");
 
             await using var DbContext = await DbFactory.CreateDbContextAsync();
-            var today = DateTime.Today;
-            // The registry is shared until employment is recorded. After that,
-            // only an employing organisation (or a super administrator) may see the person.
+            // This registry view is for unattached individuals, including for Super Admin.
             var individuals = DbContext.Individuals.AsNoTracking().Where(ind =>
-                actor.IsSuperAdministrator ||
-                (!DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId) &&
-                    !DbContext.StaffOnboardingRequests.Any(r => r.IndividualId == ind.BusinessEntityId && r.IsOpen && r.OrganisationId != organisationId)) ||
-                DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId && j.OrganisationID == organisationId));
+                !DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId) &&
+                (actor.IsSuperAdministrator || !DbContext.StaffOnboardingRequests.Any(r =>
+                    r.IndividualId == ind.BusinessEntityId && r.IsOpen && r.OrganisationId != organisationId)));
 
             var query = from ind in individuals
                         join id in DbContext.Idcards on ind.BusinessEntityId equals id.BusinessEntityId into idGroup
                         from idCard in idGroup.DefaultIfEmpty()
                         join p in DbContext.Passports on ind.BusinessEntityId equals p.BusinessEntityId into pGroup
                         from passport in pGroup.DefaultIfEmpty()
-                        join j in DbContext.Jobs.Where(x => (actor.IsSuperAdministrator || x.OrganisationID == organisationId) &&
-                            (x.TerminatedDate == null || x.TerminatedDate > today))
-                             on ind.BusinessEntityId equals j.IndividualID into jobGroup
-                        from activeJob in jobGroup.DefaultIfEmpty()
-                        join org in DbContext.Organisations on activeJob.OrganisationID equals org.BusinessEntityID into orgGroup
-                        from organisation in orgGroup.DefaultIfEmpty()
-                        select new { ind, idCard, passport, organisation };
+                        select new { ind, idCard, passport };
 
             string term = searchModel.SearchTerm.Trim();
 
             if (searchModel.SearchType == "ID")
             {
-                query = query.Where(q => q.idCard.IdcardNumber == term);
+                query = query.Where(q => q.idCard != null && q.idCard.IdcardNumber == term);
             }
             else if (searchModel.SearchType == "Passport")
             {
-                query = query.Where(q => q.passport.PassportNumber == term);
+                query = query.Where(q => q.passport != null && q.passport.PassportNumber == term);
             }
             else
             {
@@ -232,7 +223,6 @@
                     FullName = $"{q.ind.FirstNameEnglish} {q.ind.MiddleNameEnglish} {q.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
                     IDNumber = q.idCard != null ? q.idCard.IdcardNumber : string.Empty,
                     PassportNumber = q.passport != null ? q.passport.PassportNumber : string.Empty,
-                    Organisation = q.organisation != null ? q.organisation.OrganisationName : string.Empty,
                     Address = q.ind.Country?.ToString() ?? string.Empty,
                     Nationality = q.ind.Country?.ToString() ?? string.Empty
                 }).ToList();

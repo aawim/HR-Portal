@@ -30,6 +30,7 @@ public class JobTypeStageDto
 public record ConfigurationOption(int Id, string Name);
 public class JobTypeConfigurationData
 {
+    public bool CanManageCatalogues { get; set; }
     public List<JobTypeConfigurationDto> JobTypes { get; set; } = new();
     public List<ConfigurationOption> Staff { get; set; } = new();
     public List<ConfigurationOption> RequestTypes { get; set; } = new();

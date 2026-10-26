@@ -535,6 +535,8 @@ public partial class HrmTeContext : DbContext
             entity.HasOne<Staff>().WithMany().HasForeignKey(x => x.IndividualId).OnDelete(DeleteBehavior.Restrict);
         });
 
+        // Preserve the deployed legacy lookup table name; convention singularised it incorrectly.
+        modelBuilder.Entity<HRM.Models.Archives.DayOfWeek>().ToTable("DayOfWeeks");
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(HrmTeContext).Assembly);
 
         modelBuilder.Entity<JobWorkTemplate>(entity =>

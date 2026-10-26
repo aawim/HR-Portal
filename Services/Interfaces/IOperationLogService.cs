@@ -1,4 +1,4 @@
-﻿using HRM.Models;
+using HRM.Models;
 
 namespace HRM.Services.Interfaces
 {
@@ -12,7 +12,7 @@ namespace HRM.Services.Interfaces
         /// <summary>
         /// Updates an existing operation log with modification details.
         /// </summary>
-        Task UpdateLogAsync(int operationLogId, string? remarks = null);
+
 
         Task<OperationLog> CreateAsync(HrmTeContext context,int actionId,string remarks);
     }

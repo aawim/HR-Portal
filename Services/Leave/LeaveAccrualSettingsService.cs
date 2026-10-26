@@ -15,8 +15,8 @@ public sealed class LeaveAccrualSettingsService(IDbContextFactory<HrmTeContext> 
 {
     private async Task<int> RequireOrganisationAsync()
     {
-        await access.RequireContextAsync();
-        if (!await access.HasPermissionAsync("Admin") && !await access.HasUserGroupAsync("Human Resource: Staff") &&
+        var actor=await access.RequireContextAsync();
+        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && !await access.HasUserGroupAsync("Human Resource: Staff") &&
             !await access.HasUserGroupAsync("Human Resource :Head"))
             throw new UnauthorizedAccessException("Only HR or tenant administrators can manage leave accrual.");
         var org = await access.GetCurrentOrganisationIdAsync();

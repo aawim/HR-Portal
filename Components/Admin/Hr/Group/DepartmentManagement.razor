@@ -1,0 +1,37 @@
+@inject HRM.Services.OrganisationSettingsService Settings
+@inject ILogger<DepartmentManagement> Logger
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+@using HRM.DTOs.Organisation
+<section class="space-y-4 p-4">
+    <button type="button" class="app-button app-button-secondary" aria-label="Go back to the previous page" @onclick="GoBack">
+        <span aria-hidden="true">←</span> Back
+    </button>
+    <h1 class="text-xl font-semibold">Departments Management</h1>
+    <p class="text-sm text-slate-500">Approved departments and organisation structures, their supervisors and assigned staff.</p>
+    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
+    <div class="flex flex-wrap gap-2"><a class="app-button app-button-primary" href="/admin/hr/departments/management">Departments</a><a class="app-button app-button-secondary" href="/admin/settings/org/types">Structure types</a></div>
+    @if(data!=null)
+    {
+        <p class="text-sm">Organisation: <strong>@organisation</strong></p>
+        <div class="flex flex-wrap items-end gap-3"><label class="text-sm">Search<input class="mt-1 block rounded border bg-transparent p-2" @bind="search" @bind:event="oninput" /></label><label class="text-sm">Structure type<select class="mt-1 block rounded border bg-transparent p-2" @bind="type"><option value="0">All types</option>@foreach(var t in data.StructureTypes){<option value="@t.Id">@t.Name</option>}</select></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button><a class="app-button app-button-secondary" href="@($"/admin/settings/org/manage/{orgId}/structure")">Organisation structure</a></div>
+        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Department / structure</th><th class="p-3">Type</th><th class="p-3">Supervisors</th><th class="p-3">Staff</th><th class="p-3">Actions</th></tr></thead><tbody>
+        @foreach(var row in Filtered){<tr class="border-t" @key="row.Id"><td class="p-3">@row.Name</td><td class="p-3">@data.StructureTypes.FirstOrDefault(t=>t.Id==row.StructureTypeId)?.Name</td><td class="p-3">@string.Join(", ",row.Supervisors.Select(s=>s.Name))</td><td class="p-3">@row.Members.Count</td><td class="p-3"><button class="app-button app-button-secondary" @onclick="()=>selected=row">View</button></td></tr>}
+        </tbody></table>@if(!Filtered.Any()){<p class="p-4 text-sm text-slate-500">No matching departments.</p>}</div>
+        @if(selected!=null){<section class="space-y-3 rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><h2 class="font-semibold">@selected.Name</h2><button class="app-button app-button-secondary" @onclick="()=>selected=null">Close</button></div><h3 class="text-sm font-semibold">Assigned staff (@selected.Members.Count)</h3>@foreach(var member in selected.Members){<a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>}@if(selected.Members.Count==0){<p class="text-sm text-slate-500">No active staff assigned.</p>}<a class="app-button app-button-secondary" href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">Manage supervisors</a></section>}
+    }
+    else if(busy){<p role="status">Loading departments…</p>}
+</section>
+@code {
+    [Inject] private HRM.Services.Interfaces.IUserAccessService Access {get;set;}=null!;
+    private OrganisationTeamSettingsData? data;private OrganisationTeamSettingsRow? selected;private int orgId,type;private bool busy;private string organisation="",search="";private string? error;
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered=>data?.Rows.Where(r=>r.Kind=="Department"&&(type==0||r.StructureTypeId==type)&&r.Name.Contains(search,StringComparison.OrdinalIgnoreCase))??[];
+    protected override Task OnInitializedAsync()=>Load();
+    private async Task GoBack()
+    {
+        try { await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/navigation-history.js"); await module.InvokeVoidAsync("goBack", "/admin/hr"); }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { Navigation.NavigateTo("/admin/hr"); }
+    }
+    private async Task Load(){busy=true;error=null;try{orgId=await Access.GetCurrentOrganisationIdAsync();data=await Settings.GetTeamSettingsAsync(orgId);organisation=(await Settings.GetTeamOrganisationsAsync()).FirstOrDefault(o=>o.Id==orgId)?.Name??"";selected=null;}catch(Exception ex){data=null;Logger.LogError(ex,"Loading departments");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Departments could not be loaded. Refresh or contact HR.";}finally{busy=false;}}
+}

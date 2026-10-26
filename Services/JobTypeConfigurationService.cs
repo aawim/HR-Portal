@@ -9,11 +9,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access)
+public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
 {
     private async Task<int> RequireOrganisationAsync()
     {
         var user = await access.RequireContextAsync();
+        if(!user.IsSuperAdministrator && !user.IsHRStaff && !await access.HasPermissionAsync("Super.Admin.Manage") && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Configuration.View"))
+            throw new UnauthorizedAccessException("You do not have permission to view configuration.");
         int org;
         try { org = await access.GetCurrentOrganisationIdAsync(); }
         catch (InvalidOperationException) when (user.ActiveJob != null)
@@ -31,8 +33,10 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
     {
         var org = await RequireOrganisationAsync();
         await using var db = await factory.CreateDbContextAsync();
+        var actor=await access.RequireContextAsync();
         return new()
         {
+            CanManageCatalogues=actor.IsSuperAdministrator||await access.HasPermissionAsync("Super.Admin.Manage"),
             JobTypes = requestTypes
                 ? await db.RequestTypes.AsNoTracking().OrderBy(x => x.TypeName).Select(x => new JobTypeConfigurationDto
                     { Id = x.RequestTypeId, Name = x.TypeName, SequenceNumberTypeId = x.SequenceNumberTypeId, ViewUrl = x.ViewUrl }).ToListAsync()
@@ -52,25 +56,34 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         };
     }
 
+    private async Task RequireCatalogueAsync()
+    {
+        var actor=await access.RequireContextAsync();
+        if(!actor.IsSuperAdministrator&&!await access.HasPermissionAsync("Super.Admin.Manage"))throw new UnauthorizedAccessException("Only Super Admin can change shared Job Type and Request Type catalogues.");
+    }
+
     public async Task<ServiceResult> SaveJobTypeAsync(JobTypeConfigurationDto model)
     {
-        await RequireOrganisationAsync();
+        await RequireOrganisationAsync();await RequireCatalogueAsync();
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Trim().Length > 50 || model.DhivehiName?.Length > 50)
             return ServiceResult.Fail("Enter job type names of 50 characters or fewer.");
         await using var db = await factory.CreateDbContextAsync();
         if (await db.JobTypes.AnyAsync(x => x.JobTypeId != model.Id && x.TypeName == model.Name.Trim()))
             return ServiceResult.Fail("A job type with this name already exists.");
+        await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var entity = model.Id == 0 ? new JobType() : await db.JobTypes.SingleOrDefaultAsync(x => x.JobTypeId == model.Id);
         if (entity == null) return ServiceResult.Fail("Job type was not found.");
         if (model.Id == 0) db.JobTypes.Add(entity);
+        var audit=await logs.CreateAsync(db,HRM.Components.Shared.SharedConfig.OperationLogActionTypes.USERS_UPDATE,$"Shared Job Type {model.Id}: {entity.TypeName} → {model.Name.Trim()}.");
+        entity.OperationLogId=audit.OperationLogId;
         entity.TypeName = model.Name.Trim(); entity.TypeNameDhivehi = model.DhivehiName?.Trim(); entity.IsActive = model.IsActive;
-        await db.SaveChangesAsync(); model.Id = entity.JobTypeId;
+        await db.SaveChangesAsync(); await tx.CommitAsync(); model.Id = entity.JobTypeId;
         return ServiceResult.Ok("Job type saved.");
     }
 
     public async Task<ServiceResult> SaveRequestTypeAsync(JobTypeConfigurationDto model)
     {
-        await RequireOrganisationAsync();
+        await RequireOrganisationAsync();await RequireCatalogueAsync();
         if (string.IsNullOrWhiteSpace(model.Name) || model.Name.Trim().Length > 500 || model.ViewUrl?.Length > 1000)
             return ServiceResult.Fail("Enter a name of up to 500 characters and a view URL of up to 1000 characters.");
         var viewUrl = string.IsNullOrWhiteSpace(model.ViewUrl) ? null : model.ViewUrl.Trim();
@@ -87,6 +100,7 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         var entity = model.Id == 0 ? new RequestType() : await db.RequestTypes.SingleOrDefaultAsync(x => x.RequestTypeId == model.Id);
         if (entity == null) return ServiceResult.Fail("Request type was not found.");
         if (model.Id == 0) db.RequestTypes.Add(entity);
+        await logs.CreateAsync(db,HRM.Components.Shared.SharedConfig.OperationLogActionTypes.USERS_UPDATE,$"Shared Request Type {model.Id}: {entity.TypeName} → {model.Name.Trim()}.");
         entity.TypeName = model.Name.Trim(); entity.SequenceNumberTypeId = model.SequenceNumberTypeId;
         entity.ViewUrl = viewUrl;
         await db.SaveChangesAsync(); await tx.CommitAsync(); model.Id = entity.RequestTypeId;
@@ -95,7 +109,7 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
 
     public async Task<ServiceResult> DeleteRequestTypeAsync(int id)
     {
-        var org = await RequireOrganisationAsync();
+        var org = await RequireOrganisationAsync();await RequireCatalogueAsync();
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var entity = await db.RequestTypes.SingleOrDefaultAsync(x => x.RequestTypeId == id);
@@ -117,6 +131,7 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         await db.RequestTypeSpecificDocumentTypes.Where(x => x.RequestTypeId == id).ExecuteDeleteAsync();
         await db.Set<Dictionary<string, object>>("RequestTypeSpecificCheckListItem")
             .Where(x => EF.Property<int>(x, "RequestTypeId") == id).ExecuteDeleteAsync();
+        await logs.CreateAsync(db,HRM.Components.Shared.SharedConfig.OperationLogActionTypes.USERS_UPDATE,$"Delete unused shared Request Type {entity.RequestTypeId} ({entity.TypeName}).");
         db.RequestTypes.Remove(entity);
         await db.SaveChangesAsync(); await tx.CommitAsync();
         return ServiceResult.Ok("Request type and its unused workflow configuration deleted.");
@@ -140,58 +155,6 @@ public class JobTypeConfigurationService(IDbContextFactory<HrmTeContext> factory
         };
     }
 
-    public async Task<ServiceResult> SaveWorkflowAsync(JobTypeWorkflowDto model, bool requestTypeDefault = false)
-    {
-        var org = await RequireOrganisationAsync();
-        var data = await LoadAsync(requestTypeDefault);
-        if ((!requestTypeDefault && !data.JobTypes.Any(x => x.Id == model.JobTypeId && x.IsActive)) || !data.RequestTypes.Any(x => x.Id == model.RequestTypeId))
-            return ServiceResult.Fail("Select an active job type and a leave request type.");
-        if (model.Stages.Count == 0 || model.Stages.Count > 20 || model.Stages.Select(x => x.StateId).Distinct().Count() != model.Stages.Count)
-            return ServiceResult.Fail("Add 1–20 stages, each with a different request status.");
-        foreach (var stage in model.Stages)
-        {
-            if (string.IsNullOrWhiteSpace(stage.Name) || stage.Name.Length > 150 || !data.States.Any(x => x.Id == stage.StateId))
-                return ServiceResult.Fail("Each stage needs a name and a processing status.");
-            if (stage.StaffUserIds.Count == 0 || stage.StaffUserIds.Distinct().Count() != stage.StaffUserIds.Count ||
-                stage.StaffUserIds.Any(id => !data.Staff.Any(x => x.Id == id)))
-                return ServiceResult.Fail("Assign at least one active staff member from this organisation to every stage.");
-            if (!new[] { "Any", "All", "Sequential", "Quorum" }.Contains(stage.Mode) ||
-                stage.Mode == "Quorum" && (stage.MinimumApprovals is null or < 1 || stage.MinimumApprovals > stage.StaffUserIds.Count))
-                return ServiceResult.Fail("Choose a valid approval mode and quorum.");
-        }
-        await using var db = await factory.CreateDbContextAsync();
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
-        var route = new[] { 2 }.Concat(model.Stages.Select(x => x.StateId)).Append(4).ToArray();
-        for (var i = 1; i < route.Length; i++)
-            if (route[i - 1] != route[i])
-                try { await RequestTransitionPolicy.RequireAllowedAsync(db, model.RequestTypeId, route[i - 1], route[i]); }
-                catch (InvalidOperationException ex) { return ServiceResult.Fail(ex.Message); }
-        var previous = await db.WfWorkflowDefinitions.Include(x => x.WorkflowJobTypes)
-            .Where(x => x.LeaveRequestKind == null && x.OrganisationBusinessEntityId == org && x.RequestTypeId == model.RequestTypeId &&
-                (requestTypeDefault ? !x.WorkflowJobTypes.Any() : x.WorkflowJobTypes.Any(m => m.JobTypeId == model.JobTypeId && m.IsActive))).ToListAsync();
-        var currentVersion = previous.Where(x => x.IsActive).Select(x => x.VersionNumber).DefaultIfEmpty().Max();
-        if (currentVersion != model.Version) return ServiceResult.Fail("This workflow was changed by another administrator. Reload it before saving.");
-        foreach (var old in previous)
-        {
-            if (requestTypeDefault) old.IsActive = false;
-            foreach (var mapping in old.WorkflowJobTypes.Where(x => x.JobTypeId == model.JobTypeId)) mapping.IsActive = false;
-        }
-        var version = (await db.WfWorkflowDefinitions.Where(x => x.OrganisationBusinessEntityId == org && x.RequestTypeId == model.RequestTypeId)
-            .Select(x => (int?)x.VersionNumber).MaxAsync() ?? 0) + 1;
-        db.WfWorkflowDefinitions.Add(new()
-        {
-            Name = requestTypeDefault ? $"Request type {model.RequestTypeId} approvals" : $"Job type {model.JobTypeId} leave approvals", RequestTypeId = model.RequestTypeId,
-            OrganisationBusinessEntityId = org, VersionNumber = version, IsActive = true, CreatedAt = DateTime.UtcNow,
-            WorkflowJobTypes = requestTypeDefault ? new List<WfWorkflowJobType>() : new List<WfWorkflowJobType> { new() { JobTypeId = model.JobTypeId, IsActive = true } },
-            Stages = model.Stages.Select((stage, index) => new WfWorkflowStage
-            {
-                StageOrder = index + 1, StageName = stage.Name.Trim(), RequestStateId = stage.StateId,
-                ApprovalMode = stage.Mode, MinimumApprovals = stage.Mode == "Quorum" ? stage.MinimumApprovals : null,
-                Approvers = stage.StaffUserIds.Select((id, order) => new WfStageApprover
-                { ApproverType = "USER", ApproverReferenceId = id, SequenceNumber = order + 1, IsRequired = true }).ToList()
-            }).ToList()
-        });
-        await db.SaveChangesAsync(); await tx.CommitAsync(); model.Version = version;
-        return ServiceResult.Ok("Workflow saved. New requests will use these stages and assigned staff.");
-    }
+    public Task<ServiceResult> SaveWorkflowAsync(JobTypeWorkflowDto model, bool requestTypeDefault = false)
+        => Task.FromResult(ServiceResult.Fail("Configure approval flows under Settings > Configurations > Request Approval Flows."));
 }

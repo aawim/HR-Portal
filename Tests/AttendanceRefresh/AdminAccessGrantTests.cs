@@ -69,6 +69,11 @@ static class AdminAccessGrantTests
         Check((await rejected.Service.ActAsync(10, row.Id, 2, "Reject", "Not required")).Success, "Reject failed");
         await using (var db = rejected.Factory.CreateDbContext()) Check(!(await db.Users.SingleAsync(u => u.UserId == 4)).AdminPortalAccessEnabled && (await db.Requests.SingleAsync()).RequestStateId == 6, "Rejected request granted access");
 
+        var emergency=await Fixture.Create();
+        await using(var db=emergency.Factory.CreateDbContext()){(await db.Users.SingleAsync(u=>u.UserId==4)).AdminPortalAccessEnabled=true;await db.SaveChangesAsync();}
+        Check((await emergency.Service.SubmitAsync(10,4,[3],[2],"Pending grant")).Success,"Emergency revoke fixture failed");
+        Check((await emergency.Service.RevokeAsync(10,4,"Immediate security revocation")).Success,"Pending grant blocked emergency revoke");
+        await using(var db=emergency.Factory.CreateDbContext()){Check(!await db.AdminAccessGrantRequests.AnyAsync(r=>r.IsOpen)&&!(await db.Users.SingleAsync(u=>u.UserId==4)).AdminPortalAccessEnabled,"Emergency revoke retained account access or an open grant");Check((await db.WfRequestInstances.SingleAsync()).WorkflowStatus=="AccessRevoked","Pending grant can resume after revoke");}
         var cancelled = await Fixture.Create();
         Check((await cancelled.Service.SubmitAsync(10, 4, [3], [2], "Request")).Success, "Cancel fixture failed");
         row = (await cancelled.Service.LoadAsync()).Requests.Single();
@@ -121,7 +126,8 @@ static class AdminAccessGrantTests
                     AdminPortalAccessEnabled = id < 4, AdminPortalAccessOrganisationId = id < 4 ? 1 : null });
             }
             db.JobTypes.Add(new JobType { JobTypeId = 1, TypeName = "Contract", IsActive = true });
-            db.Jobs.Add(new Job { JobId = 1, IndividualID = 400, OrganisationID = 10, JobTypeId = 1, JobStateId = 4, JoinedDate = DateTime.Today.AddYears(-1) });
+            db.Jobs.Add(new Job { JobId = 1, IndividualID = 400, OrganisationID = 10, JobTypeId = 1, JobStateId = 4, JoinedDate = DateTime.UtcNow.AddHours(5).Date.AddYears(-1) });
+            db.JobPositions.Add(new JobPosition{JobPositionId=1,JobId=1,PositionId=1,FromDate=DateTime.UtcNow.AddHours(5).Date.AddYears(-1),JobPositionStateId=4});
             db.Roles.AddRange(new Role { RoleID = 1, RoleKey = "Admin", Name = "Admin", ContextId = 1 }, new Role { RoleID = 2, RoleKey = "Users.View", Name = "View users", ContextId = 1 }, new Role { RoleID = 3, RoleKey = "Super.Admin.Manage", Name = "Super Admin", ContextId = 1 });
             for (var id = 1; id <= 3; id++) db.UserOrganisationRoles.Add(new UserOrganisationRole { UserOrganisationID = 1, RoleID = id, IsActive = true });
             for (var id = 1; id <= 3; id++) db.UserGroups.Add(new UserGroup { UserGroupId = id, GroupName = "Group " + id, UserOrganisationId = 1 });

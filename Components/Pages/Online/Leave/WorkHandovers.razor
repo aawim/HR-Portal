@@ -1,9 +1,12 @@
+@page "/admin/hr/work-handovers"
+@page "/admin/hr/work-handovers/{LeaveId:int}"
 @page "/online/leave-handovers"
 @page "/online/leave-handovers/{LeaveId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
 @using HRM.DTOs.Leave
 @using HRM.Services.Leave
+@inject NavigationManager Navigation
 @inject LeaveHandoverService Handovers
 @inject HRM.Services.ToastService Toast
 @inject ILogger<WorkHandovers> Logger
@@ -13,8 +16,8 @@
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div><h1 class="text-xl font-semibold">@(AssignedOnly ? "Work handovers assigned to you" : "Work handovers")</h1><p class="text-sm text-slate-500">Review assigned tasks and track employee and supervisor approvals.</p></div>
         <div class="flex gap-3 text-sm">
-            <a class="text-blue-700" href="/online">Dashboard</a>
-            @if (LeaveId.HasValue) { <a class="text-blue-700" href="@(AssignedOnly ? "/online/leave-handovers?assigned=true" : "/online/leave-handovers")">@(AssignedOnly ? "All assigned handovers" : "All my handovers")</a> }
+            <a class="text-blue-700" href="@(IsAdminView ? "/admin/hr" : "/online")">@(IsAdminView ? "HR" : "Dashboard")</a>
+            @if (LeaveId.HasValue) { <a class="text-blue-700" href="@(AssignedOnly ? InboxPath+"?assigned=true" : InboxPath)">@(AssignedOnly ? "All assigned handovers" : "All my handovers")</a> }
             <button type="button" disabled="@busy" class="text-blue-700 disabled:opacity-50" @onclick="RefreshAsync">Refresh</button>
         </div>
     </div>
@@ -89,6 +92,8 @@
 </div>
 
 @code {
+    private bool IsAdminView => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
+    private string InboxPath => IsAdminView ? "/admin/hr/work-handovers" : "/online/leave-handovers";
     [Parameter] public int? LeaveId { get; set; }
     [SupplyParameterFromQuery(Name = "assigned")] public bool AssignedOnly { get; set; }
     private List<LeaveHandoverInboxItem> items = [];

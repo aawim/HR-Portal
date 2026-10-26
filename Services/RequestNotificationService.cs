@@ -129,6 +129,8 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
             n.ViewUrl == LateCheckInRequestService.PageUrl ? LateCheckInRequestService.PageUrl :
             n.ViewUrl == LateCheckInRequestService.EarlyPageUrl ? LateCheckInRequestService.EarlyPageUrl :
+            n.ViewUrl == OvertimeRequestService.PageUrl ? OvertimeRequestService.PageUrl :
+            n.ViewUrl == SupervisorChangeRequestService.PageUrl ? SupervisorChangeRequestService.PageUrl :
             n.ViewUrl == StaffPositionManagementService.RequestsPageUrl ? StaffPositionManagementService.RequestsPageUrl :
             n.ViewUrl == WeeklyHourExceptionService.PageUrl ? WeeklyHourExceptionService.PageUrl :
             n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :

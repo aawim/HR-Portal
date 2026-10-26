@@ -115,6 +115,7 @@ static class WorkPlanningLifecycleTests
             (await db.Jobs.SingleAsync(x => x.JobId == 1)).OrganisationStructureId = 111;
             db.Individuals.Add(new Individual { BusinessEntityId = 101, FirstNameEnglish = "Second" });
             db.Jobs.Add(new Job { JobId = 3, IndividualID = 101, OrganisationID = 10, OrganisationStructureId = 111, JobStateId = 4 });
+            db.JobWorkTemplateAssignments.Add(new(){JobID=3,WorkTemplateID=1,SchedulePurpose="Official",IsActive=true,EffectiveFrom=day.AddYears(-1),WorkingDaysMask=31});
             await db.SaveChangesAsync();
         }
         var manager = new HRM.Services.WorkPlanning.WorkAssignmentManagementService(factory, access, audit,

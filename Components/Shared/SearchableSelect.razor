@@ -1,0 +1,59 @@
+@using Microsoft.AspNetCore.Components.Web
+<div class="relative min-w-0">
+    <label id="@($"{id}-label")" for="@id" class="mb-1 block text-sm font-medium">@Label</label>
+    <button id="@id" type="button" disabled="@Disabled" aria-haspopup="listbox" aria-expanded="@open" aria-controls="@($"{id}-options")"
+            class="search-select-trigger flex w-full items-center justify-between gap-3 rounded border p-2 text-left text-sm disabled:opacity-50" @onclick="Toggle">
+        <span class="min-w-0 truncate">@(choices.FirstOrDefault(o=>o.Id==Value)?.Name ?? Placeholder)</span><span aria-hidden="true">▾</span>
+    </button>
+    @if(open&&!Disabled)
+    {
+        <button type="button" class="fixed inset-0 z-40 cursor-default" aria-label="Close selection" tabindex="-1" @onclick="Close"></button>
+        <div class="search-select-popup absolute left-0 right-0 z-50 mt-1 rounded-lg border p-2 shadow-lg">
+            <input @ref="searchInput" type="search" role="combobox" aria-label="@($"Search {Label.ToLowerInvariant()}")" aria-autocomplete="list" aria-expanded="true"
+                   aria-controls="@($"{id}-options")" aria-activedescendant="@(Filtered.Count>0?$"{id}-option-{activeIndex}":null)"
+                   class="search-select-search mb-2 w-full rounded border p-2 text-sm" placeholder="Type to search…" value="@query" @oninput="Search" @onkeydown="KeyDown" />
+            <div id="@($"{id}-options")" role="listbox" aria-labelledby="@($"{id}-label")" class="max-h-60 space-y-1 overflow-y-auto">
+                @for(var index=0;index<Filtered.Count;index++)
+                {
+                    var option=Filtered[index];var optionIndex=index;
+                    <button id="@($"{id}-option-{index}")" @key="option.Id" type="button" role="option" aria-selected="@(option.Id==Value)"
+                            class="search-select-option block w-full rounded px-3 py-2 text-left text-sm @(activeIndex==index?"search-select-option-active":"")"
+                            @onmouseover="()=>activeIndex=optionIndex" @onclick="()=>Choose(option.Id)">@option.Name</button>
+                }
+                @if(Filtered.Count==0){<p role="status" class="px-3 py-2 text-sm text-slate-500">No matches found.</p>}
+            </div>
+            @if(CanClear&&Value!=0){<button type="button" class="search-select-clear mt-2 w-full border-t p-2 text-left text-sm" @onclick="()=>Choose(0)">Clear selection</button>}
+        </div>
+    }
+</div>
+@code {
+    public sealed record Option(int Id,string Name);
+    [Parameter] public IEnumerable<Option> Options {get;set;}=[];
+    [Parameter] public int Value {get;set;}
+    [Parameter] public EventCallback<int> ValueChanged {get;set;}
+    [Parameter] public string Label {get;set;}="Select";
+    [Parameter] public string Placeholder {get;set;}="Select an option";
+    [Parameter] public bool Disabled {get;set;}
+    [Parameter] public bool CanClear {get;set;}=true;
+    private readonly string id="search-select-"+Guid.NewGuid().ToString("N");
+    private List<Option> choices=[];
+    private List<Option> Filtered=>choices.Where(o=>query.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries).All(token=>o.Name.Contains(token,StringComparison.OrdinalIgnoreCase))).ToList();
+    private string query="";
+    private bool open,focusSearch;
+    private int activeIndex;
+    private ElementReference searchInput;
+    protected override void OnParametersSet(){choices=Options.ToList();activeIndex=Math.Clamp(activeIndex,0,Math.Max(0,Filtered.Count-1));if(Disabled)Close();}
+    protected override async Task OnAfterRenderAsync(bool firstRender){if(focusSearch&&open&&!Disabled){focusSearch=false;await searchInput.FocusAsync();}}
+    private void Toggle(){if(Disabled)return;open=!open;query="";activeIndex=0;focusSearch=open;}
+    private void Close(){open=false;focusSearch=false;query="";activeIndex=0;}
+    private void Search(ChangeEventArgs args){query=args.Value?.ToString()??"";activeIndex=0;}
+    private async Task Choose(int value){if(Disabled||value!=0&&!choices.Any(o=>o.Id==value))return;Close();await ValueChanged.InvokeAsync(value);}
+    private async Task KeyDown(KeyboardEventArgs args)
+    {
+        var count=Filtered.Count;
+        if(args.Key=="ArrowDown"&&count>0)activeIndex=(activeIndex+1)%count;
+        else if(args.Key=="ArrowUp"&&count>0)activeIndex=(activeIndex+count-1)%count;
+        else if(args.Key=="Enter"&&count>0)await Choose(Filtered[activeIndex].Id);
+        else if(args.Key is "Escape" or "Tab")Close();
+    }
+}

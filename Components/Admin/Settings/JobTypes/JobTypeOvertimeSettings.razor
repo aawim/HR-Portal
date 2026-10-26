@@ -3,9 +3,8 @@
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<JobTypeOvertimeSettings> Logger
 
-<section class="space-y-3 rounded-xl border p-4" aria-label="Overtime policy">
+<section class="space-y-3 rounded-xl border p-3" aria-label="Overtime policy">
     <h3 class="font-semibold">Overtime (OT) — @JobTypeName</h3>
-    <p class="text-sm text-slate-500">This policy applies to this Job Type in the current organisation. Official working hours continue to come from assigned templates.</p>
     @if(error != null){<p role="alert" class="text-sm text-amber-700 dark:text-amber-400">@error</p>}
     @if(model == null)
     {
@@ -13,7 +12,7 @@
     }
     else
     {
-        @if(model.Id == 0){<p class="text-sm text-slate-500">No OT policy has been saved for this Job Type. Overtime is not allowed until configured.</p>}
+        @if(model.Id == 0){<p class="text-sm text-slate-500">OT is disabled until a policy is saved.</p>}
         <fieldset disabled="@busy" class="space-y-3">
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="model.IsAllowed" /> Allow overtime</label>
             @if(model.IsAllowed)
@@ -22,11 +21,10 @@
                     <label class="text-sm">Maximum OT hours per week<InputNumber @bind-Value="model.MaximumWeeklyHours" min="0.01" max="168" step="0.01" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
                     <label class="text-sm">Maximum OT hours per day (optional)<InputNumber @bind-Value="model.MaximumDailyHours" min="0.01" max="24" step="0.01" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
                 </div>
-                <p class="text-xs text-slate-500">Limits apply to overtime hours, in addition to normal working hours. Leave the daily limit blank to use only the weekly limit. The week follows the Job Type's working-hours week start, or Sunday if none is configured.</p>
+                <p class="text-xs text-slate-500">Leave the daily limit blank for a weekly limit only.</p>
             }
             <button class="app-button app-button-primary" @onclick="SaveAsync">@(busy ? "Saving…" : "Save OT policy")</button>
         </fieldset>
-        <p class="text-xs text-slate-500">These are eligibility limits. Saving a policy does not approve overtime or create an overtime payment.</p>
     }
 </section>
 

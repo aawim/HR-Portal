@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs.UserContext;
 using HRM.Enum;
 using HRM.Models;
@@ -389,7 +389,7 @@ namespace HRM.Services
                             jobPosition.FromDate <= today &&
                             (
                                 jobPosition.ToDate == null ||
-                                jobPosition.ToDate >= today
+                                jobPosition.ToDate > today
                             )
 
                         orderby

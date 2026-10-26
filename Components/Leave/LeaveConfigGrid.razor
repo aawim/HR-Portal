@@ -1,4 +1,4 @@
-﻿@using HRM.Models
+@using HRM.Models
 @using HRM.Models.Archives
 @using HRM.Services
 @using HRM.Services.Interfaces
@@ -6,10 +6,12 @@
 @using Microsoft.EntityFrameworkCore
 @rendermode RenderMode.InteractiveServer
 
-@inject HrmTeContext DbContext
+@inject LeaveConfigurationSettingsService Settings
+@inject ToastService Toasts
 @inject IUserAccessService _access
 
 <div class="bg-white relative">
+    @if(error != null){<p role="alert" class="rounded border p-3">@error</p>}
     <!-- Header & Action Bar -->
     <div class="flex justify-between items-end border-b border-slate-100 pb-4 mb-4 mt-[-30px]">
         <div>
@@ -274,7 +276,6 @@
     private List<LeaveConfigurableValueType>? valueTypes;
     private List<JobType>? jobTypes;
 
-    private int? loggedInUserOrgId;
 
     // --- Slide Panel State ---
     private bool isPanelOpen = false;
@@ -285,41 +286,12 @@
     private bool isDeleteModalOpen = false;
     private LeaveConfigurableValue? configToDelete;
 
-    protected override async Task OnInitializedAsync()
-    {
-        // 1. Fetch user state to determine default organization
-        if (AuthState is not null)
-        {
-            var state = await AuthState;
-            var user = state.User;
-
-            if (user.Identity is not null && user.Identity.IsAuthenticated)
-            {
-                var orgClaim = user.FindFirst("orgId");
-                if (orgClaim != null && int.TryParse(orgClaim.Value, out int orgId))
-                {
-                    loggedInUserOrgId = orgId;
-                }
-            }
-        }
-
-        await LoadData();
-    }
-
+    private string? error;
+    protected override Task OnInitializedAsync()=>LoadData();
     private async Task LoadData()
     {
-        // Fetch Dropdown Data
-        organisations = await DbContext.Organisations.OrderBy(o => o.OrganisationName).ToListAsync();
-        valueTypes = await DbContext.LeaveConfigurableValueTypes.OrderBy(v => v.Name).ToListAsync();
-        jobTypes = await DbContext.JobTypes.OrderBy(j => j.TypeName).ToListAsync();
-
-        // Fetch Grid Data
-        LeaveConfigurableValues = await DbContext.LeaveConfigurableValues
-            .Include(lct => lct.LeaveConfigurableValueType)
-            .Include(org => org.Organisation)
-            .Include(jt => jt.JobType)
-            .OrderBy(l => l.LeaveConfigurableValueId)
-            .ToListAsync();
+        try { var data=await Settings.LoadAsync();organisations=data.Organisations;valueTypes=data.Types;jobTypes=data.JobTypes;LeaveConfigurableValues=data.Values;error=null; }
+        catch(Exception ex){organisations=[];valueTypes=[];jobTypes=[];LeaveConfigurableValues=[];error=ex is UnauthorizedAccessException?ex.Message:"Leave configuration could not be loaded.";}
     }
 
     // --- Add/Edit Panel Actions ---
@@ -361,28 +333,9 @@
 
     private async Task SaveConfig()
     {
-        if (currentConfig == null) return;
-
-        if (isEditing)
-        {
-            var existing = await DbContext.LeaveConfigurableValues.FindAsync(currentConfig.LeaveConfigurableValueId);
-            if (existing != null)
-            {
-                existing.LeaveConfigurableValueTypeId = currentConfig.LeaveConfigurableValueTypeId;
-                existing.OrganisationId = currentConfig.OrganisationId;
-                existing.JobTypeId = currentConfig.JobTypeId;
-                existing.Value = currentConfig.Value;
-                existing.IsValid = currentConfig.IsValid;
-            }
-        }
-        else
-        {
-            DbContext.LeaveConfigurableValues.Add(currentConfig);
-        }
-
-        await DbContext.SaveChangesAsync();
-        await LoadData();
-        ClosePanel();
+        if(currentConfig==null)return;
+        try{await Settings.SaveAsync(currentConfig);await LoadData();ClosePanel();Toasts.Success("Leave configuration saved.");}
+        catch(Exception ex){error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Configuration could not be saved.";}
     }
 
     // --- Delete Modal Actions ---
@@ -400,16 +353,8 @@
 
     private async Task ConfirmDelete()
     {
-        if (configToDelete != null)
-        {
-            var entity = await DbContext.LeaveConfigurableValues.FindAsync(configToDelete.LeaveConfigurableValueId);
-            if (entity != null)
-            {
-                DbContext.LeaveConfigurableValues.Remove(entity);
-                await DbContext.SaveChangesAsync();
-                await LoadData(); // Refresh the grid
-            }
-        }
-        CloseDeleteModal();
+        if(configToDelete==null)return;
+        try{await Settings.DeleteAsync(configToDelete.LeaveConfigurableValueId);await LoadData();CloseDeleteModal();Toasts.Success("Leave configuration removed.");}
+        catch(Exception ex){error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Configuration could not be removed.";}
     }
 }

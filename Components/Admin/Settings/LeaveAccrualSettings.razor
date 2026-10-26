@@ -6,40 +6,40 @@
 @inject LeaveAccrualSettingsService Settings
 @inject ILogger<LeaveAccrualSettings> Logger
 
-<PageTitle>Leave accrual by job type</PageTitle>
-<div class="mx-auto max-w-6xl space-y-5 p-4">
-    <a href="/admin/settings/leaves" class="text-sm text-blue-700 underline">Back to Leaves Management</a>
-    <h1 class="text-2xl font-semibold">Leave accrual by job type</h1>
+@if(!Embedded){<PageTitle>Leave accrual by job type</PageTitle>}
+<div class="@(Embedded?"space-y-4":"mx-auto max-w-6xl space-y-5 p-4")">
+    @if(!Embedded){<a href="/admin/settings/leaves" class="text-sm text-blue-700 underline">Back to Leaves Management</a>}
+    @if(!Embedded){<h1 class="text-2xl font-semibold">Leave accrual by job type</h1>}
     @if (message != null) { <p role="status" class="rounded border bg-slate-50 p-3">@message</p> }
     @if (data == null) { <button type="button" class="app-button app-button-secondary" @onclick="ReloadAsync">Load configuration</button> }
     else
     {
-        <p class="text-sm text-slate-600">Tenant: <strong>@data.Organisation</strong>. Rules apply to approved active jobs in this tenant only. New Job Types, including Internship, appear here automatically.</p>
+        <p class="text-sm text-slate-600">@data.Organisation</p>
         <div class="overflow-x-auto rounded-xl border bg-white">
             <table class="w-full text-left text-sm">
-                <thead class="bg-slate-50"><tr><th class="p-3">Job type</th><th class="p-3">Leave type</th><th class="p-3">Grant</th><th class="p-3">First grant</th><th class="p-3">Status</th><th class="p-3">Actions</th></tr></thead>
+                <thead class="bg-slate-50"><tr><th class="px-3 py-2">Job type</th><th class="px-3 py-2">Leave type</th><th class="px-3 py-2">Grant</th><th class="px-3 py-2">First grant</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Actions</th></tr></thead>
                 <tbody>
-                    @foreach (var row in data.Rules)
+                    @foreach (var row in data.Rules.Where(r=>!JobTypeId.HasValue||r.JobTypeId==JobTypeId))
                     {
-                        <tr class="border-t"><td class="p-3">@data.JobTypes.FirstOrDefault(x => x.Id == row.JobTypeId)?.Name</td><td class="p-3">@data.LeaveTypes.FirstOrDefault(x => x.Id == row.LeaveTypeId)?.Name</td>
-                            <td class="p-3">@row.GrantDays.ToString("0.##") days / @row.RepeatEveryMonths month(s)</td><td class="p-3">@(row.FirstGrantAfterMonths == 0 ? "On joining" : $"After {row.FirstGrantAfterMonths} month(s)")</td>
-                            <td class="p-3">@(row.IsEnabled ? "Enabled" : row.CarryForwardMode == "Unspecified" ? "Draft · carry-forward required" : "Disabled")</td>
-                            <td class="p-3"><div class="flex flex-wrap gap-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => Edit(row)">Configure</button><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => PreviewAsync(row.Id)">Preview</button></div></td></tr>
+                        <tr class="border-t"><td class="px-3 py-2">@data.JobTypes.FirstOrDefault(x => x.Id == row.JobTypeId)?.Name</td><td class="px-3 py-2">@data.LeaveTypes.FirstOrDefault(x => x.Id == row.LeaveTypeId)?.Name</td>
+                            <td class="px-3 py-2">@row.GrantDays.ToString("0.##") days / @row.RepeatEveryMonths month(s)</td><td class="px-3 py-2">@(row.FirstGrantAfterMonths == 0 ? "On joining" : $"After {row.FirstGrantAfterMonths} month(s)")</td>
+                            <td class="px-3 py-2">@(row.IsEnabled ? "Enabled" : row.CarryForwardMode == "Unspecified" ? "Draft · carry-forward required" : "Disabled")</td>
+                            <td class="px-3 py-2"><div class="flex flex-wrap gap-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => Edit(row)">Configure</button><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => PreviewAsync(row.Id)">Preview</button></div></td></tr>
                     }
-                    @foreach (var job in data.JobTypes.Where(j => !data.Rules.Any(r => r.JobTypeId == j.Id)))
+                    @foreach (var job in data.JobTypes.Where(j => (!JobTypeId.HasValue||j.Id==JobTypeId)&&!data.Rules.Any(r => r.JobTypeId == j.Id)))
                     {
-                        <tr class="border-t"><td class="p-3">@job.Name</td><td colspan="4" class="p-3 text-slate-500">No accrual rule configured for this tenant</td><td class="p-3"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(job.Id)">Configure</button></td></tr>
+                        <tr class="border-t"><td class="px-3 py-2">@job.Name</td><td colspan="4" class="p-3 text-slate-500">No accrual rule configured for this tenant</td><td class="px-3 py-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(job.Id)">Configure</button></td></tr>
                     }
                 </tbody>
             </table>
         </div>
-        <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(0)">Add job type / leave type rule</button>
+        <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(JobTypeId??0)">Add job type / leave type rule</button>
         @if (model != null)
         {
-            <fieldset disabled="@busy" class="space-y-4 rounded-xl border bg-white p-5">
+            <fieldset disabled="@busy" class="space-y-3 rounded-xl border bg-white p-3">
                 <h2 class="font-semibold">@(model.Id == 0 ? "New accrual rule" : "Configure accrual rule")</h2>
-                <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <label>Job type<select disabled="@(model.Id != 0)" class="mt-1 w-full rounded border p-2" @bind="model.JobTypeId"><option value="0">Select Job Type</option>@foreach (var x in data.JobTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
+                <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                    <label>Job type<select disabled="@(model.Id != 0||JobTypeId.HasValue)" class="mt-1 w-full rounded border p-2" @bind="model.JobTypeId"><option value="0">Select Job Type</option>@foreach (var x in data.JobTypes.Where(j=>!JobTypeId.HasValue||j.Id==JobTypeId)) { <option value="@x.Id">@x.Name</option> }</select></label>
                     <label>Leave type<select disabled="@(model.Id != 0)" class="mt-1 w-full rounded border p-2" @bind="model.LeaveTypeId"><option value="0">Select Leave Type</option>@foreach (var x in data.LeaveTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
                     <label>Days per grant<input type="number" min="0.01" max="366" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.GrantDays" /></label>
                     <label>First grant after joining (months)<input type="number" min="0" max="1200" class="mt-1 w-full rounded border p-2" @bind="model.FirstGrantAfterMonths" /><span class="text-xs text-slate-500">0 means grant on the joining date.</span></label>
@@ -49,17 +49,17 @@
                     @if (model.CarryForwardMode == "Capped") { <label>Maximum carried days<input type="number" min="0" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.CarryForwardLimit" /></label> }
                     <label>Maximum balance (optional)<input type="number" min="0" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.MaximumBalance" /></label>
                 </div>
-                <p class="text-sm text-slate-600">Dates follow each employee's joining date. HR must process carry-forward at each service-year boundary before that date's grant. Use Leaves Management → Leave Carry Forward. Carried days do not expire. The balance cap limits new credits. Processing start dates prevent historical credits from being applied again.</p>
+                <p class="text-sm text-slate-600">Joining-date based. HR processes carry-forward at service-year renewal; carried days do not expire.</p>
                 <label class="flex items-center gap-2"><input type="checkbox" @bind="model.IsEnabled" />Enable automatic accrual for this tenant's matching jobs</label>
-                <p class="text-sm text-amber-700">Existing balances are preserved. Preview before enabling. Duplicate valid balances or a later recorded renewal are skipped for HR review.</p>
+                <p class="text-sm text-amber-700">Existing balances are preserved. Preview before enabling.</p>
                 <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="SaveAsync">Save configuration</button><button type="button" class="app-button app-button-secondary" @onclick="() => model = null">Close</button></div>
             </fieldset>
         }
         @if (preview != null)
         {
-            <section class="space-y-3 rounded-xl border bg-white p-5">
+            <section class="space-y-3 rounded-xl border bg-white p-3">
                 <h2 class="font-semibold">Accrual preview · @LeaveAccrualCalculator.Today.ToString("dd MMM yyyy")</h2>
-                <p class="text-sm text-slate-500">Read-only preview. Showing @preview.Count row(s). No staff balances were changed by this preview.</p>
+                <p class="text-sm text-slate-500">Preview · @preview.Count staff · no balances changed.</p>
                 <div class="max-h-96 overflow-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Job</th><th class="p-2">Due</th><th class="p-2">Grant</th><th class="p-2">Current</th><th class="p-2">After</th><th class="p-2">Result</th></tr></thead><tbody>@foreach (var row in preview) { <tr class="border-t"><td class="p-2">@row.JobId</td><td class="p-2">@row.DueDate?.ToString("dd MMM yyyy")</td><td class="p-2">@row.Grant</td><td class="p-2">@row.PreviousBalance</td><td class="p-2">@row.NewBalance</td><td class="p-2">@row.Message</td></tr> }</tbody></table></div>
                 @if (data.Rules.Any(x => x.Id == previewRuleId && x.IsEnabled)) { <button type="button" disabled="@busy" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="RunAsync">Process due credits now</button> }
             </section>
@@ -68,6 +68,8 @@
 </div>
 
 @code {
+    [Parameter] public int? JobTypeId {get;set;}
+    [Parameter] public bool Embedded {get;set;}
     private LeaveAccrualSettingsData? data;
     private JobTypeLeaveAccrualRule? model;
     private List<AccrualPreview>? preview;
@@ -79,6 +81,7 @@
     private void Edit(JobTypeLeaveAccrualRule rule) { model = System.Text.Json.JsonSerializer.Deserialize<JobTypeLeaveAccrualRule>(System.Text.Json.JsonSerializer.Serialize(rule)); preview = null; }
     private void New(int job)
     {
+        job=JobTypeId??job;
         model = new() { JobTypeId = job, EffectiveFrom = LeaveAccrualCalculator.Today };
         var name = data?.JobTypes.FirstOrDefault(x => x.Id == job)?.Name.ToLowerInvariant();
         if (name is "contract" or "temporary") { model.GrantDays = 2.5m; model.FirstGrantAfterMonths = 1; model.RepeatEveryMonths = 1; }

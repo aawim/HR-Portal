@@ -813,7 +813,7 @@ namespace HRM.Migrations
 
                     b.HasKey("DayOfWeekId");
 
-                    b.ToTable("DayOfWeek");
+                    b.ToTable("DayOfWeeks", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.DeductionType", b =>
@@ -4575,6 +4575,44 @@ namespace HRM.Migrations
                     b.ToTable("JobTypes");
                 });
 
+            modelBuilder.Entity("HRM.Models.JobTypeLeaveSet", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("LeaveSetId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OperationLogId")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobTypeId");
+
+                    b.HasIndex("LeaveSetId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId", "JobTypeId", "LeaveSetId")
+                        .IsUnique();
+
+                    b.ToTable("LS_JobTypeLeaveSets", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.JobTypeOvertimeRule", b =>
                 {
                     b.Property<int>("Id")
@@ -6394,6 +6432,65 @@ namespace HRM.Migrations
                     b.ToTable("WH_OrganisationWorkingHourRequirements", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.OvertimeRequest", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ApprovedPolicyJson")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PaidAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PaidByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PaymentReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("WeekStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("PaidByUserId");
+
+                    b.HasIndex("OrganisationId", "IndividualId", "WorkDate");
+
+                    b.ToTable("OT_OvertimeRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_OT_OvertimeRequests_Minutes", "[Minutes] > 0 AND [Minutes] <= 1440");
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.Position", b =>
                 {
                     b.Property<int>("PositionId")
@@ -7203,6 +7300,76 @@ namespace HRM.Migrations
                             t.HasCheckConstraint("CK_SP_PositionRequest_Dates", "[ToDate] IS NULL OR [ToDate] >= [FromDate]");
 
                             t.HasCheckConstraint("CK_SP_PositionRequest_Kind", "[ChangeKind] IN ('Assign','Change','Dates','Remove')");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.SupervisorChangeRequest", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("AppliedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsAssignment")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsOpen")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("OriginalVersion")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("TargetId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("TargetKind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TargetName")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("IndividualId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("OrganisationId", "TargetKind", "TargetId", "IndividualId")
+                        .IsUnique()
+                        .HasFilter("[IsOpen] = 1");
+
+                    b.ToTable("SV_SupervisorChangeRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_SV_SupervisorChangeRequests_Target", "[TargetKind] IN ('Department','Team')");
                         });
                 });
 
@@ -11689,6 +11856,33 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
                 });
 
+            modelBuilder.Entity("HRM.Models.JobTypeLeaveSet", b =>
+                {
+                    b.HasOne("HRM.Models.JobType", null)
+                        .WithMany()
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Archives.LeaveSet", null)
+                        .WithMany()
+                        .HasForeignKey("LeaveSetId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HRM.Models.JobTypeOvertimeRule", b =>
                 {
                     b.HasOne("HRM.Models.JobType", null)
@@ -12472,6 +12666,34 @@ namespace HRM.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HRM.Models.OvertimeRequest", b =>
+                {
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("PaidByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Request", "Request")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.OvertimeRequest", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Request");
+                });
+
             modelBuilder.Entity("HRM.Models.Position", b =>
                 {
                     b.HasOne("HRM.Models.OperationLog", "OperationLog")
@@ -12864,6 +13086,41 @@ namespace HRM.Migrations
                     b.HasOne("HRM.Models.Request", "Request")
                         .WithOne()
                         .HasForeignKey("HRM.Models.StaffPositionChangeRequest", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.SupervisorChangeRequest", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Individual", null)
+                        .WithMany()
+                        .HasForeignKey("IndividualId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", "Request")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.SupervisorChangeRequest", "RequestId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
@@ -13367,13 +13624,13 @@ namespace HRM.Migrations
                     b.HasOne("HRM.Models.Individual", "FromIndividual")
                         .WithMany()
                         .HasForeignKey("FromIndividualId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("HRM.Models.Job", "FromJob")
                         .WithMany()
                         .HasForeignKey("FromJobId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("HRM.Models.WorkPlanning.WorkAssignmentOwner", "FromWorkAssignmentOwner")
@@ -13403,13 +13660,13 @@ namespace HRM.Migrations
                     b.HasOne("HRM.Models.Individual", "ToIndividual")
                         .WithMany()
                         .HasForeignKey("ToIndividualId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("HRM.Models.Job", "ToJob")
                         .WithMany()
                         .HasForeignKey("ToJobId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("HRM.Models.WorkPlanning.WorkAssignmentOwner", "ToWorkAssignmentOwner")
@@ -13420,7 +13677,7 @@ namespace HRM.Migrations
                     b.HasOne("HRM.Models.WorkPlanning.WorkAssignment", "WorkAssignment")
                         .WithMany()
                         .HasForeignKey("WorkAssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("HRM.Models.WorkPlanning.WorkAssignmentTransferState", "WorkAssignmentTransferState")

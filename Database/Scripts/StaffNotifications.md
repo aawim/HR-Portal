@@ -6,7 +6,7 @@ Install the rerunnable `20261022_StaffNotifications.sql` before running the upda
 
 The header bell combines request notifications and staff activity, refreshing every three seconds. It uses the authenticated account and selected tenant, and supports opening an item, marking one read, and marking all read. Account ownership and tenant scope are checked again on each read/write.
 
-Successful EF saves record staff notifications for clock events, employment state/details, leave entitlements and balances, official/duty schedule attachments, manually assigned duties, team membership and supervisor responsibilities, and position assignments. Attendance requests created on another staff member's behalf notify that staff member. Pure reads and automatic template-based work-plan generation do not create activity alerts.
+Successful EF saves record staff notifications for employment state/details, leave entitlements and balances, official/duty schedule attachments, manually assigned duties, team membership and supervisor responsibilities, and position assignments. Attendance requests created on another staff member's behalf notify that staff member. Clock events (including corrections to raw punches), pure reads and automatic template-based work-plan generation do not create activity alerts. Attendance request submissions and workflow outcomes still notify their recipients.
 
 Request changes notify the applicant and linked leave, job and attendance subjects. Processing actions can notify even when the state remains unchanged. Work handover and eligible approver notifications continue through the existing request inbox.
 

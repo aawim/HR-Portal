@@ -54,9 +54,9 @@ static class CrudConsolidationTests
             orgLink = (await db.BusinessEntityLocations.SingleAsync(l => l.BusinessEntityId == 10)).BusinessEntityLocationId;
             Check(await db.Locations.AllAsync(l => l.OperationLogId != null && l.OperationLogId > 0), "Address audit links were not applied");
         }
-        Check(!(await organisations.SaveAddressAsync(20, new OrganisationAddressDto { LinkId = orgLink, UsageId = 1, BaseTypeId = 1, CountryId = 1, Line1 = "Attempted move" })).Success, "An address link was reassigned across owners");
+        await Denied(() => organisations.SaveAddressAsync(20, new OrganisationAddressDto { LinkId = orgLink, UsageId = 1, BaseTypeId = 1, CountryId = 1, Line1 = "Attempted move" }));
         Check(!(await personal.CreateAddressAsync(new AddressCreateDto { Name = "Invalid", CountryId = 999, AddressBaseTypeId = 1, BusinessEntityLocationTypeId = 1 })).Success, "Invalid address references accepted");
-        Check(!(await organisations.DeleteAddressAsync(20, orgLink)).Success, "Address removal crossed owner boundary");
+        await Denied(() => organisations.DeleteAddressAsync(20, orgLink));
         Check((await organisations.DeleteAddressAsync(10, orgLink)).Success, "Canonical address removal failed");
         await using (var db = factory.CreateDbContext())
         {

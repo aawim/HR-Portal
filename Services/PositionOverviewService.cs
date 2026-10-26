@@ -25,12 +25,11 @@ public sealed class PositionOverviewService(IDbContextFactory<HrmTeContext> fact
             .OrderBy(p => p.Name).Select(p => new PositionOverviewRow { Id = p.PositionId, Name = p.Name,
                 IsActive = p.IsActive != false, IsGlobal = p.IsGlobal }).ToListAsync();
         var ids = positions.Select(p => p.Id).ToList();
-        var assignments = await (from a in db.JobPositions.AsNoTracking()
+        var assignments = await (from a in db.JobPositions.AsNoTracking().Where(HRM.Helpers.PositionLifecycle.ApprovedOn(today))
                                  join job in db.Jobs.AsNoTracking() on a.JobId equals job.JobId
                                  join person in db.Individuals.AsNoTracking() on job.IndividualID equals person.BusinessEntityId
                                  where ids.Contains(a.PositionId) && job.OrganisationID == org &&
-                                     a.JobPositionStateId == 4 && job.JobStateId == 4 && a.FromDate.Date <= today &&
-                                     (!a.ToDate.HasValue || a.ToDate.Value.Date >= today) && job.JoinedDate.Date <= today &&
+                                     job.JobStateId == 4 && job.JoinedDate.Date <= today &&
                                      (!job.TerminatedDate.HasValue || job.TerminatedDate.Value.Date > today)
                                  orderby person.FirstNameEnglish, person.LastNameEnglish, a.FromDate descending
                                  select new { a.PositionId, a.JobId, a.FromDate, a.ToDate, a.JobPositionStateId,

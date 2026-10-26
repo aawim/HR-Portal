@@ -3,22 +3,29 @@
 @inject HRM.Services.ToastService Toast
 @inject ILogger<OrganisationTeamSettings> Logger
 @inject NavigationManager Navigation
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject HRM.Services.SupervisorChangeRequestService SupervisorRequests
 
 <section class="space-y-5 rounded-xl border border-slate-200 bg-white p-5">
-    <div><h2 class="text-xl font-semibold">Teams and supervisors</h2><p class="mt-1 text-sm text-slate-500">Assign supervisors for organisation teams and departments.</p></div>
+    <div><h2 class="text-xl font-semibold">Supervisors Management</h2><p class="mt-1 text-sm text-slate-500">Assign supervisors for organisation teams and departments.</p></div>
     @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
-    @if (ShowOrganisationSelector)
+    @if (ShowOrganisationSelector && isSuperAdministrator)
     {
-        <label class="block max-w-xl text-sm font-medium">Organisation
-            <select class="mt-1 w-full rounded border p-2" disabled="@busy" @bind="organisationId" @bind:after="LoadSettingsAsync">
-                <option value="0">Select an organisation</option>
-                @foreach (var org in organisations) { <option value="@org.Id">@org.Name</option> }
-            </select>
-        </label>
+        <div class="max-w-xl">
+            <HRM.Components.Shared.SearchableSelect Label="Organisation" Placeholder="Select an organisation" Disabled="@busy" CanClear="false"
+                Options="@organisations.Select(o=>new HRM.Components.Shared.SearchableSelect.Option(o.Id,o.Name))"
+                @bind-Value="organisationId" @bind-Value:after="ChangeOrganisationAsync" />
+        </div>
+    }
+    @if (!isSuperAdministrator && organisations.Count == 1)
+    {
+        <p class="text-sm"><span class="text-slate-500">Organisation:</span> <span class="font-medium">@organisations[0].Name</span></p>
     }
     @if (busy && data == null) { <p role="status" class="text-sm text-slate-500">Loading teams and supervisors…</p> }
     @if (data != null)
     {
+        <div class="grid grid-cols-1 items-start gap-5 xl:grid-cols-12">
+        <div class="min-w-0 space-y-4 xl:col-span-8">
         <div class="flex flex-wrap items-center gap-3">
             <button type="button" disabled="@busy" aria-pressed="@(kind == "Team")" class="rounded border px-3 py-2 text-sm @(kind == "Team" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(true)">Teams</button>
             <button type="button" disabled="@busy" aria-pressed="@(kind == "Department")" class="rounded border px-3 py-2 text-sm @(kind == "Department" ? "bg-blue-50 text-blue-700" : "")" @onclick="() => ChangeKind(false)">Departments</button>
@@ -34,7 +41,7 @@
                             @foreach (var type in data.StructureTypes) { <option value="@type.Id">@type.Name</option> }
                         </select>
                     </label>
-                    <p class="text-xs text-slate-500">Only approved organisation structures (state 3) are shown.</p>
+                    <p class="text-xs text-slate-500">Only approved departments without an assigned supervisor are shown.</p>
                 }
                 <label class="block text-sm">Search @kind.ToLower()s<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Team or department name" @bind="search" @bind:event="oninput" /></label>
                 <div class="max-h-[32rem] space-y-2 overflow-y-auto">
@@ -47,7 +54,7 @@
                             <span class="mt-1 block text-xs @(EligibleCount(row) == 0 ? "text-amber-700" : "text-slate-500")">@(EligibleCount(row) == 0 ? "No eligible supervisor" : $"{EligibleCount(row)} eligible supervisor(s)")</span>
                         </button>
                     }
-                    @if (!Filtered.Any()) { <p class="text-sm text-slate-500">No @kind.ToLower()s found.</p> }
+                    @if (!Filtered.Any()) { <p class="text-sm text-slate-500">@(kind == "Department" ? "No departments without a supervisor match your search." : "No teams found.")</p> }
                 </div>
             </div>
             <div class="rounded-lg border p-4 space-y-4 lg:col-span-2">
@@ -55,6 +62,16 @@
                 else
                 {
                     <div><h3 class="font-semibold">@selected.Name</h3><p class="text-xs text-slate-500">@selected.Kind supervisors</p></div>
+                    <details open class="rounded border p-3">
+                        <summary class="cursor-pointer text-sm font-medium">Assigned staff (@selected.Members.Count)</summary>
+                        <div class="mt-2 max-h-60 space-y-2 overflow-y-auto">
+                            @foreach (var member in selected.Members)
+                            {
+                                <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>
+                            }
+                            @if(selected.Members.Count==0){<p class="text-xs text-slate-500">No active staff assigned.</p>}
+                        </div>
+                    </details>
                     @if (selected.Supervisors.Count == 0) { <p class="rounded bg-amber-50 p-3 text-sm text-amber-800">No supervisor is assigned. Choose an eligible staff member below.</p> }
                     @foreach (var supervisor in selected.Supervisors)
                     {
@@ -64,29 +81,27 @@
                             </div>
                             @if (CanRemove)
                             {
-                                <button type="button" disabled="@busy" class="text-sm text-red-700" @onclick="() => removeId = supervisor.Id">Remove supervisor</button>
+                                <button type="button" disabled="@busy" class="text-sm text-red-700" @onclick="() => removeId = supervisor.Id">Request removal</button>
                             }
                         </div>
                     }
                     @if (removeId.HasValue)
                     {
                         <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm space-y-3">
-                            <p>Remove @(selected.Supervisors.FirstOrDefault(x => x.Id == removeId)?.Name) as supervisor?</p>
-                            <button type="button" disabled="@busy" class="rounded border bg-white px-3 py-2" @onclick="RemoveAsync">Confirm removal</button>
+                            <label class="block">Reason for removal<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="500" @bind="reason"></textarea></label>
+                            <p>Request removal of @(selected.Supervisors.FirstOrDefault(x => x.Id == removeId)?.Name) as supervisor?</p>
+                            <button type="button" disabled="@busy" class="rounded border bg-white px-3 py-2" @onclick="RemoveAsync">Submit removal request</button>
                             <button type="button" disabled="@busy" class="ml-3 text-blue-700" @onclick="() => removeId = null">Cancel</button>
                         </div>
                     }
-                    @if (CanAssign)
+                    @if (CanAssign && !removeId.HasValue)
                     {
                         <fieldset disabled="@busy" class="space-y-3 border-t pt-4">
-                            <label class="block text-sm font-medium">Assign supervisor
-                                <select class="mt-1 w-full rounded border p-2 font-normal" @bind="staffId">
-                                    <option value="0">Select a staff member</option>
-                                    @foreach (var staff in AvailableStaff) { <option value="@staff.Id">@staff.Name</option> }
-                                </select>
-                            </label>
+                            <HRM.Components.Shared.SearchableSelect Label="Assign supervisor" Placeholder="Select a staff member" Disabled="@busy"
+                                Options="@AvailableStaff.Select(s=>new HRM.Components.Shared.SearchableSelect.Option(s.Id,s.Name))" @bind-Value="staffId" />
+                            <label class="block text-sm">Reason for assignment<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="500" @bind="reason"></textarea></label>
                             <p class="text-xs text-slate-500">Eligible staff must have an active approved job and user account in this organisation. A supervisor cannot approve their own leave handover.</p>
-                            <button type="button" disabled="@(busy || staffId <= 0)" class="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" @onclick="AssignAsync">@(busy ? "Saving…" : "Assign supervisor")</button>
+                            <button type="button" disabled="@(busy || staffId <= 0 || string.IsNullOrWhiteSpace(reason))" class="rounded bg-blue-600 px-4 py-2 text-sm text-white disabled:opacity-50" @onclick="AssignAsync">@(busy ? "Saving…" : "Submit assignment request")</button>
                             @if (!AvailableStaff.Any()) { <p class="text-sm text-amber-800">No additional eligible staff are available.</p> }
                         </fieldset>
                     }
@@ -94,6 +109,44 @@
                 }
             </div>
         </div>
+        </div>
+        <aside class="min-w-0 space-y-4 rounded-xl border p-4 xl:col-span-4" aria-label="Existing departments, teams and supervisors">
+            <div><h3 class="font-semibold">Assigned departments and teams</h3><p class="mt-1 text-xs text-slate-500">Current supervisors in the selected organisation. Select a record to manage it.</p></div>
+            <label class="block text-sm">Search assignments<input class="mt-1 w-full rounded border p-2" type="search" placeholder="Department, team, supervisor or staff" @bind="overviewSearch" @bind:event="oninput" /></label>
+            @foreach (var overviewKind in new[] { "Department", "Team" })
+            {
+                var records = OverviewRows.Where(r => r.Kind == overviewKind).OrderBy(r => r.Name).ToList();
+                <section class="space-y-2">
+                    <h4 class="border-b pb-2 text-sm font-semibold">@(overviewKind == "Department" ? "Departments" : "Teams") <span class="font-normal text-slate-500">(@records.Count)</span></h4>
+                    @foreach (var row in records)
+                    {
+                        <article @key="(row.Kind, row.Id)" class="space-y-3 rounded-lg border p-3 @(selected?.Id == row.Id && selected.Kind == row.Kind ? "border-blue-300 bg-blue-50" : "")">
+                            <button type="button" disabled="@busy" @onclick="()=>SelectOverview(row)" aria-pressed="@(selected?.Id == row.Id && selected.Kind == row.Kind)" class="block w-full text-left text-sm font-medium">@row.Name</button>
+                            <div class="space-y-1"><h5 class="text-xs font-semibold text-slate-500">Supervisors</h5>
+                            @foreach (var supervisor in row.Supervisors)
+                            {
+                                <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{supervisor.Id}/overview")">@supervisor.Name</a>
+                                @if (data.SupervisorIssues.TryGetValue(supervisor.Id, out var issue)) { <span class="block text-xs text-amber-700">@issue</span> }
+                            }
+                            </div>
+                            <details><summary class="cursor-pointer text-xs font-semibold text-slate-500">Assigned staff (@row.Members.Count)</summary>
+                                <div class="mt-2 max-h-60 space-y-2 overflow-y-auto">
+                                @foreach(var member in row.Members)
+                                {
+                                    <a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>
+                                }
+                                @if(row.Members.Count==0){<p class="text-xs text-slate-500">No active staff assigned.</p>}
+                                </div>
+                            </details>
+                        </article>
+                    }
+                    @if (records.Count == 0) { <p class="text-xs text-slate-500">No matching @(overviewKind == "Department" ? "departments" : "teams") with assigned supervisors.</p> }
+                </section>
+            }
+        </aside>
+        </div>
+        <p class="text-xs text-slate-500">Additions and removals follow the configured approval flow. Current assignments change only after final approval.</p>
+        <HRM.Components.Shared.SupervisorChangeRequests OrganisationId="organisationId" RefreshVersion="requestVersion" OnChanged="LoadSettingsAsync" @key="organisationId" />
     }
 </section>
 
@@ -105,12 +158,21 @@
     private List<OrganisationSettingsOption> organisations = [];
     private OrganisationTeamSettingsData? data;
     private OrganisationTeamSettingsRow? selected;
-    private bool initialised, busy;
+    private bool initialised, busy, isSuperAdministrator;
     private int organisationId, staffId, structureTypeId;
     private int? removeId;
-    private string kind = "Team", search = "";
+    private string kind = "Team", search = "", overviewSearch = "";
+    private IEnumerable<OrganisationTeamSettingsRow> OverviewRows => data?.Rows.Where(r => r.Supervisors.Count > 0 &&
+        (r.Name.Contains(overviewSearch, StringComparison.OrdinalIgnoreCase) || r.Supervisors.Any(s => s.Name.Contains(overviewSearch, StringComparison.OrdinalIgnoreCase)) || r.Members.Any(m => m.Name.Contains(overviewSearch, StringComparison.OrdinalIgnoreCase)))) ?? [];
+    private void SelectOverview(OrganisationTeamSettingsRow row)
+    {
+        kind = row.Kind; structureTypeId = 0; search = ""; Select(row);
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("teamView", kind == "Team" ? "teams" : "departments"));
+    }
     private string? message;
-    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(x => x.Kind == kind &&
+    private string reason="";
+    private int requestVersion;
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(x => x.Kind == kind && (kind != "Department" || x.Supervisors.Count == 0) &&
         (kind != "Department" || structureTypeId == 0 || x.StructureTypeId == structureTypeId) && x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
     private IEnumerable<OrganisationSettingsOption> AvailableStaff => data?.Staff.Where(x => selected != null && !selected.Supervisors.Any(s => s.Id == x.Id)) ?? [];
     private int EligibleCount(OrganisationTeamSettingsRow row) => row.Supervisors.Count(x => data?.SupervisorIssues.ContainsKey(x.Id) != true);
@@ -126,19 +188,27 @@
             initialised = true;
             try
             {
+                isSuperAdministrator = (await Access.RequireContextAsync()).IsSuperAdministrator;
                 organisations = await Settings.GetTeamOrganisationsAsync();
-                organisationId = InitialOrganisationId ?? organisations.FirstOrDefault()?.Id ?? 0;
+                organisationId = isSuperAdministrator ? InitialOrganisationId ?? organisations.FirstOrDefault()?.Id ?? 0 : organisations.SingleOrDefault()?.Id ?? 0;
                 await LoadSettingsAsync();
             }
             catch (Exception ex) { HandleError(ex); }
         }
-        else if (InitialOrganisationId is > 0 && InitialOrganisationId != organisationId)
+        else if (isSuperAdministrator && InitialOrganisationId is > 0 && InitialOrganisationId != organisationId)
         {
             organisationId = InitialOrganisationId.Value;
             await LoadSettingsAsync();
         }
     }
-    private void Select(OrganisationTeamSettingsRow row) { selected = row; staffId = 0; removeId = null; }
+    private void Select(OrganisationTeamSettingsRow row) { selected = row; staffId = 0; removeId = null; reason=""; }
+    private async Task ChangeOrganisationAsync()
+    {
+        if (!isSuperAdministrator) return;
+        await LoadSettingsAsync();
+        if (new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/hr/supervisors", StringComparison.OrdinalIgnoreCase))
+            Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("organisationId", organisationId));
+    }
     private void ChangeKind(bool teams)
     {
         kind = teams ? "Team" : "Department"; search = ""; ApplyStructureFilter();
@@ -171,9 +241,9 @@
         busy = true;
         try
         {
-            var result = await Settings.SetTeamSupervisorAsync(organisationId, selected.Kind, selected.Id, person, assign);
+            var result = await SupervisorRequests.SubmitAsync(organisationId, selected.Kind, selected.Id, person, assign, reason);
             message = result.Message;
-            if (result.Success) Toast.Success(result.Message); else Toast.Warning(result.Message);
+            if (result.Success) { reason="";requestVersion++;Toast.Success(result.Message); } else Toast.Warning(result.Message);
         }
         catch (Exception ex) { HandleError(ex); }
         finally { busy = false; await LoadSettingsAsync(); }

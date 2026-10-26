@@ -1,4 +1,4 @@
-﻿using System.Data;
+using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Organisation;
@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public sealed class OrganisationResourceSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
+public sealed partial class OrganisationResourceSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs)
 {
     private async Task<(int Org, bool Super, bool Edit)> Scope(int? selected)
     {

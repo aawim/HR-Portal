@@ -47,6 +47,9 @@ builder.Services.AddScoped<WorkingHoursSettingsService>();
 builder.Services.AddScoped<JobTypeOvertimeSettingsService>();
 builder.Services.AddScoped<ScopeScheduleSettingsService>();
 builder.Services.AddScoped<GroupsManagementService>();
+builder.Services.AddScoped<LeaveConfigurationSettingsService>();
+builder.Services.AddScoped<IndividualRegistrationService>();
+builder.Services.AddScoped<OvertimeRequestService>();
 builder.Services.AddScoped<WeeklyWorkingHoursService>();
 builder.Services.AddScoped<WeeklyHourExceptionService>();
 
@@ -273,10 +276,13 @@ builder.Services.AddScoped<HRM.Services.LateCheckInRequestService>();
 builder.Services.AddScoped<HRM.Services.OrganisationPermissionService>();
 builder.Services.AddScoped<HRM.Services.OrganisationResourceSettingsService>();
 builder.Services.AddScoped<HRM.Services.OrganisationSettingsService>();
+builder.Services.AddScoped<HRM.Services.SupervisorChangeRequestService>();
+builder.Services.AddScoped<HRM.Services.HrRequestInboxService>();
+builder.Services.AddScoped<HRM.Services.LeaveSetConfigurationService>();
 
 
 builder.Services.AddScoped<LeaveApplicationState>();
-builder.Services.AddScoped<LeaveDataLoader>();
+
 builder.Services.AddScoped<LeaveStore>();
 builder.Services.AddScoped<UserAppService>();
 builder.Services.AddScoped<PortalContext>();
@@ -287,7 +293,7 @@ builder.Services.AddScoped<IUserContext, UserContext>();
 builder.Services.AddScoped<IAttendanceService, AttendanceService>();
 builder.Services.AddScoped<IAttendanceRequestService, AttendanceRequestService>();
 builder.Services.AddScoped<IJobDataLoader, JobDataLoader>();
-builder.Services.AddScoped<IJobStore, JobStore>();
+
 builder.Services.AddScoped<IAttendanceLogDataLoader, AttendanceLogDataLoader>();
 builder.Services.AddScoped<IGeographyService, GeographyService>();
 builder.Services.AddScoped<IIndividual, IndividualService>();

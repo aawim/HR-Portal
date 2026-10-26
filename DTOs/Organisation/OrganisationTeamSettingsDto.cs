@@ -17,4 +17,5 @@ public class OrganisationTeamSettingsRow
     public string Name { get; set; } = "";
     public int? StructureTypeId { get; set; }
     public List<OrganisationSettingsOption> Supervisors { get; set; } = [];
+    public List<OrganisationSettingsOption> Members { get; set; } = [];
 }

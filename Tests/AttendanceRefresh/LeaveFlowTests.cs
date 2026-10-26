@@ -50,7 +50,7 @@ static class LeaveFlowTests
                             { RequestTypeId = type, FromRequestStateId = source, ToRequestStateId = target });
             db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1, OrganisationID = 10, JobTypeId = 1, OrganisationStructureId = 7 },
                 new Job { JobId = 4, IndividualID = 4, OrganisationID = 10, JobTypeId = 1, OrganisationStructureId = 7 },
-                new Job { JobId = 2, IndividualID = 2, OrganisationID = 10, JobStateId = 4, JoinedDate = DateTime.Today.AddYears(-1), OrganisationStructureId = 7 });
+                new Job { JobId = 2, IndividualID = 2, OrganisationID = 10, JobStateId = 4, JoinedDate = DateTime.UtcNow.AddHours(5).Date.AddYears(-1), OrganisationStructureId = 7 });
             db.UserOrganisations.Add(new UserOrganisation { UserOrganisationID = 1, BusinessEntityID = 10 });
             db.UserGroups.AddRange(new UserGroup { UserGroupId = 120, UserOrganisationId = 1, GroupName = "HR" },
                 new UserGroup { UserGroupId = 121, UserOrganisationId = 1, GroupName = "Supervisor" },
@@ -73,7 +73,7 @@ static class LeaveFlowTests
                 new UserRole { UserId = 4, RoleId = 21, IsActive = true, UserOrganisationId = 1 },
                 new UserRole { UserId = 5, RoleId = 21, IsActive = true, UserOrganisationId = 1 },
                 new UserRole { UserId = 6, RoleId = 22, IsActive = true, UserOrganisationId = 1 });
-            db.Jobs.Add(new Job { JobId = 5, IndividualID = 5, OrganisationID = 10, OrganisationStructureId = 8, JobStateId = 4, JoinedDate = DateTime.Today.AddYears(-1) });
+            db.Jobs.Add(new Job { JobId = 5, IndividualID = 5, OrganisationID = 10, OrganisationStructureId = 8, JobStateId = 4, JoinedDate = DateTime.UtcNow.AddHours(5).Date.AddYears(-1) });
             db.OrganisationStructureSupervisors.Add(new OrganisationStructureSupervisor
                 { OrganisationStructureSupervisorId = 2, OrganisationStructureId = 8, SupervisorStaffId = 5, IsActive = true, IsValid = true });
             db.OrganisationStructureSupervisors.Add(new OrganisationStructureSupervisor
@@ -156,9 +156,9 @@ static class LeaveFlowTests
                 "Staff sharing a Job Type did not inherit the same leave flow");
         }
         var menuMethod = typeof(SettingsCategoryPage).GetMethod("GetSubItems", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
-        var menuItems = (System.Collections.IEnumerable)menuMethod.Invoke(new SettingsCategoryPage(), ["leaves"])!;
+        var menuItems = (System.Collections.IEnumerable)menuMethod.Invoke(new SettingsCategoryPage(), ["config"])!;
         Check(menuItems.Cast<object>().Any(x => (Type?)x.GetType().GetProperty("ComponentType")!.GetValue(x) == typeof(LeaveFlowSettings)),
-            "Leave approval configuration is missing from Leaves Management");
+            "Leave approval configuration is missing from Configurations");
         Check(!(await config.SaveAsync(new() { JobTypeId = 1, RequestTypeId = 106, HrUserGroupId = 120, SupervisorFirst = false })).Success,
             "Extension bypassed supervisor stage");
         Check(!(await config.SaveAsync(new() { JobTypeId = 1, RequestTypeId = 105, HrUserGroupId = 120, SupervisorFirst = true })).Success,

@@ -149,10 +149,7 @@ namespace HRM.Services
             return log.OperationLogId;
         }
 
-        public Task UpdateLogAsync(int operationLogId, string? remarks = null)
-        {
-            throw new NotImplementedException();
-        }
+
 
 
     }

@@ -27,7 +27,45 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if (args.Contains("--job-type-tabs-only"))
+{
+    try { await LeaveSetConfigurationTests.RunAsync(); await LeaveAccrualTests.RunAsync(); await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Job type leave configuration: tenant/permission boundaries, shared-set protection, duplicates, audit/stale edits, history protection and accrual rules"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL Job type configuration: {ex}"); return 1; }
+}
+if (args.Contains("--registry-only"))
+{
+    try { await UnattachedIndividualSearchTests.RunAsync(); Console.WriteLine("PASS Individual registry: unattached-only name/ID search for ordinary admins and Super Administrators"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL Individual registry: {ex}"); return 1; }
+}
+if (args.Contains("--hr-inbox-only"))
+{
+    try { await HrRequestInboxTests.RunAsync(); await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS HR inbox: received/organisation permissions, tenant scope, grouping, pagination, filters, safe links and HR routes"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL HR inbox: {ex}"); return 1; }
+}
+if (args.Contains("--supervisor-workflow-only"))
+{
+    try { await SupervisorWorkflowTests.RunAsync(); Console.WriteLine("PASS Supervisor workflow: staged additions/removals, duplicate/self-approval denial, rejection/cancellation, stale changes, tenant isolation and notifications"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL Supervisor workflow: {ex}"); return 1; }
+}
+if (args.Contains("--organisation-scope-only"))
+{
+    try { await SupervisorOrganisationScopeTests.RunAsync(); await CrudConsolidationTests.RunAsync(); Console.WriteLine("PASS Supervisor organisation scope and existing organisation CRUD: current tenant, Admin permission bypass denial, forged reads/writes, context switching and Super Administrator selection"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL Supervisor organisation scope: {ex}"); return 1; }
+}
+if (args.Contains("--navigation-only"))
+{
+    try { await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Section navigation: HR supervisors, legacy redirects, organisation selection and existing routes"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine($"FAIL Section navigation: {ex}"); return 1; }
+}
 var failures = 0;
+try { await LeaveSetConfigurationTests.RunAsync(); Console.WriteLine("PASS Leave set configuration"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Leave set configuration: {ex}"); }
+try { await UnattachedIndividualSearchTests.RunAsync(); Console.WriteLine("PASS Unattached individual registry"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Individual registry: {ex}"); }
+try { await HrRequestInboxTests.RunAsync(); Console.WriteLine("PASS HR request inbox"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL HR inbox: {ex}"); }
+try { await SupervisorWorkflowTests.RunAsync(); Console.WriteLine("PASS Supervisor workflow"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Supervisor workflow: {ex}"); }
+try { await SupervisorOrganisationScopeTests.RunAsync(); Console.WriteLine("PASS Supervisor organisation scope"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Supervisor organisation scope: {ex}"); }
+try { await SearchReliabilityTests.RunAsync(); } catch(Exception ex) { Console.Error.WriteLine($"FAIL Staff search: {ex}"); failures++; }
+try{await SystemGapTests.RunAsync();}catch(Exception ex){failures++;Console.Error.WriteLine($"FAIL System gaps: {ex}");}
+
 try { await WorkingHoursTests.RunAsync(); Console.WriteLine("PASS Working hours: rain amendments, weekly targets, make-up, duty overlap, overnight shifts, leave, eligibility, approvals, notifications, stale edits and tenant permissions"); }
 catch (Exception ex) { failures++; Console.Error.WriteLine($"FAIL Working hours: {ex}"); }
 if (args.Contains("--working-hours-only")) return failures == 0 ? 0 : 1;
@@ -213,7 +251,7 @@ static async Task TestLeaveDays()
 {
     var options = new DbContextOptionsBuilder<HrmTeContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options;
-    var year = DateTime.Today.Year - 1;
+    var year = DateTime.UtcNow.AddHours(5).Date.Year - 1;
     var first = new DateTime(year, 1, 1);
     await using (var db = new TestContext(options))
     {
@@ -319,13 +357,13 @@ static async Task TestRefresh(Type clockType)
         {
             WorkDate = DateTime.UtcNow.AddHours(5).Date,
             Assignments = [new() { WorkAssignmentId = 1, Name = "Official office hours", SchedulePurpose = "Official", IsValid = true,
-                StartDateTime = DateTime.Today.AddHours(8), EndDateTime = DateTime.Today.AddHours(23).AddMinutes(59) },
+                StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(8), EndDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(23).AddMinutes(59) },
                 new() { WorkAssignmentId = 2, Name = $"Duty review {data.Revision}", SchedulePurpose = "Duty", IsValid = true,
-                    StartDateTime = DateTime.Today.AddHours(10), EndDateTime = DateTime.Today.AddHours(12) }],
-            Segments = [new() { Name = "Official · Check In", SchedulePurpose = "Official", StartDateTime = DateTime.Today.AddHours(8), RequiresAttendance = true, IsMandatory = true },
-                new() { Name = "Official · Check Out", SchedulePurpose = "Official", StartDateTime = DateTime.Today.AddHours(14), RequiresAttendance = true, IsMandatory = true },
-                new() { Name = "Duty · Check In", SchedulePurpose = "Duty", StartDateTime = DateTime.Today.AddHours(10), RequiresAttendance = true, IsMandatory = true },
-                new() { Name = "Duty · Check Out", SchedulePurpose = "Duty", StartDateTime = DateTime.Today.AddHours(12), RequiresAttendance = true, IsMandatory = true }]
+                    StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(10), EndDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(12) }],
+            Segments = [new() { Name = "Official · Check In", SchedulePurpose = "Official", StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(8), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Official · Check Out", SchedulePurpose = "Official", StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(14), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Duty · Check In", SchedulePurpose = "Duty", StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(10), RequiresAttendance = true, IsMandatory = true },
+                new() { Name = "Duty · Check Out", SchedulePurpose = "Duty", StartDateTime = DateTime.UtcNow.AddHours(5).Date.AddHours(12), RequiresAttendance = true, IsMandatory = true }]
         }));
     await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -366,7 +404,7 @@ static async Task TestRefresh(Type clockType)
     Assert(renderer.Text<TodaysAttendanceLogCard>().Contains("No clock events yet"), "Initial empty events missing");
     var workPlanText = renderer.Text<TodaysWorkPlanCard>();
     Assert(workPlanText.Contains("Today's Work Plan") && workPlanText.Contains("Official office hours") && workPlanText.Contains("Duty review 0"), "Dashboard work plan did not show both schedules");
-    Assert(new[] { "08:00", "10:00", "12:00", "14:00", "Check in", "Check out", "Required" }.All(workPlanText.Contains), "Dashboard work-plan events or times missing");
+    Assert(new[] { "08:00", "10:00", "12:00", "14:00", "Clock in", "Clock out", "Required" }.All(workPlanText.Contains), "Dashboard work-plan events or times missing: "+workPlanText);
     Assert(!workPlanText.Contains("23:59"), "Dashboard displayed the late clocking allowance as official working hours");
     if (clockType == typeof(TestTimeClockCard))
         await renderer.Dispatcher.InvokeAsync(() => renderer.Event(clockType, "onchange", new ChangeEventArgs { Value = true }));
@@ -381,22 +419,21 @@ static async Task TestRefresh(Type clockType)
         Assert(await db.AttendanceLogs.CountAsync() == revision, "Clock click did not save an event");
         var time = data.Timestamp;
         Assert(renderer.Text<AttendanceSummaryCard>().Contains(time.ToString("HH:mm")), "Weekly summary still stale");
-        Assert(renderer.Text<TodaysAttendanceLogCard>().Contains(time.ToString("hh:mm:ss tt")), "Clock events still stale");
-        Assert(renderer.Text<TodaysAttendanceStatusCard>().Contains(time.ToString("hh:mm tt")), "Daily status still stale");
+        Assert(renderer.Text<TodaysAttendanceLogCard>().Contains(time.ToString("HH:mm")), "Clock events still stale");
         var overview = (YearlyAttendanceGridCard)renderer.Component(typeof(YearlyAttendanceGridCard));
         Assert(overview.Days?.Single().ClockEventCount == revision, "Yearly overview still stale");
         Assert(data.LogReads == revision + 1, "Clock events did not reload exactly once per click");
-        Assert(data.EvaluationReads == revision + 1, "Daily status did not reload exactly once per click");
+        Assert(data.EvaluationReads == 0, "Removed daily status card still loads attendance evaluations");
         Assert(renderer.Text<TodaysWorkPlanCard>().Contains($"Duty review {revision}"), "Today's Work Plan did not refresh after clocking");
     }
     await renderer.Dispatcher.InvokeAsync(() => renderer.Event(typeof(YearlyAttendanceGridCard), "onclick", new MouseEventArgs()));
-    var selectedYear = DateTime.Today.Year - 1;
+    var selectedYear = DateTime.UtcNow.AddHours(5).Date.Year - 1;
     Assert(data.LastYear == selectedYear, "Overview year navigation failed");
     await renderer.Dispatcher.InvokeAsync(() => renderer.Event(clockType, "onclick", new MouseEventArgs()));
     renderer.CheckErrors();
     Assert(data.LastYear == selectedYear, "Clock click reset the selected overview year");
     Assert(await db.AttendanceLogs.CountAsync() == 3, "Third event was not saved");
-    Assert(data.LogReads == 4 && data.EvaluationReads == 4, "Third click did not refresh the daily cards");
+    Assert(data.LogReads == 4 && data.EvaluationReads == 0, "Third click did not refresh the daily cards");
 }
 
 static void Assert(bool condition, string message)
@@ -414,7 +451,7 @@ sealed class AttendanceData
     public int LogReads;
     public int EvaluationReads;
     public int LastYear;
-    public DateTime Timestamp { get; set; } = DateTime.Today;
+    public DateTime Timestamp { get; set; } = DateTime.UtcNow.AddHours(5).Date;
     private AttendanceLogDto Log => new() { Date = Timestamp, ResolvedClockType = AttendanceClockType.CheckIn };
     public object Call(string name, object?[] args) => name switch
     {
@@ -454,7 +491,7 @@ sealed class AttendanceData
         return Yield(new AttendanceDailyEvaluationDto
         {
             FirstCheckIn = Revision == 0 ? null : Timestamp,
-            RequiresAttendance = true, WorkDate = DateTime.Today
+            RequiresAttendance = true, WorkDate = DateTime.UtcNow.AddHours(5).Date
         });
     }
 }
@@ -486,7 +523,7 @@ sealed class TestActivator : IComponentActivator
 {
     private static readonly HashSet<Type> RealComponents =
     [typeof(TimeClockCard), typeof(TestTimeClockCard), typeof(AttendanceSummaryCard),
-     typeof(YearlyAttendanceGridCard), typeof(TodaysAttendanceLogCard), typeof(TodaysAttendanceStatusCard), typeof(TodaysWorkPlanCard)];
+     typeof(YearlyAttendanceGridCard), typeof(TodaysAttendanceLogCard), typeof(TodaysAttendanceStatusCard), typeof(TodaysWorkPlanCard), typeof(AttendanceEventRow), typeof(DashboardDetailRow)];
     public IComponent CreateInstance(Type type) => type == typeof(AuthorizeView)
         ? new AuthorizedView()
         : RealComponents.Contains(type) ? (IComponent)Activator.CreateInstance(type)! : new EmptyWidget();
@@ -657,6 +694,7 @@ sealed class TestRenderer : Renderer
         {
             RenderTreeFrameType.Text => f.TextContent,
             RenderTreeFrameType.Markup => f.MarkupContent,
+            RenderTreeFrameType.Component => TextFor(f.ComponentId),
             _ => ""
         }));
     }

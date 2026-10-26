@@ -1,4 +1,4 @@
-﻿@page "/admin/hr"
+@page "/admin/hr"
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
@@ -20,9 +20,9 @@
 
             <!-- Grid: 4 columns on large screens, 2 on medium -->
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories)
+                @foreach (var cat in mainCategories.Where(c => new[]{"individuals","staff","groups","supervisors","departments","requests","attendance","performance","payroll","budget","duty-roster","work-handovers"}.Contains(c.Url)))
                 {
-                    <a href="/admin/hr/@cat.Url"
+                    <a href="@(cat.Target ?? $"/admin/hr/{cat.Url}")"
                        class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
 
                         <!-- Left: Icon Container -->
@@ -46,10 +46,19 @@
         </div>
 
         @code {
-        private record Category(string Title, string Url, string Icon, string Description);
+        private record Category(string Title, string Url, string Icon, string Description, string? Target = null);
         private List<Category> mainCategories = new() {
+            new("Attendance", "attendance", "⏱️", "Manage staff attendance, leave and attendance requests.", "/admin/attendance"),
+            new("Performance", "performance", "📈", "Open performance management.", "/admin/performance"),
+            new("Payroll", "payroll", "💵", "Manage payroll periods, processing and reports.", "/admin/payroll"),
+            new("Budget", "budget", "📊", "Manage budget allocations, transactions and reports.", "/admin/budget"),
+            new("Duty roster", "duty-roster", "🗓️", "View scheduled duties, transfers and swaps.", "/admin/work-planning/duty-roster"),
+            new("Work handovers", "work-handovers", "🤝", "Review work handovers and their approvals.", "/admin/hr/work-handovers"),
             new("Individuals", "individuals", "👤", "Manage user profiles, personal details, and system accounts."),
             new("Staff", "staff", "💼", "Manage employee records, job assignments, and employment history."),
+            new("Departments", "departments", "🏢", "View departments, supervisors and assigned staff."),
+            new("Requests", "requests", "📥", "Received requests grouped by request type."),
+            new("Supervisors Management", "supervisors", "👥", "Assign supervisors to departments and teams."),
             new("Groups", "groups", "👥", "Organize employees into functional teams, committees, or project groups."),
             new("CSC Viuga", "viuga", "🏛️", "Manage integrations and data synchronization with the Civil Service Commission network."),
             new("Others", "others", "⚙️", "Configure miscellaneous settings, lookup values, and general system preferences.")

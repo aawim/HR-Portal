@@ -15,11 +15,11 @@ static class OrganisationResourceSettingsTests
     {
         var factory = new ReceiptFactory(new DbContextOptionsBuilder<HrmTeContext>().UseInMemoryDatabase(Guid.NewGuid().ToString(), x => x.EnableNullChecks(false))
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options);
-        var super = false;
+        var super = false; var manage = true;
         var access = Proxy.For<IUserAccessService>((m, a) => m switch {
             "RequireContextAsync" => Task.FromResult(new UserContextDto { UserId = 1, IndividualId = 100, IsSuperAdministrator = super }),
             "GetCurrentOrganisationIdAsync" => Task.FromResult(10), "HasOrganisationAccessAsync" => Task.FromResult((int)a[0]! == 10),
-            "HasPermissionAsync" => Task.FromResult((string)a[0]! == "Admin"), _ => throw new Exception(m) });
+            "HasPermissionAsync" => Task.FromResult((string)a[0]! == "Admin" && manage || (string)a[0]! == "UserOrganisations.View"), _ => throw new Exception(m) });
         var logs = Proxy.For<IOperationLogService>((m, a) => m == "CreateAsync" ? Log((HrmTeContext)a[0]!) : throw new Exception(m));
         var service = new OrganisationResourceSettingsService(factory, access, logs);
         await using (var db = factory.CreateDbContext())
@@ -67,6 +67,32 @@ static class OrganisationResourceSettingsTests
         Check((await service.SaveTypeAsync(OrganisationResourceKind.LocationTypes, 0, "Branch", null)).Success, "Location type creation failed");
         Check((await service.SaveTypeAsync(OrganisationResourceKind.StructureRequestTypes, 0, "Restructure", null)).Success, "Structure request type creation failed");
         await using (var db = factory.CreateDbContext()) Check(await db.OperationLogs.CountAsync() == 6, "Resource changes were not audited");
+        super = false;
+        await using(var db=factory.CreateDbContext())
+        {
+            db.DocumentTypes.AddRange(new(){DocumentTypeId=100,TypeName="Shared passport",OrganisationId=null,IsActive=true},
+                new(){DocumentTypeId=101,TypeName="Other tenant",OrganisationId=20,IsActive=true},
+                new(){DocumentTypeId=102,TypeName="Protected",OrganisationId=10,IsSystemType=true,IsActive=true});await db.SaveChangesAsync();
+        }
+        Check(!(await service.LoadDocumentTypesAsync()).Types.Any(t=>t.Id==101),"Document types leaked another tenant");
+        await Denied(()=>service.SaveDocumentTypeAsync(new(){Id=101,Name="Foreign edit"}));
+        await Denied(()=>service.SaveDocumentTypeAsync(new(){Id=100,Name="Shared edit"}));
+        await Denied(()=>service.SaveDocumentTypeAsync(new(){Id=102,Name="Protected edit"}));
+        Check((await service.SaveDocumentTypeAsync(new(){Name="Medical certificate",IsImage=true,ShouldBeColor=true,ImageMinimumResolution=300})).Success,"Organisation document type could not be created");
+        Check(!(await service.SaveDocumentTypeAsync(new(){Name=" medical certificate "})).Success,"Duplicate document type was accepted");
+        var doc=(await service.LoadDocumentTypesAsync()).Types.Single(t=>t.Name=="Medical certificate");
+        Check(doc.IsImage&&doc.ShouldBeColor&&doc.ImageMinimumResolution==300,"Image requirements were lost");
+        doc.Description="Medical evidence";doc.IsActive=false;
+        Check((await service.SaveDocumentTypeAsync(doc)).Success,"Document type could not be edited/disabled");
+        Check(!(await service.SaveDocumentTypeAsync(doc)).Success,"Stale document type edit was accepted");
+        doc=(await service.LoadDocumentTypesAsync()).Types.Single(t=>t.Id==doc.Id);
+        await using(var db=factory.CreateDbContext()){db.Documents.Add(new(){DocumentTypeId=doc.Id,DocumentName="Existing evidence"});await db.SaveChangesAsync();}
+        Check(!(await service.SaveDocumentTypeAsync(doc,true)).Success,"Used document type was deleted");
+        Check((await service.SaveDocumentTypeAsync(new(){Name="Unused type"})).Success,"Unused type setup failed");
+        var unused=(await service.LoadDocumentTypesAsync()).Types.Single(t=>t.Name=="Unused type");
+        Check((await service.SaveDocumentTypeAsync(unused,true)).Success,"Unused document type could not be deleted");
+        manage=false;Check(!(await service.LoadDocumentTypesAsync()).CanEdit,"Read-only viewer could edit document types");
+        await Denied(()=>service.SaveDocumentTypeAsync(new(){Name="Denied"}));
     }
     private static async Task<OperationLog> Log(HrmTeContext db)
     {

@@ -1,3 +1,4 @@
+@implements IDisposable
 @using HRM.DTOs
 @using HRM.Enum
 @using HRM.Models
@@ -154,12 +155,16 @@
 
 
             _searchText = value;
-
-            _ = SearchAsync();
+            pendingSearch?.Cancel();pendingSearch?.Dispose();pendingSearch=new();
+            var version=++searchVersion;
+            _ = SearchAsync(version,pendingSearch.Token);
         }
     }
 
     private bool Loading;
+    private int searchVersion;
+    private CancellationTokenSource? pendingSearch;
+    public void Dispose(){searchVersion++;pendingSearch?.Cancel();pendingSearch?.Dispose();}
 
     private List<WorkspaceSearchResult> StaffResults = new();
 
@@ -174,7 +179,7 @@
     }
 
 
-    private async Task SearchAsync()
+    private async Task SearchAsync(int version,CancellationToken token)
 {
 
      if (string.IsNullOrWhiteSpace(SearchText))
@@ -192,13 +197,12 @@
         // OrganisationResults.Clear();
     try
     {
-
+        await Task.Delay(250,token);
        var user = await userAccessService.RequireContextAsync();
      
         
         await using var Db = await _dbFactory.CreateDbContextAsync();
-        var searchText = SearchText.Trim();
-        var searchPattern = $"%{searchText}%";
+        var searchText = string.Join(" ",SearchText.Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries));
         var restricted = AllowedStaffIds != null;
         var allowedIds = AllowedStaffIds?.ToArray() ?? [];
         var today = DateTime.UtcNow.AddHours(5).Date;
@@ -210,8 +214,9 @@
 
 
             // Never use nullable.Value inside the EF query
-            var currentOrganisationId =
-                await userAccessService.GetCurrentOrganisationIdAsync();
+            var contextOrganisationId = await userAccessService.GetCurrentOrganisationIdAsync();
+            var selectedOrganisationId = OrganisationId;
+            var currentOrganisationId = contextOrganisationId;
 
             if (OrganisationId.HasValue)
             {
@@ -241,7 +246,7 @@
         // =====================================================
         // STAFF AND INDIVIDUAL SEARCH
         // =====================================================
-        StaffResults = await
+        var foundStaff = await
         (
             from i in Db.Individuals.AsNoTracking()
 
@@ -269,6 +274,7 @@
                 (i.FirstNameEnglish ?? "") + " " +
                 (i.MiddleNameEnglish ?? "") + " " +
                 (i.LastNameEnglish ?? "")
+            let normalisedName = fullName.Replace("  "," ").Trim()
 
             let fullNameDv =
                 (i.FirstNameDhivehi ?? "") +
@@ -296,17 +302,13 @@
                 &&
 
                 (
-                    EF.Functions.Like(
-                        fullName,
-                        $"%{searchText}%")
+                    normalisedName.Contains(searchText)
 
                     ||
 
                     (
                         i.FirstNameEnglish != null &&
-                        EF.Functions.Like(
-                            i.FirstNameEnglish,
-                            $"%{searchText}%")
+                        i.FirstNameEnglish.Contains(searchText)
                     )
 
                     ||
@@ -314,9 +316,7 @@
                     (
                         card != null &&
                         card.IdcardNumber != null &&
-                        EF.Functions.Like(
-                            card.IdcardNumber,
-                            $"%{searchText}%")
+                        card.IdcardNumber.Contains(searchText)
                     )
 
                     ||
@@ -324,9 +324,7 @@
                     (
                         organisationStructure != null &&
                         organisationStructure.Name != null &&
-                        EF.Functions.Like(
-                            organisationStructure.Name,
-                            $"%{searchText}%")
+                        organisationStructure.Name.Contains(searchText)
                     )
                 )
 
@@ -339,7 +337,7 @@
                     ? job.JobId
                     : null,
 
-                Name = fullName,
+                Name = normalisedName,
                 NameDv = fullNameDv,
 
                 IDCard =
@@ -366,7 +364,7 @@
         .Distinct()
         .OrderBy(x => x.Name)
         .Take(10)
-        .ToListAsync();
+        .ToListAsync(token);
 
         // =====================================================
         // ORGANISATION SEARCH
@@ -385,12 +383,10 @@
                     x.BusinessEntityID == organisationId);
         }
 
-        OrganisationResults = StaffOnly ? new() : await organisationQuery
+        var foundOrganisations = StaffOnly ? new List<WorkspaceSearchResult>() : await organisationQuery
             .Where(x =>
                 x.OrganisationName != null &&
-                EF.Functions.Like(
-                    x.OrganisationName,
-                    $"%{searchText}%"))
+                x.OrganisationName.Contains(searchText))
             .OrderBy(x => x.OrganisationName)
             .Take(10)
             .Select(x => new WorkspaceSearchResult
@@ -400,10 +396,15 @@
                 EntityType =
                     WorkspaceEntityType.Organisation
             })
-            .ToListAsync();
+            .ToListAsync(token);
+        if(version!=searchVersion||token.IsCancellationRequested||OrganisationId!=selectedOrganisationId||
+            await userAccessService.GetCurrentOrganisationIdAsync()!=contextOrganisationId)return;
+        StaffResults=foundStaff;OrganisationResults=foundOrganisations;
     }
+    catch(OperationCanceledException) { }
     catch (Exception ex)
     {
+        if(version!=searchVersion)return;
         Console.Error.WriteLine(ex);
         StaffResults = new List<WorkspaceSearchResult>();
         OrganisationResults = new List<WorkspaceSearchResult>();
@@ -416,125 +417,10 @@
     }
     finally
     {
-        Loading = false;
-            await InvokeAsync(StateHasChanged);
+        if(version==searchVersion){Loading = false;await InvokeAsync(StateHasChanged);}
     }
 }
 
 
-
-    // private async Task SearchAsync()
-    // {
-
-    //     var user = await userAccessService.RequireContextAsync();
-     
-        
-    //     await using var Db = await _dbFactory.CreateDbContextAsync();
-
-    //     StaffResults.Clear();
-    //     OrganisationResults.Clear();
-
-    //     if (string.IsNullOrWhiteSpace(SearchText))
-    //     {
-    //         await InvokeAsync(StateHasChanged);
-    //         return;
-    //     }
-
-    //     Loading = true;
-    //     StaffResults =
-    //     await
-    //     (
-    //         from i in Db.Individuals
-
-    //         join c in Db.Idcards
-    //             on i.BusinessEntityId equals c.BusinessEntityId
-    //             into cards
-
-    //         from card in cards.DefaultIfEmpty()
-
-    //         join j in Db.Jobs
-    //             on i.BusinessEntityId equals j.IndividualID
-    //             into jobs
-
-    //         from job in jobs.DefaultIfEmpty()
-
-    //         join os in Db.OrganisationStructures
-    //             on job.OrganisationStructureId equals os.OrganisationStructureId
-    //             into structures
-
-    //         from organisationStructure in structures.DefaultIfEmpty()
-
-    //         let fullName =
-    //             (i.FirstNameEnglish ?? "") + " " +
-    //             (i.MiddleNameEnglish ?? "") + " " +
-    //             (i.LastNameEnglish ?? "")
-
-    //       let fullNameDV = i.FirstNameDhivehi + (i.LastNameDhivehi != null ? " " + i.LastNameDhivehi : "")
-           
-    //         where
-    //             EF.Functions.Like(
-    //                 fullName,
-    //                 $"%{SearchText}%"
-    //             )
-
-    //             ||
-
-    //             (i.FirstNameEnglish != null &&
-    //                 EF.Functions.Like(i.FirstNameEnglish, $"%{SearchText}%"))
-
-    //             ||
-
-    //             (card != null &&
-    //                  EF.Functions.Like(
-    //                      card.IdcardNumber,
-    //                      $"%{SearchText}%"
-    //                  ))
-
-    //             ||
-
-    //             (organisationStructure != null &&
-    //                  EF.Functions.Like(
-    //                      organisationStructure.Name,
-    //                      $"%{SearchText}%"
-    //                  ))
-
-    //         select new WorkspaceSearchResult
-    //         {
-    //             Id = i.BusinessEntityId,
-    //             JobId = job.JobId,
-    //             IndividualId = i.BusinessEntityId,
-    //             Name = fullName.ToString(),
-    //             NameDv = fullNameDV.ToString(),
-    //             IDCard = card != null && card.IdcardNumber != null ? card.IdcardNumber : "",
-    //             Description = job == null ? "Individual"  : "Staff" +  (organisationStructure != null ? " | " + organisationStructure.Name : ""),
-    //             EntityType = job == null ? WorkspaceEntityType.Individual : WorkspaceEntityType.Staff
- 
-    //          }
-    //     )
-    //     .Distinct()
-    //     .OrderBy(x => x.Name)
-    //     .Take(10)
-    //     .ToListAsync();
-    //     OrganisationResults =
-    //         await Db.Organisations
-
-    //         .Where(x =>
-    //             EF.Functions.Like(
-    //                 x.OrganisationName,
-    //                 $"%{SearchText}%"
-    //             ))
-
-    //         .Take(10)
-    //         .Select(x => new WorkspaceSearchResult
-    //         {
-    //             Id = x.BusinessEntityID,
-    //             Name = x.OrganisationName,
-    //             EntityType = WorkspaceEntityType.Organisation
-    //             })
-
-    //         .ToListAsync();
-    //     Loading = false;
-    //     await InvokeAsync(StateHasChanged);
-    // }
 
 }

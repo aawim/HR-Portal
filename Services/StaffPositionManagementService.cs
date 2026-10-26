@@ -114,17 +114,17 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
     }
 
     private async Task ValidateAndApplyAsync(HrmTeContext db, int org, int staffId, int jobId, int positionId,
-        DateTime from, DateTime? to, string reason, Assignment? original, bool change, bool apply)
+        DateTime from, DateTime? to, string reason, Assignment? original, bool change, bool apply, int? approvalRequestId = null)
     {
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500)
             throw new InvalidOperationException("Enter a reason of up to 500 characters.");
         from = from.Date; to = to?.Date;
-        if (from.Year < 1900 || to.HasValue && to.Value < from)
-            throw new InvalidOperationException("The end date must be on or after the start date.");
+        if (from.Year < 1900 || to.HasValue && to.Value <= from)
+            throw new InvalidOperationException("The end date must be after the start date.");
         var job = await db.Jobs.SingleOrDefaultAsync(j => j.JobId == jobId && j.IndividualID == staffId && j.OrganisationID == org);
         if (job == null || job.JobStateId != 4)
             throw new InvalidOperationException("Select an approved employment record in the current organisation.");
-        if (from < job.JoinedDate.Date || job.TerminatedDate.HasValue && (!to.HasValue || to.Value >= job.TerminatedDate.Value.Date))
+        if (from < job.JoinedDate.Date || job.TerminatedDate.HasValue && (!to.HasValue || to.Value > job.TerminatedDate.Value.Date))
             throw new InvalidOperationException("The position dates must fall within the employment period.");
         HRM.Models.JobPosition? existing = null;
         if (original != null)
@@ -139,7 +139,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 throw new InvalidOperationException("This position has ended or reaches its end date today. No further changes can be made.");
             if (!change && existing.PositionId != positionId)
                 throw new InvalidOperationException("Use Change position to assign a different position.");
-            if (change && (from <= existing.FromDate.Date || existing.ToDate.HasValue && from > existing.ToDate.Value.Date.AddDays(1)))
+            if (change && (from <= existing.FromDate.Date || existing.ToDate.HasValue && from > existing.ToDate.Value.Date))
                 throw new InvalidOperationException("The new position must start after the previous position started and without a gap in its period.");
         }
         if ((existing == null || change) && !await Available(db, org).AnyAsync(p => p.PositionId == positionId))
@@ -149,7 +149,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             throw new InvalidOperationException("Select a different position, or use Edit dates.");
         if (await db.JobPositions.AnyAsync(a => a.JobId == jobId && a.PositionId == positionId && a.JobPositionStateId == 4 &&
             (existing == null || a.JobPositionId != existing.JobPositionId) &&
-            (!to.HasValue || a.FromDate <= to.Value) && (!a.ToDate.HasValue || a.ToDate.Value >= from)))
+            (!to.HasValue || a.FromDate < to.Value) && (!a.ToDate.HasValue || a.ToDate.Value > from)))
             throw new InvalidOperationException("This position already has an assignment overlapping those dates.");
         if (!apply) return;
         var before = existing == null ? null : new { existing.JobPositionId, existing.PositionId, existing.FromDate, existing.ToDate, existing.OperationLogId };
@@ -163,9 +163,12 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         }
         else
         {
-            if (existing != null) { existing.ToDate = from.AddDays(-1); existing.OperationLogId = audit.OperationLogId; }
-            db.JobPositions.Add(new HRM.Models.JobPosition { JobId = jobId, PositionId = positionId,
-                FromDate = from, ToDate = to, JobPositionStateId = 4, OperationLogId = audit.OperationLogId });
+            if (existing != null) { existing.ToDate = from; existing.OperationLogId = audit.OperationLogId; }
+            var approvedPosition=new HRM.Models.JobPosition { JobId = jobId, PositionId = positionId,
+                FromDate = from, ToDate = to, JobPositionStateId = 4, OperationLogId = audit.OperationLogId };
+            db.JobPositions.Add(approvedPosition);
+            await db.SaveChangesAsync();
+            if(approvalRequestId.HasValue)db.JobPositionsRequests.Add(new(){JobPositionId=approvedPosition.JobPositionId,RequestId=approvalRequestId.Value,OperationLogId=audit.OperationLogId});
         }
         await db.SaveChangesAsync();
     }

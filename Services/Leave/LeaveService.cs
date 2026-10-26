@@ -383,16 +383,10 @@ namespace HRM.Services.Leave
             return matchingIds.Length == 1 ? matchingIds[0] : null;
         }
 
-        public Task<List<LeaveReasonDto>> GetReasonsByLeaveType()
-        {
-            throw new NotImplementedException();
-        }
+
 
        
-        public Task<ServiceResult> ShowDetailLeaveAsync(int? leaveId)
-        {
-            throw new NotImplementedException();
-        }
+
 
 
 

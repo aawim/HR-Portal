@@ -1,0 +1,35 @@
+name: Verify HRM
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+permissions:
+  contents: read
+jobs:
+  regression:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Verify dependencies, styles, build, regressions and source inventory
+        shell: pwsh
+        run: ./tools/verify-project.ps1
+      - name: Verify fresh SQL Server deployment and upgrade
+        shell: pwsh
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+          ConnectionStrings__DefaultConnection: 'Server=(localdb)\MSSQLLocalDB;Database=master;Integrated Security=true;TrustServerCertificate=true'
+        run: |
+          sqllocaldb start MSSQLLocalDB
+          dotnet restore tools/DatabaseBaseline/DatabaseBaseline.csproj
+          dotnet build tools/DatabaseBaseline/DatabaseBaseline.csproj --no-restore --no-dependencies
+          Copy-Item bin/AttendanceRefresh/HRM.dll tools/DatabaseBaseline/bin/Debug/net8.0/HRM.dll -Force
+          dotnet tools/DatabaseBaseline/bin/Debug/net8.0/DatabaseBaseline.dll --verify-empty-schema
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated SQL Server deployment verification failed.' }
