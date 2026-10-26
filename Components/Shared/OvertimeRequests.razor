@@ -11,7 +11,8 @@
             @foreach(var option in tabs)
             { <button type="button" class="app-button @(tab==option.Key ? "app-button-primary" : "app-button-secondary")" disabled="@busy" @onclick="()=>ChangeTab(option.Key)">@option.Value</button> }
         </nav>
-        <fieldset disabled="@busy" class="space-y-3">
+        <fieldset disabled="@busy" class="grid min-w-0 gap-4 @((tab is "Planned" or "Unplanned") ? "lg:grid-cols-2" : "")">
+        <div class="min-w-0 space-y-3">
         @if(tab=="Preapproval")
         {
             <div class="flex flex-wrap gap-3"><label>From date<input type="date" @bind="from" class="mt-1 block rounded border bg-transparent p-2" /></label><label>To date<input type="date" @bind="to" class="mt-1 block rounded border bg-transparent p-2" /></label></div>
@@ -26,28 +27,17 @@
         {
             @if(tab=="Planned")
             {
+                @if(tasks.Count==0)
+                {
+                    <div class="space-y-2 rounded-lg border p-3 text-sm" role="status">
+                        <p>No approved OT preapproval with tasks is available for your account. Planned OT needs an approved request first.</p>
+                        <div class="flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" @onclick='()=>ChangeTab("Preapproval")'>Request OT preapproval</button><button type="button" class="app-button app-button-secondary" @onclick='()=>ChangeTab("Unplanned")'>Claim unplanned OT</button></div>
+                    </div>
+                }
                 <div class="grid gap-3 sm:grid-cols-2"><label>Approved OT request<select class="mt-1 block w-full rounded border bg-transparent p-2" value="@preapprovalId" @onchange="SelectPreapproval"><option value="0">Select request</option>@foreach(var group in tasks.GroupBy(t=>t.RequestId)){var first=group.First();<option value="@group.Key">@first.Reference · @first.From.ToString("dd MMM")–@first.To.ToString("dd MMM yyyy")</option>}</select></label>
-                <label>Task<select class="mt-1 block w-full rounded border bg-transparent p-2" @bind="taskId"><option value="0">Select task</option>@foreach(var task in tasks.Where(t=>t.RequestId==preapprovalId)){<option value="@task.Id">@task.Task</option>}</select></label></div>
+                <label>Task<select disabled="@(preapprovalId==0)" class="mt-1 block w-full rounded border bg-transparent p-2" @bind="taskId"><option value="0">Select task</option>@foreach(var task in tasks.Where(t=>t.RequestId==preapprovalId)){<option value="@task.Id">@task.Task</option>}</select></label></div>
             }
             <div class="flex flex-wrap items-end gap-3"><label>Work date<input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="DateChanged" class="mt-1 block rounded border bg-transparent p-2" /></label><button type="button" class="app-button app-button-secondary" @onclick="LoadEvents">Refresh clock events</button></div>
-            <div class="overflow-hidden rounded-lg border" aria-busy="@loadingEvents">
-                <h2 class="border-b px-3 py-2 text-sm font-semibold">Clock events outside official hours</h2>
-                @if(loadingEvents){<p class="px-3 py-3 text-sm text-slate-500">Loading clock events…</p>}
-                else if(clocks.Count==0){<p class="px-3 py-3 text-sm text-slate-500">No saved clock events outside official hours for this date. Request missing punches under OT clock events.</p>}
-                else
-                {
-                    @foreach(var clock in clocks)
-                    {
-                        <div @key="clock.Id" class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 last:border-b-0">
-                            <time datetime="@clock.Time.ToString("yyyy-MM-ddTHH:mm:ss")" class="text-sm font-medium">@clock.Time.ToString("dd MMM yyyy · HH:mm:ss")</time>
-                            <div class="flex gap-2">
-                                <button type="button" class="app-button @(startId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(startId==clock.Id)" @onclick="()=>SelectStart(clock.Id)">@(startId==clock.Id?"Start selected":"Use as start")</button>
-                                <button type="button" class="app-button @(endId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(endId==clock.Id)" disabled="@(SelectedStart==null||clock.Time<=SelectedStart.Time)" @onclick="()=>endId=clock.Id">@(endId==clock.Id?"End selected":"Use as end")</button>
-                            </div>
-                        </div>
-                    }
-                }
-            </div>
             @if(SelectedStart!=null)
             {
                 <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm" aria-live="polite">
@@ -56,10 +46,32 @@
                     @if(SelectedEnd!=null){<span>Duration: <strong>@((SelectedEnd.Time-SelectedStart.Time).TotalHours.ToString("0.##")) hours</strong></span>}
                 </div>
             }
-            <p class="text-xs text-slate-500">Only saved events outside official time are listed. Missing punches can be requested in OT clock events.</p>
+            <p class="text-xs text-slate-500">Only unused saved events outside official time are listed. Cancel a claim to release its events.</p>
         }
         <label class="block">@(tab=="Preapproval" ? "Purpose" : "Work performed / reason")<textarea @bind="reason" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
-        <button class="app-button app-button-primary" @onclick="SubmitAsync">Submit for approval</button>
+        <button class="app-button app-button-primary" disabled="@(tab=="Planned"&&taskId==0)" @onclick="SubmitAsync">Submit for approval</button>
+        </div>
+        @if(tab is "Planned" or "Unplanned")
+        {
+            <aside class="min-w-0 self-start overflow-hidden rounded-lg border" aria-labelledby="ot-clock-events-heading" aria-busy="@loadingEvents">
+                <h2 id="ot-clock-events-heading" class="border-b px-3 py-2 text-sm font-semibold">Clock events outside official hours</h2>
+                @if(loadingEvents){<p class="px-3 py-3 text-sm text-slate-500">Loading clock events…</p>}
+                else if(clocks.Count==0){<p class="px-3 py-3 text-sm text-slate-500">No unused clock events outside official hours for this date. Events used in pending or approved claims are unavailable.</p>}
+                else
+                {
+                    @foreach(var clock in clocks)
+                    {
+                        <div @key="clock.Id" class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 last:border-b-0">
+                            <time datetime="@clock.Time.ToString("yyyy-MM-ddTHH:mm:ss")" class="text-sm font-medium">@clock.Time.ToString("dd MMM yyyy · HH:mm:ss")</time>
+                            <div class="flex flex-wrap gap-2">
+                                <button type="button" class="app-button @(startId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(startId==clock.Id)" @onclick="()=>SelectStart(clock.Id)">@(startId==clock.Id?"Start selected":"Use as start")</button>
+                                <button type="button" class="app-button @(endId==clock.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(endId==clock.Id)" disabled="@(SelectedStart==null||clock.Time<=SelectedStart.Time)" @onclick="()=>endId=clock.Id">@(endId==clock.Id?"End selected":"Use as end")</button>
+                            </div>
+                        </div>
+                    }
+                }
+            </aside>
+        }
         </fieldset>
     }
     @if(error!=null){<p role="alert" class="text-sm">@error</p>}
@@ -105,8 +117,22 @@
     private List<HRM.Services.OvertimeTaskOption> tasks=[];
     private List<HRM.Services.OvertimeClockOption> clocks=[];
     private readonly Dictionary<string,string> tabs=new(){{"Preapproval","OT preapproval"},{"Planned","Planned OT claim"},{"Unplanned","Unplanned OT claim"},{"ClockEvents","OT clock events"}};
-    private async Task ChangeTab(string value){tab=value;error=null;startId=endId=0;if(value is "Planned" or "Unplanned")await LoadEvents();}
-    private void SelectPreapproval(ChangeEventArgs e){preapprovalId=int.TryParse(e.Value?.ToString(),out var id)?id:0;taskId=0;}
+    private async Task ChangeTab(string value)
+    {
+        tab=value;error=null;startId=endId=0;
+        if(value=="Planned")
+        {
+            try{tasks=await Requests.LoadApprovedTasksAsync();if(!tasks.Any(t=>t.Id==taskId&&t.RequestId==preapprovalId))taskId=0;}
+            catch(Exception ex){tasks=[];taskId=preapprovalId=0;Fail(ex);return;}
+        }
+        if(value is "Planned" or "Unplanned")await LoadEvents();
+    }
+    private void SelectPreapproval(ChangeEventArgs e)
+    {
+        preapprovalId=int.TryParse(e.Value?.ToString(),out var id)?id:0;
+        var choices=tasks.Where(t=>t.RequestId==preapprovalId).ToList();
+        taskId=choices.Count==1?choices[0].Id:0;error=null;
+    }
     private async Task DateChanged(ChangeEventArgs e){if(DateTime.TryParse(e.Value?.ToString(),out var value)){date=value.Date;await LoadEvents();}}
     private async Task LoadEvents()
     {
@@ -117,7 +143,7 @@
         finally{if(version==eventLoadVersion)loadingEvents=false;}
     }
     protected override Task OnInitializedAsync()=>LoadAsync();
-    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}if(!PendingOnly&&tab is "Planned" or "Unplanned")await LoadEvents();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
     private Task SubmitAsync()
     {
         if(tab=="Preapproval")return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,taskText.Split('\n').ToList()));

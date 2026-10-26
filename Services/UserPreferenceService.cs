@@ -8,7 +8,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public sealed record UserThemePreference(int? UserId, string ThemeMode);
+public sealed record UserThemePreference(int? UserId, string ThemeMode, int FontSizePercent = 100);
 
 public sealed class UserPreferenceService(IDbContextFactory<HrmTeContext> factory,
     AuthenticationStateProvider authentication, IOperationLogService logs)
@@ -27,13 +27,24 @@ public sealed class UserPreferenceService(IDbContextFactory<HrmTeContext> factor
         var user = await CurrentUserAsync(db);
         if (user == null) return new(null, "dark");
         var theme = await db.UserPreferences.AsNoTracking().Where(x => x.UserPreferenceId == user.UserPreferenceId)
-            .Select(x => x.ThemeMode).SingleOrDefaultAsync();
-        return new(user.UserId, theme == "light" ? "light" : "dark");
+            .Select(x => new { x.ThemeMode, x.FontSizePercent }).SingleOrDefaultAsync();
+        return new(user.UserId, theme?.ThemeMode == "light" ? "light" : "dark", AllowedFontSizes.Contains(theme?.FontSizePercent ?? 100) ? theme?.FontSizePercent ?? 100 : 100);
     }
 
-    public async Task SaveThemeAsync(string theme, int expectedUserId)
+    public static readonly IReadOnlyList<int> AllowedFontSizes = Array.AsReadOnly(new[] { 90, 100, 110, 120, 130 });
+
+    public Task SaveThemeAsync(string theme, int expectedUserId)
     {
         if (theme is not ("dark" or "light")) throw new ArgumentException("Choose dark or light mode.", nameof(theme));
+        return SaveAppearanceAsync(expectedUserId, theme, null);
+    }
+    public Task SaveFontSizeAsync(int percent, int expectedUserId)
+    {
+        if (!AllowedFontSizes.Contains(percent)) throw new ArgumentException("Choose an available font size.", nameof(percent));
+        return SaveAppearanceAsync(expectedUserId, null, percent);
+    }
+    private async Task SaveAppearanceAsync(int expectedUserId, string? theme, int? fontSize)
+    {
         await using var db = await factory.CreateDbContextAsync();
         await using var transaction = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var user = await CurrentUserAsync(db);
@@ -41,17 +52,21 @@ public sealed class UserPreferenceService(IDbContextFactory<HrmTeContext> factor
             throw new UnauthorizedAccessException("Your session has changed. Reload the page before saving settings.");
         var preference = await db.UserPreferences.SingleOrDefaultAsync(x => x.UserPreferenceId == user.UserPreferenceId);
         var shared = preference != null && await db.Users.AnyAsync(x => x.UserId != user.UserId && x.UserPreferenceId == preference.UserPreferenceId);
-        if (preference?.ThemeMode == theme && !shared) return;
-        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE, $"User {user.UserId}: theme changed to {theme}.");
+        if (preference != null && (theme == null || preference.ThemeMode == theme) &&
+            (!fontSize.HasValue || preference.FontSizePercent == fontSize.Value) && !shared) return;
+        var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.USERS_UPDATE, $"User {user.UserId}: appearance setting updated; theme {theme ?? "unchanged"}, font size {fontSize?.ToString() ?? "unchanged"}%.");
         // Legacy shared preferences must not change another user's settings.
         if (preference == null || shared)
         {
             preference = new UserPreference { SelectedContextId = preference?.SelectedContextId,
-                SelectedLanguageId = preference?.SelectedLanguageId, OperationLogId = log.OperationLogId };
+                SelectedLanguageId = preference?.SelectedLanguageId,
+                ThemeMode = preference?.ThemeMode ?? "dark", FontSizePercent = preference?.FontSizePercent ?? 100,
+                RecentWorkspaceSearchesJson = preference?.RecentWorkspaceSearchesJson, OperationLogId = log.OperationLogId };
             db.UserPreferences.Add(preference);
             user.UserPreference = preference;
         }
-        preference.ThemeMode = theme;
+        if (theme != null) preference.ThemeMode = theme;
+        if (fontSize.HasValue) preference.FontSizePercent = fontSize.Value;
         preference.UpdatedAtUtc = DateTime.UtcNow;
         preference.OperationLogId = log.OperationLogId;
         await db.SaveChangesAsync();

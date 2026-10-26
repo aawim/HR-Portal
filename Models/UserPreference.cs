@@ -13,6 +13,8 @@ public partial class UserPreference
 
     public int? SelectedContextId { get; set; }
 
+    public int FontSizePercent { get; set; } = 100;
+
     public string ThemeMode { get; set; } = "dark";
     public string? RecentWorkspaceSearchesJson { get; set; }
 

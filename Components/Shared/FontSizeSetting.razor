@@ -1,0 +1,34 @@
+@inject HRM.Services.UserPreferenceService Preferences
+@inject IJSRuntime JS
+@inject ILogger<FontSizeSetting> Logger
+
+<label class="block text-sm" for="user-font-size">Font size</label>
+<select id="user-font-size" class="mt-1 block w-full rounded border bg-transparent p-2 text-sm" value="@percent" disabled="@(!ready||saving)" @onchange="ChangeAsync">
+    <option value="90">Small · 90%</option>
+    <option value="100">Default · 100%</option>
+    <option value="110">Large · 110%</option>
+    <option value="120">Larger · 120%</option>
+    <option value="130">Largest · 130%</option>
+</select>
+@if(error!=null){<p role="alert" class="mt-2 text-xs text-rose-600">@error</p>}
+@code {
+    private int percent=100;
+    private int? userId;
+    private bool ready,saving;
+    private string? error;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(!firstRender)return;
+        try{var settings=await Preferences.GetThemeAsync();userId=settings.UserId;percent=settings.FontSizePercent;ready=userId.HasValue;}
+        catch(Exception ex){Logger.LogError(ex,"Loading font size");error="Font size could not be loaded. Reopen this menu to retry.";}
+        StateHasChanged();
+    }
+    private async Task ChangeAsync(ChangeEventArgs e)
+    {
+        if(!ready||saving||!userId.HasValue||!int.TryParse(e.Value?.ToString(),out var next))return;
+        saving=true;error=null;
+        try{await Preferences.SaveFontSizeAsync(next,userId.Value);await JS.InvokeVoidAsync("hrmFontSize.set",next);percent=next;}
+        catch(Exception ex){Logger.LogError(ex,"Saving font size");error="Font size could not be saved. Please try again.";}
+        finally{saving=false;}
+    }
+}

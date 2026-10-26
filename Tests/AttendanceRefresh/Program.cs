@@ -27,6 +27,7 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if(args.Contains("--font-size-only")){await UserFontSizeTests.RunAsync();Console.WriteLine("PASS User font size preferences");return 0;}
 if (args.Contains("--overtime-policy-only"))
 {
     await OvertimePolicyTests.RunAsync(); Console.WriteLine("PASS OT policy relational persistence"); return 0;
@@ -104,6 +105,8 @@ catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Organisation re
 try { await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Section navigation: category URLs, direct links, workspace and attendance tabs, protected sections and legacy route compatibility"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Section navigation: {ex}"); }
 if(args.Contains("--navigation-only")) return failures == 0 ? 0 : 1;
+try { await UserFontSizeTests.RunAsync(); Console.WriteLine("PASS User font size preferences: persistence, account isolation, shared preference cloning, validation and theme preservation"); }
+catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL User font size preferences: {ex}"); }
 try { await OvertimePolicyTests.RunAsync(); Console.WriteLine("PASS OT policy: relational first save, audit foreign key, update, disabled limits, stale edits and tenant switching"); }
 catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL OT policy: {ex}"); }
 try { await OvertimeWorkTests.RunAsync(); Console.WriteLine("PASS Overtime work requests: preapproval tasks, saved clock evidence, unplanned claims, clock approvals, limits, duplicates and tenant isolation"); }

@@ -27,6 +27,9 @@ static class OvertimeWorkTests
         Check(options.Any(x => x.Id == 1) && !options.Any(x => x.Id == 3 || x.Id == 8), "Clock selector exposed official/foreign events");
         Check((await f.Service.SubmitClaimAsync(1, 2, "Unplanned extra work")).Success, "Unplanned claim failed");
         Check(!(await f.Service.SubmitClaimAsync(1, 2, "Repeat")).Success, "Double claim accepted");
+        Check(!(await f.Service.SubmitClaimAsync(2, 5, "Reuse previous end as a start")).Success, "Used boundary clock was reused");
+        var remaining = await f.Service.LoadClockEventsAsync(Today.AddDays(-1));
+        Check(!remaining.Any(x => x.Id == 1 || x.Id == 2) && remaining.Any(x => x.Id == 4), "Used events remained selectable or unused events disappeared");
         int claim;
         await using (var db = f.Factory.CreateDbContext())
         {
@@ -37,6 +40,7 @@ static class OvertimeWorkTests
         Check(denied, "Self approval accepted");
         f.AsReviewer(); Check((await f.Service.ActAsync(claim, 2, "Approve", "Verified")).Success, "Claim approval failed");
         f.AsStaff();
+        Check(!(await f.Service.LoadClockEventsAsync(Today.AddDays(-1))).Any(x => x.Id == 1 || x.Id == 2), "Approved claim events became selectable again");
         Check(!(await f.Service.SubmitWorkAsync("Preapproval", Today, Today.AddDays(1), "Planned", [])).Success, "Empty task list accepted");
         Check((await f.Service.SubmitWorkAsync("Preapproval", Today, Today.AddDays(1), "Planned", ["Deploy release", "Verify backup"])).Success, "Preapproval submit failed");
         int preapproval; int task;
@@ -103,6 +107,8 @@ static class OvertimeWorkTests
         int cancelled;
         await using (var db = g.Factory.CreateDbContext()) cancelled = await db.OvertimeRequests.Select(x => x.RequestId).SingleAsync();
         Check((await g.Service.ActAsync(cancelled, 2, "Cancel", "Withdrawn")).Success, "Own claim cancellation failed");
+        Check((await g.Service.LoadClockEventsAsync(Today.AddDays(-1))).Any(x => x.Id == 1) &&
+            (await g.Service.LoadClockEventsAsync(Today.AddDays(-1))).Any(x => x.Id == 2), "Cancelled claim did not restore selectable events");
         Check((await g.Service.SubmitClaimAsync(1, 2, "Resubmitted after cancellation")).Success, "Cancelled claim did not release interval");
         // An overnight interval belongs to two daily/weekly buckets, not just its start date.
         var night = new Fixture(); await night.Seed();
@@ -195,7 +201,7 @@ static class OvertimeWorkTests
                 SchedulePurpose = "Official", StartDateTime = Today.AddDays(-1).AddHours(8), EndDateTime = Today.AddDays(-1).AddHours(14) });
             var hours = new[] { 14, 15, 10, 15, 16, 18, 19, 20 };
             for (var i = 0; i < hours.Length; i++) db.AttendanceLogs.Add(new() { AttendanceLogId = i + 1, OrganisationId = i == 7 ? 20 : 10,
-                IndividualId = i == 7 ? 300 : 200, AttendanceLogStateId = 1, Date = Today.AddDays(-1).AddHours(hours[i]) });
+                IndividualId = i == 7 ? 300 : 200, AttendanceLogStateId = 1, Date = Today.AddDays(-1).AddHours(hours[i]).AddMinutes(i == 3 ? 1 : 0) });
             await db.SaveChangesAsync();
         }
     }

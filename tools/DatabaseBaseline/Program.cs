@@ -8,6 +8,23 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--verify-font-size-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true);return 0;}
+if(args.Contains("--apply-font-size-upgrade"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>!x.EndsWith("_UserFontSizePreference",StringComparison.Ordinal)))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"Font preference column available; {await db.UserPreferences.CountAsync()} existing preference records retained.");
+    return 0;
+}
+if(args.Contains("--audit-ot-preapprovals"))
+{
+    var rows=await db.OvertimeWorkRequests.AsNoTracking().Where(x=>x.Kind=="Preapproval")
+        .Select(x=>new{x.RequestId,x.OrganisationId,x.IndividualId,x.FromDate,x.ToDate,x.Request.RequestStateId,x.Request.RequestState.StateName,Tasks=x.Tasks.Count}).ToListAsync();
+    Console.WriteLine($"OT preapprovals: {rows.Count}");
+    foreach(var row in rows)Console.WriteLine($"Request {row.RequestId}; organisation {row.OrganisationId}; staff {row.IndividualId}; {row.FromDate:yyyy-MM-dd} to {row.ToDate:yyyy-MM-dd}; {row.StateName}; tasks {row.Tasks}");
+    return 0;
+}
 if(args.Contains("--audit-ot-policy"))
 {
     var rows=await db.JobTypeOvertimeRules.AsNoTracking().OrderBy(x=>x.OrganisationId).ThenBy(x=>x.JobTypeId).ToListAsync();

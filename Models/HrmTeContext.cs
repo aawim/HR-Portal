@@ -4160,6 +4160,7 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<UserPreference>(entity =>
         {
+            entity.Property(e => e.FontSizePercent).HasDefaultValue(100);
             entity.Property(e => e.ThemeMode).HasMaxLength(16).HasDefaultValue("dark").IsRequired();
             entity.Property(e => e.RecentWorkspaceSearchesJson).HasColumnType("nvarchar(max)");
             entity.Property(e => e.UpdatedAtUtc).HasColumnType("datetime2");

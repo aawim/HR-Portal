@@ -67,8 +67,9 @@ public sealed partial class OvertimeRequestService
             throw new InvalidOperationException("HR must review the existing legacy claim for this date before further overtime is claimed.");
         if (await db.OvertimeRequests.AnyAsync(x => x.RequestId != r.RequestId && x.OrganisationId == r.OrganisationId &&
             x.IndividualId == r.IndividualId && (!x.Request.RequestState.IsFinalState || x.Request.RequestStateId == 4) &&
-            x.StartedAt < end && x.EndedAt > start))
-            throw new InvalidOperationException("This time overlaps an existing pending or approved OT claim.");
+            (x.StartLogId == r.StartLogId || x.StartLogId == r.EndLogId || x.EndLogId == r.StartLogId || x.EndLogId == r.EndLogId ||
+             x.StartedAt <= end && x.EndedAt >= start)))
+            throw new InvalidOperationException("These clock events or times are already used by a pending or approved OT claim. Cancel that request before using them again.");
         if (r.ClaimSource == "Planned")
         {
             var task = await db.OvertimeWorkTasks.Include(t => t.WorkRequest).ThenInclude(w => w.Request)
@@ -113,7 +114,14 @@ public sealed partial class OvertimeRequestService
             .OrderBy(l => l.Date).Select(l => new OvertimeClockOption(l.AttendanceLogId, l.Date)).ToListAsync();
         var official = (await AttendanceScheduleFacts.LoadAsync(db, actor.Person, date.AddDays(-1), date.AddDays(1), actor.Org))
             .Where(f => f.Purpose == "Official").ToList();
-        return events.Where(e => !official.Any(f => e.Time > f.ScheduledStart && e.Time < f.ScheduledEnd)).ToList();
+        var reserved = await db.OvertimeRequests.AsNoTracking().Where(x => x.OrganisationId == actor.Org && x.IndividualId == actor.Person &&
+            (!x.Request.RequestState.IsFinalState || x.Request.RequestStateId == 4) &&
+            (x.WorkDate >= date.AddDays(-1) && x.WorkDate < end || x.StartedAt < end && x.EndedAt >= date))
+            .Select(x => new { x.StartLogId, x.EndLogId, x.StartedAt, x.EndedAt, x.WorkDate, x.ClaimSource }).ToListAsync();
+        return events.Where(e => !official.Any(f => e.Time > f.ScheduledStart && e.Time < f.ScheduledEnd) &&
+            !reserved.Any(r => r.StartLogId == e.Id || r.EndLogId == e.Id ||
+                r.StartedAt.HasValue && r.EndedAt.HasValue && e.Time >= r.StartedAt && e.Time <= r.EndedAt ||
+                r.ClaimSource == "Legacy" && e.Time.Date == r.WorkDate)).ToList();
     }
     public async Task<List<OvertimeTaskOption>> LoadApprovedTasksAsync()
     {

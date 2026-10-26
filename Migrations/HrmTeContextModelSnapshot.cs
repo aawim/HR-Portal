@@ -2850,6 +2850,11 @@ namespace HRM.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("UserPreferenceId"));
 
+                    b.Property<int>("FontSizePercent")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasDefaultValue(100);
+
                     b.Property<int>("OperationLogId")
                         .HasColumnType("int")
                         .HasColumnName("OperationLogID");
