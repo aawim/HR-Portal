@@ -46,6 +46,7 @@
         }
     </div>
     @if (handoverError != null) { <p role="alert" class="text-sm text-red-700">@handoverError</p> }
+    @if (!string.IsNullOrWhiteSpace(LeaveState.HandoverRuleSource)) { <p class="text-xs text-slate-500">@LeaveState.HandoverRuleSource · @(LeaveState.WorkHandoverAfterDays.HasValue ? $"Required for more than {LeaveState.WorkHandoverAfterDays} leave days" : "Handover not required")</p> }
     @if (LeaveState.IsWorkHandoverRequired)
     {
         <section class="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
@@ -163,6 +164,7 @@
             var rules = await LeaveService.GetHandoverRulesAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.Model.FromDate, LeaveState.ApplicantJobId);
             if (version != handoverLoadVersion) return;
             LeaveState.WorkHandoverAfterDays = rules.AfterDays;
+            LeaveState.HandoverRuleSource = rules.RuleId.HasValue ? rules.Source : null;
             handoverRecipients = rules.Recipients;
             foreach (var task in LeaveState.Model.HandoverTasks.Where(t => !handoverRecipients.Any(x => x.JobId == t.JobId))) task.JobId = null;
             if (!handoverRecipients.Any(x => x.JobId == LeaveState.Model.HandoverJobId)) LeaveState.Model.HandoverJobId = null;

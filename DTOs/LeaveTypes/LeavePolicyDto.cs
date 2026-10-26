@@ -21,9 +21,7 @@ namespace HRM.DTOs.LeaveTypes
 
         public decimal? PayPercentage { get; set; }
 
-        public bool RequireWorkHandover { get; set; }
 
-        public int WorkHandoverAfterDays { get; set; } = 2;
 
         public bool IsLocationRequired { get; set; }
 

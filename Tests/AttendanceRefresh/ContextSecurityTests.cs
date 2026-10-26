@@ -68,7 +68,9 @@ static class ContextSecurityTests
             user.AdminPortalAccessOrganisationId = 1;
             await db.SaveChangesAsync();
         }
-        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false, "A User Group exceeded the organisation permission ceiling");
+        var portalOnlySession = await sessionService.GetSessionAsync();
+        Check(portalOnlySession?.CanAccessAdminPortal == true, $"Explicit portal admission incorrectly required resource permissions (user={portalOnlySession?.UserId}, org={portalOnlySession?.OrganisationId})");
+        Check(!(await new EffectivePermissionService(factory).GetEffectivePermissionsAsync(1)).Any(), "Portal admission bypassed the organisation resource ceiling");
         await using (var db = factory.CreateDbContext())
         {
             db.UserOrganisationRoles.Add(new UserOrganisationRole { UserOrganisationID = 1, RoleID = 1, IsActive = true });
@@ -94,7 +96,8 @@ static class ContextSecurityTests
             db.UserOrganisationRoles.RemoveRange(db.UserOrganisationRoles);
             await db.SaveChangesAsync();
         }
-        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == false, "Revoked Admin access survived session refresh");
+        Check((await sessionService.GetSessionAsync())?.CanAccessAdminPortal == true, "Removing resource assignments also removed explicit portal admission");
+        Check(!(await new EffectivePermissionService(factory).GetEffectivePermissionsAsync(1)).Any(), "Removed User Group permissions survived refresh");
         await using (var db = factory.CreateDbContext())
         {
             (await db.Users.SingleAsync(x => x.UserId == 1)).UserOrganisationId = 2;

@@ -6,6 +6,8 @@ namespace HRM.DTOs.LeaveTypes
     {
         public int? LeaveTypeId { get; set; }
 
+        public int? RequestTypeId { get; set; }
+
         [Required]
         [MaxLength(50)]
         public string Code { get; set; } = "";

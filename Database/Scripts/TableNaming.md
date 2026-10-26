@@ -43,3 +43,5 @@ Supervisor additions/removals use `SV_SupervisorChangeRequests`; shared workflow
 `LT_` is the unified leave-type feature prefix. `LT_LeaveTypes` is the in-place rename/consolidation of the existing catalogue; `LT_TypeMigrationAudits` preserves retired definition/mapping/configuration snapshots. See `docs/unified-leave-types.md`.
 
 Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccrualRules`. Migration `20261026061841_PrefixLeavePolicyTables` performs in-place, data-preserving renames. Existing constraint and index names remain unchanged. Applied historical migrations retain the names used when they were deployed.
+
+`LH_LeaveHandoverRules` and `LH_LeaveHandoverRuleTypes` store scoped, effective-dated work-handover requirements and selected leave types. They share the established `LH_` handover prefix. Existing `Leaves` receives nullable `HandoverRuleSnapshot`; historical rows are not rewritten.

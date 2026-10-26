@@ -1,7 +1,7 @@
 namespace HRM.DTOs.Leave;
 
 public record LeaveHandoverRecipient(int JobId, string Name);
-public record LeaveHandoverRulesDto(int? AfterDays, List<LeaveHandoverRecipient> Recipients);
+public record LeaveHandoverRulesDto(int? AfterDays, List<LeaveHandoverRecipient> Recipients,string Source="",int? RuleId=null,int? RuleVersion=null);
 public class LeaveHandoverTaskInput
 {
     public int? JobId { get; set; }

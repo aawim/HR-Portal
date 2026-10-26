@@ -4871,6 +4871,9 @@ namespace HRM.Migrations
                     b.Property<DateTime>("FromDate")
                         .HasColumnType("datetime");
 
+                    b.Property<string>("HandoverRuleSnapshot")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int>("JobId")
                         .HasColumnType("int")
                         .HasColumnName("JobID");
@@ -5376,6 +5379,111 @@ namespace HRM.Migrations
                     b.HasIndex("SupervisorApprovedByIndividualId");
 
                     b.ToTable("LH_LeaveHandoverReviews", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverRule", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AfterDays")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("AllLeaveTypes")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("JobTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OrganisationStructureId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Scope")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int?>("TeamId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobTypeId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationStructureId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("OrganisationId", "IsActive", "EffectiveFrom");
+
+                    b.ToTable("LH_LeaveHandoverRules", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LH_RuleScope", "([Scope]='Organisation' AND [TeamId] IS NULL AND [OrganisationStructureId] IS NULL) OR ([Scope]='Structure' AND [OrganisationStructureId] IS NOT NULL AND [TeamId] IS NULL) OR ([Scope]='Team' AND [TeamId] IS NOT NULL AND [OrganisationStructureId] IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverRuleType", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LeaveTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RuleId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveTypeId");
+
+                    b.HasIndex("RuleId", "LeaveTypeId")
+                        .IsUnique();
+
+                    b.ToTable("LH_LeaveHandoverRuleTypes", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverSupervisor", b =>
@@ -12089,6 +12197,52 @@ namespace HRM.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
                 });
 
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverRule", b =>
+                {
+                    b.HasOne("HRM.Models.JobType", null)
+                        .WithMany()
+                        .HasForeignKey("JobTypeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OrganisationStructure", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationStructureId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Team", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverRuleType", b =>
+                {
+                    b.HasOne("HRM.Models.LeaveType", null)
+                        .WithMany()
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.LeaveTypes.LeaveHandoverRule", "Rule")
+                        .WithMany("LeaveTypes")
+                        .HasForeignKey("RuleId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Rule");
+                });
+
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverSupervisor", b =>
                 {
                     b.HasOne("HRM.Models.Staff", null)
@@ -14367,6 +14521,11 @@ namespace HRM.Migrations
             modelBuilder.Entity("HRM.Models.LeaveTypeReasonType", b =>
                 {
                     b.Navigation("LeaveReasons");
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverRule", b =>
+                {
+                    b.Navigation("LeaveTypes");
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicy", b =>

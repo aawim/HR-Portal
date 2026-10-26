@@ -111,6 +111,7 @@ namespace HRM.Services.State
             Model.LeaveReasonId > 0 && Reasons.Any(x => x.Id == Model.LeaveReasonId);
 
         public int? WorkHandoverAfterDays { get; set; }
+        public string? HandoverRuleSource { get; set; }
         public bool IsWorkHandoverRequired => WorkHandoverAfterDays.HasValue && Model.Duration > WorkHandoverAfterDays.Value;
 
         public bool CanSubmit =>
@@ -146,6 +147,7 @@ namespace HRM.Services.State
 
             WorkHandoverCompleted = false;
             WorkHandoverAfterDays = null;
+            HandoverRuleSource = null;
 
             HandoverEmployeeId = null;
 

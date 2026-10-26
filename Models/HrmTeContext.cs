@@ -17,6 +17,8 @@ public partial class HrmTeContext : DbContext
     public HrmTeContext()
     {
     }
+    public DbSet<LeaveHandoverRule> LeaveHandoverRules => Set<LeaveHandoverRule>();
+    public DbSet<LeaveHandoverRuleType> LeaveHandoverRuleTypes => Set<LeaveHandoverRuleType>();
     public DbSet<LeaveHandoverReview> LeaveHandoverReviews => Set<LeaveHandoverReview>();
     public DbSet<LeaveHandoverSupervisor> LeaveHandoverSupervisors => Set<LeaveHandoverSupervisor>();
 
@@ -451,6 +453,24 @@ public partial class HrmTeContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<LeaveHandoverRule>(e =>
+        {
+            e.ToTable("LH_LeaveHandoverRules",t=>t.HasCheckConstraint("CK_LH_RuleScope", "([Scope]='Organisation' AND [TeamId] IS NULL AND [OrganisationStructureId] IS NULL) OR ([Scope]='Structure' AND [OrganisationStructureId] IS NOT NULL AND [TeamId] IS NULL) OR ([Scope]='Team' AND [TeamId] IS NOT NULL AND [OrganisationStructureId] IS NULL)"));
+            e.HasKey(x=>x.Id); e.Property(x=>x.Name).HasMaxLength(200); e.Property(x=>x.Scope).HasMaxLength(20); e.Property(x=>x.Mode).HasMaxLength(20);
+            e.Property(x=>x.Version).IsConcurrencyToken(); e.Property(x=>x.EffectiveFrom).HasColumnType("date"); e.Property(x=>x.EffectiveTo).HasColumnType("date");
+            e.HasIndex(x=>new{x.OrganisationId,x.IsActive,x.EffectiveFrom});
+            e.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<OrganisationStructure>().WithMany().HasForeignKey(x=>x.OrganisationStructureId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<Team>().WithMany().HasForeignKey(x=>x.TeamId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<JobType>().WithMany().HasForeignKey(x=>x.JobTypeId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<OperationLog>().WithMany().HasForeignKey(x=>x.OperationLogId).OnDelete(DeleteBehavior.Restrict);
+        });
+        modelBuilder.Entity<LeaveHandoverRuleType>(e =>
+        {
+            e.ToTable("LH_LeaveHandoverRuleTypes"); e.HasKey(x=>x.Id); e.HasIndex(x=>new{x.RuleId,x.LeaveTypeId}).IsUnique();
+            e.HasOne(x=>x.Rule).WithMany(x=>x.LeaveTypes).HasForeignKey(x=>x.RuleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasOne<LeaveType>().WithMany().HasForeignKey(x=>x.LeaveTypeId).OnDelete(DeleteBehavior.Restrict);
+        });
         modelBuilder.Entity<LeaveCarryForward>(e =>
         {
             e.ToTable("LCF_LeaveCarryForwards"); e.HasKey(x => x.Id);

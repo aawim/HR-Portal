@@ -47,19 +47,31 @@ static class OrganisationPermissionTests
         Check(!(await effective.GetEffectivePermissionsAsync(2)).Any(p => p.RoleID == 4), "Direct/group permission escaped organisation ceiling");
         Check((await effective.LoadDirectPermissionsAsync(2)).Select(p => p.RoleID).SequenceEqual([2]), "Direct permission source bypassed ceiling");
         Check((await effective.LoadUserGroupPermissionsAsync(2)).Select(p => p.RoleID).SequenceEqual([2]), "Group permission source bypassed ceiling");
+        Check(!await effective.HasPermissionAsync(2, "Admin"), "Organisation ceiling implicitly granted unassigned Admin permission");
+        Check(!(await effective.GetPermissionSourcesAsync(2)).Any(p => p.Source == HRM.Enum.PermissionSource.Organisation), "Organisation limits exposed as inherited grants");
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Users.Add(new User { UserId = 3, BusinessEntityID = 300, Username = "portal-only", UserOrganisationId = 1,
+                IsActive = true, LocalUserStateId = 1, AdminPortalAccessEnabled = true, AdminPortalAccessOrganisationId = 1 });
+            await db.SaveChangesAsync();
+        }
+        Check(!(await effective.GetEffectivePermissionsAsync(3)).Any(), "Portal access alone granted resource permissions");
         var data = await service.LoadAsync();
         Check(data.IsSuperAdmin && data.Organisations.Count == 2 && data.AllowedIds.Count == 2, "Explicit platform administrator cannot manage permission limits");
         Check((await service.LoadAsync(20)).OrganisationId == 20, "Super Admin organisation selection failed");
         actor = 2;
         var denied = false; try { await service.LoadAsync(20); } catch (UnauthorizedAccessException) { denied = true; }
         Check(denied, "Organisation administrator selected another tenant");
-        Check(!(await service.SaveAsync(10, [1,2,4], [1,2], "Escalate")).Success, "Tenant administrator expanded their own ceiling");
+        denied = false;
+        try { denied = !(await service.SaveAsync(10, [1,2,4], [1,2], "Escalate")).Success; }
+        catch (UnauthorizedAccessException) { denied = true; }
+        Check(denied, "Account without assigned management permissions expanded its own ceiling");
         actor = 1;
         Check(!(await service.SaveAsync(10, [1,4], [1], "Stale")).Success, "Stale organisation settings overwrote current permissions");
         Check(!(await service.SaveAsync(10, [1,4], [1,2], "")).Success, "Unaudited change accepted");
         Check((await service.SaveAsync(10, [1,4], [1,2], "Enable restricted area; remove view")).Success, "Super Admin save failed");
         Check(await effective.HasPermissionAsync(2, "Restricted") && !await effective.HasPermissionAsync(2, "Users.View"), "Permission change did not apply immediately");
-        Check(invalidated.SetEquals([1,2]), "Tenant users were not invalidated");
+        Check(invalidated.SetEquals([1,2,3]), "Tenant users were not invalidated");
         await using (var db = factory.CreateDbContext())
         {
             Check(await db.UserRoles.AnyAsync(r => r.UserId == 2 && r.RoleId == 2 && r.IsActive), "Limit removal deleted the underlying user assignment");

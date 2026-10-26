@@ -7,7 +7,7 @@ internal static class UnifiedLeaveTypeUpgrade
 {
     private static string Identifier(string value) => "[" + value.Replace("]", "]]") + "]";
     private static string Literal(string value) => "N'" + value.Replace("'", "''") + "'";
-    public static async Task RehearseAsync(string sourceConnection)
+    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false)
     {
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnection);
         var source = sourceBuilder.InitialCatalog;
@@ -40,11 +40,20 @@ internal static class UnifiedLeaveTypeUpgrade
             var testBuilder = new SqlConnectionStringBuilder(sourceConnection) { InitialCatalog = name, Pooling = false };
             await using var db = new HrmTeContext(new DbContextOptionsBuilder<HrmTeContext>().UseSqlServer(testBuilder.ConnectionString).Options);
             db.Database.SetCommandTimeout(300);
-            // Exercise the otherwise-unused new-only-definition branch on the isolated copy.
-            await db.Database.ExecuteSqlRawAsync("INSERT dbo.LeaveDefinitions(Code,Name,OwnerOrganisationID,IsSystemType,IsGlobal,IsActive,CreatedDate) SELECT 'UPGRADE-SMOKE','Upgrade preservation fixture',MIN(BusinessEntityID),0,0,1,SYSUTCDATETIME() FROM dbo.Organisations;");
+            var beforeBalances = await db.JobLeaveTypes.AsNoTracking().OrderBy(x=>x.JobLeaveTypeId).Select(x=>new{x.JobLeaveTypeId,x.JobId,x.LeaveTypeId,x.RemainingDays,x.IsValid}).ToListAsync();
+            var beforeLeaves = await db.Leaves.AsNoTracking().OrderBy(x=>x.LeaveId).Select(x=>new{x.LeaveId,x.JobId,x.LeaveTypeId,x.FromDate,x.ToDate,x.Duration,x.LeaveStateId}).ToListAsync();
+            if (!scopedHandover)
+                await db.Database.ExecuteSqlRawAsync("INSERT dbo.LeaveDefinitions(Code,Name,OwnerOrganisationID,IsSystemType,IsGlobal,IsActive,CreatedDate) SELECT 'UPGRADE-SMOKE','Upgrade preservation fixture',MIN(BusinessEntityID),0,0,1,SYSUTCDATETIME() FROM dbo.Organisations;");
             await db.Database.MigrateAsync();
             await VerifyAsync(db);
-            if (!await db.LeaveTypes.AnyAsync(t => t.Code == "UPGRADE-SMOKE" && t.Name == "Upgrade preservation fixture")) throw new InvalidOperationException("An unmapped new definition was not preserved.");
+            if (!scopedHandover && !await db.LeaveTypes.AnyAsync(t=>t.Code=="UPGRADE-SMOKE"))throw new InvalidOperationException("An unmapped definition was lost.");
+            if(scopedHandover)
+            {
+                var afterBalances = await db.JobLeaveTypes.AsNoTracking().OrderBy(x=>x.JobLeaveTypeId).Select(x=>new{x.JobLeaveTypeId,x.JobId,x.LeaveTypeId,x.RemainingDays,x.IsValid}).ToListAsync();
+                var afterLeaves = await db.Leaves.AsNoTracking().OrderBy(x=>x.LeaveId).Select(x=>new{x.LeaveId,x.JobId,x.LeaveTypeId,x.FromDate,x.ToDate,x.Duration,x.LeaveStateId}).ToListAsync();
+                if(!beforeBalances.SequenceEqual(afterBalances)||!beforeLeaves.SequenceEqual(afterLeaves))throw new InvalidOperationException("Scoped handover upgrade changed historical leave or balance data.");
+                await VerifyHandoverAsync(db,verifyImported:true);
+            }
             await db.Database.MigrateAsync();
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_PrefixLeavePolicyTables.sql"));
             Console.WriteLine("PASS Isolated restored-data consolidation, exact balance/history checks, canonical queries and repeat upgrade.");
@@ -66,11 +75,28 @@ internal static class UnifiedLeaveTypeUpgrade
         Console.WriteLine($"Canonical types: {await db.LeaveTypes.CountAsync()}; balances: {await db.JobLeaveTypes.CountAsync()}; historical leaves: {await db.Leaves.CountAsync()}; policies: {await db.LeavePolicies.CountAsync()}; audit snapshots: {await db.LeaveTypeMigrationAudits.CountAsync()}.");
         if ((await db.Database.GetPendingMigrationsAsync()).Any()) throw new InvalidOperationException("Pending migrations remain.");
     }
+    public static async Task VerifyHandoverAsync(HrmTeContext db,bool verifyImported=false)
+    {
+        Console.WriteLine($"Scoped handover rules: {await db.LeaveHandoverRules.CountAsync()}; selected type links: {await db.LeaveHandoverRuleTypes.CountAsync()}.");
+        var balance = await db.JobLeaveTypes.AsNoTracking().Where(x=>x.LeaveTypeId==66&&x.IsValid&&x.Job.OrganisationID==3).Select(x=>new{x.JobId}).FirstOrDefaultAsync();
+        if(balance!=null)
+        {
+            var r=await HRM.Services.Leave.LeaveHandoverRuleResolver.ResolveAsync(db,balance.JobId,66,DateTime.UtcNow.AddHours(5).Date);
+            Console.WriteLine($"Annual local type 66: {r.Source}; threshold={r.AfterDays}; 2 days requires handover={r.Requires(2)}; 3 days requires handover={r.Requires(3)}.");
+            if(verifyImported)
+            {
+                var old=await db.LeavePolicies.AsNoTracking().Where(p=>p.OrganisationId==3&&(p.LeaveTypeId==66||p.LeaveTypeId==1)&&p.IsActive&&p.EffectiveFrom<=DateTime.UtcNow.AddHours(5).Date&&(p.EffectiveTo==null||p.EffectiveTo>=DateTime.UtcNow.AddHours(5).Date)).OrderByDescending(p=>p.LeaveTypeId==66).ThenByDescending(p=>p.EffectiveFrom).Select(p=>new{p.RequireWorkHandover,p.WorkHandoverAfterDays}).FirstOrDefaultAsync();
+                if(old!=null&&(old.RequireWorkHandover ? r.AfterDays!=old.WorkHandoverAfterDays||r.Requires(old.WorkHandoverAfterDays)||!r.Requires(old.WorkHandoverAfterDays+1) : r.Mode!="Exempt"))
+                    throw new InvalidOperationException("The reviewed annual handover requirement was not preserved.");
+            }
+        }
+    }
     public static async Task ApplyAsync(HrmTeContext db)
     {
         var pending = (await db.Database.GetPendingMigrationsAsync()).ToArray();
-        if (pending.Any(x => !x.EndsWith("_UnifiedLeaveTypes", StringComparison.Ordinal) && !x.EndsWith("_PrefixLeavePolicyTables", StringComparison.Ordinal))) throw new InvalidOperationException("Unexpected pending migrations. Review deployment before applying.");
+        if (pending.Any(x => !x.EndsWith("_UnifiedLeaveTypes", StringComparison.Ordinal) && !x.EndsWith("_PrefixLeavePolicyTables", StringComparison.Ordinal) && !x.EndsWith("_ScopedLeaveHandoverRules", StringComparison.Ordinal))) throw new InvalidOperationException("Unexpected pending migrations. Review deployment before applying.");
         db.Database.SetCommandTimeout(300);
         await db.Database.MigrateAsync(); await VerifyAsync(db);
+        await VerifyHandoverAsync(db,pending.Any(x=>x.EndsWith("_ScopedLeaveHandoverRules",StringComparison.Ordinal)));
     }
 }

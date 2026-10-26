@@ -65,6 +65,7 @@ static class SectionNavigationTests
         Check(Route("/admin/settings/org/organisations/3/structure") == typeof(SettingsPage), "Organisation record section URL is missing");
         Check(Route("/admin/settings/workplaning/templates") == typeof(SettingsPage), "Work planning section URL is missing");
         Check(Route("/admin/settings/leaves/manage-leave-sets")==typeof(SettingsPage),"Canonical leave set settings route is missing");
+        Check(Selected(new SettingsPage { CategoryName="leaves",Section="work-handover-rules" })=="Work Handover Rules", "Scoped handover settings route is missing");
         var cataloguePage = new SettingsPage { CategoryName = "leaves", Section = "leave-types" };
         Check(Selected(cataloguePage) == "Manage Leave Types", "Canonical leave catalogue route is missing");
         Check(Route("/admin/hr/leave/types") == typeof(HRM.Components.Leave.LeaveTypesRedirect), "Former type editor must redirect to Settings");

@@ -92,8 +92,6 @@ namespace HRM.Services
                     PayPercentage =
                         policy.PayPercentage,
 
-                    RequireWorkHandover = policy.RequireWorkHandover,
-                    WorkHandoverAfterDays = policy.WorkHandoverAfterDays,
                     IsLocationRequired =
                         policy.IsLocationRequired,
 
@@ -181,8 +179,6 @@ namespace HRM.Services
                     PayPercentage =
                         policy.PayPercentage,
 
-                    RequireWorkHandover = policy.RequireWorkHandover,
-                    WorkHandoverAfterDays = policy.WorkHandoverAfterDays,
                     IsLocationRequired =
                         policy.IsLocationRequired,
 
@@ -235,6 +231,8 @@ namespace HRM.Services
 
                 await using var transaction = db.Database.CurrentTransaction == null
                     ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
+                var routingError = await HRM.Services.Leave.LeaveRequestTypeLink.ValidateAsync(db, request.RequestTypeId, cancellationToken);
+                if (routingError != null) return ServiceResult<int>.Failure(routingError);
 
                 var definition =
                     await db.LeaveTypes
@@ -314,8 +312,6 @@ namespace HRM.Services
                                 ? request.PayPercentage
                                 : null,
 
-                        RequireWorkHandover = request.RequireWorkHandover,
-                        WorkHandoverAfterDays = request.WorkHandoverAfterDays,
                         IsLocationRequired =
                             request.IsLocationRequired,
 
@@ -395,6 +391,10 @@ namespace HRM.Services
 
                 await using var transaction = db.Database.CurrentTransaction == null
                     ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
+                var routingError = await HRM.Services.Leave.LeaveRequestTypeLink.ValidateAsync(db, request.RequestTypeId, cancellationToken);
+                if (routingError != null) return ServiceResult<int>.Failure(routingError);
+                if (!await db.LeaveTypes.AnyAsync(x => x.LeaveTypeId == request.LeaveTypeId && x.IsActive && (x.IsGlobal || x.OrganisationId == organisationId), cancellationToken))
+                    return ServiceResult<int>.Failure("Select an active leave type available to this organisation.");
                 var policy =
                     await db.LeavePolicies
                         .FirstOrDefaultAsync(
@@ -464,8 +464,6 @@ namespace HRM.Services
                         ? request.PayPercentage
                         : null;
 
-                policy.RequireWorkHandover = request.RequireWorkHandover;
-                policy.WorkHandoverAfterDays = request.WorkHandoverAfterDays;
                 policy.IsLocationRequired =
                     request.IsLocationRequired;
 
@@ -601,8 +599,6 @@ namespace HRM.Services
                 return "Default entitlement cannot be negative.";
             }
 
-            if (request.WorkHandoverAfterDays < 0 || request.WorkHandoverAfterDays > 3650)
-                return "Work handover days must be between 0 and 3650.";
 
             if (request.MinimumServiceMonths.HasValue &&
                 request.MinimumServiceMonths.Value < 0)

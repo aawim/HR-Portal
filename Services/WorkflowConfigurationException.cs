@@ -14,6 +14,7 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
     public WorkflowRequestContextDto Context { get; } = context;
     public string Detail { get; } = detail;
     public string? ConfigurationUrl { get; init; }
+    public string? AlertKind { get; init; }
 
     public async Task NotifyAsync(IDbContextFactory<HrmTeContext> factory)
     {
@@ -47,7 +48,7 @@ public sealed class WorkflowConfigurationException(WorkflowRequestContextDto con
             }
             // The source organisation is explicit; this link never switches tenant context.
             var url = ConfigurationUrl ?? $"/admin/settings/config/approval-flows?issueOrganisationId={org}&jobTypeId={Context.JobTypeId}&requestTypeId={Context.RequestTypeId}";
-            var kind = ConfigurationUrl == null ? "Approval flow needs attention" : "Request transition needs attention";
+            var kind = AlertKind ?? (ConfigurationUrl == null ? "Approval flow needs attention" : "Request transition needs attention");
             var message = $"A request action was blocked in {organisation}. Job Type: {jobType}. Request Type: {requestType}. {Detail}";
             if (message.Length > 500) message = message[..497] + "…";
             await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);

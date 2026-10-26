@@ -15,7 +15,7 @@ The old type CRUD service and editor, mapping service, framework resolver, and l
 ## Rule ownership
 
 - Type catalogue: identity, name, scope and active state; preserves existing rule defaults for dates without an effective organisation policy.
-- Organisation policy: effective-dated application rules, including holiday counting, pay, location, eligibility, request routing and work handover.
+- Organisation policy: effective-dated application rules, including holiday counting, pay, location, eligibility and request routing. Scoped work-handover requirements are managed separately under Work Handover Rules (see work-handover-rules.md).
 - Job Type configuration: accrual, renewal, caps and carry-forward. The policy editor links here instead of presenting a second, non-posting accrual editor. Historical policy-accrual metadata is retained, with no user-facing writer.
 - Leave sets: membership by canonical type ID; assigning a set to a Job Type does not itself grant days.
 
@@ -35,3 +35,13 @@ Regression coverage includes canonical identity, scope, global types, duplicate 
 ## Related policy table naming
 
 The following naming migration renames `LeavePolicies` to `LT_LeavePolicies` and `LeavePolicyAccrualRules` to `LT_LeavePolicyAccrualRules` in place. All four type-configuration tables share the established `LT_` feature prefix. EF mappings, the model snapshot and the idempotent standalone script `20261026_PrefixLeavePolicyTables.sql` agree. Table object IDs, row counts, foreign keys, constraints and indexes are retained. Previously applied consolidation scripts and migrations are unchanged.
+
+## Application request routing
+
+Leave type IDs and request type IDs are independent. A type's `RequestTypeId` supplies the default; an effective organisation policy may override it. Settings uses named selectors for both fields, and choosing a type for a new policy starts with the type's default route. Active types and policy saves reject missing/unknown request types, User Registration, and leave-change request types. Submission checks the link before writing a request or changing a balance; configuration failures notify HR/administrators/developers with an employee-safe message.
+
+The reviewed NCIT repair `20261026_RepairAnnualLeaveRequestTypes.sql` corrects type 66 from request type 1 (User Registration) to 34 (Annual Leave Request), matching its recorded request history, and policy 1 from 0 to 34, matching canonical annual type 1. It is scoped, idempotent and audited; it does not modify any application, balance or workflow state. The compatibility layer had previously hidden these invalid links. Use `--audit-leave-applications` for a read-only check of current routing and the Contract approval-flow resolution.
+
+## Annual reason compatibility repair
+
+`20261026_RepairAnnualLeaveReasons.sql` restores NCIT annual type 66's Other, Holiday, Family and Personal choices from the explicitly related global annual type 1. It verifies both types' annual request link, copies only missing choices, and reuses a General fallback row only if it has no historical references. The operation is audited and idempotent. Historical leave-reason rows are unchanged. Returned applications preselect a unique corresponding canonical choice when their saved reason belongs to the older global type; the saved record changes only through the normal resubmission action.

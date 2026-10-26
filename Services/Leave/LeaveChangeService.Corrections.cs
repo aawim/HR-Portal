@@ -53,7 +53,7 @@ public partial class LeaveChangeService
         var link = await db.LeaveRequests.AsNoTracking()
             .Include(x => x.Request).Include(x => x.Leave).ThenInclude(x => x.Job)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveType)
-            .Include(x => x.Leave).ThenInclude(x => x.LeaveReason)
+            .Include(x => x.Leave).ThenInclude(x => x.LeaveReason).ThenInclude(x => x!.LeaveTypeReasonType)
             .Include(x => x.Leave).ThenInclude(x => x.LeaveSpendingLocation)
             .SingleOrDefaultAsync(x => x.RequestId == requestId && person > 0 && x.Leave.Job.IndividualID == person)
             ?? throw new UnauthorizedAccessException("This leave application is not available to you.");
@@ -65,17 +65,26 @@ public partial class LeaveChangeService
         var source = await LeaveService.ResolveApplicationTypeAsync(db,
             new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate)
             ?? throw new InvalidOperationException("The leave type could not be resolved.");
+        var reasons = await db.LeaveTypeReasonTypes.AsNoTracking().Where(x => x.LeaveTypeId == source.LeaveTypeId)
+            .OrderBy(x => x.ReasonTypeName).Select(x => new LeaveReasonDto { Id = x.LeaveTypeReasonTypeId, Name = x.ReasonTypeName }).ToListAsync();
+        var reasonId = leave.LeaveReason?.LeaveTypeReasonTypeId ?? 0;
+        if (!reasons.Any(x => x.Id == reasonId))
+        {
+            // Old applications can reference a global type's reason. Preselect its unique
+            // canonical equivalent for editing without rewriting the historical record.
+            var equivalent = reasons.Where(x => string.Equals(x.Name.Trim(), leave.LeaveReason?.LeaveTypeReasonType?.ReasonTypeName?.Trim(), StringComparison.OrdinalIgnoreCase)).ToList();
+            reasonId = equivalent.Count == 1 ? equivalent[0].Id : 0;
+        }
         return new()
         {
             RequestId = requestId, ReturnedAt = link.Request.LastStateChangedDate,
             Reference = link.Request.ReferenceNumber ?? "#" + requestId, LeaveType = leave.LeaveType.Name,
             ReturnReason = link.Request.StateChangeRemarks ?? "No return reason was recorded. Contact the reviewer for details.",
             FromDate = leave.FromDate, ToDate = leave.ToDate, IncludeHolidays = source.IncludeHolidays,
-            ReasonId = leave.LeaveReason?.LeaveTypeReasonTypeId ?? 0, Explanation = leave.LeaveReason?.Reason ?? "",
+            ReasonId = reasonId, Explanation = leave.LeaveReason?.Reason ?? "",
             CountryId = leave.LeaveSpendingLocation?.CountryId, IslandId = leave.LeaveSpendingLocation?.IslandId,
             Address = leave.LeaveSpendingLocation?.Address ?? "", ContactNumber = leave.LeaveSpendingLocation?.ContactNumber ?? "",
-            Reasons = await db.LeaveTypeReasonTypes.AsNoTracking().Where(x => x.LeaveTypeId == source.LeaveTypeId)
-                .OrderBy(x => x.ReasonTypeName).Select(x => new LeaveReasonDto { Id = x.LeaveTypeReasonTypeId, Name = x.ReasonTypeName }).ToListAsync(),
+            Reasons = reasons,
             HandoverTasks = await db.LeaveWorkHandOvers.AsNoTracking().Where(x => x.LeaveId == leave.LeaveId && x.IsValid)
                 .OrderBy(x => x.LeaveWorkHandOverId).Select(x => new LeaveHandoverTaskInput { JobId = x.JobId, Tasks = x.TaskDetails ?? "" }).ToListAsync(),
             Recipients = await db.Jobs.AsNoTracking().Where(x => x.OrganisationID == leave.Job.OrganisationID && x.IndividualID != person &&
@@ -125,8 +134,8 @@ public partial class LeaveChangeService
         if (duration <= 0) throw new InvalidOperationException("The revised dates must contain at least one leave day.");
         var adjustment = leave.Duration - duration;
         var balance = await ValidateBalanceAndOverlapAsync(db, leave, model.ToDate.Date, adjustment);
-        var threshold = await LeaveService.ResolveHandoverThresholdAsync(db, balance, source, leave.Job.OrganisationID, model.FromDate);
-        var needsHandover = threshold.HasValue && duration > threshold.Value;
+        var handoverRule = await LeaveHandoverRuleResolver.ResolveAsync(db,leave.JobId,source.LeaveTypeId,model.FromDate);
+        var needsHandover = handoverRule.Requires(duration);
         var supervisors = new List<int>();
         if (needsHandover)
         {
@@ -150,6 +159,7 @@ public partial class LeaveChangeService
             $"Return reason: {request.StateChangeRemarks}. Previous handover review: {System.Text.Json.JsonSerializer.Serialize(review)}");
         balance.RemainingDays = checked(balance.RemainingDays!.Value + adjustment);
         balance.OperationLogId = log.OperationLogId;
+        leave.HandoverRuleSnapshot = handoverRule.Snapshot(duration);
         leave.FromDate = model.FromDate.Date; leave.ToDate = model.ToDate.Date; leave.Duration = duration;
         leave.OperationLogId = log.OperationLogId;
         var otherLast = await db.Leaves.AsNoTracking().Where(x => x.JobId == leave.JobId && x.LeaveTypeId == leave.LeaveTypeId &&

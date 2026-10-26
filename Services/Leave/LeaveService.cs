@@ -339,17 +339,10 @@ namespace HRM.Services.Leave
         }
  
 
-        internal static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType leaveType, int organisationId, DateTime fromDate)
-        {
-            var definitionId = balance.LeaveTypeId;
-            if (!definitionId.HasValue) return null;
-            var date = fromDate.Date;
-            var policy = await db.LeavePolicies.AsNoTracking().Where(x => x.OrganisationId == organisationId &&
-                x.LeaveTypeId == definitionId && x.IsActive && x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date))
-                .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.LeavePolicyId)
-                .Select(x => new { x.RequireWorkHandover, x.WorkHandoverAfterDays }).FirstOrDefaultAsync();
-            return policy?.RequireWorkHandover == true ? policy.WorkHandoverAfterDays : null;
-        }
+        private static WorkflowConfigurationException HandoverIssue(Job applicant, LeaveType type, HandoverRuleConflictException ex) => new(new HRM.DTOs.ApprovalFlow.WorkflowRequestContextDto
+        { RequestTypeId=type.RequestTypeId??0, OrganisationBusinessEntityId=applicant.OrganisationID,JobTypeId=applicant.JobTypeId,SubjectJobId=applicant.JobId,LeaveTypeId=type.LeaveTypeId,LeaveRequestKind=0 },ex.Detail)
+        { ConfigurationUrl="/admin/settings/leaves/work-handover-rules",AlertKind="Handover configuration needs attention" };
+
         public async Task<LeaveHandoverRulesDto> GetHandoverRulesAsync(int jobLeaveTypeId, DateTime fromDate, int? applicantJobId = null)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
@@ -358,15 +351,18 @@ namespace HRM.Services.Leave
             var balance = await db.JobLeaveTypes.AsNoTracking().FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId && x.JobId == jobId && x.IsValid && x.IsLeaveInfoUpdated)
                 ?? throw new InvalidOperationException("Leave balance was not found.");
             var organisationId = await db.Jobs.Where(x => x.JobId == jobId).Select(x => x.OrganisationID).SingleAsync();
-            var type = await ResolveApplicationTypeAsync(db, balance, organisationId)
+            var type = await ResolveApplicationTypeAsync(db, balance, organisationId, fromDate)
                 ?? throw new InvalidOperationException("Leave type was not found.");
-            var threshold = await ResolveHandoverThresholdAsync(db, balance, type, organisationId, fromDate);
+            EffectiveHandoverRule decision;
+            try { decision=await LeaveHandoverRuleResolver.ResolveAsync(db,jobId,type.LeaveTypeId,fromDate); }
+            catch(HandoverRuleConflictException ex){await HandoverIssue(applicant,type,ex).NotifyAsync(_dbFactory);throw;}
+            var threshold=decision.AfterDays;
             var recipients = threshold.HasValue ? await db.Jobs.AsNoTracking()
                 .Where(x => x.OrganisationID == organisationId && x.IndividualID != applicant.IndividualID && x.TerminatedDate == null && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= fromDate.Date && db.Users.Any(u => u.BusinessEntityID == x.IndividualID))
                 .OrderBy(x => x.Individual.FirstNameEnglish)
                 .Select(x => new LeaveHandoverRecipient(x.JobId, x.Individual.FirstNameEnglish + " " + (x.Individual.MiddleNameEnglish ?? "") + " " + (x.Individual.LastNameEnglish ?? "")))
                 .ToListAsync() : new List<LeaveHandoverRecipient>();
-            return new(threshold, recipients);
+            return new(threshold, recipients,decision.Source,decision.RuleId,decision.Version);
         }
 
         //// SUBMIT LEAVE (MAIN PART)
@@ -417,6 +413,21 @@ namespace HRM.Services.Leave
                 if (leaveType == null)
                     return ServiceResult.Fail("The selected leave type is unavailable.");
 
+                var routingError = await LeaveRequestTypeLink.ValidateAsync(db, leaveType.RequestTypeId);
+                if (routingError != null)
+                {
+                    var issue = new WorkflowConfigurationException(new HRM.DTOs.ApprovalFlow.WorkflowRequestContextDto
+                    {
+                        RequestTypeId = leaveType.RequestTypeId ?? 0, OrganisationBusinessEntityId = organisationId,
+                        SubjectJobId = jobId, JobTypeId = applicant.JobTypeId, ApplicantBusinessEntityId = applicant.IndividualID,
+                        LeaveTypeId = leaveType.LeaveTypeId, LeaveRequestKind = 0
+                    }, $"Leave type {leaveType.LeaveTypeId} ({leaveType.Name}) has an invalid application request type. Correct its request type in Settings > Leaves.")
+                    { ConfigurationUrl = "/admin/settings/leaves/leave-types", AlertKind = "Leave configuration needs attention" };
+                    await transaction.RollbackAsync();
+                    await issue.NotifyAsync(_dbFactory);
+                    return ServiceResult.Fail(WorkflowConfigurationException.StaffMessage);
+                }
+
                 model.LeaveTypeId = jobLeaveType.LeaveTypeId ?? leaveType.LeaveTypeId;
                 var reasonType = await db.LeaveTypeReasonTypes.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.LeaveTypeReasonTypeId == model.LeaveReasonId &&
@@ -431,8 +442,10 @@ namespace HRM.Services.Leave
                 model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, leaveType.IncludeHolidays);
                 if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
                     return ServiceResult.Fail("The requested days must be positive and within your available balance.");
-                var handoverAfterDays = await ResolveHandoverThresholdAsync(db, jobLeaveType, leaveType, organisationId, model.FromDate);
-                var needsHandover = handoverAfterDays.HasValue && model.Duration > handoverAfterDays.Value;
+                EffectiveHandoverRule handoverRule;
+                try { handoverRule=await LeaveHandoverRuleResolver.ResolveAsync(db,jobId,leaveType.LeaveTypeId,model.FromDate); }
+                catch(HandoverRuleConflictException ex){await transaction.RollbackAsync();await HandoverIssue(applicant,leaveType,ex).NotifyAsync(_dbFactory);return ServiceResult.Fail(WorkflowConfigurationException.StaffMessage);}
+                var needsHandover = handoverRule.Requires(model.Duration);
                 var handoverTasks = model.HandoverTasks.ToList();
                 if (handoverTasks.Count == 0 && model.HandoverJobId.HasValue)
                     handoverTasks.Add(new() { JobId = model.HandoverJobId, Tasks = model.HandoverNotes ?? "" });
@@ -513,6 +526,7 @@ namespace HRM.Services.Leave
                     FromDate = model.FromDate,
                     ToDate = model.ToDate,
                     Duration = model.Duration,
+                    HandoverRuleSnapshot = handoverRule.Snapshot(model.Duration),
                     OperationLogId = operationLog.OperationLogId,
                     LeaveStateId = SharedConfig.LeaveStates.PENDING_VERIFICATION
                 };

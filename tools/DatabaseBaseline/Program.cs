@@ -8,6 +8,11 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--audit-admin-access")){await AdminAccessAudit.RunAsync(db);return 0;}
+if(args.Contains("--repair-annual-leave-reasons")){await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_RepairAnnualLeaveReasons.sql"));await LeaveApplicationAudit.RunAsync(db);return 0;}
+if(args.Contains("--repair-annual-leave-routing")){await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_RepairAnnualLeaveRequestTypes.sql"));await LeaveApplicationAudit.RunAsync(db);return 0;}
+if(args.Contains("--audit-leave-applications")){await LeaveApplicationAudit.RunAsync(db);return 0;}
+if(args.Contains("--verify-scoped-handover-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true);return 0;}
 if(args.Contains("--verify-leave-type-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!);return 0;}
 if(args.Contains("--apply-unified-leave-types")){await UnifiedLeaveTypeUpgrade.ApplyAsync(db);return 0;}
 if(args.Contains("--audit-leave-types")) { await db.Database.OpenConnectionAsync(); await using var command=db.Database.GetDbConnection().CreateCommand(); command.CommandText=await File.ReadAllTextAsync("Database/Scripts/LeaveTypeAudit.sql"); await using var reader=await command.ExecuteReaderAsync(); do { while(await reader.ReadAsync()) Console.WriteLine(string.Join(" | ",Enumerable.Range(0,reader.FieldCount).Select(i=>reader.GetName(i)+"="+reader.GetValue(i)))); } while(await reader.NextResultAsync()); return 0; }

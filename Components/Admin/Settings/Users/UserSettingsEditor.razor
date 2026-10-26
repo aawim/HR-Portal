@@ -51,7 +51,7 @@
                                         </div>
                                     </section>
                                     <h4 class="text-sm font-semibold text-slate-800">Direct permissions</h4>
-                                    <p class="text-xs text-slate-500">Direct permissions apply in addition to permissions inherited from roles and the organisation.</p>
+                                    <p class="text-xs text-slate-500">Direct and User Group permissions are limited to permissions enabled for the organisation.</p>
                                     <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                         <PermissionAssignmentColumn @key="(user.Id, true)" Assigned="true" Permissions="data.Permissions.Where(p => user.DirectPermissionIds.Contains(p.Id)).ToList()" OnMove="id => ToggleDirect(id, false)" OnMoveGroup="ids => MoveDirect(ids, false)" />
                                         <PermissionAssignmentColumn @key="(user.Id, false)" Permissions="data.Permissions.Where(p => !user.DirectPermissionIds.Contains(p.Id)).ToList()" OnMove="id => ToggleDirect(id, true)" OnMoveGroup="ids => MoveDirect(ids, true)" />
@@ -74,7 +74,7 @@
                             }
                             else
                             {
-                                <p class="rounded-xl bg-indigo-50 p-4 text-sm text-indigo-800">Permissions assigned here apply to every account in @data.OrganisationName.</p>
+                                <p class="rounded-xl bg-indigo-50 p-4 text-sm text-indigo-800">These permissions limit which resources accounts in @data.OrganisationName can be granted. Each account still needs direct or User Group permissions.</p>
                                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                     <PermissionAssignmentColumn Assigned="true" Permissions="data.Permissions.Where(p => organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, false)" OnMoveGroup="ids => MoveOrganisation(ids, false)" />
                                     <PermissionAssignmentColumn Permissions="data.Permissions.Where(p => !organisationPermissions.Contains(p.Id)).ToList()" OnMove="id => ToggleOrganisation(id, true)" OnMoveGroup="ids => MoveOrganisation(ids, true)" />
@@ -131,11 +131,11 @@
     {
         UserSettingsTab.Staff => data.Staff.Select(x => new Row(x.IndividualId, x.Name, x.EmployeeNumber ?? "No employee number")),
         UserSettingsTab.Enrollment => data.Enrollments.Select(x => new Row(x.Id, x.Name, x.Number)),
-        UserSettingsTab.Organisation => new[] { new Row(data.UserOrganisationId, data.OrganisationName, $"{organisationPermissions.Count} default permissions") },
+        UserSettingsTab.Organisation => new[] { new Row(data.UserOrganisationId, data.OrganisationName, $"{organisationPermissions.Count} allowed permissions") },
         _ => data.Users.Select(x => new Row(x.Id, x.Name, $"{x.Username} · {(x.Active && x.StateId == 1 && x.Approved ? "Active" : "Inactive / pending")}"))
     };
     private IEnumerable<Row> FilteredRows => Rows.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.Detail.Contains(search, StringComparison.OrdinalIgnoreCase));
-    private HashSet<int> InheritedIds => (data?.OrganisationPermissionIds ?? new()).Concat(data?.Roles.Where(r => user?.RoleIds.Contains(r.Id) == true).SelectMany(r => r.PermissionIds) ?? Enumerable.Empty<int>()).ToHashSet();
+    private HashSet<int> InheritedIds => (data?.Roles.Where(r => user?.RoleIds.Contains(r.Id) == true).SelectMany(r => r.PermissionIds) ?? Enumerable.Empty<int>()).Where(id => data?.OrganisationPermissionIds.Contains(id) == true).ToHashSet();
     protected override async Task OnInitializedAsync() => await ReloadAsync();
     private async Task ReloadAsync()
     {

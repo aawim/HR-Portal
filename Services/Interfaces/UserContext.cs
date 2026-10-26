@@ -24,9 +24,8 @@ public class UserContext(AuthenticationStateProvider auth, IDbContextFactory<Hrm
    .Select(x => new { Id = x.BusinessEntityID, Name = x.Organisation.OrganisationName }).SingleOrDefaultAsync();
   var jobId = organisation == null ? 0 : await db.Jobs.AsNoTracking().Where(j => j.IndividualID == user.BusinessEntityID && j.OrganisationID == organisation.Id && j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= DateTime.Today)
    .OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).Select(j => j.JobId).FirstOrDefaultAsync();
-  var permissions = await new HRM.Services.EffectivePermissionService(factory).GetEffectivePermissionsAsync(user.UserId);
-  var ids = permissions.Select(x => x.RoleID).ToList();
-  var canAdmin = user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId && await db.Roles.AnyAsync(x => ids.Contains(x.RoleID) && x.ContextId == 1);
+  // Portal admission and individual resource permissions are separate grants.
+  var canAdmin = user.AdminPortalAccessEnabled && user.AdminPortalAccessOrganisationId == user.UserOrganisationId;
   return new UserSessionDto { UserId = user.UserId, IndividualId = user.BusinessEntityID, JobId = jobId, OrganisationId = organisation?.Id, OrganisationName = organisation?.Name ?? "", CanAccessSystem = true, CanAccessAdminPortal = organisation != null && canAdmin };
  }
 }

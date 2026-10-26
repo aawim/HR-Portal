@@ -6,6 +6,7 @@
 @using HRM.Services.Interfaces.Leave
 
 @inject ILeaveTypeCatalogueService LeaveTypeCatalogueService
+@inject ILogger<LeaveTypeManagement> Logger
 
 <PageTitle>Leave Types</PageTitle>
 
@@ -44,6 +45,7 @@
 
         </div>
 
+        @if (_message != null) { <p role="status" class="rounded border p-3 text-sm">@_message</p> }
         <div class="grid grid-cols-1 gap-3 xl:grid-cols-12">
 
             <!-- Form -->
@@ -51,6 +53,7 @@
 
                 <LeaveTypeForm
                     Model="@_model"
+                    RequestTypes="@_requestTypes"
                     IsEdit="@_isEdit"
                     IsSaving="@_saving"
                     OnSave="@SaveAsync"
@@ -77,6 +80,8 @@
 
 @code {
     private List<LeaveTypeCatalogueDto> _types = [];
+    private List<LeaveRequestTypeOption> _requestTypes = [];
+    private string? _message;
 
     private LeaveTypeCatalogueSaveRequest _model = new();
 
@@ -98,6 +103,7 @@
         try
         {
             _loading = true;
+            _requestTypes = await LeaveTypeCatalogueService.GetRequestTypesAsync();
 
             _types =
                 await LeaveTypeCatalogueService
@@ -145,6 +151,7 @@
                 LeaveTypeId =
                     detail.LeaveTypeId,
 
+                RequestTypeId = detail.RequestTypeId,
                 Code =
                     detail.Code,
 
@@ -170,30 +177,16 @@
 
     private async Task SaveAsync()
     {
+        _saving = true; _message = null;
         try
         {
-            _saving = true;
-
-            if (_isEdit)
-            {
-                await LeaveTypeCatalogueService
-                    .UpdateAsync(
-                        _model);
-            }
-            else
-            {
-                await LeaveTypeCatalogueService
-                    .CreateAsync(
-                        _model);
-            }
-
-            await LoadAsync();
-
-            StartCreate();
+            var result = _isEdit ? await LeaveTypeCatalogueService.UpdateAsync(_model) : await LeaveTypeCatalogueService.CreateAsync(_model);
+            _message = result.Message;
+            if (!result.Success) return;
+            StartCreate(); await LoadAsync();
         }
-        finally
-        {
-            _saving = false;
-        }
+        catch (Exception ex) { Logger.LogError(ex, "Leave type save failed"); _message = "Leave type could not be saved. Please try again."; }
+        finally { _saving = false; }
     }
+
 }

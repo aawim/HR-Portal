@@ -16,6 +16,8 @@ public partial class Leaf
 
     public int Duration { get; set; }
 
+    public string? HandoverRuleSnapshot { get; set; }
+
     public string? ChitNo { get; set; }
 
     public int? LeaveTypeId { get; set; }

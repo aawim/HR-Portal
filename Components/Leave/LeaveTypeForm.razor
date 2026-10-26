@@ -25,6 +25,7 @@
               OnValidSubmit="@SaveAsync">
 
         <DataAnnotationsValidator />
+        <ValidationSummary />
 
         <div class="space-y-5 p-5">
 
@@ -98,6 +99,13 @@
 
             </div>
 
+            <div>
+                <label class="block text-xs font-semibold mb-1" for="leave-type-request">Application request type</label>
+                <InputSelect id="leave-type-request" class="w-full rounded border bg-transparent p-2 text-sm" @bind-Value="Model.RequestTypeId" disabled="@IsSaving">
+                    <option value="">Select request type</option>
+                    @foreach (var option in RequestTypes) { <option value="@option.Id">@option.Name</option> }
+                </InputSelect>
+            </div>
             <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
 
                 <label class="flex items-center gap-3
@@ -179,6 +187,8 @@
 </section>
 
 @code {
+    [Parameter] public IReadOnlyList<LeaveRequestTypeOption> RequestTypes { get; set; } = [];
+
     [Parameter, EditorRequired]
     public LeaveTypeCatalogueSaveRequest Model { get; set; } =
         new();

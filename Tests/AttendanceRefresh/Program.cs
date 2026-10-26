@@ -27,6 +27,15 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if (args.Contains("--context-security-only"))
+{
+    await ContextSecurityTests.RunAsync(); Console.WriteLine("PASS Context security"); return 0;
+}
+if (args.Contains("--handover-rules-only"))
+{
+    try { await HandoverRuleTests.RunAsync(); Console.WriteLine("PASS Scoped handover rules: defaults, overrides, exemptions, inheritance, dates, memberships, priority, conflicts, snapshots and tenant permissions"); return 0; }
+    catch(Exception ex) { Console.Error.WriteLine(ex); return 1; }
+}
 if (args.Contains("--leave-policy-only"))
 {
     try { await UnifiedLeaveTypeTests.RunAsync(); await LeavePolicyScopeTests.RunAsync(); Console.WriteLine("PASS Unified leave catalogue and policy: organisation ID resolution, tenant isolation, selected organisation and access denial"); return 0; }
@@ -63,6 +72,7 @@ if (args.Contains("--navigation-only"))
     catch(Exception ex) { Console.Error.WriteLine($"FAIL Section navigation: {ex}"); return 1; }
 }
 var failures = 0;
+try { await HandoverRuleTests.RunAsync(); Console.WriteLine("PASS Scoped handover rules"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Scoped handover rules: {ex}"); }
 try { await UnifiedLeaveTypeTests.RunAsync(); Console.WriteLine("PASS Unified leave types: canonical identity, effective policies, shared types, audit, duplicate protection and tenant isolation"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Unified leave types: {ex}"); }
 try { await LeavePolicyScopeTests.RunAsync(); Console.WriteLine("PASS Leave policy organisation scope"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Leave policy organisation scope: {ex}"); }
 try { await LeaveSetConfigurationTests.RunAsync(); Console.WriteLine("PASS Leave set configuration"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Leave set configuration: {ex}"); }

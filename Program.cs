@@ -218,6 +218,7 @@ builder.Services.AddScoped<IWorkPlanValidator, WorkPlanValidator>();
 
 
 
+builder.Services.AddScoped<HRM.Services.Leave.LeaveHandoverRuleSettingsService>();
 builder.Services.AddScoped<IJobLeaveTypeService, JobLeaveTypeService>();
 builder.Services.AddScoped<IEffectivePermissionService,EffectivePermissionService>();
 builder.Services.AddScoped<IUserContextBuilder, UserContextBuilder>();

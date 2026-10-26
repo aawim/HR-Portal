@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.UserContext;
+using HRM.DTOs.UserContext;
 using HRM.Enum;
 using HRM.Models;
 using HRM.Services.Interfaces;
@@ -27,8 +27,7 @@ namespace HRM.Services
             permissions.AddRange(
                 await LoadUserGroupPermissionsAsync(userId));
 
-            permissions.AddRange(
-                await LoadOrganisationPermissionsAsync(userId));
+            // Organisation permissions are a ceiling, never an account grant.
 
             return ResolveEffectivePermissions(permissions);
         }
@@ -94,9 +93,7 @@ namespace HRM.Services
 
 
 
-            var organisationPermissions = await LoadOrganisationPermissionsAsync(userId);
-
-            permissions.AddRange(organisationPermissions);
+            // Only explicit account and User Group assignments are permission sources.
 
 
 
@@ -216,61 +213,5 @@ namespace HRM.Services
                 .ToListAsync();
         }
 
-        private async Task<List<UserPermissionDto>>LoadOrganisationPermissionsAsync(int userId)
-        {
-
-            using var db = await _dbFactory.CreateDbContextAsync();
-            return await db.UserOrganisationRoles
-                .AsNoTracking()
-                .Where(x =>
-                    x.IsActive &&
-                    x.UserOrganisation.Users
-                        .Any(u =>
-                            u.UserId == userId && u.IsActive && u.LocalUserStateId == 1 &&
-                            (x.Role.ContextId != 1 || (u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId))))
-                .Select(x => new UserPermissionDto
-                {
-                    RoleID =
-                        x.RoleID,
-
-                    RoleKey =
-                        x.Role.RoleKey,
-
-                    Name =
-                        x.Role.Name,
-
-                    Description =
-                        x.Role.Description,
-
-                    ModuleID =
-                        x.Role.ModuleId,
-
-                    IsSystemRole =
-                        x.Role.IsSystemRole == true,
-
-
-                    Source =
-                        PermissionSource.Organisation,
-
-
-                    UserID =
-                        userId,
-
-
-                    UserGroupID = null,
-
-                    UserGroupName = null,
-
-
-                    OrganisationID =
-                        x.UserOrganisation.BusinessEntityID,
-
-
-                    IsGlobal = false
-                })
-                .ToListAsync();
-        }
-
-        
     }
 }
