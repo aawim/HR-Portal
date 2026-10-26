@@ -7,7 +7,7 @@ namespace HRM.DTOs.LeaveTypes
         public int? LeavePolicyId { get; set; }
 
         [Required]
-        public int LeaveDefinitionId { get; set; }
+        public int LeaveTypeId { get; set; }
 
         [MaxLength(200)]
         public string? Name { get; set; }

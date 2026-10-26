@@ -1,10 +1,10 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 
 namespace HRM.DTOs.LeaveTypes
 {
-    public sealed class LeaveDefinitionSaveRequest
+    public sealed class LeaveTypeCatalogueSaveRequest
     {
-        public int? LeaveDefinitionId { get; set; }
+        public int? LeaveTypeId { get; set; }
 
         [Required]
         [MaxLength(50)]

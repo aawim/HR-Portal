@@ -8,7 +8,6 @@ public partial class JobLeaveType
 {
     public int JobLeaveTypeId { get; set; }
 
-    public int? LeaveDefinitionId { get; set; }
     public int JobId { get; set; }
 
     public int? LeaveTypeId { get; set; }
@@ -41,5 +40,5 @@ public partial class JobLeaveType
 
  
 
-    public virtual LeaveDefinition? LeaveDefinition { get; set; }
+
 }

@@ -31,7 +31,7 @@ using HRM.Services.Interfaces.JobLeaveTypes;
 using HRM.Services.JobPosition;
 using HRM.Services.Interfaces.JobPosition;
 using HRM.Services.Interfaces.LeaveType;
-using HRM.Services.Interfaces.Policy;
+
 using HRM.Services.Attendance.AttendancePlan;
 using HRM.WorkPlanning;
 using HRM.Models.Archives;
@@ -103,20 +103,16 @@ builder.Services.AddScoped<HRM.WorkPlanning.Services.DutyRosterService>();
 builder.Services.AddScoped<IJobWorkTemplateService, JobWorkTemplateService>();
 
 builder.Services.AddScoped<
-    ILeaveDefinitionService,
-    LeaveDefinitionService>();
+    ILeaveTypeCatalogueService,
+    LeaveTypeCatalogueService>();
 
-builder.Services.AddScoped<
-    ILeaveFrameworkResolver,
-    LeaveFrameworkResolver>();
+
 
 builder.Services.AddScoped<
     ILeavePolicyService,
     LeavePolicyService>();
 
-builder.Services.AddScoped<
-    ILeavePolicyAccrualRuleService,
-    LeavePolicyAccrualRuleService>();
+
 
 builder.Services.AddScoped<
     IAttendanceResolver,
@@ -155,7 +151,7 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<UserContext, UserContext>();
 
 
-builder.Services.AddScoped<ILeaveTypeService,LeaveTypeService>();
+
 
 builder.Services.AddScoped<IJobPosition, JobPositionService>();
 
@@ -169,7 +165,7 @@ builder.Services.AddScoped<IManualWorkAssignmentService,ManualWorkAssignmentServ
 
 builder.Services.AddScoped<IManualWorkAssignmentLookupService,ManualWorkAssignmentLookupService>();
 
-builder.Services.AddScoped<ILeaveTypeMappingService,LeaveTypeMappingService>();
+
 
 builder.Services.AddScoped<IWorkPlanService, WorkPlanService>();
 

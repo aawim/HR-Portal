@@ -1,4 +1,4 @@
-﻿@using HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManagerComponent
+@using HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManagerComponent
 @using HRM.DTOs
 @using HRM.DTOs.Leave
 @using HRM.DTOs.LeaveTypes
@@ -9,10 +9,9 @@
 @using HRM.Services.Interfaces.Leave
 
 @inject ILeaveService LeaveService
-@inject ILeaveTypeService LeaveTypeService
 @inject IJobLeaveTypeService JobLeaveTypeService
 @inject ToastService ToastService
-@inject ILeaveDefinitionService leaveDefinitionService;
+@inject ILeaveTypeCatalogueService Catalogue;
 @if (loadError != null)
 {
     <div role="alert" class="mb-3 rounded-lg border p-3 text-sm">@loadError <button type="button" class="app-button app-button-secondary" disabled="@isLoading" @onclick="LoadAsync">Retry</button></div>
@@ -319,17 +318,12 @@
 
         <div class="bg-white rounded-xl border border-slate-200 shadow-sm h-full">
 
-             <AvailableLegacyLeaveTypes 
-                     LeaveTypes="@availableLegacyTypes"
-                     IsProcessing="@assigningLegacy"
-                    OnAssign="AssignLegacyLeaveType" />
 
 
-
-            <AvailableLeaveDefinitions
-                    Definitions="@availableDefinitions"
+            <AvailableLeaveTypes
+                    Types="@availableTypes"
                     IsProcessing="@assigningDefinition"
-                    OnAssign="AssignLeaveDefinitionAsync" />
+                    OnAssign="AssignLeaveTypeAsync" />
 
         </div>
 
@@ -342,12 +336,10 @@
 
 @code {
 
-    private List<LeaveDefinitionDto> availableDefinitions = new();
-    private List<LeaveTypeDto> availableLegacyTypes = new();
+    private List<LeaveTypeCatalogueDto> availableTypes = new();
 
 
     private bool assigningDefinition;
-    private bool assigningLegacy;
     [Parameter]
     public int StaffId { get; set; }
 
@@ -361,13 +353,11 @@
 
     private List<JobLeaveTypeDto> assigned = new();
 
-    private List<LeaveTypeDto> available = new();
+
 
     private JobLeaveTypeDto? selectedAssigned;
 
-    private AssignLegacyLeaveTypeDto assignModel = new();
 
-    private LeaveTypeDto? selectedAvailable;
 
     private string assignedSearch = "";
 
@@ -384,73 +374,7 @@
     {
         selectedAssigned = item;
 
-        selectedAvailable = null;
     }
-
-
-
-    private void SelectAvailable(LeaveTypeDto leaveType)
-    {
-
-        if (JobId <= 0)
-            return;
-
-
-        selectedAvailable = leaveType;
-
-        assignModel = new AssignLegacyLeaveTypeDto
-            {
-                JobId = JobId,
-
-                LeaveTypeId = leaveType.LeaveTypeId,
-
-                RemainingDays = leaveType.Duration ?? 0,
-
-                EffectiveFromDate = DateTime.Today,
-
-                EffectiveToDate = DateTime.Today.AddYears(1),
-
-                IsValid = true
-            };
-
-
-
-
-
-    }
-
-
-
-    private async Task AssignLeaveType()
-    {
-        var result = await JobLeaveTypeService.AssignLegacyAsync(assignModel);
-
-        // if (!result.Success)
-        // {
-        //     ToastService.Error("Uanble to assign leave Type!.");
-        //     return;
-        // }
-
-        if (!result.Success)
-        {
-            var errorMessage = result.Message?.Any() == true
-                ? string.Join(" ", result.Message)
-                : "Unable to assign leave type.";
-
-            ToastService.Error(errorMessage);
-            return;
-        }
-
-        ToastService.Success("Leave Type Assigned!.");
-
-        selectedAvailable = null;
-
-        await LoadAsync();
-    }
-
-
-
-
 
 
 
@@ -511,28 +435,28 @@
 
 
 
-    private async Task AssignLeaveDefinitionAsync(
-       LeaveDefinitionDto definition)
+    private async Task AssignLeaveTypeAsync(
+       LeaveTypeCatalogueDto definition)
     {
-        if (assigningDefinition || assigningLegacy)
+        if (assigningDefinition)
             return;
 
         try
         {
             assigningDefinition = true;
 
-            var dto = new AssignLeaveDefinitionDto
+            var dto = new AssignLeaveTypeCatalogueDto
                 {
                     JobId = JobId,
-                    LeaveDefinitionId =
-                            definition.LeaveDefinitionId,
+                    LeaveTypeId =
+                            definition.LeaveTypeId,
 
                     EffectiveFromDate = DateTime.Today,
                     EffectiveToDate = null
                 };
 
             var result =
-                await JobLeaveTypeService.AssignDefinitionAsync(dto);
+                await JobLeaveTypeService.AssignAsync(dto);
 
             if (!result.Success)
             {
@@ -564,66 +488,11 @@
 
 
 
-    private async Task AssignLegacyLeaveType(
-        LeaveTypeDto leaveType)
-    {
-        if (assigningLegacy || assigningDefinition)
-            return;
-
-        try
-        {
-            assigningLegacy = true;
-
-            var dto = new AssignLegacyLeaveTypeDto
-                {
-                    JobId = JobId,
-                    LeaveTypeId =
-                            leaveType.LeaveTypeId,
-
-                    EffectiveFromDate = DateTime.Today,
-                    EffectiveToDate = null
-                };
-
-            var result =
-                await JobLeaveTypeService.AssignLegacyAsync(dto);
-
-            if (!result.Success)
-            {
-                ToastService.Error(
-                    result.Message ??
-                    "Unable to assign leave definition.");
-
-                return;
-            }
-
-            ToastService.Success(
-                "Leave definition assigned successfully.");
-
-            await LoadAsync();
-        }
-        catch (Exception ex)
-        {
-            ToastService.Error(
-                "An unexpected error occurred while assigning " +
-                "the leave definition.");
-
-            Console.Error.WriteLine(ex);
-        }
-        finally
-        {
-            assigningLegacy = false;
-        }
-    }
- 
-
-
- 
-
     private async Task LoadAsync()
     {
         isLoading = true;
         loadError = null;
-        assigned = []; available = []; availableDefinitions = []; availableLegacyTypes = [];
+        assigned = []; availableTypes = [];
 
         try
         {
@@ -634,11 +503,10 @@
         if(JobId <= 0) throw new InvalidOperationException("This staff member has no active approved job in the current organisation.");
         assigned = await JobLeaveTypeService.GetEntitlementsAsync(JobId);
 
-        available = await JobLeaveTypeService.GetAvailableLeaveTypesAsync(JobId);
- 
-        availableDefinitions = await leaveDefinitionService.GetAvailableAsync();
 
-        availableLegacyTypes = await LeaveTypeService.GetOrganisationLeaveTypesAsync();
+ 
+        availableTypes = (await Catalogue.GetAvailableAsync()).Where(t => !assigned.Any(a => a.LeaveTypeId == t.LeaveTypeId)).ToList();
+
             
              
 

@@ -176,7 +176,7 @@ namespace HRM.Services.Leave
                 IQueryable<JobLeaveType> query = db.JobLeaveTypes
                     .AsNoTracking()
                     .Include(x => x.LeaveType)
-                    .Include(x => x.LeaveDefinition)
+                    .Include(x => x.LeaveType)
                     .Where(x =>
                         x.JobId == jobId &&
                         x.IsValid &&
@@ -191,32 +191,7 @@ namespace HRM.Services.Leave
                 }
 
                 var balances = await query.ToListAsync();
-                var organisationId = await db.Jobs.AsNoTracking()
-                    .Where(x => x.JobId == jobId)
-                    .Select(x => x.OrganisationID)
-                    .FirstOrDefaultAsync();
-                var mappings = await GetApplicationMappingsAsync(db, organisationId);
-
-                return balances
-                    .GroupBy(x =>
-                    {
-                        var definitionId = ResolveApplicationDefinitionId(x, x.LeaveType, mappings);
-                        return definitionId.HasValue
-                            ? $"definition:{definitionId.Value}"
-                            : $"legacy:{x.LeaveTypeId}";
-                    })
-                    .Select(group => group
-                        .OrderByDescending(x => x.RemainingDays > 0)
-                        .ThenByDescending(x => x.LeaveDefinitionId.HasValue)
-                        .ThenByDescending(x => mappings.Any(m => m.LegacyLeaveTypeId == x.LeaveTypeId))
-                        .ThenByDescending(x => x.EffectiveFromDate)
-                        .ThenByDescending(x => x.JobLeaveTypeId)
-                        .First())
-                    .OrderBy(x =>
-                        x.LeaveDefinition?.Name ??
-                        x.LeaveType?.Name ??
-                        string.Empty)
-                    .ToList();
+                return balances.OrderBy(x => x.LeaveType?.Name ?? "").ToList();
             }
 
 
@@ -297,7 +272,7 @@ namespace HRM.Services.Leave
             return await GetJobLeaveBalancesAsync(job.JobId);
         }
 
-        public async Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId, int? applicantJobId = null)
+        public async Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId, int? applicantJobId = null, DateTime? date = null)
         {
             await using var db = await _dbFactory.CreateDbContextAsync();
             var applicant = await LeaveApplicantScope.ResolveAsync(db, _access, applicantJobId);
@@ -307,95 +282,24 @@ namespace HRM.Services.Leave
             if (balance == null)
                 return null;
 
-            var legacyType = await ResolveApplicationLegacyTypeAsync(
-                db, balance, applicant.OrganisationID);
-            if (legacyType == null)
+            var leaveType = await ResolveApplicationTypeAsync(
+                db, balance, applicant.OrganisationID, date);
+            if (leaveType == null)
                 return null;
 
             return new LeaveApplicationTypeDto
             {
                 JobLeaveTypeId = balance.JobLeaveTypeId,
-                LeaveTypeId = legacyType.LeaveTypeId,
-                LeaveTypeName = legacyType.Name,
+                LeaveTypeId = leaveType.LeaveTypeId,
+                LeaveTypeName = leaveType.Name,
                 RemainingDays = balance.RemainingDays ?? 0,
-                IncludeHolidays = legacyType.IncludeHolidays,
-                Reasons = await GetReasonsByLeaveType(legacyType.LeaveTypeId)
+                IncludeHolidays = leaveType.IncludeHolidays,
+                Reasons = await GetReasonsByLeaveType(leaveType.LeaveTypeId)
             };
         }
 
-        internal static async Task<LeaveType?> ResolveApplicationLegacyTypeAsync(
-            HrmTeContext db, JobLeaveType balance, int organisationId)
-        {
-            var legacyType = balance.LeaveTypeId.HasValue
-                ? await db.LeaveTypes.AsNoTracking()
-                    .FirstOrDefaultAsync(x => x.LeaveTypeId == balance.LeaveTypeId.Value)
-                : null;
-            var mappings = await GetApplicationMappingsAsync(db, organisationId);
-            var definitionId = ResolveApplicationDefinitionId(balance, legacyType, mappings);
-            if (!definitionId.HasValue)
-                return legacyType;
-
-            var candidates = mappings.Where(x => x.LeaveDefinitionId == definitionId.Value).ToList();
-            if (candidates.Count == 0)
-                return legacyType;
-
-            var candidateIds = candidates.Select(x => x.LegacyLeaveTypeId).ToArray();
-            var typesWithReasons = await db.LeaveTypeReasonTypes.AsNoTracking()
-                .Where(x => candidateIds.Contains(x.LeaveTypeId))
-                .Select(x => x.LeaveTypeId).Distinct().ToListAsync();
-            var source = candidates.FirstOrDefault(x => typesWithReasons.Contains(x.LegacyLeaveTypeId))
-                ?? candidates[0];
-            return await db.LeaveTypes.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.LeaveTypeId == source.LegacyLeaveTypeId);
-        }
-
-        private static Task<List<LeaveTypeMapping>> GetApplicationMappingsAsync(
-            HrmTeContext db, int organisationId)
-        {
-            var today = DateTime.Today;
-            return db.LeaveTypeMappings.AsNoTracking().Include(x => x.LeaveDefinition)
-                .Where(x => x.IsActive &&
-                    (x.OrganisationId == organisationId || x.OrganisationId == null) &&
-                    (x.EffectiveFrom == null || x.EffectiveFrom <= today) &&
-                    (x.EffectiveTo == null || x.EffectiveTo >= today))
-                .OrderByDescending(x => x.OrganisationId.HasValue)
-                .ThenByDescending(x => x.EffectiveFrom)
-                .ThenByDescending(x => x.LeaveTypeMappingId)
-                .ToListAsync();
-        }
-
-        private static int? ResolveApplicationDefinitionId(
-            JobLeaveType balance, LeaveType? legacyType, List<LeaveTypeMapping> mappings)
-        {
-            if (balance.LeaveDefinitionId.HasValue)
-                return balance.LeaveDefinitionId.Value;
-            var direct = mappings.FirstOrDefault(x => x.LegacyLeaveTypeId == balance.LeaveTypeId);
-            if (direct != null)
-                return direct.LeaveDefinitionId;
-            if (legacyType?.MigratedLeaveDefinitionID != null)
-                return legacyType.MigratedLeaveDefinitionID;
-
-            // Organisation copies can retain the definition's name without its ID.
-            // Only accept a unique definition in the applicable mapping scope.
-            var matchingIds = mappings.Where(x => string.Equals(
-                    x.LeaveDefinition.Name.Trim(), legacyType?.Name.Trim(), StringComparison.OrdinalIgnoreCase))
-                .Select(x => x.LeaveDefinitionId).Distinct().ToArray();
-            return matchingIds.Length == 1 ? matchingIds[0] : null;
-        }
-
-
-
-       
-
-
-
-
-
-
-
-      
-
-
+        internal static Task<LeaveType?> ResolveApplicationTypeAsync(HrmTeContext db, JobLeaveType balance, int organisationId, DateTime? date = null)
+            => LeavePolicyResolver.ResolveAsync(db, balance.LeaveTypeId, organisationId, date ?? DateTime.UtcNow.AddHours(5).Date);
 
         public async Task<int> GetJobIdByStaffId(int StaffId)
         {
@@ -435,13 +339,13 @@ namespace HRM.Services.Leave
         }
  
 
-        internal static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType legacyType, int organisationId, DateTime fromDate)
+        internal static async Task<int?> ResolveHandoverThresholdAsync(HrmTeContext db, JobLeaveType balance, LeaveType leaveType, int organisationId, DateTime fromDate)
         {
-            var definitionId = ResolveApplicationDefinitionId(balance, legacyType, await GetApplicationMappingsAsync(db, organisationId));
+            var definitionId = balance.LeaveTypeId;
             if (!definitionId.HasValue) return null;
             var date = fromDate.Date;
             var policy = await db.LeavePolicies.AsNoTracking().Where(x => x.OrganisationId == organisationId &&
-                x.LeaveDefinitionId == definitionId && x.IsActive && x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date))
+                x.LeaveTypeId == definitionId && x.IsActive && x.EffectiveFrom <= date && (x.EffectiveTo == null || x.EffectiveTo >= date))
                 .OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.LeavePolicyId)
                 .Select(x => new { x.RequireWorkHandover, x.WorkHandoverAfterDays }).FirstOrDefaultAsync();
             return policy?.RequireWorkHandover == true ? policy.WorkHandoverAfterDays : null;
@@ -454,9 +358,9 @@ namespace HRM.Services.Leave
             var balance = await db.JobLeaveTypes.AsNoTracking().FirstOrDefaultAsync(x => x.JobLeaveTypeId == jobLeaveTypeId && x.JobId == jobId && x.IsValid && x.IsLeaveInfoUpdated)
                 ?? throw new InvalidOperationException("Leave balance was not found.");
             var organisationId = await db.Jobs.Where(x => x.JobId == jobId).Select(x => x.OrganisationID).SingleAsync();
-            var legacy = await ResolveApplicationLegacyTypeAsync(db, balance, organisationId)
-                ?? throw new InvalidOperationException("Leave type mapping was not found.");
-            var threshold = await ResolveHandoverThresholdAsync(db, balance, legacy, organisationId, fromDate);
+            var type = await ResolveApplicationTypeAsync(db, balance, organisationId)
+                ?? throw new InvalidOperationException("Leave type was not found.");
+            var threshold = await ResolveHandoverThresholdAsync(db, balance, type, organisationId, fromDate);
             var recipients = threshold.HasValue ? await db.Jobs.AsNoTracking()
                 .Where(x => x.OrganisationID == organisationId && x.IndividualID != applicant.IndividualID && x.TerminatedDate == null && x.JobStateId == SharedConfig.JobStates.APPROVED && x.JoinedDate <= fromDate.Date && db.Users.Any(u => u.BusinessEntityID == x.IndividualID))
                 .OrderBy(x => x.Individual.FirstNameEnglish)
@@ -508,17 +412,15 @@ namespace HRM.Services.Leave
                 if (jobLeaveType == null)
                     return ServiceResult.Fail("Leave balance not found for selected leave type.");
 
-                var legacyType = await ResolveApplicationLegacyTypeAsync(
-                    db, jobLeaveType, organisationId);
-                if (legacyType == null)
-                    return ServiceResult.Fail("No active legacy leave type mapping was found for the selected leave balance.");
+                var leaveType = await ResolveApplicationTypeAsync(
+                    db, jobLeaveType, organisationId, model.FromDate);
+                if (leaveType == null)
+                    return ServiceResult.Fail("The selected leave type is unavailable.");
 
-                // Keep the selected legacy balance's identity for existing leave
-                // and cancellation paths; reasons can come from its mapped source.
-                model.LeaveTypeId = jobLeaveType.LeaveTypeId ?? legacyType.LeaveTypeId;
+                model.LeaveTypeId = jobLeaveType.LeaveTypeId ?? leaveType.LeaveTypeId;
                 var reasonType = await db.LeaveTypeReasonTypes.AsNoTracking()
                     .FirstOrDefaultAsync(x => x.LeaveTypeReasonTypeId == model.LeaveReasonId &&
-                        x.LeaveTypeId == legacyType.LeaveTypeId);
+                        x.LeaveTypeId == leaveType.LeaveTypeId);
                 if (reasonType == null)
                     return ServiceResult.Fail("Select a valid reason for the selected leave type.");
 
@@ -526,10 +428,10 @@ namespace HRM.Services.Leave
                     return ServiceResult.Fail("Select a valid start and end date.");
                 var contractYearError = await LeaveContractYearBalance.ValidateSpendAsync(db, jobLeaveType, model.ToDate);
                 if (contractYearError != null) return ServiceResult.Fail(contractYearError);
-                model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, legacyType.IncludeHolidays);
+                model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, leaveType.IncludeHolidays);
                 if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
                     return ServiceResult.Fail("The requested days must be positive and within your available balance.");
-                var handoverAfterDays = await ResolveHandoverThresholdAsync(db, jobLeaveType, legacyType, organisationId, model.FromDate);
+                var handoverAfterDays = await ResolveHandoverThresholdAsync(db, jobLeaveType, leaveType, organisationId, model.FromDate);
                 var needsHandover = handoverAfterDays.HasValue && model.Duration > handoverAfterDays.Value;
                 var handoverTasks = model.HandoverTasks.ToList();
                 if (handoverTasks.Count == 0 && model.HandoverJobId.HasValue)
@@ -545,7 +447,7 @@ namespace HRM.Services.Leave
                 var explanation = LeaveApplicationDetails.Build(model);
                 if (explanation.Length > 250)
                     return ServiceResult.Fail("Explanation and additional details must total 250 characters or fewer.");
-                if (!legacyType.RequestTypeId.HasValue || legacyType.RequestTypeId.Value <= 0)
+                if (!leaveType.RequestTypeId.HasValue || leaveType.RequestTypeId.Value <= 0)
                     return ServiceResult.Fail("No request type is configured for this leave type. Contact HR before applying.");
 
                 // CHECK OVERLAP LEAVES (ANY STATE)
@@ -588,7 +490,7 @@ namespace HRM.Services.Leave
                         new CreateRequestDto
                         {
                             RequestTypeId =
-                                legacyType.RequestTypeId.Value,
+                                leaveType.RequestTypeId.Value,
 
                             OperationLogId =
                                 operationLog.OperationLogId,

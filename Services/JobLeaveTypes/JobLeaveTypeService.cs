@@ -20,449 +20,46 @@ namespace HRM.Services.JobLeaveTypes
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IOperationLogService _operationLogService;
         private readonly IUserAccessService _userAccessService;
-        private readonly IProfileService _profileService;
-        private readonly IJobService _jobService;
- 
+
+
+
         public JobLeaveTypeService(
                 IDbContextFactory<HrmTeContext> dbFactory
                 ,IOperationLogService operationLogService
                 ,IUserAccessService userAccessService
-                ,IProfileService profileService
-                ,IJobService jobService 
             )
         {
             _dbFactory = dbFactory;
             _operationLogService = operationLogService;
             _userAccessService = userAccessService;
-            _jobService = jobService;
-            _profileService = profileService;
+
+
         }
-        //public async Task<ServiceResult> AssignAsync(AssignLeaveTypeDto dto)
-        //{
-        //    await using var db = await _dbFactory.CreateDbContextAsync();
-
-        //    await using var transaction =
-        //        await db.Database.BeginTransactionAsync();
-
-        //    try
-        //    {
-        //        var exists = await db.JobLeaveTypes
-        //            .AnyAsync(x =>
-        //                x.JobId == dto.JobId &&
-        //                x.LeaveTypeId == dto.LeaveTypeId &&
-        //                x.IsValid);
-
-        //        if (exists)
-        //        {
-        //            return ServiceResult.Fail(
-        //                "This leave type is already assigned.");
-        //        }
-
-
-        //        var leaveType = await db.LeaveTypes
-        //            .FirstOrDefaultAsync(x =>
-        //                x.LeaveTypeId == dto.LeaveTypeId);
-
-
-        //        if (leaveType == null)
-        //        {
-        //            return ServiceResult.Fail(
-        //                "Leave type not found.");
-        //        }
-
-
-        //        // Create Audit Log
-        //        var operationLog =
-        //            await _operationLogService.CreateAsync(
-        //                db,
-        //                actionId: SharedConfig.OperationLogActionTypes.JOB_LEAVE_TYPE_CREATE,
-        //                remarks: $"Assigned leave type: {leaveType.Name}");
-
-
-        //        var jobLeaveType = new JobLeaveType
-        //        {
-        //            JobId = dto.JobId,
-        //            LeaveTypeId = dto.LeaveTypeId,
-
-        //            // Initial balance from Leave Type policy
-        //            RemainingDays = leaveType.Duration ?? 0,
-        //            IsValid = true,
-        //            IsLeaveInfoUpdated = true,
-        //            EffectiveFromDate = DateTime.Today,
-        //            EffectiveToDate = DateTime.Today.AddYears(1),
-        //            RenewedDate = DateTime.Today,
-        //            OperationLogId = operationLog.OperationLogId
-        //        };
-
-        //        db.JobLeaveTypes.Add(jobLeaveType);
-
-        //        await db.SaveChangesAsync();
-
-        //        await transaction.CommitAsync();
-
-        //        return ServiceResult.Ok("Leave type assigned successfully.");
-        //    }
-        //    catch
-        //    {
-        //        await transaction.RollbackAsync();
-        //        throw;
-        //    }
-        //}
-
-
-        public async Task<ServiceResult> AssignLegacyAsync(
-           AssignLegacyLeaveTypeDto dto,
-           CancellationToken cancellationToken = default)
+        public async Task<ServiceResult> AssignAsync(AssignLeaveTypeCatalogueDto dto, CancellationToken cancellationToken = default)
         {
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-            await using var transaction =
-                await db.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var userContext =
-                    await _userAccessService.GetContextAsync();
-
-                var currentOrganisationId = userContext?.ActiveJob?.OrganisationId;
-
-                if (!currentOrganisationId.HasValue)
-                {
-                    return ServiceResult.Fail(
-                        "The current user does not have an active organisation.");
-                }
-
-           
-                var individualId = await _jobService.GetIndividualIdByJobIdAsync(dto.JobId);
-
-                if (individualId <= 0)
-                {
-                    return ServiceResult.Fail(
-                        "No active individual was found for the selected job.");
-                }
-
-                var profile = await _profileService.GetProfileAsync(
-                    individualId,
-                    cancellationToken);
-
-
-                if (profile?.ActiveJob?.OrganisationId != currentOrganisationId)
-                {
-                    return ServiceResult.Fail(
-                       $"{profile?.FullName} Does Not Belong To The Current Organisation");
-                }
-
-                //if (!jobExists)
-                //{
-                //    return ServiceResult.Fail(
-                //        "The selected job does not belong to your organisation.");
-                //}
-
-                var leaveType = await db.LeaveTypes
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        x => x.LeaveTypeId == dto.LeaveTypeId &&
-                             x.OrganisationId ==
-                                 currentOrganisationId.Value,
-                        cancellationToken);
-
-                if (leaveType is null)
-                {
-                    return ServiceResult.Fail(
-                        "Leave type not found.");
-                }
-
-                // Check the same legacy type.
-                var alreadyAssigned = await db.JobLeaveTypes
-                    .AnyAsync(
-                        x => x.JobId == dto.JobId &&
-                             x.LeaveTypeId == dto.LeaveTypeId &&
-                             x.IsValid,
-                        cancellationToken);
-
-                if (alreadyAssigned)
-                {
-                    return ServiceResult.Fail(
-                        "This leave type is already assigned.");
-                }
-
-                /*
-                 * If the legacy type has been migrated, prevent assigning
-                 * it when the corresponding definition is already assigned.
-                 */
-                if (leaveType.MigratedLeaveDefinitionID.HasValue)
-                {
-                    var migratedDefinitionAssigned =
-                        await db.JobLeaveTypes.AnyAsync(
-                            x => x.JobId == dto.JobId &&
-                                 x.LeaveDefinitionId ==
-                                     leaveType.MigratedLeaveDefinitionID.Value &&
-                                 x.IsValid,
-                            cancellationToken);
-
-                    if (migratedDefinitionAssigned)
-                    {
-                        return ServiceResult.Fail(
-                            "The new definition for this legacy leave type " +
-                            "is already assigned.");
-                    }
-                }
-
-                var operationLog =
-                    await _operationLogService.CreateAsync(
-                        db,
-                        actionId: SharedConfig.OperationLogActionTypes
-                            .JOB_LEAVE_TYPE_CREATE,
-                        remarks:
-                            $"Assigned legacy leave type: {leaveType.Name}");
-
-                var effectiveFrom =
-                    dto.EffectiveFromDate.Date;
-
-                var jobLeaveType = new JobLeaveType
-                {
-                    JobId = dto.JobId,
-
-                    // Legacy source
-                    LeaveTypeId = dto.LeaveTypeId,
-
-                    LeaveDefinitionId = null,
-
-                    RemainingDays = leaveType.Duration ?? 0,
-                    IsValid = true,
-                    IsLeaveInfoUpdated = true,
-
-                    EffectiveFromDate = effectiveFrom,
-
-                    EffectiveToDate =
-                        dto.EffectiveToDate ??
-                        effectiveFrom.AddYears(1),
-
-                    RenewedDate = effectiveFrom,
-
-                    OperationLogId =
-                        operationLog.OperationLogId
-                };
-
-                db.JobLeaveTypes.Add(jobLeaveType);
-
-                await db.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
-                return ServiceResult.Ok(
-                    "Legacy leave type assigned successfully.");
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
-        }
-
- 
-
-        public async Task<List<LeaveTypeDto>> GetAvailableLeaveTypesAsync(int jobId)
-        {
-            await ReadEntitlementsAsync(jobId, true);
+            var actor = await _userAccessService.RequireContextAsync();
             var org = await _userAccessService.GetCurrentOrganisationIdAsync();
-            await using var db = await _dbFactory.CreateDbContextAsync();
-
-            var assignedLeaveTypeIds = await db.JobLeaveTypes
-                .Where(x => x.JobId == jobId && x.IsValid)
-                .Select(x => x.LeaveTypeId)
-                .ToListAsync();
-
-            return await db.LeaveTypes
-                .AsNoTracking()
-                .Where(x => !assignedLeaveTypeIds.Contains(x.LeaveTypeId) && (x.OrganisationId == org || x.IsGlobal))
-                .OrderBy(x => x.Name)
-                .Select(x => new LeaveTypeDto
-                {
-                    LeaveTypeId = x.LeaveTypeId,
-                    Name = x.Name,
-                    NameDhivehi = x.NameDhivehi,
-                    Duration = x.Duration,
-                    IncludeHolidays = x.IncludeHolidays,
-                    IncludePay = x.IncludePay,
-                    IsPublic = x.IsPublic,
-                    IsGlobal = x.IsGlobal,
-                    IsLocationRequired = x.IsLocationRequired,
-                    ServiceDurationMonths = x.ServiceDurationMonths,
-                    IsRenewed = x.IsRenewed,
-                    IsStaffWideAvailable = x.IsStaffWideAvailable,
-                    PayPercentage = x.PayPercentage,
-                    StartInMonth = x.StartInMonth,
-                    RepeatedEveryInMonth = x.RepeatedEveryInMonth
-                })
-                .ToListAsync();
+            if (org <= 0 || !await _userAccessService.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Select an organisation you can access.");
+            if (!actor.IsSuperAdministrator && !actor.IsHRStaff && !actor.IsHRHead && !actor.IsHRManager && !await _userAccessService.HasPermissionAsync("Admin") && !await _userAccessService.HasPermissionAsync("Leave.Configuration.Manage"))
+                throw new UnauthorizedAccessException("HR permission is required to assign leave types.");
+            if (dto.LeaveTypeId is not > 0 || dto.EffectiveToDate?.Date < dto.EffectiveFromDate.Date) return ServiceResult.Fail("Select a leave type and a valid effective period.");
+            await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
+            await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
+            if (!await db.Jobs.AnyAsync(x => x.JobId == dto.JobId && x.OrganisationID == org && x.JobStateId == 4 && x.TerminatedDate == null, cancellationToken))
+                return ServiceResult.Fail("The selected active job was not found in this organisation.");
+            var type = await db.LeaveTypes.AsNoTracking().SingleOrDefaultAsync(x => x.LeaveTypeId == dto.LeaveTypeId && x.IsActive && (x.IsGlobal || x.OrganisationId == org), cancellationToken);
+            if (type == null) return ServiceResult.Fail("An active leave type was not found.");
+            if (await db.JobLeaveTypes.AnyAsync(x => x.JobId == dto.JobId && x.LeaveTypeId == dto.LeaveTypeId && x.IsValid, cancellationToken)) return ServiceResult.Fail("This leave type is already assigned.");
+            var audit = await _operationLogService.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_LEAVE_TYPE_CREATE, $"Assigned leave type {type.LeaveTypeId}: {type.Name} to job {dto.JobId}.");
+            var day = dto.EffectiveFromDate.Date;
+            var policy = await db.LeavePolicies.AsNoTracking().Where(x => x.LeaveTypeId == type.LeaveTypeId && x.OrganisationId == org && x.IsActive && x.EffectiveFrom <= day && (x.EffectiveTo == null || x.EffectiveTo >= day)).OrderByDescending(x => x.EffectiveFrom).ThenByDescending(x => x.LeavePolicyId).FirstOrDefaultAsync(cancellationToken);
+            var jobType = await db.Jobs.Where(x => x.JobId == dto.JobId).Select(x => x.JobTypeId).SingleAsync(cancellationToken);
+            var accrues = await db.JobTypeLeaveAccrualRules.AnyAsync(x => x.OrganisationId == org && x.JobTypeId == jobType && x.LeaveTypeId == type.LeaveTypeId && x.IsEnabled, cancellationToken);
+            db.JobLeaveTypes.Add(new JobLeaveType { JobId = dto.JobId, LeaveTypeId = type.LeaveTypeId, RemainingDays = accrues ? 0 : policy?.DefaultEntitlementDays ?? type.Duration ?? 0,
+                IsValid = true, IsLeaveInfoUpdated = true, EffectiveFromDate = day, EffectiveToDate = dto.EffectiveToDate, RenewedDate = day, OperationLogId = audit.OperationLogId });
+            await db.SaveChangesAsync(cancellationToken); await tx.CommitAsync(cancellationToken);
+            return ServiceResult.Ok("Leave type assigned successfully.");
         }
-        public async Task<ServiceResult> AssignDefinitionAsync(AssignLeaveDefinitionDto dto,
-            CancellationToken cancellationToken = default)
-        {
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(cancellationToken);
-
-            await using var transaction =
-                await db.Database.BeginTransactionAsync(cancellationToken);
-
-            try
-            {
-                var userContext =
-                    await _userAccessService.GetContextAsync();
-
-                var currentOrganisationId = userContext?.ActiveJob?.OrganisationId;
-
-                if (!currentOrganisationId.HasValue)
-                {
-                    return ServiceResult.Fail(
-                        "The current user does not have an active organisation.");
-                }
-
-                var jobExists = await db.Jobs
-                    .AnyAsync(
-                        x => x.JobId == dto.JobId &&
-                             x.OrganisationID ==
-                                 currentOrganisationId.Value,
-                        cancellationToken);
-
-                if (!jobExists)
-                {
-                    return ServiceResult.Fail(
-                        "The selected job does not belong to your organisation.");
-                }
-
-                var definition = await db.LeaveDefinitions
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(
-                        x =>
-                            x.LeaveDefinitionId ==
-                                dto.LeaveDefinitionId &&
-                            x.OwnerOrganisationId ==
-                                currentOrganisationId.Value &&
-                            x.IsActive,
-                        cancellationToken);
-
-                if (definition is null)
-                {
-                    return ServiceResult.Fail(
-                        "An active leave definition was not found.");
-                }
-
-                // Check the same definition.
-                var alreadyAssigned = await db.JobLeaveTypes
-                    .AnyAsync(
-                        x => x.JobId == dto.JobId &&
-                             x.LeaveDefinitionId ==
-                                 dto.LeaveDefinitionId &&
-                             x.IsValid,
-                        cancellationToken);
-
-                if (alreadyAssigned)
-                {
-                    return ServiceResult.Fail(
-                        "This leave definition is already assigned.");
-                }
-
-                /*
-                 * Find legacy types mapped to the selected definition.
-                 * This prevents assigning the definition when the staff
-                 * already has its legacy equivalent.
-                 */
-                var mappedLegacyTypeIds =
-                  db.LeaveTypeMappings
-                      .Where(x =>
-                          x.LeaveDefinitionId ==
-                              dto.LeaveDefinitionId &&
-                          x.IsActive)
-                      .Select(x =>
-                          x.LegacyLeaveTypeId);
-
-                            var mappedLegacyTypeAssigned =
-                                await db.JobLeaveTypes
-                                    .AnyAsync(
-                                        x =>
-                                            x.JobId == dto.JobId &&
-                                            x.IsValid &&
-                                            x.LeaveTypeId.HasValue &&
-                                            mappedLegacyTypeIds.Contains(
-                                                x.LeaveTypeId.Value),
-                                        cancellationToken);
-
-                if (mappedLegacyTypeAssigned)
-                {
-                    return ServiceResult.Fail(
-                        "The legacy version of this leave definition " +
-                        "is already assigned.");
-                }
-
-                var operationLog =
-                    await _operationLogService.CreateAsync(
-                        db,
-                        actionId: SharedConfig.OperationLogActionTypes
-                            .JOB_LEAVE_TYPE_CREATE,
-                        remarks:
-                            $"Assigned leave definition: {definition.Name}");
-
-                var effectiveFrom =
-                    dto.EffectiveFromDate.Date;
-
-                var jobLeaveType = new JobLeaveType
-                {
-                    JobId = dto.JobId,
-
-                    // New source
-                    LeaveTypeId = null,
-                    LeaveDefinitionId =
-                        dto.LeaveDefinitionId,
-
-                    /*
-                     * The policy/accrual engine will calculate and post
-                     * the entitlement after assignment.
-                     */
-                    RemainingDays = 0,
-
-                    IsValid = true,
-                    IsLeaveInfoUpdated = true,
-
-                    EffectiveFromDate = effectiveFrom,
-                    EffectiveToDate = dto.EffectiveToDate,
-                    RenewedDate = effectiveFrom,
-
-                    OperationLogId =
-                        operationLog.OperationLogId
-                };
-
-                db.JobLeaveTypes.Add(jobLeaveType);
-
-                await db.SaveChangesAsync(cancellationToken);
-
-                /*
-                 * Call the new entitlement/accrual service here after the
-                 * JobLeaveType has received its primary key.
-                 *
-                 * Example:
-                 *
-                 * await _leaveAccrualService
-                 *     .CalculateInitialEntitlementAsync(
-                 *         db,
-                 *         jobLeaveType.JobLeaveTypeId,
-                 *         effectiveFrom,
-                 *         cancellationToken);
-                 */
-
-                await transaction.CommitAsync(cancellationToken);
-
-                return ServiceResult.Ok(
-                    "Leave definition assigned successfully.");
-            }
-            catch
-            {
-                await transaction.RollbackAsync(cancellationToken);
-                throw;
-            }
-        }
-
 
         public async Task<ServiceResult> UpdateAsync(JobLeaveTypeEditDto dto)
         {
@@ -565,7 +162,7 @@ namespace HRM.Services.JobLeaveTypes
         //    var balances = await db.JobLeaveTypes
         //        .AsNoTracking()
         //        .Include(x => x.LeaveType)
-        //        .Include(x => x.LeaveDefinition)
+        //        .Include(x => x.LeaveType)
         //        .Where(x =>
         //            x.JobId == jobId &&
         //            x.IsValid &&
@@ -575,7 +172,7 @@ namespace HRM.Services.JobLeaveTypes
 
         //    return balances
         //        .OrderBy(x =>
-        //            x.LeaveDefinition?.Name ??
+        //            x.LeaveType?.Name ??
         //            x.LeaveType?.Name ??
         //            string.Empty)
         //        .ToList();
@@ -615,12 +212,8 @@ namespace HRM.Services.JobLeaveTypes
                      JobId = x.JobId,
 
                      LeaveTypeId = x.LeaveTypeId,
-
-                     LeaveDefinitionId = x.LeaveDefinitionId,
-                     LeaveTypeName = x.LeaveDefinition != null && !string.IsNullOrWhiteSpace(x.LeaveDefinition.Name)
-                         ? x.LeaveDefinition.Name : x.LeaveType != null ? x.LeaveType.Name : "",
-                     LeaveTypeNameDv = x.LeaveDefinition != null && !string.IsNullOrWhiteSpace(x.LeaveDefinition.NameDhivehi)
-                         ? x.LeaveDefinition.NameDhivehi : x.LeaveType != null ? x.LeaveType.NameDhivehi ?? "" : "",
+                     LeaveTypeName = x.LeaveType != null ? x.LeaveType.Name : "",
+                     LeaveTypeNameDv = x.LeaveType != null ? x.LeaveType.NameDhivehi ?? "" : "",
 
                      RemainingDays = x.RemainingDays ?? 0,
 
@@ -640,18 +233,5 @@ namespace HRM.Services.JobLeaveTypes
                  .ToListAsync();
         }
 
-        private async Task<int> GetJobIdByStaffId(int StaffId)
-        {
-            await using var db = await _dbFactory.CreateDbContextAsync();
-
-            return await db.Jobs
-            .AsNoTracking()
-            .Where(x => x.IndividualID == StaffId && x.TerminatedDate == null)
-            .Select(x => x.JobId)
-            .FirstOrDefaultAsync();
-        }
-
-
- 
     }
 }

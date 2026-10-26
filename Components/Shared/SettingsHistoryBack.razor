@@ -1,0 +1,29 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@if (IsSettings && trail?.Previous != null)
+{
+    <a class="app-button app-button-secondary mb-3" href="@trail.Previous" aria-label="Back to previous location">
+        <span aria-hidden="true">←</span> Back
+    </a>
+}
+
+@code {
+    private HRM.Helpers.NavigationTrail? trail;
+    private bool IsSettings => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/admin/settings", StringComparison.OrdinalIgnoreCase)
+        || new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/settings/", StringComparison.OrdinalIgnoreCase);
+
+    protected override void OnInitialized()
+    {
+        trail = new(Navigation.Uri);
+        Navigation.LocationChanged += LocationChanged;
+    }
+
+    private void LocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        trail?.Visit(args.Location);
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= LocationChanged;
+}

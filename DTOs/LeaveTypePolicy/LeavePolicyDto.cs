@@ -4,7 +4,7 @@
     {
         public int LeavePolicyId { get; set; }
 
-        public int LeaveDefinitionId { get; set; }
+        public int LeaveTypeId { get; set; }
 
         public string LeaveTypeCode { get; set; } =
             string.Empty;

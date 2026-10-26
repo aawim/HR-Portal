@@ -1,4 +1,4 @@
-﻿@using HRM.DTOs.Leave
+@using HRM.DTOs.Leave
 @using HRM.DTOs.LeaveTypes
 
 <section class="overflow-hidden rounded-2xl
@@ -8,11 +8,11 @@
     <div class="border-b border-slate-200 px-5 py-4">
 
         <h2 class="text-sm font-semibold text-slate-900">
-            Leave Definitions
+            Leave Types
         </h2>
 
         <p class="mt-1 text-xs text-slate-500">
-            New policy-based leave types.
+            
         </p>
 
     </div>
@@ -23,7 +23,7 @@
             Loading...
         </div>
     }
-    else if (Definitions.Count == 0)
+    else if (Types.Count == 0)
     {
         <div class="p-10 text-center">
 
@@ -34,7 +34,7 @@
 
             <p class="mt-2 text-sm font-medium
                       text-slate-700">
-                No leave definitions
+                No leave types
             </p>
 
         </div>
@@ -43,7 +43,7 @@
     {
         <div class="divide-y divide-slate-100">
 
-            @foreach (var item in Definitions)
+            @foreach (var item in Types)
             {
                 <button type="button"
                         @onclick="() => SelectAsync(item)"
@@ -76,15 +76,6 @@
                                 </span>
                             }
 
-                            @if (item.IsLegacyMapped)
-                            {
-                                <span class="rounded-full bg-amber-50
-                                             px-2 py-0.5 text-[10px]
-                                             font-semibold text-amber-700">
-                                    Legacy mapped
-                                </span>
-                            }
-
                         </div>
 
                         <p class="mt-1 font-mono text-[11px]
@@ -109,10 +100,10 @@
 
 @code {
     [Parameter]
-    public IReadOnlyList<LeaveDefinitionDto>
-        Definitions
+    public IReadOnlyList<LeaveTypeCatalogueDto>
+        Types
     { get; set; } =
-            Array.Empty<LeaveDefinitionDto>();
+            Array.Empty<LeaveTypeCatalogueDto>();
 
     [Parameter]
     public bool IsLoading { get; set; }
@@ -121,22 +112,22 @@
     public int? SelectedId { get; set; }
 
     [Parameter]
-    public EventCallback<LeaveDefinitionDto>
+    public EventCallback<LeaveTypeCatalogueDto>
         OnSelected
     { get; set; }
 
     private async Task SelectAsync(
-        LeaveDefinitionDto item)
+        LeaveTypeCatalogueDto item)
     {
         await OnSelected.InvokeAsync(item);
     }
 
     private string GetItemClass(
-        LeaveDefinitionDto item)
+        LeaveTypeCatalogueDto item)
     {
         var selected =
             SelectedId ==
-            item.LeaveDefinitionId;
+            item.LeaveTypeId;
 
         return selected
             ? "flex w-full items-center gap-3 bg-indigo-50 px-4 py-3 text-left"

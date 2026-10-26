@@ -22,7 +22,7 @@ static class LeaveEntitlementTests
         Task<ActiveJobDto?> Active(int staff) { staffArgument = staff; return Task.FromResult<ActiveJobDto?>(new() { JobId = 906, IndividualId = staff, IsActive = true }); }
         var audit = Proxy.For<IOperationLogService>((method, _) => throw new Exception(method));
         var profiles = Proxy.For<IProfileService>((method, _) => throw new Exception(method));
-        var service = new JobLeaveTypeService(factory, audit, access, profiles, jobs);
+        var service = new JobLeaveTypeService(factory, audit, access);
         var today = DateTime.UtcNow.AddHours(5).Date;
         await using(var db = factory.CreateDbContext())
         {

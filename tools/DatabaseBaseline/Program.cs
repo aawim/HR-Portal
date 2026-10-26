@@ -8,6 +8,9 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--verify-leave-type-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!);return 0;}
+if(args.Contains("--apply-unified-leave-types")){await UnifiedLeaveTypeUpgrade.ApplyAsync(db);return 0;}
+if(args.Contains("--audit-leave-types")) { await db.Database.OpenConnectionAsync(); await using var command=db.Database.GetDbConnection().CreateCommand(); command.CommandText=await File.ReadAllTextAsync("Database/Scripts/LeaveTypeAudit.sql"); await using var reader=await command.ExecuteReaderAsync(); do { while(await reader.ReadAsync()) Console.WriteLine(string.Join(" | ",Enumerable.Range(0,reader.FieldCount).Select(i=>reader.GetName(i)+"="+reader.GetValue(i)))); } while(await reader.NextResultAsync()); return 0; }
 if(args.Contains("--verify-empty-schema")){await EmptyDatabaseProvisioning.SmokeAsync(db.Database.GetConnectionString()!);return 0;}
 if(args.Contains("--provision-empty")){await EmptyDatabaseProvisioning.CreateAsync(db);return 0;}
 if(args.Contains("--canonicalize-legacy-flows")){await LegacyWorkflowUpgrade.RunAsync(db);return 0;}

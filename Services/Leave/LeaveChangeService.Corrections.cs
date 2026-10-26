@@ -62,8 +62,8 @@ public partial class LeaveChangeService
             leave.LeaveStateId != SharedConfig.LeaveStates.INCOMPLETE ||
             !await db.WfRequestInstances.AnyAsync(x => x.RequestId == requestId && x.WorkflowStatus == "Returned" && x.CompletedAt == null))
             throw new InvalidOperationException("Only an application returned as Incomplete can be edited.");
-        var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID)
+        var source = await LeaveService.ResolveApplicationTypeAsync(db,
+            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate)
             ?? throw new InvalidOperationException("The leave type could not be resolved.");
         return new()
         {
@@ -111,8 +111,8 @@ public partial class LeaveChangeService
             throw new InvalidOperationException("Select a valid start and end date.");
         if ((model.Explanation?.Length ?? 0) > 250 || (model.Address?.Length ?? 0) > 250 || (model.ContactNumber?.Length ?? 0) > 250)
             throw new InvalidOperationException("Explanation, address and contact number must each be 250 characters or fewer.");
-        var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID)
+        var source = await LeaveService.ResolveApplicationTypeAsync(db,
+            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate)
             ?? throw new InvalidOperationException("The leave type could not be resolved.");
         if (!await db.LeaveTypeReasonTypes.AnyAsync(x => x.LeaveTypeReasonTypeId == model.ReasonId && x.LeaveTypeId == source.LeaveTypeId))
             throw new InvalidOperationException("Select a valid reason for this leave type.");

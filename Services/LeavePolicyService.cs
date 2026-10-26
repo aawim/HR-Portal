@@ -13,22 +13,21 @@ namespace HRM.Services
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IUserAccessService _userAccessService;
-        private readonly IUserContext _userContext;
+        private readonly IOperationLogService _logs;
         private readonly ILogger<LeavePolicyService> _logger;
-        private readonly IHttpContextAccessor _http;
+
 
         public LeavePolicyService(
         IDbContextFactory<HrmTeContext> dbFactory,
         IUserAccessService userAccessService,
-        IUserContext userContext,
         ILogger<LeavePolicyService> logger,
-        IHttpContextAccessor http)
+        IOperationLogService logs)
         {
             _dbFactory = dbFactory;
             _userAccessService = userAccessService;
-            _userContext = userContext;
+            _logs = logs;
             _logger = logger;
-            _http = http;
+
         }
 
 
@@ -48,9 +47,9 @@ namespace HRM.Services
             (
                 from policy in db.LeavePolicies.AsNoTracking()
 
-                join definition in db.LeaveDefinitions.AsNoTracking()
-                    on policy.LeaveDefinitionId equals
-                       definition.LeaveDefinitionId
+                join definition in db.LeaveTypes.AsNoTracking()
+                    on policy.LeaveTypeId equals
+                       definition.LeaveTypeId
 
                 where
                     policy.OrganisationId ==
@@ -66,8 +65,8 @@ namespace HRM.Services
                     LeavePolicyId =
                         policy.LeavePolicyId,
 
-                    LeaveDefinitionId =
-                        policy.LeaveDefinitionId,
+                    LeaveTypeId =
+                        policy.LeaveTypeId,
 
                     LeaveTypeCode =
                         definition.Code,
@@ -140,9 +139,9 @@ namespace HRM.Services
             (
                 from policy in db.LeavePolicies.AsNoTracking()
 
-                join definition in db.LeaveDefinitions.AsNoTracking()
-                    on policy.LeaveDefinitionId equals
-                       definition.LeaveDefinitionId
+                join definition in db.LeaveTypes.AsNoTracking()
+                    on policy.LeaveTypeId equals
+                       definition.LeaveTypeId
 
                 where
                     policy.LeavePolicyId ==
@@ -155,8 +154,8 @@ namespace HRM.Services
                     LeavePolicyId =
                         policy.LeavePolicyId,
 
-                    LeaveDefinitionId =
-                        policy.LeaveDefinitionId,
+                    LeaveTypeId =
+                        policy.LeaveTypeId,
 
                     LeaveTypeCode =
                         definition.Code,
@@ -225,6 +224,7 @@ namespace HRM.Services
 
             try
             {
+                await RequireManageAsync();
                 var organisationId =
                     await ResolveCurrentOrganisationAsync(
                         cancellationToken);
@@ -237,16 +237,16 @@ namespace HRM.Services
                     ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken) : null;
 
                 var definition =
-                    await db.LeaveDefinitions
+                    await db.LeaveTypes
                         .AsNoTracking()
                         .FirstOrDefaultAsync(
                             x =>
-                                x.LeaveDefinitionId ==
-                                    request.LeaveDefinitionId &&
+                                x.LeaveTypeId ==
+                                    request.LeaveTypeId &&
                                 x.IsActive &&
                                 (
                                     x.IsGlobal ||
-                                    x.OwnerOrganisationId ==
+                                    x.OrganisationId ==
                                         organisationId
                                 ),
                             cancellationToken);
@@ -264,8 +264,8 @@ namespace HRM.Services
                             x =>
                                 x.OrganisationId ==
                                     organisationId &&
-                                x.LeaveDefinitionId ==
-                                    request.LeaveDefinitionId &&
+                                x.LeaveTypeId ==
+                                    request.LeaveTypeId &&
                                 x.IsActive &&
                                 (
                                     !x.EffectiveTo.HasValue ||
@@ -286,13 +286,13 @@ namespace HRM.Services
                 }
 
                 var logId = await CreateOperationLogAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_TYPE_CREATE,
-                    $"Created leave policy for definition {request.LeaveDefinitionId}, organisation {organisationId}. Values: {System.Text.Json.JsonSerializer.Serialize(request)}", cancellationToken);
+                    $"Created leave policy for definition {request.LeaveTypeId}, organisation {organisationId}. Values: {System.Text.Json.JsonSerializer.Serialize(request)}", cancellationToken);
                 var policy =
                     new LeavePolicy
                     {
                         OperationLogId = logId,
-                        LeaveDefinitionId =
-                            request.LeaveDefinitionId,
+                        LeaveTypeId =
+                            request.LeaveTypeId,
 
                         OrganisationId =
                             organisationId,
@@ -384,6 +384,7 @@ namespace HRM.Services
 
             try
             {
+                await RequireManageAsync();
                 var organisationId =
                     await ResolveCurrentOrganisationAsync(
                         cancellationToken);
@@ -419,8 +420,8 @@ namespace HRM.Services
                                     policy.LeavePolicyId &&
                                 x.OrganisationId ==
                                     organisationId &&
-                                x.LeaveDefinitionId ==
-                                    request.LeaveDefinitionId &&
+                                x.LeaveTypeId ==
+                                    request.LeaveTypeId &&
                                 x.IsActive &&
                                 (
                                     !x.EffectiveTo.HasValue ||
@@ -443,8 +444,8 @@ namespace HRM.Services
                 var logId = await CreateOperationLogAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_TYPE_UDPATE,
                     $"Updated leave policy {policy.LeavePolicyId}, organisation {organisationId}. Before: {System.Text.Json.JsonSerializer.Serialize(policy)} After: {System.Text.Json.JsonSerializer.Serialize(request)}", cancellationToken);
                 policy.OperationLogId = logId;
-                policy.LeaveDefinitionId =
-                    request.LeaveDefinitionId;
+                policy.LeaveTypeId =
+                    request.LeaveTypeId;
 
                 policy.Name =
                     Clean(request.Name);
@@ -521,6 +522,7 @@ namespace HRM.Services
 
             try
             {
+                await RequireManageAsync();
                 var organisationId =
                     await ResolveCurrentOrganisationAsync(
                         cancellationToken);
@@ -580,33 +582,15 @@ namespace HRM.Services
 
         private async Task<int> CreateOperationLogAsync(HrmTeContext db, int actionId, string remarks, CancellationToken cancellationToken)
         {
-            var actor = await _userAccessService.RequireContextAsync();
-            var session = await _userContext.GetSessionAsync()
-                ?? throw new InvalidOperationException("The current session could not be resolved for the operation log.");
-            if (actor.UserId <= 0 || session.OrganisationId is not > 0)
-                throw new InvalidOperationException("The current user and organisation are required for the operation log.");
-            var individualId = actor.IndividualId > 0 ? actor.IndividualId : actor.BusinessEntityId;
-            var now = DateTime.Now;
-            var log = new OperationLog
-            {
-                OperationLogActionId = actionId, Remarks = remarks,
-                CreatedByUserId = actor.UserId, UpdatedByUserId = actor.UserId,
-                CreatedByIndividualId = individualId > 0 ? individualId : null,
-                UpdatedByIndividualId = individualId > 0 ? individualId : null,
-                CreatedByUserOrganisationId = session.OrganisationId, UpdatedByUserOrganisationId = session.OrganisationId,
-                CreatedByContextId = 1, UpdatedContextId = 1, CreatedDate = now, UpdatedDate = now,
-                CreatedByIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? "",
-                UpdatedByIp = _http.HttpContext?.Connection.RemoteIpAddress?.ToString() ?? ""
-            };
-            db.OperationLogs.Add(log);
-            await db.SaveChangesAsync(cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var log = await _logs.CreateAsync(db, actionId, remarks);
             return log.OperationLogId;
         }
 
         private static string? Validate(
             LeavePolicySaveRequest request)
         {
-            if (request.LeaveDefinitionId <= 0)
+            if (request.LeaveTypeId <= 0)
             {
                 return "A leave definition is required.";
             }
@@ -646,56 +630,21 @@ namespace HRM.Services
             return null;
         }
 
+        private async Task RequireManageAsync()
+        {
+            var actor = await _userAccessService.RequireContextAsync();
+            if (!actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Admin") && !await _userAccessService.HasPermissionAsync("Leave.Configuration.Manage"))
+                throw new UnauthorizedAccessException("Leave configuration management permission is required.");
+        }
+
         private async Task<int> ResolveCurrentOrganisationAsync(
             CancellationToken cancellationToken)
         {
-            var context =
-                await _userAccessService.GetContextAsync();
-
-            var session =
-                await _userContext.GetSessionAsync();
-
-            if (session is null ||
-                session.OrganisationId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "Current portal organisation could not be resolved.");
-            }
-
-            await using var db =
-                await _dbFactory.CreateDbContextAsync(
-                    cancellationToken);
-
-            var organisationId =
-                await db.UserOrganisations
-                    .AsNoTracking()
-                    .Where(x =>
-                        x.UserOrganisationID ==
-                            session.OrganisationId)
-                    .Select(x =>
-                        x.BusinessEntityID)
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
-
-            if (organisationId <= 0)
-            {
-                throw new InvalidOperationException(
-                    "Current organisation could not be resolved.");
-            }
-
-            if (context?.IsSuperAdministrator == true)
-            {
-                return organisationId;
-            }
-
-            if (context?.ActiveJob is null ||
-                context.ActiveJob.OrganisationId !=
-                    organisationId)
-            {
-                throw new UnauthorizedAccessException(
-                    "The selected organisation does not match the current user's active organisation.");
-            }
-
+            cancellationToken.ThrowIfCancellationRequested();
+            await _userAccessService.RequireContextAsync();
+            var organisationId = await _userAccessService.GetCurrentOrganisationIdAsync();
+            if (organisationId <= 0 || !await _userAccessService.HasOrganisationAccessAsync(organisationId))
+                throw new UnauthorizedAccessException("Select an organisation you can access.");
             return organisationId;
         }
 

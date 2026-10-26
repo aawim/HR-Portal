@@ -24,7 +24,7 @@ public sealed class LeaveAccrualProcessor(IDbContextFactory<HrmTeContext> factor
                 (x.LeaveTypeId == rule.LeaveTypeId || x.LeaveType.Name == leaveName)).ToListAsync();
             var balance = balances.SingleOrDefaultIfOne();
             if (balances.Count > 1) { result.Add(new(job.JobId, null, 0, 0, 0, "Multiple valid balances: reconcile before processing.")); continue; }
-            if (balance != null && balance.LeaveTypeId != rule.LeaveTypeId) { result.Add(new(job.JobId, null, 0, balance.RemainingDays ?? 0, balance.RemainingDays ?? 0, "An equivalent leave type is assigned; reconcile the mapping before processing.")); continue; }
+            if (balance != null && balance.LeaveTypeId != rule.LeaveTypeId) { result.Add(new(job.JobId, null, 0, balance.RemainingDays ?? 0, balance.RemainingDays ?? 0, "A different type with the same name is assigned; ask HR to reconcile before processing.")); continue; }
             var existing = await db.LeaveAccrualPostings.Where(x => x.RuleId == rule.Id && x.JobId == job.JobId).Select(x => x.DueDate).ToListAsync();
             var due = LeaveAccrualCalculator.DueDates(rule, job.JoinedDate, LeaveAccrualCalculator.Today).Where(x => !existing.Contains(x.Date)).ToList();
             var amount = balance?.RemainingDays ?? 0;
@@ -49,6 +49,7 @@ public sealed class LeaveAccrualProcessor(IDbContextFactory<HrmTeContext> factor
     {
         await using var lookup = await factory.CreateDbContextAsync();
         var rule = await lookup.JobTypeLeaveAccrualRules.AsNoTracking().SingleAsync(x => x.Id == ruleId && x.OrganisationId == org && x.IsEnabled);
+        if (!await lookup.LeaveTypes.AnyAsync(x => x.LeaveTypeId == rule.LeaveTypeId && x.IsActive)) return 0;
         var jobs = await lookup.Jobs.Where(j => j.OrganisationID == org && j.JobTypeId == rule.JobTypeId && j.JobStateId == 4 &&
             j.TerminatedDate == null && j.JoinedDate <= LeaveAccrualCalculator.Today).Select(x => x.JobId).ToListAsync();
         var posted = 0;
@@ -61,6 +62,7 @@ public sealed class LeaveAccrualProcessor(IDbContextFactory<HrmTeContext> factor
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         var rule = await db.JobTypeLeaveAccrualRules.SingleAsync(x => x.Id == ruleId && x.OrganisationId == org);
+        if (!await db.LeaveTypes.AnyAsync(x => x.LeaveTypeId == rule.LeaveTypeId && x.IsActive)) return 0;
         if (!rule.IsEnabled || rule.CarryForwardMode == "Unspecified") return 0;
         var job = await db.Jobs.SingleOrDefaultAsync(j => j.JobId == jobId && j.OrganisationID == org && j.JobTypeId == rule.JobTypeId &&
             j.JobStateId == 4 && j.TerminatedDate == null && j.JoinedDate <= LeaveAccrualCalculator.Today);

@@ -1,9 +1,10 @@
-﻿@using HRM.DTOs.LeaveTypes
+@using HRM.DTOs.LeaveTypes
 @using HRM.Models.LeaveTypes
 @using HRM.Services.Interfaces.LeaveType
 
 @inject ILeavePolicyService LeavePolicyService
-@inject ILeaveDefinitionService LeaveDefinitionService
+@inject ILeaveTypeCatalogueService LeaveTypeCatalogueService
+@inject ILogger<LeavePolicyManagement> Logger
 
 <div class="w-full">
 
@@ -122,7 +123,7 @@
                         }
 
                         <!-- =================================================
-                        LEAVE DEFINITION
+                        LEAVE TYPE
                         ================================================= -->
                         <div>
 
@@ -134,7 +135,7 @@
                             </label>
 
                             <InputSelect
-                            @bind-Value="_model.LeaveDefinitionId"
+                            @bind-Value="_model.LeaveTypeId"
                             disabled="@_isSaving"
                             class="w-full rounded-xl
                                        border border-slate-300
@@ -150,9 +151,9 @@
                                 </option>
 
                                 @foreach (var definition
-                                   in AvailableDefinitions)
+                                   in AvailableTypes)
                                 {
-                                    <option value="@definition.LeaveDefinitionId">
+                                    <option value="@definition.LeaveTypeId">
                                         @definition.Name
                                         (@definition.Code)
                                     </option>
@@ -161,7 +162,7 @@
                             </InputSelect>
 
                             <ValidationMessage
-                            For="@(() => _model.LeaveDefinitionId)" />
+                            For="@(() => _model.LeaveTypeId)" />
 
                         </div>
 
@@ -509,17 +510,14 @@
 
                                             <p class="mt-1 text-xs
                               text-indigo-700">
-                                                Configure accrual,
-                                                renewal, balance caps
-                                                and carry-forward rules.
+                                                Configure accrual and carry-forward by Job Type.
                                             </p>
 
                                         </div>
 
                                     </div>
 
-                                    <button type="button"
-                                            @onclick="OpenAccrualRules"
+                                    <a href="/admin/settings/config/job-types?tab=leave"
                                             class="inline-flex items-center
                            justify-center gap-2
                            rounded-xl border
@@ -537,20 +535,9 @@
 
                                         Configure
 
-                                    </button>
+                                    </a>
 
                                 </div>
-
-                                @if (_showAccrualRules &&
-                               _accrualPolicyId.HasValue)
-                                {
-                                    <div class="mt-4">
-
-                                        <LeavePolicyAccrualRules LeavePolicyId="@_accrualPolicyId.Value"
-                                                                 OnClose="@CloseAccrualRules" />
-
-                                    </div>
-                                }
 
                             </div>
                         }
@@ -799,7 +786,7 @@
                             <p class="mt-1 text-xs
                                       text-slate-500">
                                 Create a policy for one of
-                                your leave definitions.
+                                your leave types.
                             </p>
 
                         </div>
@@ -971,14 +958,12 @@
 
 @code {
 
-    private bool _showAccrualRules;
 
-    private int? _accrualPolicyId;
 
 
     private List<LeavePolicyDto> _policies = [];
 
-    private List<LeaveDefinitionDto> _definitions = [];
+    private List<LeaveTypeCatalogueDto> _types = [];
 
     private LeavePolicySaveRequest _model = new();
 
@@ -997,9 +982,9 @@
     private string _searchText =
         string.Empty;
 
-    private IEnumerable<LeaveDefinitionDto>
-        AvailableDefinitions =>
-            _definitions
+    private IEnumerable<LeaveTypeCatalogueDto>
+        AvailableTypes =>
+            _types
                 .Where(x =>
                     x.IsActive)
                 .OrderBy(x =>
@@ -1061,24 +1046,25 @@
         try
         {
             _isLoading = true;
+            _message = null;
 
             var policyTask =
                 LeavePolicyService
                     .GetOrganisationPoliciesAsync();
 
-            var definitionTask =
-                LeaveDefinitionService
+            var typeTask =
+                LeaveTypeCatalogueService
                     .GetAvailableAsync();
 
             await Task.WhenAll(
                 policyTask,
-                definitionTask);
+                typeTask);
 
             _policies =
                 await policyTask;
 
-            _definitions =
-                await definitionTask;
+            _types =
+                await typeTask;
         }
         catch (Exception exception)
         {
@@ -1088,8 +1074,7 @@
             _saveSucceeded =
                 false;
 
-            Console.Error.WriteLine(
-                exception);
+            Logger.LogError(exception, "Unable to load leave policies for the current organisation.");
         }
         finally
         {
@@ -1099,9 +1084,6 @@
 
     private void StartCreate()
     {
-
-        _showAccrualRules = false;
-        _accrualPolicyId = null;
 
 
         _selectedPolicyId =
@@ -1135,8 +1117,6 @@
 
     private async Task SelectPolicyAsync(LeavePolicyDto policy)
     {
-         _showAccrualRules = false;
-        _accrualPolicyId = null;
 
 
         _message =
@@ -1170,8 +1150,8 @@
                 LeavePolicyId =
                     detail.LeavePolicyId,
 
-                LeaveDefinitionId =
-                    detail.LeaveDefinitionId,
+                LeaveTypeId =
+                    detail.LeaveTypeId,
 
                 Name =
                     detail.Name,
@@ -1335,31 +1315,6 @@
             args.Value?.ToString() ??
             string.Empty;
     }
-
-    private void OpenAccrualRules()
-    {
-        if (!_selectedPolicyId.HasValue ||
-            _selectedPolicyId.Value <= 0)
-        {
-            return;
-        }
-
-        _accrualPolicyId =
-            _selectedPolicyId.Value;
-
-        _showAccrualRules =
-            true;
-    }
-
-    private void CloseAccrualRules()
-{
-    _showAccrualRules =
-        false;
-
-    _accrualPolicyId =
-        null;
-}
-
 
     private string GetPolicyClass(
         LeavePolicyDto policy)

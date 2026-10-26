@@ -884,7 +884,7 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("OperationLogID");
 
-                    b.Property<int>("OwnerOrganisationId")
+                    b.Property<int>("OrganisationId")
                         .HasColumnType("int")
                         .HasColumnName("OwnerOrganisationID");
 
@@ -904,7 +904,7 @@ namespace HRM.Migrations
 
                     b.HasKey("DeductionTypeId");
 
-                    b.HasIndex("OwnerOrganisationId");
+                    b.HasIndex("OrganisationId");
 
                     b.HasIndex("RequestId");
 
@@ -4290,10 +4290,6 @@ namespace HRM.Migrations
                     b.Property<DateTime?>("LastLeaveTakenDate")
                         .HasColumnType("datetime");
 
-                    b.Property<int?>("LeaveDefinitionId")
-                        .HasColumnType("int")
-                        .HasColumnName("LeaveDefinitionID");
-
                     b.Property<int?>("LeaveTypeId")
                         .HasColumnType("int")
                         .HasColumnName("LeaveTypeID");
@@ -4312,19 +4308,15 @@ namespace HRM.Migrations
                     b.HasKey("JobLeaveTypeId")
                         .HasName("PK_JobLeaveTypes");
 
-                    b.HasIndex("LeaveDefinitionId");
-
                     b.HasIndex("LeaveTypeId");
 
                     b.HasIndex("OperationLogId");
 
                     b.HasIndex(new[] { "JobId", "LeaveTypeId" }, "IX_JobLeaveTypes");
 
-                    b.HasIndex(new[] { "JobId", "LeaveDefinitionId" }, "IX_JobLeaveTypes_JobID_LeaveDefinitionID");
-
                     b.ToTable("JobLeaveTypes", null, t =>
                         {
-                            t.HasCheckConstraint("CK_JobLeaveTypes_ExactlyOneLeaveSource", "(\r\n    ([LeaveTypeID] IS NOT NULL\r\n     AND [LeaveDefinitionID] IS NULL)\r\n    OR\r\n    ([LeaveTypeID] IS NULL\r\n     AND [LeaveDefinitionID] IS NOT NULL)\r\n)");
+                            t.HasCheckConstraint("CK_JobLeaveTypes_LeaveType", "[LeaveTypeID] IS NOT NULL");
                         });
                 });
 
@@ -5039,6 +5031,19 @@ namespace HRM.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeaveTypeId"));
 
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(50)");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
                     b.Property<int?>("Duration")
                         .HasColumnType("int");
 
@@ -5046,6 +5051,9 @@ namespace HRM.Migrations
                         .HasColumnType("bit");
 
                     b.Property<bool>("IncludePay")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<bool>("IsGlobal")
@@ -5065,9 +5073,6 @@ namespace HRM.Migrations
 
                     b.Property<bool>("IsSystemType")
                         .HasColumnType("bit");
-
-                    b.Property<int?>("MigratedLeaveDefinitionID")
-                        .HasColumnType("int");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -5102,7 +5107,13 @@ namespace HRM.Migrations
                     b.Property<int>("StartInMonth")
                         .HasColumnType("int");
 
+                    b.Property<DateTime?>("UpdatedDate")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("LeaveTypeId");
+
+                    b.HasIndex("Code")
+                        .IsUnique();
 
                     b.HasIndex("OperationLogId");
 
@@ -5110,7 +5121,7 @@ namespace HRM.Migrations
 
                     b.HasIndex("RequestTypeId");
 
-                    b.ToTable("LeaveTypes");
+                    b.ToTable("LT_LeaveTypes", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypeReasonType", b =>
@@ -5332,110 +5343,6 @@ namespace HRM.Migrations
                     b.ToTable("LCF_LeaveCarryForwards", (string)null);
                 });
 
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveDefinition", b =>
-                {
-                    b.Property<int>("LeaveDefinitionId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("LeaveDefinitionID");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeaveDefinitionId"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .IsUnicode(false)
-                        .HasColumnType("varchar(50)");
-
-                    b.Property<DateTime>("CreatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsGlobal")
-                        .HasColumnType("bit");
-
-                    b.Property<bool>("IsSystemType")
-                        .HasColumnType("bit");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<string>("NameDhivehi")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
-                    b.Property<int?>("OperationLogId")
-                        .HasColumnType("int")
-                        .HasColumnName("OperationLogID");
-
-                    b.Property<int?>("OwnerOrganisationId")
-                        .HasColumnType("int")
-                        .HasColumnName("OwnerOrganisationID");
-
-                    b.Property<DateTime?>("UpdatedDate")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("LeaveDefinitionId");
-
-                    b.ToTable("LeaveDefinitions", (string)null);
-                });
-
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveFrameworkConfiguration", b =>
-                {
-                    b.Property<int>("LeaveFrameworkConfigurationId")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasColumnName("LeaveFrameworkConfigurationID");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeaveFrameworkConfigurationId"));
-
-                    b.Property<DateTime>("EffectiveFrom")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("date");
-
-                    b.Property<string>("FrameworkType")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
-                        .HasDefaultValue(true);
-
-                    b.Property<string>("MigrationState")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("nvarchar(30)");
-
-                    b.Property<int?>("OperationLogId")
-                        .HasColumnType("int")
-                        .HasColumnName("OperationLogID");
-
-                    b.Property<int>("OrganisationId")
-                        .HasColumnType("int")
-                        .HasColumnName("OrganisationID");
-
-                    b.HasKey("LeaveFrameworkConfigurationId");
-
-                    b.HasIndex("OperationLogId");
-
-                    b.HasIndex("OrganisationId", "IsActive", "EffectiveFrom")
-                        .HasDatabaseName("IX_LeaveFrameworkConfigurations_Organisation_Active_Effective");
-
-                    b.ToTable("LeaveFrameworkConfigurations", (string)null);
-                });
-
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverReview", b =>
                 {
                     b.Property<int>("LeaveId")
@@ -5522,9 +5429,9 @@ namespace HRM.Migrations
                     b.Property<bool>("IsStaffWideAvailable")
                         .HasColumnType("bit");
 
-                    b.Property<int>("LeaveDefinitionId")
+                    b.Property<int>("LeaveTypeId")
                         .HasColumnType("int")
-                        .HasColumnName("LeaveDefinitionID");
+                        .HasColumnName("LeaveTypeID");
 
                     b.Property<int?>("MinimumServiceMonths")
                         .HasColumnType("int");
@@ -5556,11 +5463,13 @@ namespace HRM.Migrations
                     b.Property<int>("WorkHandoverAfterDays")
                         .HasColumnType("int");
 
-                    b.HasKey("LeavePolicyId");
+                    b.HasKey("LeavePolicyId")
+                        .HasName("PK_LeavePolicies");
 
-                    b.HasIndex("LeaveDefinitionId");
+                    b.HasIndex("LeaveTypeId")
+                        .HasDatabaseName("IX_LeavePolicies_LeaveTypeID");
 
-                    b.ToTable("LeavePolicies", (string)null);
+                    b.ToTable("LT_LeavePolicies", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicyAccrualRule", b =>
@@ -5607,47 +5516,44 @@ namespace HRM.Migrations
                     b.Property<int?>("OperationLogId")
                         .HasColumnType("int");
 
-                    b.HasKey("LeavePolicyAccrualRuleId");
+                    b.HasKey("LeavePolicyAccrualRuleId")
+                        .HasName("PK_LeavePolicyAccrualRules");
 
-                    b.HasIndex("LeavePolicyId");
+                    b.HasIndex("LeavePolicyId")
+                        .HasDatabaseName("IX_LeavePolicyAccrualRules_LeavePolicyID");
 
-                    b.ToTable("LeavePolicyAccrualRules", (string)null);
+                    b.ToTable("LT_LeavePolicyAccrualRules", (string)null);
                 });
 
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveTypeMapping", b =>
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveTypeMigrationAudit", b =>
                 {
-                    b.Property<int>("LeaveTypeMappingId")
+                    b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("LeaveTypeMappingId"));
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
-                    b.Property<DateTime?>("EffectiveFrom")
+                    b.Property<int?>("LeaveTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("MigratedAtUtc")
                         .HasColumnType("datetime2");
 
-                    b.Property<DateTime?>("EffectiveTo")
-                        .HasColumnType("datetime2");
+                    b.Property<string>("SnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
 
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("bit");
+                    b.Property<string>("SourceEntity")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
 
-                    b.Property<int>("LeaveDefinitionId")
+                    b.Property<int>("SourceId")
                         .HasColumnType("int");
 
-                    b.Property<int>("LegacyLeaveTypeId")
-                        .HasColumnType("int");
+                    b.HasKey("Id");
 
-                    b.Property<int?>("OperationLogId")
-                        .HasColumnType("int");
-
-                    b.Property<int?>("OrganisationId")
-                        .HasColumnType("int");
-
-                    b.HasKey("LeaveTypeMappingId");
-
-                    b.HasIndex("LeaveDefinitionId");
-
-                    b.ToTable("LeaveTypeMappings");
+                    b.ToTable("LT_TypeMigrationAudits", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.LocalUserState", b =>
@@ -10002,7 +9908,7 @@ namespace HRM.Migrations
                 {
                     b.HasOne("HRM.Models.Organisation", "OwnerOrganisation")
                         .WithMany("DeductionTypes")
-                        .HasForeignKey("OwnerOrganisationId")
+                        .HasForeignKey("OrganisationId")
                         .IsRequired()
                         .HasConstraintName("FK_DeductionTypes_Organisations");
 
@@ -11715,12 +11621,6 @@ namespace HRM.Migrations
                         .IsRequired()
                         .HasConstraintName("FK_JobLeaves_Jobs");
 
-                    b.HasOne("HRM.Models.LeaveTypes.LeaveDefinition", "LeaveDefinition")
-                        .WithMany("JobLeaveTypes")
-                        .HasForeignKey("LeaveDefinitionId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("FK_JobLeaveTypes_LeaveDefinitions");
-
                     b.HasOne("HRM.Models.LeaveType", "LeaveType")
                         .WithMany("JobLeaveTypes")
                         .HasForeignKey("LeaveTypeId")
@@ -11735,8 +11635,6 @@ namespace HRM.Migrations
                         .HasConstraintName("FK_JobLeaves_OperationLogs");
 
                     b.Navigation("Job");
-
-                    b.Navigation("LeaveDefinition");
 
                     b.Navigation("LeaveType");
 
@@ -12172,22 +12070,6 @@ namespace HRM.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveFrameworkConfiguration", b =>
-                {
-                    b.HasOne("HRM.Models.OperationLog", null)
-                        .WithMany()
-                        .HasForeignKey("OperationLogId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("FK_LeaveFrameworkConfigurations_OperationLogs");
-
-                    b.HasOne("HRM.Models.Organisation", null)
-                        .WithMany()
-                        .HasForeignKey("OrganisationId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("FK_LeaveFrameworkConfigurations_Organisations");
-                });
-
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveHandoverReview", b =>
                 {
                     b.HasOne("HRM.Models.Leaf", null)
@@ -12224,13 +12106,14 @@ namespace HRM.Migrations
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicy", b =>
                 {
-                    b.HasOne("HRM.Models.LeaveTypes.LeaveDefinition", "LeaveDefinition")
+                    b.HasOne("HRM.Models.LeaveType", "LeaveType")
                         .WithMany("LeavePolicies")
-                        .HasForeignKey("LeaveDefinitionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("FK_LeavePolicies_LT_LeaveTypes_LeaveTypeID");
 
-                    b.Navigation("LeaveDefinition");
+                    b.Navigation("LeaveType");
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicyAccrualRule", b =>
@@ -12239,20 +12122,10 @@ namespace HRM.Migrations
                         .WithMany("AccrualRules")
                         .HasForeignKey("LeavePolicyId")
                         .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .IsRequired()
+                        .HasConstraintName("FK_LeavePolicyAccrualRules_LeavePolicies_LeavePolicyID");
 
                     b.Navigation("LeavePolicy");
-                });
-
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveTypeMapping", b =>
-                {
-                    b.HasOne("HRM.Models.LeaveTypes.LeaveDefinition", "LeaveDefinition")
-                        .WithMany("LeaveTypeMappings")
-                        .HasForeignKey("LeaveDefinitionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("LeaveDefinition");
                 });
 
             modelBuilder.Entity("HRM.Models.Location", b =>
@@ -14484,6 +14357,8 @@ namespace HRM.Migrations
                 {
                     b.Navigation("JobLeaveTypes");
 
+                    b.Navigation("LeavePolicies");
+
                     b.Navigation("LeaveSetLeaveTypes");
 
                     b.Navigation("Leaves");
@@ -14492,15 +14367,6 @@ namespace HRM.Migrations
             modelBuilder.Entity("HRM.Models.LeaveTypeReasonType", b =>
                 {
                     b.Navigation("LeaveReasons");
-                });
-
-            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveDefinition", b =>
-                {
-                    b.Navigation("JobLeaveTypes");
-
-                    b.Navigation("LeavePolicies");
-
-                    b.Navigation("LeaveTypeMappings");
                 });
 
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeavePolicy", b =>

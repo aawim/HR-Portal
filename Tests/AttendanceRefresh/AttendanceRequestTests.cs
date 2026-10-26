@@ -34,7 +34,7 @@ static class AttendanceRequestTests
             await db.Database.EnsureCreatedAsync();
             db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1, OrganisationID = 10 },
                 new Job { JobId = 2, IndividualID = 2, OrganisationID = 10 });
-            db.LeaveTypes.Add(new LeaveType { LeaveTypeId = 1, Name = "Annual Leave", IncludeHolidays = true });
+            db.LeaveTypes.Add(new LeaveType { LeaveTypeId = 1, OrganisationId = 10, Name = "Annual Leave", IncludeHolidays = true });
             db.Leaves.AddRange(
                 new Leaf { LeaveId = 1, JobId = 1, LeaveTypeId = 1, FromDate = today.AddDays(-5), ToDate = today.AddDays(-1), Duration = 5, LeaveStateId = 4 },
                 new Leaf { LeaveId = 2, JobId = 1, LeaveTypeId = 1, FromDate = today, ToDate = today, Duration = 1, LeaveStateId = 4 },
@@ -377,7 +377,7 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
     {
         Type[] types = [typeof(Job), typeof(Leaf), typeof(LeaveType), typeof(JobLeaveType), typeof(Request), typeof(RequestState),
             typeof(AttendanceLog), typeof(AttendanceLogResolution), typeof(AttendanceLogRequest), typeof(AttendanceLogChangeRequest),
-            typeof(LeaveChangeRequest), typeof(LeaveTypeMapping), typeof(LeaveDefinition),
+            typeof(LeaveChangeRequest), typeof(LeavePolicy),
             typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
             typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule), typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting), typeof(HRM.Models.LeaveTypes.LeaveCarryForward)];
         types = types.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
@@ -388,7 +388,7 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
             (typeof(AttendanceLogRequest), "AttendanceLog"), (typeof(AttendanceLogRequest), "Request"),
             (typeof(AttendanceLogChangeRequest), "AttendanceLog"), (typeof(AttendanceLogChangeRequest), "Request"),
             (typeof(LeaveChangeRequest), "Leave"), (typeof(LeaveChangeRequest), "Request"),
-            (typeof(LeaveTypeMapping), "LeaveDefinition")
+
         };
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
@@ -409,7 +409,6 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
         builder.Entity<AttendanceLogChangeRequest>().HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId);
         builder.Entity<LeaveChangeRequest>().HasOne(x => x.Leave).WithMany().HasForeignKey(x => x.LeaveId);
         builder.Entity<LeaveChangeRequest>().HasOne(x => x.Request).WithMany().HasForeignKey(x => x.RequestId);
-        builder.Entity<LeaveTypeMapping>().HasOne(x => x.LeaveDefinition).WithMany().HasForeignKey(x => x.LeaveDefinitionId);
         ScheduleTestModel.Configure(builder);
     }
 }

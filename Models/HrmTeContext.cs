@@ -51,15 +51,13 @@ public partial class HrmTeContext : DbContext
     public virtual DbSet<WfWorkflowJobType> WfWorkflowJobTypes
     { get; set; }
 
-    public virtual DbSet<LeaveDefinition> LeaveDefinitions { get; set; }
 
     public virtual DbSet<LeavePolicy> LeavePolicies { get; set; }
 
     public virtual DbSet<LeavePolicyAccrualRule> LeavePolicyAccrualRules { get; set; }
 
-    public virtual DbSet<LeaveFrameworkConfiguration> LeaveFrameworkConfigurations { get; set; }
+    public DbSet<LeaveTypeMigrationAudit> LeaveTypeMigrationAudits => Set<LeaveTypeMigrationAudit>();
 
-    public virtual DbSet<LeaveTypeMapping>LeaveTypeMappings{ get; set; }
 
 
     public DbSet<JobWorkTemplate> JobWorkTemplates { get; set; }
@@ -1395,13 +1393,13 @@ public partial class HrmTeContext : DbContext
                 .HasMaxLength(500)
                 .IsUnicode(false);
             entity.Property(e => e.OperationLogId).HasColumnName("OperationLogID");
-            entity.Property(e => e.OwnerOrganisationId).HasColumnName("OwnerOrganisationID");
+            entity.Property(e => e.OrganisationId).HasColumnName("OwnerOrganisationID");
             entity.Property(e => e.RequestId).HasColumnName("RequestID");
             entity.Property(e => e.TypeNameDhivehi).HasMaxLength(50);
             entity.Property(e => e.TypeNameEnglish).HasMaxLength(50);
 
             entity.HasOne(d => d.OwnerOrganisation).WithMany(p => p.DeductionTypes)
-                .HasForeignKey(d => d.OwnerOrganisationId)
+                .HasForeignKey(d => d.OrganisationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_DeductionTypes_Organisations");
 
@@ -1799,27 +1797,12 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<JobLeaveType>(entity =>
         {
-            entity.ToTable(
-                "JobLeaveTypes",
-                table =>
-                {
-                    table.HasCheckConstraint(
-                        "CK_JobLeaveTypes_ExactlyOneLeaveSource",
-                        """
-                (
-                    ([LeaveTypeID] IS NOT NULL
-                     AND [LeaveDefinitionID] IS NULL)
-                    OR
-                    ([LeaveTypeID] IS NULL
-                     AND [LeaveDefinitionID] IS NOT NULL)
-                )
-                """);
-                });
+            entity.ToTable("JobLeaveTypes", t => t.HasCheckConstraint("CK_JobLeaveTypes_LeaveType", "[LeaveTypeID] IS NOT NULL"));
 
             entity.HasKey(e => e.JobLeaveTypeId)
                 .HasName("PK_JobLeaveTypes");
 
-            // Legacy lookup index
+            // Canonical type lookup index
             entity.HasIndex(
                     e => new
                     {
@@ -1827,15 +1810,6 @@ public partial class HrmTeContext : DbContext
                         e.LeaveTypeId
                     },
                     "IX_JobLeaveTypes");
-
-            // New definition lookup index
-            entity.HasIndex(
-                    e => new
-                    {
-                        e.JobId,
-                        e.LeaveDefinitionId
-                    },
-                    "IX_JobLeaveTypes_JobID_LeaveDefinitionID");
 
             entity.Property(e => e.JobLeaveTypeId)
                 .HasColumnName("JobLeaveTypeID");
@@ -1846,8 +1820,7 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.LeaveTypeId)
                 .HasColumnName("LeaveTypeID");
 
-            entity.Property(e => e.LeaveDefinitionId)
-                .HasColumnName("LeaveDefinitionID");
+
 
             entity.Property(e => e.RemainingDays).HasPrecision(10, 2);
 
@@ -1879,24 +1852,12 @@ public partial class HrmTeContext : DbContext
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_JobLeaves_Jobs");
 
-            // Temporary legacy relationship
+            // Canonical type relationship
             entity.HasOne(e => e.LeaveType)
                 .WithMany(e => e.JobLeaveTypes)
                 .HasForeignKey(e => e.LeaveTypeId)
                 .OnDelete(DeleteBehavior.Restrict)
                 .HasConstraintName("FK_JobLeaves_LeaveTypes");
-
-            // Permanent definition relationship
-            entity.Property(e => e.LeaveDefinitionId)
-      .HasColumnName("LeaveDefinitionID");
-
-            entity.HasOne(e => e.LeaveDefinition)
-                .WithMany(e => e.JobLeaveTypes)
-                .HasForeignKey(e => e.LeaveDefinitionId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName(
-                    "FK_JobLeaveTypes_LeaveDefinitions");
-
 
             // Operation log relationship
             entity.HasOne(e => e.OperationLog)
@@ -2318,6 +2279,11 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<LeaveType>(entity =>
         {
+            entity.ToTable("LT_LeaveTypes");
+            entity.Property(e => e.Code).HasMaxLength(50).IsUnicode(false);
+            entity.HasIndex(e => e.Code).IsUnique();
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.HasMany(e => e.LeavePolicies).WithOne(e => e.LeaveType).HasForeignKey(e => e.LeaveTypeId).OnDelete(DeleteBehavior.Restrict).HasConstraintName("FK_LeavePolicies_LT_LeaveTypes_LeaveTypeID");
             entity.Property(e => e.LeaveTypeId).HasColumnName("LeaveTypeID");
             entity.Property(e => e.Name).HasMaxLength(250);
             entity.Property(e => e.NameDhivehi).HasMaxLength(250);
@@ -4524,65 +4490,21 @@ public partial class HrmTeContext : DbContext
             .HasDatabaseName("UX_WorkPlans_Job_WorkDate");
         });
 
-        modelBuilder.Entity<LeaveDefinition>(entity =>
-        {
-            entity.ToTable("LeaveDefinitions");
-
-            entity.HasKey(x =>
-                x.LeaveDefinitionId);
-
-            entity.Property(x =>
-                x.LeaveDefinitionId)
-                .HasColumnName("LeaveDefinitionID");
-
-            entity.Property(x =>
-                x.Code)
-                .HasMaxLength(50)
-                .IsUnicode(false);
-
-            entity.Property(x =>
-                x.Name)
-                .HasMaxLength(200);
-
-            entity.Property(x =>
-                x.NameDhivehi)
-                .HasMaxLength(200);
-
-            entity.Property(x =>
-                x.Description)
-                .HasMaxLength(1000);
-
-            entity.Property(x =>
-                x.OwnerOrganisationId)
-                .HasColumnName("OwnerOrganisationID");
-
-            entity.Property(x =>
-                x.OperationLogId)
-                .HasColumnName("OperationLogID");
-
-            entity.HasMany(x =>
-                x.LeavePolicies)
-                .WithOne(x =>
-                    x.LeaveDefinition)
-                .HasForeignKey(x =>
-                    x.LeaveDefinitionId);
-        });
-
-
         modelBuilder.Entity<LeavePolicy>(entity =>
         {
-            entity.ToTable("LeavePolicies");
+            entity.ToTable("LT_LeavePolicies");
 
             entity.HasKey(x =>
-                x.LeavePolicyId);
+                x.LeavePolicyId).HasName("PK_LeavePolicies");
+            entity.HasIndex(x => x.LeaveTypeId).HasDatabaseName("IX_LeavePolicies_LeaveTypeID");
 
             entity.Property(x =>
                 x.LeavePolicyId)
                 .HasColumnName("LeavePolicyID");
 
             entity.Property(x =>
-                x.LeaveDefinitionId)
-                .HasColumnName("LeaveDefinitionID");
+                x.LeaveTypeId)
+                .HasColumnName("LeaveTypeID");
 
             entity.Property(x =>
                 x.OrganisationId)
@@ -4608,10 +4530,11 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<LeavePolicyAccrualRule>(entity =>
         {
-            entity.ToTable("LeavePolicyAccrualRules");
+            entity.ToTable("LT_LeavePolicyAccrualRules");
 
             entity.HasKey(x =>
-                x.LeavePolicyAccrualRuleId);
+                x.LeavePolicyAccrualRuleId).HasName("PK_LeavePolicyAccrualRules");
+            entity.HasIndex(x => x.LeavePolicyId).HasDatabaseName("IX_LeavePolicyAccrualRules_LeavePolicyID");
 
             entity.Property(x =>
                 x.LeavePolicyAccrualRuleId)
@@ -4642,86 +4565,15 @@ public partial class HrmTeContext : DbContext
                 .WithMany(x =>
                     x.AccrualRules)
                 .HasForeignKey(x =>
-                    x.LeavePolicyId);
+                    x.LeavePolicyId).HasConstraintName("FK_LeavePolicyAccrualRules_LeavePolicies_LeavePolicyID");
         });
 
-        modelBuilder.Entity<LeaveFrameworkConfiguration>(entity =>
+        modelBuilder.Entity<LeaveTypeMigrationAudit>(entity =>
         {
-            entity.ToTable("LeaveFrameworkConfigurations");
-
-            entity.HasKey(e =>
-                e.LeaveFrameworkConfigurationId);
-
-            entity.Property(e =>
-                e.LeaveFrameworkConfigurationId)
-                .HasColumnName("LeaveFrameworkConfigurationID");
-
-            entity.Property(e =>
-                e.OrganisationId)
-                .HasColumnName("OrganisationID");
-
-            entity.Property(e =>
-                e.FrameworkType)
-                .HasConversion<string>()
-                .HasMaxLength(30)
-                .IsRequired();
-
-            entity.Property(e =>
-                e.MigrationState)
-                .HasConversion<string>()
-                .HasMaxLength(30)
-                .IsRequired();
-
-            entity.Property(e =>
-                e.EffectiveFrom)
-                .HasColumnType("date");
-
-            entity.Property(e =>
-                e.EffectiveTo)
-                .HasColumnType("date");
-
-            entity.Property(e =>
-                e.IsActive)
-                .HasDefaultValue(true);
-
-            entity.Property(e =>
-                e.OperationLogId)
-                .HasColumnName("OperationLogID");
-
-            entity.HasIndex(e => new
-            {
-                e.OrganisationId,
-                e.IsActive,
-                e.EffectiveFrom
-            })
-            .HasDatabaseName(
-                "IX_LeaveFrameworkConfigurations_Organisation_Active_Effective");
-
-            /*
-             * Optional but recommended:
-             *
-             * Link OrganisationID to Organisations.BusinessEntityID.
-             */
-            entity.HasOne<Organisation>()
-                .WithMany()
-                .HasForeignKey(e =>
-                    e.OrganisationId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName(
-                    "FK_LeaveFrameworkConfigurations_Organisations");
-
-            /*
-             * Optional:
-             *
-             * Link OperationLogID if your OperationLog entity exists.
-             */
-            entity.HasOne<OperationLog>()
-                .WithMany()
-                .HasForeignKey(e =>
-                    e.OperationLogId)
-                .OnDelete(DeleteBehavior.Restrict)
-                .HasConstraintName(
-                    "FK_LeaveFrameworkConfigurations_OperationLogs");
+            entity.ToTable("LT_TypeMigrationAudits");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.SourceEntity).HasMaxLength(80);
+            entity.Property(x => x.SnapshotJson).IsRequired();
         });
 
 

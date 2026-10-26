@@ -61,9 +61,8 @@ static class WorkspaceStaffDataTests
         var manager = new HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManager { StaffId = 26 };
         var managerType = manager.GetType();
         managerType.GetProperty("LeaveService", flags)!.SetValue(manager, leaves);
-        managerType.GetProperty("JobLeaveTypeService", flags)!.SetValue(manager, new HRM.Services.JobLeaveTypes.JobLeaveTypeService(factory, null!, access, null!, null!));
-        managerType.GetProperty("leaveDefinitionService", flags)!.SetValue(manager, new LeaveDefinitionService(factory, access, null!));
-        managerType.GetProperty("LeaveTypeService", flags)!.SetValue(manager, new LeaveTypeService(factory, access, NullLogger<LeaveTypeService>.Instance, null!, null!));
+        managerType.GetProperty("JobLeaveTypeService", flags)!.SetValue(manager, new HRM.Services.JobLeaveTypes.JobLeaveTypeService(factory, null!, access));
+        managerType.GetProperty("Catalogue", flags)!.SetValue(manager, new LeaveTypeCatalogueService(factory, access));
         managerType.GetProperty("ToastService", flags)!.SetValue(manager, new ToastService());
         await managerRenderer.Dispatcher.InvokeAsync(async () => { managerRenderer.Attach(manager); await managerRenderer.Render(); }); managerRenderer.CheckErrors();
         Check(manager.JobId == 906 && managerType.GetField("loadError", flags)!.GetValue(manager) == null, "Leave assignments could not load for staff ID different from job ID");

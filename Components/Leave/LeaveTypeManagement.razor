@@ -1,17 +1,17 @@
-﻿@page "/admin/hr/leave/types"
+
 
 @using HRM.DTOs.Leave
 @using HRM.DTOs.LeaveTypes
 @using HRM.Services.Interfaces.LeaveType
 @using HRM.Services.Interfaces.Leave
 
-@inject ILeaveDefinitionService LeaveDefinitionService
+@inject ILeaveTypeCatalogueService LeaveTypeCatalogueService
 
 <PageTitle>Leave Types</PageTitle>
 
-<div class="min-h-screen bg-slate-50">
+<div class="space-y-3">
 
-    <div class="w-full px-4 py-6 sm:px-6 lg:px-8">
+    <div class="w-full">
 
         <div class="mb-6 flex flex-col gap-4
                     sm:flex-row sm:items-center
@@ -23,8 +23,7 @@
                 </h1>
 
                 <p class="mt-1 text-sm text-slate-500">
-                    Manage new policy-based leave definitions
-                    and migrate legacy leave types.
+                    Manage leave types and their availability.
                 </p>
             </div>
 
@@ -45,12 +44,12 @@
 
         </div>
 
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <div class="grid grid-cols-1 gap-3 xl:grid-cols-12">
 
             <!-- Form -->
             <div class="xl:col-span-7">
 
-                <LeaveDefinitionForm
+                <LeaveTypeForm
                     Model="@_model"
                     IsEdit="@_isEdit"
                     IsSaving="@_saving"
@@ -62,8 +61,8 @@
             <!-- List -->
             <div class="xl:col-span-5">
 
-                <LeaveDefinitionList
-                    Definitions="@_definitions"
+                <LeaveTypeList
+                    Types="@_types"
                     IsLoading="@_loading"
                     SelectedId="@_selectedId"
                     OnSelected="@SelectAsync" />
@@ -77,9 +76,9 @@
 </div>
 
 @code {
-    private List<LeaveDefinitionDto> _definitions = [];
+    private List<LeaveTypeCatalogueDto> _types = [];
 
-    private LeaveDefinitionSaveRequest _model = new();
+    private LeaveTypeCatalogueSaveRequest _model = new();
 
     private int? _selectedId;
 
@@ -100,9 +99,9 @@
         {
             _loading = true;
 
-            _definitions =
-                await LeaveDefinitionService
-                    .GetAvailableAsync();
+            _types =
+                await LeaveTypeCatalogueService
+                    .GetManagementAsync();
         }
         finally
         {
@@ -116,19 +115,19 @@
         _isEdit = false;
 
         _model =
-            new LeaveDefinitionSaveRequest
+            new LeaveTypeCatalogueSaveRequest
             {
                 IsActive = true
             };
     }
 
     private async Task SelectAsync(
-        LeaveDefinitionDto definition)
+        LeaveTypeCatalogueDto definition)
     {
         var detail =
-            await LeaveDefinitionService
+            await LeaveTypeCatalogueService
                 .GetByIdAsync(
-                    definition.LeaveDefinitionId);
+                    definition.LeaveTypeId);
 
         if (detail is null)
         {
@@ -136,15 +135,15 @@
         }
 
         _selectedId =
-            detail.LeaveDefinitionId;
+            detail.LeaveTypeId;
 
         _isEdit = true;
 
         _model =
-            new LeaveDefinitionSaveRequest
+            new LeaveTypeCatalogueSaveRequest
             {
-                LeaveDefinitionId =
-                    detail.LeaveDefinitionId,
+                LeaveTypeId =
+                    detail.LeaveTypeId,
 
                 Code =
                     detail.Code,
@@ -177,13 +176,13 @@
 
             if (_isEdit)
             {
-                await LeaveDefinitionService
+                await LeaveTypeCatalogueService
                     .UpdateAsync(
                         _model);
             }
             else
             {
-                await LeaveDefinitionService
+                await LeaveTypeCatalogueService
                     .CreateAsync(
                         _model);
             }

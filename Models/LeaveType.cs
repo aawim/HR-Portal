@@ -44,7 +44,12 @@ public partial class LeaveType
 
     public int RepeatedEveryInMonth { get; set; }
 
-    public int? MigratedLeaveDefinitionID { get; set; } 
+    public string Code { get; set; } = "";
+    public string? Description { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime CreatedDate { get; set; }
+    public DateTime? UpdatedDate { get; set; }
+    public virtual ICollection<HRM.Models.LeaveTypes.LeavePolicy> LeavePolicies { get; set; } = new List<HRM.Models.LeaveTypes.LeavePolicy>();
 
     public virtual ICollection<JobLeaveType> JobLeaveTypes { get; set; } = new List<JobLeaveType>();
 

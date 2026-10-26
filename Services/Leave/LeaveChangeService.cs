@@ -36,14 +36,14 @@ public partial class LeaveChangeService(
                 (x.Request.RequestState.IsProcessingState || x.Request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE))
             .Select(x => x.LeaveId).Distinct().ToListAsync();
         var result = new List<LeaveChangeLeaveDto>();
-        var policies = new Dictionary<(int? TypeId, int OrganisationId), bool>();
+        var policies = new Dictionary<(int? TypeId, int OrganisationId, DateTime FromDate), bool>();
         foreach (var leave in leaves)
         {
-            var key = (leave.LeaveTypeId, leave.Job.OrganisationID);
+            var key = (leave.LeaveTypeId, leave.Job.OrganisationID, leave.FromDate);
             if (!policies.TryGetValue(key, out var includeHolidays))
             {
-                var source = await LeaveService.ResolveApplicationLegacyTypeAsync(
-                    db, new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID);
+                var source = await LeaveService.ResolveApplicationTypeAsync(
+                    db, new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate);
                 includeHolidays = source?.IncludeHolidays ?? leave.LeaveType.IncludeHolidays;
                 policies[key] = includeHolidays;
             }
@@ -116,8 +116,8 @@ public partial class LeaveChangeService(
                 (x.Request.RequestState.IsProcessingState || x.Request.RequestStateId == SharedConfig.RequestStates.INCOMPLETE)))
                 throw new InvalidOperationException("This leave already has a pending change request.");
 
-            var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-                new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID)
+            var source = await LeaveService.ResolveApplicationTypeAsync(db,
+                new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate)
                 ?? throw new InvalidOperationException("The leave type could not be resolved.");
             var change = LeaveChangeRules.Calculate(leave.FromDate, leave.ToDate, leave.Duration,
                 model.Kind, model.Date, source.IncludeHolidays);
@@ -157,8 +157,8 @@ public partial class LeaveChangeService(
         RequireApproved(leave);
         if (leave.FromDate.Date != change.FromDate.Date)
             throw new InvalidOperationException("The original leave has changed. Submit a new change request.");
-        var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID)
+        var source = await LeaveService.ResolveApplicationTypeAsync(db,
+            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate)
             ?? throw new InvalidOperationException("The leave type could not be resolved.");
         var kind = (LeaveChangeKind)change.LeaveChangeRequestTypeId;
         var target = kind == LeaveChangeKind.EarlyReturn ? change.ToDate.AddDays(1) : change.ToDate;
@@ -194,12 +194,12 @@ public partial class LeaveChangeService(
             ? db.JobLeaveTypes.FromSqlInterpolated($"SELECT * FROM dbo.JobLeaveTypes WITH (UPDLOCK, HOLDLOCK) WHERE JobID = {leave.JobId} AND IsValid = 1")
             : db.JobLeaveTypes.Where(x => x.JobId == leave.JobId && x.IsValid);
         var balances = await balanceQuery.ToListAsync();
-        var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID);
+        var source = await LeaveService.ResolveApplicationTypeAsync(db,
+            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate);
         var candidates = new List<JobLeaveType>();
         foreach (var balance in balances)
         {
-            var type = await LeaveService.ResolveApplicationLegacyTypeAsync(db, balance, leave.Job.OrganisationID);
+            var type = await LeaveService.ResolveApplicationTypeAsync(db, balance, leave.Job.OrganisationID, leave.FromDate);
             if (type != null && type.LeaveTypeId == source?.LeaveTypeId) candidates.Add(balance);
         }
         var original = candidates.Where(x => x.OperationLogId == leave.OperationLogId).ToList();

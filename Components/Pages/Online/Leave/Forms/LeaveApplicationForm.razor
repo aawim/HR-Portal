@@ -153,6 +153,13 @@
         try
         {
             if (!LeaveState.Model.JobLeaveTypeId.HasValue) throw new InvalidOperationException("Select a leave balance first.");
+            var applicationType = await LeaveService.GetApplicationLeaveTypeAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.ApplicantJobId, LeaveState.Model.FromDate)
+                ?? throw new InvalidOperationException("This leave type is unavailable. Select another balance or contact HR.");
+            if (version != handoverLoadVersion) return;
+            LeaveState.IncludeHolidays = applicationType.IncludeHolidays;
+            LeaveState.Reasons = applicationType.Reasons;
+            if (!LeaveState.Reasons.Any(x => x.Id == LeaveState.Model.LeaveReasonId)) LeaveState.Model.LeaveReasonId = null;
+            DurationChanged();
             var rules = await LeaveService.GetHandoverRulesAsync(LeaveState.Model.JobLeaveTypeId.Value, LeaveState.Model.FromDate, LeaveState.ApplicantJobId);
             if (version != handoverLoadVersion) return;
             LeaveState.WorkHandoverAfterDays = rules.AfterDays;

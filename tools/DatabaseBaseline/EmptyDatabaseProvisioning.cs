@@ -26,8 +26,8 @@ internal static class EmptyDatabaseProvisioning
         var assembly=db.GetService<IMigrationsAssembly>();
         foreach(var item in assembly.Migrations.OrderBy(x=>x.Key))
         {
-            // The current model already contains their tables, including the renamed task table.
-            if(item.Key is "20260910062632_AddJobWorkTemplates" or "20261019100000_AddUserTodos" or "20261025120700_PreserveTransferHistory")continue;
+            // The current model already contains these structural changes, including work-handover columns on LT_LeavePolicies.
+            if(item.Key.EndsWith("_UnifiedLeaveTypes",StringComparison.Ordinal) || item.Key is "20261015090000_AddLeavePolicyWorkHandover" or "20260910062632_AddJobWorkTemplates" or "20261019100000_AddUserTodos" or "20261025120700_PreserveTransferHistory")continue;
             var migration=assembly.CreateMigration(item.Value,db.Database.ProviderName!);
             foreach(var operation in migration.UpOperations.OfType<SqlOperation>())
             {
@@ -45,6 +45,7 @@ internal static class EmptyDatabaseProvisioning
         try
         {
             await CreateAsync(db);await db.Database.MigrateAsync();
+            await UnifiedLeaveTypeUpgrade.VerifyAsync(db);
             if((await db.Database.GetPendingMigrationsAsync()).Any())throw new InvalidOperationException("Fresh schema has pending migrations.");
             if(!await db.RequestTypes.AnyAsync(x=>x.TypeName=="Overtime Claim Request"))throw new InvalidOperationException("Overtime metadata missing on fresh install.");
             if(await db.RequestTypes.CountAsync(x=>x.TypeName=="Supervisor Assignment Request"||x.TypeName=="Supervisor Removal Request")!=2)

@@ -27,6 +27,11 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if (args.Contains("--leave-policy-only"))
+{
+    try { await UnifiedLeaveTypeTests.RunAsync(); await LeavePolicyScopeTests.RunAsync(); Console.WriteLine("PASS Unified leave catalogue and policy: organisation ID resolution, tenant isolation, selected organisation and access denial"); return 0; }
+    catch (Exception ex) { Console.Error.WriteLine(ex); return 1; }
+}
 if (args.Contains("--job-type-tabs-only"))
 {
     try { await LeaveSetConfigurationTests.RunAsync(); await LeaveAccrualTests.RunAsync(); await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS Job type leave configuration: tenant/permission boundaries, shared-set protection, duplicates, audit/stale edits, history protection and accrual rules"); return 0; }
@@ -58,6 +63,8 @@ if (args.Contains("--navigation-only"))
     catch(Exception ex) { Console.Error.WriteLine($"FAIL Section navigation: {ex}"); return 1; }
 }
 var failures = 0;
+try { await UnifiedLeaveTypeTests.RunAsync(); Console.WriteLine("PASS Unified leave types: canonical identity, effective policies, shared types, audit, duplicate protection and tenant isolation"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Unified leave types: {ex}"); }
+try { await LeavePolicyScopeTests.RunAsync(); Console.WriteLine("PASS Leave policy organisation scope"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Leave policy organisation scope: {ex}"); }
 try { await LeaveSetConfigurationTests.RunAsync(); Console.WriteLine("PASS Leave set configuration"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Leave set configuration: {ex}"); }
 try { await UnattachedIndividualSearchTests.RunAsync(); Console.WriteLine("PASS Unattached individual registry"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Individual registry: {ex}"); }
 try { await HrRequestInboxTests.RunAsync(); Console.WriteLine("PASS HR request inbox"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL HR inbox: {ex}"); }

@@ -1,11 +1,11 @@
-﻿namespace HRM.DTOs.LeaveTypes
+namespace HRM.DTOs.LeaveTypes
 {
-    public class AssignLeaveDefinitionDto
+    public class AssignLeaveTypeCatalogueDto
     {
 
         public int JobId { get; set; }
 
-        public int? LeaveDefinitionId { get; set; }
+        public int? LeaveTypeId { get; set; }
 
         public DateTime EffectiveFromDate { get; set; }
             = DateTime.Today;

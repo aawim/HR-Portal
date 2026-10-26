@@ -47,7 +47,7 @@ public partial class DeductionType
 
     public bool IsAmountGivenWhenAssigning { get; set; }
 
-    public int OwnerOrganisationId { get; set; }
+    public int OrganisationId { get; set; }
 
     public virtual Organisation OwnerOrganisation { get; set; } = null!;
 

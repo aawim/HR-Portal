@@ -39,3 +39,7 @@ Entity class and DbSet names remain descriptive C# names. Physical names are set
 Supervisor additions/removals use `SV_SupervisorChangeRequests`; shared workflow history remains in the `WF_` tables.
 
 `LS_JobTypeLeaveSets` stores current-tenant Job Type to leave-set assignments. Existing `LeaveSets` and `LeaveSetLeaveTypes` remain in place; no historical tables are replaced.
+
+`LT_` is the unified leave-type feature prefix. `LT_LeaveTypes` is the in-place rename/consolidation of the existing catalogue; `LT_TypeMigrationAudits` preserves retired definition/mapping/configuration snapshots. See `docs/unified-leave-types.md`.
+
+Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccrualRules`. Migration `20261026061841_PrefixLeavePolicyTables` performs in-place, data-preserving renames. Existing constraint and index names remain unchanged. Applied historical migrations retain the names used when they were deployed.

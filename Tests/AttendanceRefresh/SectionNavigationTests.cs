@@ -11,6 +11,21 @@ static class SectionNavigationTests
     private static void Check(bool value, string message) { if (!value) throw new Exception(message); }
     public static Task RunAsync()
     {
+        var trail = new NavigationTrail("https://localhost/admin/my/workspace");
+        Check(trail.Previous == null, "Direct visit must not display Back");
+        trail.Visit("https://localhost/admin/settings/leaves");
+        Check(trail.Previous == "https://localhost/admin/my/workspace", "Back lost the previous location");
+        trail.Visit("https://localhost/admin/settings/leaves/manage-leave-sets");
+        Check(trail.Previous == "https://localhost/admin/settings/leaves", "Settings section was not tracked");
+        trail.Visit("https://localhost/admin/settings/leaves");
+        Check(trail.Previous == "https://localhost/admin/my/workspace", "Back navigation created a loop");
+        trail.Visit("https://localhost/Online/Auth/Logout");
+        Check(trail.Previous == null, "Authentication navigation retained old account history");
+        trail.Visit("https://localhost/admin/settings");
+        Check(trail.Previous == null, "Back must not replay authentication endpoints");
+        trail.Visit("https://other-host/admin/settings");
+        Check(trail.Previous == null, "Back retained a different origin");
+
         Check(SectionRoutes.Slug("Manage Organisations") == "organisations" && SectionRoutes.Slug("OrgDaily") == "org-daily" &&
             SectionRoutes.Slug("LeaveType") == "leave-type", "Section slugs are inconsistent");
         Check(SectionRoutes.Tab(["Attendance", "Break Late", "Out Of Office"], "break-late", "Attendance") == "Break Late", "Hyphenated tab URL not restored");
@@ -50,6 +65,9 @@ static class SectionNavigationTests
         Check(Route("/admin/settings/org/organisations/3/structure") == typeof(SettingsPage), "Organisation record section URL is missing");
         Check(Route("/admin/settings/workplaning/templates") == typeof(SettingsPage), "Work planning section URL is missing");
         Check(Route("/admin/settings/leaves/manage-leave-sets")==typeof(SettingsPage),"Canonical leave set settings route is missing");
+        var cataloguePage = new SettingsPage { CategoryName = "leaves", Section = "leave-types" };
+        Check(Selected(cataloguePage) == "Manage Leave Types", "Canonical leave catalogue route is missing");
+        Check(Route("/admin/hr/leave/types") == typeof(HRM.Components.Leave.LeaveTypesRedirect), "Former type editor must redirect to Settings");
         var setsPage=new SettingsPage{CategoryName="leaves",Section="manage-leave-sets"};
         Check(Selected(setsPage)=="Leave Set Management","Settings did not select canonical leave set management");
         var legacySets=new HRM.Components.Pages.HrCategoryPage{CategoryName="leave-sets",Section="management"};var setNavigation=new SupervisorTestNavigation();

@@ -4,7 +4,7 @@ namespace HRM.DTOs.LeaveTypes
     {
         public int LeavePolicyId { get; set; }
 
-        public int LeaveDefinitionId { get; set; }
+        public int LeaveTypeId { get; set; }
          public  int RequestTypeId { get; set; }
         public string LeaveTypeName { get; set; } = "";
 

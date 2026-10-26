@@ -69,8 +69,8 @@ public class AttendanceRequestService(
             info.Message = "This leave already has an open change request. Complete or cancel it first.";
             return info;
         }
-        var source = await LeaveService.ResolveApplicationLegacyTypeAsync(db,
-            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID);
+        var source = await LeaveService.ResolveApplicationTypeAsync(db,
+            new JobLeaveType { LeaveTypeId = leave.LeaveTypeId }, leave.Job.OrganisationID, leave.FromDate);
         (DateTime EndDate, int Duration, int BalanceAdjustment) adjustment;
         try
         {

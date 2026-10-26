@@ -77,9 +77,9 @@ static class SecurityHardeningTests
         Check(await clock.CanUseTestClockAsync(), "Explicit development diagnostic access was not honoured.");
         environment.EnvironmentName = Environments.Production;
         Check(!await clock.CanUseTestClockAsync(), "Production permits custom test clocks.");
-        var types = new LeaveTypeService(null!, access, NullLogger<LeaveTypeService>.Instance, null!, null!);
-        await Denied(() => types.CreateAsync(new HRM.DTOs.Leave.LeaveTypeSaveRequest { Name = "Attempt" }));
-        await Denied(() => types.UpdateAsync(new HRM.DTOs.Leave.LeaveTypeSaveRequest { LeaveTypeId = 1, Name = "Attempt" }));
+        var types = new LeaveTypeCatalogueService(null!, access);
+        await Denied(() => types.CreateAsync(new HRM.DTOs.LeaveTypes.LeaveTypeCatalogueSaveRequest { Name = "Attempt" }));
+        await Denied(() => types.UpdateAsync(new HRM.DTOs.LeaveTypes.LeaveTypeCatalogueSaveRequest { LeaveTypeId = 1, Name = "Attempt" }));
 
         await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>().UseInMemoryDatabase(Guid.NewGuid().ToString(), o => o.EnableNullChecks(false)).Options);
         db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 100, OrganisationID = 10 },

@@ -4,7 +4,7 @@ namespace HRM.Models.LeaveTypes
     {
         public int LeavePolicyId { get; set; }
 
-        public int LeaveDefinitionId { get; set; }
+        public int LeaveTypeId { get; set; }
 
         public int OrganisationId { get; set; }
 
@@ -42,7 +42,7 @@ namespace HRM.Models.LeaveTypes
 
         public DateTime? UpdatedDate { get; set; }
 
-        public virtual LeaveDefinition LeaveDefinition { get; set; } =
+        public virtual HRM.Models.LeaveType LeaveType { get; set; } =
             null!;
 
         public virtual ICollection<LeavePolicyAccrualRule> AccrualRules { get; set; } =

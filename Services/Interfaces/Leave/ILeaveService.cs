@@ -11,7 +11,7 @@ namespace HRM.Services.Interfaces.Leave
         Task<int> GetJobIdByStaffId(int StaffId);
         //Task<List<JobLeaveTypeDto>> GetJobLeaveTypeByJobId(int jobId);
         Task<List<LeaveReasonDto>> GetReasonsByLeaveType(int? leaveTypeId);
-        Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId, int? applicantJobId = null);
+        Task<LeaveApplicationTypeDto?> GetApplicationLeaveTypeAsync(int jobLeaveTypeId, int? applicantJobId = null, DateTime? date = null);
         Task<LeaveHandoverRulesDto> GetHandoverRulesAsync(int jobLeaveTypeId, DateTime fromDate, int? applicantJobId = null);
         Task<List<LeaveApplicantJob>> GetLeaveApplicantJobsAsync(int staffId);
         Task<List<JobLeaveType>> GetApplicantLeaveBalancesAsync(int applicantJobId);

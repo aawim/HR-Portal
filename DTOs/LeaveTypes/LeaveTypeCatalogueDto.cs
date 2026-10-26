@@ -1,8 +1,8 @@
-﻿namespace HRM.DTOs.LeaveTypes
+namespace HRM.DTOs.LeaveTypes
 {
-    public sealed class LeaveDefinitionDto
+    public sealed class LeaveTypeCatalogueDto
     {
-        public int LeaveDefinitionId { get; set; }
+        public int LeaveTypeId { get; set; }
 
         public string Code { get; set; } = "";
 
@@ -12,7 +12,7 @@
 
         public string? Description { get; set; }
 
-        public int? OwnerOrganisationId { get; set; }
+        public int? OrganisationId { get; set; }
 
         public bool IsSystemType { get; set; }
 
@@ -20,8 +20,6 @@
 
         public bool IsActive { get; set; }
 
-        public bool IsLegacyMapped { get; set; }
 
-        public int? LegacyLeaveTypeId { get; set; }
     }
 }
