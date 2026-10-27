@@ -35,11 +35,8 @@ static class ContextSecurityTests
         var sessionService = new HRM.Services.Interfaces.UserContext(auth, factory);
         var session = await sessionService.GetSessionAsync();
         Check(session?.OrganisationId == 10 && !session.CanAccessAdminPortal, "Foreign group or forged org claim granted Admin access");
-        var organisationService = Proxy.For<IOrganisationService>((method, args) => method == "GetUserOrganisationAsync"
-            ? Task.FromResult<UserOrganisationDto?>(new UserOrganisationDto { OrganisationBusinessEntityId = 10 })
-            : throw new Exception("Organisation must be loaded through the user's assignment: " + method));
         var roleService = Proxy.For<IRoleService>((method, args) => throw new Exception("Unscoped role service must not override resolved permissions"));
-        var realBuilder = new UserContextBuilder(factory, auth, roleService, organisationService, new EffectivePermissionService(factory));
+        var realBuilder = new UserContextBuilder(factory, auth, roleService, new EffectivePermissionService(factory));
         var built = await realBuilder.BuildAsync(1);
         Check(built?.Organisation?.OrganisationBusinessEntityId == 10 && built.UserGroups.Count == 0 && built.Permissions.Count == 0,
             "Builder used an individual ID for organisation lookup or retained foreign groups");

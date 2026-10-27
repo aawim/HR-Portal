@@ -8,5 +8,6 @@ public sealed record LeaveRequestWorkflowSummary(int LeaveId, int RequestId, str
 public interface ILeaveRequestWorkflowQueries
 {
     Task<List<RequestStateOption>> GetStatesAsync(CancellationToken ct = default);
+    Task<List<DirectoryOption>> GetLeaveStatesAsync(CancellationToken ct = default);
     Task<List<LeaveRequestWorkflowSummary>> GetMineAsync(IReadOnlyList<int> leaveIds, CancellationToken ct = default);
 }

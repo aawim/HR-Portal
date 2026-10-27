@@ -30,6 +30,12 @@ Still required: remaining 12 database-coupled components, existing-interface cli
 
 ## Application contract checkpoint
 
-The reviewed remote catalog now contains 74 DTO-only asynchronous interfaces / 329 operations. Entity-bearing feature contracts have explicit backend projections; unused legacy entity-based account writes have been removed from the remote interfaces. Remaining database-bound pages have typed contract coverage, documented in `docs/application-contracts.md`; their query implementations and controller/client wiring remain part of the API/UI migration. Personal leave application and user-data adapters reuse existing canonical services. A standalone Application-only contract suite is included in normal verification.
+The reviewed remote catalog now contains 74 DTO-only asynchronous interfaces / 330 operations. Entity-bearing feature contracts have explicit backend projections; unused legacy entity-based account writes have been removed from the remote interfaces. Remaining database-bound pages have typed contract coverage, documented in `docs/application-contracts.md`; their query implementations and controller/client wiring remain part of the API/UI migration. Personal leave application and user-data adapters reuse existing canonical services. A standalone Application-only contract suite is included in normal verification.
 
 Verification for the Application contract checkpoint: standalone boundary/JSON checks passed; all 48 regression groups passed; the root bridge and independent API builds passed with zero warnings/errors. No web host was started and no live database or migration was changed.
+
+## API controller checkpoint
+
+Implemented 74 typed contract controllers / 329 supported actions, plus identity and CSRF endpoints. Added backend implementations for the page-query contracts, explicit session/CSRF/error handling and effective permission gates. Backend registration can be validated in isolation with background workers disabled. The new `HRM.Api.UnitTests` xUnit project covers HTTP and backend boundaries; no production host or live database was used. See `docs/api-controllers.md` for routes, request shapes, security checks, tests and remaining separate-UI/authentication work.
+
+Final API checkpoint verification (27 October 2026): 31 xUnit API tests passed, all 48 existing regression groups passed, and Application-only contract checks passed for 74 interfaces / 331 operations. Both the independent API and temporary root host compile without warnings or errors. Production applications/background workers were not started; live database data and migrations were not changed. UI HTTP-client and separate-host authentication wiring are still pending.

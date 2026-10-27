@@ -24,6 +24,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Application build or analyzer checks failed.' }
     dotnet run --project Tests/ApplicationContracts/ApplicationContracts.csproj
     if ($LASTEXITCODE -ne 0) { throw 'Application contract boundary checks failed.' }
+    dotnet restore Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj --locked-mode
+    if ($LASTEXITCODE -ne 0) { throw 'API unit-test dependency restore failed.' }
+    dotnet test Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj --no-restore --verbosity minimal
+    if ($LASTEXITCODE -ne 0) { throw 'API unit and endpoint checks failed.' }
     dotnet run --project Tests/AttendanceRefresh/AttendanceRefresh.csproj -p:WarningLevel=0 --
     if ($LASTEXITCODE -ne 0) { throw 'Regression checks failed.' }
     python tools/audit_project.py

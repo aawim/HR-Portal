@@ -1,3 +1,4 @@
+using HRM.Api.Infrastructure;
 using HRM.Components;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -318,7 +319,7 @@ builder.Services.AddRazorComponents()
 
 // 2. Add Controller Services (Required to trigger the Login/Logout redirects)
 // MVC antiforgery authorization filters require the view-feature services.
-builder.Services.AddControllersWithViews();
+builder.Services.AddHrmApiEndpoints();
 builder.Services.AddAuthorization();
 
 // 3. Configure OpenID Connect & Cookie Authentication

@@ -1,4 +1,5 @@
-﻿using HRM.DTOs;
+using HRM.DTOs;
+using HRM.Api.Infrastructure;
 using HRM.DTOs.Organisation;
 using HRM.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -10,7 +11,7 @@ namespace HRM.Controllers
     [ApiController]
     [Microsoft.AspNetCore.Authorization.Authorize]
     [Route("api/[controller]")]
-    public class OrganisationController : ControllerBase
+    public class OrganisationController : HrmApiController
     {
         private readonly IOrganisationService _organisationService;
         private readonly HRM.Services.Interfaces.IUserAccessService _access;
@@ -25,7 +26,7 @@ namespace HRM.Controllers
         public async Task<ActionResult<List<OrganisationResultDto>>> Search([FromQuery] string term, [FromQuery] string type = "Name")
         {
             var actor = await _access.RequireContextAsync();
-            if (!actor.IsSuperAdministrator && !await _access.HasPermissionAsync("Super.Admin.Manage")) return Forbid();
+            if (!actor.IsSuperAdministrator) return Forbid();
             if (string.IsNullOrWhiteSpace(term) || term.Length > 200) return BadRequest("Enter a search term of up to 200 characters.");
             var results = await _organisationService.SearchOrganisationsAsync(term, type);
             return Ok(results);

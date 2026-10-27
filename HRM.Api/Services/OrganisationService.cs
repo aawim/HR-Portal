@@ -1,4 +1,4 @@
-﻿using HRM.DTOs;
+using HRM.DTOs;
 using HRM.DTOs.Organisation;
 using HRM.DTOs.UserContext;
 using HRM.Models;
@@ -10,15 +10,18 @@ namespace HRM.Services
     {
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
+        private readonly HRM.Services.Interfaces.IUserAccessService _access;
 
-        public OrganisationService(IDbContextFactory<HrmTeContext> dbFactory)
+        public OrganisationService(IDbContextFactory<HrmTeContext> dbFactory, HRM.Services.Interfaces.IUserAccessService access)
         {
               _dbFactory = dbFactory;
+              _access = access;
         }
 
 
         public async Task<UserOrganisationDto?> GetOrganisationAsync(int businessEntityId)
         {
+            await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync(businessEntityId);
             await using var db = await _dbFactory.CreateDbContextAsync();
 
 
@@ -43,6 +46,8 @@ namespace HRM.Services
 
         public async Task<UserOrganisationDto?> GetUserOrganisationAsync(int userId)
         {
+            var actor = await _access.RequireContextAsync();
+            if (userId != actor.UserId) throw new UnauthorizedAccessException("Use your own employee session.");
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
@@ -87,12 +92,14 @@ namespace HRM.Services
 
         public async Task<List<OrganisationResultDto>> SearchOrganisationsAsync(string searchTerm, string searchType)
         {
+            var actor = await _access.RequireContextAsync();
+            var orgId = actor.IsSuperAdministrator ? 0 : await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync();
 
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
 
             if (string.IsNullOrWhiteSpace(searchTerm)) return new List<OrganisationResultDto>();
 
-            var query = from org in _dbContext.Organisations
+            var query = from org in _dbContext.Organisations.Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == orgId)
                         join ot in _dbContext.OrganisationTypes on org.OrganisationTypeId equals ot.OrganisationTypeId into otGroup
                         from orgType in otGroup.DefaultIfEmpty()
                         join c in _dbContext.Countries on org.CountryId equals c.CountryId into cGroup
@@ -169,6 +176,7 @@ namespace HRM.Services
 
         public async Task<OrganisationResultDto?> GetOrganisationDetailsAsync(int organisationId)
         {
+            await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync(organisationId);
 
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
 
@@ -239,6 +247,7 @@ namespace HRM.Services
 
         public async Task<List<OrgNodeDto>> GetOrganisationTreeAsync(int organisationId)
         {
+            await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync(organisationId);
 
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
 
@@ -325,6 +334,7 @@ namespace HRM.Services
         // --- Helper Lookups ---
         public async Task<List<DropdownItem>> GetCountriesAsync()
         {
+            await _access.RequireContextAsync();
 
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
              return  
@@ -336,6 +346,7 @@ namespace HRM.Services
 
         public async Task<List<DropdownItem>> GetOrganisationTypesAsync()
         {
+            await _access.RequireContextAsync();
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
             return await _dbContext.OrganisationTypes.Select(ot => new DropdownItem { Id = ot.OrganisationTypeId, Name = ot.TypeName }).ToListAsync();
 
@@ -345,11 +356,14 @@ namespace HRM.Services
  
         public async Task<List<DropdownItem>> GetAllOrganisationsAsync()
         {
+            var actor = await _access.RequireContextAsync();
+            var orgId = actor.IsSuperAdministrator ? 0 : await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync();
 
             await using var _dbContext = await _dbFactory.CreateDbContextAsync();
 
 
             return await _dbContext.Organisations
+                .Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == orgId)
                 .Select(o => new DropdownItem
                 {
                     Id = o.BusinessEntityID,

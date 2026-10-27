@@ -32,4 +32,5 @@ public interface IOutOfOfficeRequests
     Task<List<OutOfOfficeRequestRow>> GetReceivedAsync(OutOfOfficeFilter filter, CancellationToken ct = default);
     Task<OutOfOfficeApplication?> GetEditableAsync(int requestId, CancellationToken ct = default);
     Task<ServiceResult> SubmitAsync(OutOfOfficeApplication application, CancellationToken ct = default);
+    Task<ServiceResult> ActAsync(int requestId, int expectedState, string action, string? comment, CancellationToken ct = default);
 }

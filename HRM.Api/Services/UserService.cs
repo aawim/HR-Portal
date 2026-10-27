@@ -28,6 +28,13 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
+            var person = await db.Users.Where(x => x.UserId == userId).Select(x => (int?)x.BusinessEntityID).SingleOrDefaultAsync();
+            if (!person.HasValue) return null;
+            var actor = await _access.RequireContextAsync();
+            if (person != actor.IndividualId && !actor.IsSuperAdministrator && !await _access.HasPermissionAsync("Employee.View") && !await _access.HasPermissionAsync("User.Manage") && !await _access.HasPermissionAsync("Admin"))
+                throw new UnauthorizedAccessException("Staff user information requires permission.");
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, person.Value);
+
             return await db.Users
                 .AsNoTracking()
                 .Where(x => x.UserId == userId)
@@ -47,6 +54,13 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
+            var person = await db.Users.Where(x => x.Username == username).Select(x => (int?)x.BusinessEntityID).SingleOrDefaultAsync();
+            if (!person.HasValue) return null;
+            var actor = await _access.RequireContextAsync();
+            if (person != actor.IndividualId && !actor.IsSuperAdministrator && !await _access.HasPermissionAsync("Employee.View") && !await _access.HasPermissionAsync("User.Manage") && !await _access.HasPermissionAsync("Admin"))
+                throw new UnauthorizedAccessException("Staff user information requires permission.");
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, person.Value);
+
             return await db.Users
                 .AsNoTracking()
                 .Where(x => x.Username == username)
@@ -65,6 +79,13 @@ namespace HRM.Services
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
+
+            var person = await db.Users.Where(x => x.BusinessEntityID == businessEntityId).Select(x => (int?)x.BusinessEntityID).SingleOrDefaultAsync();
+            if (!person.HasValue) return null;
+            var actor = await _access.RequireContextAsync();
+            if (person != actor.IndividualId && !actor.IsSuperAdministrator && !await _access.HasPermissionAsync("Employee.View") && !await _access.HasPermissionAsync("User.Manage") && !await _access.HasPermissionAsync("Admin"))
+                throw new UnauthorizedAccessException("Staff user information requires permission.");
+            await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _access, person.Value);
 
             return await db.Users
                 .AsNoTracking()

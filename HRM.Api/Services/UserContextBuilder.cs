@@ -14,19 +14,17 @@ namespace HRM.Services
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly AuthenticationStateProvider _authenticationStateProvider;
         private readonly IRoleService _roleService;
-        private readonly IOrganisationService _organisationService;
         private IEffectivePermissionService _effectivePermissionService;
 
         public UserContextBuilder(
             IDbContextFactory<HrmTeContext> dbFactory,
             AuthenticationStateProvider authenticationStateProvider,
             IRoleService roleService,
-            IOrganisationService organisationService, IEffectivePermissionService effectivePermissionService)
+            IEffectivePermissionService effectivePermissionService)
         {
             _dbFactory = dbFactory;
             _authenticationStateProvider = authenticationStateProvider;
             _roleService = roleService;
-            _organisationService = organisationService;
             _effectivePermissionService = effectivePermissionService;
 
             
@@ -113,7 +111,7 @@ namespace HRM.Services
             await PopulateJobAsync(context);
 
 
-            await PopulateOrganisationAsync(context);
+            await PopulateOrganisationAsync(db, context);
 
 
             await PopulateRoleGroupsAsync(db, context);
@@ -494,7 +492,7 @@ namespace HRM.Services
 
 
 
-        private async Task PopulateOrganisationAsync(
+        private static async Task PopulateOrganisationAsync(HrmTeContext db,
           UserContextDto context)
         {
             if (context.BusinessEntityId == 0)
@@ -503,7 +501,17 @@ namespace HRM.Services
                 return;
             }
 
-            context.Organisation = await _organisationService.GetUserOrganisationAsync(context.UserId);
+            context.Organisation = await (from user in db.Users.AsNoTracking()
+                join assignment in db.UserOrganisations on user.UserOrganisationId equals assignment.UserOrganisationID
+                join organisation in db.Organisations on assignment.BusinessEntityID equals organisation.BusinessEntityID
+                where user.UserId == context.UserId && user.IsActive && user.LocalUserStateId == 1
+                select new UserOrganisationDto
+                {
+                    OrganisationBusinessEntityId = organisation.BusinessEntityID,
+                    OrganisationName = organisation.OrganisationName,
+                    OrganisationNameDhivehi = organisation.OrganisationNameDhivehi ?? "",
+                    ParentOrganisationBusinessEntityId = organisation.ParentOrganisationBusinessEntityId
+                }).SingleOrDefaultAsync();
         }
 
 

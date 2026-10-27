@@ -1,6 +1,6 @@
 # Application contracts
 
-The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationContractCatalog.cs`: 74 interfaces and 329 operations. The catalog describes supported schemas; it does not register endpoints or grant access. API controllers must enforce authentication, resource permissions, current-tenant scope, workflow transitions and concurrency for every operation.
+The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationContractCatalog.cs`: 74 interfaces and 331 operations. The catalog describes supported schemas; it does not register endpoints or grant access. API controllers must enforce authentication, resource permissions, current-tenant scope, workflow transitions and concurrency for every operation.
 
 `HRM.Application` references only `HRM.Core`. It has no ASP.NET, EF, API or UI assembly dependency. Remote contracts use DTOs, explicit scalars and asynchronous methods. Domain entities, DbContexts, arbitrary object graphs, query expressions, request-supplied CLR types and server audit/cache operations are excluded from the remote surface.
 
@@ -24,7 +24,7 @@ The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationCont
 | Legacy Add New Job route | Existing `StaffOnboardingServiceContracts.IOperations` and `IIndividualRegistryService`; redirect to canonical onboarding rather than adding another writer |
 | Current session and address/geography lookups | `ICurrentEmployeeSession`, `IEmployeeAddresses` |
 
-The newly declared page-query contracts still need their backend implementations and controller/client wiring during the next migration step. They are not exposed as working endpoints in this change.
+The page-query contracts now have backend implementations and typed controllers; see `docs/api-controllers.md`. Their UI/client wiring remains part of the independent UI migration.
 
 ## Ownership, scope and concurrency
 

@@ -1,4 +1,4 @@
-﻿using HRM.Components.Shared;
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.DTOs.Staff;
 using HRM.Models;
@@ -14,13 +14,18 @@ namespace HRM.Services
     public class StaffService : IStaffService
     {
         private readonly HrmTeContext _dbContext;
+        private readonly IUserAccessService _access;
 
-        public StaffService(HrmTeContext dbContext)
+        public StaffService(HrmTeContext dbContext, IUserAccessService access)
         {
-            _dbContext = dbContext;
+            _dbContext = dbContext; _access = access;
         }
         public async Task<List<IndividualResultDto>> SearchStaffAsync(string searchTerm, string searchType, int? organisationId)
         {
+            await new HRM.Services.Queries.ApiReadScope(_access).RequireStaffReadAsync("Employee.View");
+            organisationId = await new HRM.Services.Queries.ApiReadScope(_access).OrganisationAsync(organisationId);
+            if (searchTerm?.Length > 200) throw new ArgumentException("Search text is too long.");
+
             var query = from ind in _dbContext.Individuals
                         join id in _dbContext.Idcards on ind.BusinessEntityId equals id.BusinessEntityId into idGroup
                         from idCard in idGroup.DefaultIfEmpty()
