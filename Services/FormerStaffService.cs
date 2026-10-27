@@ -26,7 +26,7 @@ public sealed class FormerStaffService(IDbContextFactory<HrmTeContext> factory,I
             var term=word;
             source=source.Where(i=>((i.FirstNameEnglish??"")+" "+(i.MiddleNameEnglish??"")+" "+(i.LastNameEnglish??"")).Contains(term)||db.Idcards.Any(c=>c.BusinessEntityId==i.BusinessEntityId&&c.IdcardNumber.Contains(term))||db.Passports.Any(c=>c.BusinessEntityId==i.BusinessEntityId&&c.PassportNumber.Contains(term))||db.Staffs.Any(s=>s.IndividualId==i.BusinessEntityId&&(s.EmployeeNumber??"").Contains(term)));
         }
-        var persons=await source.OrderBy(i=>i.FirstNameEnglish).ToListAsync(ct);var result=new List<FormerStaffRow>();
+        var persons=await source.OrderBy(i=>i.FirstNameEnglish).Select(i=>new{i.BusinessEntityId,i.FirstNameEnglish,i.MiddleNameEnglish,i.LastNameEnglish}).ToListAsync(ct);var result=new List<FormerStaffRow>();
         foreach(var person in persons)
         {
             var job=await FormerStaffPolicy.EndedJobs(db).Where(j=>j.OrganisationID==org&&j.IndividualID==person.BusinessEntityId).OrderByDescending(j=>j.JoinedDate).Select(j=>new{j.JobId,j.JoinedDate,j.TerminatedDate,Department=j.OrganisationStructure.Name,Type=j.JobType.TypeName}).FirstAsync(ct);

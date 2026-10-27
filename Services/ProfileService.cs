@@ -195,6 +195,7 @@ namespace HRM.Services
                 {
                     //DateOfBirth = individual.DateOfBirth.Value.ToString("dd MMM yyyy") ?? "Not Available",
 
+                    ImageUrl = IndividualImage.DataUrl(individual.ImageData,individual.ImageContentType),
                     DateOfBirth = individual.DateOfBirth ?? DateTime.MinValue,
 
                     GenderId = individual.GenderId,
@@ -492,6 +493,8 @@ namespace HRM.Services
                         LastNameDhivehi =
                             individual.LastNameDhivehi,
 
+                        ImageData = individual.ImageData,
+                        ImageContentType = individual.ImageContentType,
                         DateOfBirth = individual.DateOfBirth,
 
                         GenderId = individual.GenderTypeId,
@@ -980,6 +983,8 @@ namespace HRM.Services
 
         private sealed class IndividualProfileModel
         {
+            public byte[]? ImageData {get;init;}
+            public string? ImageContentType {get;init;}
             public int IndividualId { get; init; }
 
             public string? FirstNameEnglish { get; init; }

@@ -1685,6 +1685,9 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<Individual>(entity =>
         {
+            entity.Property(e=>e.ImageContentType).HasMaxLength(20);
+            entity.Property(e=>e.ImageData).HasColumnType("varbinary(max)");
+            entity.ToTable("Individuals",table=>table.HasCheckConstraint("CK_Individuals_Image","([ImageData] IS NULL AND [ImageContentType] IS NULL) OR ([ImageData] IS NOT NULL AND DATALENGTH([ImageData]) BETWEEN 1 AND 2097152 AND [ImageContentType] IS NOT NULL AND [ImageContentType] IN ('image/png','image/jpeg'))"));
             entity.HasKey(e => e.BusinessEntityId);
 
             entity.Property(e => e.BusinessEntityId)

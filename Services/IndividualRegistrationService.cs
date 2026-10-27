@@ -10,6 +10,8 @@ public sealed class IndividualRegistrationModel
     public string FirstName {get;set;}="";public string? MiddleName {get;set;}public string? LastName {get;set;}
     public string? FirstNameDhivehi {get;set;}public string? MiddleNameDhivehi {get;set;}public string? LastNameDhivehi {get;set;}
     public int GenderTypeId {get;set;}public int CountryId {get;set;}public DateTime? DateOfBirth {get;set;}
+    public bool IsForeigner {get;set;}
+    public byte[]? ImageData {get;set;}
     public string? NationalId {get;set;}public string? PassportNumber {get;set;}
     public string? AddressName {get;set;}public string? AddressLine {get;set;}public int AddressCountryId {get;set;}public int AddressBaseTypeId {get;set;}public int AddressUsageId {get;set;}
     public List<RegistrationContact> Contacts {get;set;}=[];
@@ -34,8 +36,9 @@ public sealed class IndividualRegistrationService(IDbContextFactory<HrmTeContext
         await RequireAsync();
         var names=new[]{model.FirstName,model.MiddleName,model.LastName,model.FirstNameDhivehi,model.MiddleNameDhivehi,model.LastNameDhivehi};
         if(string.IsNullOrWhiteSpace(model.FirstName)||names.Any(n=>n?.Trim().Length>250)||model.GenderTypeId is <1 or >2||!model.DateOfBirth.HasValue||model.DateOfBirth.Value.Date>DateTime.UtcNow.AddHours(5).Date||model.DateOfBirth.Value.Year<1850)throw new InvalidOperationException("Enter a first name, valid birth date and gender. Names must be 250 characters or fewer.");
-        var national=model.NationalId?.Trim().ToUpperInvariant();var passport=model.PassportNumber?.Trim().ToUpperInvariant();
-        if(string.IsNullOrEmpty(national)&&string.IsNullOrEmpty(passport)||national?.Length>50||passport?.Length>50)throw new InvalidOperationException("Enter a national ID or passport number of up to 50 characters.");
+        var national=model.IsForeigner?null:model.NationalId?.Trim().ToUpperInvariant();var passport=model.IsForeigner?model.PassportNumber?.Trim().ToUpperInvariant():null;
+        var imageType=IndividualImage.Validate(model.ImageData);
+        if(string.IsNullOrEmpty(national)&&string.IsNullOrEmpty(passport)||national?.Length>50||passport?.Length>50)throw new InvalidOperationException(model.IsForeigner?"Enter a passport number of up to 50 characters.":"Enter a national ID of up to 50 characters.");
         await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if(!await db.Countries.AnyAsync(x=>x.CountryId==model.CountryId))throw new InvalidOperationException("Select a valid nationality.");
         if(!string.IsNullOrEmpty(national)&&await db.Idcards.AnyAsync(x=>x.IdcardNumber.Trim().ToUpper()==national)||!string.IsNullOrEmpty(passport)&&await db.Passports.AnyAsync(x=>x.CountryId==model.CountryId&&x.PassportNumber.Trim().ToUpper()==passport))throw new InvalidOperationException("This individual is already registered. Search the registry before creating another record.");
@@ -44,7 +47,7 @@ public sealed class IndividualRegistrationService(IDbContextFactory<HrmTeContext
             ?? throw new InvalidOperationException("Individual registration is not configured. Contact the administrator.");
         var audit=await logs.CreateAsync(db,SharedConfig.OperationLogActionTypes.BUSINESS_ENTITY_CREATE,"Manual individual registration; identity verification remains pending. No employee account or tenant employment created.");
         var entity=new BusinessEntity{BusinessEntityTypeId=type,OperationLogId=audit.OperationLogId};db.BusinessEntities.Add(entity);await db.SaveChangesAsync();
-        var individual=new Individual{BusinessEntityId=entity.BusinessEntityID,FirstNameEnglish=model.FirstName.Trim(),MiddleNameEnglish=model.MiddleName?.Trim(),LastNameEnglish=model.LastName?.Trim(),FirstNameDhivehi=model.FirstNameDhivehi?.Trim(),MiddleNameDhivehi=model.MiddleNameDhivehi?.Trim(),LastNameDhivehi=model.LastNameDhivehi?.Trim(),DateOfBirth=model.DateOfBirth.Value.Date,GenderTypeId=model.GenderTypeId,CountryId=model.CountryId};
+        var individual=new Individual{BusinessEntityId=entity.BusinessEntityID,IsForeigner=model.IsForeigner,ImageData=model.ImageData?.ToArray(),ImageContentType=imageType,FirstNameEnglish=model.FirstName.Trim(),MiddleNameEnglish=model.MiddleName?.Trim(),LastNameEnglish=model.LastName?.Trim(),FirstNameDhivehi=model.FirstNameDhivehi?.Trim(),MiddleNameDhivehi=model.MiddleNameDhivehi?.Trim(),LastNameDhivehi=model.LastNameDhivehi?.Trim(),DateOfBirth=model.DateOfBirth.Value.Date,GenderTypeId=model.GenderTypeId,CountryId=model.CountryId};
         db.Individuals.Add(individual);
         if(!string.IsNullOrEmpty(national))db.Idcards.Add(new(){BusinessEntity=individual,IdcardNumber=national,IdcardStateId=1,OperationLogId=audit.OperationLogId});
         if(!string.IsNullOrEmpty(passport))db.Passports.Add(new Passport{BusinessEntity=individual,PassportNumber=passport,CountryId=model.CountryId,PassportStateId=1,OperationLogId=audit.OperationLogId});

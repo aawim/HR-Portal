@@ -7,7 +7,7 @@ internal static class UnifiedLeaveTypeUpgrade
 {
     private static string Identifier(string value) => "[" + value.Replace("]", "]]") + "]";
     private static string Literal(string value) => "N'" + value.Replace("'", "''") + "'";
-    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false, bool chat = false, bool groupChat = false, bool payroll = false, bool formerStaff = false)
+    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false, bool chat = false, bool groupChat = false, bool payroll = false, bool formerStaff = false, bool individualImages = false)
     {
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnection);
         var source = sourceBuilder.InitialCatalog;
@@ -46,6 +46,7 @@ internal static class UnifiedLeaveTypeUpgrade
                 .Select(x=>new{x.Id,x.OrganisationId,x.FirstUserId,x.SecondUserId,x.FirstReadMessageId,x.SecondReadMessageId,x.CreatedAtUtc,x.UpdatedAtUtc}).ToListAsync() : null;
             var beforeMessages = groupChat ? await db.StaffChatMessages.AsNoTracking().OrderBy(x=>x.Id)
                 .Select(x=>new{x.Id,x.ConversationId,x.SenderUserId,x.ClientMessageId,x.Body,x.RequestId,x.SentAtUtc}).ToListAsync() : null;
+            var beforeIndividuals=individualImages?await db.Individuals.AsNoTracking().OrderBy(i=>i.BusinessEntityId).Select(i=>new{i.BusinessEntityId,i.FirstNameEnglish,i.MiddleNameEnglish,i.LastNameEnglish,i.DateOfBirth,i.CountryId,i.GenderTypeId}).ToListAsync():null;
             var beforeClaims = await db.OvertimeRequests.AsNoTracking().OrderBy(x => x.RequestId)
                 .Select(x => new { x.RequestId, x.OrganisationId, x.IndividualId, x.JobId, x.WorkDate, x.Minutes, x.Reason, x.PaidAtUtc, x.PaymentReference }).ToListAsync();
             var beforeBalances = await db.JobLeaveTypes.AsNoTracking().OrderBy(x=>x.JobLeaveTypeId).Select(x=>new{x.JobLeaveTypeId,x.JobId,x.LeaveTypeId,x.RemainingDays,x.IsValid}).ToListAsync();
@@ -87,6 +88,12 @@ internal static class UnifiedLeaveTypeUpgrade
                 var afterLeaves = await db.Leaves.AsNoTracking().OrderBy(x=>x.LeaveId).Select(x=>new{x.LeaveId,x.JobId,x.LeaveTypeId,x.FromDate,x.ToDate,x.Duration,x.LeaveStateId}).ToListAsync();
                 if(!beforeBalances.SequenceEqual(afterBalances)||!beforeLeaves.SequenceEqual(afterLeaves))throw new InvalidOperationException("Scoped handover upgrade changed historical leave or balance data.");
                 await VerifyHandoverAsync(db,verifyImported:true);
+            }
+            if(individualImages)
+            {
+                var afterIndividuals=await db.Individuals.AsNoTracking().OrderBy(i=>i.BusinessEntityId).Select(i=>new{i.BusinessEntityId,i.FirstNameEnglish,i.MiddleNameEnglish,i.LastNameEnglish,i.DateOfBirth,i.CountryId,i.GenderTypeId}).ToListAsync();
+                if(!beforeIndividuals!.SequenceEqual(afterIndividuals))throw new InvalidOperationException("Individual image upgrade changed existing identity records.");
+                await IndividualImageSqlSmoke.RunAsync(db);
             }
             if(formerStaff)await FormerStaffSqlSmoke.RunAsync(db);
             if(payroll)await OvertimePayrollSqlSmoke.RunAsync(db);

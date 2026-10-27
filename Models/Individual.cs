@@ -8,6 +8,12 @@ public partial class Individual
 {
     public int BusinessEntityId { get; set; }
 
+    public bool? IsForeigner { get; set; }
+
+    public byte[]? ImageData { get; set; }
+
+    public string? ImageContentType { get; set; }
+
     public string FirstNameEnglish { get; set; } = null!;
 
     public string? MiddleNameEnglish { get; set; }

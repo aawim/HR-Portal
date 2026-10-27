@@ -8,6 +8,14 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--verify-individual-images")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,individualImages:true);return 0;}
+if(args.Contains("--apply-individual-images"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261027062345_IndividualImageAndForeigner"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"Individual image and foreigner columns installed; {await db.Individuals.CountAsync()} existing individuals preserved.");return 0;
+}
 if(args.Contains("--verify-former-staff")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,formerStaff:true);return 0;}
 if(args.Contains("--verify-overtime-payroll-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,payroll:true);return 0;}
 if(args.Contains("--apply-overtime-payroll-upgrade"))
