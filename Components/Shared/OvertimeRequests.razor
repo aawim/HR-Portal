@@ -1,17 +1,27 @@
 @page "/online/overtime-requests"
+@page "/admin/attendance/manage-overtimes"
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject HRM.Services.OvertimeRequestService Requests
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<OvertimeRequests> Logger
 <section class="space-y-3 rounded-xl border p-4">
     <div class="flex flex-wrap items-center justify-between gap-2"><h1 class="font-semibold">@(PendingOnly?"Pending overtime requests":"Overtime requests")</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
+    @if(PendingOnly){<a class="text-sm underline" href="/admin/attendance/manage-overtimes">Overtime and payroll</a>}
+    <div class="@(PendingOnly ? "" : "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")">
+    <div class="min-w-0 space-y-3">
     @if(!PendingOnly)
     {
-        <nav class="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Overtime request types">
+        <nav class="flex flex-wrap gap-2" aria-label="Overtime request types">
             @foreach(var option in tabs)
             { <button type="button" class="app-button @(tab==option.Key ? "app-button-primary" : "app-button-secondary")" disabled="@busy" @onclick="()=>ChangeTab(option.Key)">@option.Value</button> }
         </nav>
-        <fieldset disabled="@busy" class="grid min-w-0 gap-4 @((tab is "Planned" or "Unplanned") ? "lg:grid-cols-2" : "")">
+        @if(tab=="Payroll")
+        {
+            <OvertimePayroll Rows="rows" OnProcessed="LoadAsync" />
+        }
+        else
+        {
+        <fieldset disabled="@busy" class="grid min-w-0 gap-4">
         <div class="min-w-0 space-y-3">
         @if(tab=="Preapproval")
         {
@@ -73,9 +83,17 @@
             </aside>
         }
         </fieldset>
+        }
     }
     @if(error!=null){<p role="alert" class="text-sm">@error</p>}
-    @foreach(var work in workRows)
+    </div>
+    <aside class="min-w-0 space-y-3" aria-label="Overtime request history">
+    @if(!PendingOnly)
+    {
+        <OvertimeRequestTable Claims="rows" WorkRequests="workRows" Busy="busy" SelectedId="selectedRequestId" OnSelected="SelectRequest" OnFiltersChanged="ClearRequest" />
+        @if(selectedRequestId.HasValue){<div class="flex items-center justify-between gap-2"><h2 class="text-sm font-semibold">Request details</h2><button type="button" class="app-button app-button-secondary" @onclick="ClearRequest">Close details</button></div>}
+    }
+    @foreach(var work in workRows.Where(w=>PendingOnly||w.Id==selectedRequestId))
     {
         <article class="space-y-2 border-t pt-3 text-sm" @key="work">
             <p class="font-semibold">@work.Reference · @work.Staff · @(work.Kind=="Preapproval" ? "OT preapproval" : "OT clock events")</p>
@@ -90,20 +108,27 @@
             }
         </article>
     }
-    @foreach(var row in rows)
+    @foreach(var row in rows.Where(r=>PendingOnly||r.Id==selectedRequestId))
     {
         <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id"><p class="font-semibold">@row.Reference · @row.Staff</p><p>@row.Date.ToString("dd MMM yyyy") · @((row.Minutes/60m).ToString("0.##")) hours · @row.Status</p><p>@row.Source · @row.Start?.ToString("dd MMM HH:mm:ss") – @row.End?.ToString("dd MMM HH:mm:ss")</p>@if(row.Task!=null){<p>Task: @row.Task</p>}<p>@row.Reason</p>
+        @if(row.StateId==4){<p>Payroll: @(row.PayrollProcessed ? "Processed" : "Awaiting payroll") @row.PayrollMonth?.ToString("MMMM yyyy") @row.PayrollReference</p>}
+        @if(row.CanResubmit){<label class="block">Work performed / reason<textarea @bind="reasons[row.Id]" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><button class="app-button app-button-primary" disabled="@busy" @onclick="()=>Resubmit(row.Id)">Resubmit for approval</button>}
         @if(row.PaymentReference!=null){<p>Payroll/payment reference: @row.PaymentReference</p>}
-        @if(row.CanApprove||row.CanCancel){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
-        @if(row.CanPay){<label class="block">Completed payroll/payment reference<input @bind="payments[row.Id]" maxlength="200" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Pay(row.Id)">Record payment</button>}
+        @if(row.CanApprove||row.CanCancel||row.CanReviseApproved){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanReviseApproved){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Incomplete")'>Return as Incomplete</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
+
         </article>
     }
-    @if(!busy&&rows.Count==0&&workRows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
+    @if(PendingOnly&&!busy&&rows.Count==0&&workRows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
+    </aside>
+    </div>
 </section>
 @code {
     [Parameter] public bool PendingOnly {get;set;}
-    private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> payments=[];
+    private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> reasons=[];
     private DateTime date=DateTime.UtcNow.AddHours(5).Date;private string reason="";private bool busy;private string? error;
+    private int? selectedRequestId;
+    private void SelectRequest(int id){selectedRequestId=id;}
+    private void ClearRequest(){selectedRequestId=null;}
     private string tab="Preapproval",taskText="";
     private TimeOnly? startTime,endTime;
     private DateTime from=DateTime.UtcNow.AddHours(5).Date,to=DateTime.UtcNow.AddHours(5).Date;
@@ -116,7 +141,7 @@
     private List<HRM.Services.OvertimeWorkRow> workRows=[];
     private List<HRM.Services.OvertimeTaskOption> tasks=[];
     private List<HRM.Services.OvertimeClockOption> clocks=[];
-    private readonly Dictionary<string,string> tabs=new(){{"Preapproval","OT preapproval"},{"Planned","Planned OT claim"},{"Unplanned","Unplanned OT claim"},{"ClockEvents","OT clock events"}};
+    private readonly Dictionary<string,string> tabs=new(){{"Preapproval","OT preapproval"},{"Planned","Planned OT claim"},{"Unplanned","Unplanned OT claim"},{"ClockEvents","OT clock events"},{"Payroll","Approved & payroll"}};
     private async Task ChangeTab(string value)
     {
         tab=value;error=null;startId=endId=0;
@@ -143,7 +168,7 @@
         finally{if(version==eventLoadVersion)loadingEvents=false;}
     }
     protected override Task OnInitializedAsync()=>LoadAsync();
-    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);payments.TryAdd(row.Id,"");}if(!PendingOnly&&tab is "Planned" or "Unplanned")await LoadEvents();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);reasons[row.Id]=row.Reason;}if(!PendingOnly&&tab is "Planned" or "Unplanned")await LoadEvents();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
     private Task SubmitAsync()
     {
         if(tab=="Preapproval")return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,taskText.Split('\n').ToList()));
@@ -158,7 +183,7 @@
     }
     private Task ActWork(HRM.Services.OvertimeWorkRow row,string action)=>Execute(()=>Requests.ActWorkAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
     private Task Act(HRM.Services.OvertimeRow row,string action)=>Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
-    private Task Pay(int id)=>Execute(()=>Requests.RecordPaymentAsync(id,payments.GetValueOrDefault(id,"")));
+    private Task Resubmit(int id)=>Execute(()=>Requests.ResubmitClaimAsync(id,reasons.GetValueOrDefault(id,"")));
     private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
     private void Fail(Exception ex){Logger.LogError(ex,"Overtime claim processing");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Overtime claims could not be loaded or saved. Please refresh or contact HR.";}
 }

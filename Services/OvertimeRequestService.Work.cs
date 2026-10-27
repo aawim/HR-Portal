@@ -201,7 +201,7 @@ public sealed partial class OvertimeRequestService
         var rows = await db.OvertimeWorkRequests.AsNoTracking().Include(w => w.Tasks).Include(w => w.Request).ThenInclude(r => r.RequestState)
             .Where(w => w.OrganisationId == actor.Org && (!pendingOnly || !w.Request.RequestState.IsFinalState) &&
                 (actor.Manage || w.IndividualId == actor.Person || db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.User && a.RequestStageInstance.WorkflowRequestInstance.RequestId == w.RequestId)))
-            .OrderByDescending(w => w.CreatedAtUtc).Take(100).ToListAsync();
+            .OrderByDescending(w => w.CreatedAtUtc).ToListAsync();
         var result = new List<OvertimeWorkRow>();
         foreach (var w in rows)
         {

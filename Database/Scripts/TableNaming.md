@@ -51,3 +51,5 @@ Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccru
 `CH_Conversations` and `CH_Messages` store private tenant-scoped direct staff chats, read cursors and optional authorised request references. User and request foreign keys are restrictive; history is not cascade-deleted.
 
 `CH_Memberships` retains each join/leave interval, manager role, message visibility boundary and read cursor. `CH_Events` retains group creation, conversion, membership and manager-change events. Existing `CH_Conversations` gains `IsGroup` and `Title`; existing direct conversations and message records are preserved.
+
+`OT_PayrollBatches` stores tenant payroll month, reference and processing audit. `OT_PayrollItems` snapshots approved claims and prevents a claim being processed twice. `TR_OT_PayrollStateLock` protects processed (and legacy paid) claim statuses on `Requests`.

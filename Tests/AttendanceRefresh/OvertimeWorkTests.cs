@@ -16,6 +16,7 @@ static class OvertimeWorkTests
     static readonly DateTime Today = DateTime.UtcNow.AddHours(5).Date;
     public static async Task RunAsync()
     {
+        await PayrollAsync();
         var f = new Fixture(); await f.Seed();
         Check(!(await f.Service.SubmitAsync(Today, 60, "Typed hours")).Success, "Arbitrary hours accepted");
         Check(!(await f.Service.SubmitClaimAsync(1, 8, "Foreign end")).Success, "Foreign clock accepted");
@@ -132,6 +133,60 @@ static class OvertimeWorkTests
         f.Org = 20;
         denied = false; try { await f.Service.ActAsync(claim, 4, "Approve", "Other tenant"); } catch (UnauthorizedAccessException) { denied = true; }
         Check(denied, "Cross-tenant claim accessible");
+    }
+    static async Task PayrollAsync()
+    {
+        var f=new Fixture();await f.Seed();
+        await using(var db=f.Factory.CreateDbContext())
+        {
+            db.RequestStates.Add(new(){RequestStateId=1,StateName="Incomplete"});
+            foreach(var pair in new[]{(4,1),(4,5),(4,6),(1,2),(1,5)})db.RequestTypesAllowedRequestStateTransitions.Add(new(){RequestTypeId=100,FromRequestStateId=pair.Item1,ToRequestStateId=pair.Item2});
+            (await db.Jobs.SingleAsync()).OrganisationStructureId=50;
+            db.Jobs.Add(new(){JobId=2,IndividualID=100,OrganisationID=10,JobStateId=4,JoinedDate=Today.AddYears(-1)});
+            db.OrganisationStructureSupervisors.Add(new(){OrganisationStructureId=50,SupervisorStaffId=100,IsActive=true,IsValid=true});
+            await db.SaveChangesAsync();
+        }
+        Check((await f.Service.SubmitClaimAsync(1,2,"Extra work")).Success,"Payroll fixture claim failed");
+        int id;await using(var db=f.Factory.CreateDbContext())id=await db.OvertimeRequests.Select(x=>x.RequestId).SingleAsync();
+        var denied=false;try{await f.Service.ProcessPayrollAsync([id],Today,"Payroll",Guid.NewGuid());}catch(UnauthorizedAccessException){denied=true;}
+        Check(denied,"Staff processed payroll without permission");
+        f.AsReviewer();
+        Check(!(await f.Service.ProcessPayrollAsync([id],Today,"Payroll",Guid.NewGuid())).Success,"Pending claim processed");
+        Check((await f.Service.ActAsync(id,2,"Approve","Verified")).Success,"Payroll claim approval failed");
+        var view=(await f.Service.LoadAsync()).Single();Check(view.CanReviseApproved&&view.CanPay&&!view.PayrollProcessed,"Approved supervisor/payroll actions unavailable");
+        // Approval rights and payroll permission do not bypass the supervisor requirement.
+        await using(var db=f.Factory.CreateDbContext()){(await db.OrganisationStructureSupervisors.SingleAsync()).IsActive=false;await db.SaveChangesAsync();}
+        denied=false;try{await f.Service.ActAsync(id,4,"Reject","Not supervisor");}catch(UnauthorizedAccessException){denied=true;}
+        Check(denied,"An unrelated reviewer revised an approved claim");
+        await using(var db=f.Factory.CreateDbContext()){(await db.OrganisationStructureSupervisors.SingleAsync()).IsActive=true;await db.SaveChangesAsync();}
+        f.Org=20;denied=false;try{await f.Service.ActAsync(id,4,"Cancel","Foreign organisation");}catch(UnauthorizedAccessException){denied=true;}
+        Check(denied,"Foreign organisation changed approved claim");
+        Check(!(await f.Service.ProcessPayrollAsync([id],Today,"Foreign",Guid.NewGuid())).Success,"Foreign organisation processed claim");f.Org=10;
+        Check((await f.Service.ActAsync(id,4,"Incomplete","Clarify work")).Success,"Supervisor could not return claim");
+        f.AsStaff();Check((await f.Service.LoadAsync()).Single().CanResubmit,"Returned claim not resubmittable");
+        Check(!(await f.Service.LoadClockEventsAsync(Today.AddDays(-1))).Any(x=>x.Id==1),"Incomplete claim released reserved clocks");
+        Check((await f.Service.ResubmitClaimAsync(id,"Clarified work")).Success,"Returned claim resubmission failed");
+        f.AsReviewer();Check((await f.Service.ActAsync(id,2,"Approve","Verified again")).Success,"Reapproval failed");
+        await using(var db=f.Factory.CreateDbContext())Check(await db.WfRequestStageInstances.CountAsync()==2,"Resubmission erased approval history");
+        Check(!(await f.Service.ProcessPayrollAsync([id,999],Today,"Payroll",Guid.NewGuid())).Success,"Partial batch accepted");
+        var key=Guid.NewGuid();Check((await f.Service.ProcessPayrollAsync([id],Today,"Payroll",key)).Success,"Payroll failed");
+        Check((await f.Service.ProcessPayrollAsync([id],Today,"Payroll",key)).Success,"Idempotent payroll retry failed");
+        Check(!(await f.Service.ProcessPayrollAsync([id],Today,"Other",key)).Success,"Changed retry payload accepted");
+        Check(!(await f.Service.ProcessPayrollAsync([id],Today,"Again",Guid.NewGuid())).Success,"Claim processed twice");
+        foreach(var action in new[]{"Cancel","Reject","Incomplete","Approve"})Check(!(await f.Service.ActAsync(id,4,action,"Locked")).Success,"Payroll lock bypassed: "+action);
+        f.AsStaff();Check(!(await f.Service.ActAsync(id,4,"Cancel","Withdraw")).Success,"Owner cancelled processed claim");
+        view=(await f.Service.LoadAsync()).Single();Check(view.PayrollProcessed&&view.PayrollMonth?.Day==1&&!view.CanCancel&&!view.CanApprove,"Processed status/actions incorrect");
+        // A separate approved claim releases its events after a supervisor rejects it.
+        Check((await f.Service.SubmitClaimAsync(4,5,"Other extra work")).Success,"Second claim failed");
+        int second;await using(var db=f.Factory.CreateDbContext())second=await db.OvertimeRequests.Where(x=>x.RequestId!=id).Select(x=>x.RequestId).SingleAsync();
+        f.AsReviewer();Check((await f.Service.ActAsync(second,2,"Approve","Verified")).Success,"Second approval failed");
+        Check((await f.Service.ActAsync(second,4,"Reject","Incorrect work")).Success,"Supervisor rejection failed");
+        f.AsStaff();Check((await f.Service.LoadClockEventsAsync(Today.AddDays(-1))).Any(x=>x.Id==4),"Rejected approved claim retained events");
+        Check((await f.Service.SubmitClaimAsync(4,5,"Replacement")).Success,"Rejected approved interval could not be reused");
+        await using(var db=f.Factory.CreateDbContext())second=await db.OvertimeRequests.Where(x=>x.Request.RequestStateId==2).Select(x=>x.RequestId).SingleAsync();
+        f.AsReviewer();Check((await f.Service.ActAsync(second,2,"Approve","Verified")).Success,"Replacement approval failed");
+        f.AsStaff();Check((await f.Service.ActAsync(second,4,"Cancel","Withdrawn")).Success,"Requester could not cancel approved unprocessed claim");
+        Check((await f.Service.SubmitClaimAsync(4,5,"Replacement after cancellation")).Success,"Cancelled approved interval could not be reused");
     }
     sealed class Fixture
     {

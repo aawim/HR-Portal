@@ -7,7 +7,7 @@ internal static class UnifiedLeaveTypeUpgrade
 {
     private static string Identifier(string value) => "[" + value.Replace("]", "]]") + "]";
     private static string Literal(string value) => "N'" + value.Replace("'", "''") + "'";
-    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false, bool chat = false, bool groupChat = false)
+    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false, bool chat = false, bool groupChat = false, bool payroll = false)
     {
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnection);
         var source = sourceBuilder.InitialCatalog;
@@ -88,6 +88,7 @@ internal static class UnifiedLeaveTypeUpgrade
                 if(!beforeBalances.SequenceEqual(afterBalances)||!beforeLeaves.SequenceEqual(afterLeaves))throw new InvalidOperationException("Scoped handover upgrade changed historical leave or balance data.");
                 await VerifyHandoverAsync(db,verifyImported:true);
             }
+            if(payroll)await OvertimePayrollSqlSmoke.RunAsync(db);
             await db.Database.MigrateAsync();
             await db.Database.ExecuteSqlRawAsync(await File.ReadAllTextAsync("Database/Scripts/20261026_PrefixLeavePolicyTables.sql"));
             Console.WriteLine("PASS Isolated restored-data consolidation, exact balance/history checks, canonical queries and repeat upgrade.");

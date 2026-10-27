@@ -9,7 +9,10 @@ using HRM.Components.Shared;
 using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 public sealed record OvertimeRow(int Id,int StateId,string Reference,string Staff,DateTime Date,int Minutes,string Status,string Reason,bool CanApprove,bool CanCancel,bool CanPay,string? PaymentReference)
-{ public string Source { get; init; } = "Legacy"; public DateTime? Start { get; init; } public DateTime? End { get; init; } public string? Task { get; init; } }
+{ public string Source { get; init; } = "Legacy"; public DateTime? Start { get; init; } public DateTime? End { get; init; } public string? Task { get; init; }
+    public bool CanReviseApproved {get;init;} public bool CanResubmit {get;init;}
+    public bool PayrollProcessed {get;init;} public DateTime? PayrollMonth {get;init;} public string? PayrollReference {get;init;}
+}
 public sealed partial class OvertimeRequestService(IDbContextFactory<HrmTeContext> factory,IUserAccessService access,IRequestService requests,IOperationLogService logs,IWorkflowEngine workflow,IWorkflowApproverResolver resolver,IWorkflowRequestContextResolver contexts)
 {
     public const string TypeName="Overtime Claim Request";public const string PageUrl="/online/overtime-requests";
@@ -45,16 +48,48 @@ public sealed partial class OvertimeRequestService(IDbContextFactory<HrmTeContex
         Task.FromResult(ServiceResult.Fail("Select saved start and end clock events to submit overtime."));
     public async Task<List<OvertimeRow>> LoadAsync(bool pendingOnly=false)
     {
-        var actor=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();var source=await db.OvertimeRequests.Include(x=>x.Request).ThenInclude(x=>x.RequestState).Where(x=>x.OrganisationId==actor.Org&&(!pendingOnly||!x.Request.RequestState.IsFinalState)&&(actor.Manage||actor.Pay||x.IndividualId==actor.Person||db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.User&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==x.RequestId))).OrderByDescending(x=>x.CreatedAtUtc).Take(100).ToListAsync();
-        var result=new List<OvertimeRow>();foreach(var row in source){var instance=await WorkflowRequestProcessing.Instance(db,row.RequestId);var name=await db.Individuals.Where(i=>i.BusinessEntityId==row.IndividualId).Select(i=>i.FirstNameEnglish+" "+i.LastNameEnglish).SingleAsync();result.Add(new(row.RequestId,row.Request.RequestStateId,row.Request.ReferenceNumber??$"#{row.RequestId}",name,row.WorkDate,row.Minutes,row.PaidAtUtc.HasValue?"Paid":(row.Request.RequestState.IsFinalState?"":"Processing · ")+row.Request.RequestState.StateName,row.Reason,await Processing.CanApprove(db,Subject(row),instance,actor.User,actor.Person),row.IndividualId==actor.Person&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus=="InProgress",actor.Pay&&row.Request.RequestStateId==4&&!row.PaidAtUtc.HasValue&&row.IndividualId!=actor.Person,row.PaymentReference) { Source = row.ClaimSource, Start = row.StartedAt, End = row.EndedAt,
-            Task = row.PreapprovalTaskId.HasValue ? await db.OvertimeWorkTasks.Where(t => t.Id == row.PreapprovalTaskId).Select(t => t.Description).SingleOrDefaultAsync() : null });}return result;
+        var actor=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();
+        var supervised=await SupervisorJobsAsync(db,actor.Org,actor.Person);
+        var source=await db.OvertimeRequests.Include(x=>x.Request).ThenInclude(x=>x.RequestState).Where(x=>x.OrganisationId==actor.Org&&
+            (!pendingOnly||!x.Request.RequestState.IsFinalState)&&(actor.Manage||actor.Pay||x.IndividualId==actor.Person||supervised.Contains(x.JobId)||
+             db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.User&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==x.RequestId)))
+            .OrderByDescending(x=>x.CreatedAtUtc).ToListAsync();
+        var ids=source.Select(r=>r.RequestId).ToArray();
+        var payroll=await db.OvertimePayrollItems.AsNoTracking().Include(i=>i.Batch).Where(i=>ids.Contains(i.RequestId)).ToDictionaryAsync(i=>i.RequestId);
+        var result=new List<OvertimeRow>();
+        foreach(var row in source)
+        {
+            var instance=await WorkflowRequestProcessing.Instance(db,row.RequestId);
+            var name=await db.Individuals.Where(i=>i.BusinessEntityId==row.IndividualId).Select(i=>i.FirstNameEnglish+" "+i.LastNameEnglish).SingleAsync();
+            payroll.TryGetValue(row.RequestId,out var item);var locked=item!=null||row.PaidAtUtc.HasValue;
+            var supervisor=row.IndividualId!=actor.Person&&supervised.Contains(row.JobId)&&await IsSupervisorAsync(db,row,actor.Person);
+            result.Add(new(row.RequestId,row.Request.RequestStateId,row.Request.ReferenceNumber??$"#{row.RequestId}",name,row.WorkDate,row.Minutes,
+                (row.Request.RequestState.IsProcessingState&&!row.Request.RequestState.IsFinalState?"Processing · ":"")+row.Request.RequestState.StateName.Trim(),row.Reason,
+                !locked&&await Processing.CanApprove(db,Subject(row),instance,actor.User,actor.Person),
+                !locked&&(row.Request.RequestStateId==4&&(row.IndividualId==actor.Person||supervisor)||row.IndividualId==actor.Person&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus is "InProgress" or "Returned"),
+                actor.Pay&&row.Request.RequestStateId==4&&!locked&&row.IndividualId!=actor.Person,row.PaymentReference)
+            {
+                Source=row.ClaimSource,Start=row.StartedAt,End=row.EndedAt,
+                Task=row.PreapprovalTaskId.HasValue?await db.OvertimeWorkTasks.Where(t=>t.Id==row.PreapprovalTaskId).Select(t=>t.Description).SingleOrDefaultAsync():null,
+                CanReviseApproved=!locked&&row.Request.RequestStateId==4&&supervisor,
+                CanResubmit=!locked&&row.IndividualId==actor.Person&&row.Request.RequestStateId==1&&instance?.WorkflowStatus=="Returned",
+                PayrollProcessed=locked,PayrollMonth=item?.Batch.PayrollMonth,PayrollReference=item?.Batch.Reference
+            });
+        }
+        return result;
     }
     public async Task<ServiceResult> ActAsync(int id,int expectedState,string action,string? comment)
     {
         var actor=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try{var row=await db.OvertimeRequests.Include(x=>x.Request).ThenInclude(x=>x.RequestState).SingleOrDefaultAsync(x=>x.RequestId==id&&x.OrganisationId==actor.Org)??throw new UnauthorizedAccessException("Claim unavailable in this organisation.");
+            if (await IsPayrollLockedAsync(db,row)) throw new InvalidOperationException("Payroll has been processed for this OT claim. Its status cannot be changed.");
+            if (row.Request.RequestStateId==4 || row.Request.RequestStateId==1&&action=="Cancel")
+            {
+                await ChangeApprovedOrReturnedAsync(db,row,expectedState,action,comment,actor.User,actor.Person);
+                await tx.CommitAsync();return ServiceResult.Ok("OT claim status updated.");
+            }
             await Processing.ExecuteAsync(db,Subject(row),expectedState,action,comment,actor.User,actor.Person,async()=>{await ValidateAsync(db,row);},async()=>{var policy=await ValidateAsync(db,row);row.ApprovedPolicyJson=JsonSerializer.Serialize(new{policy.Id,policy.Version,policy.MaximumWeeklyHours,policy.MaximumDailyHours});});await tx.CommitAsync();return ServiceResult.Ok("Overtime claim action saved.");}
-        catch(InvalidOperationException ex){await tx.RollbackAsync();if(ex is WorkflowConfigurationException config)await config.NotifyAsync(factory);if(ex is RequestTransitionConfigurationException transition){var row=await db.OvertimeRequests.AsNoTracking().SingleAsync(x=>x.RequestId==id&&x.OrganisationId==actor.Org);await new WorkflowConfigurationException(await contexts.ResolveAsync(db,id,row.JobId),transition.Detail){ConfigurationUrl="/admin/settings/config/state-transitions"}.NotifyAsync(factory);}return ServiceResult.Fail(ex.Message);}
+        catch(InvalidOperationException ex){await tx.RollbackAsync();if(ex is WorkflowConfigurationException config)await config.NotifyAsync(factory);if(ex is RequestTransitionConfigurationException transition){var row=await db.OvertimeRequests.AsNoTracking().SingleAsync(x=>x.RequestId==id&&x.OrganisationId==actor.Org);await new WorkflowConfigurationException(await contexts.ResolveAsync(db,id,row.JobId),transition.Detail){ConfigurationUrl="/admin/settings/config/state-transitions"}.NotifyAsync(factory);}return ServiceResult.Fail(ex is RequestTransitionConfigurationException ? "This action could not be completed. HR has been notified." : ex.Message);}
     }
     public async Task<ServiceResult> RecordPaymentAsync(int id,string reference)
     {

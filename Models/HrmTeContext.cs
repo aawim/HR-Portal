@@ -3151,6 +3151,7 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<Request>(entity =>
         {
+            entity.ToTable("Requests", table => table.HasTrigger("TR_OT_PayrollStateLock"));
             entity.HasIndex(e => new { e.OrganisationBusinessEntityID, e.RequestTypeId, e.RequestStateId, e.ApplicationDate }, "IX_Requests_RequestType_RequestState").IsDescending(false, false, false, true);
 
             entity.HasIndex(e => e.RequestStateId, "ix_IndexName_10_MARCH");

@@ -81,7 +81,9 @@ public sealed class WorkflowRequestProcessing(IWorkflowApproverResolver resolver
                         if (candidates.Count == 0)
                             throw new WorkflowConfigurationException(await contextResolver.ResolveAsync(db, r.RequestId, r.JobId),
                                 $"No eligible independent approvers remain for {next.StageName}.");
-                        var opened = new WfRequestStageInstance { WorkflowRequestInstance = instance, WorkflowStage = next, StartedAt = DateTime.UtcNow };
+                        var attempt = (await db.WfRequestStageInstances.Where(s => s.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId && s.WorkflowStageId == next.WorkflowStageId)
+                            .Select(s => (int?)s.AttemptNumber).MaxAsync() ?? 0) + 1;
+                        var opened = new WfRequestStageInstance { WorkflowRequestInstance = instance, WorkflowStage = next, StartedAt = DateTime.UtcNow, AttemptNumber = attempt };
                         foreach (var c in candidates) opened.Approvals.Add(new() { ApproverUserId = c.UserId, StageApproverId = c.StageApproverId, ApprovalSequence = c.SequenceNumber, AssignedAt = DateTime.UtcNow });
                         db.WfRequestStageInstances.Add(opened); await db.SaveChangesAsync(); instance.CurrentRequestStageInstanceId = opened.RequestStageInstanceId;
                         foreach (var c in candidates.Where(c => next.ApprovalMode != "Sequential" || c.SequenceNumber == candidates.Min(x => x.SequenceNumber))) Notify(db, r, c.UserId, opened.RequestStageInstanceId);

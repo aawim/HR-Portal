@@ -8,6 +8,15 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--verify-overtime-payroll-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,payroll:true);return 0;}
+if(args.Contains("--apply-overtime-payroll-upgrade"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261027052521_OvertimePayrollProcessing"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"OT payroll schema installed; existing claims {await db.OvertimeRequests.CountAsync()}, payroll batches {await db.OvertimePayrollBatches.CountAsync()}.");
+    return 0;
+}
 if(args.Contains("--audit-chat-references")){await ChatReferenceAudit.RunAsync(db);return 0;}
 if(args.Contains("--audit-chat-visibility")){await ChatVisibilityAudit.RunAsync(db);return 0;}
 if(args.Contains("--verify-group-chat-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,chat:true,groupChat:true);return 0;}

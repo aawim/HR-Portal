@@ -6451,6 +6451,85 @@ namespace HRM.Migrations
                     b.ToTable("WH_OrganisationWorkingHourRequirements", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.OvertimePayrollBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("ClientBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PayrollMonth")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("ProcessedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ProcessedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("ProcessedByUserId");
+
+                    b.HasIndex("OrganisationId", "ClientBatchId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "PayrollMonth");
+
+                    b.ToTable("OT_PayrollBatches", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimePayrollItem", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequestReference")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<DateTime>("WorkDate")
+                        .HasColumnType("date");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("JobId");
+
+                    b.ToTable("OT_PayrollItems", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.OvertimeRequest", b =>
                 {
                     b.Property<int>("RequestId")
@@ -6914,7 +6993,12 @@ namespace HRM.Migrations
 
                     SqlServerIndexBuilderExtensions.HasFillFactor(b.HasIndex(new[] { "RequestTypeId" }, "missing_index_4_3_Requests"), 75);
 
-                    b.ToTable("Requests");
+                    b.ToTable("Requests", null, t =>
+                        {
+                            t.HasTrigger("TR_OT_PayrollStateLock");
+                        });
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.RequestDocument", b =>
@@ -12996,6 +13080,50 @@ namespace HRM.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("HRM.Models.OvertimePayrollBatch", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ProcessedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimePayrollItem", b =>
+                {
+                    b.HasOne("HRM.Models.OvertimePayrollBatch", "Batch")
+                        .WithMany("Items")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OvertimeRequest", null)
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.OvertimePayrollItem", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Batch");
+                });
+
             modelBuilder.Entity("HRM.Models.OvertimeRequest", b =>
                 {
                     b.HasOne("HRM.Models.AttendanceLog", null)
@@ -15308,6 +15436,11 @@ namespace HRM.Migrations
             modelBuilder.Entity("HRM.Models.OrganisationType", b =>
                 {
                     b.Navigation("Organisations");
+                });
+
+            modelBuilder.Entity("HRM.Models.OvertimePayrollBatch", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("HRM.Models.OvertimeWorkRequest", b =>

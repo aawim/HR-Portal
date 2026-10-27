@@ -1,0 +1,50 @@
+@using HRM.Services
+<section class="min-w-0 space-y-3 rounded-lg border p-3" aria-labelledby="ot-request-table-heading">
+    <div class="flex flex-wrap items-center justify-between gap-2"><h2 id="ot-request-table-heading" class="font-semibold">All overtime requests</h2><span class="text-xs text-slate-500">@Filtered.Count request(s)</span></div>
+    <div class="grid gap-2 sm:grid-cols-2">
+        <label class="text-sm">Work from<input type="date" @bind="from" @bind:after="FilterChanged" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+        <label class="text-sm">Work to<input type="date" @bind="to" @bind:after="FilterChanged" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+        <label class="text-sm">Status<select @bind="state" @bind:after="FilterChanged" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">All statuses</option>@foreach(var option in Entries.GroupBy(x=>x.State).OrderBy(g=>g.Key)){<option value="@option.Key">@option.First().Status.Replace("Processing · ","")</option>}</select></label>
+        <label class="text-sm">Request type<select @bind="kind" @bind:after="FilterChanged" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">All request types</option><option>OT preapproval</option><option>Planned OT claim</option><option>Unplanned OT claim</option><option>Legacy OT claim</option><option>OT clock events</option></select></label>
+        <label class="text-sm">Payroll status<select @bind="payroll" @bind:after="FilterChanged" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">All</option><option value="Ready">Awaiting payroll</option><option value="Processed">Payroll processed</option></select></label>
+        <label class="text-sm">Staff / reference<input type="search" value="@search" @oninput="SearchChanged" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+    </div>
+    <button type="button" class="app-button app-button-secondary" @onclick="Reset">Reset filters</button>
+    @if(from.HasValue&&to.HasValue&&from>to){<p role="alert" class="text-sm">Work to must be on or after Work from.</p>}
+    <div class="overflow-x-auto" aria-busy="@Busy">
+        <table class="w-full text-left text-sm">
+            <thead><tr class="border-b"><th scope="col" class="p-2">Reference / staff</th><th scope="col" class="p-2">Type</th><th scope="col" class="p-2">Work dates / hours</th><th scope="col" class="p-2">Status</th><th scope="col" class="p-2">Payroll</th><th scope="col" class="p-2">Action</th></tr></thead>
+            <tbody>
+            @foreach(var row in Filtered.Skip((page-1)*pageSize).Take(pageSize))
+            {
+                <tr @key="row.Id" class="border-b align-top"><td class="p-2"><span class="font-medium">@row.Reference</span><br />@row.Staff</td><td class="p-2">@row.Kind</td><td class="whitespace-nowrap p-2">@row.From.ToString("dd MMM yyyy")@if(row.To.Date!=row.From.Date){<br /><span>– @row.To.ToString("dd MMM yyyy")</span>}@if(row.Minutes.HasValue){<br /><span>@((row.Minutes.Value/60m).ToString("0.##")) hours</span>}</td><td class="p-2">@row.Status</td><td class="p-2">@row.Payroll @row.PayrollMonth?.ToString("MMM yyyy")</td><td class="p-2"><button type="button" class="app-button app-button-secondary" aria-label="View request @row.Reference" aria-pressed="@(SelectedId==row.Id)" disabled="@Busy" @onclick="()=>OnSelected.InvokeAsync(row.Id)">View</button></td></tr>
+            }
+            @if(Filtered.Count==0){<tr><td colspan="6" class="p-3 text-slate-500">@(Busy ? "Loading requests…" : "No overtime requests match these filters.")</td></tr>}
+            </tbody>
+        </table>
+    </div>
+    <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <label>Rows <select @bind="pageSize" @bind:after="FilterChanged" class="rounded border bg-transparent p-1"><option>10</option><option>25</option><option>50</option></select></label>
+        <div class="flex items-center gap-2"><button type="button" class="app-button app-button-secondary" disabled="@(page<=1)" @onclick="()=>page--">Previous</button><span>Page @(page) of @Pages</span><button type="button" class="app-button app-button-secondary" disabled="@(page>=Pages)" @onclick="()=>page++">Next</button></div>
+    </div>
+</section>
+@code {
+    [Parameter]public List<OvertimeRow> Claims {get;set;}=[];
+    [Parameter]public List<OvertimeWorkRow> WorkRequests {get;set;}=[];
+    [Parameter]public bool Busy {get;set;}
+    [Parameter]public int? SelectedId {get;set;}
+    [Parameter]public EventCallback<int> OnSelected {get;set;}
+    [Parameter]public EventCallback OnFiltersChanged {get;set;}
+    private DateTime? from,to;
+    private int state,page=1,pageSize=10;
+    private string kind="",payroll="",search="";
+    private sealed record Entry(int Id,int State,string Reference,string Staff,string Kind,DateTime From,DateTime To,int? Minutes,string Status,string Payroll,DateTime? PayrollMonth);
+    private IEnumerable<Entry> Entries=>WorkRequests.Select(w=>new Entry(w.Id,w.StateId,w.Reference,w.Staff,w.Kind=="Preapproval"?"OT preapproval":"OT clock events",w.From,w.To,null,w.Status,"—",null))
+        .Concat(Claims.Select(r=>new Entry(r.Id,r.StateId,r.Reference,r.Staff,r.Source=="Planned"?"Planned OT claim":r.Source=="Unplanned"?"Unplanned OT claim":"Legacy OT claim",r.Date,r.End?.Date??r.Date,r.Minutes,r.Status,r.StateId==4?(r.PayrollProcessed?"Payroll processed":"Awaiting payroll"):"—",r.PayrollMonth)));
+    private List<Entry> Filtered=>Entries.Where(r=>(!from.HasValue||r.To.Date>=from.Value.Date)&&(!to.HasValue||r.From.Date<=to.Value.Date)&&(state==0||r.State==state)&&(kind==""||r.Kind==kind)&&(payroll==""||r.Payroll==(payroll=="Processed"?"Payroll processed":"Awaiting payroll"))&&(string.IsNullOrWhiteSpace(search)||(r.Reference+" "+r.Staff).Contains(search.Trim(),StringComparison.OrdinalIgnoreCase))).OrderByDescending(r=>r.Id).ToList();
+    private int Pages=>Math.Max(1,(Filtered.Count+pageSize-1)/pageSize);
+    protected override void OnParametersSet(){page=Math.Min(page,Pages);}
+    private async Task FilterChanged(){page=1;await OnFiltersChanged.InvokeAsync();}
+    private async Task SearchChanged(ChangeEventArgs e){search=e.Value?.ToString()??"";await FilterChanged();}
+    private async Task Reset(){from=to=null;state=0;kind=payroll=search="";await FilterChanged();}
+}
