@@ -7,7 +7,7 @@ internal static class UnifiedLeaveTypeUpgrade
 {
     private static string Identifier(string value) => "[" + value.Replace("]", "]]") + "]";
     private static string Literal(string value) => "N'" + value.Replace("'", "''") + "'";
-    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false)
+    public static async Task RehearseAsync(string sourceConnection, bool scopedHandover = false, bool overtime = false, bool chat = false, bool groupChat = false)
     {
         var sourceBuilder = new SqlConnectionStringBuilder(sourceConnection);
         var source = sourceBuilder.InitialCatalog;
@@ -40,6 +40,12 @@ internal static class UnifiedLeaveTypeUpgrade
             var testBuilder = new SqlConnectionStringBuilder(sourceConnection) { InitialCatalog = name, Pooling = false };
             await using var db = new HrmTeContext(new DbContextOptionsBuilder<HrmTeContext>().UseSqlServer(testBuilder.ConnectionString).Options);
             db.Database.SetCommandTimeout(300);
+            var groupUpgradePending = groupChat && (await db.Database.GetPendingMigrationsAsync()).Any(x => x.EndsWith("_StaffChatGroups",StringComparison.Ordinal));
+            if(groupUpgradePending&&!await db.StaffChatConversations.AnyAsync())await ChatSqlSmoke.SeedLegacyAsync(db);
+            var beforeChats = groupChat ? await db.StaffChatConversations.AsNoTracking().OrderBy(x=>x.Id)
+                .Select(x=>new{x.Id,x.OrganisationId,x.FirstUserId,x.SecondUserId,x.FirstReadMessageId,x.SecondReadMessageId,x.CreatedAtUtc,x.UpdatedAtUtc}).ToListAsync() : null;
+            var beforeMessages = groupChat ? await db.StaffChatMessages.AsNoTracking().OrderBy(x=>x.Id)
+                .Select(x=>new{x.Id,x.ConversationId,x.SenderUserId,x.ClientMessageId,x.Body,x.RequestId,x.SentAtUtc}).ToListAsync() : null;
             var beforeClaims = await db.OvertimeRequests.AsNoTracking().OrderBy(x => x.RequestId)
                 .Select(x => new { x.RequestId, x.OrganisationId, x.IndividualId, x.JobId, x.WorkDate, x.Minutes, x.Reason, x.PaidAtUtc, x.PaymentReference }).ToListAsync();
             var beforeBalances = await db.JobLeaveTypes.AsNoTracking().OrderBy(x=>x.JobLeaveTypeId).Select(x=>new{x.JobLeaveTypeId,x.JobId,x.LeaveTypeId,x.RemainingDays,x.IsValid}).ToListAsync();
@@ -48,6 +54,23 @@ internal static class UnifiedLeaveTypeUpgrade
                 await db.Database.ExecuteSqlRawAsync("INSERT dbo.LeaveDefinitions(Code,Name,OwnerOrganisationID,IsSystemType,IsGlobal,IsActive,CreatedDate) SELECT 'UPGRADE-SMOKE','Upgrade preservation fixture',MIN(BusinessEntityID),0,0,1,SYSUTCDATETIME() FROM dbo.Organisations;");
             await db.Database.MigrateAsync();
             await VerifyAsync(db);
+            if(groupChat)
+            {
+                var afterChats=await db.StaffChatConversations.AsNoTracking().OrderBy(x=>x.Id)
+                    .Select(x=>new{x.Id,x.OrganisationId,x.FirstUserId,x.SecondUserId,x.FirstReadMessageId,x.SecondReadMessageId,x.CreatedAtUtc,x.UpdatedAtUtc}).ToListAsync();
+                var afterMessages=await db.StaffChatMessages.AsNoTracking().OrderBy(x=>x.Id)
+                    .Select(x=>new{x.Id,x.ConversationId,x.SenderUserId,x.ClientMessageId,x.Body,x.RequestId,x.SentAtUtc}).ToListAsync();
+                if(!beforeChats!.SequenceEqual(afterChats)||!beforeMessages!.SequenceEqual(afterMessages))throw new InvalidOperationException("Group upgrade changed chat history or read cursors.");
+                if(groupUpgradePending)
+                    foreach(var conversation in afterChats)
+                    {
+                        var members=await db.StaffChatMemberships.Where(m=>m.ConversationId==conversation.Id).ToListAsync();
+                        if(members.Count!=2||!members.Any(m=>m.UserId==conversation.FirstUserId&&m.LastReadMessageId==conversation.FirstReadMessageId)||
+                            !members.Any(m=>m.UserId==conversation.SecondUserId&&m.LastReadMessageId==conversation.SecondReadMessageId))throw new InvalidOperationException("Legacy direct membership/read cursor backfill failed.");
+                    }
+                Console.WriteLine($"PASS group upgrade: preserved {afterChats.Count} conversations and {afterMessages.Count} messages; membership backfill verified.");
+            }
+            if(chat)await ChatSqlSmoke.RunAsync(db,groupChat);
             if (overtime)
             {
                 var afterClaims = await db.OvertimeRequests.AsNoTracking().OrderBy(x => x.RequestId)

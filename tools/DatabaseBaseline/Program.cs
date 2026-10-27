@@ -8,6 +8,26 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--audit-chat-references")){await ChatReferenceAudit.RunAsync(db);return 0;}
+if(args.Contains("--audit-chat-visibility")){await ChatVisibilityAudit.RunAsync(db);return 0;}
+if(args.Contains("--verify-group-chat-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,chat:true,groupChat:true);return 0;}
+if(args.Contains("--apply-group-chat-upgrade"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261027030613_StaffChatGroups"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"Group chat schema installed; conversations {await db.StaffChatConversations.CountAsync()}, messages {await db.StaffChatMessages.CountAsync()}, memberships {await db.StaffChatMemberships.CountAsync()}.");
+    return 0;
+}
+if(args.Contains("--verify-chat-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,chat:true);return 0;}
+if(args.Contains("--apply-chat-upgrade"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261026100840_StaffChat"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    await db.Database.MigrateAsync();
+    Console.WriteLine($"Chat schema installed; conversations {await db.StaffChatConversations.CountAsync()}, messages {await db.StaffChatMessages.CountAsync()}.");
+    return 0;
+}
 if(args.Contains("--verify-font-size-upgrade")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true);return 0;}
 if(args.Contains("--apply-font-size-upgrade"))
 {

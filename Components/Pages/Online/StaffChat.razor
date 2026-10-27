@@ -1,0 +1,214 @@
+@page "/online/chat"
+@page "/admin/chat"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@implements IAsyncDisposable
+@inject HRM.Services.StaffChatService Chat
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<StaffChat> Logger
+
+<div class="space-y-3">
+    <h1 class="text-lg font-semibold">Staff chat</h1>
+    @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm text-amber-700 dark:text-amber-400">@error</p>}
+    <div class="grid min-w-0 gap-3 lg:grid-cols-3">
+        <aside class="min-w-0 space-y-3 rounded-xl border p-3">
+            <h2 class="text-sm font-semibold">Your conversations</h2>
+            <div class="max-h-80 overflow-y-auto divide-y">
+                @foreach(var thread in threads)
+                {<button type="button" class="flex w-full items-center justify-between gap-2 rounded px-2 py-3 text-left text-sm @(selected==thread.Id?"bg-blue-50 font-semibold":"hover:bg-slate-50")" disabled="@busy" @onclick="()=>OpenAsync(thread.Id)"><span>@thread.Name @if(thread.IsGroup){<span class="text-xs text-slate-500">· Group</span>}</span>@if(thread.Unread>0){<span class="rounded-full bg-blue-600 px-2 text-xs text-white">@thread.Unread</span>}</button>}
+                @if(threads.Count==0){<p class="py-2 text-sm text-slate-500">Start a chat with a colleague.</p>}
+            </div>
+            <details class="border-t pt-3">
+                <summary class="cursor-pointer text-sm font-semibold">New chat or add members</summary>
+                <div class="mt-3 space-y-3">
+            <div class="flex items-center justify-between gap-2"><h2 class="text-sm font-semibold">New chat</h2><button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="ToggleGroupCreation">@(creatingGroup?"Cancel group":"New group")</button></div>
+            @if(creatingGroup)
+            {
+                <label class="block text-sm">Group name<input @bind="newGroupName" maxlength="120" class="mt-1 w-full rounded border bg-transparent p-2" /></label>
+                <p class="text-xs text-slate-500">Select colleagues below · @groupUsers.Count / 49</p>
+                <div class="flex flex-wrap gap-2">@foreach(var person in groupUsers){<button type="button" class="rounded border px-2 py-1 text-xs" @onclick="()=>groupUsers.Remove(person.Key)">@person.Value ×</button>}</div>
+            }
+            <label class="sr-only" for="chat-contact-search">Search staff</label>
+            <input id="chat-contact-search" type="search" @bind="search" maxlength="100" placeholder="Search staff name" class="w-full rounded border bg-transparent p-2 text-sm" />
+            <div class="flex gap-2"><select aria-label="Staff filter" @bind="filter" class="min-w-0 flex-1 rounded border bg-transparent p-2 text-sm"><option value="all">All staff</option><option value="hr">HR</option><option value="supervisor">My supervisors</option></select><button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="SearchAsync">Search</button></div>
+            <div class="max-h-48 overflow-y-auto divide-y">
+                @foreach(var contact in contacts)
+                {
+                    <div class="flex items-center gap-2 py-2 text-sm">
+                        @if(creatingGroup)
+                        {<label class="flex min-w-0 flex-1 items-center gap-2"><input type="checkbox" checked="@groupUsers.ContainsKey(contact.UserId)" disabled="@busy" @onchange="e=>ToggleGroupUser(contact,e.Value is true)" /><span>@contact.Name</span></label>}
+                        else
+                        {<button type="button" class="min-w-0 flex-1 text-left hover:underline" disabled="@busy" @onclick="()=>StartAsync(contact.UserId)">@contact.Name @if(contact.IsSupervisor){<span class="text-xs text-slate-500">· My supervisor</span>}@if(contact.IsHr){<span class="text-xs text-slate-500">· HR</span>}</button>}
+                        @if(!creatingGroup&&activeChat?.CanManage==true&&!activeChat.Members.Any(m=>m.UserId==contact.UserId&&m.LeftAtUtc==null))
+                        {<button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>GroupActionAsync(()=>Chat.AddMemberAsync(selected,contact.UserId))">Add</button>}
+                    </div>
+                }
+                @if(contacts.Count==0){<p class="py-2 text-sm text-slate-500">No staff found.</p>}
+            </div>
+            @if(creatingGroup){<button type="button" class="app-button app-button-primary" disabled="@(busy||groupUsers.Count==0||string.IsNullOrWhiteSpace(newGroupName))" @onclick="CreateGroupAsync">Create group</button>}
+                </div>
+            </details>
+        </aside>
+        <section class="min-w-0 overflow-hidden rounded-xl border lg:col-span-2" aria-label="Conversation">
+            @if(activeChat==null){<p class="p-4 text-sm text-slate-500">Select a conversation or find a staff member to start chatting.</p>}
+            else
+            {
+                <div class="border-b px-4 py-3"><h2 class="font-semibold">@activeChat.Name @if(activeChat.IsGroup){<span class="text-xs text-slate-500">Group</span>}</h2></div>
+                <details class="border-b px-4 py-2 text-sm">
+                    <summary class="cursor-pointer">@(activeChat.IsGroup?$"Members ({activeChat.Members.Count(m=>m.LeftAtUtc==null)})":"Make this a group")</summary>
+                    @if(!activeChat.IsGroup)
+                    {
+                        <div class="mt-2 flex flex-wrap gap-2"><input aria-label="Group name" @bind="groupTitle" maxlength="120" placeholder="Group name" class="min-w-0 flex-1 rounded border bg-transparent p-2" /><button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>GroupActionAsync(()=>Chat.ConvertToGroupAsync(selected,groupTitle))">Make group</button></div>
+                        <p class="mt-1 text-xs text-slate-500">Existing messages remain. Both participants become managers; new members see messages from when they join.</p>
+                    }
+                    else
+                    {
+                        @if(activeChat.CanManage)
+                        {
+                            <div class="mt-2 flex flex-wrap gap-2"><input aria-label="Group name" @bind="groupTitle" maxlength="120" class="min-w-0 flex-1 rounded border bg-transparent p-2" /><button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>GroupActionAsync(()=>Chat.RenameGroupAsync(selected,groupTitle))">Rename</button></div>
+                            <p class="mt-2 text-xs text-slate-500">Open New chat or add members on the left, search colleagues and choose Add. Removing a member keeps their messages.</p>
+                        }
+                        <div class="mt-2 divide-y">
+                        @foreach(var member in activeChat.Members.Where(m=>m.LeftAtUtc==null))
+                        {
+                            <div @key="member.MembershipId" class="flex flex-wrap items-center justify-between gap-2 py-2">
+                                <span>@member.Name @(member.IsMe?"(You)":"") @if(member.IsManager){<span class="text-xs text-slate-500">· Manager</span>}@if(!member.IsAvailable){<span class="text-xs text-slate-500">· Unavailable</span>}</span>
+                                <div class="flex flex-wrap gap-2">
+                                    @if(activeChat.CanManage&&!member.IsMe&&member.IsAvailable){<button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>GroupActionAsync(()=>Chat.SetManagerAsync(selected,member.UserId,!member.IsManager))">@(member.IsManager?"Remove manager role":"Make manager")</button>}
+                                    @if(activeChat.CanManage||member.IsMe){<button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>RemoveMemberAsync(member)">@(member.IsMe?"Leave group":"Remove")</button>}
+                                </div>
+                            </div>
+                        }
+                        </div>
+                        @if(activeChat.CanManage&&activeChat.Members.Any(m=>m.LeftAtUtc!=null))
+                        {<details class="mt-2 border-t pt-2"><summary class="cursor-pointer">Previous memberships</summary>@foreach(var former in activeChat.Members.Where(m=>m.LeftAtUtc!=null)){<p class="py-1 text-xs text-slate-500">@former.Name · @former.JoinedAtUtc.AddHours(5).ToString("dd MMM HH:mm") – @former.LeftAtUtc?.AddHours(5).ToString("dd MMM HH:mm")</p>}</details>}
+                    }
+                </details>
+                <div @ref="messageList" class="space-y-3 overflow-y-auto p-3" style="height: min(55vh, 32rem);" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
+                    @if(activeChat.HasOlder){<button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadOlderAsync">Load older messages</button>}
+                    @foreach(var message in activeChat.Messages)
+                    {
+                        <article @key="message.Id" class="max-w-[90%] rounded-lg border p-3 @(message.IsMine?"ml-auto bg-blue-50":"mr-auto")">
+                            <p class="mb-1 text-xs text-slate-500">@(message.IsMine?"You":message.SenderName) · @message.SentAtUtc.AddHours(5).ToString("dd MMM HH:mm")</p>
+                            @if(message.Request!=null)
+                            {<div class="mb-2 rounded border px-2 py-1 text-xs">@if(message.Request.Url!=null){<a href="@message.Request.Url" class="underline">@message.Request.Reference</a>}else{<span>@message.Request.Reference <span class="text-slate-500">· Information only</span></span>} · @message.Request.Type</div>}
+                            else if(message.HasUnavailableReference){<p class="mb-2 text-xs text-slate-500">Request reference unavailable</p>}
+                            <p class="whitespace-pre-wrap break-words text-sm">@message.Body</p>
+                        </article>
+                    }
+                    @if(activeChat.Messages.Count==0){<p class="text-sm text-slate-500">No messages yet.</p>}
+                </div>
+                @if(activeChat.CanSend)
+                {
+                    <fieldset disabled="@busy" class="space-y-2 border-t p-3">
+                        <details>
+                            <summary class="cursor-pointer text-sm">Attach a request reference (optional)</summary>
+                            <div class="mt-2 grid gap-2 sm:grid-cols-3">
+                                <label class="text-xs">Status<select @bind="requestStatus" @bind:after="SearchRequestsAsync" class="mt-1 block w-full rounded border bg-transparent p-2 text-sm"><option value="0">All open statuses</option>@foreach(var status in requestStatuses){<option value="@status.Id">@status.Name</option>}</select></label>
+                                <label class="text-xs">Submitted from<input type="date" @bind="requestFrom" @bind:after="SearchRequestsAsync" class="mt-1 block w-full rounded border bg-transparent p-2 text-sm" /></label>
+                                <label class="text-xs">Submitted to<input type="date" @bind="requestTo" @bind:after="SearchRequestsAsync" class="mt-1 block w-full rounded border bg-transparent p-2 text-sm" /></label>
+                            </div>
+                            <button type="button" class="app-button app-button-secondary mt-2" @onclick="ResetRequestSearchAsync">Reset filters</button>
+                            <select aria-label="Attached request" @bind="requestId" class="mt-2 w-full rounded border bg-transparent p-2 text-sm"><option value="0">No request attached</option>@foreach(var item in references){<option value="@item.Id">@item.Reference · @item.Type</option>}</select>
+                            @if(requestSearched&&references.Count==0){<p class="mt-1 text-xs text-slate-500">No matching open request is available for you to attach.</p>}
+                        </details>
+                        <label for="chat-message" class="sr-only">Message</label>
+                        <textarea id="chat-message" @bind="body" @bind:event="oninput" maxlength="4000" rows="3" placeholder="Write a message…" class="w-full rounded border bg-transparent p-2 text-sm"></textarea>
+                        <div class="flex items-center justify-between gap-2"><span class="text-xs text-slate-500">@body.Length / 4,000</span><button type="button" class="app-button app-button-primary" disabled="@(string.IsNullOrWhiteSpace(body))" @onclick="SendAsync">Send</button></div>
+                    </fieldset>
+                }
+                else{<p class="border-t p-3 text-sm text-slate-500">This colleague is no longer available for chat. Your conversation history remains available.</p>}
+            }
+        </section>
+    </div>
+</div>
+@code {
+    [SupplyParameterFromQuery(Name="conversationId")] public long? ConversationId {get;set;}
+    private List<HRM.Services.ChatContact> contacts=[];
+    private List<HRM.Services.ChatThread> threads=[];
+    private List<HRM.Services.ChatReference> references=[];
+    private List<HRM.Services.ChatRequestStatus> requestStatuses=[];
+    private DateTime? requestFrom,requestTo;
+    private int requestStatus;
+    private HRM.Services.ChatPage? activeChat;
+    private string search="",filter="all",body="";
+    private string? error;
+    private long selected;
+    private int conversationVersion;
+    private int requestId;
+    private bool creatingGroup;
+    private string newGroupName="",groupTitle="";
+    private readonly Dictionary<int,string> groupUsers=[];
+    private void ToggleGroupCreation(){creatingGroup=!creatingGroup;groupUsers.Clear();newGroupName="";}
+    private void ToggleGroupUser(HRM.Services.ChatContact contact,bool selected){if(selected)groupUsers[contact.UserId]=contact.Name;else groupUsers.Remove(contact.UserId);}
+    private async Task CreateGroupAsync()
+    {
+        if(busy)return;busy=true;error=null;
+        try{var id=await Chat.CreateGroupAsync(newGroupName,groupUsers.Keys);creatingGroup=false;groupUsers.Clear();await OpenCoreAsync(id);Navigation.NavigateTo($"/online/chat?conversationId={id}",replace:true);}
+        catch(Exception ex){Fail(ex);}finally{busy=false;}
+    }
+    private Task RemoveMemberAsync(HRM.Services.ChatMember member)=>GroupActionAsync(()=>Chat.RemoveMemberAsync(selected,member.UserId),member.IsMe);
+    private async Task GroupActionAsync(Func<Task> operation,bool leaving=false)
+    {
+        if(busy)return;busy=true;error=null;
+        try
+        {
+            await operation();references=[];requestId=0;requestSearched=false;
+            if(leaving){conversationVersion++;selected=0;activeChat=null;body="";Navigation.NavigateTo("/online/chat",replace:true);}
+            else{activeChat=await Chat.ReadAsync(selected);groupTitle=activeChat.IsGroup?activeChat.Name:"";}
+            threads=await Chat.ListAsync();
+        }
+        catch(Exception ex){Fail(ex);}finally{busy=false;}
+    }
+    private bool busy,disposed,requestSearched,scroll,forceScroll;
+    private Guid messageKey=Guid.NewGuid();
+    private ElementReference messageList;
+    private readonly CancellationTokenSource stop=new();
+    private Task? watching;
+    protected override async Task OnInitializedAsync()
+    {
+        try{contacts=await Chat.SearchContactsAsync("");threads=await Chat.ListAsync();}
+        catch(Exception ex){Fail(ex);}
+        watching=WatchAsync();
+    }
+    protected override async Task OnParametersSetAsync()
+    {
+        if(ConversationId is >0&&selected!=ConversationId.Value)await OpenAsync(ConversationId.Value,false);
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if(scroll&&activeChat!=null){scroll=false;try{await JS.InvokeVoidAsync("hrmChat.scrollToLatest",messageList,forceScroll);}catch(JSDisconnectedException){}forceScroll=false;}
+    }
+    private async Task SearchAsync(){if(busy)return;busy=true;error=null;try{contacts=await Chat.SearchContactsAsync(search,filter);}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task StartAsync(int user){if(busy)return;busy=true;error=null;try{var id=await Chat.StartAsync(user);await OpenCoreAsync(id);Navigation.NavigateTo($"/online/chat?conversationId={id}",replace:true);}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task OpenAsync(long id,bool navigate=true){if(busy)return;busy=true;error=null;try{await OpenCoreAsync(id);if(navigate)Navigation.NavigateTo($"/online/chat?conversationId={id}",replace:true);}catch(Exception ex){activeChat=null;selected=0;Fail(ex);}finally{busy=false;}}
+    private async Task OpenCoreAsync(long id){conversationVersion++;selected=id;activeChat=null;activeChat=await Chat.ReadAsync(id);requestStatuses=await Chat.GetRequestStatusesAsync(id);requestFrom=requestTo=null;requestStatus=0;groupTitle=activeChat.IsGroup?activeChat.Name:"";body="";messageKey=Guid.NewGuid();references=await Chat.SearchRequestsAsync(id,null);requestId=0;requestSearched=true;threads=await Chat.ListAsync();scroll=forceScroll=true;}
+    private async Task SearchRequestsAsync(){if(busy||selected==0)return;busy=true;error=null;try{references=await Chat.SearchRequestsAsync(selected,null,requestFrom,requestTo,requestStatus>0?requestStatus:null);requestSearched=true;if(!references.Any(r=>r.Id==requestId))requestId=0;}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task ResetRequestSearchAsync(){if(busy)return;requestFrom=requestTo=null;requestStatus=0;await SearchRequestsAsync();}
+    private async Task SendAsync(){if(busy||selected==0)return;busy=true;error=null;try{await Chat.SendAsync(selected,body,requestId>0?requestId:null,messageKey);body="";messageKey=Guid.NewGuid();requestId=0;await RefreshAsync();scroll=forceScroll=true;}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task LoadOlderAsync(){if(busy||activeChat==null||activeChat.Messages.Count==0)return;busy=true;try{var older=await Chat.ReadAsync(selected,activeChat.Messages.Min(m=>m.Id),false);activeChat=activeChat with{Messages=older.Messages.Concat(activeChat.Messages).DistinctBy(m=>m.Id).OrderBy(m=>m.Id).ToList(),HasOlder=older.HasOlder};}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task RefreshAsync()
+    {
+        var revision=conversationVersion;var id=selected;
+        var refreshedThreads=await Chat.ListAsync();
+        if(revision!=conversationVersion)return;
+        threads=refreshedThreads;
+        if(id==0)return;
+        var visible=await JS.InvokeAsync<bool>("hrmChat.isVisible");
+        var fresh=await Chat.ReadAsync(id,markRead:visible);
+        if(revision!=conversationVersion||selected!=id)return;
+        var newMessages=activeChat==null||fresh.Messages.LastOrDefault()?.Id!=activeChat.Messages.LastOrDefault()?.Id;
+        if(activeChat!=null&&activeChat.Id==fresh.Id&&activeChat.Messages.Count>50)fresh=fresh with{Messages=activeChat.Messages.Concat(fresh.Messages).GroupBy(m=>m.Id).Select(g=>g.Last()).OrderBy(m=>m.Id).ToList(),HasOlder=activeChat.HasOlder};
+        activeChat=fresh;
+        if(visible)threads=threads.Select(t=>t.Id==id?t with{Unread=0}:t).ToList();
+        if(newMessages)scroll=true;
+    }
+    private async Task WatchAsync()
+    {
+        using var timer=new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try{while(await timer.WaitForNextTickAsync(stop.Token))await InvokeAsync(async()=>{if(busy||disposed)return;try{await RefreshAsync();StateHasChanged();}catch(Exception ex){activeChat=null;selected=0;Fail(ex);StateHasChanged();}});}
+        catch(OperationCanceledException){}catch(ObjectDisposedException){}
+    }
+    private void Fail(Exception ex){Logger.LogWarning(ex,"Staff chat operation failed");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Chat is unavailable right now. Please try again.";}
+    public async ValueTask DisposeAsync(){disposed=true;await stop.CancelAsync();if(watching!=null)await watching;stop.Dispose();}
+}

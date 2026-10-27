@@ -53,6 +53,8 @@ internal static class EmptyDatabaseProvisioning
             if(await db.RequestTypes.CountAsync(x=>x.TypeName=="Supervisor Assignment Request"||x.TypeName=="Supervisor Removal Request")!=2)
                 throw new InvalidOperationException("Supervisor approval request types missing on fresh install.");
             if(await db.SupervisorChangeRequests.CountAsync()!=0)throw new InvalidOperationException("A fresh installation contains unexpected supervisor requests.");
+            if(await db.StaffChatConversations.CountAsync()!=0||await db.StaffChatMessages.CountAsync()!=0||await db.StaffChatMemberships.CountAsync()!=0||await db.StaffChatEvents.CountAsync()!=0)
+                throw new InvalidOperationException("Unexpected conversations/messages in a fresh database.");
             if(await db.LeaveHandoverRules.CountAsync()!=0)throw new InvalidOperationException("Unexpected scoped handover rules on fresh installation.");
             if(await db.JobTypeLeaveSets.CountAsync()!=0)throw new InvalidOperationException("Unexpected fresh-install Job Type leave set assignments.");
             // Rehearse the additive upgrade with a preserved business catalogue record.

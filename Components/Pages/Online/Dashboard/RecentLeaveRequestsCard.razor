@@ -84,6 +84,10 @@
                     <tr>
 
                         <th class="px-3 py-3 text-left text-xs font-semibold uppercase">
+                            Reference
+                        </th>
+
+                        <th class="px-3 py-3 text-left text-xs font-semibold uppercase">
                             Type
                         </th>
 
@@ -119,6 +123,10 @@
                     @foreach (var leave in LeaveRequests)
                     {
                         <tr class="hover:bg-slate-50">
+
+                            <td class="whitespace-nowrap px-3 py-3 text-sm font-medium">
+                                @LeaveReferences.GetValueOrDefault(leave.LeaveId, "—")
+                            </td>
 
                             <td class="px-3 py-3">
                                 @(leave.LeaveType?.Name ?? "Leave")
@@ -379,6 +387,7 @@
     }
 
     private Dictionary<int, int> LeaveRequestIds = new();
+    private Dictionary<int, string> LeaveReferences = new();
 
     private Dictionary<int, WorkflowCardInfo> WorkflowInfo = new();
     private Dictionary<int, string> RequestStatuses = new();
@@ -562,6 +571,7 @@
     private async Task LoadWorkflowInfoAsync()
     {
         LeaveRequestIds.Clear();
+        LeaveReferences.Clear();
         WorkflowInfo.Clear();
         RequestStatuses.Clear();
         ProcessingRequests.Clear();
@@ -586,6 +596,7 @@
             {
                 x.LeaveId,
                 x.RequestId,
+                Reference = x.Request.ReferenceNumber,
                 Status = x.Request.RequestState.StateName,
                 IsProcessing = x.Request.RequestState.IsProcessingState && !x.Request.RequestState.IsFinalState,
                 StateId = x.Request.RequestStateId,
@@ -606,6 +617,8 @@
                 x => x.Key,
                 x => x.First().RequestId
             );
+        LeaveReferences = mappings.GroupBy(x => x.LeaveId).ToDictionary(g => g.Key,
+            g => string.IsNullOrWhiteSpace(g.First().Reference) ? $"#{g.First().RequestId}" : g.First().Reference!);
         RequestStatuses = mappings.GroupBy(x => x.RequestId)
             .ToDictionary(x => x.Key, x => x.First().Status);
         ProcessingRequests = mappings.GroupBy(x => x.RequestId)

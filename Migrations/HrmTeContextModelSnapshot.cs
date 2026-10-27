@@ -7253,6 +7253,195 @@ namespace HRM.Migrations
                     b.ToTable("Staffs");
                 });
 
+            modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("FirstReadMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("FirstUserId")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsGroup")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("SecondReadMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("SecondUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("FirstUserId");
+
+                    b.HasIndex("SecondUserId");
+
+                    b.HasIndex("OrganisationId", "UpdatedAtUtc");
+
+                    b.HasIndex("OrganisationId", "FirstUserId", "SecondUserId")
+                        .IsUnique()
+                        .HasFilter("[IsGroup] = 0");
+
+                    b.ToTable("CH_Conversations", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CH_Conversations_Participants", "[FirstUserId] < [SecondUserId]");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatEvent", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("nvarchar(24)");
+
+                    b.Property<int>("ActorUserId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Detail")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<int?>("SubjectUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("SubjectUserId");
+
+                    b.HasIndex("ConversationId", "Id");
+
+                    b.ToTable("CH_Events", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatMembership", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int?>("AddedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<bool>("IsManager")
+                        .HasColumnType("bit");
+
+                    b.Property<long>("JoinedAfterMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("JoinedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<long>("LastReadMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("LeftAfterMessageId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("LeftAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("RemovedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedByUserId");
+
+                    b.HasIndex("RemovedByUserId");
+
+                    b.HasIndex("ConversationId", "UserId")
+                        .IsUnique()
+                        .HasFilter("[LeftAtUtc] IS NULL");
+
+                    b.HasIndex("UserId", "ConversationId", "LeftAtUtc");
+
+                    b.ToTable("CH_Memberships", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatMessage", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<Guid>("ClientMessageId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<long>("ConversationId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("SenderUserId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("SentAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId");
+
+                    b.HasIndex("ConversationId", "Id");
+
+                    b.HasIndex("SenderUserId", "ClientMessageId")
+                        .IsUnique();
+
+                    b.HasIndex("SenderUserId", "SentAtUtc");
+
+                    b.ToTable("CH_Messages", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
                 {
                     b.Property<long>("StaffNotificationId")
@@ -13190,6 +13379,96 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
                 });
 
+            modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("FirstUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SecondUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatEvent", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.StaffChatConversation", null)
+                        .WithMany()
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SubjectUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatMembership", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AddedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.StaffChatConversation", "Conversation")
+                        .WithMany("Members")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("RemovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatMessage", b =>
+                {
+                    b.HasOne("HRM.Models.StaffChatConversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("SenderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
                 {
                     b.HasOne("HRM.Models.User", null)
@@ -15147,6 +15426,13 @@ namespace HRM.Migrations
                     b.Navigation("StaffEnrollmentNumbers");
 
                     b.Navigation("TeamStaffs");
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
+                {
+                    b.Navigation("Members");
+
+                    b.Navigation("Messages");
                 });
 
             modelBuilder.Entity("HRM.Models.Team", b =>

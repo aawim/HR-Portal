@@ -9,6 +9,10 @@ public sealed partial class RequestNotificationService
     {
         if(db.Model.FindEntityType(typeof(StaffNotification)) == null) return new(0, []);
         var query = db.StaffNotifications.AsNoTracking().Where(x => x.UserId == actor.UserId && x.IndividualId == actor.PersonId && x.OrganisationId == actor.OrganisationId);
+        if(db.Model.FindEntityType(typeof(StaffChatMembership)) != null)
+            query = query.Where(n => (n.Kind != "Chat" && n.Kind != "ChatMembership") || n.Url == StaffChatService.PageUrl ||
+                db.StaffChatMemberships.Any(m => m.UserId == actor.UserId && m.LeftAtUtc == null &&
+                    m.Conversation.OrganisationId == actor.OrganisationId && n.Url == StaffChatService.PageUrl + "?conversationId=" + m.ConversationId.ToString()));
         var count = await query.CountAsync(x => x.ReadAtUtc == null, ct);
         var rows = await query.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.StaffNotificationId).Take(30).ToListAsync(ct);
         // Negative IDs distinguish non-request activity when marking a combined inbox item read.

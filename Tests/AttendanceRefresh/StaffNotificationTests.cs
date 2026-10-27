@@ -70,5 +70,23 @@ static class StaffNotificationTests
             "RequireContextAsync" => Task.FromResult(new HRM.DTOs.UserContext.UserContextDto { UserId = 1, IndividualId = 100 }),
             "GetCurrentOrganisationIdAsync" => Task.FromResult(20), "HasOrganisationAccessAsync" => Task.FromResult(true), _ => throw new Exception(method) });
         Check((await new RequestNotificationService(factory, auth, scope).GetInboxAsync()).Items.Count == 0, "Bell ignored the selected tenant and used the account's home tenant");
+        await using(var db=factory.CreateDbContext())
+        {
+            db.Users.Add(new(){UserId=5,Username="other-member",BusinessEntityID=500,UserOrganisationId=1,IsActive=true,LocalUserStateId=1});
+            db.StaffChatConversations.AddRange(new StaffChatConversation{Id=10,OrganisationId=10,IsGroup=true,Title="Member chat",FirstUserId=1,SecondUserId=2},
+                new StaffChatConversation{Id=11,OrganisationId=10,IsGroup=true,Title="Other chat",FirstUserId=2,SecondUserId=5},
+                new StaffChatConversation{Id=12,OrganisationId=10,IsGroup=true,Title="Former chat",FirstUserId=1,SecondUserId=2});
+            db.StaffChatMemberships.AddRange(new StaffChatMembership{ConversationId=10,UserId=1},new StaffChatMembership{ConversationId=10,UserId=2},
+                new StaffChatMembership{ConversationId=11,UserId=2},new StaffChatMembership{ConversationId=11,UserId=5},
+                new StaffChatMembership{ConversationId=12,UserId=1,LeftAtUtc=DateTime.UtcNow},new StaffChatMembership{ConversationId=12,UserId=2});
+            foreach(var id in new[]{10,11,12})db.StaffNotifications.Add(new(){UserId=1,IndividualId=100,OrganisationId=10,Kind="Chat",Message="Chat activity",Url=$"/online/chat?conversationId={id}",CreatedAtUtc=DateTime.UtcNow,ReadAtUtc=id==12?DateTime.UtcNow:null});
+            db.StaffNotifications.Add(new(){UserId=1,IndividualId=100,OrganisationId=10,Kind="ChatMembership",Message="Old group invitation",Url="/online/chat?conversationId=12",CreatedAtUtc=DateTime.UtcNow});
+            db.StaffNotifications.Add(new(){UserId=1,IndividualId=100,OrganisationId=10,Kind="ChatMembership",Message="You were removed from a group.",Url="/online/chat",CreatedAtUtc=DateTime.UtcNow});
+            await db.SaveChangesAsync();
+        }
+        inbox=await inboxService.GetInboxAsync();
+        Check(inbox.Items.Any(i=>i.Url=="/online/chat?conversationId=10")&&!inbox.Items.Any(i=>i.Url is "/online/chat?conversationId=11" or "/online/chat?conversationId=12"),"Non-member or removed chat links appeared in the bell");
+        Check(inbox.Items.Any(i=>i.Message=="You were removed from a group."),"Personal removal notice was lost");
+
     }
 }

@@ -1,0 +1,35 @@
+@page "/online/chat/{ConversationId:long}/requests/{RequestId:int}"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HRM.Services.StaffChatService Chat
+@inject ILogger<ChatRequestDetails> Logger
+
+<section class="space-y-3 rounded-xl border p-4">
+    <a href="@($"/online/chat?conversationId={ConversationId}")" class="text-sm underline">Back to chat</a>
+    <h1 class="text-lg font-semibold">Request details</h1>
+    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    else if(details==null){<p class="text-sm text-slate-500">Loading request…</p>}
+    else
+    {
+        <dl class="grid gap-3 sm:grid-cols-2">
+            <div><dt class="text-xs text-slate-500">Reference</dt><dd class="text-sm font-semibold">@details.Reference</dd></div>
+            <div><dt class="text-xs text-slate-500">Request type</dt><dd class="text-sm">@details.Type</dd></div>
+            <div><dt class="text-xs text-slate-500">Requesting staff member</dt><dd class="text-sm">@details.Applicant</dd></div>
+            <div><dt class="text-xs text-slate-500">Status</dt><dd class="text-sm">@details.Status</dd></div>
+            <div><dt class="text-xs text-slate-500">Submitted</dt><dd class="text-sm">@details.AppliedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</dd></div>
+            @if(details.EffectiveDate.HasValue){<div><dt class="text-xs text-slate-500">Effective date</dt><dd class="text-sm">@details.EffectiveDate.Value.ToString("dd MMM yyyy")</dd></div>}
+            @foreach(var field in details.Details){<div><dt class="text-xs text-slate-500">@field.Label</dt><dd class="whitespace-pre-wrap break-words text-sm">@field.Value</dd></div>}
+        </dl>
+    }
+</section>
+@code {
+    [Parameter] public long ConversationId {get;set;}
+    [Parameter] public int RequestId {get;set;}
+    private HRM.Services.ChatRequestDetails? details;
+    private string? error;
+    protected override async Task OnParametersSetAsync()
+    {
+        details=null;error=null;
+        try{details=await Chat.GetRequestDetailsAsync(ConversationId,RequestId);}
+        catch(Exception ex){Logger.LogWarning(ex,"Opening request from chat");error=ex is UnauthorizedAccessException?ex.Message:"Request details could not be loaded. Please try again.";}
+    }
+}

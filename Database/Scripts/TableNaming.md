@@ -47,3 +47,7 @@ Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccru
 `LH_LeaveHandoverRules` and `LH_LeaveHandoverRuleTypes` store scoped, effective-dated work-handover requirements and selected leave types. They share the established `LH_` handover prefix. Existing `Leaves` receives nullable `HandoverRuleSnapshot`; historical rows are not rewritten.
 
 `OT_WorkRequests` stores dated OT preapproval and missing-clock requests; `OT_WorkTasks` stores their task list. `OT_OvertimeRequests` retains claims and gains saved clock event references, timestamp snapshots, claim source and an optional approved task reference.
+
+`CH_Conversations` and `CH_Messages` store private tenant-scoped direct staff chats, read cursors and optional authorised request references. User and request foreign keys are restrictive; history is not cascade-deleted.
+
+`CH_Memberships` retains each join/leave interval, manager role, message visibility boundary and read cursor. `CH_Events` retains group creation, conversion, membership and manager-change events. Existing `CH_Conversations` gains `IsGroup` and `Title`; existing direct conversations and message records are preserved.
