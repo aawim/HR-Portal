@@ -29,7 +29,7 @@ public sealed class SupervisorChangeRequestMapping : IEntityTypeConfiguration<Su
         b.HasOne(x=>x.Request).WithOne().HasForeignKey<SupervisorChangeRequest>(x=>x.RequestId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Job>().WithMany().HasForeignKey(x=>x.JobId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne<Individual>().WithMany().HasForeignKey(x=>x.IndividualId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne<Individual>().WithMany().HasForeignKey(x=>x.IndividualId).HasConstraintName("FK_SV_SupervisorChangeRequests_Individuals_IndividualId").OnDelete(DeleteBehavior.Restrict);
         b.HasOne<User>().WithMany().HasForeignKey(x=>x.CreatedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

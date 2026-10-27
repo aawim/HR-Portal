@@ -25,7 +25,7 @@ internal static class IndividualImageSqlSmoke
         var denied=false;try{await service.RegisterAsync(model);}catch(InvalidOperationException){denied=true;}if(!denied)throw new InvalidOperationException("SQL passport duplicate accepted.");
         model.IsForeigner=false;model.NationalId="SMOKE-LOCAL-"+token;model.ImageData=null;var local=await service.RegisterAsync(model);
         if(!await db.Idcards.AnyAsync(p=>p.BusinessEntityId==local)||await db.Passports.AnyAsync(p=>p.BusinessEntityId==local))throw new InvalidOperationException("SQL local identity selection failed.");
-        denied=false;try{await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.Individuals SET ImageContentType='image/svg+xml' WHERE BusinessEntityID={id}");}catch(SqlException ex)when(ex.Number==547){denied=true;}if(!denied)throw new InvalidOperationException("SQL image MIME constraint failed.");
+        denied=false;try{await db.Database.ExecuteSqlInterpolatedAsync($"UPDATE dbo.BE_Individuals SET ImageContentType='image/svg+xml' WHERE BusinessEntityID={id}");}catch(SqlException ex)when(ex.Number==547){denied=true;}if(!denied)throw new InvalidOperationException("SQL image MIME constraint failed.");
         Console.WriteLine("PASS isolated SQL individual registration: preserved old identities, local/foreign selection, image bytes/MIME, duplicate passport denial and image constraint.");
     }
     sealed class Factory(string connection):IDbContextFactory<HrmTeContext>

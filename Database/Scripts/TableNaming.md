@@ -54,4 +54,6 @@ Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccru
 
 `OT_PayrollBatches` stores tenant payroll month, reference and processing audit. `OT_PayrollItems` snapshots approved claims and prevents a claim being processed twice. `TR_OT_PayrollStateLock` protects processed (and legacy paid) claim statuses on `Requests`.
 
-`Individuals` gains nullable `IsForeigner`, `ImageData` and `ImageContentType` through an additive migration. Existing individuals are preserved without guessed classification. No new physical table is created.
+`BE_Individuals` gains nullable `IsForeigner`, `ImageData` and `ImageContentType` through an additive migration. Existing individuals are preserved without guessed classification. No new physical table is created.
+
+The business entity registry uses `BE_` consistently: `Individuals` → `BE_Individuals`, `BusinessEntities` → `BE_BusinessEntities`, `VerifiedStates` → `BE_VerifiedStates`, and `BusinessEntityStates` → `BE_BusinessEntityStates`. `PrefixBusinessEntityTables` and `20261027_PrefixBusinessEntityTables.sql` rename existing objects in place. Original primary keys, foreign keys, indexes and state IDs are retained; the reviewed legacy `UserGetInfo` SQL module is updated without changing its interface or permissions. Historical applied migrations/scripts retain the names used when originally deployed. Current EF mappings and runtime SQL use the prefixed tables.

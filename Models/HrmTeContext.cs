@@ -970,6 +970,17 @@ public partial class HrmTeContext : DbContext
 
         modelBuilder.Entity<BusinessEntity>(entity =>
         {
+            entity.ToTable("BE_BusinessEntities");
+            entity.HasKey(e=>e.BusinessEntityID).HasName("PK_BusinessEntities");
+            entity.HasIndex(e=>e.BusinessEntityTypeId).HasDatabaseName("IX_BusinessEntities_BusinessEntityTypeID");
+            entity.HasIndex(e=>e.LastStateChangedByUserId).HasDatabaseName("IX_BusinessEntities_LastStateChangedByUserID");
+            entity.HasIndex(e=>e.OperationLogId).HasDatabaseName("IX_BusinessEntities_OperationLogID");
+            entity.HasIndex(e=>e.VerifiedBy).HasDatabaseName("IX_BusinessEntities_VerifiedBy");
+            entity.HasIndex(e=>e.VerifiedStateId).HasDatabaseName("IX_BusinessEntities_VerifiedStateID");
+            entity.HasIndex(e=>e.BusinessEntityStateId).HasDatabaseName("IX_BusinessEntities_BusinessEntityStateID");
+            entity.HasOne(e=>e.Organisation).WithOne(e=>e.BusinessEntity).HasForeignKey<Organisation>(e=>e.BusinessEntityID).HasConstraintName("FK_Organisations_BusinessEntities_BusinessEntityID");
+            entity.HasOne<VerifiedState>().WithMany().HasForeignKey(x=>x.VerifiedStateId).HasConstraintName("FK_BusinessEntities_VerifiedStates");
+            entity.HasOne<BusinessEntityState>().WithMany().HasForeignKey(x=>x.BusinessEntityStateId).HasConstraintName("FK_BusinessEntities_BusinessEntityStates");
             entity.Property(e => e.BusinessEntityID).HasColumnName("BusinessEntityID");
             entity.Property(e => e.BusinessEntityStateId).HasColumnName("BusinessEntityStateID");
             entity.Property(e => e.BusinessEntityTypeId).HasColumnName("BusinessEntityTypeID");
@@ -1687,8 +1698,9 @@ public partial class HrmTeContext : DbContext
         {
             entity.Property(e=>e.ImageContentType).HasMaxLength(20);
             entity.Property(e=>e.ImageData).HasColumnType("varbinary(max)");
-            entity.ToTable("Individuals",table=>table.HasCheckConstraint("CK_Individuals_Image","([ImageData] IS NULL AND [ImageContentType] IS NULL) OR ([ImageData] IS NOT NULL AND DATALENGTH([ImageData]) BETWEEN 1 AND 2097152 AND [ImageContentType] IS NOT NULL AND [ImageContentType] IN ('image/png','image/jpeg'))"));
-            entity.HasKey(e => e.BusinessEntityId);
+            entity.ToTable("BE_Individuals",table=>table.HasCheckConstraint("CK_Individuals_Image","([ImageData] IS NULL AND [ImageContentType] IS NULL) OR ([ImageData] IS NOT NULL AND DATALENGTH([ImageData]) BETWEEN 1 AND 2097152 AND [ImageContentType] IS NOT NULL AND [ImageContentType] IN ('image/png','image/jpeg'))"));
+            entity.HasKey(e => e.BusinessEntityId).HasName("PK_Individuals");
+            entity.HasIndex(e=>e.CountryId).HasDatabaseName("IX_Individuals_CountryID");
 
             entity.Property(e => e.BusinessEntityId)
                 .ValueGeneratedNever()

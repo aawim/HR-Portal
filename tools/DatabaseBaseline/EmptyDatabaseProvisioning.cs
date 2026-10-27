@@ -60,7 +60,11 @@ internal static class EmptyDatabaseProvisioning
             // Rehearse the additive upgrade with a preserved business catalogue record.
             var sentinel = new JobType { TypeName = "Integration preservation check", IsActive = true };
             db.JobTypes.Add(sentinel); await db.SaveChangesAsync();
-            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS dbo.TR_OT_PayrollStateLock; DROP TABLE dbo.OT_PayrollItems; DROP TABLE dbo.OT_PayrollBatches; DROP TABLE dbo.OT_OvertimeRequests; DROP TABLE dbo.OT_WorkTasks; DROP TABLE dbo.OT_WorkRequests; DROP TABLE dbo.LS_JobTypeLeaveSets; DELETE dbo.__EFMigrationsHistory WHERE MigrationId IN ('20261027052521_OvertimePayrollProcessing','20261026085804_OvertimeWorkRequests','20261025120600_SystemGapHardening','20261025120700_PreserveTransferHistory','20261026050306_JobTypeLeaveSetAssignments');");
+            // Historical migrations must be rehearsed against their historical table names.
+            // This is restricted to the generated empty integration database; no source database is renamed backwards.
+            if(db.Database.GetDbConnection().Database!=name||!name.StartsWith("HRM_Integration_",StringComparison.Ordinal))throw new InvalidOperationException("Unsafe upgrade fixture database.");
+            await db.Database.ExecuteSqlRawAsync("EXEC sys.sp_rename 'dbo.BE_Individuals','Individuals'; EXEC sys.sp_rename 'dbo.BE_BusinessEntities','BusinessEntities'; EXEC sys.sp_rename 'dbo.BE_VerifiedStates','VerifiedStates'; EXEC sys.sp_rename 'dbo.BE_BusinessEntityStates','BusinessEntityStates';");
+            await db.Database.ExecuteSqlRawAsync("DROP TRIGGER IF EXISTS dbo.TR_OT_PayrollStateLock; DROP TABLE dbo.OT_PayrollItems; DROP TABLE dbo.OT_PayrollBatches; DROP TABLE dbo.OT_OvertimeRequests; DROP TABLE dbo.OT_WorkTasks; DROP TABLE dbo.OT_WorkRequests; DROP TABLE dbo.LS_JobTypeLeaveSets; DELETE dbo.__EFMigrationsHistory WHERE MigrationId IN ('20261027064659_PrefixBusinessEntityTables','20261027052521_OvertimePayrollProcessing','20261026085804_OvertimeWorkRequests','20261025120600_SystemGapHardening','20261025120700_PreserveTransferHistory','20261026050306_JobTypeLeaveSetAssignments');");
             await db.Database.MigrateAsync(); await db.Database.MigrateAsync();
             if (!await db.JobTypes.AnyAsync(x => x.JobTypeId == sentinel.JobTypeId && x.TypeName == sentinel.TypeName) ||
                 (await db.Database.GetPendingMigrationsAsync()).Any()) throw new InvalidOperationException("Upgrade lost existing data or left pending migrations.");

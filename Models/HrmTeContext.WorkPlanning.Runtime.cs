@@ -418,6 +418,7 @@ public partial class HrmTeContext
             entity.HasOne(e => e.Individual)
                 .WithMany()
                 .HasForeignKey(e => e.IndividualId)
+                .HasConstraintName("FK_WorkAssignmentOwners_Individuals_IndividualID")
                 .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasOne(e => e.Job)
@@ -545,8 +546,8 @@ public partial class HrmTeContext
 
             // Historical transfers must never cascade through multiple employee/job paths.
             entity.HasOne(e=>e.WorkAssignment).WithMany().HasForeignKey(e=>e.WorkAssignmentId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e=>e.FromIndividual).WithMany().HasForeignKey(e=>e.FromIndividualId).OnDelete(DeleteBehavior.Restrict);
-            entity.HasOne(e=>e.ToIndividual).WithMany().HasForeignKey(e=>e.ToIndividualId).OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e=>e.FromIndividual).WithMany().HasForeignKey(e=>e.FromIndividualId).HasConstraintName("FK_WorkAssignmentTransfers_Individuals_FromIndividualID").OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e=>e.ToIndividual).WithMany().HasForeignKey(e=>e.ToIndividualId).HasConstraintName("FK_WorkAssignmentTransfers_Individuals_ToIndividualID").OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e=>e.FromJob).WithMany().HasForeignKey(e=>e.FromJobId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e=>e.ToJob).WithMany().HasForeignKey(e=>e.ToJobId).OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.WorkAssignmentTransferState)

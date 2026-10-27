@@ -198,7 +198,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
     private static async Task LockPersonAsync(HrmTeContext db, int person)
     {
         if (db.Database.IsSqlServer())
-            await db.Individuals.FromSqlInterpolated($"SELECT * FROM dbo.Individuals WITH (UPDLOCK,HOLDLOCK) WHERE BusinessEntityID={person}").LoadAsync();
+            await db.Individuals.FromSqlInterpolated($"SELECT * FROM dbo.BE_Individuals WITH (UPDLOCK,HOLDLOCK) WHERE BusinessEntityID={person}").LoadAsync();
     }
 
     private async Task OpenStageAsync(HrmTeContext db, StaffOnboardingRequest r, WfRequestInstance instance, WfWorkflowStage stage)

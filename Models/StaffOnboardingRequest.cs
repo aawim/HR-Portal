@@ -33,7 +33,7 @@ public sealed class StaffOnboardingMapping : IEntityTypeConfiguration<StaffOnboa
         b.Property(x => x.Remarks).HasMaxLength(1000);
         b.Property(x => x.RowVersion).IsRowVersion();
         b.HasOne(x => x.Request).WithOne().HasForeignKey<StaffOnboardingRequest>(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne(x => x.Individual).WithMany().HasForeignKey(x => x.IndividualId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.Individual).WithMany().HasForeignKey(x => x.IndividualId).HasConstraintName("FK_SO_StaffOnboardingRequests_Individuals_IndividualId").OnDelete(DeleteBehavior.Restrict);
         b.HasOne<Organisation>().WithMany().HasForeignKey(x => x.OrganisationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<OrganisationStructure>().WithMany().HasForeignKey(x => x.OrganisationStructureId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne<JobType>().WithMany().HasForeignKey(x => x.JobTypeId).OnDelete(DeleteBehavior.Restrict);

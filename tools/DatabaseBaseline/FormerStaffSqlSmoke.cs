@@ -17,6 +17,9 @@ internal static class FormerStaffSqlSmoke
         ((ChatSmokeAccess)(object)access).Handler=(m,a)=>m switch{"RequireContextAsync"=>Task.FromResult(new UserContextDto{UserId=0,IndividualId=0,IsSuperAdministrator=true}),"GetCurrentOrganisationIdAsync"=>Task.FromResult(record.Org),"HasOrganisationAccessAsync"=>Task.FromResult((int)a[0]! ==record.Org),"HasPermissionAsync"=>Task.FromResult(false),_=>throw new InvalidOperationException(m)};
         var factory=new Factory(connection);var service=new FormerStaffService(factory,access);
         var result=await service.SearchAsync();if(!result.Staff.Any(r=>r.Id==record.Person))throw new InvalidOperationException("Former staff SQL search omitted the historical person.");
+        var row=result.Staff.First(r=>r.Id==record.Person);
+        var filtered=await service.SearchAsync(row.Name,filters:new(row.DepartmentId,row.JobTypeId,row.Ended?.Date,row.Ended?.Date,row.VerifiedStateId??-1,row.BusinessEntityStateId??-1));
+        if(!filtered.Staff.Any(r=>r.Id==record.Person)||filtered.VerifiedStates.Count==0||filtered.EntityStates.Count==0)throw new InvalidOperationException("SQL former staff combined filters/catalogues failed.");
         var report=await service.DetailAsync(record.Person);
         if(!report.Tables.Any(t=>t.Name=="Employment history"&&t.Rows.Count>0))throw new InvalidOperationException("Former SQL employment history unavailable.");
         var bytes=AttendanceReportExport.Excel(report);if(bytes.Length<1000)throw new InvalidOperationException("Former SQL export empty.");

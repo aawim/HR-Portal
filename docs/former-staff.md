@@ -13,3 +13,9 @@ HrmTeContext checks changed records before saving or generating notifications. I
 An in-progress transaction may complete the approval which ends an active employment/position; subsequent transactions cannot edit that ended record. This prevents the write guard from blocking the final workflow/audit save of the termination itself. No new tables or migrations are required.
 
 Verification includes former/current and tenant boundaries, ended-position detection, identity/ownership reassignment protection, attendance additions, profile/job/leave/request edits, deleted employment, superadmin denial, information Excel/PDF exports, and restored SQL Server history/attendance queries and write rejection. The web application and its background workers are not started by these checks.
+
+## Filters and registry states
+
+Department, Job Type, employment-ended From/To (inclusive), verification state, business entity state and text search apply together, with All options and Reset. The employment filters use the same latest ended employment shown in each row. Historical departments are available even if no longer active. Verification and entity-state choices come from `BE_VerifiedStates` and `BE_BusinessEntityStates`, with Not set for null legacy values. Filter choices remain available when no records match. List exports include state names and the applied filter description.
+
+The four registry tables now use the shared `BE_` prefix. Deploy the data-preserving prefix migration before starting the matching application version. No staff history is copied or replaced. Rehearsal verifies exact record snapshots, table object IDs, original foreign keys/indexes, `UserGetInfo` results, combined filters and repeat execution. All previous write restrictions remain in force.

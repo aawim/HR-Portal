@@ -4,8 +4,20 @@ using Microsoft.EntityFrameworkCore;
 using System.Globalization;
 namespace HRM.Services;
 
-public sealed record FormerStaffRow(int Id,string Name,string EmployeeNumber,string NationalId,string Passport,string Department,string JobType,DateTime Joined,DateTime? Ended);
-public sealed record FormerStaffData(string Organisation,List<FormerStaffRow> Staff);
+public sealed record FormerStaffRow(int Id,string Name,string EmployeeNumber,string NationalId,string Passport,string Department,string JobType,DateTime Joined,DateTime? Ended)
+{
+    public int DepartmentId {get;init;}public int JobTypeId {get;init;}
+    public int? VerifiedStateId {get;init;}public int? BusinessEntityStateId {get;init;}
+    public string VerificationState {get;init;}="Not set";public string EntityState {get;init;}="Not set";
+}
+public sealed record FormerStaffChoice(int Id,string Name);
+public sealed record FormerStaffFilters(int? DepartmentId=null,int? JobTypeId=null,DateTime? From=null,DateTime? To=null,int? VerifiedStateId=null,int? BusinessEntityStateId=null);
+public sealed record FormerStaffData(string Organisation,List<FormerStaffRow> Staff)
+{
+    public List<FormerStaffChoice> Departments {get;init;}=[];public List<FormerStaffChoice> JobTypes {get;init;}=[];
+    public List<FormerStaffChoice> VerifiedStates {get;init;}=[];public List<FormerStaffChoice> EntityStates {get;init;}=[];
+    public string FilterDescription {get;init;}="All former staff";
+}
 public sealed class FormerStaffService(IDbContextFactory<HrmTeContext> factory,IUserAccessService access)
 {
     private async Task<int> ScopeAsync()
@@ -15,26 +27,52 @@ public sealed class FormerStaffService(IDbContextFactory<HrmTeContext> factory,I
         if(!actor.IsSuperAdministrator&&!actor.IsHRStaff&&!actor.IsHRHead&&!actor.IsHRManager&&!actor.IsOrganisationAdmin&&!await access.HasPermissionAsync("Admin")&&!await access.HasPermissionAsync("Staff.Details"))throw new UnauthorizedAccessException("You do not have permission to view former staff records.");
         return org;
     }
-    public async Task<FormerStaffData> SearchAsync(string? search=null,CancellationToken ct=default)
+    public async Task<FormerStaffData> SearchAsync(string? search=null,CancellationToken ct=default,FormerStaffFilters? filters=null)
     {
+        filters??=new();
+        if(search?.Length>250)throw new InvalidOperationException("Search must be 250 characters or fewer.");
+        if(filters.From.HasValue&&(filters.From.Value.Year<1900||filters.From.Value.Year>2200)||filters.To.HasValue&&(filters.To.Value.Year<1900||filters.To.Value.Year>2200)||filters.From.HasValue&&filters.To.HasValue&&filters.From.Value.Date>filters.To.Value.Date)throw new InvalidOperationException("Enter a valid employment end-date range.");
         var org=await ScopeAsync();await using var db=await factory.CreateDbContextAsync(ct);
-        var current=FormerStaffPolicy.CurrentJobs(db);
-        var people=FormerStaffPolicy.EndedJobs(db).Where(j=>j.OrganisationID==org&&!current.Any(a=>a.IndividualID==j.IndividualID&&a.OrganisationID==org)).Select(j=>j.IndividualID).Distinct();
-        var source=db.Individuals.AsNoTracking().Where(i=>people.Contains(i.BusinessEntityId));
+        var current=FormerStaffPolicy.CurrentJobs(db);var endedJobs=FormerStaffPolicy.EndedJobs(db);
+        // Display and filter the same latest ended employment, rather than silently matching an older department.
+        var latest=endedJobs.Where(j=>j.OrganisationID==org&&!current.Any(a=>a.IndividualID==j.IndividualID&&a.OrganisationID==org)&&
+            !endedJobs.Any(n=>n.OrganisationID==org&&n.IndividualID==j.IndividualID&&(n.JoinedDate>j.JoinedDate||n.JoinedDate==j.JoinedDate&&n.JobId>j.JobId)));
+        var departments=await latest.Select(j=>new{Id=j.OrganisationStructureId,Name=j.OrganisationStructure.Name}).Distinct().OrderBy(x=>x.Name).Select(x=>new FormerStaffChoice(x.Id,x.Name)).ToListAsync(ct);
+        var types=await latest.Select(j=>new{Id=j.JobTypeId,Name=j.JobType.TypeName}).Distinct().OrderBy(x=>x.Name).Select(x=>new FormerStaffChoice(x.Id,x.Name)).ToListAsync(ct);
+        var verified=await db.VerifiedStates.AsNoTracking().OrderBy(x=>x.StateName).Select(x=>new FormerStaffChoice(x.VerifiedStateId,x.StateName.Trim())).ToListAsync(ct);
+        var states=await db.BusinessEntityStates.AsNoTracking().OrderBy(x=>x.StateName).Select(x=>new FormerStaffChoice(x.BusinessEntityStateId,x.StateName.Trim())).ToListAsync(ct);
+        if(filters.DepartmentId.HasValue&&!departments.Any(x=>x.Id==filters.DepartmentId))throw new InvalidOperationException("Select a department from the current organisation.");
+        if(filters.JobTypeId.HasValue&&!types.Any(x=>x.Id==filters.JobTypeId))throw new InvalidOperationException("Select an available Job Type.");
+        if(filters.VerifiedStateId.HasValue&&filters.VerifiedStateId!=-1&&!verified.Any(x=>x.Id==filters.VerifiedStateId))throw new InvalidOperationException("Select a valid verification state.");
+        if(filters.BusinessEntityStateId.HasValue&&filters.BusinessEntityStateId!=-1&&!states.Any(x=>x.Id==filters.BusinessEntityStateId))throw new InvalidOperationException("Select a valid business entity state.");
+        var jobs=latest.Select(j=>new{j.JobId,j.IndividualID,j.OrganisationStructureId,j.JobTypeId,j.JoinedDate,Ended=j.TerminatedDate??db.JobPositions.Where(p=>p.JobId==j.JobId&&p.JobPositionStateId==4).Max(p=>p.ToDate),Department=j.OrganisationStructure.Name,Type=j.JobType.TypeName});
+        if(filters.DepartmentId.HasValue)jobs=jobs.Where(j=>j.OrganisationStructureId==filters.DepartmentId);
+        if(filters.JobTypeId.HasValue)jobs=jobs.Where(j=>j.JobTypeId==filters.JobTypeId);
+        if(filters.From.HasValue){var from=filters.From.Value.Date;jobs=jobs.Where(j=>j.Ended.HasValue&&j.Ended.Value>=from);}
+        if(filters.To.HasValue){var end=filters.To.Value.Date.AddDays(1);jobs=jobs.Where(j=>j.Ended.HasValue&&j.Ended.Value<end);}
+        var source=db.Individuals.AsNoTracking().Where(i=>jobs.Any(j=>j.IndividualID==i.BusinessEntityId));
+        if(filters.VerifiedStateId.HasValue)source=source.Where(i=>db.BusinessEntities.Any(b=>b.BusinessEntityID==i.BusinessEntityId&&(filters.VerifiedStateId==-1?b.VerifiedStateId==null:b.VerifiedStateId==filters.VerifiedStateId)));
+        if(filters.BusinessEntityStateId.HasValue)source=source.Where(i=>db.BusinessEntities.Any(b=>b.BusinessEntityID==i.BusinessEntityId&&(filters.BusinessEntityStateId==-1?b.BusinessEntityStateId==null:b.BusinessEntityStateId==filters.BusinessEntityStateId)));
         foreach(var word in (search??"").Trim().Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries))
         {
             var term=word;
             source=source.Where(i=>((i.FirstNameEnglish??"")+" "+(i.MiddleNameEnglish??"")+" "+(i.LastNameEnglish??"")).Contains(term)||db.Idcards.Any(c=>c.BusinessEntityId==i.BusinessEntityId&&c.IdcardNumber.Contains(term))||db.Passports.Any(c=>c.BusinessEntityId==i.BusinessEntityId&&c.PassportNumber.Contains(term))||db.Staffs.Any(s=>s.IndividualId==i.BusinessEntityId&&(s.EmployeeNumber??"").Contains(term)));
         }
-        var persons=await source.OrderBy(i=>i.FirstNameEnglish).Select(i=>new{i.BusinessEntityId,i.FirstNameEnglish,i.MiddleNameEnglish,i.LastNameEnglish}).ToListAsync(ct);var result=new List<FormerStaffRow>();
+        var persons=await source.OrderBy(i=>i.FirstNameEnglish).Select(i=>new{i.BusinessEntityId,i.FirstNameEnglish,i.MiddleNameEnglish,i.LastNameEnglish,
+            Verified=db.BusinessEntities.Where(b=>b.BusinessEntityID==i.BusinessEntityId).Select(b=>b.VerifiedStateId).FirstOrDefault(),
+            State=db.BusinessEntities.Where(b=>b.BusinessEntityID==i.BusinessEntityId).Select(b=>b.BusinessEntityStateId).FirstOrDefault()}).ToListAsync(ct);
+        var result=new List<FormerStaffRow>();
         foreach(var person in persons)
         {
-            var job=await FormerStaffPolicy.EndedJobs(db).Where(j=>j.OrganisationID==org&&j.IndividualID==person.BusinessEntityId).OrderByDescending(j=>j.JoinedDate).Select(j=>new{j.JobId,j.JoinedDate,j.TerminatedDate,Department=j.OrganisationStructure.Name,Type=j.JobType.TypeName}).FirstAsync(ct);
-            var end=job.TerminatedDate??await db.JobPositions.Where(p=>p.JobId==job.JobId&&p.JobPositionStateId==4).MaxAsync(p=>p.ToDate,ct);
-            result.Add(new(person.BusinessEntityId,string.Join(" ",new[]{person.FirstNameEnglish,person.MiddleNameEnglish,person.LastNameEnglish}.Where(x=>!string.IsNullOrWhiteSpace(x))),await db.Staffs.Where(s=>s.IndividualId==person.BusinessEntityId).Select(s=>s.EmployeeNumber).FirstOrDefaultAsync(ct)??"",await db.Idcards.Where(c=>c.BusinessEntityId==person.BusinessEntityId).Select(c=>c.IdcardNumber).FirstOrDefaultAsync(ct)??"",await db.Passports.Where(c=>c.BusinessEntityId==person.BusinessEntityId).Select(c=>c.PassportNumber).FirstOrDefaultAsync(ct)??"",job.Department,job.Type,job.JoinedDate,end));
+            var job=await jobs.SingleAsync(j=>j.IndividualID==person.BusinessEntityId,ct);
+            result.Add(new(person.BusinessEntityId,string.Join(" ",new[]{person.FirstNameEnglish,person.MiddleNameEnglish,person.LastNameEnglish}.Where(x=>!string.IsNullOrWhiteSpace(x))),await db.Staffs.Where(s=>s.IndividualId==person.BusinessEntityId).Select(s=>s.EmployeeNumber).FirstOrDefaultAsync(ct)??"",await db.Idcards.Where(c=>c.BusinessEntityId==person.BusinessEntityId).Select(c=>c.IdcardNumber).FirstOrDefaultAsync(ct)??"",await db.Passports.Where(c=>c.BusinessEntityId==person.BusinessEntityId).Select(c=>c.PassportNumber).FirstOrDefaultAsync(ct)??"",job.Department,job.Type,job.JoinedDate,job.Ended)
+            {DepartmentId=job.OrganisationStructureId,JobTypeId=job.JobTypeId,VerifiedStateId=person.Verified,BusinessEntityStateId=person.State,VerificationState=ChoiceName(verified,person.Verified),EntityState=ChoiceName(states,person.State)});
         }
-        return new(await db.Organisations.Where(o=>o.BusinessEntityID==org).Select(o=>o.OrganisationName).SingleAsync(ct),result);
+        var description=$"Department: {FilterName(departments,filters.DepartmentId)} · Job Type: {FilterName(types,filters.JobTypeId)} · Ended: {filters.From?.ToString("dd MMM yyyy")??"Any"} – {filters.To?.ToString("dd MMM yyyy")??"Any"} · Verification: {FilterName(verified,filters.VerifiedStateId)} · Entity state: {FilterName(states,filters.BusinessEntityStateId)}"+(string.IsNullOrWhiteSpace(search)?"":" · Search: "+search.Trim());
+        return new(await db.Organisations.Where(o=>o.BusinessEntityID==org).Select(o=>o.OrganisationName).SingleAsync(ct),result){Departments=departments,JobTypes=types,VerifiedStates=verified,EntityStates=states,FilterDescription=description};
     }
+    private static string ChoiceName(List<FormerStaffChoice> choices,int? id)=>id.HasValue?choices.FirstOrDefault(x=>x.Id==id)?.Name??$"State {id}":"Not set";
+    private static string FilterName(List<FormerStaffChoice> choices,int? id)=>!id.HasValue?"All":id==-1?"Not set":choices.FirstOrDefault(x=>x.Id==id)?.Name??id.ToString()!;
     public async Task<AttendanceExportReport> DetailAsync(int person,CancellationToken ct=default)
     {
         var org=await ScopeAsync();await using var db=await factory.CreateDbContextAsync(ct);

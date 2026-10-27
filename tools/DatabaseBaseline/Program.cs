@@ -8,6 +8,23 @@ using System.Data;
 // Explicit deployment utility: never starts the web application or its background workers.
 Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT",Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")??"Development");
 await using var db=new HrmTeContextFactory().CreateDbContext([]);
+if(args.Contains("--local-shared-memory"))
+{
+    var target=new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(db.Database.GetConnectionString());
+    var host=target.DataSource.Split('\\')[0];
+    if(!host.Equals(Environment.MachineName,StringComparison.OrdinalIgnoreCase)&&host is not ("." or "(local)" or "localhost"))throw new InvalidOperationException("Shared-memory diagnostic mode is restricted to the configured local SQL Server instance.");
+    target.DataSource="lpc:"+target.DataSource;db.Database.SetConnectionString(target.ConnectionString);
+}
+if(args.Contains("--database-target")){var target=new Microsoft.Data.SqlClient.SqlConnectionStringBuilder(db.Database.GetConnectionString());Console.WriteLine($"Server: {target.DataSource}; database: {target.InitialCatalog}; integrated authentication: {target.IntegratedSecurity}");return 0;}
+if(args.Contains("--audit-businessentity-prefix")){var snapshot=await RegistryPrefixSqlSmoke.CaptureAsync(db);foreach(var table in snapshot.Tables)Console.WriteLine($"{table.Name}: {table.Count} rows, object {table.Id}");return 0;}
+if(args.Contains("--verify-registry-prefix")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,formerStaff:true,registryPrefix:true);return 0;}
+if(args.Contains("--apply-registry-prefix"))
+{
+    var pending=(await db.Database.GetPendingMigrationsAsync()).ToArray();
+    if(pending.Any(x=>x!="20261027064659_PrefixBusinessEntityTables"))throw new InvalidOperationException("Unexpected migrations; deployment refused.");
+    var before=await RegistryPrefixSqlSmoke.CaptureAsync(db);await db.Database.MigrateAsync();await RegistryPrefixSqlSmoke.VerifyAsync(db,before);
+    Console.WriteLine("Registry tables renamed and Former Staff state filters available.");return 0;
+}
 if(args.Contains("--verify-individual-images")){await UnifiedLeaveTypeUpgrade.RehearseAsync(db.Database.GetConnectionString()!,scopedHandover:true,overtime:true,individualImages:true);return 0;}
 if(args.Contains("--apply-individual-images"))
 {
