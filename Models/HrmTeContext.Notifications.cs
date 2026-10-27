@@ -6,12 +6,14 @@ public partial class HrmTeContext
 {
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {
+        ProtectFormerStaffAsync(CancellationToken.None).GetAwaiter().GetResult();
         CaptureStateNotificationsAsync(false, CancellationToken.None).GetAwaiter().GetResult();
         return base.SaveChanges(acceptAllChangesOnSuccess);
     }
 
     public override async Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
     {
+        await ProtectFormerStaffAsync(cancellationToken);
         await CaptureStateNotificationsAsync(true, cancellationToken);
         return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
     }

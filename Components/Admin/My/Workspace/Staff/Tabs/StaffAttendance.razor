@@ -3,7 +3,7 @@
 @inject HRM.Services.Interfaces.IAttendanceService Attendance
 
 <section class="space-y-4 pt-4" aria-label="Selected employee attendance">
-    <HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />
+    @if(!ReadOnly){<HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />}
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div><h3 class="text-lg font-semibold">Attendance</h3><p class="text-sm text-slate-500">Attendance records for the selected employee.</p></div>
         <button type="button" class="app-button app-button-secondary" disabled="@loading" @onclick="LoadAsync">Refresh</button>
@@ -76,6 +76,7 @@
         return new("Employee attendance", $"{(StaffName ?? $"Employee ID {StaffId}")} · {periodFrom:dd MMM yyyy} – {periodTo:dd MMM yyyy}" +
             (events.Count == 1000 ? " · Clock events limited to latest 1,000; narrow the period for other events." : ""), tables);
     }
+    [Parameter] public bool ReadOnly {get;set;}
     [Parameter] public string? StaffName { get; set; }
     [Parameter] public int StaffId { get; set; }
     [Parameter] public DateTime? InitialFrom { get; set; }

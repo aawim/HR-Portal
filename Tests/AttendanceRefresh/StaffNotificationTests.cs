@@ -35,7 +35,8 @@ static class StaffNotificationTests
             await db.SaveChangesAsync(); Check(await db.StaffNotifications.CountAsync() == 5, "Unchanged save duplicated activity alerts");
             var schedule = await db.JobWorkTemplateAssignments.SingleAsync(); schedule.IsActive = false; await db.SaveChangesAsync();
             Check(await db.StaffNotifications.AnyAsync(x => x.Kind == "Schedule" && x.Message.Contains("ended")), "Schedule removal alert missing");
-            (await db.Jobs.FindAsync(1))!.TerminatedDate = DateTime.UtcNow.AddHours(5).Date; await db.SaveChangesAsync();
+            // Keep this fixture active for later clock/request notification checks; former-staff writes have their own denial tests.
+            (await db.Jobs.FindAsync(1))!.TerminatedDate = DateTime.UtcNow.AddHours(5).Date.AddDays(1); await db.SaveChangesAsync();
             Check(await db.StaffNotifications.AnyAsync(x => x.Kind == "Employment"), "Employment status alert missing");
         }
         var auth = new ContextAuthentication(); auth.SignIn("notify1"); var inboxService = new RequestNotificationService(factory, auth);

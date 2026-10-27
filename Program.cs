@@ -50,6 +50,7 @@ builder.Services.AddScoped<GroupsManagementService>();
 builder.Services.AddScoped<LeaveConfigurationSettingsService>();
 builder.Services.AddScoped<IndividualRegistrationService>();
 builder.Services.AddScoped<OvertimeRequestService>();
+builder.Services.AddScoped<FormerStaffService>();
 builder.Services.AddScoped<WeeklyWorkingHoursService>();
 builder.Services.AddScoped<WeeklyHourExceptionService>();
 

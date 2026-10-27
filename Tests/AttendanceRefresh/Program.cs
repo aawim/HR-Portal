@@ -62,6 +62,7 @@ if (args.Contains("--registry-only"))
     try { await UnattachedIndividualSearchTests.RunAsync(); Console.WriteLine("PASS Individual registry: unattached-only name/ID search for ordinary admins and Super Administrators"); return 0; }
     catch(Exception ex) { Console.Error.WriteLine($"FAIL Individual registry: {ex}"); return 1; }
 }
+if(args.Contains("--former-staff-only")){try{await FormerStaffTests.RunAsync();Console.WriteLine("PASS Former staff read-only policy, tenant scope, search and superadmin write denial");return 0;}catch(Exception ex){Console.Error.WriteLine(ex);return 1;}}
 if (args.Contains("--hr-inbox-only"))
 {
     try { await HrRequestInboxTests.RunAsync(); await SectionNavigationTests.RunAsync(); Console.WriteLine("PASS HR inbox: received/organisation permissions, tenant scope, grouping, pagination, filters, safe links and HR routes"); return 0; }
@@ -88,6 +89,7 @@ try { await UnifiedLeaveTypeTests.RunAsync(); Console.WriteLine("PASS Unified le
 try { await LeavePolicyScopeTests.RunAsync(); Console.WriteLine("PASS Leave policy organisation scope"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Leave policy organisation scope: {ex}"); }
 try { await LeaveSetConfigurationTests.RunAsync(); Console.WriteLine("PASS Leave set configuration"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Leave set configuration: {ex}"); }
 try { await UnattachedIndividualSearchTests.RunAsync(); Console.WriteLine("PASS Unattached individual registry"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Individual registry: {ex}"); }
+try{await FormerStaffTests.RunAsync();Console.WriteLine("PASS Former staff");}catch(Exception ex){failures++;Console.Error.WriteLine($"FAIL Former staff: {ex}");}
 try { await HrRequestInboxTests.RunAsync(); Console.WriteLine("PASS HR request inbox"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL HR inbox: {ex}"); }
 try { await SupervisorWorkflowTests.RunAsync(); Console.WriteLine("PASS Supervisor workflow"); } catch(Exception ex) { failures++; Console.Error.WriteLine($"FAIL Supervisor workflow: {ex}"); }
 try { await SupervisorOrganisationScopeTests.RunAsync(); Console.WriteLine("PASS Supervisor organisation scope"); } catch(Exception ex) { failures++;Console.Error.WriteLine($"FAIL Supervisor organisation scope: {ex}"); }

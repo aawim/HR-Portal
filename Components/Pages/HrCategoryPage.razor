@@ -130,6 +130,7 @@
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)QueryOrganisationId! } : null;
     protected override void OnParametersSet()
     {
+        if(CategoryName.Equals("individuals",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo(Section is "add-new" or "add"?"/admin/hr/staff/add-individual":"/admin/hr/staff/search-individuals",replace:true);return;}
         if(CategoryName.Equals("leave-sets",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return;}
         if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section != "management")
         {
@@ -171,13 +172,11 @@
     }
     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
-        "individuals" => new() {
-            new("Search", "🔍", "Find existing individual profiles in the system.", typeof(IndividualSearchGrid)),
-            new("Add New", "➕", "Register a new individual profile.",  typeof(AddNewIndividualGrid)),
-    },
- 
         "staff" => new() {
             new("Search", "🔍", "Find active and past employee records.", typeof(StaffSearchGrid)),
+            new("Add Individual", "➕", "Register an individual before staff onboarding.",typeof(AddNewIndividualGrid)),
+            new("Search Individuals", "🔍", "Find individuals available for staff onboarding.",typeof(IndividualSearchGrid)),
+            new("Former Staff", "📁", "Read-only staff history and attendance.",typeof(FormerStaff)),
             new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffGrid)),
             new("Staff Enrollment", "🪪", "Manage organisation staff enrollment numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffEnrollmentNumberGrid)),
             new("Staff Onboarding", "💼", "Submit appointments and review approvals before employee accounts are created.", typeof(StaffOnboardingPage)),

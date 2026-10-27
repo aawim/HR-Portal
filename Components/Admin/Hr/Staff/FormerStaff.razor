@@ -1,0 +1,43 @@
+@implements IDisposable
+@using HRM.Services
+@inject FormerStaffService Records
+@inject ILogger<FormerStaff> Logger
+<section class="space-y-3 p-3" aria-busy="@loading">
+    <h1 class="text-xl font-semibold">Former Staff</h1>
+    <p class="text-sm text-slate-500">Read-only staff records. @data?.Organisation</p>
+    <div class="flex flex-wrap items-end gap-3">
+        <label class="min-w-0 flex-1 text-sm">Search former staff<input type="search" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" maxlength="250" placeholder="Name, employee number, national ID or passport" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+        <button type="button" class="app-button app-button-secondary" @onclick="Reset">Reset</button>
+    </div>
+    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
+    @if(data!=null)
+    {
+        <HRM.Components.Shared.AttendanceExportButtons CreateReport="ListReport" Disabled="@(loading||data.Staff.Count==0)" />
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="border-b"><th class="p-2">Staff</th><th class="p-2">Employee number</th><th class="p-2">Department / job type</th><th class="p-2">Employment dates</th><th class="p-2">View</th></tr></thead><tbody>
+        @foreach(var row in data.Staff.Skip((page-1)*25).Take(25))
+        {
+            <tr @key="row.Id" class="border-b"><td class="p-2">@row.Name<br />@row.NationalId @row.Passport</td><td class="p-2">@row.EmployeeNumber</td><td class="p-2">@row.Department<br />@row.JobType</td><td class="p-2">@row.Joined.ToString("dd MMM yyyy") – @row.Ended?.ToString("dd MMM yyyy")</td><td class="p-2"><a class="app-button app-button-secondary" href="@($"/admin/my/workspace?entityType=Staff&entityId={row.Id}")">Staff workspace</a></td></tr>
+        }
+        @if(data.Staff.Count==0){<tr><td colspan="5" class="p-3">No former staff found.</td></tr>}
+        </tbody></table></div>
+        <div class="flex flex-wrap items-center gap-3 text-sm"><button class="app-button app-button-secondary" disabled="@(page<=1)" @onclick="()=>page--">Previous</button><span>Page @(page) of @Pages · @data.Staff.Count staff</span><button class="app-button app-button-secondary" disabled="@(page>=Pages)" @onclick="()=>page++">Next</button></div>
+    }
+    @if(loading){<p role="status">Loading former staff…</p>}
+</section>
+@code {
+    private FormerStaffData? data;private string search="";private string? error;private bool loading,disposed;private int version,page=1;private CancellationTokenSource? pending;
+    private int Pages=>Math.Max(1,((data?.Staff.Count??0)+24)/25);
+    private AttendanceExportReport ListReport()=>new("Former staff",$"{data?.Organisation} · Search: {search}",[new("Former staff",["Name","Employee number","National ID","Passport","Department","Job type","Joined","Ended"],data!.Staff.Select(r=>new object?[]{r.Name,r.EmployeeNumber,r.NationalId,r.Passport,r.Department,r.JobType,r.Joined.ToString("yyyy-MM-dd"),r.Ended?.ToString("yyyy-MM-dd")}).ToList())]);
+    protected override Task OnInitializedAsync()=>Load(false);
+    private Task SearchChanged(){page=1;return Load(true);}
+    private Task Reset(){search="";page=1;return Load(false);}
+    private async Task Load(bool debounce)
+    {
+        pending?.Cancel();pending?.Dispose();pending=new();var ct=pending.Token;var current=++version;loading=true;error=null;
+        try{if(debounce)await Task.Delay(300,ct);var result=await Records.SearchAsync(search,ct);if(current==version&&!disposed){data=result;page=Math.Min(page,Pages);}}
+        catch(OperationCanceledException)when(ct.IsCancellationRequested){}
+        catch(Exception ex){if(current==version&&!disposed){data=null;Logger.LogError(ex,"Former staff search");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Former staff could not be loaded. Please try again.";}}
+        finally{if(current==version&&!disposed)loading=false;}
+    }
+    public void Dispose(){disposed=true;pending?.Cancel();pending?.Dispose();}
+}
