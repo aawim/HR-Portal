@@ -28,8 +28,14 @@ public sealed partial class OvertimeRequestService
     // All timestamps are local schedule time, as stored by the existing attendance system.
     private static async Task ValidateOutsideOfficialAsync(HrmTeContext db, int org, int person, DateTime start, DateTime end)
     {
-        if (end <= start || end > DateTime.UtcNow.AddHours(5) || end - start > TimeSpan.FromHours(24) || start.Date < Today.AddMonths(-3))
-            throw new InvalidOperationException("Select a completed interval of up to 24 hours within the last three months.");
+        var now = DateTime.UtcNow.AddHours(5);
+        var today = now.Date;
+
+
+        //if (end <= start || end > DateTime.UtcNow.AddHours(5) || end - start > TimeSpan.FromHours(24) || start.Date < Today.AddMonths(-3))
+
+        if (end <= start || end - start > TimeSpan.FromHours(24) || start.Date < today.AddMonths(-3))
+            throw new InvalidOperationException("Select a valid overtime interval of up to 24 hours.");
         var facts = await AttendanceScheduleFacts.LoadAsync(db, person, start.Date.AddDays(-1), end.Date, org);
         var official = facts.Where(f => f.Purpose == "Official").ToList();
         for (var day = start.Date; day < end; day = day.AddDays(1))
