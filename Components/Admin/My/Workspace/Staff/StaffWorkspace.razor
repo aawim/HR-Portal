@@ -4,8 +4,8 @@
 @using HRM.Enum
 @using HRM.Models
 
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<HrmTeContext> DbFactory
+@using HRM.DTOs
+@inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
 @inject HRM.Services.Interfaces.IUserAccessService Access
 
 <div class="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm">
@@ -100,7 +100,7 @@
     private bool Loading;
     private bool former;
 
-    private StaffInfo? Staff;
+    private StaffWorkspaceIdentity? Staff;
      
     [Parameter]
     public int StaffId { get; set; }
@@ -118,24 +118,11 @@
         var staffId = StaffId;
         loadedStaffId = staffId;
         Loading = true;
-        await using var db = await DbFactory.CreateDbContextAsync();
-        if(org<=0||!await Access.HasOrganisationAccessAsync(org)||!await db.Jobs.AnyAsync(j=>j.IndividualID==staffId&&j.OrganisationID==org)){Staff=null;Loading=false;return;}
-        former=await HRM.Services.FormerStaffPolicy.IsFormerAsync(db,staffId,org);
-        var staff = await db.Individuals.AsNoTracking()
-            .Where(x => x.BusinessEntityId == staffId)
-            .Select(x => new StaffInfo { Name = x.FirstNameEnglish + " " + x.LastNameEnglish })
-            .FirstOrDefaultAsync();
+        var staff = await Directory.GetStaffIdentityAsync(staffId);
         if (loadedStaffId != staffId || loadedOrganisationId!=org) return;
         Staff = staff;
+        former = staff?.IsFormer == true;
         Loading = false;
-    }
-    public class StaffInfo
-    {
-        public string Name { get; set; } = "";
-
-        public string? Position { get; set; }
-
-        public string Status { get; set; } = "";
     }
 
 }

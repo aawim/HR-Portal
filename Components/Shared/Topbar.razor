@@ -1,6 +1,5 @@
 @using Microsoft.AspNetCore.Components.Authorization
-@using Microsoft.EntityFrameworkCore
-@inject IDbContextFactory<HRM.Models.HrmTeContext> DbFactory
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 @inject ILogger<Topbar> Logger
 <header class="h-16 bg-white shadow-sm flex items-center justify-between px-6 relative z-50">
 
@@ -123,11 +122,8 @@
             {
                 try
                 {
-                    await using var db = await DbFactory.CreateDbContextAsync();
-                    var groups = await db.UserAssignedUserGroups.AsNoTracking()
-                        .Where(g => g.User.Username == username && g.User.IsActive && g.User.LocalUserStateId == 1 &&
-                            (g.UserGroup.IsGlobal || g.UserGroup.UserOrganisationId == g.User.UserOrganisationId))
-                        .Select(g => g.UserGroup.GroupName).Distinct().OrderBy(g => g).ToListAsync();
+                    var context = await UserAccess.GetContextAsync();
+                    var groups = context?.UserGroups.Select(g => g.GroupName).Distinct().OrderBy(g => g).ToList() ?? [];
                     if (version == groupLoadVersion) userGroups = groups;
                 }
                 catch (Exception ex) { Logger.LogWarning(ex, "Could not load current user's group labels"); }

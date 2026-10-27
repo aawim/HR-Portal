@@ -28,25 +28,26 @@ static class OvertimePolicyTests
         // Like the production audit service, this saves ALL currently tracked entities.
         var logs = Proxy.For<IOperationLogService>((m,a) => m == "CreateAsync" ? Audit((HrmTeContext)a[0]!) : throw new Exception(m));
         var service = new JobTypeOvertimeSettingsService(factory, access, logs);
-        var model = await service.LoadAsync(1);
+        HRM.Services.Contracts.JobTypeOvertimeSettingsServiceContracts.IOperations contract = service;
+        var model = await contract.LoadAsync(1);
         Check(model.Id == 0 && !model.IsAllowed, "Unsaved policy should default to disabled");
         model.IsAllowed = true; model.MaximumWeeklyHours = 10; model.MaximumDailyHours = 2;
-        await service.SaveAsync(model);
-        var loaded = await service.LoadAsync(1);
+        await contract.SaveAsync(model);
+        var loaded = await contract.LoadAsync(1);
         Check(loaded.Id > 0 && loaded.IsAllowed && loaded.MaximumWeeklyHours == 10 && loaded.MaximumDailyHours == 2, "First policy save failed");
         await using (var db = factory.CreateDbContext())
             Check(await db.OperationLogs.AnyAsync(l => l.OperationLogId == loaded.OperationLogId), "Required audit foreign key is invalid");
-        loaded.MaximumWeeklyHours = 12; await service.SaveAsync(loaded);
-        var updated = await service.LoadAsync(1);
+        loaded.MaximumWeeklyHours = 12; await contract.SaveAsync(loaded);
+        var updated = await contract.LoadAsync(1);
         Check(updated.Version == loaded.Version + 1 && updated.MaximumWeeklyHours == 12, "Policy update/version failed");
         var denied = false;
-        try { await service.SaveAsync(loaded); } catch (InvalidOperationException) { denied = true; }
+        try { await contract.SaveAsync(loaded); } catch (InvalidOperationException) { denied = true; }
         Check(denied, "Stale policy overwrote newer limits");
-        updated.IsAllowed = false; await service.SaveAsync(updated);
-        var disabled = await service.LoadAsync(1);
+        updated.IsAllowed = false; await contract.SaveAsync(updated);
+        var disabled = await contract.LoadAsync(1);
         Check(!disabled.IsAllowed && disabled.MaximumWeeklyHours == 0 && disabled.MaximumDailyHours == null, "Disabling policy retained limits");
         org = 20; denied = false;
-        try { await service.SaveAsync(disabled); } catch (InvalidOperationException) { denied = true; }
+        try { await contract.SaveAsync(disabled); } catch (InvalidOperationException) { denied = true; }
         Check(denied, "Tenant switch wrote a policy to the wrong organisation");
     }
     static async Task<OperationLog> Audit(HrmTeContext db)

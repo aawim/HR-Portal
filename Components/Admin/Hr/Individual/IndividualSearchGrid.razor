@@ -1,10 +1,10 @@
-@using Microsoft.EntityFrameworkCore
+@using HRM.DTOs.Registry
 @using HRM.Models
 @using HRM.Services
 @using HRM.Components.Shared
 @using HRM.Services.Interfaces
 
-@inject IDbContextFactory<HrmTeContext> DbFactory
+@inject IIndividualRegistryService Registry
 @inject IUserAccessService UserAccess
 
 <div class="relative w-full h-full mx-auto py-6">
@@ -136,7 +136,7 @@
 @code {
     // --- State Variables ---
     private SearchModel searchModel = new();
-    private List<IndividualResultDto> searchResults = new();
+    private List<RegistryIndividualDto> searchResults = new();
     private bool isLoading = false;
     private bool hasSearched = false;
     private string? searchError;
@@ -169,63 +169,7 @@
 
         try
         {
-            var actor = await UserAccess.RequireContextAsync();
-            var organisationId = actor.IsSuperAdministrator ? 0 : await UserAccess.GetCurrentOrganisationIdAsync();
-            if (!actor.IsSuperAdministrator && (organisationId <= 0 || !await UserAccess.HasOrganisationAccessAsync(organisationId)))
-                throw new UnauthorizedAccessException("You do not have access to the selected organisation.");
-
-            await using var DbContext = await DbFactory.CreateDbContextAsync();
-            // This registry view is for unattached individuals, including for Super Admin.
-            var individuals = DbContext.Individuals.AsNoTracking().Where(ind =>
-                !DbContext.Jobs.Any(j => j.IndividualID == ind.BusinessEntityId) &&
-                (actor.IsSuperAdministrator || !DbContext.StaffOnboardingRequests.Any(r =>
-                    r.IndividualId == ind.BusinessEntityId && r.IsOpen && r.OrganisationId != organisationId)));
-
-            var query = from ind in individuals
-                        join id in DbContext.Idcards on ind.BusinessEntityId equals id.BusinessEntityId into idGroup
-                        from idCard in idGroup.DefaultIfEmpty()
-                        join p in DbContext.Passports on ind.BusinessEntityId equals p.BusinessEntityId into pGroup
-                        from passport in pGroup.DefaultIfEmpty()
-                        select new { ind, idCard, passport };
-
-            string term = searchModel.SearchTerm.Trim();
-
-            if (searchModel.SearchType == "ID")
-            {
-                query = query.Where(q => q.idCard != null && q.idCard.IdcardNumber == term);
-            }
-            else if (searchModel.SearchType == "Passport")
-            {
-                query = query.Where(q => q.passport != null && q.passport.PassportNumber == term);
-            }
-            else
-            {
-                // Match each word across the name fields, so a full name such as
-                // "Ahmed Farish" also matches separate first/last name columns.
-                foreach (var word in term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
-                {
-                    var namePart = word;
-                    query = query.Where(q =>
-                        (q.ind.FirstNameEnglish != null && q.ind.FirstNameEnglish.Contains(namePart)) ||
-                        (q.ind.MiddleNameEnglish != null && q.ind.MiddleNameEnglish.Contains(namePart)) ||
-                        (q.ind.LastNameEnglish != null && q.ind.LastNameEnglish.Contains(namePart)) ||
-                        (q.idCard != null && q.idCard.IdcardNumber == term) ||
-                        (q.passport != null && q.passport.PassportNumber == term));
-                }
-            }
-
-            var results = await query.OrderBy(q => q.ind.FirstNameEnglish)
-                .ThenBy(q => q.ind.LastNameEnglish).Take(50).ToListAsync();
-
-            searchResults = results.Select(q => new IndividualResultDto
-                {
-                    BusinessEntityId = q.ind.BusinessEntityId,
-                    FullName = $"{q.ind.FirstNameEnglish} {q.ind.MiddleNameEnglish} {q.ind.LastNameEnglish}".Replace("  ", " ").Trim(),
-                    IDNumber = q.idCard != null ? q.idCard.IdcardNumber : string.Empty,
-                    PassportNumber = q.passport != null ? q.passport.PassportNumber : string.Empty,
-                    Address = q.ind.Country?.ToString() ?? string.Empty,
-                    Nationality = q.ind.Country?.ToString() ?? string.Empty
-                }).ToList();
+            searchResults = await Registry.SearchAsync(searchModel.SearchTerm, searchModel.SearchType);
         }
         catch (UnauthorizedAccessException)
         {
@@ -249,15 +193,5 @@
         public string SearchType { get; set; } = "Name";
     }
 
-    public class IndividualResultDto
-    {
-        public int BusinessEntityId { get; set; }
-        public string FullName { get; set; } = string.Empty;
-        public string Organisation { get; set; } = string.Empty;
-        public string IDNumber { get; set; } = string.Empty;
-        public string PassportNumber { get; set; } = string.Empty;
-        public string Address { get; set; } = string.Empty;
-        public string Nationality { get; set; } = string.Empty;
-    }
 
 }

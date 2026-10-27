@@ -27,6 +27,12 @@ using MyAttendance = HRM.Components.Pages.Online.MyAttendanceGrid;
 // Only unrelated dashboard widgets are replaced. Clock buttons use the real
 // AttendanceLogService against an isolated in-memory database. Production
 // connections and employee attendance records are never used.
+if(args.Contains("--application-contracts-only")){await ContractProjectionTests.RunAsync();await UserAppDataRegistrationTests.RunAsync();await ApiOperationContractTests.RunAsync();await OvertimePolicyTests.RunAsync();return 0;}
+await ContractProjectionTests.RunAsync();
+if(args.Contains("--user-app-data-only")){await UserAppDataRegistrationTests.RunAsync();return 0;}
+await UserAppDataRegistrationTests.RunAsync();
+if(args.Contains("--architecture-only")){await ApiOperationContractTests.RunAsync();await UnattachedIndividualSearchTests.RunAsync();await SearchReliabilityTests.RunAsync();return 0;}
+await ApiOperationContractTests.RunAsync();
 if(args.Contains("--group-chat-only")){await StaffGroupChatTests.RunAsync();Console.WriteLine("PASS Staff group chat");return 0;}
 if(args.Contains("--chat-only")){await StaffChatTests.RunAsync();Console.WriteLine("PASS Staff chat");return 0;}
 if(args.Contains("--font-size-only")){await UserFontSizeTests.RunAsync();Console.WriteLine("PASS User font size preferences");return 0;}
@@ -297,9 +303,9 @@ static async Task TestLeaveDays()
     var first = new DateTime(year, 1, 1);
     await using (var db = new TestContext(options))
     {
-        db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1, JobStateId = 4, JoinedDate = first.AddDays(-10) },
+        db.Jobs.AddRange(new Job { JobId = 1, IndividualID = 1, OrganisationID = 10, JobStateId = 4, JoinedDate = first.AddDays(-10) },
             new Job { JobId = 2, IndividualID = 2 },
-            new Job { JobId = 3, IndividualID = 1, TerminatedDate = first.AddMonths(1) });
+            new Job { JobId = 3, IndividualID = 1, OrganisationID = 10, TerminatedDate = first.AddMonths(1) });
         db.JobPositions.Add(new JobPosition { JobPositionId = 1, JobId = 1, PositionId = 1, JobPositionStateId = 4, FromDate = first.AddDays(-10) });
         db.WorkTemplates.Add(new HRM.Models.WorkPlanning.WorkTemplate { WorkTemplateId = 1, Name = "Official schedule", IsActive = true, RequiresAttendance = true });
         db.JobWorkTemplateAssignments.Add(new HRM.Models.WorkPlanning.JobWorkTemplateAssignment { JobID = 1, WorkTemplateID = 1, IsActive = true, EffectiveFrom = first.AddDays(-10), WorkingDaysMask = 31 });
@@ -349,7 +355,13 @@ static async Task TestLeaveDays()
     await using var gridRenderer = new TestRenderer(gridServices);
     var grid = new TestMyAttendance();
     var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-    typeof(MyAttendance).GetProperty("DbContext", flags)!.SetValue(grid, gridDb);
+    typeof(MyAttendance).GetProperty("AttendanceSupport", flags)!.SetValue(grid,
+        new MyAttendanceSupportService(new TestContextFactory(options), Proxy.For<IUserAccessService>((method, _) => method switch
+        {
+            "GetCurrentIndividualIdAsync" => Task.FromResult(1),
+            "GetCurrentOrganisationIdAsync" => Task.FromResult(10),
+            _ => throw new Exception(method)
+        })));
     typeof(MyAttendance).GetProperty("AttendanceLogService", flags)!.SetValue(grid,
         new AttendanceLogService(gridDb, null!, null!, null!, access));
     typeof(MyAttendance).GetProperty("AttendanceService", flags)!.SetValue(grid,

@@ -153,7 +153,7 @@
             scheduleMode = CurrentAssignment?.ScheduleMode ?? "Standard";
             anchor = CurrentAssignment?.RotationAnchorDate ?? from;
             weekdays = Enumerable.Range(0, 7).Select(n => ((CurrentAssignment?.WorkingDaysMask ?? 31) & (1 << n)) != 0).ToArray();
-            rotation = HRM.Helpers.StaffScheduleCalendar.Parse(CurrentAssignment?.RotationTemplateIds);
+            rotation = HRM.Helpers.SchedulePattern.Parse(CurrentAssignment?.RotationTemplateIds);
             if (rotation.Count == 0) rotation.Add(0);
             try { templates = await AssignmentService.SearchTemplatesAsync(OrganisationBusinessEntityId, null); }
             catch { error = "Templates could not be loaded. Close and try again."; templates = []; }

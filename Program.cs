@@ -224,6 +224,9 @@ builder.Services.AddScoped<IJobLeaveTypeService, JobLeaveTypeService>();
 builder.Services.AddScoped<IEffectivePermissionService,EffectivePermissionService>();
 builder.Services.AddScoped<IUserContextBuilder, UserContextBuilder>();
 builder.Services.AddScoped<IUserAccessService, UserAccessService>();
+builder.Services.AddScoped<IIndividualRegistryService, IndividualRegistryService>();
+builder.Services.AddScoped<IWorkspaceDirectoryService, WorkspaceDirectoryService>();
+builder.Services.AddScoped<IMyAttendanceSupportService, MyAttendanceSupportService>();
 builder.Services.AddScoped<IAttendanceRequestResourceBuilder,AttendanceRequestResourceBuilder>();
 builder.Services.AddScoped<ILeaveResourceBuilder,LeaveResourceBuilder>();
 builder.Services.AddScoped<IIndividualResourceBuilder,IndividualResourceBuilder>();
@@ -283,7 +286,8 @@ builder.Services.AddScoped<HRM.Services.LeaveSetConfigurationService>();
 builder.Services.AddScoped<LeaveApplicationState>();
 
 builder.Services.AddScoped<LeaveStore>();
-builder.Services.AddScoped<UserAppService>();
+builder.Services.AddUserAppData();
+builder.Services.AddScoped<HRM.Application.Contracts.Pages.ILeaveApplications, HRM.Services.Transport.LeaveApplicationsService>();
 builder.Services.AddScoped<PortalContext>();
 builder.Services.AddScoped<UserRepository>();
 

@@ -46,6 +46,11 @@ static class FormerStaffTests
         var blocked=false;try{await service.SearchAsync(filters:new(DepartmentId:2));}catch(InvalidOperationException){blocked=true;}Check(blocked,"Foreign department filter accepted");
         blocked=false;try{await service.SearchAsync(filters:new(From:today,To:today.AddDays(-1)));}catch(InvalidOperationException){blocked=true;}Check(blocked,"Reversed date range accepted");
         var report=await service.DetailAsync(200);
+        HRM.Services.Contracts.FormerStaffServiceContracts.IOperations remote = service;
+        var dtoReport = await remote.DetailAsync(200);
+        var copy = System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ExportReportDto>(
+            System.Text.Json.JsonSerializer.Serialize(dtoReport, HRM.Application.Transport.ApiOperationKeys.Json), HRM.Application.Transport.ApiOperationKeys.Json)!;
+        Check(copy.Tables.Count == report.Tables.Count && copy.Tables.Any(t => t.Name == "Contacts" && t.Rows.Count == 1), "Former staff typed export contract lost authorised data.");
         Check(report.Tables.Any(t=>t.Name=="Employment history"&&t.Rows.Count==1)&&report.Tables.Any(t=>t.Name=="Contacts"&&t.Rows.Count==1),"Former staff history was unavailable");
         var excel=AttendanceReportExport.Excel(report);Check(excel.Length>1000&&excel[0]=='P'&&excel[1]=='K',"Former information Excel export failed");
         var pdf=AttendanceReportExport.Pdf(report,Path.Combine(Directory.GetCurrentDirectory(),"wwwroot","fonts","Faruma.ttf"));Check(pdf.Length>1000&&System.Text.Encoding.ASCII.GetString(pdf,0,4)=="%PDF","Former information PDF export failed");
@@ -64,7 +69,7 @@ static class FormerStaffTests
         }
         await using(var db=factory.CreateDbContext()){(await db.Individuals.SingleAsync(i=>i.BusinessEntityId==100)).FirstNameEnglish="Active edited";await db.SaveChangesAsync();}
         org=20;Check((await service.SearchAsync()).Staff.Single().Id==400,"Former staff current-tenant boundary failed");
-        var denied=false;try{await service.DetailAsync(200);}catch(UnauthorizedAccessException){denied=true;}Check(denied,"Former details leaked across tenants");
+        var denied=false;try{await remote.DetailAsync(200);}catch(UnauthorizedAccessException){denied=true;}Check(denied,"Former details leaked across tenants");
         super=false;denied=false;try{await service.SearchAsync();}catch(UnauthorizedAccessException){denied=true;}Check(denied,"Unauthorised user could browse former staff");
     }
 }

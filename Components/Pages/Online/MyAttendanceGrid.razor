@@ -1,6 +1,5 @@
-﻿@* @page "/admin/attendance/manage-attendance/my-attendance" *@
+@* @page "/admin/attendance/manage-attendance/my-attendance" *@
 @page "/online/attendance/my-attendance"
-@using Microsoft.EntityFrameworkCore
 @page "/online/attendance/my-attendance/{TabSection}"
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
@@ -11,7 +10,7 @@
 
 @rendermode RenderMode.InteractiveServer
 
-@inject HrmTeContext DbContext
+@inject HRM.Services.Interfaces.IMyAttendanceSupportService AttendanceSupport
 @inject AttendanceLogService AttendanceLogService
 @inject IIndividual _individual
 @inject IAttendanceService AttendanceService
@@ -564,20 +563,10 @@
             int individualID = await _individual.GetIndividualID();
         attendanceDays = await AttendanceService.GetStaffAttendanceRangeAsync(individualID, start, end);
         rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(individualID, start, end);
-        var restDays = await HRM.Helpers.StaffScheduleCalendar.RestDaysAsync(DbContext, individualID, start.Date, end.Date);
-        var eligibility = await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(DbContext, individualID, start.Date, end.Date);
-        var approvedLeaves = await DbContext.Leaves
-            .AsNoTracking()
-            .Where(l => l.Job.IndividualID == individualID &&
-                l.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
-                l.FromDate < end.Date.AddDays(1) && l.ToDate >= start.Date)
-            .Select(l => new
-            {
-                l.FromDate,
-                l.ToDate,
-                Type = l.LeaveTypeId.HasValue ? l.LeaveType.Name : "Leave"
-            })
-            .ToListAsync();
+        var support = await AttendanceSupport.LoadAsync(start.Date, end.Date);
+        var restDays = support.RestDays;
+        var eligibility = support.Eligibility;
+        var approvedLeaves = support.ApprovedLeaves;
 
         // Define rules
         // var shiftStart = new TimeSpan(8, 30, 0);

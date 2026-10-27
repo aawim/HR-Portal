@@ -18,16 +18,26 @@ static class UnattachedIndividualSearchTests
             db.Jobs.AddRange(new(){JobId=2,IndividualID=2,OrganisationID=10,JobStateId=4},new(){JobId=3,IndividualID=3,OrganisationID=20,JobStateId=4},new(){JobId=4,IndividualID=4,OrganisationID=10,JobStateId=4,TerminatedDate=DateTime.UtcNow.AddHours(5).Date.AddDays(-1)});
             db.Idcards.AddRange(new(){BusinessEntityId=1,IdcardNumber="FREE-ID"},new(){BusinessEntityId=2,IdcardNumber="STAFF-ID"});await db.SaveChangesAsync();
         }
+        var deniedAccess = Proxy.For<IUserAccessService>((m,a) => m switch
+        {
+            "RequireContextAsync" => Task.FromResult(new UserContextDto { UserId = 7, IndividualId = 7 }),
+            "HasPermissionAsync" => Task.FromResult(false),
+            _ => throw new Exception("Access should fail before querying the registry: " + m)
+        });
+        var denied = false;
+        try { await new HRM.Services.IndividualRegistryService(factory, deniedAccess).SearchAsync("Person", "Name"); }
+        catch (UnauthorizedAccessException) { denied = true; }
+        Check(denied, "Registry endpoint allowed a non-HR caller");
         foreach(var super in new[]{false,true})
         {
             var access=Proxy.For<IUserAccessService>((m,a)=>m switch{"RequireContextAsync"=>Task.FromResult(new UserContextDto{UserId=1,IndividualId=99,IsSuperAdministrator=super}),"GetCurrentOrganisationIdAsync"=>Task.FromResult(10),"HasOrganisationAccessAsync" or "HasPermissionAsync"=>Task.FromResult(true),_=>throw new Exception(m)});
             using var services=new ServiceCollection().AddLogging().BuildServiceProvider();await using var renderer=new TestRenderer(services);var component=new Search();
             const BindingFlags flags=BindingFlags.Instance|BindingFlags.Public|BindingFlags.NonPublic;
-            typeof(Search).GetProperty("DbFactory",flags)!.SetValue(component,factory);typeof(Search).GetProperty("UserAccess",flags)!.SetValue(component,access);
+            typeof(Search).GetProperty("Registry",flags)!.SetValue(component,new HRM.Services.IndividualRegistryService(factory,access));typeof(Search).GetProperty("UserAccess",flags)!.SetValue(component,access);
             var input=new Search.SearchModel{SearchType="Name",SearchTerm="Person"};typeof(Search).GetField("searchModel",flags)!.SetValue(component,input);
             await renderer.Dispatcher.InvokeAsync(async()=>{renderer.Attach(component);await renderer.Render();});
             await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Search"));renderer.CheckErrors();
-            List<Search.IndividualResultDto> Results()=>(List<Search.IndividualResultDto>)typeof(Search).GetField("searchResults",flags)!.GetValue(component)!;
+            List<HRM.DTOs.Registry.RegistryIndividualDto> Results()=>(List<HRM.DTOs.Registry.RegistryIndividualDto>)typeof(Search).GetField("searchResults",flags)!.GetValue(component)!;
             Check(Results().Select(r=>r.BusinessEntityId).Order().SequenceEqual([1,5]),"Registry listed employed/previously attached people or hid an unattached identity");
             input.SearchType="ID";input.SearchTerm="STAFF-ID";
             await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Search"));Check(Results().Count==0,"National ID search bypassed the unattached-only filter");

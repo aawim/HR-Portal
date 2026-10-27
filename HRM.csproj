@@ -9,20 +9,26 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <WarningsAsErrors>$(WarningsAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsAsErrors>
     <ImplicitUsings>enable</ImplicitUsings>
-    <DefaultItemExcludes>$(DefaultItemExcludes);Tests/**;node_modules/**;tools/**;docs/**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);Tests/**;node_modules/**;tools/**;docs/**;HRM.Core/**;HRM.Application/**;HRM.Api/**;HRM.UI/**</DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Database\Scripts\20261020_IndependentLeaveChangeRequests.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261022_PrefixFeatureTables.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261025_WorkingHoursAndScheduleAmendments.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261025_TemplateDerivedWorkingHours.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261025_ScopeScheduleAssignments.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261025_LegacySchemaCompatibility.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261026_UnifiedLeaveTypes.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261026_PrefixLeavePolicyTables.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261026_ScopedLeaveHandoverRules.sql" />
-    <EmbeddedResource Include="Database\Scripts\20261027_PrefixBusinessEntityTables.sql" />
+    <ProjectReference Include="HRM.Core/HRM.Core.csproj" />
+    <ProjectReference Include="HRM.Application/HRM.Application.csproj" />
+    <Compile Include="HRM.Api/**/*.cs" Exclude="HRM.Api/Program.cs;HRM.Api/obj/**;HRM.Api/bin/**" />
+    <Compile Include="HRM.UI/Services/State/**/*.cs;HRM.UI/Services/Stores/**/*.cs;HRM.UI/Services/Exports/**/*.cs;HRM.UI/Helpers/**/*.cs;HRM.UI/Services/Transport/**/*.cs;HRM.UI/Services/Generated/**/*.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261020_IndependentLeaveChangeRequests.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261022_PrefixFeatureTables.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261025_WorkingHoursAndScheduleAmendments.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261025_TemplateDerivedWorkingHours.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261025_ScopeScheduleAssignments.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261025_LegacySchemaCompatibility.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261026_UnifiedLeaveTypes.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261026_PrefixLeavePolicyTables.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261026_ScopedLeaveHandoverRules.sql" />
+    <EmbeddedResource LogicalName="HRM.Database.Scripts.%(Filename)%(Extension)" Include="HRM.Api\Database\Scripts\20261027_PrefixBusinessEntityTables.sql" />
   </ItemGroup>
 
   <ItemGroup>

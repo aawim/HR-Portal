@@ -24,11 +24,11 @@ static class SearchReliabilityTests
         }
         var org=10;var orgReads=0;var switchOrganisation=false;TaskCompletionSource<UserContextDto>? gate=null;
         var actor=new UserContextDto{UserId=1,IndividualId=1};
-        var access=Proxy.For<IUserAccessService>((m,a)=>m switch {"RequireContextAsync"=>gate?.Task??Task.FromResult(actor),"GetCurrentOrganisationIdAsync"=>Task.FromResult(switchOrganisation&&++orgReads>1?20:org),"HasPermissionAsync"=>Task.FromResult(false),_=>throw new Exception(m)});
+        var access=Proxy.For<IUserAccessService>((m,a)=>m switch {"RequireContextAsync"=>gate?.Task??Task.FromResult(actor),"GetCurrentOrganisationIdAsync"=>Task.FromResult(switchOrganisation&&++orgReads>1?20:org),"HasOrganisationAccessAsync"=>Task.FromResult(true),"HasPermissionAsync"=>Task.FromResult(false),_=>throw new Exception(m)});
         using var services=new ServiceCollection().AddLogging().BuildServiceProvider();await using var renderer=new TestRenderer(services);
         var search=new Search{StaffOnly=true,RequireActivePosition=true};
         const BindingFlags flags=BindingFlags.Instance|BindingFlags.NonPublic;
-        typeof(Search).GetProperty("_dbFactory",flags)!.SetValue(search,factory);
+        typeof(Search).GetProperty("Directory",flags)!.SetValue(search,new WorkspaceDirectoryService(factory,access));
         typeof(Search).GetProperty("userAccessService",flags)!.SetValue(search,access);
         typeof(Search).GetProperty("ToastService",flags)!.SetValue(search,new ToastService());
         await renderer.Dispatcher.InvokeAsync(async()=>{renderer.Attach(search);await renderer.Render();});
@@ -51,6 +51,14 @@ static class SearchReliabilityTests
         Check(Results().Count==0,"Older search overwrote the newer result");
         await renderer.Dispatcher.InvokeAsync(()=>{typeof(Search).GetProperty("SearchText",flags)!.SetValue(search,"Ahmed");typeof(Search).GetProperty("SearchText",flags)!.SetValue(search,"");});
         await Task.Delay(300);Check(Results().Count==0,"Canceled search repopulated the cleared input");
+        var directory = new WorkspaceDirectoryService(factory, access);
+        var crossTenantDenied = false;
+        try { await directory.SearchAsync(new("Foreign", OrganisationId: 20)); }
+        catch (UnauthorizedAccessException) { crossTenantDenied = true; }
+        Check(crossTenantDenied, "Caller-selected organisation bypassed the backend tenant boundary");
+        Check(await directory.GetStaffIdentityAsync(3) is null, "Staff workspace identity crossed tenants");
+        var narrowed = await directory.SearchAsync(new("Ahmed", AllowedStaffIds: [3]));
+        Check(narrowed.Staff.Count == 0, "Caller staff IDs broadened the search scope");
         renderer.CheckErrors();Console.WriteLine("PASS Staff search: whitespace, missing middle name, active-position boundary, tenant isolation, stale responses and debounce cancellation");
     }
 }
