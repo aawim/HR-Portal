@@ -5,7 +5,7 @@
     <h1 class="text-xl font-semibold">Received Requests</h1>
     <p class="text-sm text-slate-500">All received requests appear newest first. Filter by Request Type or open a request to use its existing approval process.</p>
     @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
-    <fieldset class="flex flex-wrap items-end gap-3"><label class="w-full text-sm sm:w-80 lg:w-96">Search<input class="mt-1 block w-full rounded border bg-transparent p-2" placeholder="Reference, staff or request type" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label><label class="text-sm">Status<select id="hr-request-status" class="mt-1 block rounded border bg-transparent p-2" @bind="status" @bind:after="ApplyFilters"><option value="all">All statuses</option><optgroup label="Status groups"><option value="processing">Processing</option><option value="final">Final</option></optgroup><optgroup label="Request statuses">@foreach(var item in statuses){<option value="@item.Id">@item.Name</option>}</optgroup></select></label><label class="text-sm">From<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-from" type="date" @bind="from" @bind:after="ApplyFilters" /></label><label class="text-sm">To<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-to" type="date" @bind="to" @bind:after="ApplyFilters" /></label><button class="app-button app-button-secondary" @onclick="Reset">Reset</button></fieldset>
+    <fieldset class="flex flex-wrap items-end gap-3"><label class="w-full text-sm sm:w-80 lg:w-96">Search<input class="mt-1 block w-full rounded border bg-transparent p-2" placeholder="User name, staff name or reference" maxlength="250" @bind="search" @bind:event="oninput" @bind:after="SearchChanged" /></label><label class="text-sm">Request type<select id="hr-request-type" class="mt-1 block rounded border bg-transparent p-2" @bind="selectedType" @bind:after="ApplyFilters"><option value="0">All request types</option>@foreach(var item in types){<option value="@item.Id">@item.Name</option>}</select></label><label class="text-sm">Status<select id="hr-request-status" class="mt-1 block rounded border bg-transparent p-2" @bind="status" @bind:after="ApplyFilters"><option value="all">All statuses</option><optgroup label="Status groups"><option value="processing">Processing</option><option value="final">Final</option></optgroup><optgroup label="Request statuses">@foreach(var item in statuses){<option value="@item.Id">@item.Name</option>}</optgroup></select></label><label class="text-sm">From<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-from" type="date" @bind="from" @bind:after="ApplyFilters" /></label><label class="text-sm">To<input class="mt-1 block rounded border bg-transparent p-2" id="hr-request-to" type="date" @bind="to" @bind:after="ApplyFilters" /></label><button class="app-button app-button-secondary" @onclick="Reset">Reset</button></fieldset>
     @if(data!=null)
     {
         <p class="text-sm">@data.Organisation · @(data.OrganisationWide?"Organisation requests":"Requests received or assigned to you") · @data.Groups.Sum(g=>g.Count) requests</p>
@@ -21,6 +21,7 @@
 @code {
     private HRM.Services.HrInboxData? data;
     private List<HRM.Services.HrRequestStatus> statuses=[];
+    private List<HRM.Services.HrRequestType> types=[];
     private string search="",status="all";
     private DateTime? from,to;
     private bool busy,disposed;
@@ -44,7 +45,7 @@
             if(debounce)await Task.Delay(300,token);
             var result=await Requests.LoadAsync(type,page,text,state,start,end,token);
             if(disposed||version!=loadVersion||token.IsCancellationRequested)return;
-            data=result;statuses=result.Statuses;selectedPage=result.Page;
+            data=result;statuses=result.Statuses;types=result.Types;selectedPage=result.Page;
         }
         catch(OperationCanceledException) when(token.IsCancellationRequested) { }
         catch(Exception ex)

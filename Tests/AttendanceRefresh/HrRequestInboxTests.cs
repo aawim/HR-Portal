@@ -20,7 +20,8 @@ static class HrRequestInboxTests
         await using(var db=factory.CreateDbContext())
         {
             db.Organisations.AddRange(new(){BusinessEntityID=10,OrganisationName="Current"},new(){BusinessEntityID=20,OrganisationName="Other"});
-            db.Individuals.Add(new(){BusinessEntityId=100,FirstNameEnglish="Ahmed",LastNameEnglish="Afzal"});
+            db.Individuals.Add(new(){BusinessEntityId=100,FirstNameEnglish="Ahmed",MiddleNameEnglish="Ibrahim",LastNameEnglish="Afzal"});
+            db.Users.Add(new(){UserId=50,BusinessEntityID=100,Username="afzal.login"});
             db.RequestTypes.AddRange(new(){RequestTypeId=1,TypeName="Supervisor",ViewUrl="/online/supervisor-requests"},new(){RequestTypeId=2,TypeName="Other"},new(){RequestTypeId=3,TypeName="Unsafe",ViewUrl="//external.example/path"});
             db.RequestStates.AddRange(new(){RequestStateId=2,StateName="Pending",IsProcessingState=true},new(){RequestStateId=4,StateName="Approved",IsFinalState=true});
             db.RequestStates.AddRange(new(){RequestStateId=1,StateName="Incomplete",IsProcessingState=true},new(){RequestStateId=5,StateName="Cancelled",IsFinalState=true},new(){RequestStateId=6,StateName="Rejected",IsFinalState=true},new(){RequestStateId=12,StateName="Pending HR Approval",IsProcessingState=true});
@@ -53,6 +54,11 @@ static class HrRequestInboxTests
         Check((await service.LoadAsync(status:"5")).Items.Single().Id==31,"Cancelled status did not filter exactly");
         var emptyState=await service.LoadAsync(status:"6");Check(emptyState.Groups.Count==0&&emptyState.Statuses.Count==6,"Empty status results removed filter choices");
         try{await service.LoadAsync(status:"9999");throw new Exception("Unknown status accepted");}catch(InvalidOperationException ex) when(ex.Message=="Select a valid request status."){}
+        Check((await service.LoadAsync(search:"Ahmed Afzal")).Groups.Sum(g=>g.Count)==26,"Full-name search failed with a middle name");
+        Check((await service.LoadAsync(search:"Ibrahim")).Groups.Sum(g=>g.Count)==26,"Middle-name search failed");
+        Check((await service.LoadAsync(search:"afzal.login")).Groups.Sum(g=>g.Count)==26,"Account username search failed");
+        Check((await service.LoadAsync(1,search:"Ahmed Afzal",status:"4",from:date.Date,to:date.Date)).Items.Single().Id==26,"User, request type, status and date filters did not combine");
+        Check((await service.LoadAsync(1,search:"no-match")).Types.Count==3,"Empty results removed request type choices");
         Check((await service.LoadAsync(search:"R-30")).Items.Single().Id==30,"Reference search failed");
         Check((await service.LoadAsync(from:date.Date,to:date.Date)).Groups.Sum(g=>g.Count)==28,"Inclusive business-date filter failed");
         Check((await service.LoadAsync(from:date.Date.AddDays(1))).Groups.Count==0,"Date filter included earlier requests");
@@ -75,6 +81,11 @@ static class HrRequestInboxTests
         component.GetType().GetProperty("Logger",flags)!.SetValue(component,Microsoft.Extensions.Logging.Abstractions.NullLogger<HRM.Components.Admin.Hr.Group.HrRequestsInbox>.Instance);
         await renderer.Dispatcher.InvokeAsync(async()=>{renderer.Attach(component);await renderer.Render();});
         Check(renderer.RootButtonCount("Search")==0&&renderer.RootButtonCount("Reset")==1,"Filter row still requires a Search button");
+        await renderer.Dispatcher.InvokeAsync(()=>renderer.RootChange("hr-request-type","1"));
+        Check(!renderer.RootText().Contains("R-30")&&renderer.RootText().Contains("R-26"),"Request type dropdown did not filter immediately");
+        await renderer.Dispatcher.InvokeAsync(()=>renderer.RootEvent("oninput",new ChangeEventArgs{Value="afzal.login"}));
+        Check(renderer.RootText().Contains("R-26")&&!renderer.RootText().Contains("R-30"),"Username did not combine with selected type");
+        await renderer.Dispatcher.InvokeAsync(()=>renderer.RootClick("Reset"));
         await renderer.Dispatcher.InvokeAsync(()=>renderer.RootChange("hr-request-status","5"));
         Check(renderer.RootText().Contains("R-31")&&!renderer.RootText().Contains("R-30"),"Status selection did not filter immediately");
         await renderer.Dispatcher.InvokeAsync(()=>renderer.RootChange("hr-request-from","2026-10-27"));

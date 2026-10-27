@@ -5,9 +5,11 @@ using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 public sealed record HrRequestGroup(int Id,string Name,int Count,int Processing);
 public sealed record HrInboxRow(int Id,string Reference,string Applicant,string Type,string Status,DateTime AppliedAt,bool IsFinal,string? Url);
+public sealed record HrRequestType(int Id,string Name);
 public sealed record HrRequestStatus(int Id,string Name);
 public sealed record HrInboxData(string Organisation,bool OrganisationWide,List<HrRequestGroup> Groups,List<HrInboxRow> Items,int TypeId,int Page,int TotalPages)
 {
+    public List<HrRequestType> Types { get; init; } = [];
     public List<HrRequestStatus> Statuses { get; init; } = [];
 }
 public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factory,IUserAccessService access)
@@ -30,14 +32,20 @@ public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factor
         var source=db.Requests.AsNoTracking().Where(r=>r.OrganisationBusinessEntityID==org&&(wide||
             db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.UserId&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==r.RequestId)||
             db.RequestNotifications.Any(n=>n.UserId==actor.UserId&&n.RequestId==r.RequestId)));
+        var types=await source.Select(r=>new {Id=r.RequestTypeId,Name=r.RequestType.TypeName}).Distinct().OrderBy(t=>t.Name).Select(t=>new HrRequestType(t.Id,t.Name)).ToListAsync(cancellationToken);
         if(from.HasValue){var start=from.Value.Date.AddHours(-5);source=source.Where(r=>r.ApplicationDate>=start);}
         if(to.HasValue){var end=to.Value.Date.AddDays(1).AddHours(-5);source=source.Where(r=>r.ApplicationDate<end);}
         if(status=="processing")source=source.Where(r=>!r.RequestState.IsFinalState);
         else if(status=="final")source=source.Where(r=>r.RequestState.IsFinalState);
         else if(stateId.HasValue)source=source.Where(r=>r.RequestStateId==stateId.Value);
-        var text=search?.Trim();
-        if(!string.IsNullOrWhiteSpace(text))source=source.Where(r=>(r.ReferenceNumber??"").Contains(text)||r.RequestType.TypeName.Contains(text)||
-            db.Individuals.Any(i=>i.BusinessEntityId==r.ApplicantBusinessEntityId&&((i.FirstNameEnglish??"")+" "+(i.LastNameEnglish??"")).Contains(text)));
+        var terms=(search??"").Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries);
+        foreach(var term in terms)
+        {
+            var text=term;
+            source=source.Where(r=>(r.ReferenceNumber??"").Contains(text)||r.RequestType.TypeName.Contains(text)||
+                db.Individuals.Any(i=>i.BusinessEntityId==r.ApplicantBusinessEntityId&&((i.FirstNameEnglish??"")+" "+(i.MiddleNameEnglish??"")+" "+(i.LastNameEnglish??"")).Contains(text))||
+                db.Users.Any(u=>u.BusinessEntityID==r.ApplicantBusinessEntityId&&u.Username.Contains(text)));
+        }
         var grouped=await source.GroupBy(r=>new{r.RequestTypeId,r.RequestType.TypeName}).Select(g=>new{Id=g.Key.RequestTypeId,Name=g.Key.TypeName,Count=g.Count(),Processing=g.Count(r=>!r.RequestState.IsFinalState)}).OrderBy(g=>g.Name).ToListAsync(cancellationToken);
         var groups=grouped.Select(g=>new HrRequestGroup(g.Id,g.Name,g.Count,g.Processing)).ToList();
         var type=Math.Max(0,typeId.GetValueOrDefault());
@@ -45,10 +53,10 @@ public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factor
         var pages=Math.Max(1,(int)Math.Ceiling(count/25d));page=Math.Clamp(page,1,pages);
         var rows=await source.Where(r=>type==0||r.RequestTypeId==type).OrderByDescending(r=>r.ApplicationDate).ThenByDescending(r=>r.RequestId).Skip((page-1)*25).Take(25)
             .Select(r=>new{r.RequestId,r.ReferenceNumber,Type=r.RequestType.TypeName,r.RequestType.ViewUrl,r.RequestState.StateName,r.RequestState.IsFinalState,r.RequestState.IsProcessingState,r.ApplicationDate,
-                Applicant=db.Individuals.Where(i=>i.BusinessEntityId==r.ApplicantBusinessEntityId).Select(i=>(i.FirstNameEnglish??"")+" "+(i.LastNameEnglish??"")).FirstOrDefault(),IsLeave=db.LeaveRequests.Any(l=>l.RequestId==r.RequestId)}).ToListAsync(cancellationToken);
-        var items=rows.Select(r=>new HrInboxRow(r.RequestId,r.ReferenceNumber??$"#{r.RequestId}",r.Applicant??"",r.Type,
+                Applicant=db.Individuals.Where(i=>i.BusinessEntityId==r.ApplicantBusinessEntityId).Select(i=>(i.FirstNameEnglish??"")+" "+(i.MiddleNameEnglish??"")+" "+(i.LastNameEnglish??"")).FirstOrDefault(),IsLeave=db.LeaveRequests.Any(l=>l.RequestId==r.RequestId)}).ToListAsync(cancellationToken);
+        var items=rows.Select(r=>new HrInboxRow(r.RequestId,r.ReferenceNumber??$"#{r.RequestId}",string.Join(" ",(r.Applicant??"").Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)),r.Type,
             (r.IsProcessingState&&!r.IsFinalState?"Processing · ":"")+r.StateName,r.ApplicationDate.AddHours(5),r.IsFinalState,RequestUrl(r.ViewUrl,r.RequestId,r.IsLeave))).ToList();
-        return new(await db.Organisations.Where(o=>o.BusinessEntityID==org).Select(o=>o.OrganisationName).SingleAsync(cancellationToken),wide,groups,items,type,page,pages){Statuses=statuses};
+        return new(await db.Organisations.Where(o=>o.BusinessEntityID==org).Select(o=>o.OrganisationName).SingleAsync(cancellationToken),wide,groups,items,type,page,pages){Statuses=statuses,Types=types};
     }
     private static string? RequestUrl(string? url,int id,bool leave)
     {

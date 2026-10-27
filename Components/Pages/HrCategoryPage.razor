@@ -16,7 +16,7 @@
 @inject ILeaveService LeaveService
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>@(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests - HR Portal" : "HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
@@ -38,7 +38,7 @@
                     <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
 
                         <h2 class="text-xl font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            @CategoryName Management
+                            @(CategoryName.Equals("requests", StringComparison.OrdinalIgnoreCase) ? "Received Requests" : $"{CategoryName} Management")
                         </h2>
 
                         <button @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
