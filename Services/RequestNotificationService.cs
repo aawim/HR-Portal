@@ -116,7 +116,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var rows = await (from n in owned.AsNoTracking()
                           join fromState in db.RequestStates on n.FromStateId equals fromState.RequestStateId
                           join toState in db.RequestStates on n.ToStateId equals toState.RequestStateId
-                          orderby n.CreatedAtUtc descending, n.RequestNotificationId descending
+                          orderby (n.ReadAtUtc == null) descending, n.CreatedAtUtc descending, n.RequestNotificationId descending
                               select new { n.RequestNotificationId, ReferenceNumber = n.Request.ReferenceNumber ?? n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
                               n.NotificationKind, n.Request.RequestId, n.LeaveId, n.Request.RequestType.ViewUrl,
                               ActionStage = db.WfRequestStageInstances.Where(s => s.RequestStageInstanceId == n.RequestStageInstanceId)
@@ -162,7 +162,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                 "DutySubmitted" => "Your duty change request was submitted. Both staff members have been notified to accept it.",
                 _ => null })).ToList();
         var staff = await LoadStaffInboxAsync(db, actor, token);
-        return new(unread + staff.UnreadCount, requestItems.Concat(staff.Items).OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Take(30).ToList());
+        return new(unread + staff.UnreadCount, requestItems.Concat(staff.Items).OrderBy(x => x.IsRead).ThenByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.Id).Take(30).ToList());
     }
 
     public async Task MarkReadAsync(long? notificationId = null, CancellationToken token = default)

@@ -14,7 +14,7 @@ public sealed partial class RequestNotificationService
                 db.StaffChatMemberships.Any(m => m.UserId == actor.UserId && m.LeftAtUtc == null &&
                     m.Conversation.OrganisationId == actor.OrganisationId && n.Url == StaffChatService.PageUrl + "?conversationId=" + m.ConversationId.ToString()));
         var count = await query.CountAsync(x => x.ReadAtUtc == null, ct);
-        var rows = await query.OrderByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.StaffNotificationId).Take(30).ToListAsync(ct);
+        var rows = await query.OrderByDescending(x => x.ReadAtUtc == null).ThenByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.StaffNotificationId).Take(30).ToListAsync(ct);
         // Negative IDs distinguish non-request activity when marking a combined inbox item read.
         return new(count, rows.Select(x => new RequestNotificationItem(-x.StaffNotificationId, x.Kind == "LeaveBalance" ? "Leave balance" : x.Kind,
             "", "", x.CreatedAtUtc, x.ReadAtUtc.HasValue, x.Url, Message: x.Message)).ToList());

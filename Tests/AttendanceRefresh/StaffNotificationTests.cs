@@ -87,6 +87,27 @@ static class StaffNotificationTests
         inbox=await inboxService.GetInboxAsync();
         Check(inbox.Items.Any(i=>i.Url=="/online/chat?conversationId=10")&&!inbox.Items.Any(i=>i.Url is "/online/chat?conversationId=11" or "/online/chat?conversationId=12"),"Non-member or removed chat links appeared in the bell");
         Check(inbox.Items.Any(i=>i.Message=="You were removed from a group."),"Personal removal notice was lost");
+        await inboxService.MarkReadAsync();
+        await using(var db=factory.CreateDbContext())
+        {
+            var now=DateTime.UtcNow;
+            for(var i=0;i<40;i++)
+            {
+                db.StaffNotifications.Add(new(){UserId=1,IndividualId=100,OrganisationId=10,Kind="History",Message="Newer read staff alert",Url="/online",CreatedAtUtc=now.AddMinutes(-i),ReadAtUtc=now});
+                db.RequestNotifications.Add(new(){UserId=1,RequestId=1,NotificationKind="StateChanged",ReferenceNumber="Newer read request alert",FromStateId=2,ToStateId=4,CreatedAtUtc=now.AddMinutes(-i),ReadAtUtc=now});
+            }
+            db.StaffNotifications.Add(new(){UserId=1,IndividualId=100,OrganisationId=10,Kind="History",Message="Older unread staff alert",Url="/online",CreatedAtUtc=now.AddDays(-2)});
+            db.RequestNotifications.Add(new(){UserId=1,RequestId=1,NotificationKind="StateChanged",ReferenceNumber="Older unread request alert",FromStateId=2,ToStateId=4,CreatedAtUtc=now.AddDays(-3)});
+            await db.SaveChangesAsync();
+        }
+        inbox=await inboxService.GetInboxAsync();
+        Check(inbox.UnreadCount==2&&inbox.Items.Count==30,"Unread prioritisation changed counts or inbox limit");
+        Check(inbox.Items[0].Message=="Older unread staff alert"&&inbox.Items[1].Reference=="Older unread request alert"&&inbox.Items.Skip(2).All(i=>i.IsRead),"Older unread alerts were buried by newer read items or truncated before merging");
+        Check(inbox.Items.Skip(2).Select(i=>i.CreatedAtUtc).SequenceEqual(inbox.Items.Skip(2).OrderByDescending(i=>i.CreatedAtUtc).Select(i=>i.CreatedAtUtc)),"Read notifications lost newest-first ordering");
+        await inboxService.MarkReadAsync(inbox.Items[0].Id);
+        inbox=await inboxService.GetInboxAsync();
+        Check(inbox.UnreadCount==1&&inbox.Items[0].Reference=="Older unread request alert"&&!inbox.Items[0].IsRead&&inbox.Items.Skip(1).All(i=>i.IsRead),"Marking read did not move the item below remaining unread alerts");
+
 
     }
 }
