@@ -19,12 +19,14 @@ public sealed class ApiSessionFilter(IUserAccessService access) : IAsyncActionFi
         // The principal is already verified by cookie authentication; circuit scopes are untouched.
         if (context.HttpContext.RequestServices.GetService<AuthenticationStateProvider>() is IHostEnvironmentAuthenticationStateProvider hostState)
             hostState.SetAuthenticationState(Task.FromResult(new AuthenticationState(context.HttpContext.User)));
-        if (!context.Controller.GetType().IsDefined(typeof(AllowMissingEmployeeAttribute), true) && await access.GetContextAsync() is not { UserId: > 0 })
+        var action = context.ActionDescriptor as ControllerActionDescriptor;
+        var allowsMissingEmployee = context.Controller.GetType().IsDefined(typeof(AllowMissingEmployeeAttribute), true) ||
+            action?.MethodInfo.IsDefined(typeof(AllowMissingEmployeeAttribute), true) == true;
+        if (!allowsMissingEmployee && await access.GetContextAsync() is not { UserId: > 0 })
         {
             context.Result = new UnauthorizedObjectResult(new ProblemDetails { Status = 401, Title = "Your employee session is unavailable. Please sign in again." });
             return;
         }
-        var action = context.ActionDescriptor as ControllerActionDescriptor;
         var requirement = action?.MethodInfo.GetCustomAttribute<ApiPermissionAttribute>() ?? context.Controller.GetType().GetCustomAttribute<ApiPermissionAttribute>();
         if (requirement is not null)
         {

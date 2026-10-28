@@ -51,6 +51,7 @@ public sealed class EndpointSecurityTests
                     services.AddScoped<IAttendanceRequestService, StateCheckingAttendance>();
                 }
                 services.AddSingleton<IWorkspaceDirectoryService>(Workspace);
+                services.AddSingleton<HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations, PreferenceStub>();
             }).Configure(app => { app.UseRouting(); app.UseAuthentication(); app.UseAuthorization(); app.UseEndpoints(e => e.MapControllers()); }));
             Client = Server.CreateClient(); Client.BaseAddress = new("https://localhost");
         }
@@ -156,6 +157,15 @@ public sealed class EndpointSecurityTests
         Assert.Contains("alice", text, StringComparison.Ordinal);
         Assert.DoesNotContain("token", text, StringComparison.OrdinalIgnoreCase);
     }
+    [Fact]
+    public async Task Signed_in_efaas_identity_can_load_default_appearance_before_employee_enrolment()
+    {
+        using var fixture = new Fixture(); fixture.SignIn(); fixture.Access.Actor = null;
+        using var response = await fixture.Client.GetAsync("/api/v1/user-preference/get-theme");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var preference = await response.Content.ReadFromJsonAsync<HRM.Services.UserThemePreference>();
+        Assert.Null(preference!.UserId); Assert.Equal("dark", preference.ThemeMode);
+    }
     [Theory]
     [InlineData(20, null)]
     [InlineData(null, 200)]
@@ -202,6 +212,12 @@ public sealed class EndpointSecurityTests
             return Task.FromResult(new AttendanceRequestDateInfoDto { CanSubmit = true });
         }
         public Task<ServiceResult> SubmitAsync(AttendanceRequestApplicationDto model) { Writes++; return Task.FromResult(ServiceResult.Ok()); }
+    }
+    public sealed class PreferenceStub : HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations
+    {
+        public Task<HRM.Services.UserThemePreference> GetThemeAsync() => Task.FromResult(new HRM.Services.UserThemePreference(null, "dark"));
+        public Task SaveThemeAsync(string theme, int expectedUserId) => throw new NotSupportedException();
+        public Task SaveFontSizeAsync(int percent, int expectedUserId) => throw new NotSupportedException();
     }
     public sealed class TestAuthentication(IOptionsMonitor<AuthenticationSchemeOptions> options, ILoggerFactory logger, UrlEncoder encoder)
         : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
