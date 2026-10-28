@@ -9,41 +9,78 @@
 @inject ILogger<AdminHome> Logger
 
 <PageTitle>Organisation Overview</PageTitle>
-<section class="space-y-3" aria-busy="@busy">
-    <header class="flex flex-wrap items-center justify-between gap-2">
-        <div><h1 class="text-xl font-semibold">Organisation Overview</h1><p class="text-sm text-slate-500">@(organisation?.Name ?? "Current organisation") · @DateTime.UtcNow.AddHours(5).ToString("dd MMM yyyy")</p></div>
-        <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+<section class="executive-dashboard" aria-busy="@busy">
+    <header class="executive-heading">
+        <div><span class="eyebrow">Government HR Platform · People analytics</span><h1>Organisation Overview</h1><p>@(organisation?.Name ?? "Current organisation")</p></div>
+        <div class="heading-actions"><span class="sync-label">@(loadedAt?.ToString("dd MMM yyyy · HH:mm") ?? "Not refreshed")</span><button type="button" disabled="@busy" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise" aria-hidden="true"></i> Refresh</button></div>
     </header>
-    @if(error != null) { <p role="alert" class="rounded border p-3">@error</p> }
+    <div class="executive-toolbar">
+        <label>Department / structure<select @bind="selectedDepartment"><option value="0">All approved structures</option>@foreach(var d in organisation?.Departments ?? []) { <option value="@d.Id">@d.Name (@d.Members)</option> }</select></label>
+        <label>Find unit<input type="search" placeholder="Search departments or teams" @bind="search" @bind:event="oninput" /></label>
+        <label>Work type<select @bind="selectedJobType"><option value="0">All job types</option>@foreach(var type in (organisation?.Workforce ?? []).DistinctBy(s=>s.JobTypeId).OrderBy(s=>s.JobType)) { <option value="@type.JobTypeId">@type.JobType</option> }</select></label>
+        <label>Work modality<select @bind="selectedModality"><option value="all">All staff</option><option value="home">Work from home</option><option value="onsite">On site</option><option value="leave">On leave</option></select></label>
+        <span class="scope-label">Current workforce · @DateTime.UtcNow.AddHours(5).ToString("dd MMM yyyy")</span>
+    </div>
+    @if(error != null) { <p role="alert" class="dashboard-alert">@error</p> }
     @if(busy && organisation == null) { <p role="status">Loading organisation overview…</p> }
     @if(organisation != null)
     {
-        <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <article class="rounded-lg border bg-white p-3"><h2 class="text-sm">Active staff</h2><strong class="text-2xl">@organisation.StaffCount</strong><p class="text-xs text-slate-500">Approved current employment</p></article>
-            <article class="rounded-lg border bg-white p-3"><h2 class="text-sm">Approved structures</h2><strong class="text-2xl">@organisation.Departments.Count</strong></article>
-            <article class="rounded-lg border bg-white p-3"><h2 class="text-sm">Active teams</h2><strong class="text-2xl">@organisation.Teams.Count</strong></article>
-            <article class="rounded-lg border bg-white p-3"><h2 class="text-sm">Processing requests</h2><strong class="text-2xl">@(inbox == null ? "—" : inbox.Groups.Sum(g => g.Processing).ToString())</strong><p class="text-xs text-slate-500">@(inbox?.OrganisationWide == true ? "Organisation requests" : "Requests received or assigned to you")</p></article>
-        </div>
-        <div class="grid items-start gap-3 xl:grid-cols-3">
-            <section class="min-w-0 overflow-hidden rounded-lg border bg-white xl:col-span-2">
-                <header class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2"><h2 class="font-semibold">Departments and teams</h2><label><span class="visually-hidden">Filter units</span><input type="search" class="rounded border bg-transparent px-2 py-1 text-sm" placeholder="Filter units…" @bind="search" @bind:event="oninput" /></label></header>
-                <div class="overflow-auto" style="max-height:32rem"><table class="w-full text-left text-sm"><thead><tr class="border-b"><th class="px-3 py-2">Unit</th><th class="px-3 py-2">Type</th><th class="px-3 py-2">Active staff</th></tr></thead><tbody>
-                @foreach(var unit in Units)
-                { <tr class="border-b"><td class="px-3 py-2">@unit.Name</td><td class="px-3 py-2">@unit.Kind</td><td class="px-3 py-2">@unit.Members</td></tr> }
-                @if(!Units.Any()) { <tr><td colspan="3" class="p-3">No matching units.</td></tr> }
-                </tbody></table></div>
-                <p class="px-3 py-2 text-xs text-slate-500">Staff may belong to multiple teams; team totals are not headcount.</p>
-            </section>
-            <section class="min-w-0 rounded-lg border bg-white">
-                <header class="flex flex-wrap justify-between gap-2 border-b px-3 py-2"><h2 class="font-semibold">Processing by request type</h2><a class="text-sm underline" href="/admin/hr/requests">View requests</a></header>
-                @if(requestError != null) { <p role="alert" class="p-3">@requestError</p> }
-                else if(inbox != null)
+        <section class="executive-kpis" aria-label="Executive summary">
+            @foreach(var metric in Metrics)
+            {
+                <article class="executive-card kpi"><div class="kpi-label"><span>@metric.Label</span><i class="@metric.Icon" aria-hidden="true"></i></div><strong>@metric.Value</strong><small>@metric.Note</small></article>
+            }
+        </section>
+        <div class="executive-chart-grid">
+            <section class="executive-card">
+                <header><div><h2>Request activity</h2><p>Processing requests by type within your permitted scope</p></div><a href="/admin/hr/requests">View all <i class="bi bi-arrow-right" aria-hidden="true"></i></a></header>
+                @if(requestError != null) { <p role="alert">@requestError</p> }
+                else if(inbox != null && inbox.Groups.Count > 0)
                 {
-                    @foreach(var group in inbox.Groups.Where(g => g.Processing > 0).OrderByDescending(g => g.Processing))
-                    { <div class="flex justify-between gap-2 border-b px-3 py-2 text-sm"><span>@group.Name</span><strong>@group.Processing</strong></div> }
-                    @if(!inbox.Groups.Any(g => g.Processing > 0)) { <p class="p-3 text-sm">No processing requests in your permitted scope.</p> }
+                    <div class="bar-chart">
+                    @foreach(var g in inbox.Groups.OrderByDescending(g => g.Processing))
+                    { <div class="bar-row"><span>@g.Name</span><meter min="0" max="@Math.Max(1,inbox.Groups.Max(x=>x.Processing))" value="@g.Processing">@g.Processing</meter><strong>@g.Processing</strong></div> }
+                    </div>
                 }
+                else { <div class="empty-chart"><i class="bi bi-inbox" aria-hidden="true"></i><p>No processing requests in your permitted scope.</p></div> }
             </section>
+            <section class="executive-card">
+                <header><div><h2>Department headcount</h2><p>Active staff assignments across approved structures</p></div></header>
+                <div class="bar-chart">
+                    @foreach(var d in FilteredDepartments.OrderByDescending(d => d.Members))
+                    { <div class="bar-row"><span>@d.Name</span><meter min="0" max="@Math.Max(1,organisation.StaffCount)" value="@d.Members">@d.Members</meter><strong>@d.Members</strong></div> }
+                    @if(!FilteredDepartments.Any()) { <p class="empty-message">No matching structures.</p> }
+                </div>
+            </section>
+        </div>
+        <section class="executive-three-grid" aria-label="People insights">
+            <article class="executive-card"><header><h2><i class="bi bi-people" aria-hidden="true"></i> Gender representation</h2></header><div class="bar-chart">@foreach(var gender in GenderCounts) { <div class="bar-row"><span>@gender.Name</span><meter min="0" max="@Math.Max(1,People.Count())" value="@gender.Count">@gender.Count</meter><strong>@gender.Count</strong></div> }</div><p class="panel-note">Distinct individuals linked to active approved jobs · @People.Count() staff</p></article>
+            <article class="executive-card"><header><h2><i class="bi bi-buildings" aria-hidden="true"></i> Work modality distribution</h2></header><div class="bar-chart">@foreach(var mode in ModalityCounts) { <div class="bar-row"><span>@mode.Name</span><meter min="0" max="@Math.Max(1,People.Count())" value="@mode.Count">@mode.Count</meter><strong>@mode.Count</strong></div> }</div><p class="panel-note">Today's approved work-from-home requests. On site = active staff without approved WFH or leave; this is an expected arrangement, not confirmed attendance.</p>@if(!organisation.HasWorkFromHomeRequestType) { <p class="panel-note">No work-from-home request subtype is configured.</p> }</article>
+            <article class="executive-card"><header><h2><i class="bi bi-person-check" aria-hidden="true"></i> Recruitment efficiency</h2></header><div class="unavailable"><strong>Not available</strong><p>Recruitment analytics are not connected to this overview.</p></div></article>
+        </section>
+        <section class="executive-card">
+            <header><div><h2>Staff on leave today</h2><p>Approved leave covering @DateTime.UtcNow.AddHours(5).ToString("dd MMM yyyy") · @VisibleLeaves.Select(l=>l.IndividualId).Distinct().Count() staff</p></div></header>
+            @if(!organisation.CanViewLeaveDetails) { <p class="empty-message">Leave details require leave-view permission.</p> }
+            else if(!VisibleLeaves.Any()) { <p class="empty-message">No staff on approved leave for the selected filters.</p> }
+            else { <div class="leave-staff-grid">@foreach(var leave in VisibleLeaves) { <article class="leave-staff-card" @key="leave.LeaveId"><h3>@leave.Name</h3><span class="status-tag">@leave.LeaveType</span><dl><div><dt>Duration</dt><dd>@leave.Duration days</dd></div><div><dt>From</dt><dd>@leave.FromDate.ToString("dd MMM yyyy")</dd></div><div><dt>Leave ends</dt><dd>@leave.ToDate.ToString("dd MMM yyyy")</dd></div></dl></article> }</div> }
+        </section>
+        <section class="executive-card">
+            <header><div><h2><i class="bi bi-diagram-3" aria-hidden="true"></i> Organisation structure and team ledger</h2><p>Approved structures and active teams · membership counts may overlap</p></div><div class="ledger-controls"><button type="button" @onclick="ExpandAll">Expand all</button><button type="button" @onclick="CollapseAll">Collapse all</button></div></header>
+            <div class="unit-ledger">
+            @foreach(var unit in Units)
+            {
+                var key = unit.Kind + ":" + unit.Name;
+                <article class="unit-entry">
+                    <button class="unit-toggle" type="button" aria-expanded="@expanded.Contains(key).ToString().ToLowerInvariant()" @onclick="()=>ToggleUnit(key)"><i class="@(expanded.Contains(key) ? "bi bi-chevron-down" : "bi bi-chevron-right")" aria-hidden="true"></i><span><strong>@unit.Name</strong><small>@unit.Kind</small></span><span class="unit-count">@unit.Members <small>active staff</small></span></button>
+                    @if(expanded.Contains(key)) { <div class="unit-detail"><p>@unit.Members active staff assignments in this @unit.Kind.ToLowerInvariant().</p><a href="/admin/my/workspace">Open staff workspace <i class="bi bi-arrow-right" aria-hidden="true"></i></a></div> }
+                </article>
+            }
+            @if(!Units.Any()) { <p class="empty-message">No matching departments or teams.</p> }
+            </div>
+        </section>
+        <div class="executive-chart-grid">
+            <section class="executive-card"><header><div><h2>Performance vs. potential matrix</h2><p>9-box talent distribution</p></div><span class="status-tag">Not available</span></header><div class="talent-matrix">@foreach(var label in MatrixLabels) { <div><span>@label</span><strong>—</strong></div> }</div><p class="panel-note">Performance and potential assessments are not connected to this overview.</p></section>
+<section class="executive-card"><header><div><h2>Talent momentum</h2><p>Onboarding and employee milestones</p></div><div class="ledger-controls"><button type="button" aria-pressed="@((!anniversaries).ToString().ToLowerInvariant())" @onclick="()=>anniversaries=false">Recent hires</button><button type="button" aria-pressed="@anniversaries.ToString().ToLowerInvariant()" @onclick="()=>anniversaries=true">Anniversaries</button></div></header><div class="empty-chart"><i class="bi bi-calendar-event" aria-hidden="true"></i><strong>@(anniversaries ? "Anniversary data not available" : "New hire data not available")</strong><p>Employee milestone reporting is not connected to this overview.</p></div><footer><a href="/admin/my/workspace">Open staff directory <i class="bi bi-arrow-right" aria-hidden="true"></i></a></footer></section>
         </div>
     }
 </section>
@@ -54,9 +91,40 @@
     private bool busy;
     private string? error, requestError;
     private string search = "";
+    private int selectedDepartment;
+    private int selectedJobType;
+    private string selectedModality = "all";
+    private bool MatchesModality(int id) => selectedModality switch {
+        "home" => organisation!.WorkingFromHomeStaffIds.Contains(id) && !organisation.OnLeaveStaffIds.Contains(id),
+        "onsite" => !organisation!.WorkingFromHomeStaffIds.Contains(id) && !organisation.OnLeaveStaffIds.Contains(id),
+        "leave" => organisation!.OnLeaveStaffIds.Contains(id), _ => true };
+    private IEnumerable<OrganisationOverviewStaff> FilteredWorkforce => (organisation?.Workforce ?? []).Where(s=>(selectedDepartment==0 || s.DepartmentId==selectedDepartment) && (selectedJobType==0 || s.JobTypeId==selectedJobType) && MatchesModality(s.IndividualId));
+    private IEnumerable<OrganisationOverviewStaff> People => FilteredWorkforce.DistinctBy(s=>s.IndividualId);
+    private IEnumerable<(string Name,int Count)> GenderCounts => new[] { ("Female",People.Count(s=>s.GenderTypeId==2)),("Male",People.Count(s=>s.GenderTypeId==1)),("Not recorded / other",People.Count(s=>s.GenderTypeId is not (1 or 2))) };
+    private IEnumerable<(string Name,int Count)> ModalityCounts => new[] {
+        ("Work from home",People.Count(s=>organisation!.WorkingFromHomeStaffIds.Contains(s.IndividualId) && !organisation.OnLeaveStaffIds.Contains(s.IndividualId))),
+        ("On site",People.Count(s=>!organisation!.WorkingFromHomeStaffIds.Contains(s.IndividualId) && !organisation.OnLeaveStaffIds.Contains(s.IndividualId))),
+        ("On leave",People.Count(s=>organisation!.OnLeaveStaffIds.Contains(s.IndividualId))) };
+    private IEnumerable<OrganisationOverviewLeave> VisibleLeaves => (organisation?.StaffOnLeave ?? []).Where(l=>(selectedDepartment==0 || l.DepartmentId==selectedDepartment) && (selectedJobType==0 || l.JobTypeId==selectedJobType) && MatchesModality(l.IndividualId));
+    private bool anniversaries;
+    private DateTime? loadedAt;
+    private readonly HashSet<string> expanded = [];
+    private static readonly string[] MatrixLabels = ["High growth", "Future star", "Top talent", "Developing", "Core player", "High performer", "Needs support", "Effective", "Expert"];
+    private IEnumerable<OrganisationWorkspaceGroup> FilteredDepartments => (organisation?.Departments ?? []).Where(d => selectedDepartment == 0 || d.Id == selectedDepartment).Select(d=>new OrganisationWorkspaceGroup(d.Id,d.Name,FilteredWorkforce.Where(s=>s.DepartmentId==d.Id).Select(s=>s.IndividualId).Distinct().Count()));
+    private IEnumerable<(string Label,string Value,string Note,string Icon)> Metrics => [
+        ("Total headcount", People.Count().ToString(), "Approved current employment", "bi bi-people"),
+        ("Approved structures", FilteredDepartments.Count().ToString(), "Current organisation", "bi bi-diagram-3"),
+        ("Active teams", organisation!.Teams.Count.ToString(), "Organisation-wide", "bi bi-collection"),
+        ("Processing requests", inbox == null ? "—" : inbox.Groups.Sum(g=>g.Processing).ToString(), inbox?.OrganisationWide == true ? "Organisation-wide" : "Received or assigned to you", "bi bi-hourglass-split"),
+        ("Request categories", inbox == null ? "—" : inbox.Groups.Count.ToString(), "With processing requests", "bi bi-list-check"),
+        ("Populated structures", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check")
+    ];
+    private void ToggleUnit(string key) { if(!expanded.Add(key)) expanded.Remove(key); }
+    private void ExpandAll() { foreach(var u in Units) expanded.Add(u.Kind + ":" + u.Name); }
+    private void CollapseAll() => expanded.Clear();
     private IEnumerable<(string Name, string Kind, int Members)> Units =>
-        (organisation?.Departments ?? []).Select(d => (d.Name, Kind: "Structure", d.Members))
-        .Concat((organisation?.Teams ?? []).Select(t => (t.Name, Kind: "Team", t.Members)))
+        FilteredDepartments.Select(d => (d.Name, Kind: "Structure", d.Members))
+        .Concat((selectedDepartment == 0 ? organisation?.Teams ?? [] : new List<OrganisationWorkspaceGroup>()).Select(t => (t.Name, Kind: "Team", t.Members)))
         .Where(u => u.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).OrderBy(u => u.Name);
     protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()
@@ -70,6 +138,7 @@
             if(session?.CanAccessAdminPortal != true) throw new UnauthorizedAccessException();
             var organisationId = await Access.GetCurrentOrganisationIdAsync();
             await Task.WhenAll(LoadOrganisationAsync(organisationId), LoadRequestsAsync());
+            loadedAt = DateTime.UtcNow.AddHours(5);
         }
         catch(Exception ex) { Logger.LogError(ex,"Loading organisation overview"); error="The organisation overview could not be loaded. Refresh or contact your HR administrator."; }
         finally { busy = false; }

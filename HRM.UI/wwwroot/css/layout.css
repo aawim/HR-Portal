@@ -6,6 +6,7 @@ html, body {
     overflow: hidden;
 }
 .app-shell {
+    --shell-footer-height: 2.75rem;
     position: fixed;
     inset: 0;
     display: flex;
@@ -38,7 +39,8 @@ html, body {
 }
 .welcome-main { display: flex; align-items: center; justify-content: center; }
 .app-shell-footer {
-    flex: 0 0 auto; padding: .45rem 1rem; border-top: 1px solid var(--app-border-color);
+    box-sizing:border-box; display:flex; align-items:center; justify-content:center;
+    flex: 0 0 var(--shell-footer-height); height:var(--shell-footer-height); padding:0 1rem; border-top: 1px solid var(--app-border-color);
     background: #fff; color: #64748b; font-size: .7rem; text-align: center;
 }
 .app-sidebar {
@@ -64,7 +66,9 @@ html, body {
 .app-nav-active { color:#fff !important; background:rgba(255,255,255,.16) !important; }
 .app-sidebar.is-collapsed .portal-switch-container { display:none; }
 .app-sidebar.is-collapsed .sidebar-logout { justify-content:center; }
-.sidebar-bottom { margin-top:auto; }
+.sidebar-bottom { box-sizing:border-box; display:flex; align-items:center; margin-top:auto; height:var(--shell-footer-height); min-height:var(--shell-footer-height); padding:0 .75rem; }
+.sidebar-bottom .sidebar-logout { height:100%; padding-top:0; padding-bottom:0; border-radius:0; }
+.sidebar-bottom>div { padding-top:0; padding-bottom:0; }
 .portal-public .app-sidebar { background-color:#075985 !important; }
 .portal-public .app-shell-content>header { border-bottom:3px solid #075985; }
 .portal-admin .app-sidebar { background-color:#008080 !important; }
@@ -100,7 +104,7 @@ html, body {
     .app-shell-content > header { padding-left:.75rem; padding-right:.75rem; gap:.5rem; }
     .topbar-actions { min-width:0; margin-left:auto; gap:.5rem; padding-left:0; }
     .welcome-main { align-items:flex-start; padding:.75rem !important; }
-    .app-shell-footer { padding:.4rem .75rem; }
+    .app-shell-footer { padding:0 .75rem; }
     .app-sidebar { display:none; position:fixed; inset:0 auto 0 0; z-index:80; width:min(18rem,86vw); flex-basis:auto; box-shadow:0 20px 50px rgba(15,23,42,.42); }
     .app-sidebar.is-mobile-open { display:flex; }
     .app-sidebar.is-collapsed { width:min(18rem,86vw); }

@@ -27,6 +27,31 @@ public partial class OrganisationWorkspaceService(IDbContextFactory<HrmTeContext
             ?? throw new InvalidOperationException("Organisation not found.");
         var jobs = db.Jobs.AsNoTracking().Where(x => x.OrganisationID == organisationId && x.JobStateId == SharedConfig.JobStates.APPROVED && x.TerminatedDate == null && x.JoinedDate <= today);
         data.StaffCount = await jobs.Select(x => x.IndividualID).Distinct().CountAsync();
+        data.Workforce = await jobs.Select(x => new OrganisationOverviewStaff(x.IndividualID, x.OrganisationStructureId,
+            x.JobTypeId, x.JobType.TypeName, x.Individual.GenderTypeId)).Distinct().ToListAsync();
+        var homeTypeNames = new[] { "work from home", "work-from-home", "working from home", "wfh" };
+        var homeTypes = await db.OutOfficeRequestTypes.AsNoTracking()
+            .Where(t => homeTypeNames.Contains(t.TypeName.Trim().ToLower()))
+            .Select(t => t.OutOfOfficeRequestTypeId).ToListAsync();
+        data.HasWorkFromHomeRequestType = homeTypes.Count > 0;
+        data.WorkingFromHomeStaffIds = await db.OutOfOfficeRequests.AsNoTracking()
+            .Where(r => r.OrganisationBusinessEntityID == organisationId && homeTypes.Contains(r.OutOfOfficeRequestTypeId) &&
+                r.Request.OrganisationBusinessEntityID == organisationId && r.Request.RequestStateId == SharedConfig.RequestStates.APPROVED &&
+                r.Date >= today && r.Date < today.AddDays(1) && jobs.Any(j => j.IndividualID == r.StaffId))
+            .Select(r => r.StaffId).Distinct().ToListAsync();
+        data.OnLeaveStaffIds = await db.Leaves.AsNoTracking()
+            .Where(l => jobs.Any(j => j.JobId == l.JobId) && l.LeaveStateId == SharedConfig.LeaveStates.APPROVED && l.FromDate < today.AddDays(1) && l.ToDate >= today)
+            .Select(l => l.Job.IndividualID).Distinct().ToListAsync();
+        // Leave names are HR data: require the canonical leave-view permission before returning them.
+        var actor = await access.RequireContextAsync();
+        data.CanViewLeaveDetails = actor.IsSuperAdministrator || await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Leave.View");
+        if (data.CanViewLeaveDetails)
+            data.StaffOnLeave = await db.Leaves.AsNoTracking()
+                .Where(l => jobs.Any(j => j.JobId == l.JobId) && l.LeaveStateId == SharedConfig.LeaveStates.APPROVED && l.FromDate < today.AddDays(1) && l.ToDate >= today)
+                .OrderBy(l => l.ToDate).ThenBy(l => l.LeaveId)
+                .Select(l => new OrganisationOverviewLeave(l.LeaveId, l.Job.IndividualID, l.Job.OrganisationStructureId, l.Job.JobTypeId,
+                    (l.Job.Individual.FirstNameEnglish + " " + (l.Job.Individual.MiddleNameEnglish ?? "") + " " + (l.Job.Individual.LastNameEnglish ?? "")).Trim(),
+                    l.LeaveType.Name, l.FromDate, l.ToDate, l.Duration)).ToListAsync();
         data.Departments = await db.OrganisationStructures.AsNoTracking().Where(x => x.OrganisationBusinessEntityID == organisationId && x.OrganisationStructureStateId == 3)
             .OrderBy(x => x.Name).Select(x => new OrganisationWorkspaceGroup(x.OrganisationStructureId, x.Name,
                 jobs.Where(j => j.OrganisationStructureId == x.OrganisationStructureId).Select(j => j.IndividualID).Distinct().Count())).ToListAsync();
