@@ -45,6 +45,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Contracts.HrRequestInboxServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.UserServiceContracts.IOperations),
         typeof(global::HRM.Services.Interfaces.IUserAppDataService),
+        typeof(global::HRM.Services.Interfaces.IUserContext),
         typeof(global::HRM.Services.Interfaces.IIndividualRegistryService),
         typeof(global::HRM.Services.Interfaces.IWorkspaceDirectoryService),
         typeof(global::HRM.Services.Interfaces.IMyAttendanceSupportService),

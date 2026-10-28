@@ -35,7 +35,7 @@ foreach(var contract in ApplicationContractCatalog.All)
  if(baseName.EndsWith("Service"))baseName=baseName[..^7];
  var controller=baseName+"Controller";var prefix="api/v1/"+Kebab(baseName);
  var file=new StringBuilder("// Typed endpoints delegate to canonical application services.\nusing Microsoft.AspNetCore.Mvc;\nusing HRM.Api.Infrastructure;\nnamespace HRM.Api.Controllers.V1;\n\n");
- if(baseName=="CurrentEmployeeSession")file.AppendLine("[AllowMissingEmployee]");
+ if(baseName is "CurrentEmployeeSession" or "UserContext")file.AppendLine("[AllowMissingEmployee]");
  file.AppendLine($"[Route(\"{prefix}\")]\npublic sealed class {controller}({Name(contract)} service) : HrmApiController\n{{");
  foreach(var method in contract.GetMethods().Where(m => m.GetCustomAttribute<ObsoleteAttribute>() is null))
  {
@@ -86,4 +86,5 @@ foreach(var contract in ApplicationContractCatalog.All)
  file.AppendLine("}");File.WriteAllText(Path.Combine(target,controller+".cs"),file.ToString());
 }
 File.WriteAllText(Path.Combine(root,"docs/api-endpoints.json"),JsonSerializer.Serialize(entries,new JsonSerializerOptions{WriteIndented=true})+"\n");
+File.WriteAllText(Path.Combine(root,"HRM.Application/Transport/api-endpoints.json"),JsonSerializer.Serialize(entries,new JsonSerializerOptions{WriteIndented=true})+"\n");
 Console.WriteLine($"Generated {ApplicationContractCatalog.All.Count} typed controllers / {count} actions.");

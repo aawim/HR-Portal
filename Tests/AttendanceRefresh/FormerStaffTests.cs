@@ -53,7 +53,7 @@ static class FormerStaffTests
         Check(copy.Tables.Count == report.Tables.Count && copy.Tables.Any(t => t.Name == "Contacts" && t.Rows.Count == 1), "Former staff typed export contract lost authorised data.");
         Check(report.Tables.Any(t=>t.Name=="Employment history"&&t.Rows.Count==1)&&report.Tables.Any(t=>t.Name=="Contacts"&&t.Rows.Count==1),"Former staff history was unavailable");
         var excel=AttendanceReportExport.Excel(report);Check(excel.Length>1000&&excel[0]=='P'&&excel[1]=='K',"Former information Excel export failed");
-        var pdf=AttendanceReportExport.Pdf(report,Path.Combine(Directory.GetCurrentDirectory(),"wwwroot","fonts","Faruma.ttf"));Check(pdf.Length>1000&&System.Text.Encoding.ASCII.GetString(pdf,0,4)=="%PDF","Former information PDF export failed");
+        var pdf=AttendanceReportExport.Pdf(report,Path.Combine(Directory.GetCurrentDirectory(),"HRM.UI","wwwroot","fonts","Faruma.ttf"));Check(pdf.Length>1000&&System.Text.Encoding.ASCII.GetString(pdf,0,4)=="%PDF","Former information PDF export failed");
         foreach(var edit in new Func<HrmTeContext,Task>[] {
             async db=>(await db.Individuals.SingleAsync(i=>i.BusinessEntityId==200)).FirstNameEnglish="Changed",
             async db=>(await db.Jobs.SingleAsync(j=>j.JobId==2)).TerminatedDate=null,

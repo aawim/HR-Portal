@@ -37,7 +37,8 @@ public sealed class OrganisationAttendanceQueries(IDbContextFactory<HrmTeContext
             var employeeNumber = await db.Staffs.Where(s => s.IndividualId == job.IndividualID).Select(s => s.EmployeeNumber).SingleOrDefaultAsync(ct);
             var eligibility = await AttendanceEligibilityCalendar.LoadAsync(db, job.IndividualID, day, day, organisation, job.JobId, ct);
             rows.Add(new(job.IndividualID, job.JobId, person, employeeNumber, eligibility[day],
-                await attendance.GetStaffClockEventsAsync(job.IndividualID, day, day, ct), await attendance.GetStaffScheduleAttendanceAsync(job.IndividualID, day, day, ct)));
+                await attendance.GetStaffClockEventsAsync(job.IndividualID, day, day, ct), await attendance.GetStaffScheduleAttendanceAsync(job.IndividualID, day, day, ct))
+                { Overview = (await attendance.GetStaffAttendanceRangeAsync(job.IndividualID, day, day, ct)).FirstOrDefault() });
         }
         return new(structures, teams, types, rows);
     }

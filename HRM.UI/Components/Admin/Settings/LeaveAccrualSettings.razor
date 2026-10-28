@@ -1,0 +1,96 @@
+@page "/admin/settings/leaves/accrual"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using HRM.Models.LeaveTypes
+@using HRM.Services.Leave
+@inject HRM.Services.Leave.Contracts.LeaveAccrualSettingsServiceContracts.IOperations Settings
+@inject ILogger<LeaveAccrualSettings> Logger
+
+@if(!Embedded){<PageTitle>Leave accrual by job type</PageTitle>}
+<div class="@(Embedded?"space-y-4":"mx-auto max-w-6xl space-y-5 p-4")">
+    @if(!Embedded){<a href="/admin/settings/leaves" class="text-sm text-blue-700 underline">Back to Leaves Management</a>}
+    @if(!Embedded){<h1 class="text-2xl font-semibold">Leave accrual by job type</h1>}
+    @if (message != null) { <p role="status" class="rounded border bg-slate-50 p-3">@message</p> }
+    @if (data == null) { <button type="button" class="app-button app-button-secondary" @onclick="ReloadAsync">Load configuration</button> }
+    else
+    {
+        <p class="text-sm text-slate-600">@data.Organisation</p>
+        <div class="overflow-x-auto rounded-xl border bg-white">
+            <table class="w-full text-left text-sm">
+                <thead class="bg-slate-50"><tr><th class="px-3 py-2">Job type</th><th class="px-3 py-2">Leave type</th><th class="px-3 py-2">Grant</th><th class="px-3 py-2">First grant</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Actions</th></tr></thead>
+                <tbody>
+                    @foreach (var row in data.Rules.Where(r=>!JobTypeId.HasValue||r.JobTypeId==JobTypeId))
+                    {
+                        <tr class="border-t"><td class="px-3 py-2">@data.JobTypes.FirstOrDefault(x => x.Id == row.JobTypeId)?.Name</td><td class="px-3 py-2">@data.LeaveTypes.FirstOrDefault(x => x.Id == row.LeaveTypeId)?.Name</td>
+                            <td class="px-3 py-2">@row.GrantDays.ToString("0.##") days / @row.RepeatEveryMonths month(s)</td><td class="px-3 py-2">@(row.FirstGrantAfterMonths == 0 ? "On joining" : $"After {row.FirstGrantAfterMonths} month(s)")</td>
+                            <td class="px-3 py-2">@(row.IsEnabled ? "Enabled" : row.CarryForwardMode == "Unspecified" ? "Draft · carry-forward required" : "Disabled")</td>
+                            <td class="px-3 py-2"><div class="flex flex-wrap gap-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => Edit(row)">Configure</button><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => PreviewAsync(row.Id)">Preview</button></div></td></tr>
+                    }
+                    @foreach (var job in data.JobTypes.Where(j => (!JobTypeId.HasValue||j.Id==JobTypeId)&&!data.Rules.Any(r => r.JobTypeId == j.Id)))
+                    {
+                        <tr class="border-t"><td class="px-3 py-2">@job.Name</td><td colspan="4" class="p-3 text-slate-500">No accrual rule configured for this tenant</td><td class="px-3 py-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(job.Id)">Configure</button></td></tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(JobTypeId??0)">Add job type / leave type rule</button>
+        @if (model != null)
+        {
+            <fieldset disabled="@busy" class="space-y-3 rounded-xl border bg-white p-3">
+                <h2 class="font-semibold">@(model.Id == 0 ? "New accrual rule" : "Configure accrual rule")</h2>
+                <div class="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+                    <label>Job type<select disabled="@(model.Id != 0||JobTypeId.HasValue)" class="mt-1 w-full rounded border p-2" @bind="model.JobTypeId"><option value="0">Select Job Type</option>@foreach (var x in data.JobTypes.Where(j=>!JobTypeId.HasValue||j.Id==JobTypeId)) { <option value="@x.Id">@x.Name</option> }</select></label>
+                    <label>Leave type<select disabled="@(model.Id != 0)" class="mt-1 w-full rounded border p-2" @bind="model.LeaveTypeId"><option value="0">Select Leave Type</option>@foreach (var x in data.LeaveTypes) { <option value="@x.Id">@x.Name</option> }</select></label>
+                    <label>Days per grant<input type="number" min="0.01" max="366" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.GrantDays" /></label>
+                    <label>First grant after joining (months)<input type="number" min="0" max="1200" class="mt-1 w-full rounded border p-2" @bind="model.FirstGrantAfterMonths" /><span class="text-xs text-slate-500">0 means grant on the joining date.</span></label>
+                    <label>Repeat every (months)<input type="number" min="1" max="120" class="mt-1 w-full rounded border p-2" @bind="model.RepeatEveryMonths" /></label>
+                    <label>Processing start date<input type="date" class="mt-1 w-full rounded border p-2" @bind="model.EffectiveFrom" /></label>
+                    <label>Carry-forward<select class="mt-1 w-full rounded border p-2" @bind="model.CarryForwardMode"><option value="Unspecified">Not yet configured</option><option value="None">No carry-forward</option><option value="Unlimited">Carry all unused days</option><option value="Capped">Carry up to a limit</option></select></label>
+                    @if (model.CarryForwardMode == "Capped") { <label>Maximum carried days<input type="number" min="0" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.CarryForwardLimit" /></label> }
+                    <label>Maximum balance (optional)<input type="number" min="0" step="0.01" class="mt-1 w-full rounded border p-2" @bind="model.MaximumBalance" /></label>
+                </div>
+                <p class="text-sm text-slate-600">Joining-date based. HR processes carry-forward at service-year renewal; carried days do not expire.</p>
+                <label class="flex items-center gap-2"><input type="checkbox" @bind="model.IsEnabled" />Enable automatic accrual for this tenant's matching jobs</label>
+                <p class="text-sm text-amber-700">Existing balances are preserved. Preview before enabling.</p>
+                <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="SaveAsync">Save configuration</button><button type="button" class="app-button app-button-secondary" @onclick="() => model = null">Close</button></div>
+            </fieldset>
+        }
+        @if (preview != null)
+        {
+            <section class="space-y-3 rounded-xl border bg-white p-3">
+                <h2 class="font-semibold">Accrual preview · @DateTime.UtcNow.AddHours(5).Date.ToString("dd MMM yyyy")</h2>
+                <p class="text-sm text-slate-500">Preview · @preview.Count staff · no balances changed.</p>
+                <div class="max-h-96 overflow-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Job</th><th class="p-2">Due</th><th class="p-2">Grant</th><th class="p-2">Current</th><th class="p-2">After</th><th class="p-2">Result</th></tr></thead><tbody>@foreach (var row in preview) { <tr class="border-t"><td class="p-2">@row.JobId</td><td class="p-2">@row.DueDate?.ToString("dd MMM yyyy")</td><td class="p-2">@row.Grant</td><td class="p-2">@row.PreviousBalance</td><td class="p-2">@row.NewBalance</td><td class="p-2">@row.Message</td></tr> }</tbody></table></div>
+                @if (data.Rules.Any(x => x.Id == previewRuleId && x.IsEnabled)) { <button type="button" disabled="@busy" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="RunAsync">Process due credits now</button> }
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int? JobTypeId {get;set;}
+    [Parameter] public bool Embedded {get;set;}
+    private HRM.DTOs.Contracts.LeaveAccrualSettingsDataResponse? data;
+    private HRM.DTOs.Contracts.JobTypeLeaveAccrualRuleDto? model;
+    private List<AccrualPreview>? preview;
+    private int previewRuleId;
+    private bool busy;
+    private string? message;
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    private async Task ReloadAsync() { try { data = await Settings.LoadAsync(); } catch (Exception ex) { Logger.LogError(ex, "Could not load tenant accrual rules"); message = ex is UnauthorizedAccessException ? ex.Message : "Accrual settings could not be loaded."; } }
+    private void Edit(HRM.DTOs.Contracts.JobTypeLeaveAccrualRuleDto rule) { model = System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.JobTypeLeaveAccrualRuleDto>(System.Text.Json.JsonSerializer.Serialize(rule)); preview = null; }
+    private void New(int job)
+    {
+        job=JobTypeId??job;
+        model = new() { JobTypeId = job, EffectiveFrom = DateTime.UtcNow.AddHours(5).Date };
+        var name = data?.JobTypes.FirstOrDefault(x => x.Id == job)?.Name.ToLowerInvariant();
+        if (name is "contract" or "temporary") { model.GrantDays = 2.5m; model.FirstGrantAfterMonths = 1; model.RepeatEveryMonths = 1; }
+        if (name == "permanent") { model.GrantDays = 30; model.FirstGrantAfterMonths = 12; model.RepeatEveryMonths = 12; }
+        if (name == "political") { model.GrantDays = 30; model.FirstGrantAfterMonths = 0; model.RepeatEveryMonths = 12; }
+        preview = null;
+    }
+    private async Task SaveAsync() { if (busy || model == null) return; busy = true; try { await Settings.SaveAsync(model); model = null; preview = null; await ReloadAsync(); message = "Tenant accrual configuration saved."; } catch (Exception ex) { Logger.LogError(ex, "Could not save accrual rule"); message = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "Accrual configuration could not be saved."; } finally { busy = false; } }
+    private async Task PreviewAsync(int id) { if (busy) return; busy = true; try { previewRuleId = id; preview = await Settings.PreviewAsync(id); } catch (Exception ex) { Logger.LogError(ex, "Could not preview accrual"); message = "Accrual preview could not be loaded."; } finally { busy = false; } }
+    private async Task RunAsync() { if (busy) return; busy = true; try { var count = await Settings.RunAsync(previewRuleId); preview = await Settings.PreviewAsync(previewRuleId); message = $"Posted {count} due credit(s). Previously posted credits were not duplicated."; } catch (Exception ex) { Logger.LogError(ex, "Could not process accrual"); message = "Processing could not finish. Refresh the preview to review completed credits before retrying."; } finally { busy = false; } }
+}
+

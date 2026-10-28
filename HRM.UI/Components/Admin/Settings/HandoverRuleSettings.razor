@@ -1,0 +1,57 @@
+@attribute [Authorize]
+@using HRM.DTOs.Leave
+@using HRM.Services.Leave
+@inject HRM.Services.Leave.Contracts.LeaveHandoverRuleSettingsServiceContracts.IOperations Settings
+@inject ILogger<HandoverRuleSettings> Logger
+@inject HRM.Services.ToastService Toasts
+<section class="space-y-3">
+    <header class="flex flex-wrap items-center justify-between gap-2"><div><h2 class="text-base font-semibold">Work handover rules</h2><p class="text-xs text-slate-500">@data?.Organisation</p></div><div class="flex gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick="Reload">Refresh</button><button class="app-button app-button-primary" disabled="@(busy||data==null)" @onclick="NewRule">New rule</button></div></header>
+    <p class="text-sm text-slate-500">Team overrides department; department overrides organisation. Within a scope, specific leave types take precedence, then specific Job Types, then higher priority. No override inherits the default. Days use the leave policy’s counted leave days.</p>
+    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
+    @if(data!=null)
+    {
+        @if(model!=null)
+        {
+            <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-3">
+                <h3 class="text-sm font-semibold">@(model.Id==0?"New rule":"Edit rule")</h3>
+                <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                    <label class="text-sm">Name<input class="block w-full rounded border bg-transparent p-2" maxlength="200" @bind="model.Name" /></label>
+                    <label class="text-sm">Applies to<select class="block w-full rounded border p-2" @bind="model.Scope"><option>Organisation</option><option value="Structure">Department / structure</option><option>Team</option></select></label>
+                    @if(model.Scope=="Structure"){<label class="text-sm">Approved department / structure<select class="block w-full rounded border p-2" @bind="model.OrganisationStructureId"><option value="">Select</option>@foreach(var x in data.Structures){<option value="@x.Id">@x.Name</option>}</select></label>}
+                    @if(model.Scope=="Team"){<label class="text-sm">Team<select class="block w-full rounded border p-2" @bind="model.TeamId"><option value="">Select</option>@foreach(var x in data.Teams){<option value="@x.Id">@x.Name</option>}</select></label>}
+                    <label class="text-sm">Job Type<select class="block w-full rounded border p-2" @bind="model.JobTypeId"><option value="">All Job Types</option>@foreach(var x in data.JobTypes){<option value="@x.Id">@x.Name</option>}</select></label>
+                    <label class="text-sm">Requirement<select class="block w-full rounded border p-2" @bind="model.Mode"><option value="Required">Require handover</option><option value="Exempt">Not required</option>@if(model.Id>0){<option value="Inherit">Inherit default</option>}</select></label>
+                    @if(model.Mode=="Required"){<label class="text-sm">Required for more than<input type="number" min="0" max="3650" class="block w-full rounded border bg-transparent p-2" @bind="model.AfterDays" /><span class="text-xs text-slate-500">leave days; @model.AfterDays days does not trigger it</span></label>}
+                    <label class="text-sm">Priority<input type="number" min="0" max="1000" class="block w-full rounded border bg-transparent p-2" @bind="model.Priority" /></label>
+                    <label class="text-sm">Effective from<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="model.EffectiveFrom" /></label>
+                    <label class="text-sm">Effective to<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="model.EffectiveTo" /></label>
+                </div>
+                <div class="flex flex-wrap gap-4 text-sm"><label><input type="checkbox" @bind="model.AllLeaveTypes" /> All leave types</label><label><input type="checkbox" @bind="model.IsActive" /> Enabled</label></div>
+                @if(!model.AllLeaveTypes){<div class="grid max-h-52 gap-2 overflow-y-auto rounded border p-2 text-sm sm:grid-cols-2">@foreach(var x in data.Types){<label><input type="checkbox" checked="@model.LeaveTypeIds.Contains(x.Id)" @onchange="e=>SelectType(x.Id,e.Value is true)" /> @x.Name</label>}</div>}
+                <div class="flex gap-2"><button class="app-button app-button-primary" @onclick="Save">Save rule</button><button class="app-button app-button-secondary" @onclick="()=>model=null">Cancel</button></div>
+            </fieldset>
+        }
+        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Rule</th><th class="p-2">Scope</th><th class="p-2">Leave types / Job Type</th><th class="p-2">Requirement</th><th class="p-2">Period</th><th class="p-2">Action</th></tr></thead><tbody>
+            @foreach(var r in data.Rules){<tr class="border-t"><td class="p-2">@r.Name<br /><span class="text-xs text-slate-500">@(r.IsActive?"Enabled":"Disabled") · Priority @r.Priority</span></td><td class="p-2">@ScopeName(r)</td><td class="p-2">@(r.AllLeaveTypes?"All leave types":string.Join(", ",data.Types.Where(x=>r.LeaveTypeIds.Contains(x.Id)).Select(x=>x.Name)))<br />@(data.JobTypes.FirstOrDefault(x=>x.Id==r.JobTypeId)?.Name??"All Job Types")</td><td class="p-2">@(r.Mode=="Required"?$"More than {r.AfterDays} days":r.Mode=="Exempt"?"Not required":"Inherit default")</td><td class="p-2 whitespace-nowrap">@r.EffectiveFrom.ToString("dd MMM yyyy")<br />@(r.EffectiveTo?.ToString("dd MMM yyyy")??"No end date")</td><td class="p-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Edit(r)">Edit</button></td></tr>}
+        </tbody></table>@if(data.Rules.Count==0){<p class="p-3 text-sm text-slate-500">No rules configured. Handover is not required until a matching rule is enabled.</p>}</div>
+        <details class="rounded-xl border p-3"><summary class="cursor-pointer text-sm font-semibold">Preview a staff member’s rule</summary><div class="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <label class="text-sm">Find staff<input class="block w-full rounded border bg-transparent p-2" @bind="staffSearch" placeholder="Name" @bind:after="FindStaff" /></label>
+            <label class="text-sm">Staff<select class="block w-full rounded border p-2" @bind="previewJob"><option value="0">Select staff</option>@foreach(var x in staff){<option value="@x.Id">@x.Name</option>}</select></label>
+            <label class="text-sm">Leave type<select class="block w-full rounded border p-2" @bind="previewType"><option value="0">Select leave type</option>@foreach(var x in data.Types){<option value="@x.Id">@x.Name</option>}</select></label>
+            <label class="text-sm">Leave start<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="previewDate" /></label>
+        </div><button class="app-button app-button-secondary mt-3" disabled="@(busy||previewJob==0||previewType==0)" @onclick="Preview">Preview</button>@if(preview!=null){<p role="status" class="mt-2 text-sm">@preview</p>}</details>
+    }
+</section>
+@code {
+    private HandoverRuleSettingsData? data;private HandoverRuleEdit? model;private bool busy;private string? error,preview;private string staffSearch="";private List<HandoverOption> staff=[];private int previewJob,previewType;private DateTime previewDate=DateTime.UtcNow.AddHours(5).Date;
+    protected override Task OnInitializedAsync()=>Reload();
+    private async Task Reload(){busy=true;error=null;try{data=await Settings.LoadAsync();model=null;staff=await Settings.StaffAsync("");}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private void NewRule(){model=new(){OrganisationId=data?.OrganisationId??0};error=null;}
+    private void Edit(HandoverRuleEdit r){model=System.Text.Json.JsonSerializer.Deserialize<HandoverRuleEdit>(System.Text.Json.JsonSerializer.Serialize(r));error=null;}
+    private string ScopeName(HandoverRuleEdit r)=>r.Scope=="Team"?"Team · "+(data?.Teams.FirstOrDefault(x=>x.Id==r.TeamId)?.Name??"Previous team"):r.Scope=="Structure"?"Department · "+(data?.Structures.FirstOrDefault(x=>x.Id==r.OrganisationStructureId)?.Name??"Previous structure"):"Organisation";
+    private void SelectType(int id,bool selected){if(model==null)return;if(selected&&!model.LeaveTypeIds.Contains(id))model.LeaveTypeIds.Add(id);else if(!selected)model.LeaveTypeIds.Remove(id);}
+    private async Task Save(){if(model==null||busy)return;busy=true;error=null;try{await Settings.SaveAsync(model);Toasts.Success("Handover rule saved.");await Reload();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private async Task FindStaff(){try{staff=await Settings.StaffAsync(staffSearch);previewJob=0;preview=null;}catch(Exception ex){Fail(ex);}}
+    private async Task Preview(){try{var r=await Settings.PreviewAsync(previewJob,previewType,previewDate);preview=r.Source+" · "+(r.Mode=="Required"?$"Handover required for more than {r.AfterDays} leave days":"Handover not required");}catch(Exception ex){Fail(ex);}}
+    private void Fail(Exception ex){Logger.LogError(ex,"Handover rule configuration");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Handover rules could not be loaded or saved. Please try again.";}
+}

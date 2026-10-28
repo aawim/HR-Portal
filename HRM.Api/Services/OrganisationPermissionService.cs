@@ -15,11 +15,7 @@ public sealed class OrganisationPermissionService(IDbContextFactory<HrmTeContext
 :global::HRM.Services.Contracts.OrganisationPermissionServiceContracts,global::HRM.Services.Contracts.OrganisationPermissionServiceContracts.IOperations{
     // Platform permission management must remain recoverable after a tenant ceiling is reduced.
     // This checks an explicit assignment; organisation-default permissions cannot confer platform authority.
-    private static async Task<bool> SuperAdmin(HrmTeContext db, int id) => await db.Users.AnyAsync(u => u.UserId == id &&
-        u.IsActive && u.LocalUserStateId == 1 && u.AdminPortalAccessEnabled && u.AdminPortalAccessOrganisationId == u.UserOrganisationId &&
-        (u.UserRoles.Any(r => r.IsActive && r.UserOrganisationId == u.UserOrganisationId && r.Role.RoleKey == "Super.Admin.Manage") ||
-         u.UserAssignedUserGroups.Any(g => (g.UserGroup.IsGlobal || g.UserGroup.UserOrganisationId == u.UserOrganisationId) &&
-             g.UserGroup.UserGroupRoles.Any(r => r.IsActive && r.Role.RoleKey == "Super.Admin.Manage"))));
+    private static Task<bool> SuperAdmin(HrmTeContext db, int id) => HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, id);
 
     private async Task<(UserContextDto Actor, int Org, bool Super, bool Edit)> Scope(int? selected)
     {

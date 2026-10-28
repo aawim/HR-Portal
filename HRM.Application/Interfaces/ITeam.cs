@@ -5,6 +5,7 @@ namespace HRM.Services.Interfaces
     public interface ITeam
     {
         Task<List<TeamDto>> GetMyTeamsAsync();
+        Task<int> CreateAsync(int organisationId, string name, string? nameDhivehi, DateTime startDate, CancellationToken ct = default);
         //Task<List<TeamDto>> GetTeamsAsync(int OrgID);
         //Task<List<TeamDto>> GetTeamsAsync();
 

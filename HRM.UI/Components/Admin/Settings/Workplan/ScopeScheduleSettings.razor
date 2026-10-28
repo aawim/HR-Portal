@@ -1,0 +1,99 @@
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using HRM.Models
+@inject NavigationManager Navigation
+@inject HRM.Services.Contracts.ScopeScheduleSettingsServiceContracts.IOperations Settings
+@inject ILogger<ScopeScheduleSettings> Logger
+@inject HRM.Services.ToastService Toasts
+<section class="space-y-4 p-4">
+    <div><h1 class="text-xl font-semibold">@(OrganisationOnly?"Organisation schedules":"Schedule assignments")</h1><p class="mt-1 text-sm text-slate-500">Assign existing templates to the current organisation, approved structures, or staff groups. Staff overrides take priority, followed by group, nearest structure, and organisation default. Duty schedules are additional.</p></div>
+    @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm">@error</p>}
+    @if(data==null){<button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Reload configuration</button>}
+    else
+    {
+        @if(!OrganisationOnly)
+        {
+        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Schedule assignment scope">
+            @foreach(var item in new[]{"Organisation","Structure","Group"}){<button role="tab" aria-selected="@(scope==item)" class="app-button @(scope==item?"app-button-primary":"app-button-secondary")" @onclick="()=>ChangeScope(item)">@item schedules</button>}
+        </div>
+        }
+        @if(scope=="Group"){<label class="block text-sm">Filter group<select @bind="filterGroup" class="mt-1 block rounded border bg-transparent p-2"><option value="">All groups</option>@foreach(var g in data.Groups){<option value="@g.Id">@g.Name</option>}</select></label>}
+        @if(scope=="Structure"){
+            <div class="flex flex-wrap gap-3">
+                <label class="block text-sm">Organisation structure type<select @bind="filterStructureType" @bind:after="StructureTypeChanged" class="mt-1 block rounded border bg-transparent p-2"><option value="">All types</option>@foreach(var type in data.Structures.GroupBy(s=>s.TypeId).Select(g=>g.First()).OrderBy(s=>s.TypeName)){<option value="@type.TypeId">@type.TypeName</option>}</select></label>
+                <label class="block text-sm">Filter structure<select @bind="filterStructure" class="mt-1 block rounded border bg-transparent p-2"><option value="">All approved structures</option>@foreach(var g in FilteredStructures){<option value="@g.Id">@g.Name</option>}</select></label>
+            </div>
+        }
+        <div class="flex flex-wrap gap-3"><button class="app-button app-button-primary" disabled="@busy" @onclick="New">Assign template</button>@if(!OrganisationOnly){<a class="app-button app-button-secondary" href="/admin/settings/workplaning/templates">Manage templates</a>}</div>
+        <label class="block text-sm">Status<select @bind="statusFilter" class="mt-1 block rounded border bg-transparent p-2"><option value="All">All statuses</option><option value="Enabled">Enabled</option><option value="Disabled">Disabled</option><option value="Ended">Ended</option></select></label>
+        @if(model!=null)
+        {
+            <fieldset disabled="@busy" class="space-y-4 rounded-xl border p-4">
+                <h2 class="font-semibold">@scope schedule assignment</h2>
+                <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    @if(scope=="Structure"){<label>Approved structure<select @bind="model.OrganisationStructureId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">Select structure</option>@foreach(var s in FilteredStructures){<option value="@s.Id">@s.Name</option>}</select></label>}
+                    @if(scope=="Group"){<label>Staff group<select @bind="model.GroupId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="">Select group</option>@foreach(var s in data.Groups){<option value="@s.Id">@s.Name</option>}</select></label><label>Group priority (higher wins)<input type="number" min="0" max="9999" @bind="model.Priority" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>}
+                    <label>Purpose<select @bind="model.SchedulePurpose" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="Official">Default official hours</option><option value="Duty">Additional duty</option></select></label>
+                    <label>Template<select @bind="model.WorkTemplateId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select template</option>@foreach(var s in data.Templates.Where(t=>t.IsActive)){<option value="@s.Id">@s.Name</option>}</select></label>
+                    <label>Pattern<select @bind="model.ScheduleMode" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="Standard">@(model.SchedulePurpose=="Duty"?"Every day":"Sunday–Thursday")</option><option value="Weekly">Selected weekdays</option><option value="Rotation">Rotating cycle</option></select></label>
+                    <label>Effective from<InputDate @bind-Value="model.EffectiveFrom" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                    <label>Effective to (optional)<InputDate @bind-Value="model.EffectiveTo" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                </div>
+                @if(model.ScheduleMode=="Weekly") {<div class="flex flex-wrap gap-3">@foreach(var day in Enum.GetValues<DayOfWeek>()){var bit=1<<(int)day;<label><input type="checkbox" checked="@((model.WorkingDaysMask&bit)!=0)" @onchange="e=>ToggleDay(bit,e.Value is true)" /> @day</label>}</div>}
+                @if(model.ScheduleMode=="Rotation")
+                {
+                    <label class="block">Cycle day 1<InputDate @bind-Value="model.RotationAnchorDate" class="mt-1 block rounded border bg-transparent p-2" /></label>
+                    <div class="space-y-2">@for(var i=0;i<rotation.Count;i++){var index=i;<label class="flex flex-wrap items-center gap-2">Day @(index+1)<select @bind="rotation[index]" class="rounded border bg-transparent p-2"><option value="0">Rest day</option>@foreach(var t in data.Templates.Where(t=>t.IsActive)){<option value="@t.Id">@t.Name</option>}</select><button class="app-button app-button-secondary" @onclick="()=>rotation.RemoveAt(index)">Remove day</button></label>}</div>
+                    <button class="app-button app-button-secondary" disabled="@(rotation.Count>=90)" @onclick="()=>rotation.Add(0)">Add cycle day</button>
+                }
+                <p class="text-xs text-slate-500">Hours and clock events come from the template. Duty needs default official hours for every affected staff member and duty date. Edits apply from the selected date; earlier settings remain in history. Existing punches and finalized plans are preserved.</p>
+                <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" @onclick="SaveAsync">Save assignment</button><button class="app-button app-button-secondary" @onclick="()=>model=null">Close</button></div>
+            </fieldset>
+        }
+        @if(ending!=null)
+        {
+            <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-4"><h2 class="font-semibold">End schedule assignment</h2><label>Last scheduled day<InputDate @bind-Value="lastDay" class="mt-1 block rounded border bg-transparent p-2" /></label><p class="text-xs text-slate-500">Use yesterday to stop from today. Ending a future assignment before it starts withdraws it. Lower-priority default hours resume automatically.</p><div class="flex gap-2"><button class="app-button app-button-primary" @onclick="EndAsync">End assignment</button><button class="app-button app-button-secondary" @onclick="()=>ending=null">Close</button></div></fieldset>
+        }
+        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Scope</th><th class="p-3">Schedule</th><th class="p-3">Pattern / period</th><th class="p-3">Status</th><th class="p-3">Actions</th></tr></thead><tbody>
+            @foreach(var row in Rows)
+            {
+                <tr class="border-t"><td class="p-3">@Target(row)@if(row.GroupId.HasValue){<p class="text-xs text-slate-500">Priority @row.Priority</p>}</td><td class="p-3">@(row.SchedulePurpose=="Official"?"Default official hours":"Duty")<p class="mt-1 text-xs text-slate-500">@data.Templates.FirstOrDefault(t=>t.Id==row.WorkTemplateId)?.Name</p></td><td class="p-3">@row.ScheduleMode<p class="mt-1 text-xs text-slate-500">@row.EffectiveFrom.ToString("dd MMM yyyy")–@(row.EffectiveTo?.ToString("dd MMM yyyy")??"Ongoing")</p></td><td class="p-3">@(!row.IsActive?"Disabled":row.EffectiveTo<Today?"Ended":row.EffectiveFrom>Today?"Enabled · Scheduled":"Enabled")</td><td class="p-3"><div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>Edit(row)">Edit</button><button class="app-button app-button-secondary" disabled="@(busy || !row.IsActive || row.EffectiveTo<Today)" @onclick="()=>BeginEnd(row)">End</button><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>ToggleEnabledAsync(row)">@(row.IsActive?"Disable":"Enable")</button></div></td></tr>
+            }
+            @if(!Rows.Any()){<tr><td colspan="5" class="p-3 text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>}
+        </tbody></table></div>
+    }
+</section>
+@code {
+    [Parameter] public int? OrganisationId { get; set; }
+    [Parameter] public bool OrganisationOnly { get; set; }
+    private string? loadedKey;
+    private string statusFilter="All";
+    private HRM.DTOs.Contracts.ScopeScheduleSettingsDataResponse? data;
+    private HRM.DTOs.Contracts.ScopeScheduleAssignmentDto? model,ending;
+    private string scope="Organisation";
+    private int? filterGroup,filterStructure,filterStructureType;
+    private IEnumerable<HRM.Services.ScopeScheduleStructureOption> FilteredStructures => data?.Structures.Where(s=>!filterStructureType.HasValue || s.TypeId==filterStructureType) ?? [];
+    private void StructureTypeChanged()
+    {
+        if(filterStructure.HasValue && !FilteredStructures.Any(s=>s.Id==filterStructure)) filterStructure=null;
+        if(model?.OrganisationStructureId is int id && !FilteredStructures.Any(s=>s.Id==id)) model.OrganisationStructureId=null;
+    }
+    private string? error;
+    private bool busy;
+    private List<int> rotation=[0];
+    private DateTime lastDay;
+    private static DateTime Today=>DateTime.UtcNow.AddHours(5).Date;
+    private IEnumerable<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto> Rows=>data?.Assignments.Where(a=>statusFilter=="All" || statusFilter=="Disabled"&&!a.IsActive || statusFilter=="Ended"&&a.IsActive&&a.EffectiveTo<Today || statusFilter=="Enabled"&&a.IsActive&&(!a.EffectiveTo.HasValue||a.EffectiveTo>=Today)).Where(a=>scope=="Group"?a.GroupId.HasValue&&(!filterGroup.HasValue||a.GroupId==filterGroup):scope=="Structure"?a.OrganisationStructureId.HasValue&&(!filterStructureType.HasValue||FilteredStructures.Any(s=>s.Id==a.OrganisationStructureId))&&(!filterStructure.HasValue||a.OrganisationStructureId==filterStructure):!a.GroupId.HasValue&&!a.OrganisationStructureId.HasValue)??[];
+    protected override void OnInitialized(){var query=Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);if(query.TryGetValue("scope",out var value)&&value.ToString() is "Group" or "Structure")scope=value.ToString();if(query.TryGetValue("groupId",out var group)&&int.TryParse(group,out var id))filterGroup=id;if(query.TryGetValue("structureId",out var structure)&&int.TryParse(structure,out var structureId))filterStructure=structureId;}
+    protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{OrganisationOnly}";if(loadedKey==key)return;loadedKey=key;model=null;ending=null;data=null;if(OrganisationOnly){scope="Organisation";filterGroup=null;filterStructure=null;filterStructureType=null;}await LoadAsync();}
+    private async Task LoadAsync(){try{error=null;data=await Settings.LoadAsync(OrganisationId);}catch(Exception ex){Logger.LogError(ex,"Loading scope schedules");error=ex is UnauthorizedAccessException?ex.Message:"Schedule assignments could not be loaded. Please contact HR.";}}
+    private void ChangeScope(string value){scope=value;model=null;ending=null;error=null;}
+    private void New(){model=new(){EffectiveFrom=Today,GroupId=scope=="Group"?filterGroup:null,OrganisationStructureId=scope=="Structure"?filterStructure:null};rotation=[0];ending=null;error=null;}
+    private void Edit(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){if(value.OrganisationStructureId.HasValue && filterStructureType.HasValue)filterStructureType=data?.Structures.FirstOrDefault(s=>s.Id==value.OrganisationStructureId)?.TypeId;model=System.Text.Json.JsonSerializer.Deserialize<HRM.DTOs.Contracts.ScopeScheduleAssignmentDto>(System.Text.Json.JsonSerializer.Serialize(value));if(model!=null&&model.EffectiveFrom<Today)model.EffectiveFrom=Today;rotation=HRM.Helpers.SchedulePattern.Parse(value.RotationTemplateIds);if(rotation.Count==0)rotation=[0];ending=null;}
+    private void BeginEnd(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto value){ending=value;lastDay=Today;model=null;}
+    private void ToggleDay(int bit,bool value){if(model!=null)model.WorkingDaysMask=value?model.WorkingDaysMask|bit:model.WorkingDaysMask&~bit;}
+    private string Target(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto a)=>a.GroupId.HasValue?data!.Groups.FirstOrDefault(g=>g.Id==a.GroupId)?.Name??"Group":a.OrganisationStructureId.HasValue?data!.Structures.FirstOrDefault(s=>s.Id==a.OrganisationStructureId)?.Name??"Structure":"Current organisation";
+    private async Task SaveAsync(){if(model==null||busy)return;if(scope=="Group"&&!model.GroupId.HasValue||scope=="Structure"&&!model.OrganisationStructureId.HasValue){error="Select the target group or structure.";return;}model.RotationTemplateIds=model.ScheduleMode=="Rotation"?System.Text.Json.JsonSerializer.Serialize(rotation):null;await Act(async()=>{await Settings.SaveAsync(model,OrganisationId);model=null;},"Schedule assignment saved.");}
+    private async Task ToggleEnabledAsync(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row){if(busy)return;await Act(()=>Settings.SetEnabledAsync(row.Id,row.Version,!row.IsActive,OrganisationId),row.IsActive?"Schedule disabled.":"Schedule enabled.");}
+    private async Task EndAsync(){if(ending==null||busy)return;await Act(async()=>{await Settings.EndAsync(ending.Id,ending.Version,lastDay,OrganisationId);ending=null;},"Schedule assignment ended.");}
+    private async Task Act(Func<Task> action,string success){busy=true;error=null;try{await action();await LoadAsync();Toasts.Success(success);}catch(Exception ex){Logger.LogError(ex,"Saving scope schedules");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"The change could not be saved. Refresh and try again.";}finally{busy=false;}}
+}

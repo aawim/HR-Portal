@@ -102,7 +102,7 @@ sealed class SecurityTestEnvironment : Microsoft.AspNetCore.Hosting.IWebHostEnvi
     public string ApplicationName { get; set; } = "HRM.Tests";
     public string ContentRootPath { get; set; } = Directory.GetCurrentDirectory();
     public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
-    public string WebRootPath { get; set; } = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+    public string WebRootPath { get; set; } = Path.Combine(Directory.GetCurrentDirectory(), "HRM.UI", "wwwroot");
     public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
 }
 

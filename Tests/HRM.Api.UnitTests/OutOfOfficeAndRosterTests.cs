@@ -90,10 +90,12 @@ public sealed class OutOfOfficeAndRosterTests
         {
             "GetStaffClockEventsAsync" => Task.FromResult(new List<StaffAttendanceClockEventDto>()),
             "GetStaffScheduleAttendanceAsync" => Task.FromResult(new List<StaffScheduleAttendanceDto>()),
+            "GetStaffAttendanceRangeAsync" => Task.FromResult(new List<YearlyAttendanceDayDto> { new() { Date = today, EligibilityMessage = "No active schedule found" } }),
             _ => throw new Exception(name)
         });
         var result = await new OrganisationAttendanceQueries(factory, attendance, new(access)).GetDailyAsync(new(DateOnly.FromDateTime(today)));
         var staff = Assert.Single(result.Staff); Assert.Equal(100, staff.StaffId); Assert.False(staff.Eligibility.CanBeAbsent);
+        Assert.NotNull(staff.Overview); Assert.False(staff.Overview.IsAbsent); Assert.Equal("No active schedule found", staff.Overview.EligibilityMessage);
     }
     [Theory]
     [InlineData(false)]

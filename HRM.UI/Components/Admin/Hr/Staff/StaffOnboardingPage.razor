@@ -1,0 +1,184 @@
+@page "/admin/hr/onboarding"
+@using HRM.DTOs
+@using HRM.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject HRM.Services.Contracts.StaffOnboardingServiceContracts.IOperations Onboarding
+@inject NavigationManager Navigation
+@inject ToastService Toasts
+@inject ILogger<StaffOnboardingPage> Logger
+@inject PortalContext Portal
+
+<PageTitle>Staff Onboarding</PageTitle>
+<div class="mx-auto max-w-5xl space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-2xl font-bold">Staff Onboarding</h1>
+            <p class="mt-1 text-sm text-slate-500">@data?.Organisation · HR submission → configured approvals → employee account.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <a href="/admin/hr/staff/search-individuals" class="app-button app-button-secondary">Search Individual</a>
+            <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+        </div>
+    </div>
+
+    @if (message != null) { <p role="alert" class="rounded-xl border p-4">@message</p> }
+    @if (loading) { <p role="status">Loading onboarding…</p> }
+    else if (data != null)
+    {
+        @if (IndividualId.HasValue && data.CanSubmit && !string.IsNullOrEmpty(data.Individual))
+        {
+            <section class="space-y-4 rounded-xl border bg-white p-5">
+                <h2 class="text-lg font-semibold">Add @data.Individual as Staff</h2>
+                <p class="text-sm text-slate-500">This submits a Job Position Request. No employee account is created before final approval. Position, address and contact information can be completed later.</p>
+                <div class="grid gap-4 sm:grid-cols-2">
+                    <label>Organisation structure type
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="structureTypeId" @bind:after="StructureTypeChanged" disabled="@busy">
+                            <option value="0">All structure types</option>
+                            @foreach (var item in data.StructureTypes) { <option value="@item.Id">@item.Name</option> }
+                        </select>
+                    </label>
+                    <label>Department <span aria-hidden="true">*</span>
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="form.OrganisationStructureId" disabled="@busy">
+                            <option value="0">Select department</option>
+                            @foreach (var item in data.Departments.Where(x => structureTypeId == 0 || x.StructureTypeId == structureTypeId)) { <option value="@item.Id">@item.Name</option> }
+                        </select>
+                    </label>
+                    <label>Job Type <span aria-hidden="true">*</span>
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="form.JobTypeId" disabled="@busy">
+                            <option value="0">Select Job Type</option>
+                            @foreach (var item in data.JobTypes) { <option value="@item.Id">@item.Name</option> }
+                        </select>
+                    </label>
+                    <label>Joining date <span aria-hidden="true">*</span><input type="date" class="mt-1 w-full rounded-lg border p-2" @bind="form.JoinedDate" disabled="@busy" /></label>
+                    <label>Existing position (optional)
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="form.PositionId" disabled="@busy">
+                            <option value="">Assign later</option>
+                            @foreach (var item in data.Positions) { <option value="@item.Id">@item.Name</option> }
+                        </select>
+                    </label>
+                </div>
+                <p class="text-xs text-slate-500">Only approved organisation structures in @data.Organisation are available.</p>
+                <label class="block">Appointment remarks<textarea class="mt-1 w-full rounded-lg border p-2" rows="3" maxlength="1000" @bind="form.Remarks" disabled="@busy"></textarea></label>
+                <div class="flex flex-wrap items-center gap-3">
+                    <p class="w-full text-sm">Selected position: <strong>@SelectedPositionName</strong></p>
+                    <button type="button" class="app-button app-button-primary" disabled="@(busy || form.JobTypeId <= 0 || form.OrganisationStructureId <= 0)" @onclick="SubmitAsync">@(busy ? "Processing…" : "Submit for approval")</button>
+                    <a href="/admin/settings/config/approval-flows" class="text-sm underline">Configure Request Approval Flows</a>
+                </div>
+            </section>
+        }
+        <section class="space-y-3 rounded-xl border bg-white p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <h2 class="text-lg font-semibold">Onboarding requests</h2>
+                <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="pendingOnly" @bind:after="LoadRequestsAsync" /> Pending only</label>
+            </div>
+            @if (rows.Count == 0) { <p class="text-sm text-slate-500">No onboarding requests available.</p> }
+            @foreach (var row in rows)
+            {
+                <article @key="row.RequestId" class="space-y-3 rounded-lg border p-4">
+                    <div class="flex flex-wrap items-start justify-between gap-3">
+                        <div><h3 class="font-semibold">@row.Individual</h3><p class="text-sm text-slate-500">@row.Reference · @row.Department · @row.JobType</p></div>
+                        <span class="rounded-lg border px-3 py-1 text-sm">@row.Status</span>
+                    </div>
+                    <p class="text-sm">Joining: <strong>@row.JoinedDate.ToString("dd MMM yyyy")</strong> · Position: @row.Position</p>
+                    @if (row.IsOpen && row.Stage != null) { <p class="text-sm">Current stage: @row.Stage</p> }
+                    @if (row.ApprovalInformation != null) { <p class="text-sm text-slate-500">@row.ApprovalInformation</p> }
+                    @if (!string.IsNullOrEmpty(row.Remarks)) { <p class="text-sm">@row.Remarks</p> }
+                    <p class="text-sm text-slate-500">@row.AccountStatus</p>
+                    @if (row.History.Count > 0)
+                    {
+                        <details><summary class="cursor-pointer text-sm underline">Request history</summary><ul class="mt-2 list-inside list-disc text-sm">@foreach (var item in row.History) { <li>@item</li> }</ul></details>
+                    }
+                    @if (row.CanApprove || row.CanCancel)
+                    {
+                        <label class="block text-sm">Action comment<textarea aria-label="Action comment for @row.Reference" class="mt-1 w-full rounded-lg border p-2" rows="2" maxlength="2000" disabled="@busy" value="@Comment(row.RequestId)" @oninput="e => comments[row.RequestId] = e.Value?.ToString() ?? string.Empty"></textarea></label>
+                        <div class="flex flex-wrap gap-2">
+                            @if (row.CanApprove)
+                            {
+                                <button type="button" disabled="@busy" class="app-button app-button-primary" @onclick='() => ActAsync(row, "Approve")'>Approve stage</button>
+                                <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick='() => ActAsync(row, "Reject")'>Reject</button>
+                            }
+                            @if (row.CanCancel) { <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick='() => ActAsync(row, "Cancel")'>Cancel request</button> }
+                        </div>
+                    }
+                </article>
+            }
+            <p class="text-xs text-slate-500">Showing up to 100 requests in the selected organisation.</p>
+        </section>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "individualId")] public int? IndividualId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestId")] public int? RequestId { get; set; }
+    private StaffOnboardingData? data;
+    private StaffOnboardingForm form = new();
+    private List<StaffOnboardingRow> rows = [];
+    private readonly Dictionary<int, string> comments = [];
+    private bool loading = true, busy, pendingOnly;
+    private int structureTypeId;
+    private bool parametersLoaded;
+    private int? loadedIndividualId, loadedRequestId, loadedOrganisationId;
+    private string SelectedPositionName => form.PositionId.HasValue
+        ? data?.Positions.FirstOrDefault(x => x.Id == form.PositionId.Value)?.Name ?? "Selected position is unavailable; select it again"
+        : "Assign later";
+    private void StructureTypeChanged() => form.OrganisationStructureId = 0;
+    private string? message;
+    private string Comment(int id) => comments.GetValueOrDefault(id, "");
+    protected override async Task OnParametersSetAsync()
+    {
+        // Parent/cascading renders are not a new onboarding session. Keep the
+        // user's selections unless the person, request or tenant changes.
+        var organisationId = Portal.CurrentOrganisationId;
+        if (parametersLoaded && loadedIndividualId == IndividualId && loadedRequestId == RequestId && loadedOrganisationId == organisationId)
+            return;
+        parametersLoaded = true;
+        loadedIndividualId = IndividualId; loadedRequestId = RequestId; loadedOrganisationId = organisationId;
+        form = new() { IndividualId = IndividualId ?? 0 };
+        structureTypeId = 0;
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        loading = true; message = null; data = null; rows = [];
+        try { data = await Onboarding.LoadAsync(IndividualId); await LoadRequestsAsync(); }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { message = ex.Message; }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load staff onboarding"); message = "Onboarding could not be loaded. Please try again."; }
+        finally { loading = false; }
+    }
+    private async Task LoadRequestsAsync()
+    {
+        try { rows = await Onboarding.GetRequestsAsync(RequestId, pendingOnly); }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to load onboarding requests"); message = "Onboarding requests could not be loaded. Please refresh."; rows = []; }
+    }
+    private async Task SubmitAsync()
+    {
+        if (busy) return;
+        var submitted = new StaffOnboardingForm { IndividualId = form.IndividualId,
+            OrganisationStructureId = form.OrganisationStructureId, JobTypeId = form.JobTypeId,
+            PositionId = form.PositionId, JoinedDate = form.JoinedDate, Remarks = form.Remarks };
+        busy = true; message = null;
+        try
+        {
+            var result = await Onboarding.SubmitAsync(submitted);
+            if (!result.Success) { message = result.Message; return; }
+            Toasts.Success(result.Message);
+            Navigation.NavigateTo(HRM.Services.Contracts.StaffOnboardingServiceContracts.PageUrl);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to submit onboarding"); message = "The request could not be submitted. Please refresh before trying again."; }
+        finally { busy = false; }
+    }
+    private async Task ActAsync(StaffOnboardingRow row, string action)
+    {
+        if (busy) return;
+        busy = true; message = null;
+        try
+        {
+            var result = await Onboarding.ActAsync(row.RequestId, row.StateId, action, Comment(row.RequestId));
+            if (!result.Success) { message = result.Message; return; }
+            Toasts.Success(result.Message); comments.Remove(row.RequestId); await LoadRequestsAsync();
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Unable to process onboarding {RequestId}", row.RequestId); message = "The action could not be completed. Refresh the request before trying again."; }
+        finally { busy = false; }
+    }
+}

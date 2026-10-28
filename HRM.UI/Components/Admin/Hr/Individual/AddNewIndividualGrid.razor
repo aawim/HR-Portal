@@ -1,0 +1,51 @@
+@page "/individuals/new"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using HRM.Services
+@inject HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations Registration
+@inject ToastService Toasts
+@inject ILogger<AddNewIndividualGrid> Logger
+<section class="mx-auto max-w-4xl space-y-4 p-4">
+    <h1 class="text-xl font-semibold">Add New Individual</h1>
+    <p class="text-sm text-slate-500">Register a person in the shared registry. Employment and a user account are created only through approved staff onboarding. Address and contact details are optional.</p>
+    <p class="rounded-lg border p-3 text-sm">DNR lookup will be available after its API integration is configured. Enter and verify the identity details manually.</p>
+    @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm">@error</p>}
+    @if(createdId.HasValue){<p role="status" class="rounded-lg border p-3">Individual registered successfully.</p><a class="app-button app-button-primary" href="/admin/hr/onboarding?individualId=@createdId">Start staff onboarding</a><a class="app-button app-button-secondary" href="/admin/hr/staff/search-individuals">Search registry</a>}
+    else if(options!=null)
+    {
+        <fieldset disabled="@busy" class="space-y-4">
+            <label class="flex items-center gap-3 text-sm"><input id="individual-foreigner" type="checkbox" role="switch" @bind="model.IsForeigner" @bind:after="IdentityChanged" class="peer sr-only" /><span aria-hidden="true" class="relative h-6 w-11 rounded-full bg-slate-400 peer-checked:bg-blue-600 peer-focus-visible:ring-2"><span class="absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform @(model.IsForeigner ? "translate-x-5" : "")"></span></span><span>Foreigner</span></label>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label>First name<input @bind="model.FirstName" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Middle name<input @bind="model.MiddleName" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Last name<input @bind="model.LastName" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                <label>First name (Dhivehi)<input @bind="model.FirstNameDhivehi" dir="rtl" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Middle name (Dhivehi)<input @bind="model.MiddleNameDhivehi" dir="rtl" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Last name (Dhivehi)<input @bind="model.LastNameDhivehi" dir="rtl" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                @if(model.IsForeigner){<label>Passport number<input id="individual-passport" @bind="model.PassportNumber" maxlength="50" required class="mt-1 block w-full rounded border bg-transparent p-2" /></label>}
+                else{<label>National ID<input id="individual-national-id" @bind="model.NationalId" maxlength="50" required class="mt-1 block w-full rounded border bg-transparent p-2" /></label>}
+                <label>Birth date<InputDate @bind-Value="model.DateOfBirth" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Gender<select @bind="model.GenderTypeId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select gender</option><option value="1">Male</option><option value="2">Female</option></select></label>
+                <label>Nationality<select @bind="model.CountryId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select country</option>@foreach(var country in options.Countries){<option value="@country.Id">@country.Name</option>}</select></label>
+            </div>
+            <section class="space-y-2 rounded-lg border p-3"><h2 class="text-sm font-semibold">Individual image (optional)</h2><InputFile OnChange="ImageChanged" accept="image/png,image/jpeg,.png,.jpg,.jpeg" class="block w-full text-sm" /><p class="text-xs text-slate-500">PNG or JPEG · up to 2 MB · maximum 4096 × 4096 pixels</p>
+                @if(imagePreview!=null){<img src="@imagePreview" alt="Individual image preview" class="h-24 w-24 rounded-lg object-cover" /><button type="button" class="app-button app-button-secondary" @onclick="RemoveImage">Remove image</button>}
+                @if(imageError!=null){<p role="alert" class="text-sm">@imageError</p><button type="button" class="app-button app-button-secondary" @onclick="RemoveImage">Clear image</button>}
+            </section>
+            <details class="rounded-lg border p-3"><summary>Address (optional)</summary><div class="mt-3 grid gap-3 sm:grid-cols-2"><label>Address name<input @bind="model.AddressName" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Address line<input @bind="model.AddressLine" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" /></label><label>Address country<select @bind="model.AddressCountryId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select country</option>@foreach(var country in options.Countries){<option value="@country.Id">@country.Name</option>}</select></label><label>Address type<select @bind="model.AddressBaseTypeId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select type</option>@foreach(var type in options.AddressTypes){<option value="@type.Id">@type.Name</option>}</select></label><label>Address usage<select @bind="model.AddressUsageId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select usage</option>@foreach(var usage in options.AddressUsages){<option value="@usage.Id">@usage.Name</option>}</select></label></div></details>
+            <section class="space-y-2"><h2 class="font-semibold">Contact details (optional)</h2>@foreach(var contact in model.Contacts){<div class="flex flex-wrap gap-2" @key="contact"><select @bind="contact.TypeId" aria-label="Contact type" class="rounded border bg-transparent p-2"><option value="0">Select type</option>@foreach(var type in options.ContactTypes){<option value="@type.Id">@type.Name</option>}</select><input @bind="contact.Value" aria-label="Contact value" maxlength="250" class="rounded border bg-transparent p-2" /><button type="button" class="app-button app-button-secondary" @onclick="()=>model.Contacts.Remove(contact)">Remove</button></div>}<button class="app-button app-button-secondary" @onclick="()=>model.Contacts.Add(new())">Add contact</button></section>
+            <button class="app-button app-button-primary" disabled="@(imageLoading||imageError!=null)" @onclick="SaveAsync">@(busy?"Saving…":"Save Individual")</button>
+        </fieldset>
+    }
+</section>
+@code {
+    private IndividualRegistrationModel model=new();private RegistrationOptions? options;private int? createdId;private bool busy;private string? error;
+    private string? imagePreview,imageError;
+    private bool imageLoading;private int imageVersion;
+    private void IdentityChanged(){if(model.IsForeigner)model.NationalId=null;else model.PassportNumber=null;}
+    private void RemoveImage(){imageVersion++;model.ImageData=null;imagePreview=null;imageError=null;imageLoading=false;}
+    private async Task ImageChanged(InputFileChangeEventArgs e)
+    {
+        RemoveImage();var version=imageVersion;imageLoading=true;
+        try{await using var stream=e.File.OpenReadStream(IndividualImage.MaximumBytes);using var buffer=new MemoryStream();await stream.CopyToAsync(buffer);var bytes=buffer.ToArray();var type=IndividualImage.Validate(bytes);if(version!=imageVersion)return;model.ImageData=bytes;imagePreview=IndividualImage.DataUrl(bytes,type);}
+        catch(Exception ex)when(ex is IOException or InvalidOperationException){if(version!=imageVersion)return;imageError=ex is InvalidOperationException?ex.Message:"Choose a PNG or JPEG image up to 2 MB.";}
+        finally{if(version==imageVersion)imageLoading=false;}
+    }
+    protected override async Task OnInitializedAsync(){try{options=await Registration.LoadAsync();}catch(Exception ex){Fail(ex);}}
+    private async Task SaveAsync(){if(busy||imageLoading||imageError!=null)return;busy=true;error=null;try{createdId=await Registration.RegisterAsync(model);Toasts.Success("Individual registered.");}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private void Fail(Exception ex){Logger.LogError(ex,"Manual individual registration");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Registration could not be completed. Please refresh and try again.";}
+}

@@ -1,0 +1,48 @@
+@inject HRM.Services.Contracts.OvertimeRequestServiceContracts.IOperations Requests
+@inject HRM.Services.ToastService Toasts
+<div class="space-y-3">
+    <div class="flex flex-wrap items-end gap-3">
+        <label>Work from<input type="date" @bind="from" @bind:after="ClearSelection" class="mt-1 block rounded border bg-transparent p-2" /></label>
+        <label>Work to<input type="date" @bind="to" @bind:after="ClearSelection" class="mt-1 block rounded border bg-transparent p-2" /></label>
+        <label>Payroll status<select @bind="status" @bind:after="ClearSelection" class="mt-1 block rounded border bg-transparent p-2"><option value="">All</option><option value="Ready">Awaiting payroll</option><option value="Processed">Payroll processed</option></select></label>
+    </div>
+    @if(Rows.Any(r=>r.CanPay))
+    {
+        <fieldset disabled="@busy" class="flex flex-wrap items-end gap-3 rounded-lg border p-3">
+            <label>Payroll month<input type="month" value="@month" @onchange="MonthChanged" class="mt-1 block rounded border bg-transparent p-2" /></label>
+            <label>Payroll reference<input @bind="reference" maxlength="200" class="mt-1 block rounded border bg-transparent p-2" /></label>
+            <button type="button" class="app-button app-button-secondary" @onclick="SelectReady">Select eligible</button>
+            <button type="button" class="app-button app-button-primary" disabled="@(selected.Count==0)" @onclick="Process">Process payroll (@selected.Count)</button>
+        </fieldset>
+    }
+    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Select</th><th class="p-2">Staff / reference</th><th class="p-2">Work date</th><th class="p-2">Hours</th><th class="p-2">Payroll status</th></tr></thead><tbody>
+    @foreach(var row in Visible)
+    {
+        <tr @key="row.Id" class="border-t"><td class="p-2">@if(row.CanPay){<input type="checkbox" aria-label="Select @row.Reference" checked="@selected.Contains(row.Id)" disabled="@busy" @onchange="e=>Select(row.Id,e.Value is true)" />}</td><td class="p-2">@row.Staff<br />@row.Reference</td><td class="p-2">@row.Date.ToString("dd MMM yyyy")</td><td class="p-2">@((row.Minutes/60m).ToString("0.##"))</td><td class="p-2">@(row.PayrollProcessed ? "Payroll processed" : "Awaiting payroll")<br />@row.PayrollMonth?.ToString("MMMM yyyy") @row.PayrollReference @row.PaymentReference</td></tr>
+    }
+    </tbody></table></div>
+    @if(!Visible.Any()){<p class="text-sm text-slate-500">No approved overtime claims in this work period.</p>}
+</div>
+@code {
+    [Parameter]public List<HRM.Services.OvertimeRow> Rows {get;set;}=[];
+    [Parameter]public EventCallback OnProcessed {get;set;}
+    private DateTime from=new(DateTime.UtcNow.AddHours(5).Year,DateTime.UtcNow.AddHours(5).Month,1),to=DateTime.UtcNow.AddHours(5).Date;
+    private string month=DateTime.UtcNow.AddHours(5).ToString("yyyy-MM"),reference="",status="";
+    private bool busy;private string? error;private Guid batchId=Guid.NewGuid();private HashSet<int> selected=[];
+    private IEnumerable<HRM.Services.OvertimeRow> Visible=>Rows.Where(r=>r.StateId==4&&r.Date.Date>=from.Date&&r.Date.Date<=to.Date&&(status==""||r.PayrollProcessed==(status=="Processed")));
+    private void ClearSelection(){selected.Clear();}
+    private void MonthChanged(ChangeEventArgs e){month=e.Value?.ToString()??"";}
+    private void Select(int id,bool value){if(value)selected.Add(id);else selected.Remove(id);}
+    private void SelectReady(){selected=Visible.Where(r=>r.CanPay).Select(r=>r.Id).ToHashSet();}
+    private async Task Process()
+    {
+        if(busy)return;error=null;
+        if(!DateTime.TryParseExact(month+"-01","yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var date)){error="Select a payroll month.";return;}
+        busy=true;
+        try{var result=await Requests.ProcessPayrollAsync(selected.ToArray(),date,reference,batchId);if(result.Success){Toasts.Success(result.Message);selected.Clear();batchId=Guid.NewGuid();await OnProcessed.InvokeAsync();}else{error=result.Message;batchId=Guid.NewGuid();}}
+        catch(UnauthorizedAccessException ex){error=ex.Message;}
+        catch(Exception){error="Payroll could not be processed. Refresh and check the selected claims before retrying.";}
+        finally{busy=false;}
+    }
+}

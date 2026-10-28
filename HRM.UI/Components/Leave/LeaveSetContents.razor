@@ -1,0 +1,28 @@
+@using HRM.Services
+@inject HRM.Services.Contracts.LeaveSetConfigurationServiceContracts.IOperations Settings
+@inject ToastService Toasts
+@inject ILogger<LeaveSetContents> Logger
+<section class="space-y-3 rounded-xl border p-3">
+    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave types · @data?.Name</h3><button class="app-button app-button-secondary" @onclick="()=>OnClose.InvokeAsync()">Close</button></div>
+    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    @if(data!=null)
+    {
+        <input type="search" aria-label="Search leave types" placeholder="Search leave types…" class="w-full rounded border bg-transparent p-2 text-sm" @bind="search" @bind:event="oninput" />
+        <fieldset disabled="@(busy||!data.CanEdit)" class="grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2">
+            @foreach(var type in data.Types.Where(t=>t.Name.Contains(search,StringComparison.OrdinalIgnoreCase)))
+            {<label class="flex items-start gap-2 rounded border p-2 text-sm" @key="type.Id"><input type="checkbox" checked="@selected.Contains(type.Id)" @onchange="e=>Toggle(type.Id,e)" /><span>@type.Name</span></label>}
+        </fieldset>
+        @if(data.Types.Count==0){<p class="text-sm text-slate-500">No leave types available.</p>}
+        @if(data.CanEdit){<button class="app-button app-button-primary" disabled="@busy" @onclick="Save">Save leave types</button>}
+    }
+</section>
+@code {
+    [Parameter] public int LeaveSetId {get;set;}
+    [Parameter] public EventCallback OnClose {get;set;}
+    [Parameter] public EventCallback OnChanged {get;set;}
+    private LeaveSetContentsData? data;private HashSet<int> selected=[];private string search="";private string? error;private bool busy;
+    protected override async Task OnInitializedAsync(){try{data=await Settings.LoadContentsAsync(LeaveSetId);selected=data.Selected.ToHashSet();}catch(Exception ex){Fail(ex);}}
+    private void Toggle(int id,ChangeEventArgs e){if(e.Value is true)selected.Add(id);else selected.Remove(id);}
+    private async Task Save(){if(busy||data==null)return;busy=true;error=null;try{await Settings.SaveContentsAsync(LeaveSetId,selected,data.AuditId);data=await Settings.LoadContentsAsync(LeaveSetId);selected=data.Selected.ToHashSet();Toasts.Success("Leave types saved.");await OnChanged.InvokeAsync();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private void Fail(Exception ex){Logger.LogError(ex,"Leave set contents");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Leave types could not be loaded or saved. Refresh and try again.";}
+}

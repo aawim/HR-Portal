@@ -2,7 +2,7 @@
 
 ## Implemented surface
 
-Versioned controllers live in `HRM.Api/Controllers/V1`. There are 74 contract controllers with 329 supported application actions, plus the session controller's identity and antiforgery endpoints (331 versioned HTTP endpoints). Two obsolete account/clock aliases are deliberately not exposed: callers must use the canonical account settings and clock-event operations.
+Versioned controllers live in `HRM.Api/Controllers/V1`. There are 75 contract controllers with 335 supported application actions, plus the session controller's identity and antiforgery endpoints (337 versioned HTTP endpoints). Two obsolete account/clock aliases are deliberately not exposed: callers must use the canonical account settings and clock-event operations.
 
 The route inventory is `docs/api-endpoints.json` (contract actions). Controllers are strongly typed and delegate to the canonical services; they do not execute arbitrary CLR methods, raw client-supplied queries or SQL. Read operations with scalar arguments use GET; reads requiring a structured filter use POST under `query/`; mutations use POST. POST bodies wrap the named contract arguments (for example `{ "model": { ... }, "applicantJobId": null }`).
 
@@ -37,7 +37,7 @@ Out-of-office categories are separate from the central workflow request type: th
 
 ## Registration and testing
 
-`AddHrmBackendServices` is shared by API startup and dependency-resolution tests. `includeBackgroundWorkers: false` is reserved for isolated tests; production retains the existing accrual worker. `AddHrmApiEndpoints` registers endpoint filters, safe transport serialization, typed contract bindings and new query services. The temporary root host also registers the endpoints without replacing its interactive authentication provider.
+`AddHrmBackendServices` is shared by API startup and dependency-resolution tests. `includeBackgroundWorkers: false` is reserved for isolated tests; production retains the existing accrual worker. `AddHrmApiEndpoints` registers endpoint filters, safe transport serialization, typed contract bindings and new query services. The independent UI calls these endpoints over HTTP; the root project is now build-only.
 
 The new xUnit project is `Tests/HRM.Api.UnitTests/HRM.Api.UnitTests.csproj`. Run:
 
@@ -49,6 +49,6 @@ Tests use an isolated TestServer, ephemeral data-protection keys and in-memory d
 
 The new project is included in the solution and normal verification script. Verified on 27 October 2026: 31 xUnit tests, all 48 existing regression groups and Application-only contract checks passed. The temporary Blazor host also seeds each MVC request’s scoped authentication state from the verified HTTP principal without modifying any circuit scope.
 
-## Remaining architecture work
+## Separate UI host
 
-The existing pages still call their current services. The generated HTTP clients still use the earlier transport abstraction and must be connected to these typed routes while completing `HRM.UI`. Separate-host eFaas callback/cookie forwarding, public URL handling and final API/UI end-to-end verification remain part of that UI/authentication migration. Do not start both production hosts simply to test the controller layer, because the accrual worker can modify live balances. No schema migration is required for this change.
+UI pages now resolve Application interfaces to HTTP proxies for these typed routes. HRM.UI references Application only and has no EF or API assembly dependency. Authentication routes remain on the public UI origin and are forwarded to the API. Each staff session owns its server-side cookie jar and CSRF pair. API authentication and authorisation remain authoritative. See [startup and deployment validation](separate-host-startup.md). No schema migration is required.

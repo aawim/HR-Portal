@@ -1,0 +1,81 @@
+@using HRM.Models
+@using HRM.Services
+@using HRM.DTOs.Leave
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.Leave
+@using HRM.Services.Interfaces.JobLeaveTypes
+@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject IJobLeaveTypeService JobLeaveTypeService
+
+<section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Leave Balance">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+        <div><h3 class="font-semibold">Leave Balance</h3><p class="mt-1 text-xs text-slate-500">Available leave days</p></div>
+    </div>
+    <div class="space-y-2">
+        @if(isLoading){<p role="status" class="px-4 py-2 text-sm text-slate-500">Loading leave balances...</p>}
+        else if(jobTypes.Count==0){<p class="px-4 py-2 text-sm text-slate-500">No leave balances found.</p>}
+        else
+        {
+            <div class="max-h-[32rem] divide-y overflow-y-auto">
+                @foreach(var balance in jobTypes)
+                {
+                    var processing=processingLeaves.Where(x=>x.LeaveTypeId==balance.LeaveTypeId).ToList();
+                    <section class="px-4 py-2 even:bg-slate-50 dark:even:bg-slate-700/30" aria-label="@LeaveHeading(balance)">
+                        <h4 class="break-words text-sm font-semibold">@LeaveHeading(balance)</h4>
+                        <dl class="mt-1 divide-y">
+                            <DashboardDetailRow Label="Available" Value="@($"{balance.RemainingDays} days")" Tone="primary" />
+                            <DashboardDetailRow Label="Last taken" Value="@(balance.LastLeaveTakenDate?.ToString("dd MMM yyyy")??"Never")" />
+                            <DashboardDetailRow Label="Renewed" Value="@(balance.RenewedDate?.ToString("dd MMM yyyy")??"N/A")" />
+                        </dl>
+                        @foreach(var request in processing)
+                        {
+                            <div class="border-t py-1">
+                                <p class="break-words text-xs font-medium text-amber-700 dark:text-amber-400">Processing – @request.StateName</p>
+                                <p class="mt-1 text-xs text-slate-500">@request.FromDate?.ToString("dd MMM yyyy") – @request.ToDate?.ToString("dd MMM yyyy")</p>
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        }
+    </div>
+</section>
+@code {
+
+    private static string LeaveHeading(JobLeaveTypeDto balance) => !string.IsNullOrWhiteSpace(balance.LeaveTypeName) ? balance.LeaveTypeName.Trim()
+        : !string.IsNullOrWhiteSpace(balance.LeaveTypeNameDv) ? balance.LeaveTypeNameDv.Trim()
+        : balance.LeaveTypeId.HasValue ? $"Leave type #{balance.LeaveTypeId}"
+        : balance.LeaveTypeId.HasValue ? $"Leave type #{balance.LeaveTypeId}" : "Leave type not configured";
+
+    private List<JobLeaveTypeDto> jobTypes = new();
+
+    private List<ProcessingLeaveDto> processingLeaves = new();
+
+    private bool isLoading = true;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var balances =
+                await JobLeaveTypeService.GetJobLeaveType();
+
+            // Only show active balances where
+            // leave information has been updated.
+            jobTypes = balances
+                .Where(x =>
+                    x.IsValid == true &&
+                    x.IsLeaveInfoUpdated == true)
+                .ToList();
+
+
+            processingLeaves =
+                await LeaveService.GetMyProcessingLeavesAsync();
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

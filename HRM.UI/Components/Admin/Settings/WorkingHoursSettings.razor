@@ -1,0 +1,124 @@
+@attribute [Authorize]
+@using HRM.Models
+@inject HRM.Services.Contracts.WorkingHoursSettingsServiceContracts.IOperations Settings
+@inject ILogger<WorkingHoursSettings> Logger
+@inject HRM.Services.ToastService Toasts
+
+<section class="space-y-4 p-4">
+    <div><h1 class="text-xl font-semibold">Working hours and temporary amendments</h1>
+        <p class="mt-1 text-sm text-slate-500">@(data == null ? "Tenant attendance configuration" : data.Organisation)</p></div>
+    @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@error</p> }
+    @if (data == null) { <button class="app-button app-button-secondary" disabled="@busy" @onclick="ReloadAsync">Load configuration</button> }
+    else
+    {
+        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Working hours settings">
+            @if (data.CanConfigure) { <button role="tab" aria-selected="@(!amendmentsTab)" class="app-button @(!amendmentsTab ? "app-button-primary" : "app-button-secondary")" @onclick="() => amendmentsTab = false">Job Type policies</button> }
+            @if (data.CanAmend) { <button role="tab" aria-selected="@amendmentsTab" class="app-button @(amendmentsTab ? "app-button-primary" : "app-button-secondary")" @onclick="() => amendmentsTab = true">Temporary official hours</button> }
+        </div>
+        @if (data.CanConfigure)
+        {
+            <details class="rounded-lg border p-4"><summary class="cursor-pointer font-semibold">Temporary daily working hours</summary>
+                <p class="my-3 text-sm">Set hours per working day for a temporary period. For example, 8 hours replaces a 6-hour template requirement for that week and moves the finish later. Off days stay off. Longer template hours are not reduced. Rain waivers still reduce required hours. A specific Job Type overrides an all-types requirement.</p>
+                <button class="app-button app-button-secondary" @onclick="() => requirement = new() { FromDate = Today, ToDate = Today.AddDays(6) }">Add temporary requirement</button>
+                @if (requirement != null)
+                {
+                    <fieldset disabled="@busy" class="my-3 space-y-3">
+                        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <label>Job Type<select @bind="requirement.JobTypeId" class="block w-full rounded border bg-transparent p-2"><option value="">All Job Types</option>@foreach(var j in data.JobTypes) { <option value="@j.Id">@j.Name</option> }</select></label>
+                            <label>From<InputDate @bind-Value="requirement.FromDate" class="block w-full rounded border bg-transparent p-2" /></label>
+                            <label>To<InputDate @bind-Value="requirement.ToDate" class="block w-full rounded border bg-transparent p-2" /></label>
+                            <label>Hours per working day<input type="number" min="0.25" max="24" step="0.25" @bind="dailyHours" class="block w-full rounded border bg-transparent p-2" /></label>
+                        </div>
+                        <label class="block">Reason<textarea @bind="requirement.Reason" maxlength="1000" class="block w-full rounded border bg-transparent p-2"></textarea></label>
+                        <label><input type="checkbox" @bind="requirement.IsActive" /> Active</label>
+                        <div class="flex gap-2"><button class="app-button app-button-primary" @onclick="SaveRequirementAsync">Save requirement</button><button class="app-button app-button-secondary" @onclick="() => requirement = null">Close</button></div>
+                    </fieldset>
+                }
+                <div class="mt-3 space-y-2">@foreach (var r in data.Requirements) { <div class="flex flex-wrap items-center justify-between gap-2 border-t p-2"><span>@(data.JobTypes.FirstOrDefault(j => j.Id == r.JobTypeId)?.Name ?? "All Job Types") · @r.FromDate.ToString("dd MMM yyyy") – @r.ToDate.ToString("dd MMM yyyy") · @(r.RequiredDailyMinutes / 60m) hours/day · @(r.IsActive ? "Active" : "Withdrawn")</span><button disabled="@(busy || r.FromDate < Today)" class="app-button app-button-secondary" @onclick="() => EditRequirement(r)">Edit</button></div> }</div>
+            </details>
+        }
+        @if (!amendmentsTab && data.CanConfigure)
+        {
+            <p class="text-sm text-slate-500">Rules apply to this organisation only. Normal required hours and working days come from assigned official templates and dated rosters. Weeks begin on the selected day. Approved leave and waived organisation time reduce the target; approved early check-out remains owed.</p>
+            <p class="text-sm"><a href="/admin/settings/config/approval-flows" class="underline">Configure request approval flows</a> for <strong>Weekly Hours Exception Request</strong> before staff submit exceptions.</p>
+            <div class="overflow-x-auto rounded-lg border">
+                <table class="w-full text-left text-sm"><thead><tr><th class="p-3">Job Type</th><th class="p-3">Required hours</th><th class="p-3">Effective period</th><th class="p-3">Action</th></tr></thead><tbody>
+                    @foreach (var job in data.JobTypes)
+                    {
+                        var rules = data.Rules.Where(r => r.JobTypeId == job.Id).ToList();
+                        @if (rules.Count == 0) { <tr class="border-t"><td class="p-3">@job.Name</td><td class="p-3" colspan="2">Assigned official template</td><td class="p-3"><button disabled="@busy" class="app-button app-button-secondary" @onclick="() => NewRule(job.Id)">Configure</button></td></tr> }
+                        @foreach (var r in rules) { <tr class="border-t"><td class="p-3">@job.Name</td><td class="p-3">Assigned official template</td><td class="p-3">@r.EffectiveFrom.ToString("dd MMM yyyy") – @(r.EffectiveTo?.ToString("dd MMM yyyy") ?? "Ongoing")</td><td class="p-3"><button disabled="@busy" class="app-button app-button-secondary" @onclick="() => EditRule(r)">Edit</button></td></tr> }
+                    }
+                </tbody></table>
+            </div>
+            <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => NewRule(0)">Add effective rule</button>
+            @if (rule != null)
+            {
+                <fieldset disabled="@busy" class="space-y-4 rounded-xl border p-4">
+                    <h2 class="font-semibold">Weekly hours rule</h2>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <label>Job Type<select class="mt-1 block w-full rounded border bg-transparent p-2" @bind="rule.JobTypeId"><option value="0">Select Job Type</option>@foreach (var j in data.JobTypes) { <option value="@j.Id">@j.Name</option> }</select></label>
+
+                        <label>Week begins<select class="mt-1 block w-full rounded border bg-transparent p-2" @bind="rule.WeekStartsOn" @bind:after="WeekStartChanged">@foreach (var d in Enum.GetValues<DayOfWeek>()) { <option value="@((int)d)">@d</option> }</select></label>
+                        <label>Effective from<InputDate @bind-Value="rule.EffectiveFrom" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                        <label>Effective to (optional)<InputDate @bind-Value="rule.EffectiveTo" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                    </div>
+
+                    <label class="flex items-center gap-2"><input type="checkbox" @bind="rule.CountDutyHours" />Count duty hours toward weekly hours (overlap counts once)</label>
+                    <p class="text-xs text-slate-500">Choose complete weeks for the effective period. Rotating shifts follow their actual official roster days. Overtime shown is potential time only and does not approve overtime pay.</p>
+                    <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" @onclick="SaveRuleAsync">Save rule</button><button class="app-button app-button-secondary" @onclick="() => rule = null">Close</button></div>
+                </fieldset>
+            }
+        }
+        @if (amendmentsTab && data.CanAmend)
+        {
+            <p class="text-sm text-slate-500">Temporarily delay an official start for one date. The end time stays unchanged and the waived minutes do not need make-up. Only official schedules starting at the original time are affected; duty and other shift times retain their hours.</p>
+            <button class="app-button app-button-primary" disabled="@busy" @onclick="NewAmendment">Add temporary amendment</button>
+            @if (amendment != null)
+            {
+                <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-4">
+                    <div class="grid gap-3 sm:grid-cols-3">
+                        <label>Date<InputDate @bind-Value="amendment.WorkDate" disabled="@(amendment.Id != 0)" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                        <label>Original official start<input type="time" @bind="originalTime" disabled="@(amendment.Id != 0)" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                        <label>Temporary start<input type="time" @bind="revisedTime" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                    </div>
+                    <label class="block">Reason<textarea @bind="amendment.Reason" maxlength="1000" class="mt-1 block w-full rounded border bg-transparent p-2" rows="2"></textarea></label>
+                    <label class="flex items-center gap-2"><input type="checkbox" @bind="amendment.IsActive" />Active (uncheck to withdraw and restore original hours)</label>
+                    <p class="text-sm">Staff arriving at or before the temporary start are on time. The official end remains unchanged. Staff receive an in-app notification.</p>
+                    <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" @onclick="SaveAmendmentAsync">Save amendment</button><button class="app-button app-button-secondary" @onclick="() => amendment = null">Close</button></div>
+                </fieldset>
+            }
+            <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Date</th><th class="p-3">Start</th><th class="p-3">Reason</th><th class="p-3">Status</th><th class="p-3">Action</th></tr></thead><tbody>
+                @foreach (var a in data.Amendments) { <tr class="border-t"><td class="p-3">@a.WorkDate.ToString("dd MMM yyyy")</td><td class="p-3">@a.OriginalStart.ToString(@"hh\:mm") → @a.RevisedStart.ToString(@"hh\:mm")</td><td class="p-3">@a.Reason</td><td class="p-3">@(a.IsActive ? "Active" : "Withdrawn")</td><td class="p-3"><button class="app-button app-button-secondary" disabled="@(busy || a.WorkDate.Date < Today)" @onclick="() => EditAmendment(a)">Edit</button></td></tr> }
+                @if (data.Amendments.Count == 0) { <tr><td colspan="5" class="p-3">No temporary amendments.</td></tr> }
+            </tbody></table></div>
+        }
+    }
+</section>
+
+@code {
+    private HRM.DTOs.Contracts.WorkingHoursSettingsDataResponse? data;
+    private HRM.DTOs.Contracts.OrganisationWorkingHourRequirementDto? requirement;
+    private decimal dailyHours = 8;
+    private void EditRequirement(HRM.DTOs.Contracts.OrganisationWorkingHourRequirementDto value) { requirement = Copy(value); dailyHours = value.RequiredDailyMinutes / 60m; }
+    private async Task SaveRequirementAsync() { if (requirement == null || busy) return; if (dailyHours is <= 0 or > 24) { error = "Enter daily hours up to 24."; return; } requirement.RequiredDailyMinutes = (int)Math.Round(dailyHours * 60); await SaveAsync(async () => { await Settings.SaveRequirementAsync(requirement); requirement = null; }, "Temporary daily working hours saved."); }
+    private HRM.DTOs.Contracts.JobTypeWorkingHourRuleDto? rule;
+    private HRM.DTOs.Contracts.OrganisationScheduleAmendmentDto? amendment;
+    private bool busy, amendmentsTab;
+    private string? error;
+
+    private TimeOnly originalTime = new(8, 0), revisedTime = new(8, 30);
+    private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    protected override async Task OnInitializedAsync() => await ReloadAsync();
+    private async Task ReloadAsync() { try { error = null; data = await Settings.LoadAsync(); if (!data.CanConfigure) amendmentsTab = true; } catch (Exception ex) { Logger.LogError(ex, "Working hours settings could not load"); error = ex is UnauthorizedAccessException ? ex.Message : "Working hours could not be loaded. Please contact HR."; } }
+    private static T Copy<T>(T value) => System.Text.Json.JsonSerializer.Deserialize<T>(System.Text.Json.JsonSerializer.Serialize(value))!;
+    private void NewRule(int job) { rule = new() { JobTypeId = job, EffectiveFrom = Today.AddDays(-(int)Today.DayOfWeek) }; }
+    private void EditRule(HRM.DTOs.Contracts.JobTypeWorkingHourRuleDto value) { rule = Copy(value);  }
+    private void WeekStartChanged() { if (rule?.Id == 0) rule.EffectiveFrom = rule.EffectiveFrom.Date.AddDays(-((7 + (int)rule.EffectiveFrom.DayOfWeek - rule.WeekStartsOn) % 7)); }
+    private void ToggleDay(int bit, bool selected) { if (rule != null) rule.WorkingDaysMask = selected ? rule.WorkingDaysMask | bit : rule.WorkingDaysMask & ~bit; }
+    private void NewAmendment() { amendment = new() { WorkDate = Today }; originalTime = new(8, 0); revisedTime = new(8, 30); }
+    private void EditAmendment(HRM.DTOs.Contracts.OrganisationScheduleAmendmentDto value) { amendment = Copy(value); originalTime = TimeOnly.FromTimeSpan(value.OriginalStart); revisedTime = TimeOnly.FromTimeSpan(value.RevisedStart); }
+    private async Task SaveRuleAsync() { if (rule == null || busy) return; await SaveAsync(async () => { await Settings.SaveRuleAsync(rule); rule = null; }, "Weekly hours saved."); }
+    private async Task SaveAmendmentAsync() { if (amendment == null || busy) return; amendment.OriginalStart = originalTime.ToTimeSpan(); amendment.RevisedStart = revisedTime.ToTimeSpan(); await SaveAsync(async () => { await Settings.SaveAmendmentAsync(amendment); amendment = null; }, "Temporary official hours saved."); }
+    private async Task SaveAsync(Func<Task> action, string success) { busy = true; error = null; try { await action(); await ReloadAsync(); Toasts.Success(success); } catch (Exception ex) { Logger.LogError(ex, "Working hours configuration could not save"); error = ex is InvalidOperationException or UnauthorizedAccessException ? ex.Message : "The change could not be saved. Refresh and try again."; } finally { busy = false; } }
+}

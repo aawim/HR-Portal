@@ -1,0 +1,54 @@
+@using HRM.DTOs.Attendance
+@inject HRM.Services.Contracts.WeeklyWorkingHoursServiceContracts.IOperations WorkingHours
+@inject ILogger<WeeklyHoursReview> Logger
+
+<section class="space-y-3 rounded-xl border p-4">
+    <div class="flex flex-wrap items-end justify-between gap-3"><h3 class="font-semibold">Weekly hours reconciliation</h3>
+        <div class="flex flex-wrap items-end gap-2"><label class="text-sm">Week containing<InputDate @bind-Value="week" class="mt-1 block rounded border bg-transparent p-2" /></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Show week</button></div></div>
+    @if (error != null) { <p role="alert" class="text-sm">@error</p> }
+    @if (busy) { <p role="status">Loading weekly hours…</p> }
+    else if (result != null)
+    {
+        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" Disabled="@busy" />
+        <p class="text-sm text-slate-500">@result.WeekStart.ToString("dd MMM") – @result.WeekEnd.ToString("dd MMM yyyy"). Only completed clock pairs count as worked time.</p>
+        @if (!result.HasWorkingHoursRule) { <p role="status" class="text-sm">@result.ConfigurationMessage</p> }
+        <dl class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div class="rounded-lg border p-3"><dt class="text-sm">Required</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.RequiredWeekHours) : "Not configured")</dd></div>
+            <div class="rounded-lg border p-3"><dt class="text-sm">Worked</dt><dd class="font-semibold">@Hours(result.CurrentWeekHours)</dd></div>
+            <div class="rounded-lg border p-3"><dt class="text-sm">Remaining</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.RemainingWeekHours) : "—")</dd></div>
+            <div class="rounded-lg border p-3"><dt class="text-sm">Potential overtime</dt><dd class="font-semibold">@(result.HasWorkingHoursRule ? Hours(result.PotentialOvertimeHours) : "—")</dd></div>
+        </dl>
+        <div class="flex flex-wrap gap-4 text-sm"><span>Official: @Hours(result.OfficialHours)</span><span>Duty: @Hours(result.DutyHours)</span><span>Overlap: @Hours(result.DutyOverlapHours)</span><span>Organisation time waived: @Hours(result.AmendmentCreditHours)</span><span>Leave credit: @Hours(result.LeaveCreditHours)</span></div>
+        <p class="text-xs text-slate-500">Duty contributes to weekly hours: @(result.DutyCountsTowardWeek ? "Yes" : "No"). Additional duty outside official hours: @Hours(result.DutyOutsideOfficialHours).</p>
+        @if (result.ApprovedEarlyCheckoutShortfallHours > 0) { <p class="text-sm">Early check-out make-up: @Hours(result.ApprovedEarlyCheckoutShortfallHours) owed · @Hours(result.MakeupCompletedHours) completed · @Hours(result.MakeupRemainingHours) remaining.</p> }
+        @if (result.ApprovedExceptionHours > 0) { <p class="text-sm">Approved exceptions: @Hours(result.ApprovedExceptionHours) · applied to shortfall: @Hours(result.ExceptionCreditHours).</p> }
+        <p class="text-xs text-slate-500">Overlapping periods count once. Early check-out still requires make-up within the same week. An organisation amendment waives time and keeps the original end time.</p>
+    }
+</section>
+
+@code {
+    [Parameter] public int StaffId { get; set; }
+    private int loadedStaff = -1;
+    private DateTime week = DateTime.UtcNow.AddHours(5).Date;
+    private WeeklyWorkedHoursDto? result;
+    private bool busy;
+    private int version;
+    private string? error;
+    private HRM.Services.AttendanceExportReport BuildExport()
+    {
+        var r = result ?? throw new InvalidOperationException("Load a week before exporting.");
+        return new("Weekly hours reconciliation", $"Employee {StaffId} · {r.WeekStart:dd MMM yyyy} – {r.WeekEnd:dd MMM yyyy}",
+            [new("Weekly hours", ["Metric", "Hours"], new List<object?[]> {
+                new object?[] { "Required", r.HasWorkingHoursRule ? r.RequiredWeekHours : null },
+                new object?[] { "Worked", r.CurrentWeekHours }, new object?[] { "Remaining", r.HasWorkingHoursRule ? r.RemainingWeekHours : null },
+                new object?[] { "Official", r.OfficialHours }, new object?[] { "Duty", r.DutyHours }, new object?[] { "Overlap", r.DutyOverlapHours },
+                new object?[] { "Additional duty outside official hours", r.DutyOutsideOfficialHours },
+                new object?[] { "Organisation waiver", r.AmendmentCreditHours }, new object?[] { "Approved leave credit", r.LeaveCreditHours },
+                new object?[] { "Approved exception credit", r.ExceptionCreditHours }, new object?[] { "Early checkout make-up remaining", r.MakeupRemainingHours },
+                new object?[] { "Potential overtime", r.HasWorkingHoursRule ? r.PotentialOvertimeHours : null }
+            })]);
+    }
+    protected override async Task OnParametersSetAsync() { if (loadedStaff != StaffId) { loadedStaff = StaffId; await LoadAsync(); } }
+    private async Task LoadAsync() { var request = ++version; var staff = StaffId; busy = true; error = null; result = null; try { var value = await WorkingHours.LoadAsync(staff, week); if (request == version) result = value; } catch (Exception ex) { Logger.LogError(ex, "Weekly hours review failed"); if (request == version) error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Weekly hours could not be loaded. Please refresh and try again."; } finally { if (request == version) busy = false; } }
+    private static string Hours(decimal value) { var minutes = (int)Math.Round(value * 60); return $"{minutes / 60}h {minutes % 60}m"; }
+}

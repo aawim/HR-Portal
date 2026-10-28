@@ -43,6 +43,23 @@ using HRM.Services.Interfaces.AppovalWF;
 
 
 var builder = WebApplication.CreateBuilder(args);
+// The UI auth proxy forwards the registered public origin. Only the known local proxy is trusted.
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost |
+        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    var publicOrigin = new Uri(builder.Configuration["Application:PublicOrigin"] ?? "https://localhost:62839/");
+    if (publicOrigin.Scheme != "https" || publicOrigin.AbsolutePath != "/" || !string.IsNullOrEmpty(publicOrigin.UserInfo) ||
+        !string.IsNullOrEmpty(publicOrigin.Query) || !string.IsNullOrEmpty(publicOrigin.Fragment))
+        throw new InvalidOperationException("Application:PublicOrigin must be a fixed HTTPS origin.");
+    options.AllowedHosts.Add(publicOrigin.Host);
+    foreach (var address in builder.Configuration.GetSection("UiProxy:KnownProxies").Get<string[]>() ?? [])
+    {
+        if (!System.Net.IPAddress.TryParse(address, out var proxy)) throw new InvalidOperationException("UiProxy:KnownProxies must contain IP addresses.");
+        options.KnownProxies.Add(proxy);
+    }
+});
 var mainConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
     builder.Configuration.GetConnectionString("DefaultConnection"), builder.Environment.IsDevelopment(), "ConnectionStrings:DefaultConnection");
 var configuredAuditConnection = builder.Configuration.GetConnectionString("AuditConnection");
@@ -151,6 +168,7 @@ builder.Services.AddAuthentication(options =>
 
 
 var app = builder.Build();
+app.UseForwardedHeaders();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

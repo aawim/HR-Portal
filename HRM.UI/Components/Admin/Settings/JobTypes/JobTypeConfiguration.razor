@@ -1,0 +1,220 @@
+@using HRM.DTOs.ApprovalFlow
+@using HRM.Services
+@inject HRM.Services.Contracts.JobTypeConfigurationServiceContracts.IOperations Configuration
+@inject ToastService Toast
+@inject ILogger<JobTypeConfiguration> Logger
+@inject NavigationManager Navigation
+
+<div class="w-full">
+    @if (error != null)
+    {
+        <p role="alert" class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">@error</p>
+    }
+    @if (loading)
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading configuration…</div>
+    }
+    else if (data != null)
+    {
+        <fieldset disabled="@busy">
+            <div class="grid grid-cols-1 items-start gap-4 2xl:grid-cols-12">
+                <aside class="min-w-0 2xl:col-span-3 2xl:col-start-10 2xl:row-start-1">
+                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div class="border-b p-3">
+                            <div class="flex items-center justify-between gap-3">
+                                <div>
+                                    <h2 class="text-sm font-semibold text-slate-900">@TypeTitlePlural (@data.JobTypes.Count)</h2>
+
+                                </div>
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                                        title="Add @TypeLabel" aria-label="Add @TypeLabel" disabled="@(!data.CanManageCatalogues)" @onclick="NewJob">
+                                    <span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>
+                                </button>
+                            </div>
+                            <label class="relative mt-2 block">
+                                <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" aria-hidden="true">search</span>
+                                <input type="search" @bind="typeFilter" @bind:event="oninput" aria-label="Search @TypeTitlePlural"
+                                       placeholder="Search @TypeLabel…" class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100" />
+                            </label>
+                        </div>
+                        <div class="max-h-52 overflow-y-auto 2xl:max-h-[32rem]" tabindex="0" aria-label="@(RequestTypesMode ? "Request type list" : "Job type list")">
+                            @if (!FilteredTypes.Any())
+                            {
+                                <div class="p-4 text-center">
+                                    <span class="material-symbols-rounded text-4xl text-slate-300" aria-hidden="true">search_off</span>
+                                    <p class="mt-2 text-sm font-semibold text-slate-700">No @TypeLabel entries found</p>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="divide-y divide-slate-100">
+                                    @foreach (var item in FilteredTypes)
+                                    {
+                                        <button type="button" class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors @(job.Id == item.Id ? "bg-indigo-50 border-l-4 border-indigo-600" : "border-l-4 border-transparent hover:bg-slate-50")"
+                                                aria-pressed="@(job.Id == item.Id)" @onclick="() => SelectJobAsync(item)">
+                                            <div class="min-w-0">
+                                                <p class="truncate text-sm font-semibold text-slate-800">@item.Name</p>
+                                                @if (!RequestTypesMode && !string.IsNullOrWhiteSpace(item.DhivehiName))
+                                                { <p class="mt-1 truncate text-xs text-slate-500" dir="rtl">@item.DhivehiName</p> }
+                                                <div class="mt-1 text-[11px] text-slate-500">
+                                                    @if (RequestTypesMode) { <span>Request type #@item.Id</span> }
+                                                    else { <span class="@(item.IsActive ? "text-emerald-600" : "text-slate-400")">@(item.IsActive ? "Active" : "Inactive")</span> }
+                                                </div>
+                                            </div>
+                                            <span class="material-symbols-rounded text-[18px] @(job.Id == item.Id ? "text-indigo-600" : "text-slate-300")" aria-hidden="true">chevron_right</span>
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </aside>
+                <section class="min-w-0 space-y-4 2xl:col-span-9 2xl:col-start-1 2xl:row-start-1">
+                    @if(!data.CanManageCatalogues){<p class="text-sm text-slate-500">Catalogue editing requires Super Admin.</p>}
+                    <fieldset disabled="@(!data.CanManageCatalogues)" class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                        <div class="border-b p-3"><h2 class="text-sm font-semibold">@(job.Id == 0 ? $"New {TypeTitle}" : TypeTitle)</h2></div>
+                        <div class="p-3">
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <label class="block text-xs font-medium text-slate-700">Name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="@(RequestTypesMode ? 500 : 50)" @bind="job.Name" /></label>
+                    @if (RequestTypesMode)
+                    {
+                        <label class="block text-xs font-medium text-slate-700">Request numbering sequence
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" @bind="job.SequenceNumberTypeId">
+                                <option value="">Select numbering sequence</option>
+                                @foreach (var option in data.NumberingTypes) { <option value="@option.Id">@option.Name</option> }
+                            </select>
+                        </label>
+                        <div class="sm:col-span-2 space-y-2">
+                        <label class="block text-xs font-medium text-slate-700">View URL (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="1000" placeholder="/requests/details" @bind="job.ViewUrl" /></label>
+
+                        </div>
+                    }
+                    else
+                    {
+                    <label class="block text-xs font-medium text-slate-700">Dhivehi name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="50" dir="rtl" @bind="job.DhivehiName" /></label>
+                    <div class="sm:col-span-2">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" @bind="job.IsActive" class="sr-only peer" />
+                            <span class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300"></span>
+                            <span class="ml-3 text-sm font-medium text-slate-700">Active</span>
+                        </label>
+
+                    </div>
+                    }
+
+                            </div>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2 border-t p-3">
+                    <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" @onclick="NewJob">Cancel</button>
+                    <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 text-sm font-medium shadow-sm" @onclick="SaveJobAsync">Save @TypeLabel</button>
+                    @if (RequestTypesMode && job.Id > 0)
+                    {
+                        <button type="button" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-2 text-sm font-medium" @onclick="() => confirmDelete = true">Delete request type</button>
+                        @if (confirmDelete)
+                        {
+                            <div role="alert" class="w-full border border-red-200 bg-red-50 rounded-xl p-4 space-y-3 text-sm">
+                                <p>Delete @job.Name and its unused approval workflow configuration? Types linked to requests, leave types or workflow history cannot be deleted.</p>
+                                <button type="button" class="bg-red-600 text-white rounded px-3 py-2" @onclick="DeleteAsync">Confirm delete</button>
+                                <button type="button" class="border rounded px-3 py-2" @onclick="() => confirmDelete = false">Cancel</button>
+                            </div>
+                        }
+                    }
+
+                        </div>
+                    </fieldset>
+            @if (!RequestTypesMode)
+            {
+                <nav class="flex flex-wrap gap-2" role="tablist" aria-label="Job type configuration">
+                    @foreach(var tab in ConfigTabs)
+                    {
+                        <button type="button" role="tab" aria-selected="@(activeTab==tab.Id)" aria-controls="job-type-config-panel" class="app-button @(activeTab==tab.Id?"app-button-primary":"app-button-secondary")" @onclick="()=>SelectTab(tab.Id)">@tab.Name</button>
+                    }
+                </nav>
+                <section id="job-type-config-panel" role="tabpanel" aria-label="@ConfigTabs.First(t=>t.Id==activeTab).Name" @key="(activeTab,job.Id)">
+                    @if(job.Id<=0){<p class="rounded-xl border p-4 text-sm text-slate-500">Select a Job Type.</p>}
+                    else if(activeTab=="leave-sets") { <JobTypeLeaveSets JobTypeId="job.Id" /> }
+                    else if(activeTab=="leave")
+                    {
+                        <HRM.Components.Admin.Settings.LeaveAccrualSettings JobTypeId="job.Id" Embedded="true" />
+                    }
+                    else { <JobTypeOvertimeSettings JobTypeId="job.Id" JobTypeName="job.Name" /> }
+                </section>
+            }
+            @if (job.Id > 0)
+            {
+                <a class="app-button app-button-secondary" href="/admin/settings/config/approval-flows">Approval flows</a>
+            }
+
+                </section>
+
+            </div>
+        </fieldset>
+    }
+</div>
+
+@code {
+    [Parameter] public bool RequestTypesMode { get; set; }
+    [SupplyParameterFromQuery(Name="tab")] public string? Tab {get;set;}
+    private static readonly (string Id,string Name)[] ConfigTabs=[("ot","OT Config"),("leave","Leave Config"),("leave-sets","Leave Set Config")];
+    private string activeTab="ot";
+    protected override void OnParametersSet()=>activeTab=ConfigTabs.Any(t=>t.Id==Tab)?Tab!:"ot";
+    private void SelectTab(string tab){activeTab=tab;Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("tab",tab));}
+    private string TypeLabel => RequestTypesMode ? "request type" : "job type";
+    private string TypeTitle => RequestTypesMode ? "Request Type" : "Job Type";
+    private string TypeTitlePlural => RequestTypesMode ? "Request Types" : "Job Types";
+    private string typeFilter = "";
+    private IEnumerable<JobTypeConfigurationDto> FilteredTypes => data?.JobTypes.Where(x =>
+        x.Name.Contains(typeFilter, StringComparison.OrdinalIgnoreCase) ||
+        (x.DhivehiName?.Contains(typeFilter, StringComparison.OrdinalIgnoreCase) ?? false)) ?? Enumerable.Empty<JobTypeConfigurationDto>();
+    private JobTypeConfigurationData? data;
+    private JobTypeConfigurationDto job = new();
+    private bool busy, loading;
+    private string? error;
+    private bool confirmDelete;
+    protected override async Task OnInitializedAsync()
+    {
+        loading = true;
+        try { data = await Configuration.LoadAsync(RequestTypesMode); }
+        catch (Exception ex) { Fail(ex); }
+        finally { loading = false; }
+    }
+    private void NewJob() { job = new(); error = null; confirmDelete = false; }
+    private Task SelectJobAsync(JobTypeConfigurationDto item)
+    {
+        confirmDelete = false;
+        job = new() { Id = item.Id, Name = item.Name, DhivehiName = item.DhivehiName, IsActive = item.IsActive,
+            SequenceNumberTypeId = item.SequenceNumberTypeId, ViewUrl = item.ViewUrl };
+        return Task.CompletedTask;
+    }
+    private async Task SaveJobAsync()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = RequestTypesMode ? await Configuration.SaveRequestTypeAsync(job) : await Configuration.SaveJobTypeAsync(job);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message); data = await Configuration.LoadAsync(RequestTypesMode);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; }
+    }
+    private async Task DeleteAsync()
+    {
+        if (!RequestTypesMode || job.Id == 0 || !confirmDelete) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Configuration.DeleteRequestTypeAsync(job.Id);
+            if (!result.Success) { error = result.Message; Toast.Error(result.Message); return; }
+            Toast.Success(result.Message); NewJob(); data = await Configuration.LoadAsync(true);
+        }
+        catch (Exception ex) { Fail(ex); }
+        finally { busy = false; confirmDelete = false; }
+    }
+    private void Fail(Exception ex)
+    {
+        Logger.LogError(ex, "Job type configuration failed.");
+        error = ex is UnauthorizedAccessException ? ex.Message : "Configuration could not be saved or loaded. Please try again.";
+        Toast.Error(error);
+    }
+}

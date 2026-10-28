@@ -1,0 +1,52 @@
+@inject HRM.Services.Contracts.OrganisationResourceSettingsServiceContracts.IOperations Settings
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<OrganisationDocumentTypes> Logger
+@using HRM.Services
+<section class="space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-xl font-semibold">Document Types</h2><p class="text-sm text-slate-500">@data?.OrganisationName · Manage document classifications and image requirements.</p></div><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></header>
+    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
+    @if(data==null&&error==null){<p role="status">Loading…</p>}
+    @if(data!=null)
+    {
+        <p class="text-sm text-slate-500">Shared and system types are read-only. Disable types that are no longer needed; existing documents remain available.</p>
+        @if(data.CanEdit)
+        {
+            <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-4">
+                <h3 class="font-semibold">@(model.Id==0?"Add document type":"Edit document type")</h3>
+                <div class="grid gap-3 md:grid-cols-2"><label class="block text-sm">Name<input class="form-control mt-1" maxlength="250" @bind="model.Name" /></label><label class="block text-sm">Dhivehi name<input class="form-control mt-1" maxlength="250" dir="rtl" @bind="model.DhivehiName" /></label></div>
+                <label class="block text-sm">Description<textarea class="form-control mt-1" rows="2" maxlength="2000" @bind="model.Description"></textarea></label>
+                <div class="flex flex-wrap gap-4 text-sm"><label><input type="checkbox" @bind="model.IsActive" /> Active</label><label><input type="checkbox" @bind="model.IsImage" /> Image document</label>
+                @if(model.IsImage){<label><input type="checkbox" @bind="model.ShouldBeColor" /> Colour required</label><label>Minimum image resolution<input type="number" class="form-control mt-1" min="1" @bind="model.ImageMinimumResolution" /></label>}</div>
+                <div class="flex flex-wrap gap-3"><button class="app-button app-button-primary" @onclick="Save" disabled="@string.IsNullOrWhiteSpace(model.Name)">Save type</button><button class="app-button app-button-secondary" @onclick="Reset">Clear</button></div>
+            </fieldset>
+        }
+        <div class="flex flex-wrap items-end gap-3"><label class="block flex-1 text-sm">Search<input type="search" class="form-control mt-1" @bind="search" @bind:event="oninput" /></label><label class="text-sm">Status<select class="form-select mt-1" @bind="status"><option value="">All</option><option value="active">Active</option><option value="inactive">Inactive</option></select></label></div>
+        @foreach(var row in Filtered)
+        {
+            <article class="space-y-2 rounded-xl border p-4" @key="row.Id"><div class="flex flex-wrap items-center justify-between gap-3"><div><h3 class="font-medium">@row.Name</h3><p class="text-sm">@(row.IsActive?"Active":"Inactive") · @(row.IsSystem?"System":row.IsShared?"Shared":"Organisation")</p></div>
+            @if(data.CanEdit&&!row.IsShared&&!row.IsSystem){<div class="flex flex-wrap gap-3"><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Edit(row)">Edit</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>remove=row">Delete</button></div>}</div>
+            @if(!string.IsNullOrWhiteSpace(row.Description)){<p class="text-sm text-slate-500">@row.Description</p>}
+            @if(row.IsImage){<p class="text-sm text-slate-500">Image · @(row.ShouldBeColor?"Colour required":"Colour optional") @(row.ImageMinimumResolution.HasValue?$"· Minimum resolution: {row.ImageMinimumResolution}":"")</p>}
+            @if(remove?.Id==row.Id){<div role="alert" class="space-y-3 border-t pt-3 text-sm"><p>Delete @row.Name? Types used by documents or request requirements cannot be deleted.</p><div class="flex gap-3"><button class="app-button app-button-primary" disabled="@busy" @onclick="Delete">Confirm deletion</button><button class="app-button app-button-secondary" @onclick="()=>remove=null">Cancel</button></div></div>}
+            </article>
+        }
+        @if(!Filtered.Any()){<p class="rounded border p-4 text-sm">No matching document types.</p>}
+    }
+</section>
+@code {
+    private OrganisationDocumentTypesData? data;
+    private OrganisationDocumentType model=new();
+    private OrganisationDocumentType? remove;
+    private bool busy;
+    private string? error;
+    private string search="",status="";
+    private IEnumerable<OrganisationDocumentType> Filtered=>data?.Types.Where(t=>(status==""||t.IsActive==(status=="active"))&&(t.Name.Contains(search,StringComparison.OrdinalIgnoreCase)||(t.Description??"").Contains(search,StringComparison.OrdinalIgnoreCase)))??[];
+    protected override Task OnInitializedAsync()=>Load();
+    private async Task Load(){busy=true;error=null;try{data=await Settings.LoadDocumentTypesAsync();Reset();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private void Reset(){model=new();remove=null;}
+    private void Edit(OrganisationDocumentType row){model=System.Text.Json.JsonSerializer.Deserialize<OrganisationDocumentType>(System.Text.Json.JsonSerializer.Serialize(row))!;remove=null;error=null;}
+    private Task Save()=>Execute(model,false);
+    private Task Delete()=>remove==null?Task.CompletedTask:Execute(remove,true);
+    private async Task Execute(OrganisationDocumentType row,bool delete){if(busy)return;busy=true;error=null;var success=false;try{var result=await Settings.SaveDocumentTypeAsync(row,delete);success=result.Success;if(success)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(success)await Load();}
+    private void Fail(Exception ex){Logger.LogError(ex,"Organisation document types");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Document types could not be loaded or saved. Please refresh and try again.";}
+}

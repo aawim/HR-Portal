@@ -1,0 +1,28 @@
+@using HRM.Services
+@inject HRM.Services.Contracts.LeaveSetConfigurationServiceContracts.IOperations Settings
+@inject ToastService Toasts
+@inject ILogger<JobTypeLeaveSets> Logger
+<section class="space-y-3 rounded-xl border p-3">
+    <header class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave sets · @data?.JobType</h3><a class="app-button app-button-secondary" href="/admin/settings/leaves/manage-leave-sets">Manage leave sets</a></header>
+    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
+    @if(data!=null)
+    {
+        <p class="text-xs text-slate-500">@data.Organisation</p>
+        <input type="search" aria-label="Search leave sets" placeholder="Search leave sets…" class="w-full rounded border bg-transparent p-2 text-sm" @bind="search" @bind:event="oninput" />
+        <fieldset disabled="@busy" class="max-h-96 space-y-2 overflow-y-auto">
+            @foreach(var set in data.Sets.Where(s=>s.Name.Contains(search,StringComparison.OrdinalIgnoreCase)))
+            {<label class="flex items-start gap-2 rounded border p-3 text-sm" @key="set.Id"><input type="checkbox" checked="@selected.Contains(set.Id)" disabled="@(set.Types.Count==0&&!selected.Contains(set.Id))" @onchange="e=>Toggle(set.Id,e)" /><span><span class="block font-medium">@set.Name</span><span class="mt-1 block text-xs text-slate-500">@(set.Types.Count==0?"No leave types assigned":string.Join(", ",set.Types.Select(t=>t.Name)))</span></span></label>}
+        </fieldset>
+        @if(data.Sets.Count==0){<p class="text-sm text-slate-500">Create a leave set in HR first.</p>}
+        <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" disabled="@busy" @onclick="Save">Save assignments</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></div>
+    }
+</section>
+@code {
+    [Parameter] public int JobTypeId {get;set;}
+    private JobTypeLeaveSetData? data;private HashSet<int> selected=[];private string search="";private string? error;private bool busy;
+    protected override Task OnInitializedAsync()=>Load();
+    private async Task Load(){busy=true;error=null;try{data=await Settings.LoadJobTypeAsync(JobTypeId);selected=data.Selected.ToHashSet();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+    private void Toggle(int id,ChangeEventArgs e){if(e.Value is true)selected.Add(id);else selected.Remove(id);}
+    private async Task Save(){if(busy||data==null)return;busy=true;error=null;var saved=false;try{await Settings.SaveJobTypeAsync(JobTypeId,selected,data.Version);saved=true;Toasts.Success("Leave set assignments saved.");}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await Load();}
+    private void Fail(Exception ex){Logger.LogError(ex,"Job Type leave sets");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Leave set assignments could not be loaded or saved. Refresh and try again.";}
+}

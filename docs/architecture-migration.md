@@ -1,4 +1,31 @@
-# HRM architecture migration
+# HRM application architecture
+
+## Current state — 28 October 2026
+
+The four-project structure is implemented. API and UI are separate .NET 8 applications. Earlier checkpoints below describe the migration history and are superseded by this section.
+
+| Project | Responsibility | Project references |
+| --- | --- | --- |
+| HRM.Core | Entities, enums and constants | None |
+| HRM.Application | DTOs, interfaces, pure rules and reviewed route catalog | Core |
+| HRM.Api | Controllers, business services, workflows, EF, migrations and background processing | Core, Application |
+| HRM.UI | Blazor pages, assets, state, exports and authenticated HTTP clients | Application |
+
+UI components inject Application interfaces. `AddHrmApiClients` binds reviewed interfaces to `ApiContractProxy`, which uses `HttpApiOperationClient` and typed `/api/v1/...` endpoints. The API binds those interfaces to backend implementations. UI has no DbContext, Entity Framework or API assembly dependency. Local presentation adapters also obtain their data through HTTP.
+
+Components/assets, including isolated styles and PDF fonts, now live under HRM.UI. Direct database access has been removed from Razor. Legacy Add New Job redirects to staff enrolment. Team creation is an audited, tenant-authorised backend operation. Daily organisation attendance uses canonical schedules and attendance results.
+
+`HRM.csproj` is now a build-only compatibility entry point. The former root Program and 39 superseded client wrappers have been removed. The solution contains the four application projects and tests. Applied migrations, embedded SQL names, table mappings and live data are unchanged.
+
+The API owns eFaas/OIDC. The UI proxies fixed authentication routes and verifies identity through the API. Each server-side user session owns its cookie jar and CSRF pair; pooled handlers share neither cookies nor redirects. Writes are not retried. Independent card reads can run concurrently. Accepted logout revokes that browser's stored circuit sessions. API permission, tenant, ownership and workflow checks remain authoritative. Platform administrator context now uses the same explicit database-grant policy as organisation permission management.
+
+The bounded UI session store is per process and expires after eight hours. Multi-instance deployments require Blazor session affinity. See [startup instructions](separate-host-startup.md) and the API and UI Visual Studio startup profile.
+
+Tests use in-memory HTTP hosts and isolated databases; production Programs, listeners and accrual workers are not started. Real eFaas sign-in/callback/sign-out remains a deployment validation step.
+
+Verified on 28 October 2026: solution and compatibility builds passed with zero warnings/errors; 37 API tests, 22 UI transport/authentication tests and all 48 regression groups passed. Application checks passed for 75 contracts / 337 declared operations, and the relocated CSS build passed. The shared route manifest contains 335 supported application actions, plus the two session endpoints. No live database or schema changes were made.
+
+## Historical migration checkpoints
 
 Requested target: match RefProject with HRM.Core, HRM.Application, HRM.Api and HRM.UI as four projects. API and UI must be independently running applications, with the UI calling backend operations over HTTP. Keep .NET 8, current eFaas authentication, tenant permission ceilings, request approval/state rules and historical database mappings/migrations.
 

@@ -1,0 +1,176 @@
+@using HRM.DTOs
+@using HRM.Enum
+@inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations WorkspaceService
+@inject ILogger<OrganisationWorkspace> Logger
+
+<div class="min-w-0 space-y-2">
+    @if (loading)
+    {
+        <p role="status" class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">Loading organisation workspace…</p>
+    }
+    else if (error != null)
+    {
+        <div role="alert" class="rounded-xl border border-red-200 bg-white p-4 text-sm text-red-700">@error <button type="button" class="ml-2 underline" @onclick="LoadAsync">Retry</button></div>
+    }
+    else if (data != null)
+    {
+        <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div class="flex flex-wrap items-start justify-between gap-2">
+                <div><h1 class="text-xl font-semibold text-slate-800">@data.Name</h1>
+                    @if (!string.IsNullOrWhiteSpace(data.DhivehiName)) { <p lang="dv" dir="rtl" class="mt-1 text-sm text-slate-500">@data.DhivehiName</p> }
+                    <p class="mt-1 text-sm text-slate-500">@data.Type</p>
+                </div>
+                <button type="button" class="text-sm text-blue-700" @onclick="LoadAsync">Refresh</button>
+            </div>
+        </section>
+        @if (ActiveTab == WorkspaceTab.Overview)
+        {
+            <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Active staff</p><p class="mt-1 text-2xl font-semibold">@data.StaffCount</p></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Departments</p><p class="mt-1 text-2xl font-semibold">@data.Departments.Count</p></div>
+                <div class="rounded-xl border border-slate-200 bg-white p-4"><p class="text-xs text-slate-500">Active teams</p><p class="mt-1 text-2xl font-semibold">@data.Teams.Count</p></div>
+            </div>
+            <section class="rounded-xl border border-slate-200 bg-white p-4">
+                <h2 class="text-sm font-semibold text-slate-800">Organisation details</h2>
+                <dl class="mt-3 grid gap-3 text-sm sm:grid-cols-2">
+                    <div><dt class="text-xs text-slate-500">Registration number</dt><dd>@(data.RegistrationNumber ?? "—")</dd></div>
+                    <div><dt class="text-xs text-slate-500">Parent organisation</dt><dd>@(data.Parent ?? "—")</dd></div>
+                </dl>
+            </section>
+            <div class="grid grid-cols-1 items-start gap-2 lg:grid-cols-2">
+                <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <h2 class="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Departments</h2>
+                    @if (data.Departments.Count == 0) { <p class="p-4 text-sm text-slate-500">No active departments.</p> }
+                    <ul class="max-h-96 divide-y divide-slate-100 overflow-y-auto">@foreach (var group in data.Departments) { <li class="flex justify-between gap-2 px-4 py-3 text-sm"><span>@group.Name</span><span class="shrink-0 text-xs text-slate-500">@group.Members staff</span></li> }</ul>
+                </section>
+                <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                    <h2 class="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Teams</h2>
+                    @if (data.Teams.Count == 0) { <p class="p-4 text-sm text-slate-500">No active teams.</p> }
+                    <ul class="max-h-96 divide-y divide-slate-100 overflow-y-auto">@foreach (var group in data.Teams) { <li class="flex justify-between gap-2 px-4 py-3 text-sm"><span>@group.Name</span><span class="shrink-0 text-xs text-slate-500">@group.Members members</span></li> }</ul>
+                </section>
+            </div>
+        }
+        else if (ActiveTab == WorkspaceTab.Staff)
+        {
+            <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div class="flex flex-wrap items-end gap-2 border-b border-slate-100 p-4">
+                    <label class="min-w-0 flex-1 text-xs text-slate-500">Search staff<input class="mt-1 w-full rounded border border-slate-300 p-2 text-sm" placeholder="Name, employee or SAP number" @bind="search" @bind:event="oninput" /></label>
+                    <label class="text-xs text-slate-500">Department<select class="mt-1 block max-w-full rounded border border-slate-300 p-2 text-sm" @bind="department"><option value="0">All departments</option>@foreach (var group in data.Departments) { <option value="@group.Id">@group.Name</option> }</select></label>
+                    <button type="button" class="rounded bg-blue-600 px-3 py-2 text-sm text-white" @onclick="FilterAsync">Search</button>
+                </div>
+                @if (staff.Count == 0) { <p class="p-4 text-sm text-slate-500">No active staff match your filters.</p> }
+                else
+                {
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm">
+                        <thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="px-4 py-3">Name</th><th class="px-4 py-3">Department</th><th class="px-4 py-3">Employee no.</th><th class="px-4 py-3">SAP no.</th><th class="px-4 py-3">Joined</th></tr></thead>
+                        <tbody class="divide-y divide-slate-100">@foreach (var person in staff) { <tr><td class="px-4 py-3"><button type="button" class="text-left font-medium text-blue-700 hover:underline" @onclick="() => OpenStaffAsync(person)">@person.Name</button></td><td class="px-4 py-3">@person.Department</td><td class="px-4 py-3">@(person.EmployeeNumber ?? "—")</td><td class="px-4 py-3">@(person.SapNumber ?? "—")</td><td class="whitespace-nowrap px-4 py-3">@person.Joined.ToString("dd MMM yyyy")</td></tr> }</tbody>
+                    </table></div>
+                }
+                @Pagination
+            </section>
+        }
+        else if (ActiveTab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
+        {
+            <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 p-4">
+                    <div><h2 class="text-sm font-semibold">@ResourceTitle</h2><p class="mt-1 text-xs text-slate-500">@ResourceDescription</p></div>
+                    <label class="text-xs text-slate-500">Filter<input class="ml-2 rounded border border-slate-300 p-2 text-sm" @bind="resourceSearch" @bind:event="oninput" @bind:after="ResetResourceLimit" /></label>
+                </div>
+                @if (!FilteredResources.Any()) { <p class="p-4 text-sm text-slate-500">No @ResourceTitle.ToLowerInvariant() match this view.</p> }
+                <div class="divide-y divide-slate-100">
+                    @foreach (var resource in FilteredResources.Take(resourceLimit))
+                    {
+                        <details @key="resource.Id" class="px-4 py-3">
+                            <summary class="cursor-pointer text-sm font-medium text-slate-800">@resource.Name<span class="mt-1 block text-xs font-normal text-slate-500">@resource.Summary</span></summary>
+                            @if (resource.Details.Count == 0) { <p class="mt-2 text-xs text-slate-500">No assignments recorded.</p> }
+                            else { <ul class="mt-3 space-y-2 text-xs text-slate-600">@foreach (var detail in resource.Details) { <li class="break-words">@detail</li> }</ul> }
+                        </details>
+                    }
+                </div>
+                @if (FilteredResources.Count() > resourceLimit) { <button type="button" class="m-4 text-sm text-blue-700" @onclick="() => resourceLimit += 50">Show more</button> }
+            </section>
+        }
+        else if (ActiveTab == WorkspaceTab.Documents)
+        {
+            <section class="overflow-hidden rounded-xl border border-slate-200 bg-white">
+                <div class="border-b border-slate-100 px-4 py-3"><h2 class="text-sm font-semibold">Organisation documents</h2><p class="mt-1 text-xs text-slate-500">Documents linked to this organisation.</p></div>
+                @if (documents.Count == 0) { <p class="p-4 text-sm text-slate-500">No documents are linked to this organisation.</p> }
+                else
+                {
+                    <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead class="bg-slate-50 text-xs text-slate-500"><tr><th class="px-4 py-3">Document</th><th class="px-4 py-3">Type</th><th class="px-4 py-3">Date</th><th class="px-4 py-3">Size</th></tr></thead><tbody class="divide-y divide-slate-100">@foreach (var document in documents) { <tr><td class="px-4 py-3">@document.Name</td><td class="px-4 py-3">@document.Type</td><td class="px-4 py-3">@(document.Date?.ToString("dd MMM yyyy") ?? "—")</td><td class="px-4 py-3">@(document.Size.HasValue ? $"{document.Size.Value / 1024m:0.#} KB" : "—")</td></tr> }</tbody></table></div>
+                }
+                @Pagination
+            </section>
+        }
+    }
+</div>
+
+@code {
+    [Parameter] public int OrganisationId { get; set; }
+    [Parameter] public WorkspaceTab ActiveTab { get; set; }
+    [Parameter] public EventCallback<WorkspaceSearchResult> OnStaffSelected { get; set; }
+    private List<OrganisationWorkspaceResource> resources = [];
+    private string resourceSearch = "";
+    private int resourceLimit = 50;
+    private void ResetResourceLimit() => resourceLimit = 50;
+    private IEnumerable<OrganisationWorkspaceResource> FilteredResources => resources.Where(x => string.IsNullOrWhiteSpace(resourceSearch) || x.Name.Contains(resourceSearch, StringComparison.OrdinalIgnoreCase) || x.Summary.Contains(resourceSearch, StringComparison.OrdinalIgnoreCase) || x.Details.Any(d => d.Contains(resourceSearch, StringComparison.OrdinalIgnoreCase)));
+    private string ResourceTitle => ActiveTab switch { WorkspaceTab.Teams => "Teams", WorkspaceTab.AssignedRoles => "Assigned roles", WorkspaceTab.Permissions => "Permissions", _ => "Leave types" };
+    private string ResourceDescription => ActiveTab switch { WorkspaceTab.Teams => "Active teams, supervisors and members", WorkspaceTab.AssignedRoles => "Organisation roles, assigned accounts and role permissions", WorkspaceTab.Permissions => "Permissions enabled for this organisation", _ => "Configured leave types and current staff assignments" };
+    private OrganisationWorkspaceData? data;
+    private List<OrganisationWorkspaceStaff> staff = [];
+    private List<OrganisationWorkspaceDocument> documents = [];
+    private bool loading;
+    private string? error;
+    private string search = "";
+    private int department, page, total, loadedId;
+    private WorkspaceTab loadedTab;
+    private int loadVersion;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedId == OrganisationId && loadedTab == ActiveTab) return;
+        if (loadedId != OrganisationId) { data = null; search = ""; department = 0; }
+        loadedId = OrganisationId; loadedTab = ActiveTab; page = 0; resourceSearch = ""; resourceLimit = 50;
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        var version = ++loadVersion;
+        var org = OrganisationId; var tab = ActiveTab;
+        loading = true; error = null;
+        try
+        {
+            var overview = await WorkspaceService.LoadAsync(org);
+            if (version != loadVersion) return;
+            data = overview;
+            if (tab == WorkspaceTab.Staff)
+            {
+                var result = await WorkspaceService.StaffAsync(org, search, department, page);
+                if (version != loadVersion) return;
+                staff = result.Rows; total = result.Total;
+            }
+            else if (tab is WorkspaceTab.Teams or WorkspaceTab.AssignedRoles or WorkspaceTab.Permissions or WorkspaceTab.LeaveType)
+            {
+                var result = await WorkspaceService.ResourcesAsync(org, tab);
+                if (version != loadVersion) return;
+                resources = result;
+            }
+            else if (tab == WorkspaceTab.Documents)
+            {
+                var result = await WorkspaceService.DocumentsAsync(org, page);
+                if (version != loadVersion) return;
+                documents = result.Rows; total = result.Total;
+            }
+        }
+        catch (UnauthorizedAccessException ex) { if (version == loadVersion) { data = null; error = ex.Message; } }
+        catch (Exception ex) { Logger.LogError(ex, "Could not load organisation workspace {OrganisationId}", org); if (version == loadVersion) { data = null; error = "The organisation workspace could not be loaded. Please retry."; } }
+        finally { if (version == loadVersion) loading = false; }
+    }
+    private async Task FilterAsync() { page = 0; await LoadAsync(); }
+    private async Task MoveAsync(int change) { page += change; await LoadAsync(); }
+    private Task OpenStaffAsync(OrganisationWorkspaceStaff person) => OnStaffSelected.InvokeAsync(new WorkspaceSearchResult
+        { Id = person.Id, IndividualId = person.Id, BusinessEntityId = person.Id, Name = person.Name, Description = person.Department, EntityType = WorkspaceEntityType.Staff });
+    private RenderFragment Pagination => @<div class="flex items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 text-xs text-slate-500">
+        <span>@total results · Page @(page + 1) of @Math.Max(1, (int)Math.Ceiling(total / 20m))</span>
+        <div class="flex gap-2"><button type="button" disabled="@(loading || page == 0)" class="rounded border px-2 py-1 disabled:opacity-40" @onclick="() => MoveAsync(-1)">Previous</button><button type="button" disabled="@(loading || (page + 1) * 20 >= total)" class="rounded border px-2 py-1 disabled:opacity-40" @onclick="() => MoveAsync(1)">Next</button></div>
+    </div>;
+}

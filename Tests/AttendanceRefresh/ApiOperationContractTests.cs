@@ -79,34 +79,33 @@ static class ApiOperationContractTests
         var handler = new OperationHandler();
         using var http = new HttpClient(handler) { BaseAddress = new Uri("https://api.invalid/") };
         var client = new HRM.UI.Services.Transport.HttpApiOperationClient(http);
-        var proxy = HRM.UI.Services.Transport.ApiContractProxy.Create<IOperations>(client);
-        var result = await proxy.ReadAsync(42);
-        Check(result == "staff", "HTTP operation response was not deserialized");
-        Check(handler.Last?.Contract == typeof(IOperations).FullName && handler.Last.Method == "ReadAsync(System.Int32)" &&
-            handler.Last.Arguments.Single().GetInt32() == 42, "HTTP operation changed its typed contract or argument");
+        var proxy = HRM.UI.Services.Transport.ApiContractProxy.Create<HRM.Services.Interfaces.IUserContext>(client);
+        var result = await proxy.GetUserIdAsync();
+        Check(result == 42, "Typed HTTP response was not deserialized");
+        Check(handler.LastPath == "/api/v1/user-context/get-user-id", "The client did not use the registered typed endpoint");
         handler.Status = System.Net.HttpStatusCode.Forbidden;
         var denied = false;
-        try { await client.InvokeAsync<string>(typeof(IOperations), "ReadAsync", [ApiArgument.From(42)]); }
-        catch (UnauthorizedAccessException) { denied = true; }
+        try { await proxy.GetUserIdAsync(); } catch (UnauthorizedAccessException) { denied = true; }
         Check(denied, "HTTP permission denial was swallowed");
-        handler.Status = System.Net.HttpStatusCode.OK;
-        handler.Error = new("request_blocked", "This request cannot be changed.");
+        handler.Status = System.Net.HttpStatusCode.Conflict;
         var blocked = false;
-        try { await client.InvokeAsync<string>(typeof(IOperations), "ReadAsync", [ApiArgument.From(42)]); }
-        catch (HRM.UI.Services.Transport.ApiOperationException ex) { blocked = ex.Code == "request_blocked"; }
+        try { await proxy.GetUserIdAsync(); }
+        catch (HRM.UI.Services.Transport.ApiOperationException ex) { blocked = ex.Code == "409"; }
         Check(blocked, "HTTP business-rule rejection was swallowed");
-        Console.WriteLine("PASS API HTTP client: typed payloads, permission denials and blocked actions; all 39 feature contracts validated");
+        var rejected = false;
+        try { await client.InvokeAsync<string>(typeof(IOperations), "ReadAsync", [ApiArgument.From(42)]); }
+        catch (ArgumentException) { rejected = true; }
+        Check(rejected, "An unreviewed contract was sent to the backend");
+        Console.WriteLine("PASS API HTTP client: registered typed routes, permission denials and blocked actions; all 39 feature contracts validated");
     }
     sealed class OperationHandler : HttpMessageHandler
     {
         public System.Net.HttpStatusCode Status = System.Net.HttpStatusCode.OK;
-        public ApiOperationRequest? Last;
-        public ApiOperationProblem? Error;
-        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        public string? LastPath;
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
-            Last = JsonSerializer.Deserialize<ApiOperationRequest>(await request.Content!.ReadAsStringAsync(ct), ApiOperationKeys.Json);
-            return new(Status) { Content = new StringContent(JsonSerializer.Serialize(new ApiOperationResponse(JsonSerializer.SerializeToElement("staff"), Error), ApiOperationKeys.Json), System.Text.Encoding.UTF8, "application/json") };
+            LastPath = request.RequestUri!.AbsolutePath;
+            return Task.FromResult(new HttpResponseMessage(Status) { Content = new StringContent("42", System.Text.Encoding.UTF8, "application/json") });
         }
     }
-
 }

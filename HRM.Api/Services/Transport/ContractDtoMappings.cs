@@ -265,6 +265,7 @@ public static class ContractDtoMappings
     public static global::HRM.DTOs.Contracts.LeaveSetDto ToDto(global::HRM.Models.Archives.LeaveSet source) => new()
     {
         LeaveSetId = source.LeaveSetId,
+        LeaveTypeCount = source.LeaveSetLeaveTypes.Select(t => t.LeaveTypeId).Distinct().Count(),
         Name = source.Name,
         OrganisationId = source.OrganisationId,
         OperationLogId = source.OperationLogId,

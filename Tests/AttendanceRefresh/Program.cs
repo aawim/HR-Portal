@@ -351,6 +351,7 @@ static async Task TestLeaveDays()
 
     await using var gridDb = new TestContext(options);
     using var gridServices = new ServiceCollection().AddLogging()
+        .AddSingleton<HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations>(p => p.GetRequiredService<AttendanceLogService>())
         .AddSingleton<IComponentActivator, TestActivator>().BuildServiceProvider();
     await using var gridRenderer = new TestRenderer(gridServices);
     var grid = new TestMyAttendance();
@@ -440,6 +441,7 @@ static async Task TestRefresh(Type clockType)
             Proxy.For<IOperationLogService>((name, _) => name == "CreateAsync" ? Task.FromResult(new OperationLog { OperationLogId = 1 }) : throw new Exception(name)),
             null!, access, environment: new SecurityTestEnvironment(), configuration:
                 new Microsoft.Extensions.Configuration.ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Security:AllowTestClock"] = "true" }).Build()))
+        .AddSingleton<HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations>(p => p.GetRequiredService<AttendanceLogService>())
         .AddSingleton<IComponentActivator, TestActivator>()
         .BuildServiceProvider();
     await using var renderer = new TestRenderer(services);

@@ -1,6 +1,6 @@
 # Application contracts
 
-The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationContractCatalog.cs`: 74 interfaces and 331 operations. The catalog describes supported schemas; it does not register endpoints or grant access. API controllers must enforce authentication, resource permissions, current-tenant scope, workflow transitions and concurrency for every operation.
+The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationContractCatalog.cs`: 75 interfaces and 337 operations. UI resolves these interfaces to typed-route HTTP proxies. The catalog describes supported schemas; it does not register endpoints or grant access. API controllers must enforce authentication, resource permissions, current-tenant scope, workflow transitions and concurrency for every operation.
 
 `HRM.Application` references only `HRM.Core`. It has no ASP.NET, EF, API or UI assembly dependency. Remote contracts use DTOs, explicit scalars and asynchronous methods. Domain entities, DbContexts, arbitrary object graphs, query expressions, request-supplied CLR types and server audit/cache operations are excluded from the remote surface.
 
@@ -12,7 +12,9 @@ The reviewed HTTP contract surface is `HRM.Application/Contracts/ApplicationCont
 - `IUserAppDataService` returns the existing `JobLeaveTypeDto`, preserving assignment IDs, type names, fractional balances and effective periods. `LeaveStore` consumes those DTOs directly. Both active hosts use the same scoped registration.
 - Former-staff exports use typed scalar cells (`ExportReportDto`), preserving numeric values across JSON without exposing arbitrary report objects. The existing in-process export implementation remains available to current pages.
 
-## Remaining database-bound pages: contract coverage
+## Migrated page contract coverage
+
+These pages now use the implemented HTTP clients and API backends. UI registration lives in `HRM.UI/Services/Transport/ApiClientRegistration.cs`; see [separate-host startup](separate-host-startup.md).
 
 | Current UI | Contract for controller/UI migration |
 | --- | --- |

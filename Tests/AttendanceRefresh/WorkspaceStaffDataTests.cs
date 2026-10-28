@@ -60,7 +60,7 @@ static class WorkspaceStaffDataTests
         await using var managerRenderer = new TestRenderer(provider);
         var manager = new HRM.Components.Admin.My.Workspace.Staff.Tabs.LeaveAssignmentManager { StaffId = 26 };
         var managerType = manager.GetType();
-        managerType.GetProperty("LeaveService", flags)!.SetValue(manager, leaves);
+        managerType.GetProperty("LeaveService", flags)!.SetValue(manager, new HRM.Services.Transport.LeaveApplicationsService(leaves));
         managerType.GetProperty("JobLeaveTypeService", flags)!.SetValue(manager, new HRM.Services.JobLeaveTypes.JobLeaveTypeService(factory, null!, access));
         managerType.GetProperty("Catalogue", flags)!.SetValue(manager, new LeaveTypeCatalogueService(factory, access));
         managerType.GetProperty("ToastService", flags)!.SetValue(manager, new ToastService());

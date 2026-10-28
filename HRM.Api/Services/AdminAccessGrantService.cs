@@ -20,7 +20,6 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
     private async Task<(UserContextDto Actor, int Org)> Scope(int? selected)
     {
         var actor = await access.RequireContextAsync();
-        actor.IsSuperAdministrator = actor.IsSuperAdministrator || await access.HasPermissionAsync("Super.Admin.Manage");
         var current = await access.GetCurrentOrganisationIdAsync();
         var org = actor.IsSuperAdministrator && selected.GetValueOrDefault() > 0 ? selected!.Value : current;
         if (actor.IsSuperAdministrator && org <= 0)

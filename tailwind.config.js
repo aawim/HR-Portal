@@ -1,9 +1,9 @@
-﻿/** @type {import('tailwindcss').Config} */
+/** @type {import('tailwindcss').Config} */
 module.exports = {
     content: [
-        "./Components/**/*.{razor,cs}",
-        "./Helpers/**/*.cs",
-        "./Views/**/*.cshtml",
+        "./HRM.UI/Components/**/*.{razor,cs}",
+        "./HRM.UI/Helpers/**/*.cs",
+        "./HRM.Api/Views/**/*.cshtml",
     ],
     theme: {
         extend: {

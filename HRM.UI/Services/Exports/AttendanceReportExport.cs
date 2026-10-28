@@ -13,6 +13,17 @@ namespace HRM.Services;
 // Both formats consume the same authorised, filtered snapshot as the attendance view.
 public static class AttendanceReportExport
 {
+    public static AttendanceExportReport FromDto(HRM.DTOs.Contracts.ExportReportDto report) => new(report.Title, report.Description,
+        report.Tables.Select(t => new AttendanceExportTable(t.Name, t.Headers, t.Rows.Select(r => r.Select(CellValue).ToArray()).ToList())).ToList());
+
+    private static object? CellValue(HRM.DTOs.Contracts.ExportCellDto cell) => cell.Kind switch
+    {
+        HRM.DTOs.Contracts.ExportCellKind.Text => cell.Text,
+        HRM.DTOs.Contracts.ExportCellKind.Number => cell.Number,
+        HRM.DTOs.Contracts.ExportCellKind.Boolean => cell.Boolean,
+        HRM.DTOs.Contracts.ExportCellKind.DateTime => cell.DateTime,
+        _ => null
+    };
     public static AttendanceExportTable Daily(IEnumerable<YearlyAttendanceDayDto> days) => new("Daily attendance",
         ["Date", "Status", "Scheduled in", "Scheduled out", "Check in", "Check out", "Late minutes", "Worked hours", "Clock events"],
         days.OrderBy(d => d.Date).Select(d => new object?[] { d.Date.ToString("yyyy-MM-dd"), AttendancePresentation.Status(d),

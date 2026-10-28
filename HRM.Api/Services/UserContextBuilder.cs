@@ -118,6 +118,7 @@ namespace HRM.Services
 
 
             await PopulatePermissionsAsync(db, context);
+            context.IsSuperAdministrator = await HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, context.UserId);
 
 
             // Permissions and groups above are resolved with current organisation scope.

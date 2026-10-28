@@ -36,7 +36,7 @@ public sealed class RegistrationTests
         Assert.DoesNotContain(server.Services.GetServices<IHostedService>(), service => service is HRM.Services.Leave.LeaveAccrualWorker);
         var actions = server.Services.GetRequiredService<IActionDescriptorCollectionProvider>().ActionDescriptors.Items.OfType<ControllerActionDescriptor>()
             .Where(a => a.ControllerTypeInfo.IsSubclassOf(typeof(HrmApiController)) && a.AttributeRouteInfo?.Template?.StartsWith("api/v1/", StringComparison.Ordinal) == true).ToArray();
-        Assert.Equal(331, actions.Length); // 329 supported operations + identity and CSRF token endpoints. Two obsolete aliases are excluded.
+        Assert.Equal(HRM.Application.Transport.ApiEndpointCatalog.All.Count + 2, actions.Length); // Typed operations plus identity and CSRF endpoints.
         foreach (var action in actions)
         {
             Assert.NotNull(ActivatorUtilities.CreateInstance(scope.ServiceProvider, action.ControllerTypeInfo.AsType()));

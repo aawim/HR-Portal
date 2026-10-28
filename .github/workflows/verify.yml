@@ -30,6 +30,5 @@ jobs:
           sqllocaldb start MSSQLLocalDB
           dotnet restore tools/DatabaseBaseline/DatabaseBaseline.csproj
           dotnet build tools/DatabaseBaseline/DatabaseBaseline.csproj --no-restore --no-dependencies
-          Copy-Item bin/AttendanceRefresh/HRM.dll tools/DatabaseBaseline/bin/Debug/net8.0/HRM.dll -Force
           dotnet tools/DatabaseBaseline/bin/Debug/net8.0/DatabaseBaseline.dll --verify-empty-schema
           if ($LASTEXITCODE -ne 0) { throw 'Isolated SQL Server deployment verification failed.' }

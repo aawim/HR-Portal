@@ -1,0 +1,53 @@
+@page "/online/staff-position-requests"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations Positions
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<StaffPositionRequests> Logger
+<section class="space-y-3 rounded-xl border p-4">
+    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="font-semibold">@(PendingOnly ? "Pending position requests" : "Staff position requests")</h3><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
+    <p class="text-sm text-slate-500">Approved positions remain unchanged until the final approval stage is complete.</p>
+    @if(error != null){<p role="alert" class="text-sm">@error</p>}
+    @if(busy){<p role="status" class="text-sm">Loading…</p>}
+    @foreach(var row in rows)
+    {
+        <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id">
+            <p class="font-semibold">@row.Reference · @row.Staff</p>
+            <p>@Kind(row.Kind) · @row.Position</p>
+            <p>@row.From.ToString("dd MMM yyyy") – @(row.To?.ToString("dd MMM yyyy") ?? "Ongoing")</p>
+            <p>@row.Reason</p><p class="font-medium">@row.Status</p>
+            @if(!string.IsNullOrEmpty(row.Stage)){<p class="text-slate-500">Current stage: @row.Stage</p>}
+            @if(row.History.Count > 0){<details><summary>Request history</summary>@foreach(var entry in row.History){<p>@entry</p>}</details>}
+            @if(row.CanApprove || row.CanCancel)
+            {
+                <label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
+                <div class="flex flex-wrap gap-2">
+                    @if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>ActAsync(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActAsync(row,"Reject")'>Reject</button>}
+                    @if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActAsync(row,"Cancel")'>Cancel request</button>}
+                </div>
+            }
+        </article>
+    }
+    @if(!busy && rows.Count == 0 && error == null){<p class="text-sm text-slate-500">No position requests found.</p>}
+</section>
+@code {
+    [Parameter] public int? StaffId { get; set; }
+    [Parameter] public bool PendingOnly { get; set; }
+    [Parameter] public int RefreshVersion { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private List<HRM.Services.StaffPositionRequestRow> rows = [];
+    private Dictionary<int,string?> comments = [];
+    private string? error;
+    private bool busy;
+    private string? loaded;
+    protected override async Task OnParametersSetAsync(){var key=$"{StaffId}:{PendingOnly}:{RefreshVersion}";if(loaded==key)return;loaded=key;await LoadAsync();}
+    private static string Kind(string kind)=>kind switch {"Assign"=>"Assign position","Remove"=>"End / remove position","Dates"=>"Change position dates",_=>"Change position"};
+    private async Task LoadAsync(){busy=true;error=null;try{rows=await Positions.LoadRequestsAsync(StaffId,PendingOnly);foreach(var row in rows)comments.TryAdd(row.Id,null);}catch(Exception ex){Logger.LogError(ex,"Loading position requests");error="Position requests could not be loaded. Please refresh or contact HR.";}finally{busy=false;}}
+    private async Task ActAsync(HRM.Services.StaffPositionRequestRow row,string action)
+    {
+        if(busy)return;busy=true;error=null;var saved=false;
+        try{var result=await Positions.ActOnRequestAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id));saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}
+        catch(Exception ex){Logger.LogError(ex,"Acting on position request");error=ex is UnauthorizedAccessException?ex.Message:"The action could not be completed. Please refresh or contact HR.";}
+        finally{busy=false;}
+        if(saved){await LoadAsync();await OnChanged.InvokeAsync();}
+    }
+}

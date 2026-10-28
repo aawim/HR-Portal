@@ -137,7 +137,8 @@ static class LeaveHistoryTests
         var activator = new HistoryPageActivator();
         using var pageServices = new ServiceCollection().AddLogging()
             .AddSingleton<IComponentActivator>(activator)
-            .AddSingleton<ILeaveService>(service).AddSingleton<IUserAccessService>(access)
+            .AddSingleton<HRM.Application.Contracts.Pages.ILeaveApplications>(new HRM.Services.Transport.LeaveApplicationsService(service)).AddSingleton<IUserAccessService>(access)
+            .AddSingleton<HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries>(new HRM.Services.Queries.LeaveRequestWorkflowQueries(factory, access))
             .AddSingleton<IDbContextFactory<HrmTeContext>>(factory).AddSingleton<ToastService>()
             .AddSingleton(Proxy.For<ILeaveChangeService>((name, _) => throw new Exception(name)))
             .AddSingleton(Proxy.For<IWorkflowEngine>((name, _) => throw new Exception(name)))
@@ -196,12 +197,12 @@ static class LeaveHistoryTests
         var card = new HistoryCard();
         var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
         void Set(string property, object value) => typeof(RecentLeaveRequestsCard).GetProperty(property, flags)!.SetValue(card, value);
-        Set("LeaveService", leaveService); Set("DbFactory", factory); Set("UserAccess", access);
+        Set("LeaveService", new HRM.Services.Transport.LeaveApplicationsService(leaveService)); Set("WorkflowQueries", new HRM.Services.Queries.LeaveRequestWorkflowQueries(factory, access)); Set("UserAccess", access);
         Set("ToastService", new ToastService()); Set("Logger", NullLogger<RecentLeaveRequestsCard>.Instance);
         return card;
     }
-    private static List<Leaf> Rows(HistoryCard card) =>
-        (List<Leaf>)typeof(RecentLeaveRequestsCard).GetField("LeaveRequests", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(card)!;
+    private static List<HRM.DTOs.Contracts.LeafDto> Rows(HistoryCard card) =>
+        (List<HRM.DTOs.Contracts.LeafDto>)typeof(RecentLeaveRequestsCard).GetField("LeaveRequests", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(card)!;
     private static void Check(bool condition, string message) { if (!condition) throw new Exception(message); }
 }
 
