@@ -49,7 +49,7 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
         {
             if (response.StatusCode == HttpStatusCode.Unauthorized)
             {
-                sessionEnded?.Invoke();
+                if (response.Headers.Contains(CircuitBackendHandler.RecoveryHeader)) sessionEnded?.Invoke();
                 throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
             }
             if (response.StatusCode == HttpStatusCode.Forbidden)
