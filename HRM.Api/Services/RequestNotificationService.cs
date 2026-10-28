@@ -117,7 +117,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                           join toState in db.RequestStates on n.ToStateId equals toState.RequestStateId
                           orderby (n.ReadAtUtc == null) descending, n.CreatedAtUtc descending, n.RequestNotificationId descending
                               select new { n.RequestNotificationId, ReferenceNumber = n.Request.ReferenceNumber ?? n.ReferenceNumber, n.CreatedAtUtc, n.ReadAtUtc,
-                              n.NotificationKind, n.Request.RequestId, n.LeaveId, n.Request.RequestType.ViewUrl,
+                              n.NotificationKind, n.Request.RequestId, n.LeaveId, n.Request.RequestType.ViewUrl, RequestTypeName = n.Request.RequestType.TypeName,
                               ActionStage = db.WfRequestStageInstances.Where(s => s.RequestStageInstanceId == n.RequestStageInstanceId)
                                   .Select(s => s.WorkflowStage.StageName).FirstOrDefault(),
                               FromState = fromState.StateName, ToState = toState.StateName, n.Request.RequestTypeId,
@@ -126,6 +126,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                           .Take(30).ToListAsync(token);
         var requestItems = rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
+            HRM.Application.Presentation.OvertimeNavigation.NotificationUrl(n.NotificationKind, n.RequestTypeName, n.ViewUrl, n.RequestId) ?? (
             n.ViewUrl == LateCheckInRequestService.PageUrl ? LateCheckInRequestService.PageUrl :
             n.ViewUrl == LateCheckInRequestService.EarlyPageUrl ? LateCheckInRequestService.EarlyPageUrl :
             n.ViewUrl == OvertimeRequestService.PageUrl ? OvertimeRequestService.PageUrl :
@@ -138,7 +139,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
             n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
-            n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online",
+            n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online"),
             n.NotificationKind switch {
                 "ActionRequired" => n.ActionStage ?? "Review request",
                 "HandoverTasks" => "Verify your work handover tasks",

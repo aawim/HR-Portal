@@ -51,11 +51,12 @@ public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factor
             .Select(r=>new{r.RequestId,r.ReferenceNumber,Type=r.RequestType.TypeName,r.RequestType.ViewUrl,r.RequestState.StateName,r.RequestState.IsFinalState,r.RequestState.IsProcessingState,r.ApplicationDate,
                 Applicant=db.Individuals.Where(i=>i.BusinessEntityId==r.ApplicantBusinessEntityId).Select(i=>(i.FirstNameEnglish??"")+" "+(i.MiddleNameEnglish??"")+" "+(i.LastNameEnglish??"")).FirstOrDefault(),IsLeave=db.LeaveRequests.Any(l=>l.RequestId==r.RequestId)}).ToListAsync(cancellationToken);
         var items=rows.Select(r=>new HrInboxRow(r.RequestId,r.ReferenceNumber??$"#{r.RequestId}",string.Join(" ",(r.Applicant??"").Split((char[]?)null,StringSplitOptions.RemoveEmptyEntries)),r.Type,
-            (r.IsProcessingState&&!r.IsFinalState?"Processing · ":"")+r.StateName,r.ApplicationDate.AddHours(5),r.IsFinalState,RequestUrl(r.ViewUrl,r.RequestId,r.IsLeave))).ToList();
+            (r.IsProcessingState&&!r.IsFinalState?"Processing · ":"")+r.StateName,r.ApplicationDate.AddHours(5),r.IsFinalState,RequestUrl(r.ViewUrl,r.RequestId,r.IsLeave,r.Type))).ToList();
         return new(await db.Organisations.Where(o=>o.BusinessEntityID==org).Select(o=>o.OrganisationName).SingleAsync(cancellationToken),wide,groups,items,type,page,pages){Statuses=statuses,Types=types};
     }
-    private static string? RequestUrl(string? url,int id,bool leave)
+    private static string? RequestUrl(string? url,int id,bool leave,string? type=null)
     {
+        if(HRM.Application.Presentation.OvertimeNavigation.IsOvertime(type,url))return HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(id);
         if(leave)return $"/admin/my/workspace?requestId={id}";
         if(string.IsNullOrWhiteSpace(url)||!url.StartsWith('/')||url.StartsWith("//")||url.Contains('\\')||url.Any(char.IsControl))return null;
         url=url.Replace("{requestId}",id.ToString(),StringComparison.OrdinalIgnoreCase).Replace("{id}",id.ToString(),StringComparison.OrdinalIgnoreCase);

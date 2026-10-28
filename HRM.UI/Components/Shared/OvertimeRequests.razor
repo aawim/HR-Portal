@@ -4,6 +4,7 @@
 @inject HRM.Services.Contracts.OvertimeRequestServiceContracts.IOperations Requests
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<OvertimeRequests> Logger
+@inject NavigationManager Navigation
 <section class="space-y-3 rounded-xl border p-4">
     <div class="flex flex-wrap items-center justify-between gap-2"><h1 class="font-semibold">@(PendingOnly?"Pending overtime requests":"Overtime requests")</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button></div>
     @if(PendingOnly){<a class="text-sm underline" href="/admin/attendance/manage-overtimes">Overtime and payroll</a>}
@@ -12,7 +13,7 @@
     @if(!PendingOnly)
     {
         <nav class="flex flex-wrap gap-2" aria-label="Overtime request types">
-            @foreach(var option in tabs)
+            @foreach(var option in tabs.Where(t => CanReview || t.Key != "Payroll"))
             { <button type="button" class="app-button @(tab==option.Key ? "app-button-primary" : "app-button-secondary")" disabled="@busy" @onclick="()=>ChangeTab(option.Key)">@option.Value</button> }
         </nav>
         @if(tab=="Payroll")
@@ -101,10 +102,11 @@
             @if(work.Start.HasValue){<p>@work.Start.Value.ToString("dd MMM HH:mm") – @work.End?.ToString("dd MMM HH:mm")</p>}
             <p>@work.Reason</p>
             @if(work.Tasks.Count>0){<ul class="list-disc pl-5">@foreach(var task in work.Tasks){<li>@task</li>}</ul>}
-            @if(work.CanApprove||work.CanCancel)
+            @if(!CanReview && work.CanApprove){<a class="app-button app-button-primary" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(work.Id)">Review in Admin portal</a>}
+            @if(CanReview && work.CanApprove||work.CanCancel)
             {
                 <label class="block">Action comment<textarea @bind="comments[work.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
-                <div class="flex flex-wrap gap-2">@if(work.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>ActWork(work,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Reject")'>Reject</button>}@if(work.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Cancel")'>Cancel</button>}</div>
+                <div class="flex flex-wrap gap-2">@if(CanReview && work.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>ActWork(work,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Reject")'>Reject</button>}@if(work.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>ActWork(work,"Cancel")'>Cancel</button>}</div>
             }
         </article>
     }
@@ -114,7 +116,8 @@
         @if(row.StateId==4){<p>Payroll: @(row.PayrollProcessed ? "Processed" : "Awaiting payroll") @row.PayrollMonth?.ToString("MMMM yyyy") @row.PayrollReference</p>}
         @if(row.CanResubmit){<label class="block">Work performed / reason<textarea @bind="reasons[row.Id]" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><button class="app-button app-button-primary" disabled="@busy" @onclick="()=>Resubmit(row.Id)">Resubmit for approval</button>}
         @if(row.PaymentReference!=null){<p>Payroll/payment reference: @row.PaymentReference</p>}
-        @if(row.CanApprove||row.CanCancel||row.CanReviseApproved){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanReviseApproved){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Incomplete")'>Return as Incomplete</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
+        @if(!CanReview && (row.CanApprove||row.CanReviseApproved)){<a class="app-button app-button-primary" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(row.Id)">Review in Admin portal</a>}
+        @if(CanReview && (row.CanApprove||row.CanReviseApproved)||CanCancelInPortal(row)){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(CanReview && row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(CanReview && row.CanReviseApproved){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Incomplete")'>Return as Incomplete</button>}@if(CanCancelInPortal(row)){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
 
         </article>
     }
@@ -123,6 +126,10 @@
     </div>
 </section>
 @code {
+    private bool CanCancelInPortal(HRM.Services.OvertimeRow row) => row.CanCancel && (CanReview || !row.CanReviseApproved);
+    private bool CanReview => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
+    [SupplyParameterFromQuery(Name = "requestId")] public int? RequestId { get; set; }
+    protected override void OnParametersSet() { if(RequestId is > 0) selectedRequestId = RequestId; }
     [Parameter] public bool PendingOnly {get;set;}
     private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> reasons=[];
     private DateTime date=DateTime.UtcNow.AddHours(5).Date;private string reason="";private bool busy;private string? error;
@@ -181,8 +188,8 @@
         if(tab=="Planned"&&taskId==0){error="Select an approved request and task.";return Task.CompletedTask;}
         return Execute(()=>Requests.SubmitClaimAsync(startId,endId,reason,tab=="Planned"?taskId:null));
     }
-    private Task ActWork(HRM.Services.OvertimeWorkRow row,string action)=>Execute(()=>Requests.ActWorkAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
-    private Task Act(HRM.Services.OvertimeRow row,string action)=>Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
+    private Task ActWork(HRM.Services.OvertimeWorkRow row,string action)=>!CanReview && action != "Cancel" ? Task.CompletedTask : Execute(()=>Requests.ActWorkAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
+    private Task Act(HRM.Services.OvertimeRow row,string action)=>!CanReview && (action != "Cancel" || !CanCancelInPortal(row)) ? Task.CompletedTask : Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
     private Task Resubmit(int id)=>Execute(()=>Requests.ResubmitClaimAsync(id,reasons.GetValueOrDefault(id,"")));
     private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
     private void Fail(Exception ex){Logger.LogError(ex,"Overtime claim processing");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Overtime claims could not be loaded or saved. Please refresh or contact HR.";}
