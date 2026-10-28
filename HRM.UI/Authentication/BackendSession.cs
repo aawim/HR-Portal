@@ -104,8 +104,11 @@ public sealed class BackendSession(HttpClient upstream, Uri origin) : IDisposabl
 public sealed class BackendSessionStore : IDisposable
 {
     public const string ClaimType = "hrm:backend-session";
+    public const string RecoveryClaimType = "hrm:backend-session-recovery";
     private readonly MemoryCache cache = new(new MemoryCacheOptions { SizeLimit = 10000 });
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, string> credentials = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> revoked = new();
+    private readonly object restoreLock = new();
     public string Add(BackendSession session, string cookieHeader)
     {
         var handle = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
@@ -117,23 +120,45 @@ public sealed class BackendSessionStore : IDisposable
     public BackendSession Require(ClaimsPrincipal user) => user.Identity?.IsAuthenticated == true &&
         user.FindFirst(ClaimType)?.Value is { } handle && cache.TryGetValue<BackendSession>(handle, out var session) && session is not null
             ? session : throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
-    public void Remove(ClaimsPrincipal user) { if (user.FindFirst(ClaimType)?.Value is { } handle) cache.Remove(handle); }
+    public BackendSession Restore(ClaimsPrincipal user, string cookieHeader, Func<BackendSession> create)
+    {
+        if (user.Identity?.IsAuthenticated != true || user.FindFirst(ClaimType)?.Value is not { Length: 64 } handle || revoked.ContainsKey(handle))
+            throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
+        lock (restoreLock)
+        {
+            if (revoked.ContainsKey(handle)) throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
+            if (cache.TryGetValue<BackendSession>(handle, out var current) && current is not null) return current;
+            var session = create();
+            credentials[handle] = Fingerprint(cookieHeader);
+            cache.Set(handle, session, new MemoryCacheEntryOptions { Size = 1, AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(8) }
+                .RegisterPostEvictionCallback((key, value, _, _) => { credentials.TryRemove((string)key, out _); ((BackendSession?)value)?.Dispose(); }));
+            return session;
+        }
+    }
+    public void Remove(ClaimsPrincipal user)
+    {
+        if (user.FindFirst(ClaimType)?.Value is not { } handle) return;
+        revoked[handle] = 0;
+        cache.Remove(handle);
+    }
     public void RemoveBrowserSessions(string cookieHeader)
     {
         var fingerprint = Fingerprint(cookieHeader);
         foreach (var pair in credentials.Where(c => c.Value == fingerprint))
         {
             // Revoke immediately, including already-open circuits; eviction callbacks run asynchronously.
+            revoked[pair.Key] = 0;
             if (cache.TryGetValue<BackendSession>(pair.Key, out var session)) session?.Dispose();
             cache.Remove(pair.Key);
         }
     }
-    private static string Fingerprint(string header) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
-        System.Text.Encoding.UTF8.GetBytes(string.Join(";", header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+    internal static string AuthenticationCookies(string header) => string.Join(";", header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
             .Where(c => c.StartsWith(AuthenticationSessionDefaults.CookieName + "=", StringComparison.Ordinal) ||
                 c.StartsWith(AuthenticationSessionDefaults.CookieName + "C", StringComparison.Ordinal) ||
                 c.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal) || c.StartsWith(".AspNetCore.CookiesC", StringComparison.Ordinal))
-            .Order(StringComparer.Ordinal)))));
+            .Order(StringComparer.Ordinal));
+    private static string Fingerprint(string header) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes(AuthenticationCookies(header))));
     public void Dispose()
     {
         foreach (var handle in credentials.Keys) if (cache.TryGetValue<BackendSession>(handle, out var session)) session?.Dispose();

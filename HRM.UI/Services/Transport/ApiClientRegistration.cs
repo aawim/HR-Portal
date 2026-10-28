@@ -15,7 +15,9 @@ public static class ApiClientRegistration
             var redirecting = 0;
             return new HttpApiOperationClient(new HttpClient(
                 new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
-                    provider.GetRequiredService<BackendSessionStore>())) { BaseAddress = provider.GetRequiredService<BackendOrigins>().Api },
+                    provider.GetRequiredService<BackendSessionStore>(), provider.GetRequiredService<IHttpClientFactory>(),
+                    provider.GetRequiredService<BackendOrigins>(), provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>()))
+                { BaseAddress = provider.GetRequiredService<BackendOrigins>().Api },
                 () =>
                 {
                     if (Interlocked.Exchange(ref redirecting, 1) == 0)

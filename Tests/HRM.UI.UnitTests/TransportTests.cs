@@ -230,6 +230,24 @@ public sealed class TransportTests
     }
 
     [Fact]
+    public void Protected_session_recovery_restores_a_missing_handle_but_never_a_revoked_handle()
+    {
+        using var store = new BackendSessionStore();
+        ClaimsPrincipal Principal(string handle) => new(new ClaimsIdentity([new Claim(BackendSessionStore.ClaimType, handle)], "Backend"));
+        var missingHandle = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32));
+        var missing = Principal(missingHandle);
+        var restored = store.Restore(missing, AuthenticationSessionDefaults.CookieName + "=valid", () =>
+            new BackendSession(new HttpClient(new RecordingHandler(_ => Task.FromResult(Json(true)))), Origin));
+        Assert.Same(restored, store.Require(missing));
+
+        var revokedSession = new BackendSession(new HttpClient(new RecordingHandler(_ => Task.FromResult(Json(true)))), Origin);
+        var revoked = Principal(store.Add(revokedSession, AuthenticationSessionDefaults.CookieName + "=revoked"));
+        store.Remove(revoked);
+        Assert.Throws<UnauthorizedAccessException>(() => store.Restore(revoked, AuthenticationSessionDefaults.CookieName + "=revoked", () =>
+            new BackendSession(new HttpClient(new RecordingHandler(_ => Task.FromResult(Json(true)))), Origin)));
+    }
+
+    [Fact]
     public void Ui_assembly_has_no_api_or_ef_dependency()
     {
         Assert.DoesNotContain(typeof(HttpApiOperationClient).Assembly.GetReferencedAssemblies(), a => a.Name == "HRM.Api" || a.Name!.StartsWith("Microsoft.EntityFrameworkCore", StringComparison.Ordinal));

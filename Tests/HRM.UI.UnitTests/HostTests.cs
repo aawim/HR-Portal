@@ -75,6 +75,7 @@ public sealed class HostTests
         .UseDefaultServiceProvider(options => { options.ValidateScopes = true; options.ValidateOnBuild = true; })
         .ConfigureServices(services =>
         {
+            services.AddDataProtection().UseEphemeralDataProtectionProvider();
             services.AddSingleton(new BackendOrigins(new("https://localhost:62840/"), new("https://localhost:62839/")));
             services.AddSingleton<BackendSessionStore>(); services.AddSingleton<IHttpClientFactory>(new ClientFactory(backend));
             services.AddAuthentication(BackendAuthenticationHandler.SchemeName)
