@@ -11,7 +11,7 @@ namespace HRM.Api.Infrastructure;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public abstract class HrmApiController : ControllerBase;
 
-[AttributeUsage(AttributeTargets.Class)]
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
 public sealed class AllowMissingEmployeeAttribute : Attribute;
 
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
