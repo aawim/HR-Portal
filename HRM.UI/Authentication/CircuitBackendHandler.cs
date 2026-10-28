@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 namespace HRM.UI.Authentication;
 
 public sealed class CircuitBackendHandler(AuthenticationStateProvider authentication, BackendSessionStore sessions,
-    IHttpClientFactory clients, BackendOrigins origins, IDataProtectionProvider protection) : HttpMessageHandler
+    IHttpClientFactory clients, BackendOrigins origins, IDataProtectionProvider protection, ILogger<BackendSession>? logger = null) : HttpMessageHandler
 {
     public const string RecoveryHeader = "X-HRM-Session-Recovery";
     private readonly IDataProtector recoveryProtector = protection.CreateProtector("HRM.UI.BackendSessionRecovery.v1");
@@ -24,7 +24,7 @@ public sealed class CircuitBackendHandler(AuthenticationStateProvider authentica
                 var cookies = recoveryProtector.Unprotect(protectedCookies);
                 session = sessions.Restore(user, cookies, () =>
                 {
-                    var restored = new BackendSession(clients.CreateClient("backend"), origins.Api);
+                    var restored = new BackendSession(clients.CreateClient("backend"), origins.Api, logger);
                     restored.ImportCookies(cookies);
                     return restored;
                 });

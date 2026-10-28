@@ -18,7 +18,7 @@ public sealed class BackendAuthenticationHandler(IOptionsMonitor<AuthenticationS
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.ContainsKey("Cookie")) return AuthenticateResult.NoResult();
-        var session = new BackendSession(clients.CreateClient("backend"), origins.Api);
+        var session = new BackendSession(clients.CreateClient("backend"), origins.Api, Context.RequestServices.GetRequiredService<ILogger<BackendSession>>());
         var retained = false;
         try
         {

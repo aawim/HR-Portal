@@ -13,6 +13,7 @@
         <div><h3 class="font-semibold">Leave Balance</h3><p class="mt-1 text-xs text-slate-500">Available leave days</p></div>
     </div>
     <div class="space-y-2">
+        @if (processingError != null) { <p role="status" class="px-4 py-2 text-sm">@processingError</p> }
         @if(isLoading){<p role="status" class="px-4 py-2 text-sm text-slate-500">Loading leave balances...</p>}
         else if(error != null){<p role="alert" class="px-4 py-2">@error <button type="button" class="underline" @onclick="LoadAsync">Retry</button></p>}
         else if(jobTypes.Count==0){<p class="px-4 py-2 text-sm text-slate-500">No leave balances found.</p>}
@@ -57,10 +58,15 @@
 
 
     private string? error;
+    private string? processingError;
     protected override Task OnInitializedAsync() => LoadAsync();
     private async Task LoadAsync()
     {
-        isLoading=true; error=null;
+        isLoading=true; error=null; processingError=null;
+        await Task.WhenAll(LoadBalancesAsync(), LoadProcessingAsync());
+    }
+    private async Task LoadBalancesAsync()
+    {
         try
         {
             var balances =
@@ -74,14 +80,18 @@
                     x.IsLeaveInfoUpdated == true)
                 .ToList();
 
-
-            processingLeaves =
-                await LeaveService.GetMyProcessingLeavesAsync();
         }
+        catch(TimeoutException ex) { Logger.LogWarning(ex,"Leave balance request timed out"); error="The HR service is taking too long to return your balances. Please retry."; }
         catch(Exception ex) { Logger.LogError(ex,"Loading leave balances"); error="Leave balances could not be loaded."; }
         finally
         {
             isLoading = false;
+            await InvokeAsync(StateHasChanged);
         }
+    }
+    private async Task LoadProcessingAsync()
+    {
+        try { processingLeaves = await LeaveService.GetMyProcessingLeavesAsync(); }
+        catch(Exception ex) { Logger.LogWarning(ex,"Loading processing leave details"); processingError="Processing leave details are temporarily unavailable."; }
     }
 }

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Caching.Memory;
 namespace HRM.UI.Authentication;
 
 /// <summary>Credentials stay on the UI server. Each session owns its cookie jar and token pair.</summary>
-public sealed class BackendSession(HttpClient upstream, Uri origin) : IDisposable
+public sealed class BackendSession(HttpClient upstream, Uri origin, ILogger<BackendSession>? logger = null) : IDisposable
 {
     private readonly CookieContainer cookies = new();
     private readonly object cookieLock = new();
@@ -68,7 +68,19 @@ public sealed class BackendSession(HttpClient upstream, Uri origin) : IDisposabl
         string header;
         lock (cookieLock) header = cookies.GetCookieHeader(origin);
         if (header.Length > 0) outbound.Headers.TryAddWithoutValidation("Cookie", header);
-        var response = await upstream.SendAsync(outbound, HttpCompletionOption.ResponseHeadersRead, ct);
+        var started = System.Diagnostics.Stopwatch.StartNew();
+        HttpResponseMessage response;
+        try { response = await upstream.SendAsync(outbound, HttpCompletionOption.ResponseHeadersRead, ct); }
+        catch (OperationCanceledException) when (revoked)
+        {
+            throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            logger?.LogWarning("Backend request {Method} {Path} cancelled after {ElapsedMs} ms; configured timeout {TimeoutSeconds} seconds",
+                request.Method, uri.AbsolutePath, started.ElapsedMilliseconds, upstream.Timeout.TotalSeconds);
+            throw new TimeoutException("The HR service did not respond in time. Please try again.");
+        }
         if (response.Headers.TryGetValues("Set-Cookie", out var values))
             lock (cookieLock) foreach (var value in values) cookies.SetCookies(origin, value);
         return response;
