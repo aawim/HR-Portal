@@ -25,7 +25,7 @@ static class SecurityHardeningTests
     public static async Task RunAsync()
     {
         var assembly = typeof(AttendanceLogService).Assembly;
-        using (var settingsFile = System.Text.Json.JsonDocument.Parse(File.ReadAllText("appsettings.json")))
+        using (var settingsFile = System.Text.Json.JsonDocument.Parse(File.ReadAllText("HRM.Api/appsettings.json")))
         {
             var trackedSettings = settingsFile.RootElement;
             Check(string.IsNullOrWhiteSpace(trackedSettings.GetProperty("Authentication").GetProperty("OpenIdConnect").GetProperty("ClientSecret").GetString()),
@@ -33,7 +33,7 @@ static class SecurityHardeningTests
             foreach (var connection in trackedSettings.GetProperty("ConnectionStrings").EnumerateObject())
                 Check(string.IsNullOrWhiteSpace(connection.Value.GetString()), "Tracked settings contain an environment-specific database connection.");
         }
-        var routes = assembly.GetTypes().SelectMany(t => t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), true)
+        var routes = typeof(HRM.Components.App).Assembly.GetTypes().SelectMany(t => t.GetCustomAttributes(typeof(Microsoft.AspNetCore.Components.RouteAttribute), true)
             .Cast<Microsoft.AspNetCore.Components.RouteAttribute>()).Select(r => r.Template).ToList();
         Check(!routes.Contains("/debug/attendance-resolver"), "Public attendance debug route survived cleanup.");
         Check(!routes.Contains("/admin/work-planning/assignment-resolver"), "Unrestricted resolver route survived cleanup.");

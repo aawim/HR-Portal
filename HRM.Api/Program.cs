@@ -1,3 +1,5 @@
+using HRM.Api.Authentication;
+using HRM.Hosting;
 using HRM.Api.Infrastructure;
 
 using Microsoft.AspNetCore.Authentication;
@@ -43,23 +45,10 @@ using HRM.Services.Interfaces.AppovalWF;
 
 
 var builder = WebApplication.CreateBuilder(args);
-// The UI auth proxy forwards the registered public origin. Only the known local proxy is trusted.
-builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
-{
-    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedHost |
-        Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
-    options.ForwardLimit = 1;
-    var publicOrigin = new Uri(builder.Configuration["Application:PublicOrigin"] ?? "https://localhost:62839/");
-    if (publicOrigin.Scheme != "https" || publicOrigin.AbsolutePath != "/" || !string.IsNullOrEmpty(publicOrigin.UserInfo) ||
-        !string.IsNullOrEmpty(publicOrigin.Query) || !string.IsNullOrEmpty(publicOrigin.Fragment))
-        throw new InvalidOperationException("Application:PublicOrigin must be a fixed HTTPS origin.");
-    options.AllowedHosts.Add(publicOrigin.Host);
-    foreach (var address in builder.Configuration.GetSection("UiProxy:KnownProxies").Get<string[]>() ?? [])
-    {
-        if (!System.Net.IPAddress.TryParse(address, out var proxy)) throw new InvalidOperationException("UiProxy:KnownProxies must contain IP addresses.");
-        options.KnownProxies.Add(proxy);
-    }
-});
+RuntimeRequirements.RequireCurrent(builder.Environment);
+var publicOrigin = HRM.Application.Transport.DeploymentOrigin.Require(builder.Configuration["Application:PublicOrigin"], "Application:PublicOrigin", !builder.Environment.IsDevelopment());
+builder.Services.AddProtectedHostKeys(builder.Configuration, builder.Environment, "HRM.Api");
+builder.Services.AddTrustedProxyHeaders(builder.Configuration, publicOrigin);
 var mainConnection = HRM.Helpers.DatabaseConnectionPolicy.Validate(
     builder.Configuration.GetConnectionString("DefaultConnection"), builder.Environment.IsDevelopment(), "ConnectionStrings:DefaultConnection");
 var configuredAuditConnection = builder.Configuration.GetConnectionString("AuditConnection");
@@ -76,99 +65,12 @@ builder.Logging.AddDebug();
 builder.Logging.AddConsole();
 builder.Services.AddHrmBackendServices();
 
-// 3. Configure OpenID Connect & Cookie Authentication
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = OpenIdConnectDefaults.AuthenticationScheme;
-})
-.AddCookie(CookieAuthenticationDefaults.AuthenticationScheme, options =>
-{
-    options.Events.OnRedirectToLogin = context =>
-    {
-        if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = 401;
-        else context.Response.Redirect(context.RedirectUri);
-        return Task.CompletedTask;
-    };
-    options.Events.OnRedirectToAccessDenied = context =>
-    {
-        if (context.Request.Path.StartsWithSegments("/api")) context.Response.StatusCode = 403;
-        else context.Response.Redirect(context.RedirectUri);
-        return Task.CompletedTask;
-    };
-    options.Cookie.HttpOnly = true;
-    options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
-    options.Cookie.SameSite = SameSiteMode.Lax;
-})
-.AddOpenIdConnect(OpenIdConnectDefaults.AuthenticationScheme, options =>
-{
-    options.Authority = builder.Configuration["Authentication:OpenIdConnect:Authority"];
-    options.ClientId = builder.Configuration["Authentication:OpenIdConnect:ClientId"];
-    options.ClientSecret = builder.Configuration["Authentication:OpenIdConnect:ClientSecret"];
-
-    options.CallbackPath = "/Online/Auth/Callback";
-    options.SignedOutRedirectUri = "/Online/Auth/login";
-    options.ResponseType = "code";
-    options.UsePkce = true;
-    options.RequireHttpsMetadata = true;
-    options.SaveTokens = true;
-
-    options.GetClaimsFromUserInfoEndpoint = true;
-
-    options.TokenValidationParameters = new Microsoft.IdentityModel.Tokens.TokenValidationParameters
-    {
-        // Tell ASP.NET Core: "Whenever you need the user's name, use the 'full_name' claim from eFaas"
-        NameClaimType = "full_name"
-    };
-
-    ////query["scope"] = "openid efaas.profile efaas.email efaas.mobile efaas.birthdate";   // openid MUST be included   
-    ////options.TokenValidationParameters.NameClaimType = "name";
-    //options.GetClaimsFromUserInfoEndpoint = true;
-    //options.SaveTokens = true;
-    //options.Scope.Clear();
-    //options.Scope.Add("openid");
-    //options.Scope.Add("efaas.profile");
-    //options.Scope.Add("efaas.email");
-
-    options.Scope.Clear();
-    options.Scope.Add("openid");
-    options.Scope.Add("efaas.profile");
-    options.Scope.Add("efaas.email");
-    options.Scope.Add("efaas.mobile");
-    options.Scope.Add("efaas.birthdate");
-
-    // Claims to keep in authState.User after eFaas login
-    options.ClaimActions.MapUniqueJsonKey("idnumber", "idnumber");
-    options.ClaimActions.MapUniqueJsonKey("full_name", "full_name");
-    options.ClaimActions.MapUniqueJsonKey("first_name", "first_name");
-    options.ClaimActions.MapUniqueJsonKey("last_name", "last_name");
-    options.ClaimActions.MapUniqueJsonKey("email", "email");
-    options.ClaimActions.MapUniqueJsonKey("mobile", "mobile");
-    options.ClaimActions.MapUniqueJsonKey("dob", "dob");
-    options.ClaimActions.MapUniqueJsonKey("photo", "photo");
-    options.ClaimActions.MapUniqueJsonKey("user_type", "user_type");
-    options.ClaimActions.MapUniqueJsonKey("sub", "sub");
-    options.ClaimActions.MapUniqueJsonKey("middle_name", "middle_name");
-    options.ClaimActions.MapUniqueJsonKey("given_name", "given_name");
-    options.ClaimActions.MapUniqueJsonKey("family_name", "family_name");
-
- 
-
-
-
-
-
-
-
-
-});
-
-// 4. Add Blazor Cascading Authentication State
-
-
+builder.Services.AddEfaasAuthentication(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
-app.UseForwardedHeaders();
+if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
+    app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");
+app.UseTrustedProxyHeaders();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -187,7 +89,7 @@ app.MapGet("/Online/Auth/login", () =>
         new AuthenticationProperties { RedirectUri = "/" },
         new[] { OpenIdConnectDefaults.AuthenticationScheme }
     );
-});
+}).AllowAnonymous();
 
 app.UseHttpsRedirection();
 
@@ -222,29 +124,6 @@ app.UseAntiforgery();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
-
-//app.MapGet("/Online/Auth/Logout", async context =>
-//{
-//    await context.SignOutAsync("Cookies");
-
-//    context.Response.Redirect("/");
-//})
-//.AllowAnonymous();
-
-//app.MapGet("/Online/Auth/Logout", () =>
-//{
-//    return Results.SignOut(
-//        new AuthenticationProperties
-//        {
-//            RedirectUri = "/?access=denied"
-//        },
-//        new[]
-//        {
-//            "Cookies",
-//            OpenIdConnectDefaults.AuthenticationScheme
-//        });
-//})
-//.AllowAnonymous();
 
 // Direct links open confirmation; only the antiforgery-protected POST signs out.
 app.MapGet("/Online/Auth/Logout", () => Results.LocalRedirect("/Online/Auth/NoAccessLogout"))

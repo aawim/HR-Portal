@@ -11,6 +11,8 @@ Open **https://localhost:62839/**. The API listens on **https://localhost:62840/
 
 Existing development user secrets are retained by the API through the existing secrets ID. The API requires the main/audit connection strings and eFaas client secret. Do not put secrets in the UI or commit them to appsettings. The UI needs only `Backend:Origin` and `Application:PublicOrigin`.
 
+Production now requires explicit origins/allowed hosts, protected persistent key storage and a patched runtime. The previously exposed eFaas credential must be rotated. See [deployment security and required settings](deployment-security.md). Development defaults live only in `appsettings.Development.json`.
+
 Keep `Application:PublicOrigin` identical in both hosts. The registered eFaas callback remains `https://localhost:62839/Online/Auth/Callback`. Login, callback and protected logout requests are forwarded through the UI to the API. Existing root-host authentication cookies may require a fresh sign-in after the host change.
 
 Use trusted HTTPS certificates for both hosts. For deployment, set the public and private origins explicitly, keep the API on the private network, and configure `UiProxy:KnownProxies` with the UI proxy IP when it is not loopback. Only the configured public host and known proxies are trusted; never clear proxy trust restrictions. The per-process UI session store requires Blazor session affinity for multiple instances.

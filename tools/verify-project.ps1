@@ -2,6 +2,8 @@ $ErrorActionPreference = 'Stop'
 $taskRepository = Split-Path -Parent $PSScriptRoot
 Push-Location -LiteralPath $taskRepository
 try {
+    python tools/check_deployment_configuration.py
+    if ($LASTEXITCODE -ne 0) { throw 'Deployment configuration security checks failed.' }
     npm ci --ignore-scripts --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'CSS dependency restore failed.' }
     npm run build:css

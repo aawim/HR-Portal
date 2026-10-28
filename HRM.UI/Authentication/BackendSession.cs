@@ -108,7 +108,9 @@ public sealed class BackendSessionStore : IDisposable
     }
     private static string Fingerprint(string header) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
         System.Text.Encoding.UTF8.GetBytes(string.Join(";", header.Split(';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .Where(c => c.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal) || c.StartsWith(".AspNetCore.CookiesC", StringComparison.Ordinal))
+            .Where(c => c.StartsWith(AuthenticationSessionDefaults.CookieName + "=", StringComparison.Ordinal) ||
+                c.StartsWith(AuthenticationSessionDefaults.CookieName + "C", StringComparison.Ordinal) ||
+                c.StartsWith(".AspNetCore.Cookies=", StringComparison.Ordinal) || c.StartsWith(".AspNetCore.CookiesC", StringComparison.Ordinal))
             .Order(StringComparer.Ordinal)))));
     public void Dispose()
     {

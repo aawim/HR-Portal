@@ -43,15 +43,8 @@ public sealed class BackendAuthenticationHandler(IOptionsMonitor<AuthenticationS
 
 public sealed record BackendOrigins(Uri Api, Uri Public)
 {
-    public static BackendOrigins FromConfiguration(IConfiguration config)
+    public static BackendOrigins FromConfiguration(IConfiguration config, bool production = false)
     {
-        static Uri Origin(string? value, string name)
-        {
-            if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.AbsolutePath != "/" ||
-                !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo))
-                throw new InvalidOperationException($"{name} must be a fixed HTTPS origin without a path or credentials.");
-            return uri;
-        }
-        return new(Origin(config["Backend:Origin"], "Backend:Origin"), Origin(config["Application:PublicOrigin"], "Application:PublicOrigin"));
+        return new(DeploymentOrigin.Require(config["Backend:Origin"], "Backend:Origin", production), DeploymentOrigin.Require(config["Application:PublicOrigin"], "Application:PublicOrigin", production));
     }
 }

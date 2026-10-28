@@ -169,17 +169,19 @@ public sealed class TransportTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.SendAsync(new(HttpMethod.Get, "https://other.example/api/v1/session/identity"), default));
     }
 
-    [Fact]
-    public async Task Logout_revokes_all_browser_circuits_but_preserves_other_users()
+    [Theory]
+    [InlineData(".AspNetCore.Cookies")]
+    [InlineData(AuthenticationSessionDefaults.CookieName)]
+    public async Task Logout_revokes_all_browser_circuits_but_preserves_other_users(string cookieName)
     {
         using var store = new BackendSessionStore();
         BackendSession Session() => new(new HttpClient(new RecordingHandler(_ => Task.FromResult(Json(true)))), Origin);
         ClaimsPrincipal Principal(string handle) => new(new ClaimsIdentity([new Claim(BackendSessionStore.ClaimType, handle)], "Backend"));
         var a = Session(); var a2 = Session(); var b = Session();
-        var pa = Principal(store.Add(a, ".AspNetCore.Cookies=user-a; csrf=one"));
-        var pa2 = Principal(store.Add(a2, "csrf=two; .AspNetCore.Cookies=user-a"));
-        var pb = Principal(store.Add(b, ".AspNetCore.Cookies=user-b"));
-        store.RemoveBrowserSessions("csrf=three; .AspNetCore.Cookies=user-a");
+        var pa = Principal(store.Add(a, cookieName + "=user-a; csrf=one"));
+        var pa2 = Principal(store.Add(a2, "csrf=two; " + cookieName + "=user-a"));
+        var pb = Principal(store.Add(b, cookieName + "=user-b"));
+        store.RemoveBrowserSessions("csrf=three; " + cookieName + "=user-a");
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => a.SendAsync(new(HttpMethod.Get, "api/v1/session/identity"), default));
         Assert.Throws<UnauthorizedAccessException>(() => store.Require(pa)); Assert.Throws<UnauthorizedAccessException>(() => store.Require(pa2));
         Assert.Same(b, store.Require(pb));

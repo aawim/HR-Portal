@@ -22,6 +22,7 @@ namespace HRM.Controllers
             }
 
             [HttpPost("Logout")]
+            [AllowAnonymous]
             [ValidateAntiForgeryToken]
             public IActionResult Logout()
             {

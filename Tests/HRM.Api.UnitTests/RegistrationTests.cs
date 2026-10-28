@@ -1,4 +1,5 @@
 using System.Reflection;
+using Microsoft.Extensions.Configuration;
 using HRM.Application.Contracts;
 using HRM.Api.Infrastructure;
 using HRM.Models;
@@ -22,6 +23,7 @@ public sealed class RegistrationTests
     {
         var factory = new QueryFactory();
         using var server = new TestServer(new WebHostBuilder().UseEnvironment("Testing")
+            .ConfigureAppConfiguration((_, config) => config.AddInMemoryCollection(new Dictionary<string, string?> { ["Application:PublicOrigin"] = "https://hrm.example.org/" }))
             .UseDefaultServiceProvider(options => { options.ValidateOnBuild = true; options.ValidateScopes = true; })
             .ConfigureServices(services =>
             {

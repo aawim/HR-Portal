@@ -5,7 +5,7 @@ public sealed class ApiNavigationManager : NavigationManager
 {
     public ApiNavigationManager(IConfiguration configuration, IHttpContextAccessor accessor)
     {
-        var address = configuration["Application:PublicOrigin"] ?? "https://localhost:62839/";
+        var address = configuration["Application:PublicOrigin"];
         if (!System.Uri.TryCreate(address, UriKind.Absolute, out var origin) || origin.Scheme != "https" || !string.IsNullOrEmpty(origin.UserInfo))
             throw new InvalidOperationException("Application:PublicOrigin must be an HTTPS origin.");
         var root = origin.GetLeftPart(UriPartial.Authority) + "/";
