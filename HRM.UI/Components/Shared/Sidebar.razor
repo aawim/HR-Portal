@@ -8,13 +8,16 @@
 
 
 
-<aside class="app-sidebar w-64 bg-slate-900 text-slate-300 hidden md:flex flex-col shadow-xl">
+<aside class="app-sidebar @(collapsed ? "is-collapsed" : null) text-slate-300 hidden md:flex flex-col shadow-xl">
     <!-- Logo Area (Always Visible) -->
-    <div class="h-16 flex items-center px-6 border-b border-slate-800">
-        <div class="flex items-center gap-2 text-white font-bold text-xl">
+    <div class="sidebar-header h-16 flex items-center border-b border-slate-700">
+        <div class="flex min-w-0 flex-1 items-center gap-2 text-white font-bold text-xl">
             <svg class="w-8 h-8 text-blue-500" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
-            <span>HR Portal</span>
+            @if (!collapsed) { <span class="whitespace-nowrap">HR Portal</span> }
         </div>
+        <button type="button" class="sidebar-collapse" @onclick="ToggleCollapsed" aria-label="@(collapsed ? "Expand navigation" : "Collapse navigation")" title="@(collapsed ? "Expand navigation" : "Collapse navigation")">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="@(collapsed ? "m9 18 6-6-6-6" : "m15 18-6-6 6-6")"/></svg>
+        </button>
     </div>
 
     <AuthorizeView>
@@ -28,29 +31,29 @@
                     {
                         <!-- Admin Menu-->
 
-                        <NavItem Href="/admin/my/workspace" Icon="briefcase" Text="Home" IsActive="true" />
-                        <NavItem Href="/admin" Icon="home" Text="Dashboard"  />
-                        <NavItem Href="admin/hr" Icon="users" Text="HR" />
-                        <NavItem Href="admin/settings" Icon="cog" Text="Settings" />
+                        <NavItem Compact="collapsed" Href="/admin/my/workspace" Icon="briefcase" Text="Home" IsActive="true" />
+                        <NavItem Compact="collapsed" Href="/admin" Icon="home" Text="Dashboard"  />
+                        <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
+                        <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
                         <hr />
-                        <NavItem Href="admin/recruitment" Icon="user-plus" Text="Recruitment" />
+                        <NavItem Compact="collapsed" Href="admin/recruitment" Icon="user-plus" Text="Recruitment" />
                     }
                     else
                     {
                         <!-- User Menu-->
-                        <NavItem Href="/online" Icon="home" Text="Home" IsActive="true" />
+                        <NavItem Compact="collapsed" Href="/online" Icon="home" Text="Home" IsActive="true" />
 
-                        <NavItem Href="/online/attendance" Icon="clock" Text="Attendance" />
-                        <NavItem Href="/online/duty-roster" Icon="calendar" Text="Duty roster" />
+                        <NavItem Compact="collapsed" Href="/online/attendance" Icon="clock" Text="Attendance" />
+                        <NavItem Compact="collapsed" Href="/online/duty-roster" Icon="calendar" Text="Duty roster" />
 
-                        <NavItem Href="/online/break-time-request" Icon="currency-dollar" Text="Break Time Request" />
+                        <NavItem Compact="collapsed" Href="/online/break-time-request" Icon="currency-dollar" Text="Break Time Request" />
 
-                        <NavItem Href="/online/ot" Icon="trending-up" Text="Overtime" />
+                        <NavItem Compact="collapsed" Href="/online/ot" Icon="trending-up" Text="Overtime" />
 
-                        <NavItem Href="/online/leaves" Icon="calendar" Text="Leaves" />
-                        <NavItem Href="/online/leave-handovers" Icon="briefcase" Text="Work handovers" />
+                        <NavItem Compact="collapsed" Href="/online/leaves" Icon="calendar" Text="Leaves" />
+                        <NavItem Compact="collapsed" Href="/online/leave-handovers" Icon="briefcase" Text="Work handovers" />
                     }
-                    <NavItem Href="/online/chat" Icon="chat" Text="Chat" />
+                    <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
                 </ul>
             </nav>
 
@@ -65,9 +68,9 @@
 
             <!-- Logout Form -->
             <div class="p-4 border-t border-slate-800">
-                <LogoutButton Class="flex items-center gap-3 text-slate-400 hover:text-rose-400 transition-colors w-full px-3 py-2 rounded-lg hover:bg-slate-800">
+                <LogoutButton Class="sidebar-logout flex items-center gap-3 text-slate-300 hover:text-white transition-colors w-full px-3 py-2 rounded-lg">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
-                        <span>Logout</span>
+                        @if (!collapsed) { <span>Logout</span> }
                 </LogoutButton>
             </div>
         </Authorized>
@@ -84,7 +87,7 @@
             <div class="p-4 border-t border-slate-800">
                 <div class="flex items-center gap-3 text-slate-500 px-3 py-2 text-sm">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
-                    <span>Login required</span>
+                    @if (!collapsed) { <span>Login required</span> }
                 </div>
             </div>
         </NotAuthorized>
@@ -93,15 +96,17 @@
 @code {
     [Parameter] public bool HasSystemAccess { get; set; }
     [Parameter] public bool CanAccessAdminPortal { get; set; }
+    private bool collapsed = true;
+    private void ToggleCollapsed() => collapsed = !collapsed;
     private RenderFragment DisabledEmployeeMenu => @<nav aria-label="Employee navigation" class="flex-1 overflow-y-auto py-4 opacity-50">
         <ul class="space-y-1 px-3">
-            <NavItem Href="" Disabled="true" Icon="home" Text="Home" />
-            <NavItem Href="" Disabled="true" Icon="clock" Text="Attendance" />
-            <NavItem Href="" Disabled="true" Icon="calendar" Text="Duty roster" />
-            <NavItem Href="" Disabled="true" Icon="currency-dollar" Text="Break Time Request" />
-            <NavItem Href="" Disabled="true" Icon="trending-up" Text="Overtime" />
-            <NavItem Href="" Disabled="true" Icon="calendar" Text="Leaves" />
-            <NavItem Href="" Disabled="true" Icon="briefcase" Text="Work handovers" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="home" Text="Home" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="clock" Text="Attendance" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="calendar" Text="Duty roster" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="currency-dollar" Text="Break Time Request" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="trending-up" Text="Overtime" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="calendar" Text="Leaves" />
+            <NavItem Compact="collapsed" Href="" Disabled="true" Icon="briefcase" Text="Work handovers" />
         </ul>
     </nav>;
  

@@ -33,12 +33,35 @@ html, body {
     overflow-x: hidden;
     overflow-y: auto;
 }
+.welcome-main { display: flex; align-items: center; justify-content: center; }
+.app-shell-footer {
+    flex: 0 0 auto; padding: .45rem 1rem; border-top: 1px solid var(--app-border-color);
+    background: #fff; color: #64748b; font-size: .7rem; text-align: center;
+}
 .app-sidebar {
     flex: 0 0 16rem;
     width: 16rem;
     min-height: 0;
-    overflow: hidden;
+    overflow: hidden; background: #0c4a6e; transition: width .18s ease, flex-basis .18s ease;
 }
+.app-sidebar.is-collapsed { flex-basis: 4.5rem; width: 4.5rem; }
+.sidebar-header { gap: .5rem; padding: 0 .75rem; }
+.sidebar-collapse { display:grid; place-items:center; width:2rem; height:2rem; flex:none; border:1px solid rgba(255,255,255,.2); border-radius:.5rem; color:#fff; background:rgba(255,255,255,.08); }
+.sidebar-collapse:hover,.sidebar-logout:hover,.app-nav-link:hover { background:rgba(255,255,255,.11); }
+.sidebar-collapse:focus-visible { outline:3px solid #bae6fd; outline-offset:2px; }
+.sidebar-collapse svg { width:1rem; height:1rem; stroke-width:2; }
+.app-sidebar.is-collapsed .sidebar-header { justify-content:center; padding:0 .5rem; }
+.app-sidebar.is-collapsed .sidebar-header>div { display:none; }
+.app-sidebar.is-collapsed nav ul { padding-left:.55rem; padding-right:.55rem; }
+.app-nav-link.is-compact { justify-content:center; gap:0; padding-left:.65rem; padding-right:.65rem; }
+.app-nav-active { color:#fff !important; background:rgba(255,255,255,.16) !important; }
+.app-sidebar.is-collapsed .portal-switch-container { display:none; }
+.app-sidebar.is-collapsed .sidebar-logout { justify-content:center; }
+.portal-admin .app-sidebar { background:#14532d; }
+.portal-admin .app-shell-content>header { border-bottom:3px solid #16a34a; }
+.portal-online .app-sidebar { background:#0c4a6e; }
+.portal-online .app-shell-content>header { border-bottom:3px solid #0284c7; }
+:root[data-theme="dark"] .app-shell-footer { background:#1e293b; color:#b6c4d6; }
 .app-sidebar > nav {
     flex: 1 1 0%;
     min-height: 0;
@@ -61,3 +84,8 @@ html, body {
     .app-shell { position: static; height: auto; overflow: visible; }
     .app-shell-content, .app-shell-main { height: auto; overflow: visible; }
 }
+@media (max-width: 47.99rem) {
+    .welcome-main { align-items:flex-start; padding:.75rem !important; }
+    .app-shell-footer { padding:.4rem .75rem; }
+}
+@media (prefers-reduced-motion: reduce) { .app-sidebar { transition:none; } }
