@@ -10,9 +10,19 @@ public static class ApiClientRegistration
 {
     public static IServiceCollection AddHrmApiClients(this IServiceCollection services)
     {
-        services.AddScoped<IApiOperationClient>(provider => new HttpApiOperationClient(new HttpClient(
-            new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
-                provider.GetRequiredService<BackendSessionStore>())) { BaseAddress = provider.GetRequiredService<BackendOrigins>().Api }));
+        services.AddScoped<IApiOperationClient>(provider =>
+        {
+            var redirecting = 0;
+            return new HttpApiOperationClient(new HttpClient(
+                new CircuitBackendHandler(provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                    provider.GetRequiredService<BackendSessionStore>())) { BaseAddress = provider.GetRequiredService<BackendOrigins>().Api },
+                () =>
+                {
+                    if (Interlocked.Exchange(ref redirecting, 1) == 0)
+                        provider.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>()
+                            .NavigateTo("/Online/Auth/login", forceLoad: true);
+                });
+        });
         var create = typeof(ApiContractProxy).GetMethod(nameof(ApiContractProxy.Create))!;
         foreach (var contract in ApplicationContractCatalog.All)
             services.AddScoped(contract, provider => create.MakeGenericMethod(contract).Invoke(null, [provider.GetRequiredService<IApiOperationClient>()])!);

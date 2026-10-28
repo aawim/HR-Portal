@@ -7,7 +7,7 @@ using HRM.Application.Transport;
 namespace HRM.UI.Services.Transport;
 
 /// <summary>The supplied client must use a per-user authenticated handler, including CSRF protection.</summary>
-public sealed class HttpApiOperationClient(HttpClient http) : IApiOperationClient, IDisposable
+public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded = null) : IApiOperationClient, IDisposable
 {
     public void Dispose() => http.Dispose();
     public async Task<T> InvokeAsync<T>(Type contract, string method, IReadOnlyList<ApiArgument> arguments, CancellationToken ct = default)
@@ -48,7 +48,10 @@ public sealed class HttpApiOperationClient(HttpClient http) : IApiOperationClien
         using (response)
         {
             if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                sessionEnded?.Invoke();
                 throw new UnauthorizedAccessException("Your session has ended. Please sign in again.");
+            }
             if (response.StatusCode == HttpStatusCode.Forbidden)
                 throw new UnauthorizedAccessException("You do not have permission to perform this action.");
             var code = ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture);

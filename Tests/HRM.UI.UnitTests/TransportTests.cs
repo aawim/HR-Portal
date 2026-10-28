@@ -109,6 +109,19 @@ public sealed class TransportTests
     }
 
     [Fact]
+    public async Task Missing_backend_session_requests_one_full_authentication_recovery()
+    {
+        var recoveries = 0;
+        using var http = new HttpClient(new RecordingHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized)))) { BaseAddress = Origin };
+        using var client = new HttpApiOperationClient(http, () => recoveries++);
+
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
+            ApiContractProxy.Create<UserPreferenceServiceContracts.IOperations>(client).GetThemeAsync());
+
+        Assert.Equal(1, recoveries);
+    }
+
+    [Fact]
     public async Task Unknown_server_errors_do_not_render_upstream_details_or_retry_writes()
     {
         var calls = 0;
