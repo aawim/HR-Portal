@@ -63,15 +63,37 @@ public sealed class BackendSession(HttpClient upstream, Uri origin) : IDisposabl
         var uri = request.RequestUri?.IsAbsoluteUri == true ? request.RequestUri : new Uri(origin, request.RequestUri!);
         if (uri.Scheme != origin.Scheme || uri.Authority != origin.Authority || !uri.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal))
             throw new InvalidOperationException("The backend destination is not permitted.");
-        request.RequestUri = uri;
-        request.Headers.Remove("Cookie");
+        using var outbound = await CloneForBackendAsync(request, uri, ct);
+        outbound.Headers.Remove("Cookie");
         string header;
         lock (cookieLock) header = cookies.GetCookieHeader(origin);
-        if (header.Length > 0) request.Headers.TryAddWithoutValidation("Cookie", header);
-        var response = await upstream.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+        if (header.Length > 0) outbound.Headers.TryAddWithoutValidation("Cookie", header);
+        var response = await upstream.SendAsync(outbound, HttpCompletionOption.ResponseHeadersRead, ct);
         if (response.Headers.TryGetValues("Set-Cookie", out var values))
             lock (cookieLock) foreach (var value in values) cookies.SetCookies(origin, value);
         return response;
+    }
+
+    // The incoming message has already been marked as sent by the circuit HttpClient. A message
+    // cannot be passed through a second HttpClient, so create a private outbound copy for the API.
+    private static async Task<HttpRequestMessage> CloneForBackendAsync(HttpRequestMessage source, Uri uri, CancellationToken ct)
+    {
+        var clone = new HttpRequestMessage(source.Method, uri)
+        {
+            Version = source.Version,
+            VersionPolicy = source.VersionPolicy
+        };
+        foreach (var header in source.Headers)
+            clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        foreach (var option in source.Options)
+            clone.Options.Set(new HttpRequestOptionsKey<object?>(option.Key), option.Value);
+        if (source.Content is not null)
+        {
+            clone.Content = new ByteArrayContent(await source.Content.ReadAsByteArrayAsync(ct));
+            foreach (var header in source.Content.Headers)
+                clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+        }
+        return clone;
     }
 
     public void Dispose() { revoked = true; upstream.Dispose(); }

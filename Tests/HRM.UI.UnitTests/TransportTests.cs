@@ -20,6 +20,10 @@ public sealed class TransportTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => send(request);
     }
+    private sealed class SessionHandler(BackendSession session) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => session.SendAsync(request, ct);
+    }
     private static HttpResponseMessage Json<T>(T value) => new(HttpStatusCode.OK) { Content = JsonContent.Create(value, options: ApiOperationKeys.Json) };
 
     [Fact]
@@ -167,6 +171,31 @@ public sealed class TransportTests
         using var http = new HttpClient(new RecordingHandler(_ => throw new Exception("Must not send"))) { BaseAddress = Origin };
         using var session = new BackendSession(http, Origin); session.ImportCookies(".AspNetCore.Cookies=secret");
         await Assert.ThrowsAsync<InvalidOperationException>(() => session.SendAsync(new(HttpMethod.Get, "https://other.example/api/v1/session/identity"), default));
+    }
+
+    [Fact]
+    public async Task Circuit_client_forwards_a_fresh_request_message_to_the_backend_client()
+    {
+        using var upstream = new HttpClient(new RecordingHandler(async request =>
+        {
+            if (request.RequestUri!.AbsolutePath == "/api/v1/session/antiforgery")
+                return Json(new { requestToken = "test-token", headerName = "X-CSRF-TOKEN" });
+            Assert.Equal("/api/v1/example", request.RequestUri!.AbsolutePath);
+            Assert.Equal("test-token", request.Headers.GetValues("X-CSRF-TOKEN").Single());
+            Assert.Equal("application/json; charset=utf-8", request.Content!.Headers.ContentType!.ToString());
+            Assert.Equal("{\"value\":42}", await request.Content.ReadAsStringAsync());
+            return Json(true);
+        })) { BaseAddress = Origin };
+        using var session = new BackendSession(upstream, Origin);
+        using var circuit = new HttpClient(new SessionHandler(session)) { BaseAddress = Origin };
+        using var request = new HttpRequestMessage(HttpMethod.Post, "api/v1/example")
+        {
+            Content = JsonContent.Create(new { value = 42 })
+        };
+
+        using var response = await circuit.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Theory]
