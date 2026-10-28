@@ -31,7 +31,146 @@
                 <article class="executive-card kpi"><div class="kpi-label"><span>@metric.Label</span><i class="@metric.Icon" aria-hidden="true"></i></div><strong>@metric.Value</strong><small>@metric.Note</small></article>
             }
         </section>
-        <div class="executive-chart-grid">
+
+
+      
+
+
+        <section class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2.5 mb-5" aria-label="Executive summary">
+            @foreach (var metric in Metrics)
+            {
+                <article class="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between min-h-[76px] shadow-sm hover:border-slate-300 transition-colors">
+                    <div class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                        <span class="truncate">@metric.Label</span>
+                        <i class="@metric.Icon text-slate-400 text-sm shrink-0 ml-1" aria-hidden="true"></i>
+                    </div>
+
+                    <div class="flex items-baseline justify-between mt-1">
+                        <strong class="text-xl font-bold text-slate-900 leading-tight">@metric.Value</strong>
+                        <small class="text-[11px] text-slate-400 truncate ml-2 text-right">@metric.Note</small>
+                    </div>
+                </article>
+            }
+        </section>
+
+
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+
+            <!-- Column 1: Request Activity -->
+            <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                <header class="flex items-start justify-between gap-4 mb-4 pb-3 border-b border-slate-100">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-800">Request activity</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Processing requests by type within your permitted scope</p>
+                    </div>
+                    <a href="/admin/hr/requests" class="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline shrink-0">
+                        View all <i class="bi bi-arrow-right" aria-hidden="true"></i>
+                    </a>
+                </header>
+
+                <div class="flex-1">
+                    @if (requestError != null)
+                    {
+                        <div class="p-3 rounded-lg bg-red-50 text-red-700 text-xs" role="alert">
+                            @requestError
+                        </div>
+                    }
+                    else if (inbox != null && inbox.Groups.Count > 0)
+                    {
+                        <div class="space-y-3">
+                            @foreach (var g in inbox.Groups.OrderByDescending(g => g.Processing))
+                            {
+                                <div class="flex items-center gap-3 text-xs">
+                                    <span class="w-32 font-medium text-slate-600 truncate" title="@g.Name">@g.Name</span>
+                                    <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                        <div class="bg-blue-600 h-full rounded-full transition-all duration-300"
+                                             style="width: @((g.Processing / (double)Math.Max(1, inbox.Groups.Max(x => x.Processing)) * 100).ToString("0.##"))%;">
+                                        </div>
+                                    </div>
+                                    <strong class="w-8 text-right font-semibold text-slate-800 shrink-0">@g.Processing</strong>
+                                </div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="flex flex-col items-center justify-center py-8 text-slate-400 text-center">
+                            <i class="bi bi-inbox text-3xl mb-2" aria-hidden="true"></i>
+                            <p class="text-xs">No processing requests in your permitted scope.</p>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <!-- Column 2: Department Headcount -->
+            <section class="bg-white border border-slate-200 rounded-xl p-5 shadow-sm flex flex-col justify-between">
+                <header class="mb-4 pb-3 border-b border-slate-100">
+                    <div>
+                        <h2 class="text-base font-semibold text-slate-800">Department headcount</h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Active staff assignments across approved structures</p>
+                    </div>
+                </header>
+
+                <div class="flex-1">
+                    <div class="space-y-3">
+                        @foreach (var d in FilteredDepartments.OrderByDescending(d => d.Members))
+                        {
+                            <div class="flex items-center gap-3 text-xs">
+                                <span class="w-32 font-medium text-slate-600 truncate" title="@d.Name">@d.Name</span>
+                                <div class="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden">
+                                    <div class="bg-emerald-600 h-full rounded-full transition-all duration-300"
+                                         style="width: @((d.Members / (double)Math.Max(1, organisation.StaffCount) * 100).ToString("0.##"))%;">
+                                    </div>
+                                </div>
+                                <strong class="w-8 text-right font-semibold text-slate-800 shrink-0">@d.Members</strong>
+                            </div>
+                        }
+                        @if (!FilteredDepartments.Any())
+                        {
+                            <p class="text-xs text-slate-400 text-center py-8">No matching structures.</p>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <!-- Column 3: Executive Summary Metrics -->
+            <section class="bg-white border border-slate-200 rounded-xl p-2 shadow-sm flex flex-col" aria-label="Executive summary">
+                <header class="mb-4 pb-3 border-b border-slate-100">
+                    <h2 class="text-base font-semibold text-slate-800">Key metrics</h2>
+                    <p class="text-xs text-slate-500 mt-0.5">Quick status &amp; operational distribution</p>
+                </header>
+
+                <div class="grid grid-cols-1 gap-2 max-h-[380px] overflow-y-auto pr-1">
+                    @foreach (var metric in Metrics)
+                    {
+                        <article class="bg-slate-50 border border-slate-100 rounded-lg p-2.5 flex flex-col justify-between hover:bg-slate-100/80 transition-colors">
+                            <div class="flex items-center justify-between text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                                <span class="truncate" title="@metric.Label">@metric.Label</span>
+                                <i class="@metric.Icon text-slate-400 text-xs shrink-0 ml-1" aria-hidden="true"></i>
+                            </div>
+
+                            <div class="flex items-baseline justify-between mt-1.5">
+                                <strong class="text-base font-bold text-slate-900 leading-tight">@metric.Value</strong>
+                                <small class="text-[10px] text-slate-400 truncate ml-1 text-right" title="@metric.Note">@metric.Note</small>
+                            </div>
+                        </article>
+                    }
+                </div>
+            </section>
+
+        </div>
+
+
+
+
+
+
+
+
+
+       @*  <div class="executive-chart-grid">
+
             <section class="executive-card">
                 <header><div><h2>Request activity</h2><p>Processing requests by type within your permitted scope</p></div><a href="/admin/hr/requests">View all <i class="bi bi-arrow-right" aria-hidden="true"></i></a></header>
                 @if(requestError != null) { <p role="alert">@requestError</p> }
@@ -44,6 +183,7 @@
                 }
                 else { <div class="empty-chart"><i class="bi bi-inbox" aria-hidden="true"></i><p>No processing requests in your permitted scope.</p></div> }
             </section>
+
             <section class="executive-card">
                 <header><div><h2>Department headcount</h2><p>Active staff assignments across approved structures</p></div></header>
                 <div class="bar-chart">
@@ -52,12 +192,34 @@
                     @if(!FilteredDepartments.Any()) { <p class="empty-message">No matching structures.</p> }
                 </div>
             </section>
-        </div>
+
+            <section class="grid grid-flow-col grid-rows-4 gap-2 mb-5 overflow-x-auto" aria-label="Executive summary">
+                @foreach (var metric in Metrics)
+                {
+                    <article class="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between min-h-[72px] min-w-[180px] shadow-sm hover:border-slate-300 transition-colors">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <span class="truncate">@metric.Label</span>
+                            <i class="@metric.Icon text-slate-400 text-sm shrink-0 ml-1" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="flex items-baseline justify-between mt-1">
+                            <strong class="text-xl font-bold text-slate-900 leading-tight">@metric.Value</strong>
+                            <small class="text-[11px] text-slate-400 truncate ml-2 text-right">@metric.Note</small>
+                        </div>
+                    </article>
+                }
+            </section>
+        </div> *@
+
+
         <section class="executive-three-grid" aria-label="People insights">
             <article class="executive-card"><header><h2><i class="bi bi-people" aria-hidden="true"></i> Gender representation</h2></header><div class="bar-chart">@foreach(var gender in GenderCounts) { <div class="bar-row"><span>@gender.Name</span><meter min="0" max="@Math.Max(1,People.Count())" value="@gender.Count">@gender.Count</meter><strong>@gender.Count</strong></div> }</div><p class="panel-note">Distinct individuals linked to active approved jobs · @People.Count() staff</p></article>
             <article class="executive-card"><header><h2><i class="bi bi-buildings" aria-hidden="true"></i> Work modality distribution</h2></header><div class="bar-chart">@foreach(var mode in ModalityCounts) { <div class="bar-row"><span>@mode.Name</span><meter min="0" max="@Math.Max(1,People.Count())" value="@mode.Count">@mode.Count</meter><strong>@mode.Count</strong></div> }</div><p class="panel-note">Today's approved work-from-home requests. On site = active staff without approved WFH or leave; this is an expected arrangement, not confirmed attendance.</p>@if(!organisation.HasWorkFromHomeRequestType) { <p class="panel-note">No work-from-home request subtype is configured.</p> }</article>
             <article class="executive-card"><header><h2><i class="bi bi-person-check" aria-hidden="true"></i> Recruitment efficiency</h2></header><div class="unavailable"><strong>Not available</strong><p>Recruitment analytics are not connected to this overview.</p></div></article>
         </section>
+
+
+
         <section class="executive-card">
             <header><div><h2>Staff on leave today</h2><p>Approved leave covering @DateTime.UtcNow.AddHours(5).ToString("dd MMM yyyy") · @VisibleLeaves.Select(l=>l.IndividualId).Distinct().Count() staff</p></div></header>
             @if(!organisation.CanViewLeaveDetails) { <p class="empty-message">Leave details require leave-view permission.</p> }
@@ -117,8 +279,24 @@
         ("Active teams", organisation!.Teams.Count.ToString(), "Organisation-wide", "bi bi-collection"),
         ("Processing requests", inbox == null ? "—" : inbox.Groups.Sum(g=>g.Processing).ToString(), inbox?.OrganisationWide == true ? "Organisation-wide" : "Received or assigned to you", "bi bi-hourglass-split"),
         ("Request categories", inbox == null ? "—" : inbox.Groups.Count.ToString(), "With processing requests", "bi bi-list-check"),
-        ("Populated structures", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check")
+        ("Populated structures", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff On Leave", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff Work From Office", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff Work From Home", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Gender Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Job type Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Position Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check")
     ];
+
+
+
+    private IEnumerable<(string Label, string Value, string Note, string Icon)> LeaveRequests => [
+        ("Annual Leave", People.Count().ToString(), "Approved current employment", "bi bi-people"),
+        ("Sick Leave", FilteredDepartments.Count().ToString(), "Current organisation", "bi bi-diagram-3"),
+        ("Paternity Leave", organisation!.Teams.Count.ToString(), "Organisation-wide", "bi bi-collection"),
+        ("Maternity Leave", inbox == null ? "—" : inbox.Groups.Sum(g=>g.Processing).ToString(), inbox?.OrganisationWide == true ? "Organisation-wide" : "Received or assigned to you", "bi bi-hourglass-split"),
+     ];
+
     private void ToggleUnit(string key) { if(!expanded.Add(key)) expanded.Remove(key); }
     private void ExpandAll() { foreach(var u in Units) expanded.Add(u.Kind + ":" + u.Name); }
     private void CollapseAll() => expanded.Clear();
