@@ -26,6 +26,9 @@ html, body {
     flex: 0 0 4rem;
     min-height: 4rem;
 }
+.mobile-menu-button { display:grid; place-items:center; width:2.5rem; height:2.5rem; flex:none; border:1px solid var(--app-border-color); border-radius:.625rem; background:#f8fafc; color:#334155; }
+.mobile-menu-button svg { width:1.25rem; height:1.25rem; stroke-width:2; }
+.mobile-menu-button:focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
 .app-shell-main {
     flex: 1 1 0%;
     min-width: 0;
@@ -42,7 +45,7 @@ html, body {
     flex: 0 0 16rem;
     width: 16rem;
     min-height: 0;
-    overflow: hidden; background: #0c4a6e; transition: width .18s ease, flex-basis .18s ease;
+    overflow: hidden; background-color: #1e3a8a !important; transition: width .18s ease, flex-basis .18s ease;
 }
 .app-sidebar.is-collapsed { flex-basis: 4.5rem; width: 4.5rem; }
 .sidebar-header { gap: .5rem; padding: 0 .75rem; }
@@ -57,11 +60,15 @@ html, body {
 .app-nav-active { color:#fff !important; background:rgba(255,255,255,.16) !important; }
 .app-sidebar.is-collapsed .portal-switch-container { display:none; }
 .app-sidebar.is-collapsed .sidebar-logout { justify-content:center; }
-.portal-admin .app-sidebar { background:#14532d; }
-.portal-admin .app-shell-content>header { border-bottom:3px solid #16a34a; }
-.portal-online .app-sidebar { background:#0c4a6e; }
-.portal-online .app-shell-content>header { border-bottom:3px solid #0284c7; }
+.sidebar-bottom { margin-top:auto; }
+.portal-public .app-sidebar { background-color:#1e3a8a !important; }
+.portal-public .app-shell-content>header { border-bottom:1px solid var(--app-border-color); }
+.portal-admin .app-sidebar { background-color:#065f46 !important; }
+.portal-admin .app-shell-content>header { border-bottom:3px solid #059669; }
+.portal-online .app-sidebar { background-color:#1e3a8a !important; }
+.portal-online .app-shell-content>header { border-bottom:3px solid #2563eb; }
 :root[data-theme="dark"] .app-shell-footer { background:#1e293b; color:#b6c4d6; }
+:root[data-theme="dark"] .mobile-menu-button { background:#28364b; color:#e2e8f0; border-color:#52627a; }
 .app-sidebar > nav {
     flex: 1 1 0%;
     min-height: 0;
@@ -87,5 +94,15 @@ html, body {
 @media (max-width: 47.99rem) {
     .welcome-main { align-items:flex-start; padding:.75rem !important; }
     .app-shell-footer { padding:.4rem .75rem; }
+    .app-sidebar { display:none; position:fixed; inset:0 auto 0 0; z-index:80; width:min(18rem,86vw); flex-basis:auto; box-shadow:0 20px 50px rgba(15,23,42,.42); }
+    .app-sidebar.is-mobile-open { display:flex; }
+    .app-sidebar.is-collapsed { width:min(18rem,86vw); }
+    .app-sidebar.is-collapsed .sidebar-header { justify-content:initial; padding:0 .75rem; }
+    .app-sidebar.is-collapsed .sidebar-header>div { display:flex; }
+    .app-sidebar.is-collapsed nav ul { padding-left:.75rem; padding-right:.75rem; }
+    .app-sidebar .app-nav-link.is-compact { justify-content:flex-start; gap:.75rem; padding-left:.75rem; padding-right:.75rem; }
+    .app-sidebar.is-collapsed .portal-switch-container { display:block; }
+    .app-sidebar.is-collapsed .sidebar-logout { justify-content:flex-start; }
+    .sidebar-backdrop { position:fixed; inset:0; z-index:70; border:0; background:rgba(2,6,23,.58); }
 }
 @media (prefers-reduced-motion: reduce) { .app-sidebar { transition:none; } }
