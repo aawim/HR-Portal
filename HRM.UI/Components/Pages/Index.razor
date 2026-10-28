@@ -23,6 +23,7 @@
 @inject IAttendanceService AttendanceService
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 @inject IAttendancePlanService AttendancePlanService
+@inject ILogger<Index> Logger
 
 
 <PageTitle>Dashboard</PageTitle>
@@ -92,6 +93,10 @@
                     <!-- CENTER -->
 
                     <div class="xl:col-span-7 min-w-0 space-y-2">
+                        @if (attendanceLoadFailed)
+                        {
+                            <p role="alert" class="rounded border p-3">Some attendance information could not be loaded. <button type="button" class="underline" @onclick="RetryAttendanceAsync">Retry</button></p>
+                        }
 
                             <YearlyAttendanceGridCard
                                 ShowExports="false"
@@ -229,6 +234,12 @@
 
 
     private bool allowTestClock;
+    private bool attendanceLoadFailed;
+    private async Task RetryAttendanceAsync()
+    {
+        attendanceLoadFailed = false;
+        await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(selectedAttendanceYear));
+    }
     protected override async Task OnInitializedAsync()
     {
 
@@ -247,13 +258,23 @@
             // User isn't authenticated yet.
             return;
         }
-        allowTestClock = await AttendanceLogService.CanUseTestClockAsync();
-        await LoadDisplayNameAsync();
-        if (contextUnavailable) return;
-        await LoadAttendance();
-        if (contextUnavailable) return;
-        await LoadYearlyAttendance(DateTime.Today.Year);
-        loading = false;
+        try
+        {
+            await LoadDisplayNameAsync();
+            if (contextUnavailable) return;
+            // Mount independent cards immediately; annual attendance must not block the shell.
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+            await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(DateTime.Today.Year), LoadTestClockPermissionAsync());
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        finally { loading = false; }
+    }
+
+    private async Task LoadTestClockPermissionAsync()
+    {
+        try { allowTestClock = await AttendanceLogService.CanUseTestClockAsync(); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Could not load development clock permission"); }
     }
 
 
@@ -269,6 +290,7 @@
                     .GetMyYearlyAttendanceAsync(year);
         }
         catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        catch (Exception ex) { attendanceLoadFailed = true; Logger.LogError(ex, "Could not load dashboard annual attendance"); }
         finally
         {
             loadingYearlyAttendance = false;
@@ -329,39 +351,14 @@
 
     private async Task LoadAttendance()
     {
-        var context = await _access.GetContextAsync();
-        if (context == null) { ClearDashboardContext(); return; }
         try
         {
         weeklyLogs = await AttendanceService.GetMyWeeklyAttendanceAsync() ?? [];
 
-        var today = weeklyLogs
-            .Where(x => x.Date.Date == DateTime.Today)
-            .OrderBy(x => x.Date)
-            .ToList();
-
-        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
-        todayCheckIn = today.FirstOrDefault(x => x.InOutModeID == 1);
-        todayCheckOut = today.FirstOrDefault(x => x.InOutModeID == 2);
-
-        TodayCheckIn = result.checkIn;
-        TodayCheckOut = result.checkOut;
-
-        _attendancePlan = null;
-        if (context.ActiveJob != null)
-        {
-            _attendancePlan =
-                await AttendancePlanService
-                    .GetOrGenerateAsync(
-                        context.IndividualId,
-                        context.ActiveJob.JobId,
-                        context.ActiveJob.OrganisationId,
-                        DateTime.UtcNow.AddHours(5).Date);
-        }
-
         StateHasChanged(); // IMPORTANT
         }
         catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        catch (Exception ex) { attendanceLoadFailed = true; Logger.LogError(ex, "Could not load dashboard weekly attendance"); }
 
     }
 

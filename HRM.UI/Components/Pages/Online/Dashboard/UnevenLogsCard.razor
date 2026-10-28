@@ -2,6 +2,7 @@
 @using HRM.Services.Interfaces
 @using HRM.Enum
 @inject IAttendanceService AttendanceService
+@inject ILogger<UnevenLogsCard> Logger
 
 <section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Uneven Attendance">
     <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
@@ -9,6 +10,7 @@
     </div>
     <div class="space-y-2 px-4 py-2">
         @if(isLoading){<p role="status" class="text-sm text-slate-500">Loading attendance...</p>}
+        else if(error != null){<p role="alert">@error <button type="button" class="underline" @onclick="LoadAsync">Retry</button></p>}
         else if(Logs.Count==0){<p class="text-sm text-slate-500">No attendance exceptions found for this salary period.</p>}
         else
         {
@@ -34,9 +36,13 @@
 @code {
     private List<AttendanceLogDto> Logs=[];
     private bool isLoading=true;
-    protected override async Task OnInitializedAsync()
+    private string? error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
     {
+        isLoading=true; error=null;
         try { Logs=await AttendanceService.GetMyUnevenLogsAsync()??[]; }
+        catch(Exception ex) { Logger.LogError(ex,"Loading uneven attendance"); error="Attendance exceptions could not be loaded."; }
         finally { isLoading=false; }
     }
     private static string EventName(AttendanceLogDto log)=>log.ResolvedClockType switch {

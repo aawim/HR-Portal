@@ -6,6 +6,7 @@
 @using HRM.Services.Interfaces.JobLeaveTypes
 @inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
 @inject IJobLeaveTypeService JobLeaveTypeService
+@inject ILogger<LeaveBalanceCard> Logger
 
 <section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Leave Balance">
     <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
@@ -13,6 +14,7 @@
     </div>
     <div class="space-y-2">
         @if(isLoading){<p role="status" class="px-4 py-2 text-sm text-slate-500">Loading leave balances...</p>}
+        else if(error != null){<p role="alert" class="px-4 py-2">@error <button type="button" class="underline" @onclick="LoadAsync">Retry</button></p>}
         else if(jobTypes.Count==0){<p class="px-4 py-2 text-sm text-slate-500">No leave balances found.</p>}
         else
         {
@@ -54,8 +56,11 @@
     private bool isLoading = true;
 
 
-    protected override async Task OnInitializedAsync()
+    private string? error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
     {
+        isLoading=true; error=null;
         try
         {
             var balances =
@@ -73,6 +78,7 @@
             processingLeaves =
                 await LeaveService.GetMyProcessingLeavesAsync();
         }
+        catch(Exception ex) { Logger.LogError(ex,"Loading leave balances"); error="Leave balances could not be loaded."; }
         finally
         {
             isLoading = false;
