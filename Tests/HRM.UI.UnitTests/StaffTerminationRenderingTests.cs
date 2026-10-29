@@ -37,14 +37,25 @@ public sealed class StaffTerminationRenderingTests
         var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<StaffPositions>(ParameterView.FromDictionary(new Dictionary<string,object?>{{"StaffId",50}}))).ToHtmlString());
         Assert.Equal(ended,html.Contains(">Assign position</button>",StringComparison.Ordinal));
     }
-    [Fact]public async Task Change_position_filters_slots_by_framework_and_matrix_and_disables_full_matrices()
+    [Theory][InlineData(false)][InlineData(true)]
+    public async Task Assign_and_change_position_filter_slots_by_framework_and_matrix_and_disable_full_matrices(bool assign)
     {
         var service=DispatchProxy.Create<Contract.IOperations,Proxy>();
+        ((Proxy)(object)service).Ended=assign;
         using var provider=new ServiceCollection().AddLogging().AddSingleton(service).AddSingleton<ToastService>().BuildServiceProvider();
         await using var renderer=new HtmlRenderer(provider,provider.GetRequiredService<ILoggerFactory>());
-        var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<ChangeForm>(ParameterView.FromDictionary(new Dictionary<string,object?>{{"StaffId",50}}))).ToHtmlString());
+        var parameters=ParameterView.FromDictionary(new Dictionary<string,object?>{{"StaffId",50}});
+        var html=await renderer.Dispatcher.InvokeAsync(async()=>assign?(await renderer.RenderComponentAsync<AssignForm>(parameters)).ToHtmlString():(await renderer.RenderComponentAsync<ChangeForm>(parameters)).ToHtmlString());
         Assert.Contains("Select framework",html);Assert.Contains("Select position matrix",html);Assert.Contains("Vacant position slot",html);Assert.Contains("1 / 5 slots available",html);Assert.Contains("Full",html);
         Assert.Matches("<option[^>]*value=\"2\"[^>]*disabled",html);Assert.Contains("Available slot",html);Assert.DoesNotContain("Custom slot",html);
+    }
+    public sealed class AssignForm:StaffPositions
+    {
+        protected override async Task OnInitializedAsync()
+        {
+            await base.OnInitializedAsync();var type=typeof(StaffPositions);
+            type.GetField("selectedFrameworkId",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(this,2);type.GetField("selectedMatrixId",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(this,1);
+        }
     }
     public sealed class ChangeForm:StaffPositions
     {

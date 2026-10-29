@@ -47,16 +47,16 @@
                             { <option value="@original.JobId">Job @original.JobId</option> }
                         </select>
                     </label>
-                    @if(changing)
+                    @if(SelectingPosition)
                     {
                         <label class="text-sm">Framework<select class="mt-1 w-full rounded-lg border p-2" @bind="selectedFrameworkId" @bind:after="FrameworkChanged" required><option value="0">Select framework</option>@foreach(var framework in data.Frameworks){<option value="@framework.Id">@framework.Name</option>}</select></label>
                         <label class="text-sm">Position matrix<select class="mt-1 w-full rounded-lg border p-2" @bind="selectedMatrixId" @bind:after="MatrixChanged" disabled="@(selectedFrameworkId==0)" required><option value="0">Select position matrix</option>@foreach(var matrix in data.PositionMatrices.Where(x=>x.FrameworkId==selectedFrameworkId)){<option value="@matrix.Id" disabled="@(matrix.AvailableSlots==0)">@matrix.Name · @matrix.AvailableSlots / @matrix.ApprovedSlots slots available@(matrix.AvailableSlots==0?" · Full":"")</option>}</select></label>
                     }
-                    <label class="text-sm">@(changing?"Vacant position slot":"Position")
-                        <select class="mt-1 w-full rounded-lg border p-2" @bind="positionId" @bind:after="()=>jobMatrixStepId=null" disabled="@((original != null && !changing)||(changing&&selectedMatrixId==0))" required>
+                    <label class="text-sm">@(SelectingPosition?"Vacant position slot":"Position")
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="positionId" @bind:after="()=>jobMatrixStepId=null" disabled="@(!SelectingPosition||(SelectingPosition&&selectedMatrixId==0))" required>
                             <option value="0">Select position</option>
-                            @foreach (var position in data.Positions.Where(p=>!changing||p.FrameworkId==selectedFrameworkId&&p.MatrixId==selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
-                            @if (!changing && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
+                            @foreach (var position in data.Positions.Where(p=>!SelectingPosition||p.FrameworkId==selectedFrameworkId&&p.MatrixId==selectedMatrixId)) { <option value="@position.Id">@position.Name · #@position.Id</option> }
+                            @if (!SelectingPosition && original != null && !data.Positions.Any(p => p.Id == original.PositionId))
                             { <option value="@original.PositionId">@original.Name</option> }
                         </select>
                     </label>
@@ -171,7 +171,7 @@
     {
         if (busy) return;
         message = null;
-        if(changing&&(selectedFrameworkId==0||selectedMatrixId==0||!data!.PositionMatrices.Any(x=>x.Id==selectedMatrixId&&x.FrameworkId==selectedFrameworkId&&x.AvailableSlots>0)||!data.Positions.Any(x=>x.Id==positionId&&x.FrameworkId==selectedFrameworkId&&x.MatrixId==selectedMatrixId))){message="Select a framework, a position matrix with available slots and a vacant position.";return;}
+        if(SelectingPosition&&(selectedFrameworkId==0||selectedMatrixId==0||!data!.PositionMatrices.Any(x=>x.Id==selectedMatrixId&&x.FrameworkId==selectedFrameworkId&&x.AvailableSlots>0)||!data.Positions.Any(x=>x.Id==positionId&&x.FrameworkId==selectedFrameworkId&&x.MatrixId==selectedMatrixId))){message="Select a framework, a position matrix with available slots and a vacant position.";return;}
         if (ending && (!to.HasValue||!terminationRequestTypeId.HasValue)) { message = "Select a job termination request type and effective date."; return; }
         busy = true;
         try
@@ -186,6 +186,7 @@
         catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
         finally { busy = false; }
     }
+    private bool SelectingPosition=>original==null||changing;
     private bool CanAssign=>data?.CanManage==true&&data.Jobs.Count>0&&!data.Assignments.Any(a=>a.StateId==4&&a.From.Date<=Today&&(!a.To.HasValue||a.To.Value.Date>Today)&&data.Jobs.Any(j=>j.Id==a.JobId));
     private void FrameworkChanged(){selectedMatrixId=positionId=0;jobMatrixStepId=null;}
     private void MatrixChanged(){positionId=0;jobMatrixStepId=null;}
