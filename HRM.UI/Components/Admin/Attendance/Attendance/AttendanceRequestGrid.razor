@@ -9,6 +9,9 @@
 
 @rendermode RenderMode.InteractiveServer
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries RequestQueries
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestReview ReviewService
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<AttendanceRequestGrid> Logger
 @inject HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries WorkflowQueries
 @inject IUserAccessService SessionAccess
 @inject IOrganisationService OrganisationService
@@ -168,7 +171,7 @@
                                 </td>
                                 <td class="py-3 px-4 text-center">
                                     <div class="flex items-center justify-center gap-2">
-                                        <button @onclick="() => detail = req" class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100" title="View Details">
+                                        <button disabled="@acting" @onclick="() => OpenDetails(req)" class="text-blue-600 hover:text-blue-800 font-bold text-xs bg-blue-50 px-2 py-1 rounded transition-colors border border-blue-100" title="View Details">
                                             Detail
                                         </button>
                                     </div>
@@ -196,11 +199,46 @@
         <p>@detail.LogDate.ToString("dd MMM yyyy") · @detail.LogTime · @detail.Mode</p>
         <p>@detail.RequestState</p>
         <p class="whitespace-pre-wrap">@detail.Comments</p>
+        @if(reviewError!=null){<p role="alert">@reviewError</p>}
+        @if(review!=null)
+        {
+            <p class="text-sm font-medium">@review.Stage</p>
+            @if(review.CanApprove||review.CanCancel)
+            {
+                <label class="block text-sm">Action comment<textarea @bind="actionComment" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
+                <div class="flex flex-wrap gap-2">
+                    @if(review.CanApprove){<button class="app-button app-button-primary" disabled="@acting" @onclick='()=>Act("Approve")'>@review.ActionLabel</button><button class="app-button app-button-secondary" disabled="@acting" @onclick='()=>Act("Reject")'>Reject</button>}
+                    @if(review.CanCancel){<button class="app-button app-button-secondary" disabled="@acting" @onclick='()=>Act("Cancel")'>Cancel request</button>}
+                </div>
+            }
+            else{<p class="text-sm">@review.Message</p>}
+        }
     </section>
 }
 
 @code {
     private AttendanceRequestDto? detail;
+    private HRM.Application.Contracts.Pages.AttendanceReview? review;
+    private string? reviewError,actionComment;
+    private bool acting;
+    private async Task OpenDetails(AttendanceRequestDto row)
+    {
+        detail=row;review=null;reviewError=null;actionComment=null;
+        try{var result=await ReviewService.GetAsync(row.RequestId);if(detail?.RequestId==row.RequestId)review=result;}
+        catch(Exception ex){Logger.LogError(ex,"Attendance request {RequestId} review actions failed to load",row.RequestId);if(detail?.RequestId==row.RequestId)reviewError="Review actions could not be loaded. Refresh or contact HR.";}
+    }
+    private async Task Act(string action)
+    {
+        if(acting||review==null)return;acting=true;reviewError=null;var id=review.RequestId;
+        try
+        {
+            var result=await ReviewService.ActAsync(id,review.StateId,action,actionComment);
+            if(result.Success){Toasts.Success(result.Message);await ExecuteSearch();var row=requestsList.FirstOrDefault(x=>x.RequestId==id);if(row!=null)await OpenDetails(row);}
+            else reviewError=result.Message;
+        }
+        catch(Exception ex){Logger.LogError(ex,"Attendance request {RequestId} action failed",id);reviewError="This action could not be completed. Refresh before trying again.";}
+        finally{acting=false;}
+    }
     [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
     private int? loadedNotificationId;
     protected override async Task OnParametersSetAsync()
@@ -281,6 +319,8 @@
             stateStatistics = requestsList.GroupBy(r => r.RequestState).ToDictionary(g => g.Key, g => g.Count());
             isDataLoaded = true;
             detail = NotificationRequestId.HasValue ? requestsList.SingleOrDefault() : null;
+            review=null;
+            if(detail!=null)await OpenDetails(detail);
         }
         finally { isLoading = false; }
     }

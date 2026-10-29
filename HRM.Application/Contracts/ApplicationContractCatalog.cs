@@ -5,6 +5,7 @@ public static class ApplicationContractCatalog
 {
     public static IReadOnlyList<Type> All { get; } = Array.AsReadOnly<Type>(
     [
+        typeof(global::HRM.Application.Contracts.Pages.IAttendanceRequestReview),
         typeof(global::HRM.Application.Contracts.Pages.IStaffFinance),
         typeof(global::HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.LateCheckInRequestServiceContracts.IOperations),

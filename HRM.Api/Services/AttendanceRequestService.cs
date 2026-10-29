@@ -37,12 +37,12 @@ public class AttendanceRequestService(
         return await DateInfoAsync(db, user.IndividualId, date, originalLogId.HasValue);
     }
 
-    private static async Task<AttendanceRequestDateInfoDto> DateInfoAsync(HrmTeContext db, int individualId, DateOnly date, bool isCorrection = false)
+    internal static async Task<AttendanceRequestDateInfoDto> DateInfoAsync(HrmTeContext db, int individualId, DateOnly date, bool isCorrection = false, int? organisationId = null)
     {
         if (date == default || date == DateOnly.MaxValue) return new() { CanSubmit = false, Message = "Select a valid attendance date." };
         var day = date.ToDateTime(TimeOnly.MinValue);
         var leaves = await db.Leaves.AsNoTracking().Include(x => x.Job).Include(x => x.LeaveType)
-            .Where(x => x.Job.IndividualID == individualId && x.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
+            .Where(x => x.Job.IndividualID == individualId && (!organisationId.HasValue || x.Job.OrganisationID == organisationId) && x.LeaveStateId == SharedConfig.LeaveStates.APPROVED &&
                 x.FromDate < day.AddDays(1) && x.ToDate >= day).ToListAsync();
         if (leaves.Count == 0) return new();
         if (leaves.Count > 1) return new() { CanSubmit = false, Message = "Approved leave overlaps on this date. Contact HR to reconcile it before requesting attendance." };
@@ -179,6 +179,8 @@ public class AttendanceRequestService(
                 db.AttendanceLogChangeRequests.Add(new() { AttendanceLogId = proposed.AttendanceLogId, RequestId = request.RequestId, Comments = model.Comments.Trim() });
             await db.SaveChangesAsync();
             await workflow.StartAsync(db, request.RequestId, job.JobId);
+            db.RequestJobs.Add(new(){RequestId=request.RequestId,JobId=job.JobId,IsValid=true,OperationLogId=operation.OperationLogId});
+            await db.SaveChangesAsync();
             await transaction.CommitAsync();
             return ServiceResult.Ok($"{(original == null ? "Attendance" : "Uneven-log correction")} request {request.ReferenceNumber} submitted for approval.");
         }
