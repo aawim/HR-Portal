@@ -304,7 +304,7 @@ namespace HRM.Services
                 x.FromDate <= (dto.ToDate ?? DateOnly.MaxValue) &&
                 (x.ToDate == null || x.ToDate >= dto.FromDate));
 
-            if (overlaps)
+            if (overlaps && dto.IsValid)
             {
                 return ServiceResult.Fail("This work type is already assigned to the staff member for the selected period.");
             }
@@ -319,7 +319,7 @@ namespace HRM.Services
                 FromDate = dto.FromDate,
                 ToDate = dto.ToDate,
                 Location = location,
-                IsValid = true,
+                IsValid = dto.IsValid,
                 AssignedByUserId = actor.UserId,
                 CreatedDate = Today()
             });

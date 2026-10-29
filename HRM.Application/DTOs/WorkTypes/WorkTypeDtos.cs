@@ -57,6 +57,7 @@ public sealed class AssignedWorkTypeDto
 
 public sealed class CreateAssignedWorkTypeDto
 {
+    public bool IsValid { get; set; } = true;
     public int WorkTypeId { get; set; }
 
     public int JobId { get; set; }
