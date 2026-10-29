@@ -17,10 +17,14 @@ public abstract class StaffPositionManagementServiceContracts
         public string Version => $"{PositionId}:{From.Ticks}:{To?.Ticks}:{StateId}:{AuditId}";
         public string? PendingAction { get; init; }
         public bool HasApprovedRemoval { get; init; }
+        public bool HasApprovedTermination { get; init; }
         public HRM.Application.Contracts.Pages.PositionPayInfo? Pay { get; init; }
     }
 
-    public sealed record Data(bool CanManage, List<Choice> Jobs, List<Choice> Positions, List<Assignment> Assignments);
+    public sealed record Data(bool CanManage, List<Choice> Jobs, List<Choice> Positions, List<Assignment> Assignments)
+    {
+        public List<Choice> TerminationRequestTypes { get; init; }=[];
+    }
 
     public const string RequestsPageUrl = "/online/staff-position-requests";
 
@@ -29,7 +33,7 @@ public interface IOperations
 Task<Data> LoadAsync(int staffId)
 ;
 Task SaveAsync(int staffId, int jobId, int positionId, DateTime from, DateTime? to,
-        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null)
+        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null, int? terminationRequestTypeId = null)
 ;
 Task<List<StaffPositionRequestRow>> LoadRequestsAsync(int? staffId = null, bool pendingOnly = false)
 ;

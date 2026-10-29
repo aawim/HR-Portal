@@ -45,7 +45,8 @@ public sealed partial class StaffPositionManagementService
             if (r.ChangeKind == "Change" && original != null) position = original.Name + " → " + position;
             var history = instance == null ? new List<string>() : await db.WfRequestActions.Where(a=>a.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId)
                 .OrderBy(a=>a.PerformedAt).Select(a=>a.ActionCode + ": " + (a.Comments ?? "")).ToListAsync();
-            result.Add(new(r.RequestId,r.Request.RequestStateId,r.Request.ReferenceNumber ?? $"#{r.RequestId}",name,r.ChangeKind,
+            var typeName=await db.RequestTypes.Where(x=>x.RequestTypeId==r.Request.RequestTypeId).Select(x=>x.TypeName).SingleAsync();
+            result.Add(new(r.RequestId,r.Request.RequestStateId,r.Request.ReferenceNumber ?? $"#{r.RequestId}",name,r.ChangeKind=="Remove"&&TerminationStates.ContainsKey(typeName)?typeName:r.ChangeKind,
                 position,r.FromDate,r.ToDate,r.Reason,
                 (r.Request.RequestState.IsProcessingState && !r.Request.RequestState.IsFinalState ? "Processing · " : "") + r.Request.RequestState.StateName,
                 instance?.CurrentStage?.WorkflowStage.StageName ?? "",history,
@@ -67,8 +68,8 @@ public sealed partial class StaffPositionManagementService
             // Approve/reject always use the actual person's identity and configured stage assignment.
             var person = action == "Cancel" && r.CreatedByUserId == actor.User ? r.IndividualId : actor.Person;
             await Processing.ExecuteAsync(db,Subject(r),expectedState,action,comment,actor.User,person,
-                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",false,payStepId:r.JobMatrixStepId),
-                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",true,r.RequestId,r.JobMatrixStepId));
+                ()=>ProcessRequestedChangeAsync(db,r,false),
+                ()=>ProcessRequestedChangeAsync(db,r,true));
             await tx.CommitAsync(); return ServiceResult.Ok("Position request action saved.");
         }
         catch(InvalidOperationException ex)

@@ -122,11 +122,13 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
                                   .Select(s => s.WorkflowStage.StageName).FirstOrDefault(),
                               FromState = fromState.StateName, ToState = toState.StateName, n.Request.RequestTypeId,
                               IsLeave = db.LeaveRequests.Any(x => x.RequestId == n.RequestId),
+                              IsStaffPosition = db.StaffPositionChangeRequests.Any(x=>x.RequestId==n.RequestId),
                               IsAttendance = n.Request.AttendanceLogChangeRequest != null || n.Request.AttendanceLogRequests.Any() })
                           .Take(30).ToListAsync(token);
         var requestItems = rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
             HRM.Application.Presentation.OvertimeNavigation.NotificationUrl(n.NotificationKind, n.RequestTypeName, n.ViewUrl, n.RequestId) ?? (
+            n.IsStaffPosition ? StaffPositionManagementService.RequestsPageUrl :
             n.ViewUrl == StaffFinanceService.PageUrl ? (n.NotificationKind == "ActionRequired" ? StaffFinanceService.AdminUrl : StaffFinanceService.PageUrl) + $"?requestId={n.RequestId}" :
             n.ViewUrl == LateCheckInRequestService.PageUrl ? LateCheckInRequestService.PageUrl :
             n.ViewUrl == LateCheckInRequestService.EarlyPageUrl ? LateCheckInRequestService.EarlyPageUrl :

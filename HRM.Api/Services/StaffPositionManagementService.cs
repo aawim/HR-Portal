@@ -62,24 +62,27 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             .Where(r => r.IndividualId == staffId && r.OrganisationId == org && r.OriginalJson != null &&
                 (!r.Request.RequestState.IsFinalState || r.ChangeKind == "Remove" && r.Request.RequestStateId == 4))
             .OrderByDescending(r => r.CreatedAtUtc)
-            .Select(r => new { r.OriginalJson, r.ChangeKind, r.ToDate, r.Request.RequestState.IsFinalState }).ToListAsync();
+            .Select(r => new { r.OriginalJson, r.ChangeKind, r.ToDate, r.Request.RequestState.IsFinalState,TypeName=r.Request.RequestType.TypeName }).ToListAsync();
         assignments = assignments.Select(assignment =>
         {
             var related = changes.Where(r => JsonSerializer.Deserialize<Assignment>(r.OriginalJson!)?.Id == assignment.Id).ToList();
             return assignment with
             {
-                PendingAction = related.FirstOrDefault(r => !r.IsFinalState)?.ChangeKind,
+                PendingAction = related.Any(r=>!r.IsFinalState&&r.ChangeKind=="Remove"&&TerminationStates.ContainsKey(r.TypeName))?"Terminate":related.FirstOrDefault(r => !r.IsFinalState)?.ChangeKind,
                 HasApprovedRemoval = related.Any(r => r.IsFinalState && r.ChangeKind == "Remove" && r.ToDate == assignment.To),
+                HasApprovedTermination=related.Any(r=>r.IsFinalState&&r.ChangeKind=="Remove"&&r.ToDate==assignment.To&&TerminationStates.ContainsKey(r.TypeName)),
                 Pay=payByPosition[assignment.PositionId]
             };
         }).ToList();
-        for(var i=0;i<assignments.Count;i++){var a=assignments[i];if(a.Pay!=null){var step=await db.FrameworkJobStepHistories.Where(x=>x.JobId==a.JobId&&x.EffectiveFrom==a.From).Select(x=>(int?)x.JobMatrixStepId).SingleOrDefaultAsync();assignments[i]=a with{Pay=await PositionMatrixAssignments.SummaryAsync(db,a.PositionId,step)};}} return new(manage, jobs, positions, assignments);
+        for(var i=0;i<assignments.Count;i++){var a=assignments[i];if(a.Pay!=null){var step=await db.FrameworkJobStepHistories.Where(x=>x.JobId==a.JobId&&x.EffectiveFrom==a.From).Select(x=>(int?)x.JobMatrixStepId).SingleOrDefaultAsync();assignments[i]=a with{Pay=await PositionMatrixAssignments.SummaryAsync(db,a.PositionId,step)};}}
+        var terminationNames=TerminationStates.Keys.ToArray();
+        return new(manage, jobs, positions, assignments){TerminationRequestTypes=await db.RequestTypes.Where(x=>terminationNames.Contains(x.TypeName)).OrderBy(x=>x.TypeName).Select(x=>new Choice(x.RequestTypeId,x.TypeName)).ToListAsync()};
     }
 
     // Ending retains the original assignment and its linked requests/salary records.
     // Changing creates a successor instead of rewriting historical position names.
     public async Task SaveAsync(int staffId, int jobId, int positionId, DateTime from, DateTime? to,
-        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null)
+        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null, int? terminationRequestTypeId = null)
     {
         var (org, manage) = await ScopeAsync();
         if (!manage) throw new UnauthorizedAccessException("You do not have permission to manage staff positions.");
@@ -90,12 +93,17 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         {
             if (remove && (original == null || !to.HasValue || change))
                 throw new InvalidOperationException("Select the position and its last day.");
+            if(remove&&!terminationRequestTypeId.HasValue)throw new InvalidOperationException("Select a job termination request type.");
+            if(!remove&&terminationRequestTypeId.HasValue)throw new InvalidOperationException("A termination request type can only be used to terminate employment.");
             await ValidateAndApplyAsync(db, org, staffId, jobId, positionId, from, to, reason, original, change, false,payStepId:jobMatrixStepId);
             if (await db.StaffPositionChangeRequests.AnyAsync(r => r.JobId == jobId && r.OrganisationId == org && !r.Request.RequestState.IsFinalState))
                 throw new InvalidOperationException("This employment already has a pending position request. Complete or cancel it before submitting another.");
             var kind = remove ? "Remove" : change ? "Change" : original == null ? "Assign" : "Dates";
-            var type = await db.RequestTypes.SingleOrDefaultAsync(t => t.TypeName == RequestTypeName(kind))
+            var type = remove?await db.RequestTypes.SingleOrDefaultAsync(t=>t.RequestTypeId==terminationRequestTypeId):await db.RequestTypes.SingleOrDefaultAsync(t => t.TypeName == RequestTypeName(kind));
+            if(remove&&(type==null||!TerminationStates.ContainsKey(type.TypeName)))throw new InvalidOperationException("Select a valid job termination request type.");
+            type = type
                 ?? throw new InvalidOperationException("Position requests are not available yet. Please contact HR.");
+            if(remove)await ValidateTerminationAsync(db,jobId,to!.Value.Date);
             var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_POSITION_UPDATE,
                 $"Submit {kind} position request: staff {staffId}, job {jobId}, organisation {org}, user {actor.UserId}, reason {reason.Trim()}.");
             var request = await requests.CreateAsync(db, new HRM.DTOs.CreateRequestDto { RequestTypeId = type.RequestTypeId,
@@ -105,6 +113,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 ChangeKind = kind, PositionId = positionId, JobMatrixStepId=jobMatrixStepId, FromDate = from.Date, ToDate = to?.Date, Reason = reason.Trim(),
                 OriginalJson = original == null ? null : JsonSerializer.Serialize(original), CreatedByUserId = actor.UserId, CreatedAtUtc = DateTime.UtcNow });
             await db.SaveChangesAsync();
+            if(remove){db.JobRequests.Add(new(){JobId=jobId,RequestId=request.RequestId});await db.SaveChangesAsync();}
             await workflow.StartAsync(db, request.RequestId, jobId);
             await tx.CommitAsync();
         }
