@@ -40,12 +40,24 @@ public sealed partial class PayFrameworkTests
         Assert.False((await Service.SaveJobMatrixAsync(WithRequirements("A") with{Id=a.Id,Profile=a.Profile with{QualificationPathways=b.Profile.QualificationPathways}})).Success);
     }
     [Theory]
-    [InlineData("issuer")][InlineData("condition")][InlineData("validity")][InlineData("training")][InlineData("levels")][InlineData("missing-minimum")][InlineData("months")]
-    public async Task Invalid_structured_requirements_do_not_create_a_matrix(string error)
+    [InlineData("name","Credential requirement 1: enter a credential")]
+    [InlineData("issuer","Credential requirement 1: enter the issuing")]
+    [InlineData("condition","Credential requirement 1: enter a condition")]
+    [InlineData("validity","Credential requirement 1: validity")]
+    [InlineData("training","Credential requirement 1: training hours")]
+    [InlineData("levels","Qualification pathway 1: qualification 1: the upper MNQF level")]
+    [InlineData("missing-minimum","Qualification pathway 1: qualification 1: select an MNQF level")]
+    [InlineData("out-of-range","Qualification pathway 1: qualification 1: MNQF levels must")]
+    [InlineData("qualification","Qualification pathway 1: qualification 1: enter a qualification")]
+    [InlineData("months","Qualification pathway 1: post-qualification experience")]
+    [InlineData("relevant-months","Qualification pathway 1: relevant experience")]
+    [InlineData("managerial-months","Qualification pathway 1: managerial experience")]
+    public async Task Invalid_structured_requirements_do_not_create_a_matrix(string error,string expectedMessage)
     {
         await Seed();var input=WithRequirements();var p=input.Profile;
         switch(error)
         {
+            case "name":p.CredentialRequirements[0].Name="";break;
             case "issuer":p.CredentialRequirements[0].Issuer="";break;
             case "condition":p.CredentialRequirements[0].Requirement="Conditional";break;
             case "validity":p.CredentialRequirements[0].ValidityMonths=0;break;
@@ -53,8 +65,12 @@ public sealed partial class PayFrameworkTests
             case "levels":p.QualificationPathways[0].Qualifications[0].MaximumLevel=6;break;
             case "missing-minimum":p.QualificationPathways[0].Qualifications[0].MinimumLevel=null;p.QualificationPathways[0].Qualifications[0].MaximumLevel=8;break;
             case "months":p.QualificationPathways[0].PostQualificationMonths=-1;break;
+            case "out-of-range":p.QualificationPathways[0].Qualifications[0].MinimumLevel=11;break;
+            case "qualification":p.QualificationPathways[0].Qualifications[0].Qualification="";break;
+            case "relevant-months":p.QualificationPathways[0].RelevantExperienceMonths=1201;break;
+            case "managerial-months":p.QualificationPathways[0].ManagerialExperienceMonths=-1;break;
         }
-        Assert.False((await Service.SaveJobMatrixAsync(input)).Success);await using var db=factory.CreateDbContext();Assert.Empty(db.FrameworkJobMatrices);
+        var result=await Service.SaveJobMatrixAsync(input);Assert.False(result.Success);Assert.StartsWith(expectedMessage,result.Message);await using var db=factory.CreateDbContext();Assert.Empty(db.FrameworkJobMatrices);
     }
     [Fact]public async Task Referenced_matrix_requirements_are_frozen_and_copying_to_a_new_version_keeps_original()
     {

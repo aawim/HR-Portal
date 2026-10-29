@@ -8,16 +8,45 @@ public sealed partial class PositionManagementService
 {
     private static T ConvertRequirement<T>(object value)=>JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value))!;
     private static bool RequirementText(string? value,int max,bool required=false)=>value!=null&&value.Length<=max&&(!required||!string.IsNullOrWhiteSpace(value));
-    private static bool ValidRequirements(JobMatrixProfile p)
+    private static string? RequirementsError(JobMatrixProfile p)
     {
-        if(p.CredentialRequirements==null||p.QualificationPathways==null||p.CredentialRequirements.Count>50||p.QualificationPathways.Count>20)return false;
-        if(p.CredentialRequirements.Any(x=>x==null||x.Id<0||!RequirementText(x.Name,250,true)||!RequirementText(x.Issuer,250,true)||x.Kind is not("Licence" or "Registration" or "Certification" or "Training")||x.Requirement is not("Mandatory" or "Preferred" or "Conditional")||!RequirementText(x.Condition,2000,x.Requirement=="Conditional")||!RequirementText(x.Equivalents,2000)||!RequirementText(x.SourceReference,2000)||!RequirementText(x.VerificationInstructions,2000)||x.ValidityMonths is <1 or >600||x.TrainingHours is <0 or >10000||x.TrainingHours.HasValue&&decimal.Round(x.TrainingHours.Value,2)!=x.TrainingHours))return false;
-        foreach(var x in p.QualificationPathways)
+        if(p.CredentialRequirements==null||p.QualificationPathways==null||p.CredentialRequirements.Count>50||p.QualificationPathways.Count>20)return "Use up to 50 credential requirements and 20 qualification pathways.";
+        for(var i=0;i<p.CredentialRequirements.Count;i++)
         {
-            if(x==null||x.Id<0||!RequirementText(x.Name,250,true)||!RequirementText(x.Conditions,4000)||!RequirementText(x.SourceReference,2000)||x.RelevantExperienceMonths is <0 or >1200||x.PostQualificationMonths is <0 or >1200||x.ManagerialExperienceMonths is <0 or >1200||x.Qualifications==null||x.Qualifications.Count is <1 or >20)return false;
-            if(x.Qualifications.Any(q=>q==null||q.Id<0||!RequirementText(q.Qualification,250,true)||!RequirementText(q.FieldOfStudy,1000)||q.MinimumLevel is <1 or >10||q.MaximumLevel is <1 or >10||q.MaximumLevel.HasValue&&(!q.MinimumLevel.HasValue||q.MaximumLevel<q.MinimumLevel)))return false;
+            var x=p.CredentialRequirements[i];var row=$"Credential requirement {i+1}: ";
+            if(x==null||x.Id<0)return row+"remove the invalid row and add it again.";
+            if(!RequirementText(x.Name,250,true))return row+"enter a credential / training name (up to 250 characters).";
+            if(!RequirementText(x.Issuer,250,true))return row+"enter the issuing / recognising authority (up to 250 characters).";
+            if(x.Kind is not("Licence" or "Registration" or "Certification" or "Training"))return row+"select a valid credential type.";
+            if(x.Requirement is not("Mandatory" or "Preferred" or "Conditional"))return row+"select Mandatory, Preferred or Conditional.";
+            if(!RequirementText(x.Condition,2000,x.Requirement=="Conditional"))return row+"enter a condition for a Conditional requirement (up to 2,000 characters).";
+            if(!RequirementText(x.Equivalents,2000)||!RequirementText(x.SourceReference,2000)||!RequirementText(x.VerificationInstructions,2000))return row+"keep equivalents, source and verification notes within 2,000 characters each.";
+            if(x.ValidityMonths is <1 or >600)return row+"validity must be 1–600 months, or left blank.";
+            if(x.TrainingHours is <0 or >10000||x.TrainingHours.HasValue&&decimal.Round(x.TrainingHours.Value,2)!=x.TrainingHours)return row+"training hours must be 0–10,000 with up to two decimal places, or left blank.";
         }
-        return UniqueIds(p.CredentialRequirements.Select(x=>x.Id))&&UniqueIds(p.QualificationPathways.Select(x=>x.Id))&&UniqueIds(p.QualificationPathways.SelectMany(x=>x.Qualifications).Select(x=>x.Id));
+        for(var i=0;i<p.QualificationPathways.Count;i++)
+        {
+            var x=p.QualificationPathways[i];var row=$"Qualification pathway {i+1}: ";
+            if(x==null||x.Id<0)return row+"remove the invalid row and add it again.";
+            if(!RequirementText(x.Name,250,true))return row+"enter a pathway name (up to 250 characters).";
+            if(!RequirementText(x.Conditions,4000)||!RequirementText(x.SourceReference,2000))return row+"keep conditions within 4,000 characters and source within 2,000 characters.";
+            if(x.RelevantExperienceMonths is <0 or >1200)return row+"relevant experience must be 0–1,200 months.";
+            if(x.PostQualificationMonths is <0 or >1200)return row+"post-qualification experience must be 0–1,200 months.";
+            if(x.ManagerialExperienceMonths is <0 or >1200)return row+"managerial experience must be 0–1,200 months.";
+            if(x.Qualifications==null||x.Qualifications.Count is <1 or >20)return row+"add between 1 and 20 qualifications, or remove the unused pathway.";
+            for(var j=0;j<x.Qualifications.Count;j++)
+            {
+                var q=x.Qualifications[j];var field=row+$"qualification {j+1}: ";
+                if(q==null||q.Id<0)return field+"remove the invalid row and add it again.";
+                if(!RequirementText(q.Qualification,250,true))return field+"enter a qualification type / description (up to 250 characters).";
+                if(!RequirementText(q.FieldOfStudy,1000))return field+"keep the field of study within 1,000 characters.";
+                if(q.MinimumLevel is <1 or >10||q.MaximumLevel is <1 or >10)return field+"MNQF levels must be between 1 and 10.";
+                if(q.MaximumLevel.HasValue&&!q.MinimumLevel.HasValue)return field+"select an MNQF level before selecting an upper level.";
+                if(q.MaximumLevel<q.MinimumLevel)return field+"the upper MNQF level cannot be below the selected level.";
+            }
+        }
+        if(!UniqueIds(p.CredentialRequirements.Select(x=>x.Id))||!UniqueIds(p.QualificationPathways.Select(x=>x.Id))||!UniqueIds(p.QualificationPathways.SelectMany(x=>x.Qualifications).Select(x=>x.Id)))return "Duplicate requirement rows were submitted. Reload the Job Matrix and try again.";
+        return null;
     }
     private static bool UniqueIds(IEnumerable<long> ids){var values=ids.Where(x=>x!=0).ToArray();return values.Distinct().Count()==values.Length;}
     private static async Task LoadRequirements(HrmTeContext db,int id,JobMatrixProfile profile)

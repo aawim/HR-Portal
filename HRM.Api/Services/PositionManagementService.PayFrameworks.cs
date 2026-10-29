@@ -49,7 +49,9 @@ public sealed partial class PositionManagementService
     {
         var actor=await ScopeAsync();if(!actor.Super)throw new UnauthorizedAccessException("Only a superadministrator can configure shared job matrices.");
         var resolved=await ResolveReferenceAsync(input);if(resolved==null)return ServiceResult.Fail("Select an active Job Family and Profession / Occupation.");input=resolved;
-        if(input.Profile==null||!ValidRequirements(input.Profile))return ServiceResult.Fail("Check credential names/issuers, conditional rules, MNQF levels and experience months."); if(!ValidProfile(input.Profile))return ServiceResult.Fail("Check the Job Matrix classification, daily attendance benefit and text limits."); if(string.IsNullOrWhiteSpace(input.Code)||input.Code.Trim().Length>60||string.IsNullOrWhiteSpace(input.Name)||input.Name.Trim().Length>250||!Money(input.BasicSalary)||input.From.Year<1900||input.To<input.From.Date)
+        if(input.Profile==null)return ServiceResult.Fail("Enter the Job Matrix requirements.");
+        if(RequirementsError(input.Profile) is { } requirementsError)return ServiceResult.Fail(requirementsError);
+        if(!ValidProfile(input.Profile))return ServiceResult.Fail("Check the Job Matrix classification, daily attendance benefit and text limits."); if(string.IsNullOrWhiteSpace(input.Code)||input.Code.Trim().Length>60||string.IsNullOrWhiteSpace(input.Name)||input.Name.Trim().Length>250||!Money(input.BasicSalary)||input.From.Year<1900||input.To<input.From.Date)
             return ServiceResult.Fail("Enter a matrix code, name, valid salary and effective period.");
         if(input.Titles==null||input.Steps==null||input.Benefits==null||input.Titles.Count is <1 or >100||input.Steps.Count is <1 or >100||input.Benefits.Count>100||input.Titles.Any(x=>string.IsNullOrWhiteSpace(x)||x.Trim().Length>250)||input.Titles.Select(x=>x.Trim()).Distinct(StringComparer.OrdinalIgnoreCase).Count()!=input.Titles.Count)
             return ServiceResult.Fail("Add at least one unique title and one step, with up to 100 rows per section.");
