@@ -112,4 +112,19 @@ public sealed class StaffTerminationTests
         db.Jobs.Add(new(){JobId=6,IndividualID=50,OrganisationID=10,JobStateId=4,JoinedDate=Today});db.Positions.Add(new(){PositionId=2,OrganisationId=10,Name="New position",IsActive=true});
         db.RequestTypes.Add(new(){RequestTypeId=31,TypeName="Staff Position Assignment Request"});await db.SaveChangesAsync();
     }
+    [Fact]public async Task Terminating_a_legacy_shared_position_does_not_require_the_other_employment_to_vacate_it()
+    {
+        var original=await Seed();await using(var db=factory.CreateDbContext())
+        {
+            db.Jobs.Add(new(){JobId=6,IndividualID=60,OrganisationID=10,JobStateId=4,JoinedDate=Today.AddMonths(-2)});
+            db.JobPositions.Add(new(){JobPositionId=2,JobId=6,PositionId=1,FromDate=Today.AddMonths(-1),JobPositionStateId=4});await db.SaveChangesAsync();
+        }
+        await Service.SaveAsync(50,5,1,original.From,Today,"Resigning",original,remove:true,terminationRequestTypeId:22);
+        await using var check=factory.CreateDbContext();var request=await check.StaffPositionChangeRequests.Include(x=>x.Request).SingleAsync();
+        Assert.Null((await check.Jobs.SingleAsync(x=>x.JobId==5)).TerminatedDate);
+        await Service.ProcessRequestedChangeAsync(check,request,true);
+        Assert.Equal(Today,(await check.Jobs.SingleAsync(x=>x.JobId==5)).TerminatedDate);
+        Assert.Null((await check.Jobs.SingleAsync(x=>x.JobId==6)).TerminatedDate);Assert.Null((await check.JobPositions.SingleAsync(x=>x.JobId==6)).ToDate);
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionVacancy.RequireAsync(check,1,Today,null));
+    }
 }

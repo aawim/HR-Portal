@@ -174,7 +174,9 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             (existing == null || a.JobPositionId != existing.JobPositionId) &&
             (!to.HasValue || a.FromDate < to.Value) && (!a.ToDate.HasValue || a.ToDate.Value > from)))
             throw new InvalidOperationException("This position already has an assignment overlapping those dates.");
-        var payDefinition=await PositionMatrixAssignments.ValidateAsync(db,org,positionId,from,to,existing?.JobPositionId,payStepId); if((existing==null||change)&&payDefinition!=null&&payDefinition.Step==null)throw new InvalidOperationException("Select the employee job pay step."); if(payDefinition==null&&payStepId.HasValue)throw new InvalidOperationException("This position does not use a Job Matrix pay step.");
+        // Ending or shortening an existing assignment does not consume a new slot.
+        // Historical shared positions must remain terminable even when another job uses the same catalogue record.
+        var payDefinition=existing==null||change||expands?await PositionMatrixAssignments.ValidateAsync(db,org,positionId,from,to,existing?.JobPositionId,payStepId):null; if((existing==null||change)&&payDefinition!=null&&payDefinition.Step==null)throw new InvalidOperationException("Select the employee job pay step."); if(payDefinition==null&&payStepId.HasValue)throw new InvalidOperationException("This position does not use a Job Matrix pay step.");
         FrameworkJobStepHistory? currentPay=null;
         if(existing!=null&&!change)
         {
