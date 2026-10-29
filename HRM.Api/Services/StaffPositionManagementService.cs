@@ -46,7 +46,8 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             j.JobStateId == 4 && (!j.TerminatedDate.HasValue || j.TerminatedDate.Value > today))
             .OrderByDescending(j => j.JoinedDate).Select(j => new Choice(j.JobId,
                 "Job " + j.JobId + " · " + j.OrganisationStructure.Name + " · " + j.JobType.TypeName)).ToListAsync();
-        var positions = await Available(db, org).AsNoTracking().OrderBy(p => p.Name)
+        var vacantIds=PositionVacancy.Vacant(db,today).Select(p=>p.PositionId);
+        var positions = await Available(db, org).Where(p=>vacantIds.Contains(p.PositionId)).AsNoTracking().OrderBy(p => p.Name)
             .Select(p => new Choice(p.PositionId, p.Name)).ToListAsync();
         var assignments = await db.JobPositions.AsNoTracking().Where(a => a.Job.IndividualID == staffId && a.Job.OrganisationID == org)
             .OrderByDescending(a => a.FromDate).ThenByDescending(a => a.JobPositionId)

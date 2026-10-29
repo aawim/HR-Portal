@@ -57,7 +57,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                 .Select(x => new OnboardingDepartmentOption(x.OrganisationStructureId, x.Name, x.OrganisationStructureTypeId)).ToListAsync();
             result.JobTypes = await db.JobTypes.Where(x => x.IsActive != false).OrderBy(x => x.TypeName)
                 .Select(x => new OnboardingOption(x.JobTypeId, x.TypeName)).ToListAsync();
-            result.Positions = await db.Positions.Where(x => x.IsActive != false && (x.IsGlobal || x.OrganisationId == org))
+            result.Positions = await PositionVacancy.Vacant(db,DateTime.UtcNow.AddHours(5).Date).Where(x => x.IsActive != false && (x.IsGlobal || x.OrganisationId == org))
                 .OrderBy(x => x.Name).Select(x => new OnboardingOption(x.PositionId, x.Name)).ToListAsync();
         }
         for(var i=0;i<result.Positions.Count;i++){var p=result.Positions[i]; if(await db.Positions.AnyAsync(x=>x.PositionId==p.Id&&x.PositionMatrixId.HasValue))result.Positions[i]=p with{Pay=await PositionMatrixAssignments.SummaryAsync(db,p.Id)};} return result;
@@ -103,6 +103,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         if (r.PositionId.HasValue && !await db.Positions.AnyAsync(x => x.PositionId == r.PositionId && x.IsActive != false &&
             (x.IsGlobal || x.OrganisationId == r.OrganisationId)))
             throw new InvalidOperationException("Select an active position available to this organisation, or assign it later.");
+        if(r.PositionId.HasValue)await PositionVacancy.RequireAsync(db,r.PositionId.Value,r.JoinedDate,null);
         if(r.PositionId.HasValue){var info=await PositionMatrixAssignments.SummaryAsync(db,r.PositionId.Value,r.JobMatrixStepId);if(info!=null&&(!r.JobMatrixStepId.HasValue||!info.Steps.Any(x=>x.Id==r.JobMatrixStepId)))throw new InvalidOperationException("Select the employee job pay step.");if(info==null&&r.JobMatrixStepId.HasValue)throw new InvalidOperationException("This position has no Job Matrix pay step.");}
         if (await db.Jobs.AnyAsync(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 &&
             (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate)))

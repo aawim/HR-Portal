@@ -98,11 +98,10 @@ public sealed partial class PayFrameworkTests
     {
         await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
         await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,2,new(2026,1,1),null));
-        await using var db=factory.CreateDbContext();var position=await db.Positions.OrderBy(x=>x.PositionId).FirstAsync();
-        // Reproduce the pre-existing single-record shared matrix format.
-        db.Positions.RemoveRange(await db.Positions.Where(x=>x.PositionId!=position.PositionId).ToListAsync());await db.SaveChangesAsync();
-        db.JobPositions.AddRange(new(){PositionId=position.PositionId,JobId=1,FromDate=new(2026,1,1),ToDate=new(2026,2,1),JobPositionStateId=4},new(){PositionId=position.PositionId,JobId=2,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
-        Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,position.PositionId,new(2026,1,1),new(2026,3,1)));
+        await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();
+        db.Jobs.AddRange(new(){JobId=1,OrganisationID=10,IndividualID=1,JobStateId=4,JoinedDate=new(2026,1,1)},new(){JobId=2,OrganisationID=10,IndividualID=2,JobStateId=4,JoinedDate=new(2026,1,1)});
+        db.JobPositions.AddRange(new(){PositionId=positions[0].PositionId,JobId=1,FromDate=new(2026,1,1),ToDate=new(2026,2,1),JobPositionStateId=4},new(){PositionId=positions[1].PositionId,JobId=2,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
+        Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,positions[0].PositionId,new(2026,2,1),new(2026,3,1)));
     }
     [Fact]public async Task Matrix_effective_dates_and_zero_slot_capacity_are_enforced()
     {
@@ -138,6 +137,7 @@ public sealed partial class PayFrameworkTests
         await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
         await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,2,new(2026,1,1),null));
         await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();Assert.Equal(2,positions.Count);Assert.Null((await db.PositionMatrices.SingleAsync()).JobMatrixStepId);Assert.DoesNotContain("Step",positions[0].Name);
+        db.Jobs.AddRange(new(){JobId=50,OrganisationID=10,IndividualID=50,JobStateId=4,JoinedDate=new(2026,1,1)},new(){JobId=51,OrganisationID=10,IndividualID=51,JobStateId=4,JoinedDate=new(2026,1,1)});
         var first=new JobPosition{JobId=50,PositionId=positions[0].PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};var second=new JobPosition{JobId=51,PositionId=positions[1].PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};
         db.JobPositions.AddRange(first,second);await db.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.SnapshotAsync(db,10,first,1));
@@ -152,12 +152,46 @@ public sealed partial class PayFrameworkTests
         await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
         Assert.True((await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,5,new(2026,1,1),null))).Success);
         await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();Assert.Equal(5,positions.Count);Assert.Single(positions.Select(x=>x.Name).Distinct());Assert.Single(positions.Select(x=>x.PositionMatrixId).Distinct());
-        var first=positions[0];db.JobPositions.Add(new(){PositionId=first.PositionId,JobId=1,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
+        var first=positions[0];db.Jobs.Add(new(){JobId=1,OrganisationID=10,IndividualID=1,JobStateId=4,JoinedDate=new(2026,1,1)});db.JobPositions.Add(new(){PositionId=first.PositionId,JobId=1,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
         var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.ValidateAsync(db,10,first.PositionId,new(2026,2,15),new(2026,3,15)));Assert.Contains("already assigned",error.Message);
         Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,positions[1].PositionId,new(2026,2,15),new(2026,3,15)));
         Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,first.PositionId,new(2026,3,1),new(2026,4,1)));
         Assert.True((await Service.SaveAsync(new(first.PositionId,first.Name,null,"Updated slot",true,false,2,first.PositionMatrixId))).Success);
         Assert.False((await Service.SaveAsync(new(0,first.Name,null,null,true,false,2,first.PositionMatrixId))).Success);
+    }
+    [Theory][InlineData(4)][InlineData(5)]public async Task Filled_slots_disappear_from_assignment_selectors_and_termination_releases_only_its_position(int terminatedState)
+    {
+        await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
+        await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,5,new(2026,1,1),null));
+        var today=DateTime.UtcNow.AddHours(5).Date;
+        await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();
+        db.Organisations.Add(new(){BusinessEntityID=10,OrganisationName="Tenant"});
+        db.Jobs.Add(new(){JobId=999,OrganisationID=10,IndividualID=999,JobStateId=5,JoinedDate=new(2026,1,1)});
+        for(var i=0;i<5;i++)
+        {
+            db.Jobs.Add(new(){JobId=100+i,OrganisationID=10,IndividualID=100+i,JobStateId=4,JoinedDate=today.AddDays(-10)});
+            db.JobPositions.Add(new(){JobId=100+i,PositionId=positions[i].PositionId,FromDate=today.AddDays(-10),JobPositionStateId=4});
+        }
+        await db.SaveChangesAsync();Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());
+        var staff=new StaffPositionManagementService(factory,access,null!,null!,null!,null!,null!);
+        var onboarding=new StaffOnboardingService(factory,access,null!,null!);
+        Assert.Empty((await staff.LoadAsync(999)).Positions);Assert.Empty((await onboarding.LoadAsync()).Positions);
+        var job=await db.Jobs.SingleAsync(x=>x.JobId==100);job.TerminatedDate=today.AddDays(1);await db.SaveChangesAsync();
+        Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());Assert.Single(await PositionVacancy.Vacant(db,today.AddDays(1)).ToListAsync());
+        job.TerminatedDate=today;job.JobStateId=terminatedState;await db.SaveChangesAsync();
+        Assert.Equal(positions[0].PositionId,Assert.Single((await staff.LoadAsync(999)).Positions).Id);
+        Assert.Equal(positions[0].PositionId,Assert.Single((await onboarding.LoadAsync()).Positions).Id);
+        Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,positions[0].PositionId,today,null));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.ValidateAsync(db,10,positions[0].PositionId,today.AddDays(-1),null));
+        await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.ValidateAsync(db,10,positions[1].PositionId,today,null));
+        db.Jobs.Add(new(){JobId=200,OrganisationID=10,IndividualID=200,JobStateId=4,JoinedDate=today});
+        db.JobPositions.Add(new(){JobId=200,PositionId=positions[0].PositionId,FromDate=today,JobPositionStateId=4});await db.SaveChangesAsync();
+        Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());Assert.Equal(6,await db.JobPositions.CountAsync());
+    }
+    [Fact]public void Vacancy_query_translates_to_sql_server_without_a_database_connection()
+    {
+        using var db=new HrmTeContext(new DbContextOptionsBuilder<HrmTeContext>().UseSqlServer("Server=unused;Database=unused;Integrated Security=true;TrustServerCertificate=true").Options);
+        var sql=PositionVacancy.Vacant(db,new(2026,10,30)).ToQueryString();Assert.Contains("TerminatedDate",sql);Assert.Contains("JobPositions",sql);
     }
     [Fact]public async Task Illustrated_profile_roundtrips_and_existing_requirement_rows_are_preserved()
     {
