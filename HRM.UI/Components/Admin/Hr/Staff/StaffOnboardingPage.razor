@@ -52,11 +52,15 @@
                     </label>
                     <label>Joining date <span aria-hidden="true">*</span><input type="date" class="mt-1 w-full rounded-lg border p-2" @bind="form.JoinedDate" disabled="@busy" /></label>
                     <label>Existing position (optional)
-                        <select class="mt-1 w-full rounded-lg border p-2" @bind="form.PositionId" disabled="@busy">
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="form.PositionId" @bind:after="()=>form.JobMatrixStepId=null" disabled="@busy">
                             <option value="">Assign later</option>
                             @foreach (var item in data.Positions) { <option value="@item.Id">@item.Name</option> }
                         </select>
                     </label>
+                    @if(data.Positions.FirstOrDefault(x=>x.Id==form.PositionId)?.Pay is {} payDefinition)
+                    {
+                        <label>Employee Job pay step<select @bind="form.JobMatrixStepId" disabled="@busy"><option value="">Select pay step</option>@foreach(var s in payDefinition.Steps){<option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option>}</select></label>
+                    }
                 </div>
                 <p class="text-xs text-slate-500">Only approved organisation structures in @data.Organisation are available.</p>
                 <label class="block">Appointment remarks<textarea class="mt-1 w-full rounded-lg border p-2" rows="3" maxlength="1000" @bind="form.Remarks" disabled="@busy"></textarea></label>
@@ -156,7 +160,7 @@
         if (busy) return;
         var submitted = new StaffOnboardingForm { IndividualId = form.IndividualId,
             OrganisationStructureId = form.OrganisationStructureId, JobTypeId = form.JobTypeId,
-            PositionId = form.PositionId, JoinedDate = form.JoinedDate, Remarks = form.Remarks };
+            PositionId = form.PositionId, JobMatrixStepId=form.JobMatrixStepId, JoinedDate = form.JoinedDate, Remarks = form.Remarks };
         busy = true; message = null;
         try
         {

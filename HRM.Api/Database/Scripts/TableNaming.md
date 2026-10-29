@@ -65,3 +65,7 @@ Related leave type policy tables use `LT_LeavePolicies` and `LT_LeavePolicyAccru
 `BE_Individuals` gains nullable `IsForeigner`, `ImageData` and `ImageContentType` through an additive migration. Existing individuals are preserved without guessed classification. No new physical table is created.
 
 The business entity registry uses `BE_` consistently: `Individuals` → `BE_Individuals`, `BusinessEntities` → `BE_BusinessEntities`, `VerifiedStates` → `BE_VerifiedStates`, and `BusinessEntityStates` → `BE_BusinessEntityStates`. `PrefixBusinessEntityTables` and `20261027_PrefixBusinessEntityTables.sql` rename existing objects in place. Original primary keys, foreign keys, indexes and state IDs are retained; the reviewed legacy `UserGetInfo` SQL module is updated without changing its interface or permissions. Historical applied migrations/scripts retain the names used when originally deployed. Current EF mappings and runtime SQL use the prefixed tables.
+
+JobMatrixProfilesAndEmployeeSteps reuses PF_JobMatrixQualifications and PF_JobMatrixDuties and adds profile columns to PF_JobMatrix. Employee step selections are stored on the existing SP_StaffPositionChangeRequests and SO_StaffOnboardingRequests; approved steps remain in PF_JobStepHistory by JobID. No replacement tables or destructive step-history conversion are used.
+
+PF_Professions stores versioned profession/occupation references linked to existing PF_JobFamilies. PF_JobMatrix.ProfessionID links dropdown selections without replacing position/job history. Existing family and title tables are reused.

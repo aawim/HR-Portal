@@ -40,6 +40,7 @@ public sealed partial class StaffPositionManagementService
             var instance = await WorkflowRequestProcessing.Instance(db,r.RequestId);
             var name = await db.Individuals.Where(i=>i.BusinessEntityId == r.IndividualId).Select(i=>i.FirstNameEnglish + " " + i.LastNameEnglish).SingleAsync();
             var position = await db.Positions.Where(p=>p.PositionId == r.PositionId).Select(p=>p.Name).SingleAsync();
+            if(r.JobMatrixStepId.HasValue)position+=" · Job pay step "+await db.FrameworkJobMatrixSteps.Where(x=>x.JobMatrixStepId==r.JobMatrixStepId).Select(x=>x.StepNumber).SingleAsync();
             var original = Original(r);
             if (r.ChangeKind == "Change" && original != null) position = original.Name + " → " + position;
             var history = instance == null ? new List<string>() : await db.WfRequestActions.Where(a=>a.WorkflowRequestInstanceId == instance.WorkflowRequestInstanceId)
@@ -66,8 +67,8 @@ public sealed partial class StaffPositionManagementService
             // Approve/reject always use the actual person's identity and configured stage assignment.
             var person = action == "Cancel" && r.CreatedByUserId == actor.User ? r.IndividualId : actor.Person;
             await Processing.ExecuteAsync(db,Subject(r),expectedState,action,comment,actor.User,person,
-                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",false),
-                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",true,r.RequestId));
+                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",false,payStepId:r.JobMatrixStepId),
+                ()=>ValidateAndApplyAsync(db,actor.Org,r.IndividualId,r.JobId,r.PositionId,r.FromDate,r.ToDate,r.Reason,Original(r),r.ChangeKind == "Change",true,r.RequestId,r.JobMatrixStepId));
             await tx.CommitAsync(); return ServiceResult.Ok("Position request action saved.");
         }
         catch(InvalidOperationException ex)

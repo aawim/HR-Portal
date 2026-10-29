@@ -1,0 +1,17 @@
+@using HRM.Application.Contracts.Pages
+<div class="space-y-2 text-sm">
+    <p>@Profile.Description</p>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <p>MISSCO: @Profile.MisscoCode · Skill level: @Profile.SkillLevel</p><p>Public service rank: @Profile.PublicServiceRank</p>
+        <p><JobFamilyIcon Family="@Profile.JobFamily" /> Job family: @Profile.JobFamily</p><p>Institutional category: @Profile.InstitutionalCategory</p>
+        <p>Daily attendance benefit: @Profile.AttendanceBenefitDaily?.ToString("N2")</p><p>Revised: @Profile.RevisedDate?.ToString("dd MMM yyyy")</p>
+    </div>
+    @if(!string.IsNullOrWhiteSpace(Profile.LicensesAndTraining)){<p class="whitespace-pre-wrap"><strong>Licenses and training:</strong> @Profile.LicensesAndTraining</p>}
+    @if(!string.IsNullOrWhiteSpace(Profile.Qualifications)){<p class="whitespace-pre-wrap"><strong>Qualifications and experience:</strong> @Profile.Qualifications</p>}
+    @if(!string.IsNullOrWhiteSpace(Profile.FieldsOfStudy)){<p class="whitespace-pre-wrap"><strong>Fields of study:</strong> @Profile.FieldsOfStudy</p>}
+    @if(!string.IsNullOrWhiteSpace(Profile.ExperienceAreas)){<p class="whitespace-pre-wrap"><strong>Experience areas:</strong> @Profile.ExperienceAreas</p>}
+    @if(!string.IsNullOrWhiteSpace(Profile.Duties)){<p class="whitespace-pre-wrap"><strong>Core duties:</strong> @Profile.Duties</p>}
+</div>
+@code{
+    [Parameter,EditorRequired]public JobMatrixProfile Profile{get;set;}=new();
+}

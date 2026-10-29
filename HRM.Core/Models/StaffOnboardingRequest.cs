@@ -9,6 +9,7 @@ public sealed class StaffOnboardingRequest
     public int OrganisationStructureId { get; set; }
     public int JobTypeId { get; set; }
     public int? PositionId { get; set; }
+    public int? JobMatrixStepId { get; set; }
     public DateTime JoinedDate { get; set; }
     public string Remarks { get; set; } = "";
     public int CreatedByUserId { get; set; }

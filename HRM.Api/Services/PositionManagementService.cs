@@ -19,9 +19,9 @@ public sealed partial class PositionManagementService(IDbContextFactory<HrmTeCon
     {
         var actor=await ScopeAsync();await using var db=await factory.CreateDbContextAsync();var today=DateTime.UtcNow.AddHours(5).Date;
         var frameworks=await db.PositionFrameworks.OrderBy(x=>x.FrameworkId).Select(x=>new PositionFrameworkOption(x.FrameworkId,x.Code,x.Name,x.IsActive)).ToListAsync();
-        var matrices=await(from m in db.PositionMatrices join j in db.FrameworkJobMatrices on m.JobMatrixId equals j.JobMatrixId join t in db.FrameworkJobTitles on m.JobTitleId equals t.JobTitleId join s in db.FrameworkJobMatrixSteps on m.JobMatrixStepId equals s.JobMatrixStepId
+        var matrices=await(from m in db.PositionMatrices join j in db.FrameworkJobMatrices on m.JobMatrixId equals j.JobMatrixId join t in db.FrameworkJobTitles on m.JobTitleId equals t.JobTitleId
             where m.OrganisationId==actor.Org&&m.IsActive&&m.EffectiveFrom<=today&&(!m.EffectiveTo.HasValue||m.EffectiveTo>=today)&&j.IsActive&&t.IsActive
-            orderby t.Name select new PositionMatrixOption(m.PositionMatrixId,t.Name+" · "+j.MatrixCode+" · Step "+s.StepNumber,s.BasicSalaryOverride??j.BasicSalary,m.ApprovedSlots){FrameworkId=j.FrameworkId??0}).ToListAsync();
+            orderby t.Name select new PositionMatrixOption(m.PositionMatrixId,t.Name+" · "+j.MatrixCode,j.BasicSalary,m.ApprovedSlots){FrameworkId=j.FrameworkId??0}).ToListAsync();
         var rows=await db.Positions.Include(x=>x.PositionBasicSalaries).Where(x=>x.OrganisationId==actor.Org||x.IsGlobal||x.OrganisationId==null&&db.JobPositions.Any(a=>a.PositionId==x.PositionId&&a.Job.OrganisationID==actor.Org)).OrderBy(x=>x.Name).ToListAsync();var positions=new List<ManagedPosition>();
         foreach(var p in rows)
         {

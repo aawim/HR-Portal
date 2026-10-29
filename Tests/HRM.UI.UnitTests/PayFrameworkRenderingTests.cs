@@ -23,7 +23,7 @@ public sealed class PayFrameworkRenderingTests
         Assert.Contains("New Pay Framework",html);Assert.Contains("Job Matrices",html);
         Assert.Equal(super,html.Contains("Save framework",StringComparison.Ordinal));
         html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<PositionMatrixEditor>(ParameterView.Empty)).ToHtmlString());
-        Assert.Contains("Approved staffing slots",html);Assert.Contains("Pay step",html);Assert.Contains("Effective from",html);
+        Assert.Contains("Approved staffing slots",html);Assert.DoesNotContain("Pay step<select",html);Assert.Contains("Effective from",html);
         Assert.DoesNotContain("could not be loaded",html);
     }
     public class Proxy:DispatchProxy

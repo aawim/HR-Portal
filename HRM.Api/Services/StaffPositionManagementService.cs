@@ -72,13 +72,13 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 Pay=payByPosition[assignment.PositionId]
             };
         }).ToList();
-        return new(manage, jobs, positions, assignments);
+        for(var i=0;i<assignments.Count;i++){var a=assignments[i];if(a.Pay!=null){var step=await db.FrameworkJobStepHistories.Where(x=>x.JobId==a.JobId&&x.EffectiveFrom==a.From).Select(x=>(int?)x.JobMatrixStepId).SingleOrDefaultAsync();assignments[i]=a with{Pay=await PositionMatrixAssignments.SummaryAsync(db,a.PositionId,step)};}} return new(manage, jobs, positions, assignments);
     }
 
     // Ending retains the original assignment and its linked requests/salary records.
     // Changing creates a successor instead of rewriting historical position names.
     public async Task SaveAsync(int staffId, int jobId, int positionId, DateTime from, DateTime? to,
-        string reason, Assignment? original = null, bool change = false, bool remove = false)
+        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null)
     {
         var (org, manage) = await ScopeAsync();
         if (!manage) throw new UnauthorizedAccessException("You do not have permission to manage staff positions.");
@@ -89,7 +89,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         {
             if (remove && (original == null || !to.HasValue || change))
                 throw new InvalidOperationException("Select the position and its last day.");
-            await ValidateAndApplyAsync(db, org, staffId, jobId, positionId, from, to, reason, original, change, false);
+            await ValidateAndApplyAsync(db, org, staffId, jobId, positionId, from, to, reason, original, change, false,payStepId:jobMatrixStepId);
             if (await db.StaffPositionChangeRequests.AnyAsync(r => r.JobId == jobId && r.OrganisationId == org && !r.Request.RequestState.IsFinalState))
                 throw new InvalidOperationException("This employment already has a pending position request. Complete or cancel it before submitting another.");
             var kind = remove ? "Remove" : change ? "Change" : original == null ? "Assign" : "Dates";
@@ -101,7 +101,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 ApplicantBusinessEntityId = staffId, OrganisationBusinessEntityId = org, EffectiveDate = remove ? to!.Value.Date : from.Date,
                 OperationLogId = audit.OperationLogId });
             db.StaffPositionChangeRequests.Add(new() { RequestId = request.RequestId, Request = request, JobId = jobId, IndividualId = staffId, OrganisationId = org,
-                ChangeKind = kind, PositionId = positionId, FromDate = from.Date, ToDate = to?.Date, Reason = reason.Trim(),
+                ChangeKind = kind, PositionId = positionId, JobMatrixStepId=jobMatrixStepId, FromDate = from.Date, ToDate = to?.Date, Reason = reason.Trim(),
                 OriginalJson = original == null ? null : JsonSerializer.Serialize(original), CreatedByUserId = actor.UserId, CreatedAtUtc = DateTime.UtcNow });
             await db.SaveChangesAsync();
             await workflow.StartAsync(db, request.RequestId, jobId);
@@ -114,7 +114,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
     }
 
     private async Task ValidateAndApplyAsync(HrmTeContext db, int org, int staffId, int jobId, int positionId,
-        DateTime from, DateTime? to, string reason, Assignment? original, bool change, bool apply, int? approvalRequestId = null)
+        DateTime from, DateTime? to, string reason, Assignment? original, bool change, bool apply, int? approvalRequestId = null,int? payStepId=null)
     {
         if (string.IsNullOrWhiteSpace(reason) || reason.Trim().Length > 500)
             throw new InvalidOperationException("Enter a reason of up to 500 characters.");
@@ -151,7 +151,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             (existing == null || a.JobPositionId != existing.JobPositionId) &&
             (!to.HasValue || a.FromDate < to.Value) && (!a.ToDate.HasValue || a.ToDate.Value > from)))
             throw new InvalidOperationException("This position already has an assignment overlapping those dates.");
-        await PositionMatrixAssignments.ValidateAsync(db,org,positionId,from,to,existing?.JobPositionId);
+        var payDefinition=await PositionMatrixAssignments.ValidateAsync(db,org,positionId,from,to,existing?.JobPositionId,payStepId); if((existing==null||change)&&payDefinition!=null&&payDefinition.Step==null)throw new InvalidOperationException("Select the employee job pay step."); if(payDefinition==null&&payStepId.HasValue)throw new InvalidOperationException("This position does not use a Job Matrix pay step.");
         FrameworkJobStepHistory? currentPay=null;
         if(existing!=null&&!change)
         {
@@ -197,7 +197,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 FromDate = from, ToDate = to, JobPositionStateId = 4, OperationLogId = audit.OperationLogId };
             db.JobPositions.Add(approvedPosition);
             await db.SaveChangesAsync();
-            await PositionMatrixAssignments.SnapshotAsync(db,org,approvedPosition,audit.OperationLogId,change);
+            await PositionMatrixAssignments.SnapshotAsync(db,org,approvedPosition,audit.OperationLogId,change,payStepId);
             if(approvalRequestId.HasValue)db.JobPositionsRequests.Add(new(){JobPositionId=approvedPosition.JobPositionId,RequestId=approvalRequestId.Value,OperationLogId=audit.OperationLogId});
         }
         await db.SaveChangesAsync();

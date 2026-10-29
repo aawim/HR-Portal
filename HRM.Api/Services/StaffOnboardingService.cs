@@ -60,7 +60,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             result.Positions = await db.Positions.Where(x => x.IsActive != false && (x.IsGlobal || x.OrganisationId == org))
                 .OrderBy(x => x.Name).Select(x => new OnboardingOption(x.PositionId, x.Name)).ToListAsync();
         }
-        return result;
+        for(var i=0;i<result.Positions.Count;i++){var p=result.Positions[i]; if(await db.Positions.AnyAsync(x=>x.PositionId==p.Id&&x.PositionMatrixId.HasValue))result.Positions[i]=p with{Pay=await PositionMatrixAssignments.SummaryAsync(db,p.Id)};} return result;
     }
 
     private static async Task ValidatePersonAsync(HrmTeContext db, int person, int org, bool super)
@@ -103,6 +103,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         if (r.PositionId.HasValue && !await db.Positions.AnyAsync(x => x.PositionId == r.PositionId && x.IsActive != false &&
             (x.IsGlobal || x.OrganisationId == r.OrganisationId)))
             throw new InvalidOperationException("Select an active position available to this organisation, or assign it later.");
+        if(r.PositionId.HasValue){var info=await PositionMatrixAssignments.SummaryAsync(db,r.PositionId.Value,r.JobMatrixStepId);if(info!=null&&(!r.JobMatrixStepId.HasValue||!info.Steps.Any(x=>x.Id==r.JobMatrixStepId)))throw new InvalidOperationException("Select the employee job pay step.");if(info==null&&r.JobMatrixStepId.HasValue)throw new InvalidOperationException("This position has no Job Matrix pay step.");}
         if (await db.Jobs.AnyAsync(x => x.IndividualID == r.IndividualId && x.JobStateId == 4 &&
             (!x.TerminatedDate.HasValue || x.TerminatedDate >= r.JoinedDate)))
             throw new InvalidOperationException("This individual already has approved employment overlapping the proposed joining date.");
@@ -168,7 +169,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                 RequestEffectiveDate = model.JoinedDate.Date, ApplicantBusinessEntityId = model.IndividualId,
                 OrganisationBusinessEntityID = org, LastStateChangedByUserId = actor.UserId, LastStateChangedDate = DateTime.UtcNow };
             var r = new StaffOnboardingRequest { Request = request, IndividualId = model.IndividualId, OrganisationId = org,
-                OrganisationStructureId = model.OrganisationStructureId, JobTypeId = model.JobTypeId, PositionId = model.PositionId,
+                OrganisationStructureId = model.OrganisationStructureId, JobTypeId = model.JobTypeId, PositionId = model.PositionId, JobMatrixStepId=model.JobMatrixStepId,
                 JoinedDate = model.JoinedDate.Date, Remarks = model.Remarks?.Trim() ?? "", CreatedByUserId = actor.UserId, CreatedAtUtc = DateTime.UtcNow };
             await ValidateFieldsAsync(db, r);
             var definition = await DefinitionAsync(db, r);
@@ -248,7 +249,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             rows.Add(new StaffOnboardingRow { RequestId = r.RequestId, Reference = r.Request.ReferenceNumber ?? $"ONB-{r.RequestId}",
                 Individual = Name(r.Individual), Department = await db.OrganisationStructures.Where(x => x.OrganisationStructureId == r.OrganisationStructureId).Select(x => x.Name).SingleAsync(),
                 JobType = await db.JobTypes.Where(x => x.JobTypeId == r.JobTypeId).Select(x => x.TypeName).SingleAsync(),
-                Position = r.PositionId.HasValue ? await db.Positions.Where(x => x.PositionId == r.PositionId).Select(x => x.Name).SingleAsync() : "Assign later",
+                Position = r.PositionId.HasValue ? (await db.Positions.Where(x => x.PositionId == r.PositionId).Select(x => x.Name).SingleAsync())+(r.JobMatrixStepId.HasValue?" · Job pay step "+await db.FrameworkJobMatrixSteps.Where(x=>x.JobMatrixStepId==r.JobMatrixStepId).Select(x=>x.StepNumber).SingleAsync():"") : "Assign later",
                 JoinedDate = r.JoinedDate, Remarks = r.Remarks, StateId = r.Request.RequestStateId,
                 Status = r.Request.RequestState.IsFinalState ? r.Request.RequestState.StateName.Trim() : $"Processing · {r.Request.RequestState.StateName.Trim()}",
                 Stage = instance?.CurrentStage?.WorkflowStage.StageName, IsOpen = r.IsOpen,
@@ -388,10 +389,10 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         db.Jobs.Add(job); await db.SaveChangesAsync();
         if (r.PositionId.HasValue)
         {
-            await PositionMatrixAssignments.ValidateAsync(db,r.OrganisationId,r.PositionId.Value,r.JoinedDate,null);
+            await PositionMatrixAssignments.ValidateAsync(db,r.OrganisationId,r.PositionId.Value,r.JoinedDate,null,selectedStepId:r.JobMatrixStepId);
             var position = new HRM.Models.JobPosition { JobId = job.JobId, PositionId = r.PositionId.Value, FromDate = r.JoinedDate, JobPositionStateId = 4, OperationLogId = audit.OperationLogId };
             db.JobPositions.Add(position); await db.SaveChangesAsync();
-            await PositionMatrixAssignments.SnapshotAsync(db,r.OrganisationId,position,audit.OperationLogId);
+            await PositionMatrixAssignments.SnapshotAsync(db,r.OrganisationId,position,audit.OperationLogId,selectedStepId:r.JobMatrixStepId);
             db.JobPositionsRequests.Add(new JobPositionsRequest { JobPositionId = position.JobPositionId, RequestId = r.RequestId, OperationLogId = audit.OperationLogId });
         }
         db.JobRequests.Add(new JobRequest { JobId = job.JobId, RequestId = r.RequestId });

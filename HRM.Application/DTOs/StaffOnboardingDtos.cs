@@ -1,6 +1,9 @@
 namespace HRM.DTOs;
 
-public sealed record OnboardingOption(int Id, string Name);
+public sealed record OnboardingOption(int Id, string Name)
+{
+    public HRM.Application.Contracts.Pages.PositionPayInfo? Pay {get;init;}
+}
 public sealed record OnboardingDepartmentOption(int Id, string Name, int StructureTypeId);
 public sealed class StaffOnboardingForm
 {
@@ -8,6 +11,7 @@ public sealed class StaffOnboardingForm
     public int OrganisationStructureId { get; set; }
     public int JobTypeId { get; set; }
     public int? PositionId { get; set; }
+    public int? JobMatrixStepId { get; set; }
     public DateTime JoinedDate { get; set; } = DateTime.UtcNow.AddHours(5).Date;
     public string Remarks { get; set; } = "";
 }

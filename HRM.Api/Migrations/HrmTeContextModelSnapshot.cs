@@ -4260,6 +4260,10 @@ namespace HRM.Migrations
 
                     SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixId"));
 
+                    b.Property<decimal?>("AttendanceBenefitDaily")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
                     b.Property<decimal>("BasicSalary")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -4268,23 +4272,55 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("CurrencyTypeID");
 
+                    b.Property<string>("Description")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<DateTime>("EffectiveFrom")
                         .HasColumnType("date");
 
                     b.Property<DateTime?>("EffectiveTo")
                         .HasColumnType("date");
 
+                    b.Property<string>("ExperienceAreas")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("FieldsOfStudy")
+                        .HasColumnType("nvarchar(max)");
+
                     b.Property<int?>("FrameworkId")
                         .HasColumnType("int")
                         .HasColumnName("FrameworkID");
 
+                    b.Property<string>("GradeCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("InstitutionalCategory")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
+
+                    b.Property<int?>("JobFamilyId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobFamilyID");
+
+                    b.Property<string>("JobFamilyName")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("LicensesAndTraining")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("MatrixCode")
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("MisscoCode")
+                        .HasMaxLength(10)
+                        .HasColumnType("nvarchar(10)");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -4294,6 +4330,20 @@ namespace HRM.Migrations
                     b.Property<int?>("OperationLogId")
                         .HasColumnType("int")
                         .HasColumnName("OperationLogID");
+
+                    b.Property<int?>("ProfessionId")
+                        .HasColumnType("int")
+                        .HasColumnName("ProfessionID");
+
+                    b.Property<string>("PublicServiceRank")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<DateTime?>("RevisedDate")
+                        .HasColumnType("date");
+
+                    b.Property<byte?>("SkillLevel")
+                        .HasColumnType("tinyint");
 
                     b.HasKey("JobMatrixId");
 
@@ -4458,6 +4508,62 @@ namespace HRM.Migrations
                     b.HasKey("JobTitleId");
 
                     b.ToTable("PF_JobTitles", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkMatrixDuty", b =>
+                {
+                    b.Property<int>("JobMatrixDutyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixDutyID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixDutyId"));
+
+                    b.Property<string>("DutyDescription")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.Property<int>("SequenceNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("JobMatrixDutyId");
+
+                    b.ToTable("PF_JobMatrixDuties", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkMatrixQualification", b =>
+                {
+                    b.Property<int>("JobMatrixQualificationId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixQualificationID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixQualificationId"));
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.Property<int>("PathwayNumber")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RequirementText")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("JobMatrixQualificationId");
+
+                    b.ToTable("PF_JobMatrixQualifications", null, t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -7439,6 +7545,78 @@ namespace HRM.Migrations
                     b.ToTable("OT_WorkTasks", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.PayJobFamily", b =>
+                {
+                    b.Property<int>("JobFamilyId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobFamilyID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobFamilyId"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.HasKey("JobFamilyId");
+
+                    b.ToTable("PF_JobFamilies", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.PayProfession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ExampleTitlesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobFamilyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("MisscoCodesJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<string>("SourceEdition")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("SourcePage")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Tasks")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobFamilyId", "Name", "SourceEdition")
+                        .IsUnique();
+
+                    b.ToTable("PF_Professions", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.Position", b =>
                 {
                     b.Property<int>("PositionId")
@@ -7709,7 +7887,7 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("JobMatrixID");
 
-                    b.Property<int>("JobMatrixStepId")
+                    b.Property<int?>("JobMatrixStepId")
                         .HasColumnType("int")
                         .HasColumnName("JobMatrixStepID");
 
@@ -8745,6 +8923,9 @@ namespace HRM.Migrations
                     b.Property<int?>("JobId")
                         .HasColumnType("int");
 
+                    b.Property<int?>("JobMatrixStepId")
+                        .HasColumnType("int");
+
                     b.Property<int>("JobTypeId")
                         .HasColumnType("int");
 
@@ -8820,6 +9001,9 @@ namespace HRM.Migrations
                         .HasColumnType("int");
 
                     b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("JobMatrixStepId")
                         .HasColumnType("int");
 
                     b.Property<int>("OrganisationId")
@@ -14601,6 +14785,15 @@ namespace HRM.Migrations
                         .IsRequired();
 
                     b.Navigation("WorkRequest");
+                });
+
+            modelBuilder.Entity("HRM.Models.PayProfession", b =>
+                {
+                    b.HasOne("HRM.Models.PayJobFamily", null)
+                        .WithMany()
+                        .HasForeignKey("JobFamilyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.Position", b =>

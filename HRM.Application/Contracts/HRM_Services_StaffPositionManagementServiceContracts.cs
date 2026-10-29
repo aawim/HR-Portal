@@ -29,7 +29,7 @@ public interface IOperations
 Task<Data> LoadAsync(int staffId)
 ;
 Task SaveAsync(int staffId, int jobId, int positionId, DateTime from, DateTime? to,
-        string reason, Assignment? original = null, bool change = false, bool remove = false)
+        string reason, Assignment? original = null, bool change = false, bool remove = false, int? jobMatrixStepId = null)
 ;
 Task<List<StaffPositionRequestRow>> LoadRequestsAsync(int? staffId = null, bool pendingOnly = false)
 ;

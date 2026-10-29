@@ -10,23 +10,23 @@
             <label>Pay framework<select @bind="frameworkId" @bind:after="ChangeFramework"><option value="0">Select</option>@foreach(var f in data.Frameworks.Where(x=>x.Active)){<option value="@f.Id">@f.Name</option>}</select></label>
             <label>Job matrix<select @bind="matrixId" @bind:after="ChangeMatrix"><option value="0">Select</option>@foreach(var m in data.Matrices.Where(x=>x.FrameworkId==frameworkId&&x.Active)){<option value="@m.Id">@m.Code · @m.Name</option>}</select></label>
             <label>Title<select @bind="titleId"><option value="0">Select</option>@if(Selected!=null){@foreach(var t in Selected.Titles){<option value="@t.Id">@t.Name</option>}}</select></label>
-            <label>Pay step<select @bind="stepId"><option value="0">Select</option>@if(Selected!=null){@foreach(var s in Selected.Steps.Where(x=>x.Active)){<option value="@s.Id">Step @s.Number</option>}}</select></label>
             <label>Approved staffing slots<input type="number" min="1" @bind="slots" /></label>
             <label>Effective from<input type="date" @bind="from" /></label><label>Effective through<input type="date" @bind="to" /></label>
             <button class="app-button app-button-primary self-end" @onclick="Save">Create position</button>
         </fieldset>
         @if(Selected!=null)
         {
-            <div class="mt-3 space-y-1"><p>Salary: @(Selected.Steps.FirstOrDefault(x=>x.Id==stepId)?.BasicSalary.ToString("N2")??"Select a step") · @data.Currencies.FirstOrDefault(x=>x.Id==Selected.CurrencyId)?.Name</p><p>Step job allowance: @(Selected.Steps.FirstOrDefault(x=>x.Id==stepId)?.JobAllowance.ToString("N2")??"—")</p>@foreach(var b in Selected.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
+            <details class="mt-3"><summary>Job Matrix requirements</summary><JobMatrixProfileView Profile="Selected.Profile" /></details>
+            <div class="mt-3 space-y-1"><p>Basic salary: @Selected.BasicSalary.ToString("N2") · @data.Currencies.FirstOrDefault(x=>x.Id==Selected.CurrencyId)?.Name</p><p>Pay step is selected for the employee's Job at assignment.</p>@foreach(var b in Selected.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
         }
     }
 </details>
 @code{
     [Parameter]public EventCallback OnCreated{get;set;}
-    private PayFrameworkData? data;private bool busy;private string? error;private int frameworkId,matrixId,titleId,stepId,slots=1;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;
+    private PayFrameworkData? data;private bool busy;private string? error;private int frameworkId,matrixId,titleId,slots=1;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;
     private JobMatrixRow? Selected=>data?.Matrices.FirstOrDefault(x=>x.Id==matrixId);
     protected override async Task OnInitializedAsync(){try{data=await Service.LoadPayFrameworksAsync();}catch(Exception){error="Job matrix information could not be loaded.";}}
     private void ChangeFramework(){matrixId=0;ChangeMatrix();}
-    private void ChangeMatrix(){titleId=0;stepId=0;if(Selected!=null){from=Selected.From>DateTime.UtcNow.AddHours(5).Date?Selected.From:DateTime.UtcNow.AddHours(5).Date;to=Selected.To;}}
-    private async Task Save(){if(busy)return;busy=true;error=null;try{var result=await Service.CreatePositionMatrixAsync(new(matrixId,titleId,stepId,slots,from,to));if(result.Success){Toasts.Success(result.Message);matrixId=0;titleId=0;stepId=0;slots=1;await OnCreated.InvokeAsync();}else error=result.Message;}catch(Exception){error="The position matrix could not be created. Please try again.";}finally{busy=false;}}
+    private void ChangeMatrix(){titleId=0;if(Selected!=null){from=Selected.From>DateTime.UtcNow.AddHours(5).Date?Selected.From:DateTime.UtcNow.AddHours(5).Date;to=Selected.To;}}
+    private async Task Save(){if(busy)return;busy=true;error=null;try{var result=await Service.CreatePositionMatrixAsync(new(matrixId,titleId,slots,from,to));if(result.Success){Toasts.Success(result.Message);matrixId=0;titleId=0;slots=1;await OnCreated.InvokeAsync();}else error=result.Message;}catch(Exception){error="The position matrix could not be created. Please try again.";}finally{busy=false;}}
 }

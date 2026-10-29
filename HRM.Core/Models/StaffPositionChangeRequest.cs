@@ -8,6 +8,7 @@ public sealed class StaffPositionChangeRequest
     public int JobId { get; set; }
     public int IndividualId { get; set; }
     public int PositionId { get; set; }
+    public int? JobMatrixStepId { get; set; }
     public string ChangeKind { get; set; } = "Assign";
     public DateTime FromDate { get; set; }
     public DateTime? ToDate { get; set; }

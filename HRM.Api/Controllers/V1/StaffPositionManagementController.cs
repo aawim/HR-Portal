@@ -15,7 +15,7 @@ public sealed class StaffPositionManagementController(global::HRM.Services.Contr
     [HttpPost("save")]
     public async Task<IActionResult> Save([FromBody] StaffPositionManagementSaveRequest request)
     {
-        await service.SaveAsync(request.staffId, request.jobId, request.positionId, request.from, request.to, request.reason, request.original, request.change, request.remove);
+        await service.SaveAsync(request.staffId, request.jobId, request.positionId, request.from, request.to, request.reason, request.original, request.change, request.remove, request.jobMatrixStepId);
         return NoContent();
     }
 
@@ -30,6 +30,7 @@ public sealed class StaffPositionManagementController(global::HRM.Services.Contr
         public global::HRM.Services.Contracts.StaffPositionManagementServiceContracts.Assignment? original { get; set; } = null;
         public global::System.Boolean change { get; set; } = false;
         public global::System.Boolean remove { get; set; } = false;
+        public global::System.Int32? jobMatrixStepId { get; set; } = null;
     }
 
     [HttpGet("load-requests")]

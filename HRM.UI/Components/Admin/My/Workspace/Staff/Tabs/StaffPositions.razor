@@ -46,7 +46,7 @@
                         </select>
                     </label>
                     <label class="text-sm">Position
-                        <select class="mt-1 w-full rounded-lg border p-2" @bind="positionId" disabled="@(original != null && !changing)" required>
+                        <select class="mt-1 w-full rounded-lg border p-2" @bind="positionId" @bind:after="()=>jobMatrixStepId=null" disabled="@(original != null && !changing)" required>
                             <option value="0">Select position</option>
                             @foreach (var position in data.Positions) { <option value="@position.Id">@position.Name</option> }
                             @if (original != null && !data.Positions.Any(p => p.Id == original.PositionId))
@@ -56,6 +56,10 @@
                     <label class="text-sm">From date
                         <InputDate class="mt-1 w-full rounded-lg border p-2" @bind-Value="from" disabled="@ending" />
                     </label>
+                    @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} payDefinition && (original==null||changing))
+                    {
+                        <label>Employee Job pay step<select @bind="jobMatrixStepId"><option value="">Select pay step</option>@foreach(var s in payDefinition.Steps){<option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option>}</select></label>
+                    }
                     <label class="text-sm">To date @(ending ? "(required)" : "(optional)")
                         <InputDate class="mt-1 w-full rounded-lg border p-2" @bind-Value="to" />
                     </label>
@@ -119,6 +123,7 @@
     private Assignment? original;
     private bool loading, busy, editing, changing, ending;
     private int jobId, positionId, requestVersion;
+    private int? jobMatrixStepId;
     private DateTime from = Today;
     private DateTime? to;
     private string reason = "";
@@ -135,13 +140,13 @@
     }
     private void New()
     {
-        original = null; changing = ending = false; editing = true; message = null;
+        jobMatrixStepId=null;original = null; changing = ending = false; editing = true; message = null;
         jobId = data!.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
     }
     private void Edit(Assignment item, bool change = false, bool end = false)
     {
         original = item; changing = change; ending = end; editing = true; message = null;
-        jobId = item.JobId; positionId = change ? 0 : item.PositionId;
+        jobMatrixStepId=null;jobId = item.JobId; positionId = change ? 0 : item.PositionId;
         from = change ? (Today > item.From.Date ? Today : item.From.Date.AddDays(1)) : item.From;
         to = end ? (Today >= item.From.Date ? Today : item.From.Date) : change ? null : item.To; reason = "";
     }
@@ -153,7 +158,7 @@
         busy = true;
         try
         {
-            await Positions.SaveAsync(StaffId, jobId, positionId, from, to, reason, original, changing, ending);
+            await Positions.SaveAsync(StaffId, jobId, positionId, from, to, reason, original, changing, ending,jobMatrixStepId);
             Toasts.Success("Position request submitted for approval.");
             requestVersion++;
             await LoadAsync();

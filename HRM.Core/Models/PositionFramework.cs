@@ -13,7 +13,7 @@ public sealed class PositionMatrix
     public int? OrganisationStructureId {get;set;}
     public int JobMatrixId {get;set;}
     public int JobTitleId {get;set;}
-    public int JobMatrixStepId {get;set;}
+    public int? JobMatrixStepId {get;set;}
     public int ApprovedSlots {get;set;}
     public DateTime EffectiveFrom {get;set;}
     public DateTime? EffectiveTo {get;set;}
@@ -22,6 +22,8 @@ public sealed class PositionMatrix
 }
 public sealed class FrameworkJobMatrix
 {
+    public int? JobFamilyId {get;set;}
+    public int? ProfessionId {get;set;}
     public int JobMatrixId {get;set;}
     public string MatrixCode {get;set;}="";
     public string Name {get;set;}="";
@@ -32,6 +34,18 @@ public sealed class FrameworkJobMatrix
     public DateTime EffectiveFrom {get;set;}
     public DateTime? EffectiveTo {get;set;}
     public int? OperationLogId {get;set;}
+    public string? Description {get;set;}
+    public string? PublicServiceRank {get;set;}
+    public string? InstitutionalCategory {get;set;}
+    public string? GradeCode {get;set;}
+    public decimal? AttendanceBenefitDaily {get;set;}
+    public DateTime? RevisedDate {get;set;}
+    public string? LicensesAndTraining {get;set;}
+    public string? FieldsOfStudy {get;set;}
+    public string? ExperienceAreas {get;set;}
+    public string? JobFamilyName {get;set;}
+    public string? MisscoCode {get;set;}
+    public byte? SkillLevel {get;set;}
 }
 public sealed class FrameworkJobTitle
 {
@@ -52,6 +66,20 @@ public sealed class FrameworkJobMatrixTitle
 {
     public int JobMatrixId {get;set;}
     public int JobTitleId {get;set;}
+}
+public sealed class FrameworkMatrixDuty
+{
+    public int JobMatrixDutyId {get;set;}
+    public int JobMatrixId {get;set;}
+    public int SequenceNumber {get;set;}
+    public string DutyDescription {get;set;}="";
+}
+public sealed class FrameworkMatrixQualification
+{
+    public int JobMatrixQualificationId {get;set;}
+    public int JobMatrixId {get;set;}
+    public int PathwayNumber {get;set;}
+    public string RequirementText {get;set;}="";
 }
 public sealed class FrameworkJobMatrixBenefit
 {
