@@ -25,7 +25,8 @@ public sealed partial class PositionManagementService
         var professions=(await db.PayProfessions.Where(x=>x.IsActive).OrderBy(x=>x.Name).ToListAsync()).Select(x=>new ProfessionOption(x.Id,x.JobFamilyId,x.Name,x.Tasks,System.Text.Json.JsonSerializer.Deserialize<List<string>>(x.ExampleTitlesJson)??[],System.Text.Json.JsonSerializer.Deserialize<List<string>>(x.MisscoCodesJson)??[])).ToList();
         var studyFields=await db.PayStudyFields.Where(x=>x.IsActive).OrderBy(x=>x.Name).Select(x=>new StudyFieldOption(x.JobFamilyId,x.Name)).ToListAsync();
         var experienceAreas=await db.PayExperienceAreas.Where(x=>x.IsActive).OrderBy(x=>x.Sector).ThenBy(x=>x.Name).Select(x=>new ExperienceAreaOption(x.Id,x.JobFamilyId,x.Sector,x.Name,x.Description)).ToListAsync();
-        return new(frameworks,matrices,currencies,actor.Super,actor.Manage){JobFamilies=families,Professions=professions,StudyFields=studyFields,ExperienceAreas=experienceAreas};
+        var templates=(await db.ProfessionRequirementTemplates.Where(x=>x.IsActive).OrderBy(x=>x.PublicServiceRank).ToListAsync()).Select(x=>new ProfessionRequirementOption(x.ProfessionId,x.PublicServiceRank,System.Text.Json.JsonSerializer.Deserialize<JobMatrixProfile>(x.ProfileJson)??new(),x.SourceReference)).ToList();
+        return new(frameworks,matrices,currencies,actor.Super,actor.Manage){JobFamilies=families,Professions=professions,StudyFields=studyFields,ExperienceAreas=experienceAreas,RequirementTemplates=templates};
     }
 
     public async Task<ServiceResult> SaveFrameworkAsync(PayFrameworkInput input)

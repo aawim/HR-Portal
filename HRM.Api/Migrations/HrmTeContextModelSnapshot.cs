@@ -8231,6 +8231,43 @@ namespace HRM.Migrations
                     b.ToTable("PositionTypes");
                 });
 
+            modelBuilder.Entity("HRM.Models.ProfessionRequirementTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ProfessionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProfileJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("PublicServiceRank")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfessionId", "PublicServiceRank")
+                        .IsUnique();
+
+                    b.ToTable("PF_ProfessionRequirementTemplates", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PF_ProfessionRequirements_Profile", "ISJSON([ProfileJson])=1 AND [PublicServiceRank]>0");
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.Request", b =>
                 {
                     b.Property<int>("RequestId")
@@ -15197,6 +15234,15 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
 
                     b.Navigation("OrganisationBusinessEntity");
+                });
+
+            modelBuilder.Entity("HRM.Models.ProfessionRequirementTemplate", b =>
+                {
+                    b.HasOne("HRM.Models.PayProfession", null)
+                        .WithMany()
+                        .HasForeignKey("ProfessionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.Request", b =>

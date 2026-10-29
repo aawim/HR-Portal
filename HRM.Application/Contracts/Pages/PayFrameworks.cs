@@ -46,6 +46,7 @@ public sealed record PositionPayInfo(string Currency,decimal BasicSalary,decimal
 public sealed record ProfessionOption(int Id,int FamilyId,string Name,string Tasks,List<string> Titles,List<string> MisscoCodes);
 public sealed record StudyFieldOption(int FamilyId,string Name);
 public sealed record ExperienceAreaOption(int Id,int? FamilyId,string Sector,string Name,string Description);
+public sealed record ProfessionRequirementOption(int ProfessionId,int Rank,JobMatrixProfile Profile,string Source);
 public sealed record PayFrameworkData(List<PositionFrameworkOption> Frameworks,List<JobMatrixRow> Matrices,
     List<PositionLookup> Currencies,bool CanManageFrameworks,bool CanManagePositions)
 {
@@ -53,4 +54,5 @@ public sealed record PayFrameworkData(List<PositionFrameworkOption> Frameworks,L
     public List<ProfessionOption> Professions {get;init;}=[];
     public List<StudyFieldOption> StudyFields {get;init;}=[];
     public List<ExperienceAreaOption> ExperienceAreas {get;init;}=[];
+    public List<ProfessionRequirementOption> RequirementTemplates {get;init;}=[];
 }
