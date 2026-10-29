@@ -47,9 +47,10 @@ namespace HRM.Enum
         [Display(Name = "Create Assignment")]
         AssignmentCreate,
         AssignedRoles,
-        Permissions
+        Permissions,
+        WorkTypes
     }
 }
 
 
- 
+

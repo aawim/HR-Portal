@@ -1,6 +1,6 @@
 # Work Type management
 
-Open Settings → Work Planning → Work Types (`/admin/settings/workplaning/work-types`). Platform administrators maintain the shared catalogue. Staff with `WorkTypes.Manage` manage dated assignments in their current organisation. Grant this permission through the existing organisation permission limits and User Groups/direct permissions.
+Open Settings → Job → Work Types (`/admin/settings/job/work-types`) for the shared catalogue. Platform administrators maintain it. Open a staff member in Admin → My Workspace → Work types to manage their dated assignments; the selected staff member and current job are used automatically. Staff with `WorkTypes.Manage` manage assignments in their current organisation. Grant this permission through the existing organisation permission limits and User Groups/direct permissions. The previous Work Planning URL redirects to the catalogue.
 
 Existing physical tables `WorkTypes` and `AssignedWorkTypes` are retained; these are legacy tables reattached by the existing mapping, not newly created replacement tables. Both mappings remain excluded from migrations. No historical assignments are backfilled or guessed. Work type removal uses deactivation and assignment removal retains history.
 

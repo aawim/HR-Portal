@@ -207,6 +207,9 @@
             new("Structure Request Types", "📥", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
         },
+        "job" => new() {
+            new("Work Types", "📋", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
+        },
         "payroll" => new() {
             new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
             new("Manage Item Type", "📑", "Categorize payroll income and deductions.", null)
@@ -232,7 +235,6 @@
            new("Manage Positions", "💼", "Configure attendance clients and devices.", typeof(PositionGrid)),
         },
         "workplaning" => new() {
-           new("Work Types", "📋", "Manage work types and dated staff assignments.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
            new("Schedule assignments", "📅", "Assign official defaults and duties to organisations, structures and staff groups.", typeof(ScopeScheduleSettings)),
            new("Working Hours", "🕒", "Configure weekly hours and temporary official start-time amendments.", typeof(WorkingHoursSettings)),
            new("Duty roster", "📅", "View dated duties and arrange staff acceptance, transfers and swaps.", typeof(HRM.Components.Pages.Online.DutyRoster)),
@@ -287,7 +289,12 @@
         if (CategoryName == "leaves" && Section is "new-lt" or "manage-new-lt") { Navigation.NavigateTo("/admin/settings/leaves/leave-types", replace: true); return; }
         if(CategoryName=="leaves" && Section=="leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return; }
         if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
-        if (CategoryName == "jobs" && (string.IsNullOrWhiteSpace(Section) || Section is "job-types" or "job-type-configuration"))
+        if (CategoryName == "workplaning" && Section == "work-types" || CategoryName == "jobs" && (string.IsNullOrWhiteSpace(Section) || Section == "work-types"))
+        {
+            Navigation.NavigateTo("/admin/settings/job/work-types", replace: true);
+            return;
+        }
+        if (CategoryName == "jobs" && Section is "job-types" or "job-type-configuration")
         {
             Navigation.NavigateTo("/admin/settings/config/job-types", replace: true);
             return;
