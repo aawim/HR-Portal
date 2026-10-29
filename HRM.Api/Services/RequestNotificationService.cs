@@ -137,6 +137,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.ViewUrl == AdminAccessGrantService.PageUrl ? "/online/admin-access" :
             n.ViewUrl == StaffOnboardingService.PageUrl ? $"{StaffOnboardingService.PageUrl}?requestId={n.RequestId}" :
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
+            n.NotificationKind == "ActionRequired" && n.IsAttendance ? HRM.Application.Presentation.AttendanceRequestNavigation.ReviewUrl(n.RequestId) :
             n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
             n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online"),

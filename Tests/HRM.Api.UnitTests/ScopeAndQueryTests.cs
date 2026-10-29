@@ -68,8 +68,26 @@ public sealed class ScopeAndQueryTests
         var filter = new AttendanceRequestFilter(new(2026, 10, 27), new(2026, 10, 27));
         Assert.Equal("ATT-1", Assert.Single((await service.GetMineAsync(filter)).Requests).Reference);
         Assert.Empty((await service.GetReceivedAsync(filter)).Requests);
+        Assert.Empty((await service.GetReceivedAsync(filter with { RequestId = 2 })).Requests);
+        await using (var db = factory.CreateDbContext())
+        {
+            db.WfRequestApprovals.Add(new()
+            {
+                ApproverUserId = access.Actor!.UserId,
+                RequestStageInstance = new()
+                {
+                    WorkflowRequestInstance = new() { RequestId = 2 }
+                }
+            });
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal("ATT-2", Assert.Single((await service.GetReceivedAsync(filter with { RequestId = 2 })).Requests).Reference);
+        Assert.Empty((await service.GetReceivedAsync(filter with { RequestId = 3 })).Requests);
         access.Permissions.Add("Attendance.View");
         Assert.Equal(2, (await service.GetReceivedAsync(filter)).Requests.Count);
+        var notification = filter with { From = new(2026, 10, 29), To = new(2026, 10, 29), RequestId = 2 };
+        Assert.Equal("ATT-2", Assert.Single((await service.GetReceivedAsync(notification)).Requests).Reference);
+        Assert.Empty((await service.GetReceivedAsync(notification with { RequestId = 3 })).Requests);
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetMineAsync(filter with { StaffId = 200 }));
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() => service.GetReceivedAsync(filter with { OrganisationId = 20 }));
         Assert.Empty((await service.GetMineAsync(filter with { StateId = 4 })).Requests);

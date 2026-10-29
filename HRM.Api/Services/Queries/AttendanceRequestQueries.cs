@@ -24,7 +24,8 @@ public sealed class AttendanceRequestQueries(IDbContextFactory<HrmTeContext> fac
             join state in db.RequestStates on request.RequestStateId equals state.RequestStateId
             join person in db.Individuals on log.IndividualId equals person.BusinessEntityId
             join org in db.Organisations on log.OrganisationId equals org.BusinessEntityID
-            where log.OrganisationId == organisation && log.Date >= start && log.Date < until &&
+            where log.OrganisationId == organisation &&
+                (filter.RequestId.HasValue ? request.RequestId == filter.RequestId : log.Date >= start && log.Date < until) &&
                 (!filter.StateId.HasValue || request.RequestStateId == filter.StateId) &&
                 (!filter.StaffId.HasValue || log.IndividualId == filter.StaffId) &&
                 (mine ? log.IndividualId == actor.IndividualId : canViewAll || db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.UserId && a.RequestStageInstance.WorkflowRequestInstance.RequestId == request.RequestId))

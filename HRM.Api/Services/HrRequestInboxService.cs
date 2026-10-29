@@ -57,6 +57,7 @@ public sealed class HrRequestInboxService(IDbContextFactory<HrmTeContext> factor
     private static string? RequestUrl(string? url,int id,bool leave,string? type=null)
     {
         if(HRM.Application.Presentation.OvertimeNavigation.IsOvertime(type,url))return HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(id);
+        if(type is "Attendance Log Request" or "Attendance Log Change Request")return HRM.Application.Presentation.AttendanceRequestNavigation.ReviewUrl(id);
         if(leave)return $"/admin/my/workspace?requestId={id}";
         if(string.IsNullOrWhiteSpace(url)||!url.StartsWith('/')||url.StartsWith("//")||url.Contains('\\')||url.Any(char.IsControl))return null;
         url=url.Replace("{requestId}",id.ToString(),StringComparison.OrdinalIgnoreCase).Replace("{id}",id.ToString(),StringComparison.OrdinalIgnoreCase);

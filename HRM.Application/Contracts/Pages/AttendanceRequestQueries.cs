@@ -2,7 +2,7 @@ using HRM.DTOs.Attendance;
 namespace HRM.Application.Contracts.Pages;
 
 public sealed record RequestStateOption(int Id, string Name, bool IsProcessingState, bool IsFinalState);
-public sealed record AttendanceRequestFilter(DateOnly From, DateOnly To, int? StateId = null, int? OrganisationId = null, int? StaffId = null);
+public sealed record AttendanceRequestFilter(DateOnly From, DateOnly To, int? StateId = null, int? OrganisationId = null, int? StaffId = null, int? RequestId = null);
 public sealed record AttendanceRequestRow(int RequestId, string Reference, string Kind, DateTime ClockTime,
     int StateId, string Status, string StaffName, string OrganisationName, string Mode, string? Comments);
 public sealed record AttendanceRequestPage(List<RequestStateOption> States, List<AttendanceRequestRow> Requests);
