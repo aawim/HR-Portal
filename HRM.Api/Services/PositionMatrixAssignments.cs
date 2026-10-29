@@ -28,6 +28,9 @@ internal static class PositionMatrixAssignments
         if(matrix.ApprovedSlots<1)throw new InvalidOperationException("This position matrix has no approved staffing slots available.");
         if(!jobMatrix.IsActive||step is {IsActive:false}||!jobMatrix.CurrencyTypeId.HasValue||jobMatrix.FrameworkId!=position.PositionFrameworkId||!await db.PositionFrameworks.AnyAsync(x=>x.FrameworkId==jobMatrix.FrameworkId&&x.IsActive)||!await db.FrameworkJobTitles.AnyAsync(x=>x.JobTitleId==matrix.JobTitleId&&x.IsActive)||matrix.EffectiveFrom>from||matrix.EffectiveTo.HasValue&&(!to.HasValue||to.Value.AddDays(-1)>matrix.EffectiveTo)||jobMatrix.EffectiveFrom>from||jobMatrix.EffectiveTo.HasValue&&(!to.HasValue||to.Value.AddDays(-1)>jobMatrix.EffectiveTo))
             throw new InvalidOperationException("Choose position dates within the active matrix period.");
+        // Older matrices used one shared position. Multiple records represent individual staffing slots.
+        if(await db.Positions.CountAsync(x=>x.PositionMatrixId==matrix.PositionMatrixId)>1&&await db.JobPositions.AnyAsync(a=>a.PositionId==positionId&&a.JobPositionStateId==4&&a.JobPositionId!=excluding&&(!to.HasValue||a.FromDate<to.Value)&&(!a.ToDate.HasValue||a.ToDate>from)))
+            throw new InvalidOperationException("This position is already assigned for the selected dates. Select another vacant position in this matrix.");
         var periods=await(from a in db.JobPositions join p in db.Positions on a.PositionId equals p.PositionId where p.PositionMatrixId==matrix.PositionMatrixId&&a.JobPositionStateId==4&&a.JobPositionId!=excluding&&(!to.HasValue||a.FromDate<to.Value)&&(!a.ToDate.HasValue||a.ToDate>@from) select new{a.FromDate,a.ToDate}).ToListAsync();
         var events=new List<(DateTime Day,int Change)>();
         foreach(var p in periods){events.Add((p.FromDate<from?from:p.FromDate,1));if(p.ToDate.HasValue)events.Add((p.ToDate.Value,-1));}

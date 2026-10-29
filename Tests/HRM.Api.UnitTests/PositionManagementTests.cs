@@ -24,7 +24,10 @@ public sealed class PositionManagementTests
     [Fact]public async Task Shared_positions_table_supports_both_frameworks_and_blocks_cross_tenant_matrices()
     {
         await Seed();Assert.True((await Service.SaveAsync(new(0,"Custom officer",null,null,true,false,1,null))).Success);
-        Assert.True((await Service.SaveAsync(new(0,"Government officer",null,null,true,false,2,1))).Success);
+        // Matrix slots are created together; the general editor may update an existing slot only.
+        await using(var db=factory.CreateDbContext()){db.Positions.Add(new(){PositionId=30,OrganisationId=10,Name="Government officer",PositionFrameworkId=2,PositionMatrixId=1,IsActive=true});await db.SaveChangesAsync();}
+        Assert.True((await Service.SaveAsync(new(30,"Government officer",null,"Updated",true,false,2,1))).Success);
+        Assert.False((await Service.SaveAsync(new(0,"Extra matrix slot",null,null,true,false,2,1))).Success);
         Assert.False((await Service.SaveAsync(new(0,"Foreign matrix",null,null,true,false,2,2))).Success);
         var data=await Service.LoadAsync();Assert.DoesNotContain(data.Positions,x=>x.Name=="Other tenant");Assert.Single(data.Matrices);Assert.Contains(data.Positions,x=>x.FrameworkId==2&&x.MatrixId==1);
     }

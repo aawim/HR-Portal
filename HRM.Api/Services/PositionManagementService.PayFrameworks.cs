@@ -100,7 +100,8 @@ public sealed partial class PositionManagementService
         db.FrameworkPositionMatrixHistories.Add(new(){PositionMatrixId=positionMatrix.PositionMatrixId,NewApprovedSlots=input.Slots,ChangeReason="Initial position matrix",ChangedAt=DateTime.UtcNow,OperationLogId=log.OperationLogId});
         var name=$"{title.Name} · {matrix.MatrixCode}";
         if(name.Length>250)return ServiceResult.Fail("The title and matrix code produce a position name longer than 250 characters. Shorten the title or code.");
-        db.Positions.Add(new(){Name=name,PositionFrameworkId=matrix.FrameworkId,PositionMatrixId=positionMatrix.PositionMatrixId,OrganisationId=actor.Org,IsActive=true,IsGlobal=false,IsSalaryGivenBasedOnPostion=true,OperationLogId=log.OperationLogId});
-        await db.SaveChangesAsync();await tx.CommitAsync();return ServiceResult.Ok("Position matrix created. The position is available for staff assignment through the existing approval flow.");
+        for(var slot=0;slot<input.Slots;slot++)
+            db.Positions.Add(new(){Name=name,PositionFrameworkId=matrix.FrameworkId,PositionMatrixId=positionMatrix.PositionMatrixId,OrganisationId=actor.Org,IsActive=true,IsGlobal=false,IsSalaryGivenBasedOnPostion=true,OperationLogId=log.OperationLogId});
+        await db.SaveChangesAsync();await tx.CommitAsync();return ServiceResult.Ok($"Position matrix created with {input.Slots} positions available for staff assignment through the existing approval flow.");
     }
 }

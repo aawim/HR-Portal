@@ -65,7 +65,7 @@ public sealed partial class PayFrameworkTests
         Assert.Equal(2,matrix.Titles.Count);Assert.Equal(10000,matrix.Steps[0].BasicSalary);Assert.Equal(12000,matrix.Steps[1].BasicSalary);Assert.Equal(1500,matrix.Steps[1].JobAllowance);Assert.Equal(500,Assert.Single(matrix.Benefits).Amount);
         access.Actor!.IsSuperAdministrator=false;access.Permissions.Add("Positions.Configure");
         Assert.True((await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,2,new(2026,1,1),null))).Success);
-        var position=Assert.Single((await Service.LoadAsync()).Positions);Assert.Equal(2,position.FrameworkId);Assert.False(position.Global);Assert.Equal(10000,Assert.Single((await Service.LoadAsync()).Matrices).BasicSalary);
+        var positions=(await Service.LoadAsync()).Positions;Assert.Equal(2,positions.Count);Assert.All(positions,p=>{Assert.Equal(2,p.FrameworkId);Assert.False(p.Global);});Assert.Equal(10000,Assert.Single((await Service.LoadAsync()).Matrices).BasicSalary);
         await using(var db=factory.CreateDbContext()){Assert.Equal(10,(await db.PositionMatrices.SingleAsync()).OrganisationId);Assert.Single(db.FrameworkPositionMatrixHistories);}
         access.Organisation=20;Assert.Empty((await Service.LoadAsync()).Positions);
         Assert.True((await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,1,new(2026,1,1),null))).Success);
@@ -98,7 +98,9 @@ public sealed partial class PayFrameworkTests
     {
         await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
         await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,2,new(2026,1,1),null));
-        await using var db=factory.CreateDbContext();var position=await db.Positions.SingleAsync();
+        await using var db=factory.CreateDbContext();var position=await db.Positions.OrderBy(x=>x.PositionId).FirstAsync();
+        // Reproduce the pre-existing single-record shared matrix format.
+        db.Positions.RemoveRange(await db.Positions.Where(x=>x.PositionId!=position.PositionId).ToListAsync());await db.SaveChangesAsync();
         db.JobPositions.AddRange(new(){PositionId=position.PositionId,JobId=1,FromDate=new(2026,1,1),ToDate=new(2026,2,1),JobPositionStateId=4},new(){PositionId=position.PositionId,JobId=2,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
         Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,position.PositionId,new(2026,1,1),new(2026,3,1)));
     }
@@ -122,7 +124,7 @@ public sealed partial class PayFrameworkTests
         HRM.Services.Contracts.StaffPositionManagementServiceContracts.Assignment original;
         await using(var db=factory.CreateDbContext())
         {
-            var position=await db.Positions.SingleAsync();db.Jobs.Add(new(){JobId=50,IndividualID=500,OrganisationID=10,JobStateId=4,JoinedDate=new(2026,1,1)});
+            var position=await db.Positions.FirstAsync();db.Jobs.Add(new(){JobId=50,IndividualID=500,OrganisationID=10,JobStateId=4,JoinedDate=new(2026,1,1)});
             var assignment=new JobPosition{JobId=50,PositionId=position.PositionId,JobPositionStateId=4,FromDate=start,ToDate=end};db.JobPositions.Add(assignment);await db.SaveChangesAsync();
             db.FrameworkJobStepHistories.AddRange(new(){JobId=50,PositionMatrixId=position.PositionMatrixId!.Value,JobMatrixStepId=matrix.Steps[0].Id,EffectiveFrom=start,EffectiveTo=end},new(){JobId=50,PositionMatrixId=position.PositionMatrixId.Value,JobMatrixStepId=matrix.Steps[0].Id,EffectiveFrom=end,EffectiveTo=end.AddDays(30)});await db.SaveChangesAsync();
             original=new(assignment.JobPositionId,50,position.PositionId,position.Name,start,end,4,"Approved",0);
@@ -131,19 +133,31 @@ public sealed partial class PayFrameworkTests
         var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>service.SaveAsync(500,50,original.PositionId,start,end.AddDays(10),"Extend period",original));
         Assert.Contains("overlap another approved pay-step period",error.Message);
     }
-    [Fact]public async Task Employees_sharing_one_position_can_have_different_job_pay_steps()
+    [Fact]public async Task Employees_in_separate_slots_can_have_different_job_pay_steps()
     {
         await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
         await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,2,new(2026,1,1),null));
-        await using var db=factory.CreateDbContext();var position=await db.Positions.SingleAsync();Assert.Null((await db.PositionMatrices.SingleAsync()).JobMatrixStepId);Assert.DoesNotContain("Step",position.Name);
-        var first=new JobPosition{JobId=50,PositionId=position.PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};var second=new JobPosition{JobId=51,PositionId=position.PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};
+        await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();Assert.Equal(2,positions.Count);Assert.Null((await db.PositionMatrices.SingleAsync()).JobMatrixStepId);Assert.DoesNotContain("Step",positions[0].Name);
+        var first=new JobPosition{JobId=50,PositionId=positions[0].PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};var second=new JobPosition{JobId=51,PositionId=positions[1].PositionId,FromDate=new(2026,2,1),JobPositionStateId=4};
         db.JobPositions.AddRange(first,second);await db.SaveChangesAsync();
         await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.SnapshotAsync(db,10,first,1));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.SnapshotAsync(db,10,first,1,selectedStepId:999));
         await PositionMatrixAssignments.SnapshotAsync(db,10,first,1,selectedStepId:matrix.Steps[0].Id);await db.SaveChangesAsync();
         await PositionMatrixAssignments.SnapshotAsync(db,10,second,1,selectedStepId:matrix.Steps[1].Id);await db.SaveChangesAsync();
         Assert.Equal(10000,(await db.FrameworkJobStepHistories.SingleAsync(x=>x.JobId==50)).BasicSalarySnapshot);Assert.Equal(12000,(await db.FrameworkJobStepHistories.SingleAsync(x=>x.JobId==51)).BasicSalarySnapshot);
-        Assert.Single(db.Positions);Assert.Equal(2,await db.FrameworkJobStepHistories.CountAsync());
+        Assert.Equal(2,await db.Positions.CountAsync());Assert.Equal(2,await db.FrameworkJobStepHistories.CountAsync());
+    }
+    [Fact]public async Task Five_slots_create_five_positions_and_an_occupied_slot_cannot_be_reused()
+    {
+        await Seed();await Service.SaveJobMatrixAsync(Input());var matrix=Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices);
+        Assert.True((await Service.CreatePositionMatrixAsync(new(matrix.Id,matrix.Titles[0].Id,5,new(2026,1,1),null))).Success);
+        await using var db=factory.CreateDbContext();var positions=await db.Positions.OrderBy(x=>x.PositionId).ToListAsync();Assert.Equal(5,positions.Count);Assert.Single(positions.Select(x=>x.Name).Distinct());Assert.Single(positions.Select(x=>x.PositionMatrixId).Distinct());
+        var first=positions[0];db.JobPositions.Add(new(){PositionId=first.PositionId,JobId=1,FromDate=new(2026,2,1),ToDate=new(2026,3,1),JobPositionStateId=4});await db.SaveChangesAsync();
+        var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.ValidateAsync(db,10,first.PositionId,new(2026,2,15),new(2026,3,15)));Assert.Contains("already assigned",error.Message);
+        Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,positions[1].PositionId,new(2026,2,15),new(2026,3,15)));
+        Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,first.PositionId,new(2026,3,1),new(2026,4,1)));
+        Assert.True((await Service.SaveAsync(new(first.PositionId,first.Name,null,"Updated slot",true,false,2,first.PositionMatrixId))).Success);
+        Assert.False((await Service.SaveAsync(new(0,first.Name,null,null,true,false,2,first.PositionMatrixId))).Success);
     }
     [Fact]public async Task Illustrated_profile_roundtrips_and_existing_requirement_rows_are_preserved()
     {
