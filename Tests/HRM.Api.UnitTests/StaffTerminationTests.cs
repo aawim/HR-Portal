@@ -37,6 +37,19 @@ public sealed class StaffTerminationTests
         await using var db=factory.CreateDbContext();var r=await db.StaffPositionChangeRequests.Include(x=>x.Request).SingleAsync();
         Assert.Equal(22,r.Request.RequestTypeId);Assert.Equal(1,workflowStarts);Assert.Null((await db.Jobs.SingleAsync()).TerminatedDate);Assert.Null((await db.JobPositions.SingleAsync()).ToDate);Assert.Single(db.JobRequests);
     }
+    [Fact]public async Task Load_includes_termination_dropdown_options_in_the_http_response_contract()
+    {
+        await Seed();await using(var db=factory.CreateDbContext())
+        {
+            // No active employment choices are needed for this contract regression.
+            (await db.Jobs.SingleAsync()).JobStateId=7;db.JobPositionStates.Add(new(){JobPositionStateId=4,StateName="Approved"});await db.SaveChangesAsync();
+        }
+        var data=await Service.LoadAsync(50);var option=Assert.Single(data.TerminationRequestTypes);Assert.Equal(22,option.Id);Assert.Equal("Job Resignation Request",option.Name);
+        var jsonOptions=new JsonSerializerOptions(JsonSerializerDefaults.Web);
+        var json=JsonSerializer.Serialize(data,jsonOptions);
+        var received=JsonSerializer.Deserialize<HRM.Services.Contracts.StaffPositionManagementServiceContracts.Data>(json,jsonOptions)!;
+        Assert.Equal(option,Assert.Single(received.TerminationRequestTypes));Assert.DoesNotContain(received.TerminationRequestTypes,x=>x.Id==30);
+    }
     [Theory][InlineData(null)][InlineData(30)]public async Task Missing_or_unrelated_termination_type_is_rejected(int? type)
     {
         var original=await Seed();await Assert.ThrowsAsync<InvalidOperationException>(()=>Service.SaveAsync(50,5,1,original.From,Today,"Leaving",original,remove:true,terminationRequestTypeId:type));
