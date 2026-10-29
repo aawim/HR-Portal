@@ -15,15 +15,16 @@
             <label>Multiple positions<select @bind="multiple"><option value="Once">Once per person</option><option value="Highest">Highest entitlement</option><option value="Stack">Each position</option></select></label>
             <label>From<InputDate @bind-Value="from" /></label><label>Through (optional)<InputDate @bind-Value="to" /></label><button class="app-button app-button-primary self-end" @onclick="SaveRule">Add required allowance</button>
         </fieldset>
-        <div class="overflow-auto"><table class="w-full"><thead><tr><th>Position / allowance</th><th>Amount</th><th>Effective period</th><th>End rule</th></tr></thead><tbody>@foreach(var r in config.Rules){<tr><td>@r.Position · @r.Allowance</td><td>@r.Rule.Amount.ToString("N2")</td><td>@r.Rule.FromDate.ToString("dd MMM yyyy") – @(r.Rule.ToDate?.ToString("dd MMM yyyy")??"Ongoing")</td><td><InputDate @bind-Value="endDates[r.Id]" /><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EndRule(r.Id)">End</button></td></tr>}</tbody></table></div>
+        <div class="overflow-auto"><table class="w-full"><thead><tr><th>Position / allowance</th><th>Amount</th><th>Effective period</th><th>End rule</th></tr></thead><tbody>@foreach(var r in config.Rules){var endDate=endDates[r.Id];<tr @key="r.Id"><td>@r.Position · @r.Allowance</td><td>@r.Rule.Amount.ToString("N2")</td><td>@r.Rule.FromDate.ToString("dd MMM yyyy") – @(r.Rule.ToDate?.ToString("dd MMM yyyy")??"Ongoing")</td><td><InputDate @bind-Value="endDate.Value" /><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EndRule(r.Id)">End</button></td></tr>}</tbody></table></div>
     }
     else if(!busy){<p>Finance configuration permission is required to configure position allowances.</p>}
 </section>
 @code{
-    private FinanceConfiguration? config;private bool busy;private string? error;private long type;private int position,currency,frequency=1;private decimal amount;private string multiple="Once";private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private Dictionary<long,DateTime> endDates=[];
+    private FinanceConfiguration? config;private bool busy;private string? error;private long type;private int position,currency,frequency=1;private decimal amount;private string multiple="Once";private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private Dictionary<long,EndDateModel> endDates=[];
+    private sealed class EndDateModel { public DateTime Value { get; set; } }
     protected override async Task OnInitializedAsync()=>await Load();
-    private async Task Load(){busy=true;try{config=await Finance.GetConfigurationAsync();foreach(var r in config.Rules)endDates.TryAdd(r.Id,r.Rule.ToDate??DateTime.UtcNow.AddHours(5).Date);}catch(Exception){error="Position allowances could not be loaded.";}finally{busy=false;}}
+    private async Task Load(){busy=true;try{config=await Finance.GetConfigurationAsync();foreach(var r in config.Rules)endDates.TryAdd(r.Id,new EndDateModel { Value=r.Rule.ToDate??DateTime.UtcNow.AddHours(5).Date });}catch(Exception){error="Position allowances could not be loaded.";}finally{busy=false;}}
     private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception){error="Position allowance could not be saved.";}finally{busy=false;}if(saved)await Load();}
     private Task SaveRule()=>Run(()=>Finance.AddPositionRuleAsync(new(position,type,currency,amount,frequency,from,to,multiple)));
-    private Task EndRule(long id)=>Run(()=>Finance.EndPositionRuleAsync(id,endDates[id]));
+    private Task EndRule(long id)=>Run(()=>Finance.EndPositionRuleAsync(id,endDates[id].Value));
 }
