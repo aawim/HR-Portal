@@ -74,4 +74,42 @@ public sealed class StaffTerminationTests
         await using var db=factory.CreateDbContext();(await db.JobPositions.SingleAsync()).OperationLogId=10;await db.SaveChangesAsync();
         var r=await db.StaffPositionChangeRequests.Include(x=>x.Request).SingleAsync();await Assert.ThrowsAsync<InvalidOperationException>(()=>Service.ProcessRequestedChangeAsync(db,r,true));Assert.Null((await db.Jobs.SingleAsync()).TerminatedDate);
     }
+    [Fact]public async Task An_active_position_blocks_an_additional_assignment_even_to_a_different_job_or_future_period()
+    {
+        await Seed();await using(var db=factory.CreateDbContext())
+        {
+            db.Positions.Add(new(){PositionId=2,OrganisationId=10,Name="Second position",IsActive=true});
+            db.Jobs.Add(new(){JobId=6,IndividualID=50,OrganisationID=10,JobStateId=4,JoinedDate=Today});await db.SaveChangesAsync();
+        }
+        var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>Service.SaveAsync(50,6,2,Today.AddDays(30),null,"Another assignment"));
+        Assert.Contains("already has an active position",error.Message);await using var check=factory.CreateDbContext();Assert.Single(check.JobPositions);Assert.Empty(check.StaffPositionChangeRequests);Assert.Equal(0,workflowStarts);
+    }
+    [Fact]public async Task A_new_approved_job_can_receive_a_position_after_the_previous_employment_has_ended()
+    {
+        await Seed();await PrepareNewJob();
+        await Service.SaveAsync(50,6,2,Today,null,"New employment");await using var db=factory.CreateDbContext();var r=await db.StaffPositionChangeRequests.Include(x=>x.Request).SingleAsync();
+        await Service.ProcessRequestedChangeAsync(db,r,true);Assert.Equal(2,await db.JobPositions.CountAsync());Assert.Equal(6,(await db.JobPositions.SingleAsync(x=>x.PositionId==2)).JobId);
+    }
+    [Fact]public async Task Approval_rechecks_that_another_position_has_not_become_active_since_submission()
+    {
+        await Seed();await PrepareNewJob();await Service.SaveAsync(50,6,2,Today,null,"New employment");
+        await using var db=factory.CreateDbContext();db.Positions.Add(new(){PositionId=3,OrganisationId=10,Name="Other assignment",IsActive=true});
+        db.JobPositions.Add(new(){JobPositionId=3,JobId=6,PositionId=3,FromDate=Today,JobPositionStateId=4});await db.SaveChangesAsync();
+        var r=await db.StaffPositionChangeRequests.Include(x=>x.Request).SingleAsync();var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>Service.ProcessRequestedChangeAsync(db,r,true));Assert.Contains("already has an active position",error.Message);Assert.False(await db.JobPositions.AnyAsync(x=>x.PositionId==2));
+    }
+    [Fact]public async Task Editing_dates_cannot_expand_an_assignment_into_another_position_period()
+    {
+        var original=await Seed();await using(var db=factory.CreateDbContext())
+        {
+            db.Positions.Add(new(){PositionId=2,OrganisationId=10,Name="Previous position",IsActive=true});
+            db.JobPositions.Add(new(){JobId=5,PositionId=2,FromDate=Today.AddMonths(-2),ToDate=original.From,JobPositionStateId=4});await db.SaveChangesAsync();
+        }
+        var error=await Assert.ThrowsAsync<InvalidOperationException>(()=>Service.SaveAsync(50,5,1,original.From.AddDays(-1),null,"Extend dates",original));Assert.Contains("already has a position assigned",error.Message);
+    }
+    private async Task PrepareNewJob()
+    {
+        await using var db=factory.CreateDbContext();var old=await db.Jobs.SingleAsync();old.TerminatedDate=Today;old.JobStateId=7;(await db.JobPositions.SingleAsync()).ToDate=Today;
+        db.Jobs.Add(new(){JobId=6,IndividualID=50,OrganisationID=10,JobStateId=4,JoinedDate=Today});db.Positions.Add(new(){PositionId=2,OrganisationId=10,Name="New position",IsActive=true});
+        db.RequestTypes.Add(new(){RequestTypeId=31,TypeName="Staff Position Assignment Request"});await db.SaveChangesAsync();
+    }
 }

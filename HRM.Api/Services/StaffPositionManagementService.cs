@@ -136,6 +136,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         from = from.Date; to = to?.Date;
         if (from.Year < 1900 || to.HasValue && to.Value <= from)
             throw new InvalidOperationException("The end date must be after the start date.");
+        if(db.Database.IsSqlServer())await db.Database.ExecuteSqlInterpolatedAsync($"DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource={"HRM.StaffPosition:"+org+":"+staffId}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=5000; IF @result<0 THROW 51064,'Staff position requests are busy. Please try again.',1;");
         var job = await db.Jobs.SingleOrDefaultAsync(j => j.JobId == jobId && j.IndividualID == staffId && j.OrganisationID == org);
         if (job == null || job.JobStateId != 4)
             throw new InvalidOperationException("Select an approved employment record in the current organisation.");
@@ -159,6 +160,12 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         }
         if ((existing == null || change) && !await Available(db, org).AnyAsync(p => p.PositionId == positionId))
             throw new InvalidOperationException("Select an active position available to this organisation.");
+        var today=DateTime.UtcNow.AddHours(5).Date;
+        if(existing==null&&await PositionVacancy.Overlapping(db,today,today.AddDays(1)).AnyAsync(a=>a.Job.IndividualID==staffId&&a.Job.OrganisationID==org))
+            throw new InvalidOperationException("This staff member already has an active position. End it through the approval process before assigning another position.");
+        var expands=existing!=null&&!change&&(from<existing.FromDate||existing.ToDate.HasValue&&(!to.HasValue||to>existing.ToDate));
+        if((existing==null||change||expands)&&await PositionVacancy.Overlapping(db,from,to,existing?.JobPositionId).AnyAsync(a=>a.Job.IndividualID==staffId&&a.Job.OrganisationID==org))
+            throw new InvalidOperationException("This staff member already has a position assigned during the requested dates. End that assignment before adding another position.");
         if (change && existing == null) throw new InvalidOperationException("Select the original position to change.");
         if(change&&!await db.Positions.AnyAsync(p=>p.PositionId==positionId&&p.PositionMatrixId.HasValue))throw new InvalidOperationException("Select a vacant position from an approved position matrix.");
         if (change && existing!.PositionId == positionId)

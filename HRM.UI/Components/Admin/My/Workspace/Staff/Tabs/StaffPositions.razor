@@ -11,7 +11,7 @@
             <p class="text-sm text-slate-500">Manage assignments, effective dates and job termination requests through the configured approval flow.</p>
         </div>
         <div class="flex flex-wrap gap-2">
-            @if (data?.CanManage == true && data.Jobs.Count > 0)
+            @if (CanAssign)
             {
                 <button type="button" class="app-button app-button-primary" disabled="@busy" @onclick="New">Assign position</button>
             }
@@ -147,13 +147,14 @@
     private async Task LoadAsync()
     {
         loading = true; message = null; editing = false;
-        try { data = await Positions.LoadAsync(StaffId);if(data.CanManage&&data.Jobs.Count>0)New(); }
+        try { data = await Positions.LoadAsync(StaffId);if(CanAssign)New(); }
         catch (UnauthorizedAccessException ex) { data = null; message = ex.Message; }
         catch (Exception ex) { data = null; message = "Positions could not be loaded. Please try again."; Logger.LogError(ex, "Loading positions for staff {StaffId}", StaffId); }
         finally { loading = false; }
     }
     private void New()
     {
+        if(!CanAssign)return;
         selectedFrameworkId=selectedMatrixId=0;
         terminationRequestTypeId=null;jobMatrixStepId=null;original = null; changing = ending = false; editing = true; message = null;
         jobId = data!.Jobs.FirstOrDefault()?.Id ?? 0; positionId = 0; from = Today; to = null; reason = "";
@@ -185,6 +186,7 @@
         catch (Exception ex) { message = "The position could not be saved. Refresh and try again."; Logger.LogError(ex, "Saving position for staff {StaffId}", StaffId); Toasts.Error(message); }
         finally { busy = false; }
     }
+    private bool CanAssign=>data?.CanManage==true&&data.Jobs.Count>0&&!data.Assignments.Any(a=>a.StateId==4&&a.From.Date<=Today&&(!a.To.HasValue||a.To.Value.Date>Today)&&data.Jobs.Any(j=>j.Id==a.JobId));
     private void FrameworkChanged(){selectedMatrixId=positionId=0;jobMatrixStepId=null;}
     private void MatrixChanged(){positionId=0;jobMatrixStepId=null;}
     private static string Status(Assignment a)
