@@ -29,6 +29,26 @@ public sealed class PayFrameworkTests
         Assert.True((await Service.SaveFrameworkAsync(new(0,"CUSTOM","Non CSC / Custom",true))).Success);
         Assert.Equal(2,(await Service.LoadPayFrameworksAsync()).Frameworks.Count);
     }
+    [Fact]public async Task Study_field_suggestions_are_family_linked_and_custom_text_remains_valid()
+    {
+        await Seed();await using(var db=factory.CreateDbContext())
+        {
+            db.PayStudyFields.AddRange(new(){JobFamilyId=1,Name="Computer Science",IsActive=true},new(){JobFamilyId=1,Name="Retired example",IsActive=false});await db.SaveChangesAsync();
+        }
+        var fields=(await Service.LoadPayFrameworksAsync()).StudyFields;var field=Assert.Single(fields);Assert.Equal(1,field.FamilyId);Assert.Equal("Computer Science",field.Name);
+        var input=Input();Assert.True((await Service.SaveJobMatrixAsync(input with{Profile=input.Profile with{FieldsOfStudy="Computer Science\nCustom interdisciplinary study"}})).Success);
+        Assert.Contains("Custom interdisciplinary study",Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices).Profile.FieldsOfStudy);
+    }
+    [Fact]public async Task Sector_experience_suggestions_preserve_general_and_family_scopes_and_custom_text()
+    {
+        await Seed();await using(var db=factory.CreateDbContext())
+        {
+            db.PayExperienceAreas.AddRange(new(){Sector="Corporate",Name="Governance",IsActive=true},new(){JobFamilyId=1,Sector="Technical",Name="Systems",IsActive=true},new(){JobFamilyId=1,Sector="Technical",Name="Inactive",IsActive=false});await db.SaveChangesAsync();
+        }
+        var choices=(await Service.LoadPayFrameworksAsync()).ExperienceAreas;Assert.Equal(2,choices.Count);Assert.Contains(choices,x=>x.FamilyId==null);Assert.Contains(choices,x=>x.FamilyId==1);
+        var input=Input();Assert.True((await Service.SaveJobMatrixAsync(input with{Profile=input.Profile with{ExperienceAreas="Governance\nCustom practical experience"}})).Success);
+        Assert.Contains("Custom practical experience",Assert.Single((await Service.LoadPayFrameworksAsync()).Matrices).Profile.ExperienceAreas);
+    }
     [Fact]public async Task Profession_selection_controls_matrix_name_and_rejects_wrong_family()
     {
         await Seed();var input=Input() with{Name="Forged free text"};

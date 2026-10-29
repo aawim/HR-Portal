@@ -23,7 +23,9 @@ public sealed partial class PositionManagementService
         var duties=await db.FrameworkMatrixDuties.OrderBy(x=>x.SequenceNumber).ToListAsync(); var qualifications=await db.FrameworkMatrixQualifications.OrderBy(x=>x.PathwayNumber).ToListAsync(); foreach(var m in matrices){m.Profile.Duties=string.Join("\n",duties.Where(x=>x.JobMatrixId==m.Id).Select(x=>x.DutyDescription));m.Profile.Qualifications=string.Join("\nOR\n",qualifications.Where(x=>x.JobMatrixId==m.Id).Select(x=>x.RequirementText));} var currencies=await db.FinanceCurrencies.OrderBy(x=>x.Name).Select(x=>new PositionLookup(x.CurrencyTypeId,x.Name)).ToListAsync();
         var families=await db.PayJobFamilies.Where(x=>x.IsActive).OrderBy(x=>x.Name).Select(x=>new PositionLookup(x.JobFamilyId,x.Name)).ToListAsync();
         var professions=(await db.PayProfessions.Where(x=>x.IsActive).OrderBy(x=>x.Name).ToListAsync()).Select(x=>new ProfessionOption(x.Id,x.JobFamilyId,x.Name,x.Tasks,System.Text.Json.JsonSerializer.Deserialize<List<string>>(x.ExampleTitlesJson)??[],System.Text.Json.JsonSerializer.Deserialize<List<string>>(x.MisscoCodesJson)??[])).ToList();
-        return new(frameworks,matrices,currencies,actor.Super,actor.Manage){JobFamilies=families,Professions=professions};
+        var studyFields=await db.PayStudyFields.Where(x=>x.IsActive).OrderBy(x=>x.Name).Select(x=>new StudyFieldOption(x.JobFamilyId,x.Name)).ToListAsync();
+        var experienceAreas=await db.PayExperienceAreas.Where(x=>x.IsActive).OrderBy(x=>x.Sector).ThenBy(x=>x.Name).Select(x=>new ExperienceAreaOption(x.Id,x.JobFamilyId,x.Sector,x.Name,x.Description)).ToListAsync();
+        return new(frameworks,matrices,currencies,actor.Super,actor.Manage){JobFamilies=families,Professions=professions,StudyFields=studyFields,ExperienceAreas=experienceAreas};
     }
 
     public async Task<ServiceResult> SaveFrameworkAsync(PayFrameworkInput input)

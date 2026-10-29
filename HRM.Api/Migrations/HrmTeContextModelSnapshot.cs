@@ -7545,6 +7545,48 @@ namespace HRM.Migrations
                     b.ToTable("OT_WorkTasks", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.PayExperienceArea", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("JobFamilyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Sector")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobFamilyId", "Sector", "Name")
+                        .IsUnique();
+
+                    b.ToTable("PF_ExperienceAreaSuggestions", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.PayJobFamily", b =>
                 {
                     b.Property<int>("JobFamilyId")
@@ -7615,6 +7657,38 @@ namespace HRM.Migrations
                         .IsUnique();
 
                     b.ToTable("PF_Professions", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.PayStudyField", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobFamilyId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobFamilyId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("PF_StudyFieldSuggestions", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Position", b =>
@@ -14787,7 +14861,24 @@ namespace HRM.Migrations
                     b.Navigation("WorkRequest");
                 });
 
+            modelBuilder.Entity("HRM.Models.PayExperienceArea", b =>
+                {
+                    b.HasOne("HRM.Models.PayJobFamily", null)
+                        .WithMany()
+                        .HasForeignKey("JobFamilyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
             modelBuilder.Entity("HRM.Models.PayProfession", b =>
+                {
+                    b.HasOne("HRM.Models.PayJobFamily", null)
+                        .WithMany()
+                        .HasForeignKey("JobFamilyId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.PayStudyField", b =>
                 {
                     b.HasOne("HRM.Models.PayJobFamily", null)
                         .WithMany()

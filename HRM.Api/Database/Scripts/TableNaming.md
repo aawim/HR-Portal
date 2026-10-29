@@ -69,3 +69,7 @@ The business entity registry uses `BE_` consistently: `Individuals` → `BE_Indi
 JobMatrixProfilesAndEmployeeSteps reuses PF_JobMatrixQualifications and PF_JobMatrixDuties and adds profile columns to PF_JobMatrix. Employee step selections are stored on the existing SP_StaffPositionChangeRequests and SO_StaffOnboardingRequests; approved steps remain in PF_JobStepHistory by JobID. No replacement tables or destructive step-history conversion are used.
 
 PF_Professions stores versioned profession/occupation references linked to existing PF_JobFamilies. PF_JobMatrix.ProfessionID links dropdown selections without replacing position/job history. Existing family and title tables are reused.
+
+PF_StudyFieldSuggestions stores active, family-linked educational-discipline suggestions with source metadata. Existing matrix FieldsOfStudy snapshots are preserved.
+
+PF_ExperienceAreaSuggestions contains sector-grouped experience examples with an optional job-family scope, description and source metadata. A null family denotes general suggestions, not automatic eligibility. Existing Job Matrix ExperienceAreas text is preserved.
