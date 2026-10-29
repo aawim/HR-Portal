@@ -207,10 +207,6 @@
             new("Structure Request Types", "📥", "Manage request types used for organisation structure changes.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Organisation Permissions", "🔐", "Manage the permissions available to this organisation.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationPermissions)),
         },
-        "job" => new() {
-            new("Work Types", "📋", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
-            new("Job Type Configuration", "👥", "Job types, overtime, leave and leave-set configuration.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
-        },
         "payroll" => new() {
             new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
             new("Manage Item Type", "📑", "Categorize payroll income and deductions.", null)
@@ -223,6 +219,7 @@
            new("Request Types", "📋", "Manage request types and default approval workflows.", typeof(HRM.Components.Admin.Settings.RequestTypes.RequestTypeConfiguration)),
         },
         "config" => new() {
+            new("Work Types", "📋", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
             new("Request State Transitions", "🔄", "Configure allowed From State and To State for each Request Type.", typeof(RequestStateTransitionSettings)),
             new("Request Approval Flows", "🔄", "Configure approvals for all staff by Job Type and Request Type.", typeof(LeaveFlowSettings)),
 
@@ -290,9 +287,10 @@
         if (CategoryName == "leaves" && Section is "new-lt" or "manage-new-lt") { Navigation.NavigateTo("/admin/settings/leaves/leave-types", replace: true); return; }
         if(CategoryName=="leaves" && Section=="leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return; }
         if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
-        if (CategoryName == "workplaning" && Section == "work-types" || CategoryName == "jobs" && (string.IsNullOrWhiteSpace(Section) || Section == "work-types"))
+        if ((CategoryName == "workplaning" && Section == "work-types") ||
+            ((CategoryName is "job" or "jobs") && (string.IsNullOrWhiteSpace(Section) || Section == "work-types")))
         {
-            Navigation.NavigateTo("/admin/settings/job/work-types", replace: true);
+            Navigation.NavigateTo("/admin/settings/config/work-types", replace: true);
             return;
         }
         if ((CategoryName is "job" or "jobs") && Section is "job-types" or "job-type-configuration")
