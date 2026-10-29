@@ -1,0 +1,28 @@
+@using HRM.Application.Contracts.Pages
+@if(Profile.CredentialRequirements.Count>0)
+{
+    <h5 class="font-semibold">Credentials and training</h5>
+    @foreach(var item in Profile.CredentialRequirements)
+    {
+        <div class="border rounded p-2 space-y-1 text-sm"><p><strong>@item.Name</strong> · @item.Kind · @item.Requirement · @item.Issuer</p>
+            @if(item.ValidityMonths.HasValue){<p>Validity: @item.ValidityMonths months</p>}@if(item.RenewalRequired){<p>Renewal required</p>}@if(item.TrainingHours.HasValue){<p>Training: @item.TrainingHours hours</p>}
+            <p>@(item.EvidenceRequired?"Documentary evidence required":"Evidence requirement not specified")</p>
+            @if(item.Condition.Length>0){<p>Condition: @item.Condition</p>}@if(item.Equivalents.Length>0){<p>Equivalents: @item.Equivalents</p>}@if(item.VerificationInstructions.Length>0){<p>Verification: @item.VerificationInstructions</p>}@if(item.SourceReference.Length>0){<p>Source: @item.SourceReference</p>}
+        </div>
+    }
+}
+@if(Profile.QualificationPathways.Count>0)
+{
+    <h5 class="font-semibold">Alternative qualification pathways (OR)</h5>
+    @foreach(var path in Profile.QualificationPathways)
+    {
+        <div class="border rounded p-2 space-y-1 text-sm"><strong>@path.Name</strong>
+            @foreach(var q in path.Qualifications){<p>AND: @q.Qualification @if(q.MinimumLevel.HasValue){<span>· MNQF @q.MinimumLevel@(q.MaximumLevel.HasValue?$"–{q.MaximumLevel}":"")</span>} · @q.FieldOfStudy @(q.AccreditedRequired?"· Recognised/accredited":"")</p>}
+            <p>Relevant: @path.RelevantExperienceMonths months · Post-qualification: @path.PostQualificationMonths months · Managerial: @path.ManagerialExperienceMonths months</p>
+            @if(path.Conditions.Length>0){<p>@path.Conditions</p>}@if(path.SourceReference.Length>0){<p>Source: @path.SourceReference</p>}
+        </div>
+    }
+}
+@code{
+    [Parameter,EditorRequired]public JobMatrixProfile Profile{get;set;}=new();
+}

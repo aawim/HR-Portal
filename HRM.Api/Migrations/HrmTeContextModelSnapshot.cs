@@ -6568,6 +6568,178 @@ namespace HRM.Migrations
                     b.ToTable("Locations");
                 });
 
+            modelBuilder.Entity("HRM.Models.MatrixCredentialRequirement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Equivalents")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<bool>("EvidenceRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Issuer")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<bool>("RenewalRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Requirement")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<decimal?>("TrainingHours")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("decimal(10,2)");
+
+                    b.Property<int?>("ValidityMonths")
+                        .HasColumnType("int");
+
+                    b.Property<string>("VerificationInstructions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobMatrixId", "IsActive");
+
+                    b.ToTable("PF_CredentialRequirements", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PF_CredentialRequirement_Amounts", "([ValidityMonths] IS NULL OR [ValidityMonths] BETWEEN 1 AND 600) AND ([TrainingHours] IS NULL OR [TrainingHours] BETWEEN 0 AND 10000)");
+
+                            t.HasCheckConstraint("CK_PF_CredentialRequirement_Kind", "[Kind] IN ('Licence','Registration','Certification','Training')");
+
+                            t.HasCheckConstraint("CK_PF_CredentialRequirement_Status", "[Requirement] IN ('Mandatory','Preferred','Conditional')");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.MatrixQualificationCondition", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("AccreditedRequired")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("FieldOfStudy")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int?>("MaximumLevel")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("MinimumLevel")
+                        .HasColumnType("int");
+
+                    b.Property<long>("PathwayId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Qualification")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PathwayId", "IsActive");
+
+                    b.ToTable("PF_PathwayQualifications", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PF_PathwayQualification_Levels", "([MinimumLevel] IS NULL AND [MaximumLevel] IS NULL) OR ([MinimumLevel] IS NOT NULL AND [MinimumLevel] BETWEEN 1 AND 10 AND ([MaximumLevel] IS NULL OR [MaximumLevel] BETWEEN [MinimumLevel] AND 10))");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.MatrixQualificationPathway", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Conditions")
+                        .IsRequired()
+                        .HasMaxLength(4000)
+                        .HasColumnType("nvarchar(4000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ManagerialExperienceMonths")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("PostQualificationMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RelevantExperienceMonths")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SourceReference")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("JobMatrixId", "IsActive");
+
+                    b.ToTable("PF_QualificationPathways", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_PF_QualificationPathway_Months", "[RelevantExperienceMonths] BETWEEN 0 AND 1200 AND [PostQualificationMonths] BETWEEN 0 AND 1200 AND [ManagerialExperienceMonths] BETWEEN 0 AND 1200");
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.OperationLog", b =>
                 {
                     b.Property<int>("OperationLogId")
@@ -14342,6 +14514,33 @@ namespace HRM.Migrations
                     b.Navigation("LocationType");
 
                     b.Navigation("OperationLog");
+                });
+
+            modelBuilder.Entity("HRM.Models.MatrixCredentialRequirement", b =>
+                {
+                    b.HasOne("HRM.Models.FrameworkJobMatrix", null)
+                        .WithMany()
+                        .HasForeignKey("JobMatrixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.MatrixQualificationCondition", b =>
+                {
+                    b.HasOne("HRM.Models.MatrixQualificationPathway", null)
+                        .WithMany()
+                        .HasForeignKey("PathwayId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.MatrixQualificationPathway", b =>
+                {
+                    b.HasOne("HRM.Models.FrameworkJobMatrix", null)
+                        .WithMany()
+                        .HasForeignKey("JobMatrixId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.OperationLog", b =>

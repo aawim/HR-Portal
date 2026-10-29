@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Xunit;
 namespace HRM.Api.UnitTests;
 
-public sealed class PayFrameworkTests
+public sealed partial class PayFrameworkTests
 {
     private readonly QueryFactory factory=new(ignoreTransactions:true);
     private readonly FakeAccess access=new();

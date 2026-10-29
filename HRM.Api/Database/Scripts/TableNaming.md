@@ -73,3 +73,5 @@ PF_Professions stores versioned profession/occupation references linked to exist
 PF_StudyFieldSuggestions stores active, family-linked educational-discipline suggestions with source metadata. Existing matrix FieldsOfStudy snapshots are preserved.
 
 PF_ExperienceAreaSuggestions contains sector-grouped experience examples with an optional job-family scope, description and source metadata. A null family denotes general suggestions, not automatic eligibility. Existing Job Matrix ExperienceAreas text is preserved.
+
+PF_CredentialRequirements, PF_QualificationPathways and PF_PathwayQualifications store structured versioned Job Matrix licensing and AND/OR qualification requirements. Removed draft requirements are soft-retired; existing free-text and legacy qualification records are preserved.

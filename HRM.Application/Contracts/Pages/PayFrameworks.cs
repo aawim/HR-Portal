@@ -17,6 +17,9 @@ public sealed record JobMatrixRow(int Id,int FrameworkId,string Code,string Name
 }
 public sealed record JobMatrixProfile
 {
+    public List<CredentialRequirementInput> CredentialRequirements {get;set;}=[];
+    public List<QualificationPathwayInput> QualificationPathways {get;set;}=[];
+    public string RequirementsVersion {get;set;}="";
     public int? JobFamilyId {get;set;}
     public int? ProfessionId {get;set;}
     public string Description {get;set;}="";

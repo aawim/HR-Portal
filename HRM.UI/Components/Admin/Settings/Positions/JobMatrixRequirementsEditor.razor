@@ -1,0 +1,56 @@
+@using HRM.Application.Contracts.Pages
+<section class="matrix-requirements space-y-3">
+    <div class="flex justify-between items-center gap-2"><h4 class="font-semibold">Licences and professional training requirements</h4><button type="button" class="app-button app-button-secondary" @onclick="()=>Profile.CredentialRequirements.Add(new())">Add requirement</button></div>
+    @foreach(var item in Profile.CredentialRequirements)
+    {
+        <fieldset @key="RowKey(item)" class="border rounded-lg p-3 space-y-2">
+            <div class="requirements-grid">
+                <label>Credential / training name<input maxlength="250" @bind="item.Name" list="credential-names" /></label>
+                <label>Type<select @bind="item.Kind"><option>Licence</option><option>Registration</option><option>Certification</option><option>Training</option></select></label>
+                <label>Issuing / recognising authority<input maxlength="250" @bind="item.Issuer" list="credential-authorities" /></label>
+                <label>Requirement<select @bind="item.Requirement"><option>Mandatory</option><option>Preferred</option><option>Conditional</option></select></label>
+                <label>Validity (months, optional)<input type="number" min="1" max="600" @bind="item.ValidityMonths" /></label>
+                <label>Training hours (optional)<input type="number" min="0" max="10000" step="0.01" @bind="item.TrainingHours" /></label>
+                <label><input type="checkbox" @bind="item.RenewalRequired" /> Renewal required</label><label><input type="checkbox" @bind="item.EvidenceRequired" /> Documentary evidence required</label>
+                <label>Condition (required for Conditional)<textarea rows="2" maxlength="2000" @bind="item.Condition"></textarea></label>
+                <label>Accepted equivalents<textarea rows="2" maxlength="2000" @bind="item.Equivalents"></textarea></label>
+                <label>Verification instructions<textarea rows="2" maxlength="2000" @bind="item.VerificationInstructions"></textarea></label>
+                <label>Source / regulation / matrix reference<textarea rows="2" maxlength="2000" @bind="item.SourceReference"></textarea></label>
+            </div>
+            <button type="button" class="app-button app-button-secondary" @onclick="()=>RemoveRow(Profile.CredentialRequirements,item)">Remove requirement</button>
+        </fieldset>
+    }
+    <datalist id="credential-authorities"><option>Maldives Medical and Dental Council</option><option>Maldives Nursing and Midwifery Council</option><option>Maldives Allied Health Council</option><option>Bar Council of the Maldives</option><option>Maldives Civil Aviation Authority</option></datalist>
+    <datalist id="credential-names"><option>Practising licence</option><option>Professional registration</option><option>Bar practising certificate</option><option>Certificate of Competency</option><option>Continuing professional development</option><option>CCNP</option><option>CCIE</option><option>CISSP</option><option>CISA</option></datalist>
+    <div class="flex justify-between items-center gap-2"><h4 class="font-semibold">Qualification pathways and experience</h4><button type="button" class="app-button app-button-secondary" @onclick="AddPathway">Add alternative pathway</button></div>
+    <p class="text-sm">Complete any one pathway (OR). All qualifications and conditions within it apply (AND). A blank upper level means the exact selected MNQF level.</p>
+    @foreach(var path in Profile.QualificationPathways)
+    {
+        <fieldset @key="RowKey(path)" class="border rounded-lg p-3 space-y-3">
+            <div class="requirements-grid">
+                <label>Pathway name<input maxlength="250" @bind="path.Name" /></label>
+                <label>Relevant experience (months)<input type="number" min="0" max="1200" @bind="path.RelevantExperienceMonths" /></label>
+                <label>Post-qualification experience (months)<input type="number" min="0" max="1200" @bind="path.PostQualificationMonths" /></label>
+                <label>Managerial experience (months)<input type="number" min="0" max="1200" @bind="path.ManagerialExperienceMonths" /></label>
+            </div>
+            @foreach(var qualification in path.Qualifications)
+            {
+                <div @key="RowKey(qualification)" class="requirements-grid border rounded p-2">
+                    <label>Qualification type / description<input maxlength="250" @bind="qualification.Qualification" /></label>
+                    <label>MNQF level<select @bind="qualification.MinimumLevel"><option value="">Not specified / non-MNQF requirement</option>@for(var level=1;level<=10;level++){<option value="@level">MNQF Level @level</option>}</select></label>
+                    <label>Or through level (optional)<select @bind="qualification.MaximumLevel"><option value="">Exact level</option>@for(var level=1;level<=10;level++){<option value="@level">MNQF Level @level</option>}</select></label>
+                    <label>Required field of study<input maxlength="1000" @bind="qualification.FieldOfStudy" /></label>
+                    <label><input type="checkbox" @bind="qualification.AccreditedRequired" /> Recognised / accredited qualification required</label>
+                    <button type="button" class="app-button app-button-secondary" @onclick="()=>RemoveRow(path.Qualifications,qualification)">Remove qualification</button>
+                </div>
+            }
+            <div class="flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" @onclick="()=>path.Qualifications.Add(new())">Add qualification (AND)</button><button type="button" class="app-button app-button-secondary" @onclick="()=>RemoveRow(Profile.QualificationPathways,path)">Remove pathway</button></div>
+            <label>Additional conditions / experience scope<textarea rows="2" maxlength="4000" @bind="path.Conditions"></textarea></label>
+            <label>Source / matrix reference<textarea rows="2" maxlength="2000" @bind="path.SourceReference"></textarea></label>
+        </fieldset>
+    }
+</section>
+@code{
+    [Parameter,EditorRequired]public JobMatrixProfile Profile{get;set;}=new();
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<object,object> rowKeys=new(); private object RowKey(object row)=>rowKeys.GetValue(row,_=>new object()); private static void RemoveRow<T>(List<T> rows,T row) where T:class {var index=rows.FindIndex(x=>ReferenceEquals(x,row));if(index>=0)rows.RemoveAt(index);} private void AddPathway()=>Profile.QualificationPathways.Add(new(){Name=$"Pathway {Profile.QualificationPathways.Count+1}",Qualifications=[new()]});
+}
