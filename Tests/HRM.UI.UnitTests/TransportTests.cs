@@ -118,6 +118,17 @@ public sealed class TransportTests
         var result = await ApiContractProxy.Create<IOutOfOfficeRequests>(new HttpApiOperationClient(http)).SubmitAsync(new());
         Assert.False(result.Success); Assert.Equal("Select an approved request and task.", result.Message);
     }
+    [Fact]public async Task Workflow_configuration_errors_show_a_safe_actionable_message_without_exposing_backend_details()
+    {
+        using var http=new HttpClient(new RecordingHandler(_=>
+        {
+            var response=new HttpResponseMessage(HttpStatusCode.Conflict){Content=new StringContent("Sensitive workflow IDs and SQL details")};
+            response.Headers.Add(ApiProblemCodes.Header,ApiProblemCodes.WorkflowUnavailable);return Task.FromResult(response);
+        })){BaseAddress=Origin};
+        var api=ApiContractProxy.Create<StaffPositionManagementServiceContracts.IOperations>(new HttpApiOperationClient(http));
+        var error=await Assert.ThrowsAsync<ApiOperationException>(()=>api.SaveAsync(820,918,199,new(2026,10,25),new(2026,10,30),"Leaving",remove:true,terminationRequestTypeId:22));
+        Assert.Equal(ApiProblemCodes.WorkflowUnavailable,error.Code);Assert.Equal(ApiProblemCodes.WorkflowUnavailableMessage,error.Message);Assert.DoesNotContain("SQL",error.Message);
+    }
 
     [Theory]
     [InlineData(HttpStatusCode.Unauthorized)]

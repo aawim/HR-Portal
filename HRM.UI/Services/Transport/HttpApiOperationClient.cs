@@ -56,6 +56,8 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
             if (response.StatusCode == HttpStatusCode.Forbidden)
                 throw new UnauthorizedAccessException("You do not have permission to perform this action.");
             var code = ((int)response.StatusCode).ToString(CultureInfo.InvariantCulture);
+            if(response.StatusCode==HttpStatusCode.Conflict&&response.Headers.TryGetValues(ApiProblemCodes.Header,out var problems)&&problems.Contains(ApiProblemCodes.WorkflowUnavailable,StringComparer.Ordinal))
+                throw new ApiOperationException(ApiProblemCodes.WorkflowUnavailable,ApiProblemCodes.WorkflowUnavailableMessage);
             // Do not render arbitrary upstream HTML, exception details, or model-state values in the UI.
             throw new ApiOperationException(code, response.StatusCode switch
             {
