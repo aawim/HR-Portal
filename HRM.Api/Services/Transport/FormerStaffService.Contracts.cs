@@ -14,6 +14,7 @@ public sealed partial class FormerStaffService
         null or DBNull => new(ExportCellKind.Empty),
         string text => new(ExportCellKind.Text, Text: text),
         bool boolean => new(ExportCellKind.Boolean, Boolean: boolean),
+        System.Enum enumeration => new(ExportCellKind.Text, Text: enumeration.ToString()),
         DateTime date => new(ExportCellKind.DateTime, DateTime: date),
         byte or sbyte or short or ushort or int or uint or long or ulong or float or double or decimal
             => new(ExportCellKind.Number, Number: Convert.ToDecimal(value, CultureInfo.InvariantCulture)),
