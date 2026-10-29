@@ -27,7 +27,12 @@ public sealed record FinanceApplication
     public string Reason { get; init; } = "";
 }
 public sealed record FinanceRequestRow(int Id, int StateId, string Reference, string Staff, string Kind, string Status,
-    FinanceApplication Application, bool CanApprove, bool CanCancel);
+    FinanceApplication Application, bool CanApprove, bool CanCancel)
+{
+    public bool CanAssess {get;init;}
+    public List<AllowanceAssessmentRow> Assessments {get;init;}=[];
+}
+public sealed record AllowanceAssessmentRow(long Id,decimal Amount,int CurrencyTypeId,int AssessedByUserId,DateTime AssessedAtUtc);
 public sealed record FinanceInstalmentRow(long Id, DateTime DueDate, decimal Amount, decimal Paid, int Version, bool Superseded);
 public sealed record FinanceAgreementRow(long Id, int JobId, string Staff, string Reference, string Category, int CurrencyTypeId,
     decimal Total, decimal Outstanding, List<FinanceInstalmentRow> Instalments);
@@ -61,6 +66,7 @@ public interface IStaffFinance
     Task<List<FinanceInstalmentRow>> PreviewAgreementAsync(FinanceApplication input);
     Task<ServiceResult> SubmitAsync(FinanceApplication input);
     Task<ServiceResult> ActAsync(int requestId, int expectedState, string action, string? comment);
+    Task<ServiceResult> AssessAllowanceAsync(int requestId,int expectedState,decimal amount,int currencyTypeId);
     Task<ServiceResult> UploadDocumentAsync(FinanceDocumentUpload input);
     Task<FinanceDocumentDownload> DownloadDocumentAsync(long id);
     Task<FinancePayrollPreview> PreviewPayrollAsync(DateTime month, List<int> jobIds);

@@ -43,7 +43,7 @@ public sealed partial class StaffFinanceService
     {
         _=TypeName(input.Kind);
         if(input.Reason.Trim().Length is <1 or >2000||input.Reference.Length>200||input.FromDate.Year is <2000 or >2100)throw new InvalidOperationException("Enter a valid date, reference (up to 200 characters) and reason (up to 2,000 characters).");
-        if(input.Kind is "Allowance" or "Agreement" or "Payment")
+        if(input.Kind is "Agreement" or "Payment")
         {
             if(input.Amount<=0||input.Amount>999999999||decimal.Round(input.Amount,2)!=input.Amount)throw new InvalidOperationException("Enter a positive amount with up to two decimal places.");
             if(!await db.FinanceCurrencies.AnyAsync(x=>x.CurrencyTypeId==input.CurrencyTypeId))throw new InvalidOperationException("Select a valid currency.");
@@ -56,6 +56,7 @@ public sealed partial class StaffFinanceService
         }
         else if(input.Kind=="Allowance")
         {
+            if(!approving&&(input.Amount!=0||input.CurrencyTypeId!=0))throw new InvalidOperationException("Request the allowance without an amount or currency. HR will assess the amount.");
             if(input.FrequencyMonths is not(1 or 6 or 12)||input.ToDate<input.FromDate)throw new InvalidOperationException("Select a valid allowance period and frequency.");
             if(!await db.AllowanceTypes.AnyAsync(x=>x.Id==input.AllowanceTypeId&&x.OrganisationId==org&&x.IsActive))throw new InvalidOperationException("Select an active allowance type.");
             if(await (from p in db.JobPositions join r in db.PositionAllowanceRules on p.PositionId equals r.PositionId
@@ -136,6 +137,11 @@ public sealed partial class StaffFinanceService
             var row=await db.StaffFinanceRequests.Include(x=>x.Request).ThenInclude(x=>x.RequestState).SingleOrDefaultAsync(x=>x.RequestId==requestId&&x.OrganisationId==actor.Org)??throw new UnauthorizedAccessException("Request unavailable.");
             if(action!="Cancel"&&row.CreatedByUserId==actor.User)throw new UnauthorizedAccessException("You cannot approve or reject a request you submitted.");
             var input=Payload(row);var job=await db.Jobs.SingleAsync(x=>x.JobId==row.JobId&&x.OrganisationID==actor.Org);
+            if(row.Kind=="Allowance")
+            {
+                var assessment=await db.AllowanceAssessments.Where(x=>x.RequestId==row.RequestId).OrderByDescending(x=>x.Id).FirstOrDefaultAsync();
+                input=input with{Amount=assessment?.Amount??0,CurrencyTypeId=assessment?.CurrencyTypeId??0};
+            }
             await Processing.ExecuteAsync(db,Subject(row),expectedState,action,comment,actor.User,actor.Person,
                 async()=>
                 {
@@ -156,6 +162,7 @@ public sealed partial class StaffFinanceService
     }
     private async Task ApplyApprovedAsync(HrmTeContext db,StaffFinanceRequest row,FinanceApplication input,Scope actor)
     {
+        if(row.Kind=="Allowance"&&(input.Amount<=0||input.CurrencyTypeId<=0))throw new InvalidOperationException("HR must assess the allowance amount and currency before final approval.");
         if(row.Kind=="PayrollCycle")
         {
             var period=await db.OrganisationPayrollPeriods.SingleAsync(x=>x.OrganisationPayrollPeriodId==input.PayrollPeriodId&&x.OrganisationId==row.OrganisationId);
@@ -178,6 +185,22 @@ public sealed partial class StaffFinanceService
         }
         else if(row.Kind=="Payment")await AllocatePaymentAsync(db,input.AgreementId,input.Amount,input.FromDate,input.Reference.Trim(),actor.User,row.RequestId,null,input.BusinessEntityId);
         await logs.CreateAsync(db,SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,$"Finance request {row.RequestId} applied: {row.Kind}; organisation {row.OrganisationId}.");
+    }
+    public async Task<ServiceResult> AssessAllowanceAsync(int requestId,int expectedState,decimal amount,int currencyTypeId)
+    {
+        var actor=await ScopeAsync();if(!actor.Assess)throw new UnauthorizedAccessException("Allowance assessment permission is required.");
+        if(amount<=0||amount>999999999||decimal.Round(amount,2)!=amount)return ServiceResult.Fail("Enter a positive allowance amount with up to two decimal places.");
+        await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        var row=await db.StaffFinanceRequests.Include(x=>x.Request).ThenInclude(x=>x.RequestState).SingleOrDefaultAsync(x=>x.RequestId==requestId&&x.OrganisationId==actor.Org&&x.Kind=="Allowance")??throw new UnauthorizedAccessException();
+        if(row.IndividualId==actor.Person||row.CreatedByUserId==actor.User)throw new UnauthorizedAccessException("Another authorised HR officer must assess your own request or a request you submitted.");
+        if(row.Request.RequestStateId!=expectedState||row.Request.RequestState.IsFinalState)return ServiceResult.Fail("The request changed or is final. Refresh before assessing.");
+        var instance=await WorkflowRequestProcessing.Instance(db,requestId);
+        if(instance?.WorkflowStatus!="InProgress"||instance.CompletedAt.HasValue)return ServiceResult.Fail("This request is not available for assessment.");
+        var job=await db.Jobs.SingleAsync(x=>x.JobId==row.JobId&&x.OrganisationID==actor.Org);if(!Active(job))return ServiceResult.Fail("Employment ended. This request cannot be assessed.");
+        if(!await db.FinanceCurrencies.AnyAsync(x=>x.CurrencyTypeId==currencyTypeId))return ServiceResult.Fail("Select a valid currency.");
+        db.AllowanceAssessments.Add(new(){RequestId=requestId,RequestStateId=expectedState,Amount=amount,CurrencyTypeId=currencyTypeId,AssessedByUserId=actor.User,AssessedAtUtc=DateTime.UtcNow});
+        await logs.CreateAsync(db,SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,$"Allowance request {requestId}: HR assessment {amount} currency {currencyTypeId}, by user {actor.User}, organisation {actor.Org}.");
+        await db.SaveChangesAsync();await tx.CommitAsync();return ServiceResult.Ok("HR allowance assessment saved. The approval workflow must still be completed.");
     }
     private static async Task AllocatePaymentAsync(HrmTeContext db,long agreementId,decimal amount,DateTime paidDate,string reference,int user,int? requestId,long? payrollEntryId,int? payer,long? onlyInstalment=null)
     {

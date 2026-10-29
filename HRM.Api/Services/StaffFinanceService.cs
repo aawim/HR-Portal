@@ -18,7 +18,7 @@ public sealed partial class StaffFinanceService(IDbContextFactory<HrmTeContext> 
     public const string AdminUrl = "/admin/payroll/finance";
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
     private WorkflowRequestProcessing Processing => new(resolver, contextResolver);
-    private sealed record Scope(int User, int Person, int Org, int Job, bool Manage, bool Configure, bool Post);
+    private sealed record Scope(int User, int Person, int Org, int Job, bool Manage, bool Configure, bool Post,bool Assess);
     private async Task<Scope> ScopeAsync()
     {
         var actor = await access.RequireContextAsync(); var org = await access.GetCurrentOrganisationIdAsync();
@@ -26,7 +26,8 @@ public sealed partial class StaffFinanceService(IDbContextFactory<HrmTeContext> 
         return new(actor.UserId, actor.IndividualId, org, actor.ActiveJob?.JobId ?? 0,
             actor.IsSuperAdministrator || await access.HasPermissionAsync("StaffFinance.Manage"),
             actor.IsSuperAdministrator || await access.HasPermissionAsync("StaffFinance.Configure"),
-            actor.IsSuperAdministrator || await access.HasPermissionAsync("StaffFinance.Payroll"));
+            actor.IsSuperAdministrator || await access.HasPermissionAsync("StaffFinance.Payroll"),
+            actor.IsSuperAdministrator || await access.HasPermissionAsync("StaffFinance.Assess"));
     }
     private static FinanceApplication Payload(StaffFinanceRequest row) => JsonSerializer.Deserialize<FinanceApplication>(row.PayloadJson) ?? throw new InvalidOperationException("The saved request is unavailable.");
     private static WorkflowRequestSubject Subject(StaffFinanceRequest row) => new(row.Request,row.JobId,row.IndividualId,row.OrganisationId);
@@ -99,5 +100,5 @@ public sealed partial class StaffFinanceService(IDbContextFactory<HrmTeContext> 
     private static async Task<decimal> AllocatedAsync(HrmTeContext db,long instalmentId) => await db.DeductionPaymentAllocations.Where(x=>x.InstalmentId==instalmentId).SumAsync(x=>(decimal?)x.Amount)??0;
     private static async Task<DeductionPolicy> PolicyAsync(HrmTeContext db,int org,int currency,DateTime day) => await db.DeductionPolicies.Where(x=>x.OrganisationId==org&&x.CurrencyTypeId==currency&&x.FromDate<=day.Date).OrderByDescending(x=>x.FromDate).FirstOrDefaultAsync()??throw new InvalidOperationException("Deduction limits are not available for this currency and date. Please contact HR.");
     private static async Task<bool> AssignedAsync(HrmTeContext db,int requestId,int user) => await db.WfRequestApprovals.AnyAsync(x=>x.ApproverUserId==user&&x.RequestStageInstance.WorkflowRequestInstance.RequestId==requestId);
-    private static async Task<bool> CanReadAsync(HrmTeContext db,StaffFinanceRequest row,Scope actor) => row.OrganisationId==actor.Org&&(row.IndividualId==actor.Person||actor.Manage||actor.Post||await AssignedAsync(db,row.RequestId,actor.User));
+    private static async Task<bool> CanReadAsync(HrmTeContext db,StaffFinanceRequest row,Scope actor) => row.OrganisationId==actor.Org&&(row.IndividualId==actor.Person||actor.Manage||actor.Post||actor.Assess&&row.Kind=="Allowance"||await AssignedAsync(db,row.RequestId,actor.User));
 }

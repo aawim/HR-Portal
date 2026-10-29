@@ -42,6 +42,16 @@ public sealed class StaffAllowance
     public DateTime FromDate { get; set; }
     public DateTime? ToDate { get; set; }
 }
+public sealed class AllowanceAssessment
+{
+    public long Id {get;set;}
+    public int RequestId {get;set;}
+    public int RequestStateId {get;set;}
+    public decimal Amount {get;set;}
+    public int CurrencyTypeId {get;set;}
+    public int AssessedByUserId {get;set;}
+    public DateTime AssessedAtUtc {get;set;}
+}
 public sealed class DeductionPolicy
 {
     public long Id { get; set; }

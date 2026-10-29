@@ -4,6 +4,8 @@ using HRM.Models.WorkPlanning;
 using HRM.Models;
 using HRM.WorkPlanning.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Data.SqlClient;
 
 namespace HRM.WorkPlanning
 {
@@ -13,18 +15,36 @@ namespace HRM.WorkPlanning
 
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
         private readonly IPlanningProviderResolver _providerResolver;
+        private readonly ILogger<WorkPlanGenerator>? _logger;
 
         public WorkPlanGenerator(
             IDbContextFactory<HrmTeContext> dbFactory,
-            IPlanningProviderResolver providerResolver)
+            IPlanningProviderResolver providerResolver,ILogger<WorkPlanGenerator>? logger=null)
         {
             _dbFactory = dbFactory;
             _providerResolver = providerResolver;
+            _logger=logger;
         }
 
         public async Task<AttendanceWorkPlanDto?> GenerateOrGetAsync(
             int individualId, int jobId, int organisationBusinessEntityId, DateOnly workDate,
             CancellationToken cancellationToken = default)
+        {
+            using var lease=await WorkPlanGenerationGate.Shared.EnterAsync(organisationBusinessEntityId,jobId,workDate,cancellationToken);
+            for(var attempt=0;;attempt++)
+            {
+                try{return await GenerateCoreAsync(individualId,jobId,organisationBusinessEntityId,workDate,cancellationToken);}
+                catch(Exception ex) when(!cancellationToken.IsCancellationRequested&&IsTransient(ex))
+                {
+                    if(attempt>=1)throw new WorkPlanBusyException(ex);
+                    _logger?.LogWarning(ex,"Retrying busy work plan generation for organisation {Org}, job {Job}, date {Day}",organisationBusinessEntityId,jobId,workDate);
+                    await Task.Delay(100,cancellationToken);
+                }
+            }
+        }
+        private static bool IsTransient(Exception ex)=>ex is WorkPlanBusyException||
+            (ex is SqlException sql?sql:ex.InnerException as SqlException)?.Number is 1205 or 1222 or -2;
+        private async Task<AttendanceWorkPlanDto?> GenerateCoreAsync(int individualId,int jobId,int organisationBusinessEntityId,DateOnly workDate,CancellationToken cancellationToken)
         {
             var provider = await _providerResolver.ResolveAsync(organisationBusinessEntityId, workDate, cancellationToken);
             if (!provider.UsesWorkPlanning) return null;
@@ -34,7 +54,18 @@ namespace HRM.WorkPlanning
                 x.OrganisationID == organisationBusinessEntityId, cancellationToken))
                 throw new UnauthorizedAccessException("The job does not belong to this staff member and organisation.");
             await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, cancellationToken);
-            var plan = await db.WorkPlans.Include(x => x.WorkPlanSegments)
+            if(db.Database.IsSqlServer())
+            {
+                // Transaction-owned SQL lock also coordinates separate API instances.
+                await using var command=db.Database.GetDbConnection().CreateCommand();
+                command.Transaction=tx.GetDbTransaction();command.CommandTimeout=10;
+                command.CommandText="DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=5000; SELECT @result;";
+                var resource=command.CreateParameter();resource.ParameterName="@resource";resource.Value=$"HRM.WorkPlan:{organisationBusinessEntityId}:{jobId}:{workDate.ToString("yyyyMMdd",System.Globalization.CultureInfo.InvariantCulture)}";command.Parameters.Add(resource);
+                var result=Convert.ToInt32(await command.ExecuteScalarAsync(cancellationToken));
+                if(result is -1 or -2 or -3)throw new WorkPlanBusyException();
+                if(result<0)throw new InvalidOperationException("Work plan coordination could not be established.");
+            }
+            var plan = await db.WorkPlans.AsSplitQuery().Include(x => x.WorkPlanSegments)
                 .Include(x => x.WorkAssignments).ThenInclude(x => x.WorkAssignmentOwners)
                 .Include(x => x.WorkAssignments).ThenInclude(x => x.WorkAssignmentSegments)
                 .SingleOrDefaultAsync(x => x.JobId == jobId && x.WorkDate == date && x.IsValid, cancellationToken);

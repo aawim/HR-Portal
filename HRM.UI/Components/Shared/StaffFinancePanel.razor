@@ -45,7 +45,7 @@
                         {
                             <label>Agreement<select @bind="agreementId"><option value="0">Select</option>@foreach(var a in data.Agreements.Where(x=>x.JobId==jobId&&x.Outstanding>0)){<option value="@a.Id">@a.Reference · @a.Outstanding.ToString("N2") outstanding</option>}</select></label>
                         }
-                        @if(kind is "Allowance" or "Agreement" or "Payment")
+                        @if(kind is "Agreement" or "Payment")
                         {
                             <label>Amount<InputNumber @bind-Value="amount" min="0.01" step="0.01" /></label>
                             <label>Currency<select @bind="currency"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
@@ -79,7 +79,15 @@
                 <details class="rounded-lg border p-3" open="@(row.Id==RequestId)">
                     <summary class="cursor-pointer font-medium">@row.Reference · @row.Staff · @row.Kind · @row.Status</summary>
                     <div class="space-y-2 pt-3 text-sm">
-                        <p>@row.Application.FromDate.ToString("dd MMM yyyy") · @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)</p><p class="whitespace-pre-wrap">@row.Application.Reason</p>
+                        <p>@row.Application.FromDate.ToString("dd MMM yyyy")</p>
+                        @if(row.Kind=="Allowance")
+                        {
+                            @if(row.Assessments.Count==0){<p>Awaiting HR amount assessment.</p>}
+                            @foreach(var a in row.Assessments){<p>@(a==row.Assessments[0]?"Current HR assessment":"Previous assessment"): @a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId) · @a.AssessedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</p>}
+                            @if(AdminMode&&row.CanAssess){<div class="flex flex-wrap items-end gap-3"><label>HR amount<InputNumber @bind-Value="assessmentAmounts[row.Id]" min="0.01" step="0.01" /></label><label>Currency<select @bind="assessmentCurrencies[row.Id]"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label><button class="app-button app-button-primary" disabled="@busy" @onclick="()=>Assess(row)">Save HR assessment</button></div>}
+                        }
+                        else{<p>@row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)</p>}
+                        <p class="whitespace-pre-wrap">@row.Application.Reason</p>
                         @foreach(var d in data.Documents.Where(x=>x.RequestId==row.Id)){<button class="app-button app-button-secondary" @onclick="()=>Download(d.Id)">@d.Name</button>}
                         @if(row.CanCancel||data.CanManage&&row.Status.StartsWith("Processing · ",StringComparison.Ordinal))
                         { <label class="block">Attach evidence<InputFile OnChange="e=>Upload(row.Id,e)" accept=".pdf,.png,.jpg,.jpeg" /></label> }
@@ -115,19 +123,20 @@
     [Parameter] public int? RequestId {get;set;}
     private FinanceWorkspace? data; private FinanceConfiguration? config; private string? error; private bool busy;
     private string tab="Requests",kind="Allowance",category="Loan",reference="",reason="",status="",requestKind="";private int jobId,currency,frequency=1,count=12,entityId;private long allowanceType,agreementId;private decimal amount;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private string? selectedName;private Guid clientId=Guid.NewGuid();
-    private Dictionary<int,string?> comments=[];private List<FinanceInstalmentRow> schedule=[];
+    private Dictionary<int,string?> comments=[];private Dictionary<int,decimal> assessmentAmounts=[];private Dictionary<int,int> assessmentCurrencies=[];private List<FinanceInstalmentRow> schedule=[];
     private IEnumerable<string> Sections => new[]{"Requests","New request","Allowances","Agreements","History"}.Concat(AdminMode&&config?.CanConfigure==true?["Configuration"]:[]).Concat(AdminMode&&data?.CanPost==true?["Payroll"]:[]);
     private string DateLabel=>kind switch{"Agreement"=>"First due date","Payment"=>"Payment date","Defer"=>"Instalment month to defer","EndAllowance"=>"Last entitlement date",_=>"Effective from"};
     protected override async Task OnInitializedAsync()
     {var actor=await Access.RequireContextAsync();if(StaffId>0)jobId=(await Profiles.GetProfileAsync(StaffId))?.ActiveJob?.JobId??0;else if(!AdminMode)jobId=actor.ActiveJob?.JobId??0;await Load();}
     private string CurrencyName(int id)=>config?.Currencies.FirstOrDefault(x=>x.Id==id)?.Name??"";
-    private async Task Load(){busy=true;error=null;try{config=await Finance.GetConfigurationAsync();data=await Finance.LoadAsync(StaffId>0?StaffId:null);foreach(var r in data.Requests)comments.TryAdd(r.Id,null);}catch(Exception ex){Logger.LogError(ex,"Finance workspace failed to load");error="Finance information could not be loaded. Please contact HR if this continues.";}finally{busy=false;}}
-    private async Task SelectStaff(WorkspaceSearchResult item){try{jobId=(await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId??0;selectedName=item.Name;data=await Finance.LoadAsync(item.Id);}catch(Exception ex){Logger.LogError(ex,"Finance staff selection failed");error="Staff finance information could not be loaded.";}}
-    private FinanceApplication Input()=>new(){ClientRequestId=clientId,Kind=kind,JobId=jobId,AllowanceTypeId=allowanceType,AgreementId=agreementId,BusinessEntityId=entityId,CurrencyTypeId=currency,Amount=amount,InstalmentCount=count,FrequencyMonths=frequency,FromDate=from,ToDate=to,Category=category,Reference=reference,Reason=reason};
+    private async Task Load(){busy=true;error=null;try{config=await Finance.GetConfigurationAsync();data=await Finance.LoadAsync(StaffId>0?StaffId:null);foreach(var r in data.Requests){comments.TryAdd(r.Id,null);assessmentAmounts[r.Id]=r.Assessments.FirstOrDefault()?.Amount??0;assessmentCurrencies[r.Id]=r.Assessments.FirstOrDefault()?.CurrencyTypeId??0;}}catch(Exception ex){Logger.LogError(ex,"Finance workspace failed to load");error="Finance information could not be loaded. Please contact HR if this continues.";}finally{busy=false;}}
+    private async Task SelectStaff(WorkspaceSearchResult item){try{jobId=(await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId??0;selectedName=item.Name;data=await Finance.LoadAsync(item.Id);foreach(var r in data.Requests){comments.TryAdd(r.Id,null);assessmentAmounts[r.Id]=r.Assessments.FirstOrDefault()?.Amount??0;assessmentCurrencies[r.Id]=r.Assessments.FirstOrDefault()?.CurrencyTypeId??0;}}catch(Exception ex){Logger.LogError(ex,"Finance staff selection failed");error="Staff finance information could not be loaded.";}}
+    private FinanceApplication Input()=>new(){ClientRequestId=clientId,Kind=kind,JobId=jobId,AllowanceTypeId=allowanceType,AgreementId=agreementId,BusinessEntityId=entityId,CurrencyTypeId=kind=="Allowance"?0:currency,Amount=kind=="Allowance"?0:amount,InstalmentCount=count,FrequencyMonths=frequency,FromDate=from,ToDate=to,Category=category,Reference=reference,Reason=reason};
     private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;bool saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Logger.LogError(ex,"Finance action failed");error="This action could not be completed. Please refresh or contact HR.";}finally{busy=false;}if(saved)await Load();}
     private async Task Submit(){await Run(()=>Finance.SubmitAsync(Input()));if(error==null){clientId=Guid.NewGuid();tab="Requests";}}
     private async Task PreviewSchedule(){try{schedule=await Finance.PreviewAgreementAsync(Input());error=null;}catch(Exception){error="Enter a valid total, instalment count and repayment dates.";}}
     private Task Act(FinanceRequestRow row,string action)=>Run(()=>Finance.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
+    private Task Assess(FinanceRequestRow row)=>Run(()=>Finance.AssessAllowanceAsync(row.Id,row.StateId,assessmentAmounts[row.Id],assessmentCurrencies[row.Id]));
     private async Task Upload(int id,InputFileChangeEventArgs e){try{await using var stream=e.File.OpenReadStream(5*1024*1024);using var memory=new MemoryStream();await stream.CopyToAsync(memory);await Run(()=>Finance.UploadDocumentAsync(new(id,e.File.Name,e.File.ContentType,memory.ToArray())));}catch(Exception){error="Choose a PDF, PNG or JPEG file up to 5 MB.";}}
     private async Task Download(long id){try{var file=await Finance.DownloadDocumentAsync(id);using var stream=new MemoryStream(file.Content);using var reference=new DotNetStreamReference(stream);await using var module=await JS.InvokeAsync<IJSObjectReference>("import","./organisationStaffExport.js");await module.InvokeVoidAsync("download",file.Name,file.ContentType,reference);}catch(Exception){error="This document could not be downloaded.";}}
 }

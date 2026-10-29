@@ -152,7 +152,7 @@ public sealed class StaffFinanceTests
     [Fact] public async Task Staff_cannot_request_a_duplicate_of_a_required_position_allowance()
     {
         var f=new Fixture();await f.Seed();f.Access.Actor!.IndividualId=200;
-        var result=await f.Service.SubmitAsync(new(){Kind="Allowance",JobId=10,AllowanceTypeId=1,CurrencyTypeId=1,Amount=300,FromDate=Today,Reason="Phone allowance"});
+        var result=await f.Service.SubmitAsync(new(){Kind="Allowance",JobId=10,AllowanceTypeId=1,FromDate=Today,Reason="Phone allowance"});
         Assert.False(result.Success);Assert.Contains("already required",result.Message);
     }
     [Fact] public async Task Payroll_officer_cannot_post_their_own_entries()
@@ -161,6 +161,25 @@ public sealed class StaffFinanceTests
         var preview=await f.Service.PreviewPayrollAsync(Month,[10]);
         Assert.False((await f.Service.PostPayrollAsync(new(Month,1000,"SELF",Guid.NewGuid(),[10],preview.Fingerprint))).Success);
         await using var db=f.Factory.CreateDbContext();Assert.Empty(await db.StaffFinancePayrollEntries.ToListAsync());
+    }
+    [Fact] public async Task Staff_allowance_amount_is_decided_by_independent_hr_and_original_request_stays_unpriced()
+    {
+        var f=new Fixture();await f.Seed();await using(var db=f.Factory.CreateDbContext()){db.AllowanceTypes.Add(new(){Id=2,OrganisationId=10,Name="Subscription"});await db.SaveChangesAsync();}
+        await f.AddWorkflow(new(){Kind="Allowance",JobId=10,AllowanceTypeId=2,FromDate=Today,Reason="Subscription required"});
+        Assert.False((await f.Service.ActAsync(2000,7,"Approve","Approve")).Success);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>f.Service.AssessAllowanceAsync(2000,7,111,1));
+        f.Access.Permissions.Add("StaffFinance.Assess");
+        Assert.True((await f.Service.AssessAllowanceAsync(2000,7,111,1)).Success);
+        Assert.True((await f.Service.AssessAllowanceAsync(2000,7,123.45m,1)).Success);
+        Assert.True((await f.Service.ActAsync(2000,7,"Approve","HR assessed")).Success);
+        await using(var db=f.Factory.CreateDbContext()){Assert.Equal(123.45m,(await db.StaffAllowances.SingleAsync()).Amount);Assert.Equal(2,await db.AllowanceAssessments.CountAsync());Assert.Equal(0,JsonSerializer.Deserialize<FinanceApplication>((await db.StaffFinanceRequests.SingleAsync()).PayloadJson)!.Amount);}
+        Assert.False((await f.Service.AssessAllowanceAsync(2000,4,200,1)).Success);
+    }
+    [Fact] public async Task Staff_cannot_choose_the_requested_allowance_amount_through_the_api()
+    {
+        var f=new Fixture();await f.Seed();f.Access.Actor!.IndividualId=200;
+        var result=await f.Service.SubmitAsync(new(){Kind="Allowance",JobId=10,AllowanceTypeId=1,Amount=999,CurrencyTypeId=1,FromDate=Today,Reason="Forged amount"});
+        Assert.False(result.Success);Assert.Contains("without an amount",result.Message);
     }
     [Fact] public async Task Evidence_upload_checks_content_instead_of_trusting_file_name()
     {

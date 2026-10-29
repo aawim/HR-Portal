@@ -5,7 +5,7 @@
 - Staff: `/online/allowances-deductions`.
 - HR: Payroll → Allowances and deductions (`/admin/payroll/finance`).
 - Selected staff: staff workspace → Allowances & deductions.
-- Configuration is the Configuration tab on the HR page. It has one canonical implementation.
+- Allowance types and deduction limits use the Configuration tab on the HR page. Required position allowances have one canonical editor at Settings → Positions → Position Allowances (`/admin/settings/positions/position-allowances`).
 - Received Requests and notifications open the finance request page. Assignment grants access to the assigned request, not the employee's other financial records.
 
 ## Setup
@@ -19,6 +19,7 @@ Use existing organisation permission management, User Groups and Admin Portal Ac
 | `StaffFinance.Configure` | Allowance catalogue, dated position rules and deduction limits |
 | `StaffFinance.Manage` | Current-tenant staff finance records, HR submissions and supporting documents |
 | `StaffFinance.Payroll` | Payroll preview and posting |
+| `StaffFinance.Assess` | Independently set amount/currency for a pending staff allowance request |
 
 Actual superadministrators can perform these functions in their current organisation. Ordinary employees can submit their own requests and see their own records. An officer cannot approve a request they submitted on behalf of someone else, and applicants cannot approve their own requests.
 
@@ -38,6 +39,8 @@ Use Settings → Configurations → Request approval flows and Request State Tra
 Position rules are mandatory entitlements derived directly from approved `JobPositions`, their effective dates, employment dates and the rule's effective dates. A separate manual staff assignment is unnecessary. A position's `ToDate` is exclusive; a rule/allowance's `ToDate` is the inclusive last entitlement date.
 
 Rules specify an amount **per payment**, currency, monthly/six-monthly/annual frequency, effective period and multiple-position policy: Once (lowest stable assignment ID), Highest, or Stack. All rules for an allowance type use the same policy. Required position allowances appear in the staff view as the current month's prorated entitlement. They are independent of staff-requested allowances such as subscriptions.
+
+Staff request an allowance type and effective period without setting an amount or currency. The API rejects staff-supplied amounts as well as hiding those fields in the form. Independent HR officers with `StaffFinance.Assess` enter an amount/currency during request review. Assessments are append-only, visible in request history and leave the original request payload unchanged. Final approval requires an assessment and snapshots its latest amount into the staff entitlement. Intermediate verification stages can proceed before assessment. Assessment does not itself approve the allowance. Officers cannot assess their own requests or requests they submitted for someone else.
 
 Staff-requested allowances become entitlements only after final approval. They can have an optional end date. An approved Allowance End Request ends future entitlement; position rules are ended by configuration permission. Amounts and effective periods cannot overlap existing rules/entitlements. Proration uses calendar days in the payment month, to two decimal places. No currency conversion or tax calculation is performed.
 
@@ -76,6 +79,7 @@ Every new table uses its feature prefix. Existing tables and balances are preser
 | `AL_AllowanceTypes` | Id, OrganisationId, Name, IsActive |
 | `AL_PositionAllowanceRules` | Id, OrganisationId, PositionId, AllowanceTypeId, CurrencyTypeId, Amount, FrequencyMonths, FromDate, ToDate, MultiplePositionPolicy, CreatedByUserId, CreatedAtUtc |
 | `AL_StaffAllowances` | Id, OrganisationId, IndividualId, JobId, RequestId, AllowanceTypeId, CurrencyTypeId, Amount, FrequencyMonths, FromDate, ToDate |
+| `AL_AllowanceAssessments` | Id, RequestId, RequestStateId, Amount, CurrencyTypeId, AssessedByUserId, AssessedAtUtc |
 | `DA_DeductionPolicies` | Id, OrganisationId, CurrencyTypeId, MaximumPerMonth, MaximumPercentOfBasic, MinimumTakeHome, MaximumOutstanding, MaximumAgreements, FromDate, CreatedByUserId |
 | `DA_DeductionAgreements` | Id, OrganisationId, IndividualId, JobId, RequestId, CreditorBusinessEntityId, Reference, Category, CurrencyTypeId, TotalAmount, FirstDueDate, InstalmentCount, FrequencyMonths, ScheduleVersion |
 | `DA_Instalments` | Id, AgreementId, Version, DueDate, Amount, IsSuperseded, SourceRequestId |

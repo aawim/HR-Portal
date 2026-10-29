@@ -62,6 +62,7 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
                 HttpStatusCode.BadRequest => "Check the request fields and try again.",
                 HttpStatusCode.NotFound => "The requested record is unavailable.",
                 HttpStatusCode.Conflict => "This action could not be completed. Refresh and try again, or contact your organisation's HR team.",
+                HttpStatusCode.ServiceUnavailable => "The server is temporarily busy. Please refresh shortly.",
                 _ => "This action could not be completed right now. Please try again."
             });
         }

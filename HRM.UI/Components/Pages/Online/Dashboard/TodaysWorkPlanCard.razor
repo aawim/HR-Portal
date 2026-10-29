@@ -5,6 +5,7 @@
 @inject IAttendancePlanService Plans
 @inject IAttendanceService Attendance
 @inject ILogger<TodaysWorkPlanCard> Logger
+@implements IDisposable
 
 <section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Today's Work Plan">
     <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
@@ -51,6 +52,8 @@
     private bool loading;
     private string? error;
     private AttendanceWorkPlanDto? plan;
+    private CancellationTokenSource? loadCancellation;
+    private bool disposed;
     protected override async Task OnParametersSetAsync()
     {
         if (loadedKey == RefreshKey) return;
@@ -59,16 +62,31 @@
     }
     private async Task LoadAsync()
     {
+        if(disposed)return;
+        loadCancellation?.Cancel();
+        var cancellation=new CancellationTokenSource();loadCancellation=cancellation;
+        using var ownedCancellation=cancellation;
         loading = true; error = null; today = DateTime.UtcNow.AddHours(5).Date;
         try
         {
             var context = await UserAccess.RequireContextAsync();
-            plan = context.ActiveJob == null ? null : await Plans.GetOrGenerateAsync(context.IndividualId,
-                context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
+            AttendanceWorkPlanDto? loaded=null;
+            if(context.ActiveJob!=null)
+            {
+                for(var attempt=0;;attempt++)
+                {
+                    try{loaded=await Plans.GetOrGenerateAsync(context.IndividualId,context.ActiveJob.JobId,context.ActiveJob.OrganisationId,today,cancellation.Token);break;}
+                    catch(HRM.UI.Services.Transport.ApiOperationException ex) when(ex.Code=="503"&&attempt==0)
+                    {await Task.Delay(300,cancellation.Token);}
+                }
+            }
+            if(cancellation.IsCancellationRequested||disposed)return;
+            plan=loaded;
             scheduleMessage = "No active schedule found";
             if (context.ActiveJob != null && (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)))
             {
                 var evaluation = await Attendance.GetEvaluationAsync(context.IndividualId, context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
+                if(cancellation.IsCancellationRequested||disposed)return;
                 scheduleMessage = evaluation.Status switch
                 {
                     HRM.Enum.AttendanceDailyStatus.RestDay => "No scheduled work today (rest day)",
@@ -78,9 +96,11 @@
                 };
             }
         }
-        catch (Exception ex) { Logger.LogError(ex, "Loading today's work plan"); error = "Today's work plan could not be loaded. Please try refreshing."; plan = null; }
-        finally { loading = false; }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested){ }
+        catch (Exception ex) { if(!cancellation.IsCancellationRequested&&!disposed){Logger.LogError(ex, "Loading today's work plan"); error = ex is HRM.UI.Services.Transport.ApiOperationException {Code:"503"}?"The server is temporarily busy. Please refresh shortly.":"Today's work plan could not be loaded. Please try refreshing.";plan=null;} }
+        finally { if(ReferenceEquals(loadCancellation,cancellation)){loadCancellation=null;loading=false;} }
     }
+    public void Dispose(){disposed=true;loadCancellation?.Cancel();}
     private static string Time(DateTime value) => value.ToString("HH:mm");
     private IEnumerable<AttendanceWorkSegmentDto> EventsFor(AttendanceWorkAssignmentDto assignment)
     {

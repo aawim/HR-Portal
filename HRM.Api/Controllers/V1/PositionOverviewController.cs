@@ -6,7 +6,7 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/position-overview")]
 public sealed class PositionOverviewController(global::HRM.Services.Contracts.PositionOverviewServiceContracts.IOperations service) : HrmApiController
 {
-    [ApiPermission("Position.Details", "Staff.Positions.Manage")]
+    [ApiPermission("Position.Details", "Staff.Positions.Manage", "Positions.Configure")]
     [HttpGet("load")]
     public async Task<ActionResult<global::HRM.DTOs.PositionOverviewData>> Load()
     {

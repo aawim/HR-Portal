@@ -10,6 +10,7 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
         if (context.Exception is OperationCanceledException && context.HttpContext.RequestAborted.IsCancellationRequested) return;
         var status = context.Exception switch
         {
+            HRM.WorkPlanning.WorkPlanBusyException => 503,
             UnauthorizedAccessException => 403,
             ArgumentException => 400,
             KeyNotFoundException => 404,
@@ -18,6 +19,7 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
         };
         var title = status switch
         {
+            503 => "The server is temporarily busy. Please refresh shortly.",
             403 => "You do not have permission to access this information or perform this action.",
             400 => "Check the request fields and try again.",
             404 => "The requested record is unavailable.",
@@ -25,6 +27,7 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
             _ => "This action could not be completed right now. Please try again."
         };
         logger.LogWarning(context.Exception, "API request failed with status {Status}; trace {TraceId}", status, context.HttpContext.TraceIdentifier);
+        if(status==503)context.HttpContext.Response.Headers.RetryAfter="1";
         context.Result = new ObjectResult(new ProblemDetails { Status = status, Title = title,
             Extensions = { ["traceId"] = context.HttpContext.TraceIdentifier } }) { StatusCode = status };
         context.ExceptionHandled = true;

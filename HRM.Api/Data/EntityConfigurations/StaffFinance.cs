@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace HRM.Models;
 
-public sealed class StaffFinanceMapping : IEntityTypeConfiguration<AllowanceType>, IEntityTypeConfiguration<PositionAllowanceRule>,
+public sealed class StaffFinanceMapping : IEntityTypeConfiguration<AllowanceAssessment>,IEntityTypeConfiguration<AllowanceType>, IEntityTypeConfiguration<PositionAllowanceRule>,
     IEntityTypeConfiguration<StaffAllowance>, IEntityTypeConfiguration<DeductionPolicy>, IEntityTypeConfiguration<DeductionAgreement>,
     IEntityTypeConfiguration<DeductionInstalment>, IEntityTypeConfiguration<DeductionPayment>, IEntityTypeConfiguration<DeductionPaymentAllocation>,
     IEntityTypeConfiguration<StaffFinanceRequest>, IEntityTypeConfiguration<StaffFinanceDocument>, IEntityTypeConfiguration<StaffFinancePayrollBatch>,
@@ -22,6 +22,8 @@ public sealed class StaffFinanceMapping : IEntityTypeConfiguration<AllowanceType
     { b.ToTable("CurrencyTypes", t => t.ExcludeFromMigrations()); b.HasKey(x=>x.CurrencyTypeId); b.Property(x=>x.CurrencyTypeId).HasColumnName("CurrencyTypeID"); b.Property(x=>x.Name).HasMaxLength(200); }
     public void Configure(EntityTypeBuilder<AllowanceType> b)
     { Table(b,"AL_AllowanceTypes"); b.Property(x=>x.Name).HasMaxLength(150); b.HasIndex(x=>new{x.OrganisationId,x.Name}).IsUnique(); b.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict); }
+    public void Configure(EntityTypeBuilder<AllowanceAssessment> b)
+    {Table(b,"AL_AllowanceAssessments");b.HasIndex(x=>new{x.RequestId,x.Id});b.HasOne<StaffFinanceRequest>().WithMany().HasForeignKey(x=>x.RequestId).OnDelete(DeleteBehavior.Restrict);b.HasOne<FinanceCurrency>().WithMany().HasForeignKey(x=>x.CurrencyTypeId).OnDelete(DeleteBehavior.Restrict);b.HasOne<User>().WithMany().HasForeignKey(x=>x.AssessedByUserId).OnDelete(DeleteBehavior.Restrict);}
     public void Configure(EntityTypeBuilder<PositionAllowanceRule> b)
     {
         Table(b,"AL_PositionAllowanceRules"); b.HasIndex(x=>new{x.OrganisationId,x.PositionId,x.AllowanceTypeId,x.FromDate}).IsUnique();
@@ -80,6 +82,7 @@ public sealed class StaffFinanceMapping : IEntityTypeConfiguration<AllowanceType
 public partial class HrmTeContext
 {
     public DbSet<FinanceCurrency> FinanceCurrencies => Set<FinanceCurrency>();
+    public DbSet<AllowanceAssessment> AllowanceAssessments=>Set<AllowanceAssessment>();
     public DbSet<AllowanceType> AllowanceTypes => Set<AllowanceType>();
     public DbSet<PositionAllowanceRule> PositionAllowanceRules => Set<PositionAllowanceRule>();
     public DbSet<StaffAllowance> StaffAllowances => Set<StaffAllowance>();

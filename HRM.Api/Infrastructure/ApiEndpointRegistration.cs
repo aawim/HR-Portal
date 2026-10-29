@@ -11,6 +11,7 @@ public static class ApiEndpointRegistration
         services.AddScoped<ApiExceptionFilter>();
         services.AddScoped<ApiSessionFilter>();
         services.AddScoped<ApiReadScope>();
+        services.AddScoped<IPositionManagement,HRM.Services.PositionManagementService>();
         services.AddScoped<IAttendanceRequestReview,HRM.Services.AttendanceRequestReviewService>();
         services.AddScoped<IStaffFinance, HRM.Services.StaffFinanceService>();
         services.AddScoped<ICurrentEmployeeSession, CurrentEmployeeSession>();

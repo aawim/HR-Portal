@@ -5,6 +5,8 @@ namespace HRM.Models;
 public partial class Position
 {
     public int PositionId { get; set; }
+    public int? PositionFrameworkId { get; set; }
+    public int? PositionMatrixId { get; set; }
 
     public int? PositionClassificationId { get; set; }
 

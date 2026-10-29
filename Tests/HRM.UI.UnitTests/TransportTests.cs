@@ -147,6 +147,13 @@ public sealed class TransportTests
         var error = await Assert.ThrowsAsync<ApiOperationException>(() => ApiContractProxy.Create<UserPreferenceServiceContracts.IOperations>(new HttpApiOperationClient(http)).SaveFontSizeAsync(100, 1));
         Assert.DoesNotContain("secret", error.Message); Assert.Equal(1, calls);
     }
+    [Fact]
+    public async Task Busy_responses_have_a_clear_message_and_do_not_replay_mutations()
+    {
+        var calls=0;using var http=new HttpClient(new RecordingHandler(_=>{calls++;return Task.FromResult(new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));})){BaseAddress=Origin};
+        var error=await Assert.ThrowsAsync<ApiOperationException>(()=>ApiContractProxy.Create<UserPreferenceServiceContracts.IOperations>(new HttpApiOperationClient(http)).SaveFontSizeAsync(100,1));
+        Assert.Equal("503",error.Code);Assert.Contains("temporarily busy",error.Message);Assert.Equal(1,calls);
+    }
 
     [Fact]
     public async Task Cookie_and_csrf_pairs_are_private_to_each_user_and_writes_are_not_retried()

@@ -241,6 +241,46 @@ namespace HRM.Migrations
                     b.ToTable("AA_AdminAccessGrantRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.AllowanceAssessment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("AssessedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("AssessedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestStateId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssessedByUserId");
+
+                    b.HasIndex("CurrencyTypeId");
+
+                    b.HasIndex("RequestId", "Id");
+
+                    b.ToTable("AL_AllowanceAssessments", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
+                });
+
             modelBuilder.Entity("HRM.Models.AllowanceType", b =>
                 {
                     b.Property<long>("Id")
@@ -265,7 +305,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "Name")
                         .IsUnique();
 
-                    b.ToTable("AL_AllowanceTypes", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AL_AllowanceTypes", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.AssignedWorkType", b =>
@@ -3986,7 +4028,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "CreditorBusinessEntityId", "Reference")
                         .IsUnique();
 
-                    b.ToTable("DA_DeductionAgreements", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("DA_DeductionAgreements", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.DeductionInstalment", b =>
@@ -4023,7 +4067,9 @@ namespace HRM.Migrations
                     b.HasIndex("AgreementId", "Version", "DueDate")
                         .IsUnique();
 
-                    b.ToTable("DA_Instalments", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("DA_Instalments", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.DeductionPayment", b =>
@@ -4075,7 +4121,9 @@ namespace HRM.Migrations
                         .IsUnique()
                         .HasFilter("[RequestId] IS NOT NULL");
 
-                    b.ToTable("DA_Payments", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("DA_Payments", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.DeductionPaymentAllocation", b =>
@@ -4103,7 +4151,9 @@ namespace HRM.Migrations
                     b.HasIndex("PaymentId", "InstalmentId")
                         .IsUnique();
 
-                    b.ToTable("DA_PaymentAllocations", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("DA_PaymentAllocations", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.DeductionPolicy", b =>
@@ -4152,7 +4202,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "CurrencyTypeId", "FromDate")
                         .IsUnique();
 
-                    b.ToTable("DA_DeductionPolicies", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("DA_DeductionPolicies", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.FinanceCurrency", b =>
@@ -4172,6 +4224,65 @@ namespace HRM.Migrations
                     b.HasKey("CurrencyTypeId");
 
                     b.ToTable("CurrencyTypes", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobMatrix", b =>
+                {
+                    b.Property<int>("JobMatrixId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixId"));
+
+                    b.Property<decimal>("BasicSalary")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("MatrixCode")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("JobMatrixId");
+
+                    b.ToTable("PF_JobMatrix", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobTitle", b =>
+                {
+                    b.Property<int>("JobTitleId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobTitleID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobTitleId"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("nvarchar(300)");
+
+                    b.HasKey("JobTitleId");
+
+                    b.ToTable("PF_JobTitles", null, t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -7162,6 +7273,14 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("PositionClassificationID");
 
+                    b.Property<int?>("PositionFrameworkId")
+                        .HasColumnType("int")
+                        .HasColumnName("PositionFrameworkID");
+
+                    b.Property<int?>("PositionMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("PositionMatrixID");
+
                     b.Property<int?>("PositionRankId")
                         .HasColumnType("int")
                         .HasColumnName("PositionRankID");
@@ -7240,7 +7359,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "PositionId", "AllowanceTypeId", "FromDate")
                         .IsUnique();
 
-                    b.ToTable("AL_PositionAllowanceRules", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AL_PositionAllowanceRules", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.PositionBasicSalary", b =>
@@ -7320,6 +7441,85 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationBusinessEntityID");
 
                     b.ToTable("PositionClassifications");
+                });
+
+            modelBuilder.Entity("HRM.Models.PositionFramework", b =>
+                {
+                    b.Property<int>("FrameworkId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("FrameworkID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("FrameworkId"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("FrameworkId");
+
+                    b.ToTable("PF_Frameworks", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.PositionMatrix", b =>
+                {
+                    b.Property<int>("PositionMatrixId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("PositionMatrixID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("PositionMatrixId"));
+
+                    b.Property<int>("ApprovedSlots")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.Property<int>("JobMatrixStepId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixStepID");
+
+                    b.Property<int>("JobTitleId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobTitleID");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int")
+                        .HasColumnName("OrganisationID");
+
+                    b.Property<int?>("OrganisationStructureId")
+                        .HasColumnType("int")
+                        .HasColumnName("OrganisationStructureID");
+
+                    b.HasKey("PositionMatrixId");
+
+                    b.ToTable("PF_PositionMatrix", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
                 });
 
             modelBuilder.Entity("HRM.Models.PositionRank", b =>
@@ -7862,7 +8062,9 @@ namespace HRM.Migrations
                     b.HasIndex("RequestId")
                         .IsUnique();
 
-                    b.ToTable("AL_StaffAllowances", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AL_StaffAllowances", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
@@ -8086,7 +8288,9 @@ namespace HRM.Migrations
 
                     b.HasIndex("RequestId");
 
-                    b.ToTable("AD_RequestDocuments", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AD_RequestDocuments", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffFinancePayrollBatch", b =>
@@ -8099,6 +8303,11 @@ namespace HRM.Migrations
 
                     b.Property<Guid>("ClientBatchId")
                         .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("Month")
                         .HasColumnType("datetime2");
@@ -8120,6 +8329,11 @@ namespace HRM.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("nvarchar(500)");
 
+                    b.Property<string>("SelectionJson")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(max)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PayrollCycleRequestId");
@@ -8127,9 +8341,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "ClientBatchId")
                         .IsUnique();
 
-                    b.Property<string>("SelectionJson").IsRequired().HasColumnType("nvarchar(max)");
-                    b.Property<string>("Fingerprint").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
-                    b.ToTable("AD_PayrollBatches", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AD_PayrollBatches", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffFinancePayrollEntry", b =>
@@ -8206,7 +8420,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "Month", "SourceKey")
                         .IsUnique();
 
-                    b.ToTable("AD_PayrollEntries", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AD_PayrollEntries", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffFinanceRequest", b =>
@@ -8245,7 +8461,9 @@ namespace HRM.Migrations
                     b.HasIndex("OrganisationId", "ClientRequestId")
                         .IsUnique();
 
-                    b.ToTable("AD_FinanceRequests", (string)null, t => t.UseSqlOutputClause(false));
+                    b.ToTable("AD_FinanceRequests", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
@@ -10878,6 +11096,27 @@ namespace HRM.Migrations
                         .IsRequired();
 
                     b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.AllowanceAssessment", b =>
+                {
+                    b.HasOne("HRM.Models.User", null)
+                        .WithMany()
+                        .HasForeignKey("AssessedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.FinanceCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.StaffFinanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("HRM.Models.AllowanceType", b =>

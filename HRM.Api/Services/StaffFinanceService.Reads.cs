@@ -12,7 +12,7 @@ public sealed partial class StaffFinanceService
         if(staffId.HasValue&&staffId!=actor.Person&&!actor.Manage&&!actor.Post)throw new UnauthorizedAccessException("Staff finance information requires permission.");
         var source=db.StaffFinanceRequests.AsNoTracking().Include(x=>x.Request).ThenInclude(x=>x.RequestState)
             .Where(x=>x.OrganisationId==actor.Org&&(!staffId.HasValue||x.IndividualId==staffId)&&
-                (x.IndividualId==actor.Person||actor.Manage||actor.Post||db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.User&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==x.RequestId)));
+                (x.IndividualId==actor.Person||actor.Manage||actor.Post||actor.Assess&&x.Kind=="Allowance"||db.WfRequestApprovals.Any(a=>a.ApproverUserId==actor.User&&a.RequestStageInstance.WorkflowRequestInstance.RequestId==x.RequestId)));
         var rows=await source.OrderByDescending(x=>x.RequestId).Take(200).ToListAsync();var result=new List<FinanceRequestRow>();
         foreach(var row in rows)
         {
@@ -20,7 +20,11 @@ public sealed partial class StaffFinanceService
             result.Add(new(row.RequestId,row.Request.RequestStateId,row.Request.ReferenceNumber??$"#{row.RequestId}",name,row.Kind,
                 (row.Request.RequestState.IsProcessingState&&!row.Request.RequestState.IsFinalState?"Processing · ":"")+row.Request.RequestState.StateName,Payload(row),
                 row.CreatedByUserId!=actor.User&&await Processing.CanApprove(db,Subject(row),instance,actor.User,actor.Person),
-                row.IndividualId==actor.Person&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus=="InProgress"));
+                row.IndividualId==actor.Person&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus=="InProgress")
+            {
+                CanAssess=actor.Assess&&row.Kind=="Allowance"&&row.IndividualId!=actor.Person&&row.CreatedByUserId!=actor.User&&!row.Request.RequestState.IsFinalState&&instance?.WorkflowStatus=="InProgress",
+                Assessments=await db.AllowanceAssessments.Where(x=>x.RequestId==row.RequestId).OrderByDescending(x=>x.Id).Select(x=>new AllowanceAssessmentRow(x.Id,x.Amount,x.CurrencyTypeId,x.AssessedByUserId,x.AssessedAtUtc)).ToListAsync()
+            });
         }
         // Approval assignment permits reading the assigned request, not all of that employee's financial records.
         var person=staffId??actor.Person;var all=!staffId.HasValue&&(actor.Manage||actor.Post);

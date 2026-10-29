@@ -12,7 +12,7 @@ public sealed class PositionOverviewService(IDbContextFactory<HrmTeContext> fact
         var actor = await access.RequireContextAsync();
         if (!actor.IsSuperAdministrator && !actor.IsHRStaff && !actor.IsHRHead && !actor.IsHRManager && !actor.IsOrganisationAdmin &&
             !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Position.Details") &&
-            !await access.HasPermissionAsync("Staff.Positions.Manage"))
+            !await access.HasPermissionAsync("Staff.Positions.Manage") && !await access.HasPermissionAsync("Positions.Configure"))
             throw new UnauthorizedAccessException("You do not have permission to view positions and staff assignments.");
         var org = await access.GetCurrentOrganisationIdAsync();
         if (org <= 0 || !await access.HasOrganisationAccessAsync(org))
@@ -23,7 +23,7 @@ public sealed class PositionOverviewService(IDbContextFactory<HrmTeContext> fact
         var positions = await db.Positions.AsNoTracking().Where(p => p.IsActive != false && (p.OrganisationId == org || p.IsGlobal ||
                 (p.OrganisationId == null && db.JobPositions.Any(a => a.PositionId == p.PositionId && a.Job.OrganisationID == org))))
             .OrderBy(p => p.Name).Select(p => new PositionOverviewRow { Id = p.PositionId, Name = p.Name,
-                IsActive = p.IsActive != false, IsGlobal = p.IsGlobal }).ToListAsync();
+                IsActive = p.IsActive != false, IsGlobal = p.IsGlobal,FrameworkId=p.PositionFrameworkId,MatrixId=p.PositionMatrixId }).ToListAsync();
         var ids = positions.Select(p => p.Id).ToList();
         var assignments = await (from a in db.JobPositions.AsNoTracking().Where(HRM.Helpers.PositionLifecycle.ApprovedOn(today))
                                  join job in db.Jobs.AsNoTracking() on a.JobId equals job.JobId

@@ -99,6 +99,20 @@ public sealed class StaffFinanceController(global::HRM.Application.Contracts.Pag
         public global::System.String? comment { get; set; }
     }
 
+    [HttpPost("assess-allowance")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AssessAllowance([FromBody] StaffFinanceAssessAllowanceRequest request)
+    {
+        return Ok(await service.AssessAllowanceAsync(request.requestId, request.expectedState, request.amount, request.currencyTypeId));
+    }
+
+    public sealed class StaffFinanceAssessAllowanceRequest
+    {
+        public global::System.Int32 requestId { get; set; }
+        public global::System.Int32 expectedState { get; set; }
+        public global::System.Decimal amount { get; set; }
+        public global::System.Int32 currencyTypeId { get; set; }
+    }
+
     [HttpPost("upload-document")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UploadDocument([FromBody] StaffFinanceUploadDocumentRequest request)
     {

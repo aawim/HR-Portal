@@ -12,6 +12,8 @@ public sealed class PositionOverviewRow
     public string Name { get; set; } = "";
     public bool IsActive { get; set; }
     public bool IsGlobal { get; set; }
+    public int? FrameworkId {get;set;}
+    public int? MatrixId {get;set;}
     public List<PositionOverviewStaff> Staff { get; set; } = [];
 }
 
