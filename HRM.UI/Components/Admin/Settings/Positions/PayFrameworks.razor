@@ -1,0 +1,63 @@
+@using HRM.Application.Contracts.Pages
+@inject IPositionManagement Service
+@inject HRM.Services.ToastService Toasts
+<section class="pay-frameworks space-y-3 text-sm">
+    <div class="flex flex-wrap gap-2"><button class="app-button @(tab=="frameworks"?"app-button-primary":"app-button-secondary")" @onclick='()=>tab="frameworks"'>Frameworks</button><button class="app-button @(tab=="matrices"?"app-button-primary":"app-button-secondary")" @onclick='()=>tab="matrices"'>Job Matrices</button></div>
+    @if(error!=null){<p role="alert" class="border rounded p-3">@error</p>}
+    @if(data!=null)
+    {
+        @if(tab=="frameworks")
+        {
+            @if(data.CanManageFrameworks)
+            {
+                <fieldset disabled="@busy" class="grid grid-cols-1 md:grid-cols-4 gap-3 border rounded-lg p-3">
+                    <label>Code<input @bind="frameworkCode" maxlength="30" disabled="@(frameworkId!=0)" /></label>
+                    <label>Name<input @bind="frameworkName" maxlength="150" /></label>
+                    <label><input type="checkbox" @bind="frameworkActive" /> Active</label>
+                    <div class="flex gap-2 items-end"><button class="app-button app-button-primary" @onclick="SaveFramework">Save framework</button><button class="app-button app-button-secondary" @onclick="ClearFramework">Clear</button></div>
+                </fieldset>
+            }
+            <div class="overflow-x-auto"><table><thead><tr><th>Code</th><th>Framework</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var f in data.Frameworks){<tr><td>@f.Code</td><td>@f.Name</td><td>@(f.Active?"Active":"Inactive")</td><td>@if(data.CanManageFrameworks){<button class="app-button app-button-secondary" @onclick="()=>EditFramework(f)">Edit</button>}</td></tr>}</tbody></table></div>
+        }
+        else
+        {
+            @if(data.CanManageFrameworks)
+            {
+                <fieldset disabled="@busy" class="space-y-3 border rounded-lg p-3">
+                    <h3 class="font-semibold">@(matrixId==0?"New job matrix":"Edit unused job matrix")</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <label>Framework<select @bind="matrixFramework"><option value="0">Select</option>@foreach(var f in data.Frameworks.Where(x=>x.Active)){<option value="@f.Id">@f.Name</option>}</select></label>
+                        <label>Matrix code<input @bind="matrixCode" maxlength="60" /></label><label>Position / matrix name<input @bind="matrixName" maxlength="250" /></label>
+                        <label>Currency<select @bind="currency"><option value="0">Select</option>@foreach(var c in data.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
+                        <label>Basic salary<input type="number" min="0" step="0.01" @bind="basicSalary" /></label><label>Effective from<input type="date" @bind="from" /></label><label>Effective through<input type="date" @bind="to" /></label><label><input type="checkbox" @bind="matrixActive" /> Active</label>
+                    </div>
+                    <div class="flex justify-between items-center"><h4 class="font-semibold">Allowed titles</h4><button class="app-button app-button-secondary" @onclick="()=>titles.Add(new())">Add title</button></div>
+                    @foreach(var t in titles){<div @key="t" class="flex gap-2"><input aria-label="Allowed title" @bind="t.Name" maxlength="250" /><button class="app-button app-button-secondary" @onclick="()=>titles.Remove(t)">Remove</button></div>}
+                    <div class="flex justify-between items-center"><h4 class="font-semibold">Pay steps</h4><button class="app-button app-button-secondary" @onclick="()=>steps.Add(new(){Number=steps.Count+1})">Add step</button></div>
+                    <div class="overflow-x-auto"><table><thead><tr><th>Step</th><th>Basic salary override (optional)</th><th>Job allowance</th><th>Active</th><th></th></tr></thead><tbody>@foreach(var s in steps){<tr @key="s"><td><input aria-label="Step number" type="number" min="1" @bind="s.Number" /></td><td><input aria-label="Basic salary override" type="number" min="0" step="0.01" @bind="s.Salary" /></td><td><input aria-label="Step job allowance" type="number" min="0" step="0.01" @bind="s.Allowance" /></td><td><input aria-label="Step active" type="checkbox" @bind="s.Active" /></td><td><button class="app-button app-button-secondary" @onclick="()=>steps.Remove(s)">Remove</button></td></tr>}</tbody></table></div>
+                    <div class="flex justify-between items-center"><h4 class="font-semibold">Matrix allowances / benefits</h4><button class="app-button app-button-secondary" @onclick="()=>benefits.Add(new())">Add allowance</button></div>
+                    <div class="overflow-x-auto"><table><thead><tr><th>Allowance</th><th>Amount (optional)</th><th>Frequency</th><th></th></tr></thead><tbody>@foreach(var b in benefits){<tr @key="b"><td><input aria-label="Allowance name" @bind="b.Name" maxlength="200" /></td><td><input aria-label="Allowance amount" type="number" min="0" step="0.01" @bind="b.Amount" /></td><td><select aria-label="Allowance frequency" @bind="b.Frequency"><option>Monthly</option><option value="SixMonthly">Six-monthly</option><option>Annually</option></select></td><td><button class="app-button app-button-secondary" @onclick="()=>benefits.Remove(b)">Remove</button></td></tr>}</tbody></table></div>
+                    <div class="flex gap-2"><button class="app-button app-button-primary" @onclick="SaveMatrix">Save job matrix</button><button class="app-button app-button-secondary" @onclick="ClearMatrix">New / clear</button></div>
+                </fieldset>
+            }
+            <div class="overflow-x-auto"><table><thead><tr><th>Framework / matrix</th><th>Salary</th><th>Titles / steps</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var m in data.Matrices){<tr><td>@data.Frameworks.FirstOrDefault(x=>x.Id==m.FrameworkId)?.Name<br />@m.Code · @m.Name</td><td>@m.BasicSalary.ToString("N2") @data.Currencies.FirstOrDefault(x=>x.Id==m.CurrencyId)?.Name</td><td><details><summary>@m.Titles.Count titles · @m.Steps.Count steps</summary>@foreach(var t in m.Titles){<div>@t.Name</div>}@foreach(var s in m.Steps){<div>Step @s.Number · Salary @s.BasicSalary.ToString("N2") · Job allowance @s.JobAllowance.ToString("N2")</div>}@foreach(var b in m.Benefits){<div>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</div>}</details></td><td>@(m.Active?"Active":"Inactive")</td><td>@if(data.CanManageFrameworks&&!m.InUse){<button class="app-button app-button-secondary" @onclick="()=>EditMatrix(m)">Edit</button>}else if(m.InUse){<span>In use · create a new version</span>}</td></tr>}</tbody></table></div>
+        }
+    }
+</section>
+@code{
+    private PayFrameworkData? data;private bool busy;private string? error;private string tab="frameworks";
+    private int frameworkId;private string frameworkCode="",frameworkName="";private bool frameworkActive=true;
+    private int matrixId,matrixFramework,currency;private string matrixCode="",matrixName="";private decimal basicSalary;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private bool matrixActive=true;
+    private List<TitleDraft> titles=[new()];private List<StepDraft> steps=[new()];private List<BenefitDraft> benefits=[];
+    private sealed class TitleDraft{public string Name{get;set;}="";}
+    private sealed class StepDraft{public int Number{get;set;}=1;public decimal? Salary{get;set;}public decimal Allowance{get;set;}public bool Active{get;set;}=true;}
+    private sealed class BenefitDraft{public string Name{get;set;}="";public decimal? Amount{get;set;}public string Frequency{get;set;}="Monthly";}
+    protected override async Task OnInitializedAsync(){try{data=await Service.LoadPayFrameworksAsync();}catch(Exception){error="Pay frameworks could not be loaded.";}}
+    private void ClearFramework(){frameworkId=0;frameworkCode="";frameworkName="";frameworkActive=true;}
+    private void EditFramework(PositionFrameworkOption f){frameworkId=f.Id;frameworkCode=f.Code;frameworkName=f.Name;frameworkActive=f.Active;}
+    private void ClearMatrix(){matrixId=0;matrixFramework=0;currency=0;matrixCode="";matrixName="";basicSalary=0;from=DateTime.UtcNow.AddHours(5).Date;to=null;matrixActive=true;titles=[new()];steps=[new()];benefits=[];}
+    private void EditMatrix(JobMatrixRow m){matrixId=m.Id;matrixFramework=m.FrameworkId;currency=m.CurrencyId;matrixCode=m.Code;matrixName=m.Name;basicSalary=m.BasicSalary;from=m.From;to=m.To;matrixActive=m.Active;titles=m.Titles.Select(x=>new TitleDraft{Name=x.Name}).ToList();steps=m.Steps.Select(x=>new StepDraft{Number=x.Number,Salary=x.BasicSalary==m.BasicSalary?null:x.BasicSalary,Allowance=x.JobAllowance,Active=x.Active}).ToList();benefits=m.Benefits.Select(x=>new BenefitDraft{Name=x.Name,Amount=x.Amount,Frequency=x.Frequency}).ToList();}
+    private Task SaveFramework()=>Run(()=>Service.SaveFrameworkAsync(new(frameworkId,frameworkCode,frameworkName,frameworkActive)),ClearFramework);
+    private Task SaveMatrix()=>Run(()=>Service.SaveJobMatrixAsync(new(matrixId,matrixFramework,matrixCode,matrixName,currency,basicSalary,from,to,matrixActive,titles.Select(x=>x.Name).ToList(),steps.Select(x=>new MatrixStepInput(x.Number,x.Allowance,x.Salary,x.Active)).ToList(),benefits.Select(x=>new MatrixBenefitInput(x.Name,x.Amount,x.Frequency)).ToList())),ClearMatrix);
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> save,Action clear){if(busy)return;busy=true;error=null;try{var result=await save();if(result.Success){Toasts.Success(result.Message);clear();data=await Service.LoadPayFrameworksAsync();}else error=result.Message;}catch(Exception){error="The configuration could not be saved. Please try again.";}finally{busy=false;}}
+}

@@ -1,7 +1,10 @@
 using HRM.DTOs;
 namespace HRM.Application.Contracts.Pages;
 public sealed record PositionFrameworkOption(int Id,string Code,string Name,bool Active);
-public sealed record PositionMatrixOption(int Id,string Name,decimal BasicSalary,int ApprovedSlots);
+public sealed record PositionMatrixOption(int Id,string Name,decimal BasicSalary,int ApprovedSlots)
+{
+    public int FrameworkId {get;init;}
+}
 public sealed record PositionLookup(int Id,string Name);
 public sealed record PositionSalaryRow(decimal Amount,DateOnly EffectiveDate);
 public sealed record ManagedPosition(int Id,string Name,string? DhivehiName,string? Description,bool Active,bool Global,int? FrameworkId,int? MatrixId,string Framework,int CurrentStaff,bool CanEdit)
@@ -29,4 +32,8 @@ public interface IPositionManagement
 {
     Task<PositionManagementData> LoadAsync();
     Task<ServiceResult> SaveAsync(PositionInput input);
+    Task<PayFrameworkData> LoadPayFrameworksAsync();
+    Task<ServiceResult> SaveFrameworkAsync(PayFrameworkInput input);
+    Task<ServiceResult> SaveJobMatrixAsync(JobMatrixInput input);
+    Task<ServiceResult> CreatePositionMatrixAsync(PositionMatrixInput input);
 }

@@ -8,11 +8,12 @@
     {
         @if(data.CanManage)
         {
+            <PositionMatrixEditor OnCreated="Load" />
             <fieldset disabled="@busy" class="rounded-xl border p-3 space-y-3">
                 <h3 class="font-semibold">@(id==0?"New position":"Edit position")</h3>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <label>Framework<select @bind="framework" @bind:after="ChangeFramework"><option value="0">Select</option>@foreach(var f in data.Frameworks.Where(x=>x.Active)){<option value="@f.Id">@f.Name</option>}</select></label>
-                    @if(IsGovernment){<label>Government position matrix<select @bind="matrix"><option value="0">Select existing matrix</option>@foreach(var m in data.Matrices){<option value="@m.Id">@m.Name · @m.ApprovedSlots slots</option>}</select></label>}
+                    @if(matrix>0){<label>Position matrix<select @bind="matrix"><option value="0">Select existing matrix</option>@foreach(var m in data.Matrices.Where(x=>x.FrameworkId==framework)){<option value="@m.Id">@m.Name · @m.ApprovedSlots slots</option>}</select></label>}
                     <label>Name<input @bind="name" maxlength="250" /></label><label>Dhivehi name<input @bind="dhivehi" maxlength="250" /></label>
                     <label>Position type<select @bind="typeId"><option value="">Select</option>@foreach(var t in data.Types){<option value="@t.Id">@t.Name</option>}</select></label>
                     @if(IsCsc)
@@ -20,17 +21,17 @@
                         <label>Rank<select @bind="rankId"><option value="">Select</option>@foreach(var r in data.Ranks){<option value="@r.Id">@r.Name</option>}</select></label>
                         <label>Classification<select @bind="classificationId"><option value="">Select</option>@foreach(var c in data.Classifications){<option value="@c.Id">@c.Name</option>}</select></label>
                     }
-                    @if(!IsGovernment)
+                    @if(!IsGovernment&&matrix==0)
                     {
                         <label>New basic salary<input type="number" min="0" step="0.01" @bind="salary" /></label>
                         <label>Salary effective date<input type="date" @bind="salaryDate" /></label>
                     }
-                    <label><input type="checkbox" @bind="active" /> Active</label>@if(data.IsSuperAdministrator&&!IsGovernment){<label><input type="checkbox" @bind="global" /> Global — available to all organisations</label>}
+                    <label><input type="checkbox" @bind="active" /> Active</label>@if(data.IsSuperAdministrator&&!IsGovernment&&matrix==0){<label><input type="checkbox" @bind="global" /> Global — available to all organisations</label>}
                 </div>
-                @if(IsGovernment&&data.Matrices.Count==0){<p role="status" class="text-sm">No active government position matrices are configured for this organisation.</p>}
+                @if(id==0&&IsGovernment){<p role="status" class="text-sm">Use Create position matrix above to create a position from the framework's titles and pay steps.</p>}
                 <label class="block">Description<textarea @bind="description" maxlength="4000" rows="2"></textarea></label>
                 @if(salaryHistory.Count>0){<details><summary>Basic salary history</summary><div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Effective from</th><th>Basic salary</th></tr></thead><tbody>@foreach(var s in salaryHistory){<tr><td>@s.EffectiveDate.ToString("dd MMM yyyy")</td><td>@s.Amount.ToString("N2")</td></tr>}</tbody></table></div></details>}
-                <div class="flex gap-2"><button class="app-button app-button-primary" @onclick="Save">Save position</button><button class="app-button app-button-secondary" @onclick="Reset">New / clear</button></div>
+                <div class="flex gap-2"><button class="app-button app-button-primary" disabled="@(id==0&&IsGovernment)" @onclick="Save">Save position</button><button class="app-button app-button-secondary" @onclick="Reset">New / clear</button></div>
             </fieldset>
         }
         <div class="flex flex-wrap items-end gap-3"><label class="flex-1">Search<input type="search" @bind="search" @bind:event="oninput" placeholder="Position name" /></label><label>Framework<select @bind="filter"><option value="0">All</option>@foreach(var f in data.Frameworks){<option value="@f.Id">@f.Name</option>}</select></label><label>Status<select @bind="state"><option value="active">Active</option><option value="all">All</option><option value="inactive">Inactive</option></select></label></div>
@@ -47,5 +48,5 @@
     private void ChangeFramework(){matrix=0;typeId=null;rankId=null;classificationId=null;salary=null;salaryDate=null;if(IsGovernment)global=false;}
     private void Reset(){id=0;name="";dhivehi="";description="";active=true;global=false;matrix=0;framework=data?.Frameworks.FirstOrDefault(x=>x.Code=="LEGACY")?.Id??0;typeId=null;rankId=null;classificationId=null;salary=null;salaryDate=null;salaryHistory=[];}
     private void Edit(ManagedPosition p){id=p.Id;name=p.Name;dhivehi=p.DhivehiName??"";description=p.Description??"";active=p.Active;global=p.Global;framework=p.FrameworkId??0;matrix=p.MatrixId??0;typeId=p.TypeId;rankId=p.RankId;classificationId=p.ClassificationId;salary=null;salaryDate=null;salaryHistory=p.Salaries;}
-    private async Task Save(){if(busy)return;busy=true;error=null;var saved=false;try{var result=await Positions.SaveAsync(new(id,name,dhivehi,description,active,global,framework,IsGovernment&&matrix>0?matrix:null){TypeId=typeId,RankId=rankId,ClassificationId=classificationId,BasicSalary=salary,SalaryEffectiveDate=salaryDate});saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception){error="Position could not be saved. Check the framework and matrix selection.";}finally{busy=false;}if(saved){Reset();await Load();}}
+    private async Task Save(){if(busy)return;busy=true;error=null;var saved=false;try{var result=await Positions.SaveAsync(new(id,name,dhivehi,description,active,global,framework,matrix>0?matrix:null){TypeId=typeId,RankId=rankId,ClassificationId=classificationId,BasicSalary=salary,SalaryEffectiveDate=salaryDate});saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception){error="Position could not be saved. Check the framework and matrix selection.";}finally{busy=false;}if(saved){Reset();await Load();}}
 }

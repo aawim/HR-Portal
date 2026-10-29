@@ -388,8 +388,10 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         db.Jobs.Add(job); await db.SaveChangesAsync();
         if (r.PositionId.HasValue)
         {
+            await PositionMatrixAssignments.ValidateAsync(db,r.OrganisationId,r.PositionId.Value,r.JoinedDate,null);
             var position = new HRM.Models.JobPosition { JobId = job.JobId, PositionId = r.PositionId.Value, FromDate = r.JoinedDate, JobPositionStateId = 4, OperationLogId = audit.OperationLogId };
             db.JobPositions.Add(position); await db.SaveChangesAsync();
+            await PositionMatrixAssignments.SnapshotAsync(db,r.OrganisationId,position,audit.OperationLogId);
             db.JobPositionsRequests.Add(new JobPositionsRequest { JobPositionId = position.JobPositionId, RequestId = r.RequestId, OperationLogId = audit.OperationLogId });
         }
         db.JobRequests.Add(new JobRequest { JobId = job.JobId, RequestId = r.RequestId });

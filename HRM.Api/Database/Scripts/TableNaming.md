@@ -1,5 +1,7 @@
 # Feature table naming
 
+Pay framework configuration reuses the existing `PF_` tables in place (`PF_Frameworks`, `PF_JobMatrix`, `PF_JobMatrixSteps`, `PF_JobMatrixTitles`, `PF_JobMatrixBenefits`, `PF_JobTitles`, `PF_PositionMatrix`, `PF_PositionMatrixHistory`, `PF_JobStepHistory`). The additive `PayFrameworkMatrixManagement` migration adds framework/currency links without replacement tables or reclassification of historical rows. Existing physical names, including established singular matrix table names, are preserved. See `docs/pay-framework-configuration.md`.
+
 The reviewed 29 October cleanup retains active registry tables as `BE_BusinessEntityDocuments`, `BE_BusinessEntityCalendars`, `BE_BusinessEntityLocations`, `BE_BusinessEntityLocationTypes`, `BE_BusinessEntitySchedules`, `BE_BusinessEntityTypes`, `BE_BusinessEntityContacts`. Legacy dependent catalogues use `BT_BreakTimes`, `BG_BudgetItems`, `PY_AdditionOrDeductionTypes`. `SC_TableRetirementAudits` preserves schema and row evidence for explicitly retired tables. See `docs/legacy-table-usage-audit.md` for all eighteen decisions and recovery details.
 
 `AL_AllowanceAssessments` stores append-only HR allowance amount decisions. Existing `Positions.PositionFrameworkID` / `PositionMatrixID` and the `PF_` framework/matrix catalogue are reused in place; no replacement position tables are created. See `docs/position-management.md`.

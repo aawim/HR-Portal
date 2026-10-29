@@ -4264,22 +4264,175 @@ namespace HRM.Migrations
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<int?>("CurrencyTypeId")
+                        .HasColumnType("int")
+                        .HasColumnName("CurrencyTypeID");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("FrameworkId")
+                        .HasColumnType("int")
+                        .HasColumnName("FrameworkID");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<string>("MatrixCode")
                         .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int")
+                        .HasColumnName("OperationLogID");
 
                     b.HasKey("JobMatrixId");
 
                     b.ToTable("PF_JobMatrix", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobMatrixBenefit", b =>
+                {
+                    b.Property<int>("JobMatrixBenefitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixBenefitID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixBenefitId"));
+
+                    b.Property<decimal?>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("BenefitName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("FrequencyCode")
+                        .HasMaxLength(20)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(20)");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.HasKey("JobMatrixBenefitId");
+
+                    b.ToTable("PF_JobMatrixBenefits", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobMatrixStep", b =>
+                {
+                    b.Property<int>("JobMatrixStepId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixStepID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("JobMatrixStepId"));
+
+                    b.Property<decimal?>("BasicSalaryOverride")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("JobAllowance")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.Property<int>("StepNumber")
+                        .HasColumnType("int");
+
+                    b.HasKey("JobMatrixStepId");
+
+                    b.ToTable("PF_JobMatrixSteps", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobMatrixTitle", b =>
+                {
+                    b.Property<int>("JobMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixID");
+
+                    b.Property<int>("JobTitleId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobTitleID");
+
+                    b.HasKey("JobMatrixId", "JobTitleId");
+
+                    b.ToTable("PF_JobMatrixTitles", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkJobStepHistory", b =>
+                {
+                    b.Property<long>("JobStepHistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("JobStepHistoryID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("JobStepHistoryId"));
+
+                    b.Property<decimal>("BasicSalarySnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<decimal>("JobAllowanceSnapshot")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobID");
+
+                    b.Property<int>("JobMatrixStepId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobMatrixStepID");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int")
+                        .HasColumnName("OperationLogID");
+
+                    b.Property<int>("PositionMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("PositionMatrixID");
+
+                    b.HasKey("JobStepHistoryId");
+
+                    b.ToTable("PF_JobStepHistory", null, t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -4299,12 +4452,50 @@ namespace HRM.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("nvarchar(300)");
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
 
                     b.HasKey("JobTitleId");
 
                     b.ToTable("PF_JobTitles", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.FrameworkPositionMatrixHistory", b =>
+                {
+                    b.Property<long>("PositionMatrixHistoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasColumnName("PositionMatrixHistoryID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("PositionMatrixHistoryId"));
+
+                    b.Property<string>("ChangeReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime>("ChangedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("NewApprovedSlots")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int")
+                        .HasColumnName("OperationLogID");
+
+                    b.Property<int>("PositionMatrixId")
+                        .HasColumnType("int")
+                        .HasColumnName("PositionMatrixID");
+
+                    b.Property<int?>("PreviousApprovedSlots")
+                        .HasColumnType("int");
+
+                    b.HasKey("PositionMatrixHistoryId");
+
+                    b.ToTable("PF_PositionMatrixHistory", null, t =>
                         {
                             t.ExcludeFromMigrations();
                         });
@@ -7468,24 +7659,22 @@ namespace HRM.Migrations
             modelBuilder.Entity("HRM.Models.PositionFramework", b =>
                 {
                     b.Property<int>("FrameworkId")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("int")
                         .HasColumnName("FrameworkID");
 
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("FrameworkId"));
-
                     b.Property<string>("Code")
                         .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasMaxLength(30)
+                        .IsUnicode(false)
+                        .HasColumnType("varchar(30)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
 
                     b.HasKey("FrameworkId");
 
@@ -7527,6 +7716,9 @@ namespace HRM.Migrations
                     b.Property<int>("JobTitleId")
                         .HasColumnType("int")
                         .HasColumnName("JobTitleID");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
 
                     b.Property<int>("OrganisationId")
                         .HasColumnType("int")

@@ -16,7 +16,10 @@ public sealed class PositionManagementTests
         db.PositionFrameworks.AddRange(new(){FrameworkId=1,Code="LEGACY",Name="Legacy",IsActive=true},new(){FrameworkId=2,Code="NEW_PAY",Name="Government",IsActive=true},new(){FrameworkId=3,Code="CUSTOM",Name="Non CSC / Custom",IsActive=true});
         db.Positions.AddRange(new(){PositionId=1,OrganisationId=10,Name="Existing",PositionFrameworkId=1,IsActive=true},new(){PositionId=2,OrganisationId=20,Name="Other tenant",PositionFrameworkId=1,IsActive=true});
         db.PositionMatrices.AddRange(new(){PositionMatrixId=1,OrganisationId=10,JobMatrixId=1,JobTitleId=1,IsActive=true,EffectiveFrom=DateTime.UtcNow.AddDays(-10)},new(){PositionMatrixId=2,OrganisationId=20,JobMatrixId=1,JobTitleId=1,IsActive=true,EffectiveFrom=DateTime.UtcNow.AddDays(-10)});
-        db.FrameworkJobMatrices.Add(new(){JobMatrixId=1,MatrixCode="G1",Name="Government grade",BasicSalary=5000,IsActive=true});db.FrameworkJobTitles.Add(new(){JobTitleId=1,Name="Officer",IsActive=true});await db.SaveChangesAsync();
+        db.FrameworkJobMatrices.Add(new(){JobMatrixId=1,FrameworkId=2,MatrixCode="G1",Name="Government grade",BasicSalary=5000,IsActive=true});db.FrameworkJobTitles.Add(new(){JobTitleId=1,Name="Officer",IsActive=true});
+        db.FrameworkJobMatrixSteps.Add(new(){JobMatrixStepId=1,JobMatrixId=1,StepNumber=1,IsActive=true});
+        db.PositionMatrices.Local.ToList().ForEach(x=>x.JobMatrixStepId=1);
+        await db.SaveChangesAsync();
     }
     [Fact]public async Task Shared_positions_table_supports_both_frameworks_and_blocks_cross_tenant_matrices()
     {

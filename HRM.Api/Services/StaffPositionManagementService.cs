@@ -52,6 +52,11 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             .OrderByDescending(a => a.FromDate).ThenByDescending(a => a.JobPositionId)
             .Select(a => new Assignment(a.JobPositionId, a.JobId, a.PositionId, a.Position.Name,
                 a.FromDate, a.ToDate, a.JobPositionStateId, a.JobPositionState.StateName, a.OperationLogId)).ToListAsync();
+        var payByPosition=new Dictionary<int,HRM.Application.Contracts.Pages.PositionPayInfo?>();
+        var allPositionIds=positions.Select(x=>x.Id).Concat(assignments.Select(x=>x.PositionId)).Distinct().ToArray();
+        var matrixPositions=(await db.Positions.Where(x=>allPositionIds.Contains(x.PositionId)&&x.PositionMatrixId.HasValue).Select(x=>x.PositionId).ToListAsync()).ToHashSet();
+        foreach(var positionId in allPositionIds)payByPosition[positionId]=matrixPositions.Contains(positionId)?await PositionMatrixAssignments.SummaryAsync(db,positionId):null;
+        positions=positions.Select(x=>x with{Pay=payByPosition[x.Id]}).ToList();
         var changes = await db.StaffPositionChangeRequests.AsNoTracking()
             .Where(r => r.IndividualId == staffId && r.OrganisationId == org && r.OriginalJson != null &&
                 (!r.Request.RequestState.IsFinalState || r.ChangeKind == "Remove" && r.Request.RequestStateId == 4))
@@ -63,7 +68,8 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             return assignment with
             {
                 PendingAction = related.FirstOrDefault(r => !r.IsFinalState)?.ChangeKind,
-                HasApprovedRemoval = related.Any(r => r.IsFinalState && r.ChangeKind == "Remove" && r.ToDate == assignment.To)
+                HasApprovedRemoval = related.Any(r => r.IsFinalState && r.ChangeKind == "Remove" && r.ToDate == assignment.To),
+                Pay=payByPosition[assignment.PositionId]
             };
         }).ToList();
         return new(manage, jobs, positions, assignments);
@@ -145,6 +151,18 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
             (existing == null || a.JobPositionId != existing.JobPositionId) &&
             (!to.HasValue || a.FromDate < to.Value) && (!a.ToDate.HasValue || a.ToDate.Value > from)))
             throw new InvalidOperationException("This position already has an assignment overlapping those dates.");
+        await PositionMatrixAssignments.ValidateAsync(db,org,positionId,from,to,existing?.JobPositionId);
+        FrameworkJobStepHistory? currentPay=null;
+        if(existing!=null&&!change)
+        {
+            var matrixId=await db.Positions.Where(x=>x.PositionId==positionId).Select(x=>x.PositionMatrixId).SingleAsync();
+            if(matrixId.HasValue)
+            {
+                currentPay=await db.FrameworkJobStepHistories.SingleOrDefaultAsync(x=>x.JobId==jobId&&x.PositionMatrixId==matrixId&&x.EffectiveFrom==existing.FromDate);
+                if(currentPay!=null&&await db.FrameworkJobStepHistories.AnyAsync(x=>x.JobId==jobId&&x.JobStepHistoryId!=currentPay.JobStepHistoryId&&(!to.HasValue||x.EffectiveFrom<to)&&(!x.EffectiveTo.HasValue||x.EffectiveTo>from)))
+                    throw new InvalidOperationException("These dates overlap another approved pay-step period for this employment.");
+            }
+        }
         if (!apply) return;
         var before = existing == null ? null : new { existing.JobPositionId, existing.PositionId, existing.FromDate, existing.ToDate, existing.OperationLogId };
         var audit = await logs.CreateAsync(db, existing == null ? SharedConfig.OperationLogActionTypes.JOB_POSITION_CREATE :
@@ -153,15 +171,33 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 StaffId = staffId, JobId = jobId, Before = before, PositionId = positionId, From = from, To = to, Reason = reason.Trim() }));
         if (existing != null && !change)
         {
+            var matrixId=await db.Positions.Where(x=>x.PositionId==positionId).Select(x=>x.PositionMatrixId).SingleAsync();
+            if(matrixId.HasValue)
+            {
+                if(currentPay!=null){currentPay.EffectiveFrom=from;currentPay.EffectiveTo=to;currentPay.OperationLogId=audit.OperationLogId;}
+                var oldDate=DateOnly.FromDateTime(existing.FromDate);
+                var salary=await db.JobPositionBasicSalaries.SingleOrDefaultAsync(x=>x.JobPoistionId==existing.JobPositionId&&x.EffectiveDate==oldDate&&x.IsValid);
+                if(salary!=null){salary.EffectiveDate=DateOnly.FromDateTime(from);salary.OperationLogId=audit.OperationLogId;}
+            }
             existing.FromDate = from; existing.ToDate = to; existing.OperationLogId = audit.OperationLogId;
         }
         else
         {
-            if (existing != null) { existing.ToDate = from; existing.OperationLogId = audit.OperationLogId; }
+            if (existing != null)
+            {
+                var previousMatrix=await db.Positions.Where(x=>x.PositionId==existing.PositionId).Select(x=>x.PositionMatrixId).SingleAsync();
+                if(previousMatrix.HasValue)
+                {
+                    var previousPay=await db.FrameworkJobStepHistories.SingleOrDefaultAsync(x=>x.JobId==jobId&&x.PositionMatrixId==previousMatrix&&x.EffectiveFrom==existing.FromDate);
+                    if(previousPay!=null)previousPay.EffectiveTo=from;
+                }
+                existing.ToDate = from; existing.OperationLogId = audit.OperationLogId;
+            }
             var approvedPosition=new HRM.Models.JobPosition { JobId = jobId, PositionId = positionId,
                 FromDate = from, ToDate = to, JobPositionStateId = 4, OperationLogId = audit.OperationLogId };
             db.JobPositions.Add(approvedPosition);
             await db.SaveChangesAsync();
+            await PositionMatrixAssignments.SnapshotAsync(db,org,approvedPosition,audit.OperationLogId,change);
             if(approvalRequestId.HasValue)db.JobPositionsRequests.Add(new(){JobPositionId=approvedPosition.JobPositionId,RequestId=approvalRequestId.Value,OperationLogId=audit.OperationLogId});
         }
         await db.SaveChangesAsync();

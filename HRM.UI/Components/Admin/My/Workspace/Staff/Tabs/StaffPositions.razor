@@ -63,6 +63,10 @@
                         <textarea class="mt-1 w-full rounded-lg border p-2" @bind="reason" maxlength="500" required rows="2"></textarea>
                     </label>
                 </fieldset>
+                @if(data.Positions.FirstOrDefault(x=>x.Id==positionId)?.Pay is {} selectedPay)
+                {
+                    <div class="text-sm"><p>Basic salary: @selectedPay.BasicSalary.ToString("N2") @selectedPay.Currency · Job allowance: @selectedPay.JobAllowance.ToString("N2")</p>@foreach(var b in selectedPay.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
+                }
                 <div class="flex flex-wrap gap-2">
                     <button type="submit" class="app-button app-button-primary" disabled="@busy">@(busy ? "Submitting…" : "Submit for approval")</button>
                     <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="() => editing = false">Cancel</button>
@@ -82,7 +86,9 @@
                         @foreach (var assignment in data.Assignments)
                         {
                             <tr class="border-t border-slate-200">
-                                <td class="p-3 font-medium">@assignment.Name</td><td class="p-3">Job @assignment.JobId</td>
+                                <td class="p-3 font-medium">@assignment.Name
+                                    @if(assignment.Pay is {} pay){<details class="font-normal"><summary>Framework pay</summary><p>Basic salary: @pay.BasicSalary.ToString("N2") @pay.Currency</p><p>Job allowance: @pay.JobAllowance.ToString("N2")</p>@foreach(var b in pay.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</details>}
+                                </td><td class="p-3">Job @assignment.JobId</td>
                                 <td class="p-3 whitespace-nowrap">@assignment.From.ToString("dd MMM yyyy")</td>
                                 <td class="p-3 whitespace-nowrap">@(assignment.To?.ToString("dd MMM yyyy") ?? "Ongoing")</td>
                                 <td class="p-3">@Status(assignment)</td>
