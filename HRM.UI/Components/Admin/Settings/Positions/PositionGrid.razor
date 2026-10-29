@@ -25,7 +25,7 @@
                         <label>New basic salary<input type="number" min="0" step="0.01" @bind="salary" /></label>
                         <label>Salary effective date<input type="date" @bind="salaryDate" /></label>
                     }
-                    <label><input type="checkbox" @bind="active" /> Active</label>@if(data.IsSuperAdministrator&&!IsGovernment){<label><input type="checkbox" @bind="global" /> Global position</label>}
+                    <label><input type="checkbox" @bind="active" /> Active</label>@if(data.IsSuperAdministrator&&!IsGovernment){<label><input type="checkbox" @bind="global" /> Global — available to all organisations</label>}
                 </div>
                 @if(IsGovernment&&data.Matrices.Count==0){<p role="status" class="text-sm">No active government position matrices are configured for this organisation.</p>}
                 <label class="block">Description<textarea @bind="description" maxlength="4000" rows="2"></textarea></label>
@@ -34,7 +34,7 @@
             </fieldset>
         }
         <div class="flex flex-wrap items-end gap-3"><label class="flex-1">Search<input type="search" @bind="search" @bind:event="oninput" placeholder="Position name" /></label><label>Framework<select @bind="filter"><option value="0">All</option>@foreach(var f in data.Frameworks){<option value="@f.Id">@f.Name</option>}</select></label><label>Status<select @bind="state"><option value="active">Active</option><option value="all">All</option><option value="inactive">Inactive</option></select></label></div>
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Position</th><th>Framework</th><th>Matrix</th><th>Staff</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var p in data.Positions.Where(x=>(filter==0||x.FrameworkId==filter)&&(state=="all"||x.Active==(state=="active"))&&x.Name.Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>@p.Name</td><td>@p.Framework</td><td>@(p.MatrixId?.ToString()??"Custom")</td><td>@p.CurrentStaff</td><td>@(p.Active?"Active":"Inactive")</td><td>@if(p.CanEdit){<button class="app-button app-button-secondary" @onclick="()=>Edit(p)">Edit</button>}</td></tr>}</tbody></table></div>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Position</th><th>Framework</th><th>Scope</th><th>Matrix</th><th>Staff</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var p in data.Positions.Where(x=>(filter==0||x.FrameworkId==filter)&&(state=="all"||x.Active==(state=="active"))&&x.Name.Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>@p.Name</td><td>@p.Framework</td><td>@(p.Global?"Global":"Organisation")</td><td>@(p.MatrixId?.ToString()??"Custom")</td><td>@p.CurrentStaff</td><td>@(p.Active?"Active":"Inactive")</td><td>@if(p.CanEdit){<button class="app-button app-button-secondary" @onclick="()=>Edit(p)">Edit</button>}</td></tr>}</tbody></table></div>
     }
 </section>
 @code{

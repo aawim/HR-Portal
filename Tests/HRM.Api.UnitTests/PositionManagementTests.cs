@@ -36,6 +36,33 @@ public sealed class PositionManagementTests
         Assert.False((await Service.SaveAsync(new(1,"Changed",null,null,true,false,2,1))).Success);
         Assert.True((await Service.SaveAsync(new(1,"Renamed",null,null,false,false,1,null))).Success);
     }
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task Superadministrator_global_positions_are_available_in_other_organisations_but_not_editable_by_them(int framework)
+    {
+        await Seed();access.Actor!.IsSuperAdministrator=true;
+        var input=new PositionInput(0,"Shared officer",null,null,true,true,framework,null);
+        Assert.True((await Service.SaveAsync(input)).Success);
+        var shared=Assert.Single((await Service.LoadAsync()).Positions,x=>x.Name==input.Name);
+        Assert.True(shared.Global);Assert.True(shared.CanEdit);
+        await using(var db=factory.CreateDbContext())
+        {
+            Assert.Null((await db.Positions.SingleAsync(x=>x.PositionId==shared.Id)).OrganisationId);
+            db.Jobs.Add(new(){JobId=50,OrganisationID=20,IndividualID=500});await db.SaveChangesAsync();
+        }
+        access.Actor.IsSuperAdministrator=false;access.Organisation=20;
+        var other=Assert.Single((await Service.LoadAsync()).Positions,x=>x.Id==shared.Id);
+        Assert.False(other.CanEdit);
+        var assignments=new StaffPositionManagementService(factory,access,null!,null!,null!,null!,null!);
+        access.Permissions.Add("Staff.Positions.Manage");
+        Assert.Contains((await assignments.LoadAsync(500)).Positions,x=>x.Id==shared.Id);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>Service.SaveAsync(input with{Id=shared.Id,Name="Changed"}));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>Service.SaveAsync(input with{Id=shared.Id,Global=false}));
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>Service.SaveAsync(input with{Name="Forged global"}));
+        access.Actor.IsSuperAdministrator=true;
+        Assert.True((await Service.SaveAsync(input with{Id=shared.Id,Name="Updated shared officer"})).Success);
+    }
     [Fact]public async Task Custom_salary_is_effective_dated_and_existing_salary_history_cannot_be_overwritten()
     {
         await Seed();
