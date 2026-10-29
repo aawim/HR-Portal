@@ -91,6 +91,26 @@ public sealed class TransportTests
         Assert.Empty((await api.GetMineAsync(new(new(2026, 10, 1), new(2026, 10, 28)))).Requests);
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData(26)]
+    public async Task Position_save_resolves_registered_route_and_sends_termination_type(int? terminationType)
+    {
+        var sent=false;
+        using var http=new HttpClient(new RecordingHandler(async request=>
+        {
+            sent=true;Assert.Equal(HttpMethod.Post,request.Method);Assert.Equal("/api/v1/staff-position-management/save",request.RequestUri!.AbsolutePath);
+            var body=await request.Content!.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+            Assert.Equal(820,body.GetProperty("staffId").GetInt32());Assert.Equal(terminationType.HasValue,body.GetProperty("remove").GetBoolean());
+            var type=body.GetProperty("terminationRequestTypeId");
+            if(terminationType.HasValue)Assert.Equal(terminationType.Value,type.GetInt32());else Assert.Equal(System.Text.Json.JsonValueKind.Null,type.ValueKind);
+            return new(HttpStatusCode.NoContent);
+        })){BaseAddress=Origin};
+        var api=ApiContractProxy.Create<StaffPositionManagementServiceContracts.IOperations>(new HttpApiOperationClient(http));
+        await api.SaveAsync(820,5,1,new(2026,10,1),new(2026,10,30),"Staff request",remove:terminationType.HasValue,terminationRequestTypeId:terminationType);
+        Assert.True(sent);
+    }
+
     [Fact]
     public async Task Business_failures_keep_their_typed_result()
     {
