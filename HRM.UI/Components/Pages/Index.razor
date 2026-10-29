@@ -24,6 +24,7 @@
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 @inject IAttendancePlanService AttendancePlanService
 @inject ILogger<Index> Logger
+@inject IWorkTypeService WorkTypes
 
 
 <PageTitle>Dashboard</PageTitle>
@@ -273,7 +274,7 @@
 
     private async Task LoadTestClockPermissionAsync()
     {
-        try { allowTestClock = await AttendanceLogService.CanUseTestClockAsync(); }
+        try { allowTestClock = await WorkTypes.CanClockAsync() && await AttendanceLogService.CanUseTestClockAsync(); }
         catch (Exception ex) { Logger.LogWarning(ex, "Could not load development clock permission"); }
     }
 

@@ -52,6 +52,7 @@ foreach(var contract in ApplicationContractCatalog.All)
   {
    "LeaveConfigurationSettings" or "LeaveAccrualSettings" or "LeaveFlowConfiguration" => ["Admin"],
    "JobTypeConfiguration" => reads?["Configuration.View"]:["Admin"],
+   "WorkType" => reads?[]:["WorkTypes.Manage"],
    "PositionOverview" => ["Position.Details","Staff.Positions.Manage"],
    "IndividualRegistry" => ["Individual.View","Employee.Create"],
    "IndividualRegistration" => ["Individual.Create"],

@@ -255,6 +255,9 @@ namespace HRM.Services
                 throw new UnauthorizedAccessException("Custom clock times are restricted to explicitly enabled development diagnostics.");
             var clockTime =
                 checkTime ?? DateTime.UtcNow.AddHours(5);
+            if (!await WorkTypeService.HasClockAssignmentAsync(_context, individualId, actor.ActiveJob?.JobId ?? 0,
+                    await _access.GetCurrentOrganisationIdAsync(), DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5))))
+                throw new UnauthorizedAccessException("An active Work Type assignment is required to clock attendance. Contact your HR team.");
 
             var job =
                 await _context.Jobs

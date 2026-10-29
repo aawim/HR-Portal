@@ -1,0 +1,79 @@
+@using HRM.DTOs.WorkTypes
+@using HRM.Components.Shared
+@inject HRM.Services.Interfaces.IWorkTypeService WorkTypes
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject ILogger<WorkTypeManagement> Logger
+
+<section class="space-y-3" aria-busy="@busy">
+    <h2 class="text-lg font-semibold">Work Types</h2>
+    <p class="text-sm text-slate-500">Staff can clock while an active Work Type assignment covers today.</p>
+    @if(message != null) { <p role="status" class="rounded border p-3">@message</p> }
+    <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+    @if(loaded)
+    {
+        @if(isSuperAdmin)
+        {
+            <div class="flex flex-wrap items-end gap-2 rounded border p-3">
+                <label class="text-sm">Name<input class="block rounded border bg-transparent p-2" maxlength="100" @bind="name" /></label>
+                <label class="text-sm"><input type="checkbox" @bind="valid" /> Active</label>
+                <button class="app-button app-button-primary" disabled="@busy" @onclick="SaveType">@(editingType == 0 ? "Add work type" : "Save work type")</button>
+                <button class="app-button app-button-secondary" @onclick="ResetType">Clear</button>
+            </div>
+        }
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Work type</th><th class="p-2">Status</th><th class="p-2">Assignments</th><th></th></tr></thead><tbody>
+        @foreach(var type in types) { <tr class="border-t"><td class="p-2">@type.Name</td><td class="p-2">@(type.IsValid ? "Active" : "Inactive")</td><td class="p-2">@type.AssignmentCount</td><td class="p-2">@if(isSuperAdmin) { <button class="app-button app-button-secondary" @onclick="()=>EditType(type)">Edit</button> }</td></tr> }
+        </tbody></table></div>
+        <h3 class="font-semibold">Assign to staff</h3>
+        <div class="grid gap-3 rounded border p-3 md:grid-cols-2 xl:grid-cols-3">
+            <SearchableSelect Label="Staff" Options="staffOptions" @bind-Value="jobId" Disabled="@(busy || editingAssignment > 0)" />
+            <SearchableSelect Label="Work type" Options="typeOptions" @bind-Value="typeId" Disabled="@busy" />
+            <label class="text-sm">From<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="from" /></label>
+            <label class="text-sm">To (optional)<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="to" /></label>
+            <label class="text-sm">Location<input class="block w-full rounded border bg-transparent p-2" maxlength="250" @bind="location" /></label>
+            <div class="flex items-end gap-2"><button class="app-button app-button-primary" disabled="@busy" @onclick="SaveAssignment">@(editingAssignment == 0 ? "Assign" : "Save assignment")</button><button class="app-button app-button-secondary" @onclick="ResetAssignment">Clear</button></div>
+        </div>
+        <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Staff</th><th class="p-2">Work type</th><th class="p-2">Period</th><th class="p-2">Status</th><th></th></tr></thead><tbody>
+        @foreach(var row in assignments) { <tr class="border-t"><td class="p-2">@row.EmployeeName</td><td class="p-2">@row.WorkTypeName</td><td class="p-2">@row.FromDate.ToString("dd MMM yyyy") – @(row.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")</td><td class="p-2">@(row.IsValid ? "Active" : "Removed")</td><td class="p-2"><div class="flex gap-2">@if(row.IsValid) { <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EditAssignment(row)">Edit</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>RemoveAssignment(row)">Remove</button> }</div></td></tr> }
+        @if(assignments.Count == 0) { <tr><td colspan="5" class="p-3">No assignments in the current organisation.</td></tr> }
+        </tbody></table></div>
+    }
+</section>
+@code {
+    private List<WorkTypeDto> types=[];
+    private List<AssignedWorkTypeDto> assignments=[];
+    private List<SearchableSelect.Option> staffOptions=[];
+    private IEnumerable<SearchableSelect.Option> typeOptions => types.Where(t=>t.IsValid).Select(t=>new SearchableSelect.Option(t.WorkTypeId,t.Name));
+    private bool busy, loaded, isSuperAdmin, valid=true;
+    private int editingType, editingAssignment, jobId, typeId;
+    private string name="",location="";
+    private string? message;
+    private DateTime from=DateTime.UtcNow.AddHours(5).Date;
+    private DateTime? to;
+    protected override Task OnInitializedAsync()=>LoadAsync();
+    private async Task LoadAsync()
+    {
+        busy=true; loaded=false;
+        try {
+            isSuperAdmin=(await Access.RequireContextAsync()).IsSuperAdministrator;
+            types=await WorkTypes.GetAllAsync(true);
+            assignments=await WorkTypes.GetAssignmentsAsync(includeInactive:true);
+            staffOptions=(await WorkTypes.GetEligibleStaffAsync()).Select(s=>new SearchableSelect.Option(s.JobId,$"{s.Name} · {s.Department}")).ToList();
+            loaded=true;
+        } catch(Exception ex) { Logger.LogWarning(ex,"Loading work types"); message="Work Types could not be loaded. Check your organisation and WorkTypes.Manage permission."; }
+        finally { busy=false; }
+    }
+    private async Task Act(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if(busy)return; busy=true;
+        try { var result=await action(); message=result.Message; if(result.Success) { ResetType(); ResetAssignment(); await LoadAsync(); } }
+        catch(Exception ex) { Logger.LogWarning(ex,"Saving work types"); message="The change could not be saved. Refresh and try again."; }
+        finally { busy=false; }
+    }
+    private Task SaveType()=>Act(()=>editingType==0?WorkTypes.CreateAsync(new(){Name=name,IsValid=valid}):WorkTypes.UpdateAsync(new(){WorkTypeId=editingType,Name=name,IsValid=valid}));
+    private void EditType(WorkTypeDto t) { editingType=t.WorkTypeId;name=t.Name;valid=t.IsValid; }
+    private void ResetType() { editingType=0;name="";valid=true; }
+    private Task SaveAssignment()=>Act(()=>editingAssignment==0?WorkTypes.AssignAsync(new(){JobId=jobId,WorkTypeId=typeId,FromDate=DateOnly.FromDateTime(from),ToDate=to.HasValue?DateOnly.FromDateTime(to.Value):null,Location=location}):WorkTypes.UpdateAssignmentAsync(new(){AssignedWorkTypeId=editingAssignment,WorkTypeId=typeId,FromDate=DateOnly.FromDateTime(from),ToDate=to.HasValue?DateOnly.FromDateTime(to.Value):null,Location=location,IsValid=true}));
+    private void EditAssignment(AssignedWorkTypeDto a) { editingAssignment=a.AssignedWorkTypeId;jobId=a.JobId;typeId=a.WorkTypeId;from=a.FromDate.ToDateTime(TimeOnly.MinValue);to=a.ToDate?.ToDateTime(TimeOnly.MinValue);location=a.Location??""; }
+    private Task RemoveAssignment(AssignedWorkTypeDto a)=>Act(()=>WorkTypes.DeactivateAssignmentAsync(a.AssignedWorkTypeId));
+    private void ResetAssignment() { editingAssignment=jobId=typeId=0;from=DateTime.UtcNow.AddHours(5).Date;to=null;location=""; }
+}

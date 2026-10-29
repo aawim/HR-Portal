@@ -7,6 +7,7 @@
 @inject IUserAccessService UserAccessService
 @* @inject IAttendance AttendanceLogService *@
 @inject IAttendanceService AttendanceService
+@inject IWorkTypeService WorkTypes
 
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 
@@ -60,6 +61,8 @@
         </div>
     } *@
 
+    @if (canClock)
+    {
     <div class="flex gap-3">
 
         <button @onclick="HandleClock"
@@ -80,6 +83,7 @@
         </button>
 
     </div>
+    }
 
 </div>
 
@@ -112,6 +116,7 @@
     // private bool DisableCheckOut => ProcessingCheckIn || ProcessingCheckOut;
 
     private bool ProcessingClock;
+    private bool canClock;
     private bool _useTime = false;
 
 
@@ -121,8 +126,8 @@
     protected override async Task OnInitializedAsync()
     {
 
-        var context = await UserAccessService.RequireContextAsync();
-        var result = await AttendanceService.GetTodayStatusAsync(context.IndividualId);
+        try { canClock = await WorkTypes.CanClockAsync(); }
+        catch { canClock = false; }
 
         // TodayCheckIn = result.checkIn;
         // TodayCheckOut = result.checkOut;

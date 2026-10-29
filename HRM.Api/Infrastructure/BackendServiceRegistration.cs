@@ -132,6 +132,8 @@ public static class BackendServiceRegistration
 
         services.AddScoped<IWorkTemplateService, WorkTemplateService>();
 
+        services.AddScoped<IWorkTypeService, WorkTypeService>();
+
         services.AddScoped<IWorkAssignmentManagementService,WorkAssignmentManagementService>();
 
         services.AddScoped<IWorkAssignmentOwnershipService,WorkAssignmentOwnershipService>();

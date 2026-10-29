@@ -59,6 +59,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Interfaces.IUserAccessService),
         typeof(global::HRM.Services.Interfaces.IUserTodoService),
         typeof(global::HRM.Services.Interfaces.IWorkTemplateService),
+        typeof(global::HRM.Services.Interfaces.IWorkTypeService),
         typeof(global::HRM.Services.Interfaces.JobLeaveTypes.IJobLeaveTypeService),
         typeof(global::HRM.Services.Interfaces.Leave.ILeaveChangeService),
         typeof(global::HRM.Services.Interfaces.Leave.ILeaveReceiptService),
