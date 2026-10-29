@@ -9,7 +9,10 @@ public abstract class StaffPositionManagementServiceContracts
     public sealed record Choice(int Id, string Name)
     {
         public HRM.Application.Contracts.Pages.PositionPayInfo? Pay { get; init; }
+        public int? FrameworkId { get; init; }
+        public int? MatrixId { get; init; }
     }
+    public sealed record MatrixChoice(int Id,int FrameworkId,string Name,int ApprovedSlots,int AvailableSlots);
 
     public sealed record Assignment(int Id, int JobId, int PositionId, string Name, DateTime From,
         DateTime? To, int StateId, string State, int AuditId)
@@ -24,6 +27,8 @@ public abstract class StaffPositionManagementServiceContracts
     public sealed record Data(bool CanManage, List<Choice> Jobs, List<Choice> Positions, List<Assignment> Assignments)
     {
         public List<Choice> TerminationRequestTypes { get; init; }=[];
+        public List<HRM.Application.Contracts.Pages.PositionFrameworkOption> Frameworks { get; init; }=[];
+        public List<MatrixChoice> PositionMatrices { get; init; }=[];
     }
 
     public const string RequestsPageUrl = "/online/staff-position-requests";

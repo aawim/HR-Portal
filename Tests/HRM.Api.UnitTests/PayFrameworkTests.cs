@@ -175,11 +175,11 @@ public sealed partial class PayFrameworkTests
         await db.SaveChangesAsync();Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());
         var staff=new StaffPositionManagementService(factory,access,null!,null!,null!,null!,null!);
         var onboarding=new StaffOnboardingService(factory,access,null!,null!);
-        Assert.Empty((await staff.LoadAsync(999)).Positions);Assert.Empty((await onboarding.LoadAsync()).Positions);
+        var full=await staff.LoadAsync(999);Assert.Empty(full.Positions);Assert.Equal(0,Assert.Single(full.PositionMatrices).AvailableSlots);Assert.Equal(5,Assert.Single(full.PositionMatrices).ApprovedSlots);Assert.Equal(2,Assert.Single(full.Frameworks).Id);Assert.Empty((await onboarding.LoadAsync()).Positions);
         var job=await db.Jobs.SingleAsync(x=>x.JobId==100);job.TerminatedDate=today.AddDays(1);await db.SaveChangesAsync();
         Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());Assert.Single(await PositionVacancy.Vacant(db,today.AddDays(1)).ToListAsync());
         job.TerminatedDate=today;job.JobStateId=terminatedState;await db.SaveChangesAsync();
-        Assert.Equal(positions[0].PositionId,Assert.Single((await staff.LoadAsync(999)).Positions).Id);
+        var released=await staff.LoadAsync(999);var vacant=Assert.Single(released.Positions);Assert.Equal(positions[0].PositionId,vacant.Id);Assert.Equal(2,vacant.FrameworkId);Assert.Equal(Assert.Single(released.PositionMatrices).Id,vacant.MatrixId);Assert.Equal(1,released.PositionMatrices[0].AvailableSlots);
         Assert.Equal(positions[0].PositionId,Assert.Single((await onboarding.LoadAsync()).Positions).Id);
         Assert.NotNull(await PositionMatrixAssignments.ValidateAsync(db,10,positions[0].PositionId,today,null));
         await Assert.ThrowsAsync<InvalidOperationException>(()=>PositionMatrixAssignments.ValidateAsync(db,10,positions[0].PositionId,today.AddDays(-1),null));
@@ -187,6 +187,7 @@ public sealed partial class PayFrameworkTests
         db.Jobs.Add(new(){JobId=200,OrganisationID=10,IndividualID=200,JobStateId=4,JoinedDate=today});
         db.JobPositions.Add(new(){JobId=200,PositionId=positions[0].PositionId,FromDate=today,JobPositionStateId=4});await db.SaveChangesAsync();
         Assert.Empty(await PositionVacancy.Vacant(db,today).ToListAsync());Assert.Equal(6,await db.JobPositions.CountAsync());
+        Assert.Equal(0,Assert.Single((await staff.LoadAsync(999)).PositionMatrices).AvailableSlots);
     }
     [Fact]public void Vacancy_query_translates_to_sql_server_without_a_database_connection()
     {

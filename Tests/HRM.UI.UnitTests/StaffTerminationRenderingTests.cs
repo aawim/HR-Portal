@@ -29,11 +29,28 @@ public sealed class StaffTerminationRenderingTests
             await base.OnInitializedAsync();typeof(StaffPositions).GetMethod("Edit",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(this,[Assignment,false,true]);
         }
     }
+    [Fact]public async Task Change_position_filters_slots_by_framework_and_matrix_and_disables_full_matrices()
+    {
+        var service=DispatchProxy.Create<Contract.IOperations,Proxy>();
+        using var provider=new ServiceCollection().AddLogging().AddSingleton(service).AddSingleton<ToastService>().BuildServiceProvider();
+        await using var renderer=new HtmlRenderer(provider,provider.GetRequiredService<ILoggerFactory>());
+        var html=await renderer.Dispatcher.InvokeAsync(async()=> (await renderer.RenderComponentAsync<ChangeForm>(ParameterView.FromDictionary(new Dictionary<string,object?>{{"StaffId",50}}))).ToHtmlString());
+        Assert.Contains("Select framework",html);Assert.Contains("Select position matrix",html);Assert.Contains("Vacant position slot",html);Assert.Contains("1 / 5 slots available",html);Assert.Contains("Full",html);
+        Assert.Matches("<option[^>]*value=\"2\"[^>]*disabled",html);Assert.Contains("Available slot",html);Assert.DoesNotContain("Custom slot",html);
+    }
+    public sealed class ChangeForm:StaffPositions
+    {
+        protected override async Task OnInitializedAsync()
+        {
+            await base.OnInitializedAsync();var type=typeof(StaffPositions);type.GetMethod("Edit",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(this,[Assignment,true,false]);
+            type.GetField("selectedFrameworkId",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(this,2);type.GetField("selectedMatrixId",BindingFlags.Instance|BindingFlags.NonPublic)!.SetValue(this,1);
+        }
+    }
     public class Proxy:DispatchProxy
     {
         protected override object? Invoke(MethodInfo? method,object?[]? args)=>method!.Name switch
         {
-            "LoadAsync"=>Task.FromResult(new Contract.Data(true,[new(5,"Job 5")],[],[Assignment]){TerminationRequestTypes=[new(22,"Job Resignation Request"),new(27,"Job Retirement Request")]}),
+            "LoadAsync"=>Task.FromResult(new Contract.Data(true,[new(5,"Job 5")],[new(10,"Available slot"){FrameworkId=2,MatrixId=1},new(11,"Custom slot"){FrameworkId=3,MatrixId=3}],[Assignment]){TerminationRequestTypes=[new(22,"Job Resignation Request"),new(27,"Job Retirement Request")],Frameworks=[new(2,"NEW_PAY","Government",true),new(3,"CUSTOM","Custom",true)],PositionMatrices=[new(1,2,"Engineer",5,1),new(2,2,"Director",5,0),new(3,3,"Custom matrix",1,1)]}),
             "LoadRequestsAsync"=>Task.FromResult(new List<StaffPositionRequestRow>()),
             _=>throw new InvalidOperationException(method.Name)
         };

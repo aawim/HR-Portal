@@ -48,7 +48,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
                 "Job " + j.JobId + " · " + j.OrganisationStructure.Name + " · " + j.JobType.TypeName)).ToListAsync();
         var vacantIds=PositionVacancy.Vacant(db,today).Select(p=>p.PositionId);
         var positions = await Available(db, org).Where(p=>vacantIds.Contains(p.PositionId)).AsNoTracking().OrderBy(p => p.Name)
-            .Select(p => new Choice(p.PositionId, p.Name)).ToListAsync();
+            .Select(p => new Choice(p.PositionId, p.Name){FrameworkId=p.PositionFrameworkId,MatrixId=p.PositionMatrixId}).ToListAsync();
         var assignments = await db.JobPositions.AsNoTracking().Where(a => a.Job.IndividualID == staffId && a.Job.OrganisationID == org)
             .OrderByDescending(a => a.FromDate).ThenByDescending(a => a.JobPositionId)
             .Select(a => new Assignment(a.JobPositionId, a.JobId, a.PositionId, a.Position.Name,
@@ -76,7 +76,12 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         }).ToList();
         for(var i=0;i<assignments.Count;i++){var a=assignments[i];if(a.Pay!=null){var step=await db.FrameworkJobStepHistories.Where(x=>x.JobId==a.JobId&&x.EffectiveFrom==a.From).Select(x=>(int?)x.JobMatrixStepId).SingleOrDefaultAsync();assignments[i]=a with{Pay=await PositionMatrixAssignments.SummaryAsync(db,a.PositionId,step)};}}
         var terminationNames=TerminationStates.Keys.ToArray();
-        return new(manage, jobs, positions, assignments){TerminationRequestTypes=await db.RequestTypes.Where(x=>terminationNames.Contains(x.TypeName)).OrderBy(x=>x.TypeName).Select(x=>new Choice(x.RequestTypeId,x.TypeName)).ToListAsync()};
+        var frameworks=await db.PositionFrameworks.Where(x=>x.IsActive).OrderBy(x=>x.FrameworkId).Select(x=>new HRM.Application.Contracts.Pages.PositionFrameworkOption(x.FrameworkId,x.Code,x.Name,x.IsActive)).ToListAsync();
+        var matrices=await(from m in db.PositionMatrices join j in db.FrameworkJobMatrices on m.JobMatrixId equals j.JobMatrixId join t in db.FrameworkJobTitles on m.JobTitleId equals t.JobTitleId
+            where m.OrganisationId==org&&m.IsActive&&j.IsActive&&t.IsActive&&m.EffectiveFrom<=today&&(!m.EffectiveTo.HasValue||m.EffectiveTo>=today)
+            select new{m.PositionMatrixId,FrameworkId=j.FrameworkId??0,Name=t.Name+" · "+j.MatrixCode,m.ApprovedSlots}).ToListAsync();
+        var occupied=await(from a in PositionVacancy.Overlapping(db,today,today.AddDays(1)) join p in db.Positions on a.PositionId equals p.PositionId where p.OrganisationId==org&&p.PositionMatrixId.HasValue select p.PositionMatrixId.GetValueOrDefault()).ToListAsync();
+        return new(manage, jobs, positions, assignments){Frameworks=frameworks,PositionMatrices=matrices.Where(m=>frameworks.Any(f=>f.Id==m.FrameworkId)).Select(m=>new MatrixChoice(m.PositionMatrixId,m.FrameworkId,m.Name,m.ApprovedSlots,Math.Min(positions.Count(p=>p.MatrixId==m.PositionMatrixId),Math.Max(0,m.ApprovedSlots-occupied.Count(x=>x==m.PositionMatrixId))))).ToList(),TerminationRequestTypes=await db.RequestTypes.Where(x=>terminationNames.Contains(x.TypeName)).OrderBy(x=>x.TypeName).Select(x=>new Choice(x.RequestTypeId,x.TypeName)).ToListAsync()};
     }
 
     // Ending retains the original assignment and its linked requests/salary records.
@@ -155,6 +160,7 @@ public sealed partial class StaffPositionManagementService(IDbContextFactory<Hrm
         if ((existing == null || change) && !await Available(db, org).AnyAsync(p => p.PositionId == positionId))
             throw new InvalidOperationException("Select an active position available to this organisation.");
         if (change && existing == null) throw new InvalidOperationException("Select the original position to change.");
+        if(change&&!await db.Positions.AnyAsync(p=>p.PositionId==positionId&&p.PositionMatrixId.HasValue))throw new InvalidOperationException("Select a vacant position from an approved position matrix.");
         if (change && existing!.PositionId == positionId)
             throw new InvalidOperationException("Select a different position, or use Edit dates.");
         if (await db.JobPositions.AnyAsync(a => a.JobId == jobId && a.PositionId == positionId && a.JobPositionStateId == 4 &&
