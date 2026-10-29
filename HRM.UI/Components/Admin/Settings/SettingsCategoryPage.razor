@@ -209,6 +209,7 @@
         },
         "job" => new() {
             new("Work Types", "📋", "Manage the Work Type catalogue.", typeof(HRM.Components.Admin.Settings.WorkTypeManagement)),
+            new("Job Type Configuration", "👥", "Job types, overtime, leave and leave-set configuration.", typeof(HRM.Components.Admin.Settings.JobTypes.JobTypeConfiguration)),
         },
         "payroll" => new() {
             new("Manage Period", "⏳", "Configure pay cycles and deadlines.", null),
@@ -294,7 +295,7 @@
             Navigation.NavigateTo("/admin/settings/job/work-types", replace: true);
             return;
         }
-        if (CategoryName == "jobs" && Section is "job-types" or "job-type-configuration")
+        if ((CategoryName is "job" or "jobs") && Section is "job-types" or "job-type-configuration")
         {
             Navigation.NavigateTo("/admin/settings/config/job-types", replace: true);
             return;
