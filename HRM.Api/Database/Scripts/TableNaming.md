@@ -1,5 +1,7 @@
 # Feature table naming
 
+The reviewed 29 October cleanup retains active registry tables as `BE_BusinessEntityDocuments`, `BE_BusinessEntityCalendars`, `BE_BusinessEntityLocations`, `BE_BusinessEntityLocationTypes`, `BE_BusinessEntitySchedules`, `BE_BusinessEntityTypes`, `BE_BusinessEntityContacts`. Legacy dependent catalogues use `BT_BreakTimes`, `BG_BudgetItems`, `PY_AdditionOrDeductionTypes`. `SC_TableRetirementAudits` preserves schema and row evidence for explicitly retired tables. See `docs/legacy-table-usage-audit.md` for all eighteen decisions and recovery details.
+
 `AL_AllowanceAssessments` stores append-only HR allowance amount decisions. Existing `Positions.PositionFrameworkID` / `PositionMatrixID` and the `PF_` framework/matrix catalogue are reused in place; no replacement position tables are created. See `docs/position-management.md`.
 
 Allowances use `AL_AllowanceTypes`, `AL_PositionAllowanceRules`, `AL_StaffAllowances`. Deductions use `DA_DeductionPolicies`, `DA_DeductionAgreements`, `DA_Instalments`, `DA_Payments`, `DA_PaymentAllocations`. Their shared approval/document/payroll integration uses `AD_FinanceRequests`, `AD_RequestDocuments`, `AD_PayrollBatches`, `AD_PayrollEntries`. See `docs/staff-allowances-deductions.md` for columns and deployment.

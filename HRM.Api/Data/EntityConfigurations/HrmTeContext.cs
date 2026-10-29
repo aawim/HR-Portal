@@ -4390,6 +4390,7 @@ public partial class HrmTeContext : DbContext
 
         ConfigureWorkflowJobType(modelBuilder);
         ConfigureWorkflowDefinition(modelBuilder);
+        ConfigureRetainedLegacyTableNames(modelBuilder);
         OnModelCreatingPartial(modelBuilder);
         //ConfigureWorkPlanningConfiguration(modelBuilder);
         ConfigureWorkPlanningRuntime(modelBuilder);

@@ -537,13 +537,16 @@ namespace HRM.Migrations
                     b.HasKey("BusinessEntityCalenderId")
                         .HasName("PK_BusinessEntityCalenders");
 
-                    b.HasIndex("BusinessEntityId");
+                    b.HasIndex("BusinessEntityId")
+                        .HasDatabaseName("IX_BusinessEntityCalendars_BusinessEntityID");
 
-                    b.HasIndex("CalenderId");
+                    b.HasIndex("CalenderId")
+                        .HasDatabaseName("IX_BusinessEntityCalendars_CalenderID");
 
-                    b.HasIndex("OperationLogId");
+                    b.HasIndex("OperationLogId")
+                        .HasDatabaseName("IX_BusinessEntityCalendars_OperationLogID");
 
-                    b.ToTable("BusinessEntityCalendars");
+                    b.ToTable("BE_BusinessEntityCalendars", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.BusinessEntitySchedule", b =>
@@ -575,15 +578,19 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("ScheduleID");
 
-                    b.HasKey("BusinessEntityScheduleId");
+                    b.HasKey("BusinessEntityScheduleId")
+                        .HasName("PK_BusinessEntitySchedules");
 
-                    b.HasIndex("BusinessEntityId");
+                    b.HasIndex("BusinessEntityId")
+                        .HasDatabaseName("IX_BusinessEntitySchedules_BusinessEntityID");
 
-                    b.HasIndex("OperationLogId");
+                    b.HasIndex("OperationLogId")
+                        .HasDatabaseName("IX_BusinessEntitySchedules_OperationLogID");
 
-                    b.HasIndex("ScheduleId");
+                    b.HasIndex("ScheduleId")
+                        .HasDatabaseName("IX_BusinessEntitySchedules_ScheduleID");
 
-                    b.ToTable("BusinessEntitySchedules");
+                    b.ToTable("BE_BusinessEntitySchedules", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.Archives.Calendar", b =>
@@ -3642,15 +3649,19 @@ namespace HRM.Migrations
                     b.Property<DateTime?>("StartTime")
                         .HasColumnType("datetime");
 
-                    b.HasKey("BreakTimeId");
+                    b.HasKey("BreakTimeId")
+                        .HasName("PK_BreakTimes");
 
-                    b.HasIndex("OperationLogId");
+                    b.HasIndex("OperationLogId")
+                        .HasDatabaseName("IX_BreakTimes_OperationLogID");
 
-                    b.HasIndex("OrganisationId");
+                    b.HasIndex("OrganisationId")
+                        .HasDatabaseName("IX_BreakTimes_OrganisationID");
 
-                    b.HasIndex("OrganisationStructureId");
+                    b.HasIndex("OrganisationStructureId")
+                        .HasDatabaseName("IX_BreakTimes_OrganisationStructureID");
 
-                    b.ToTable("BreakTimes");
+                    b.ToTable("BT_BreakTimes", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.BulkUploadedDocument", b =>
@@ -3704,13 +3715,16 @@ namespace HRM.Migrations
                         .HasColumnType("int")
                         .HasColumnName("OperationLogID");
 
-                    b.HasKey("BusinessEntityId", "DocumentId");
+                    b.HasKey("BusinessEntityId", "DocumentId")
+                        .HasName("PK_BusinessEntitiesDocuments");
 
-                    b.HasIndex("DocumentId");
+                    b.HasIndex("DocumentId")
+                        .HasDatabaseName("IX_BusinessEntitiesDocuments_DocumentID");
 
-                    b.HasIndex("OperationLogId");
+                    b.HasIndex("OperationLogId")
+                        .HasDatabaseName("IX_BusinessEntitiesDocuments_OperationLogID");
 
-                    b.ToTable("BusinessEntitiesDocuments");
+                    b.ToTable("BE_BusinessEntityDocuments", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.BusinessEntity", b =>
@@ -3804,13 +3818,16 @@ namespace HRM.Migrations
                     b.HasKey("BusinessEntityLocationId")
                         .HasName("PK_BussinessEntityAddresses");
 
-                    b.HasIndex("BusinessEntityId");
+                    b.HasIndex("BusinessEntityId")
+                        .HasDatabaseName("IX_BusinessEntityLocations_BusinessEntityID");
 
-                    b.HasIndex("BusinessEntityLocationTypeId");
+                    b.HasIndex("BusinessEntityLocationTypeId")
+                        .HasDatabaseName("IX_BusinessEntityLocations_BusinessEntityLocationTypeID");
 
-                    b.HasIndex("LocationId");
+                    b.HasIndex("LocationId")
+                        .HasDatabaseName("IX_BusinessEntityLocations_LocationID");
 
-                    b.ToTable("BusinessEntityLocations");
+                    b.ToTable("BE_BusinessEntityLocations", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.BusinessEntityLocationType", b =>
@@ -3829,7 +3846,7 @@ namespace HRM.Migrations
                     b.HasKey("BusinessEntityLocationTypeId")
                         .HasName("PK_AddressTypes");
 
-                    b.ToTable("BusinessEntityLocationTypes");
+                    b.ToTable("BE_BusinessEntityLocationTypes", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.BusinessEntityState", b =>
@@ -3867,9 +3884,10 @@ namespace HRM.Migrations
                         .HasMaxLength(250)
                         .HasColumnType("nvarchar(250)");
 
-                    b.HasKey("BusinessEntityTypeId");
+                    b.HasKey("BusinessEntityTypeId")
+                        .HasName("PK_BusinessEntityTypes");
 
-                    b.ToTable("BusinessEntityTypes");
+                    b.ToTable("BE_BusinessEntityTypes", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.BussinessEntityContactInformation", b =>
@@ -3902,15 +3920,19 @@ namespace HRM.Migrations
                         .IsUnicode(false)
                         .HasColumnType("varchar(250)");
 
-                    b.HasKey("BussinessEntityContactInformationId");
+                    b.HasKey("BussinessEntityContactInformationId")
+                        .HasName("PK_BussinessEntityContactInformations");
 
-                    b.HasIndex("BussinessEntityId");
+                    b.HasIndex("BussinessEntityId")
+                        .HasDatabaseName("IX_BussinessEntityContactInformations_BussinessEntityID");
 
-                    b.HasIndex("ContactInformationTypeId");
+                    b.HasIndex("ContactInformationTypeId")
+                        .HasDatabaseName("IX_BussinessEntityContactInformations_ContactInformationTypeID");
 
-                    b.HasIndex("OperationLogId");
+                    b.HasIndex("OperationLogId")
+                        .HasDatabaseName("IX_BussinessEntityContactInformations_OperationLogID");
 
-                    b.ToTable("BussinessEntityContactInformations");
+                    b.ToTable("BE_BusinessEntityContacts", (string)null);
                 });
 
             modelBuilder.Entity("HRM.Models.City", b =>
@@ -8712,6 +8734,53 @@ namespace HRM.Migrations
                         {
                             t.HasCheckConstraint("CK_SV_SupervisorChangeRequests_Target", "[TargetKind] IN ('Department','Team')");
                         });
+                });
+
+            modelBuilder.Entity("HRM.Models.TableRetirementAudit", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTime>("ArchivedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DataJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("MigrationId")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("OriginalTableName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("nvarchar(128)");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<long>("RecordCount")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SchemaJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MigrationId", "OriginalTableName")
+                        .IsUnique();
+
+                    b.ToTable("SC_TableRetirementAudits", (string)null);
+
+                    b.HasAnnotation("SqlServer:UseSqlOutputClause", false);
                 });
 
             modelBuilder.Entity("HRM.Models.Team", b =>
