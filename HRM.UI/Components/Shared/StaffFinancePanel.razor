@@ -1,0 +1,133 @@
+@using HRM.Application.Contracts.Pages
+@using HRM.DTOs
+@using HRM.Components.Admin.My.Workspace
+@using Microsoft.AspNetCore.Components.Forms
+@inject IStaffFinance Finance
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject HRM.Services.Interfaces.Profile.IProfileService Profiles
+@inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
+@inject ILogger<StaffFinancePanel> Logger
+
+<section class="space-y-3 staff-finance">
+    <div class="flex flex-wrap justify-between items-center gap-2"><h1 class="text-xl font-semibold">Allowances and deductions</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></div>
+    @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@error</p> }
+    @if (busy) { <p role="status">Loading…</p> }
+    @if (data != null && config != null)
+    {
+        <nav class="flex flex-wrap gap-2" aria-label="Finance sections">
+            @foreach (var item in Sections) { <button class="app-button @(tab==item?"app-button-primary":"app-button-secondary")" @onclick="()=>tab=item">@item</button> }
+        </nav>
+        @if (AdminMode && StaffId == 0 && data.CanManage && tab == "New request")
+        {
+            <WorkspaceSearch StaffOnly="true" RequireActivePosition="true" OnSelected="SelectStaff" />
+            @if (selectedName != null) { <p class="text-sm font-medium">@selectedName</p> }
+        }
+        @if(tab=="Configuration") { <FinanceConfigurationPanel Config="config" OnSaved="Load" /> }
+        else if(tab=="Payroll") { <FinancePayrollPanel StaffId="@(StaffId>0?StaffId:null)" /> }
+        else if(tab=="New request")
+        {
+            @if(jobId<=0) { <p class="text-sm">Select a staff member with active employment.</p> }
+            else
+            {
+                <fieldset disabled="@busy" class="rounded-xl border p-3 space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                        <label>Request type<select @bind="kind"><option value="Allowance">Staff-requested allowance</option><option value="Agreement">Deduction agreement</option><option value="Defer">Defer an instalment</option><option value="Payment">Payment by staff or another payer</option><option value="EndAllowance">End an allowance</option></select></label>
+                        @if(kind=="Allowance")
+                        {
+                            <label>Allowance type<select @bind="allowanceType"><option value="0">Select</option>@foreach(var a in config.AllowanceTypes){<option value="@a.Id">@a.Name</option>}</select></label>
+                        }
+                        @if(kind=="EndAllowance")
+                        {
+                            <label>Allowance<select @bind="allowanceType"><option value="0">Select</option>@foreach(var a in data.Allowances.Where(x=>x.JobId==jobId)){<option value="@a.Id">@a.Type · @a.Amount.ToString("N2")</option>}</select></label>
+                        }
+                        @if(kind is "Defer" or "Payment")
+                        {
+                            <label>Agreement<select @bind="agreementId"><option value="0">Select</option>@foreach(var a in data.Agreements.Where(x=>x.JobId==jobId&&x.Outstanding>0)){<option value="@a.Id">@a.Reference · @a.Outstanding.ToString("N2") outstanding</option>}</select></label>
+                        }
+                        @if(kind is "Allowance" or "Agreement" or "Payment")
+                        {
+                            <label>Amount<InputNumber @bind-Value="amount" min="0.01" step="0.01" /></label>
+                            <label>Currency<select @bind="currency"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
+                        }
+                        <label>@DateLabel<InputDate @bind-Value="from" /></label>
+                        @if(kind=="Allowance") { <label>End date (optional)<InputDate @bind-Value="to" /></label> }
+                        @if(kind is "Allowance" or "Agreement") { <label>Frequency<select @bind="frequency"><option value="1">Monthly</option><option value="6">Every six months</option><option value="12">Annually</option></select></label> }
+                        @if(kind=="Agreement")
+                        {
+                            <label>Instalment count<InputNumber @bind-Value="count" min="1" max="120" /></label>
+                            <label>Category<select @bind="category"><option>Loan</option><option>Goods</option><option>Insurance</option><option>Other</option></select></label>
+                        }
+                        @if(kind is "Agreement" or "Payment")
+                        {
+                            <label>@(kind=="Agreement"?"Creditor / insurer registry ID":"Payer registry ID")<InputNumber @bind-Value="entityId" min="1" /></label>
+                            <label>@(kind=="Agreement"?"Agreement reference":"Receipt / transaction reference")<input @bind="reference" maxlength="200" /></label>
+                        }
+                    </div>
+                    <label class="block">Reason<textarea @bind="reason" rows="2" maxlength="2000"></textarea></label>
+                    <div class="flex flex-wrap gap-2">@if(kind=="Agreement"){<button class="app-button app-button-secondary" @onclick="PreviewSchedule">Preview repayments</button>}<button class="app-button app-button-primary" @onclick="Submit">Submit for approval</button></div>
+                    @if(schedule.Count>0&&kind=="Agreement") { <div class="max-h-64 overflow-auto"><table class="w-full text-sm"><thead><tr><th>Due date</th><th>Amount</th></tr></thead><tbody>@foreach(var i in schedule){<tr><td>@i.DueDate.ToString("dd MMM yyyy")</td><td>@i.Amount.ToString("N2")</td></tr>}</tbody></table></div> }
+                    <p class="text-xs text-slate-500">Agreement and payment evidence can be attached to the submitted request before approval.</p>
+                </fieldset>
+            }
+        }
+        else if(tab=="Requests")
+        {
+            <div class="flex flex-wrap items-end gap-3"><label>Status<select @bind="status"><option value="">All</option>@foreach(var s in data.Requests.Select(x=>x.Status).Distinct()){<option>@s</option>}</select></label><label>Type<select @bind="requestKind"><option value="">All</option>@foreach(var k in data.Requests.Select(x=>x.Kind).Distinct()){<option>@k</option>}</select></label></div>
+            @foreach(var row in data.Requests.Where(x=>(status==""||x.Status==status)&&(requestKind==""||x.Kind==requestKind)).OrderByDescending(x=>x.Id))
+            {
+                <details class="rounded-lg border p-3" open="@(row.Id==RequestId)">
+                    <summary class="cursor-pointer font-medium">@row.Reference · @row.Staff · @row.Kind · @row.Status</summary>
+                    <div class="space-y-2 pt-3 text-sm">
+                        <p>@row.Application.FromDate.ToString("dd MMM yyyy") · @row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)</p><p class="whitespace-pre-wrap">@row.Application.Reason</p>
+                        @foreach(var d in data.Documents.Where(x=>x.RequestId==row.Id)){<button class="app-button app-button-secondary" @onclick="()=>Download(d.Id)">@d.Name</button>}
+                        @if(row.CanCancel||data.CanManage&&row.Status.StartsWith("Processing · ",StringComparison.Ordinal))
+                        { <label class="block">Attach evidence<InputFile OnChange="e=>Upload(row.Id,e)" accept=".pdf,.png,.jpg,.jpeg" /></label> }
+                        @if(row.CanApprove||row.CanCancel)
+                        {
+                            <label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2"></textarea></label>
+                            <div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel request</button>}</div>
+                        }
+                    </div>
+                </details>
+            }
+            @if(data.Requests.Count==0){<p class="text-sm">No requests available.</p>}
+        }
+        else if(tab=="Allowances")
+        {
+            <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Staff</th><th>Allowance</th><th>Amount</th><th>Period</th><th>Source</th></tr></thead><tbody>@foreach(var a in data.Allowances){<tr><td>@a.Staff</td><td>@a.Type</td><td>@a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId)</td><td>@a.FromDate.ToString("dd MMM yyyy") – @(a.ToDate?.ToString("dd MMM yyyy")??"Ongoing")</td><td>@a.Source</td></tr>}</tbody></table></div>
+        }
+        else if(tab=="Agreements")
+        {
+            @foreach(var a in data.Agreements)
+            {
+                <details class="rounded-lg border p-3"><summary class="cursor-pointer">@a.Staff · @a.Reference · @a.Category · Outstanding @a.Outstanding.ToString("N2") @CurrencyName(a.CurrencyTypeId)</summary><div class="overflow-x-auto mt-2"><table class="w-full text-sm"><thead><tr><th>Version</th><th>Due</th><th>Amount</th><th>Paid</th><th>Status</th></tr></thead><tbody>@foreach(var i in a.Instalments){<tr><td>@i.Version</td><td>@i.DueDate.ToString("dd MMM yyyy")</td><td>@i.Amount.ToString("N2")</td><td>@i.Paid.ToString("N2")</td><td>@(i.Superseded?"Superseded":i.Paid==i.Amount?"Paid":"Outstanding")</td></tr>}</tbody></table></div></details>
+            }
+            @if(data.Agreements.Count==0){<p class="text-sm">No approved deduction agreements.</p>}
+        }
+        else if(tab=="History") { <FinancePayrollPanel StaffId="@(StaffId>0?StaffId:null)" ReadOnly="true" /> }
+    }
+</section>
+
+@code {
+    [Parameter] public bool AdminMode {get;set;}
+    [Parameter] public int StaffId {get;set;}
+    [Parameter] public int? RequestId {get;set;}
+    private FinanceWorkspace? data; private FinanceConfiguration? config; private string? error; private bool busy;
+    private string tab="Requests",kind="Allowance",category="Loan",reference="",reason="",status="",requestKind="";private int jobId,currency,frequency=1,count=12,entityId;private long allowanceType,agreementId;private decimal amount;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private string? selectedName;private Guid clientId=Guid.NewGuid();
+    private Dictionary<int,string?> comments=[];private List<FinanceInstalmentRow> schedule=[];
+    private IEnumerable<string> Sections => new[]{"Requests","New request","Allowances","Agreements","History"}.Concat(AdminMode&&config?.CanConfigure==true?["Configuration"]:[]).Concat(AdminMode&&data?.CanPost==true?["Payroll"]:[]);
+    private string DateLabel=>kind switch{"Agreement"=>"First due date","Payment"=>"Payment date","Defer"=>"Instalment month to defer","EndAllowance"=>"Last entitlement date",_=>"Effective from"};
+    protected override async Task OnInitializedAsync()
+    {var actor=await Access.RequireContextAsync();if(StaffId>0)jobId=(await Profiles.GetProfileAsync(StaffId))?.ActiveJob?.JobId??0;else if(!AdminMode)jobId=actor.ActiveJob?.JobId??0;await Load();}
+    private string CurrencyName(int id)=>config?.Currencies.FirstOrDefault(x=>x.Id==id)?.Name??"";
+    private async Task Load(){busy=true;error=null;try{config=await Finance.GetConfigurationAsync();data=await Finance.LoadAsync(StaffId>0?StaffId:null);foreach(var r in data.Requests)comments.TryAdd(r.Id,null);}catch(Exception ex){Logger.LogError(ex,"Finance workspace failed to load");error="Finance information could not be loaded. Please contact HR if this continues.";}finally{busy=false;}}
+    private async Task SelectStaff(WorkspaceSearchResult item){try{jobId=(await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId??0;selectedName=item.Name;data=await Finance.LoadAsync(item.Id);}catch(Exception ex){Logger.LogError(ex,"Finance staff selection failed");error="Staff finance information could not be loaded.";}}
+    private FinanceApplication Input()=>new(){ClientRequestId=clientId,Kind=kind,JobId=jobId,AllowanceTypeId=allowanceType,AgreementId=agreementId,BusinessEntityId=entityId,CurrencyTypeId=currency,Amount=amount,InstalmentCount=count,FrequencyMonths=frequency,FromDate=from,ToDate=to,Category=category,Reference=reference,Reason=reason};
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;bool saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Logger.LogError(ex,"Finance action failed");error="This action could not be completed. Please refresh or contact HR.";}finally{busy=false;}if(saved)await Load();}
+    private async Task Submit(){await Run(()=>Finance.SubmitAsync(Input()));if(error==null){clientId=Guid.NewGuid();tab="Requests";}}
+    private async Task PreviewSchedule(){try{schedule=await Finance.PreviewAgreementAsync(Input());error=null;}catch(Exception){error="Enter a valid total, instalment count and repayment dates.";}}
+    private Task Act(FinanceRequestRow row,string action)=>Run(()=>Finance.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
+    private async Task Upload(int id,InputFileChangeEventArgs e){try{await using var stream=e.File.OpenReadStream(5*1024*1024);using var memory=new MemoryStream();await stream.CopyToAsync(memory);await Run(()=>Finance.UploadDocumentAsync(new(id,e.File.Name,e.File.ContentType,memory.ToArray())));}catch(Exception){error="Choose a PDF, PNG or JPEG file up to 5 MB.";}}
+    private async Task Download(long id){try{var file=await Finance.DownloadDocumentAsync(id);using var stream=new MemoryStream(file.Content);using var reference=new DotNetStreamReference(stream);await using var module=await JS.InvokeAsync<IJSObjectReference>("import","./organisationStaffExport.js");await module.InvokeVoidAsync("download",file.Name,file.ContentType,reference);}catch(Exception){error="This document could not be downloaded.";}}
+}

@@ -127,6 +127,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var requestItems = rows.Select(n => new RequestNotificationItem(n.RequestNotificationId, n.ReferenceNumber,
             n.FromState.Trim(), n.ToState.Trim(), n.CreatedAtUtc, n.ReadAtUtc.HasValue,
             HRM.Application.Presentation.OvertimeNavigation.NotificationUrl(n.NotificationKind, n.RequestTypeName, n.ViewUrl, n.RequestId) ?? (
+            n.ViewUrl == StaffFinanceService.PageUrl ? (n.NotificationKind == "ActionRequired" ? StaffFinanceService.AdminUrl : StaffFinanceService.PageUrl) + $"?requestId={n.RequestId}" :
             n.ViewUrl == LateCheckInRequestService.PageUrl ? LateCheckInRequestService.PageUrl :
             n.ViewUrl == LateCheckInRequestService.EarlyPageUrl ? LateCheckInRequestService.EarlyPageUrl :
             n.ViewUrl == OvertimeRequestService.PageUrl ? OvertimeRequestService.PageUrl :

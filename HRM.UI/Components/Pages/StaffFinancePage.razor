@@ -1,0 +1,8 @@
+@page "/online/allowances-deductions"
+@page "/admin/payroll/finance"
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject NavigationManager Navigation
+<PageTitle>Allowances and deductions</PageTitle>
+<HRM.Components.Shared.StaffFinancePanel AdminMode="IsAdmin" RequestId="RequestId" />
+@code { [SupplyParameterFromQuery(Name="requestId")] public int? RequestId {get;set;} private bool IsAdmin=>Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("admin/", StringComparison.OrdinalIgnoreCase); }

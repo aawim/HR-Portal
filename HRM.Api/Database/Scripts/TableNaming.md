@@ -1,5 +1,7 @@
 # Feature table naming
 
+Allowances use `AL_AllowanceTypes`, `AL_PositionAllowanceRules`, `AL_StaffAllowances`. Deductions use `DA_DeductionPolicies`, `DA_DeductionAgreements`, `DA_Instalments`, `DA_Payments`, `DA_PaymentAllocations`. Their shared approval/document/payroll integration uses `AD_FinanceRequests`, `AD_RequestDocuments`, `AD_PayrollBatches`, `AD_PayrollEntries`. See `docs/staff-allowances-deductions.md` for columns and deployment.
+
 New physical tables must use an uppercase feature-initial prefix followed by an underscore and a descriptive PascalCase plural name. Example: `LC_LateCheckInRequests`. Related tables share a prefix, as the existing workflow tables share `WF_`.
 
 | Previous name | Current name |

@@ -48,7 +48,8 @@ namespace HRM.Enum
         AssignmentCreate,
         AssignedRoles,
         Permissions,
-        WorkTypes
+        WorkTypes,
+        Finance
     }
 }
 

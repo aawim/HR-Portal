@@ -1,0 +1,39 @@
+@using HRM.Application.Contracts.Pages
+@inject IStaffFinance Finance
+@inject HRM.Services.ToastService Toasts
+<div class="space-y-3 text-sm">
+    @if(error!=null){<p role="alert">@error</p>}
+    <details class="rounded-lg border p-3" open><summary class="font-semibold cursor-pointer">Allowance types</summary><div class="flex flex-wrap items-end gap-3 mt-3"><label>Existing type<select @bind="typeId" @bind:after="SelectType"><option value="0">New type</option>@foreach(var t in Config.TypeDefinitions){<option value="@t.Id">@t.Name @(t.IsActive?"":"(Inactive)")</option>}</select></label><label>Name<input @bind="name" maxlength="150" /></label><label><input type="checkbox" @bind="active" /> Active</label><button class="app-button app-button-primary" disabled="@busy" @onclick="SaveType">Save</button></div></details>
+    <details class="rounded-lg border p-3" open><summary class="font-semibold cursor-pointer">Required position allowances</summary>
+        <fieldset disabled="@busy" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            <label>Position<select @bind="position"><option value="0">Select</option>@foreach(var p in Config.Positions){<option value="@p.Id">@p.Name</option>}</select></label>
+            <label>Allowance<select @bind="type"><option value="0">Select</option>@foreach(var t in Config.AllowanceTypes){<option value="@t.Id">@t.Name</option>}</select></label>
+            <label>Currency<select @bind="currency"><option value="0">Select</option>@foreach(var c in Config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
+            <label>Amount<InputNumber @bind-Value="amount" step="0.01" min="0.01" /></label>
+            <label>Frequency<select @bind="frequency"><option value="1">Monthly</option><option value="6">Six-monthly</option><option value="12">Annually</option></select></label>
+            <label>Multiple positions<select @bind="multiple"><option value="Once">Once per person</option><option value="Highest">Highest entitlement</option><option value="Stack">Each position</option></select></label>
+            <label>From<InputDate @bind-Value="from" /></label><label>Through (optional)<InputDate @bind-Value="to" /></label><button class="app-button app-button-primary self-end" @onclick="SaveRule">Add required allowance</button>
+        </fieldset>
+        <div class="overflow-auto mt-3"><table class="w-full"><thead><tr><th>Position / allowance</th><th>Amount</th><th>Effective period</th><th>End rule</th></tr></thead><tbody>@foreach(var r in Config.Rules){<tr><td>@r.Position · @r.Allowance</td><td>@r.Rule.Amount.ToString("N2")</td><td>@r.Rule.FromDate.ToString("dd MMM yyyy") – @(r.Rule.ToDate?.ToString("dd MMM yyyy")??"Ongoing")</td><td><InputDate @bind-Value="endDates[r.Id]" /><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EndRule(r.Id)">End</button></td></tr>}</tbody></table></div>
+    </details>
+    <details class="rounded-lg border p-3"><summary class="font-semibold cursor-pointer">Deduction limits</summary>
+        <p class="text-xs mt-2">Percentage and minimum take-home use the employment basic salary, in the selected salary currency. Limits apply to all agreements together.</p>
+        <fieldset disabled="@busy" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            <label>Salary / deduction currency<select @bind="policyCurrency"><option value="0">Select</option>@foreach(var c in Config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
+            <label>Maximum monthly amount<InputNumber @bind-Value="maxMonthly" min="0.01" step="0.01" /></label><label>Maximum % of basic salary<InputNumber @bind-Value="percent" min="1" max="100" /></label><label>Minimum take-home<InputNumber @bind-Value="minimum" min="0" step="0.01" /></label><label>Maximum outstanding balance<InputNumber @bind-Value="outstanding" min="0.01" step="0.01" /></label><label>Maximum active agreements<InputNumber @bind-Value="maxAgreements" min="1" max="100" /></label><label>Effective from<InputDate @bind-Value="policyFrom" /></label><button class="app-button app-button-primary self-end" @onclick="SavePolicy">Add policy version</button>
+        </fieldset>
+        <div class="overflow-auto mt-3"><table class="w-full"><thead><tr><th>From</th><th>Currency</th><th>Monthly maximum</th><th>%</th><th>Take-home minimum</th><th>Outstanding limit</th><th>Agreements</th></tr></thead><tbody>@foreach(var p in Config.Policies){<tr><td>@p.FromDate.ToString("dd MMM yyyy")</td><td>@Config.Currencies.FirstOrDefault(x=>x.Id==p.CurrencyTypeId)?.Name</td><td>@p.MaximumPerMonth.ToString("N2")</td><td>@p.MaximumPercentOfBasic</td><td>@p.MinimumTakeHome.ToString("N2")</td><td>@p.MaximumOutstanding.ToString("N2")</td><td>@p.MaximumAgreements</td></tr>}</tbody></table></div>
+    </details>
+</div>
+@code{
+    [Parameter,EditorRequired] public FinanceConfiguration Config{get;set;}=default!;
+    [Parameter] public EventCallback OnSaved{get;set;}
+    private bool busy,active=true;private string? error;private long typeId,type;private string name="",multiple="Once";private int position,currency,frequency=1,policyCurrency,maxAgreements=3;private decimal amount,maxMonthly,percent,minimum,outstanding;private DateTime from=DateTime.UtcNow.AddHours(5).Date,policyFrom=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private Dictionary<long,DateTime> endDates=[];
+    protected override void OnParametersSet(){foreach(var r in Config.Rules)endDates.TryAdd(r.Id,r.Rule.ToDate??DateTime.UtcNow.AddHours(5).Date);}
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;try{var result=await action();if(result.Success){Toasts.Success(result.Message);await OnSaved.InvokeAsync();}else error=result.Message;}catch(Exception){error="Configuration could not be saved. Refresh and try again.";}finally{busy=false;}}
+    private Task SaveType()=>Run(()=>Finance.SaveAllowanceTypeAsync(new(typeId,name,active)));
+    private void SelectType(){var row=Config.TypeDefinitions.FirstOrDefault(x=>x.Id==typeId);name=row?.Name??"";active=row?.IsActive??true;}
+    private Task SaveRule()=>Run(()=>Finance.AddPositionRuleAsync(new(position,type,currency,amount,frequency,from,to,multiple)));
+    private Task EndRule(long id)=>Run(()=>Finance.EndPositionRuleAsync(id,endDates[id]));
+    private Task SavePolicy()=>Run(()=>Finance.AddDeductionPolicyAsync(new(policyCurrency,maxMonthly,percent,minimum,outstanding,maxAgreements,policyFrom)));
+}

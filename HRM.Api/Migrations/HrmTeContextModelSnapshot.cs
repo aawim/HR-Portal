@@ -241,6 +241,93 @@ namespace HRM.Migrations
                     b.ToTable("AA_AdminAccessGrantRequests", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.AllowanceType", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganisationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("AL_AllowanceTypes", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.Archives.AssignedWorkType", b =>
+                {
+                    b.Property<int>("AssignedWorkTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("AssignedWorkTypeID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("AssignedWorkTypeId"));
+
+                    b.Property<int>("AssignedByUserId")
+                        .HasColumnType("int")
+                        .HasColumnName("AssignedByUserID");
+
+                    b.Property<DateOnly>("CreatedDate")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("FromDate")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsValid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int")
+                        .HasColumnName("JobID");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(250)
+                        .HasColumnType("nvarchar(250)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int")
+                        .HasColumnName("OrganisationID");
+
+                    b.Property<DateOnly?>("ToDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("WorkTypeId")
+                        .HasColumnType("int")
+                        .HasColumnName("WorkTypeID");
+
+                    b.HasKey("AssignedWorkTypeId");
+
+                    b.HasIndex("JobId")
+                        .HasDatabaseName("IX_AssignedWorkTypes_JobID");
+
+                    b.HasIndex("OrganisationId")
+                        .HasDatabaseName("IX_AssignedWorkTypes_OrganisationID");
+
+                    b.HasIndex("WorkTypeId")
+                        .HasDatabaseName("IX_AssignedWorkTypes_WorkTypeID");
+
+                    b.ToTable("AssignedWorkTypes", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.Archives.AttachedBreakTime", b =>
                 {
                     b.Property<int>("AttachedBreakTimeId")
@@ -3043,6 +3130,30 @@ namespace HRM.Migrations
                     b.ToTable("WorkShifts");
                 });
 
+            modelBuilder.Entity("HRM.Models.Archives.WorkType", b =>
+                {
+                    b.Property<int>("WorkTypeId")
+                        .HasColumnType("int")
+                        .HasColumnName("WorkTypeID");
+
+                    b.Property<bool>("IsValid")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("WorkTypeId");
+
+                    b.ToTable("WorkTypes", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.Archives.WorkingDay", b =>
                 {
                     b.Property<int>("WorkingDayId")
@@ -3805,6 +3916,265 @@ namespace HRM.Migrations
                     b.HasKey("ContactInformationTypeId");
 
                     b.ToTable("ContactInformationTypes");
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionAgreement", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("CreditorBusinessEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FirstDueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("FrequencyMonths")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("InstalmentCount")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ScheduleVersion")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreditorBusinessEntityId");
+
+                    b.HasIndex("CurrencyTypeId");
+
+                    b.HasIndex("IndividualId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.HasIndex("OrganisationId", "CreditorBusinessEntityId", "Reference")
+                        .IsUnique();
+
+                    b.ToTable("DA_DeductionAgreements", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionInstalment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AgreementId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("DueDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsSuperseded")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("SourceRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SourceRequestId");
+
+                    b.HasIndex("AgreementId", "Version", "DueDate")
+                        .IsUnique();
+
+                    b.ToTable("DA_Instalments", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPayment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AgreementId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("PaidDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("PayerBusinessEntityId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("PayrollEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RecordedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int?>("RequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AgreementId");
+
+                    b.HasIndex("PayerBusinessEntityId");
+
+                    b.HasIndex("PayrollEntryId")
+                        .IsUnique()
+                        .HasFilter("[PayrollEntryId] IS NOT NULL");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique()
+                        .HasFilter("[RequestId] IS NOT NULL");
+
+                    b.ToTable("DA_Payments", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPaymentAllocation", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("InstalmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("PaymentId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstalmentId");
+
+                    b.HasIndex("PaymentId", "InstalmentId")
+                        .IsUnique();
+
+                    b.ToTable("DA_PaymentAllocations", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPolicy", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("MaximumAgreements")
+                        .HasColumnType("int");
+
+                    b.Property<decimal>("MaximumOutstanding")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MaximumPerMonth")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MaximumPercentOfBasic")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("MinimumTakeHome")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CurrencyTypeId");
+
+                    b.HasIndex("OrganisationId", "CurrencyTypeId", "FromDate")
+                        .IsUnique();
+
+                    b.ToTable("DA_DeductionPolicies", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.FinanceCurrency", b =>
+                {
+                    b.Property<int>("CurrencyTypeId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int")
+                        .HasColumnName("CurrencyTypeID");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("CurrencyTypeId"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("CurrencyTypeId");
+
+                    b.ToTable("CurrencyTypes", null, t =>
+                        {
+                            t.ExcludeFromMigrations();
+                        });
                 });
 
             modelBuilder.Entity("HRM.Models.Group", b =>
@@ -6815,6 +7185,64 @@ namespace HRM.Migrations
                     b.ToTable("Positions");
                 });
 
+            modelBuilder.Entity("HRM.Models.PositionAllowanceRule", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AllowanceTypeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FrequencyMonths")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("MultiplePositionPolicy")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PositionId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ToDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AllowanceTypeId");
+
+                    b.HasIndex("CurrencyTypeId");
+
+                    b.HasIndex("PositionId");
+
+                    b.HasIndex("OrganisationId", "PositionId", "AllowanceTypeId", "FromDate")
+                        .IsUnique();
+
+                    b.ToTable("AL_PositionAllowanceRules", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
             modelBuilder.Entity("HRM.Models.PositionBasicSalary", b =>
                 {
                     b.Property<int>("PostionBasicSalaryId")
@@ -7384,6 +7812,59 @@ namespace HRM.Migrations
                     b.ToTable("Staffs");
                 });
 
+            modelBuilder.Entity("HRM.Models.StaffAllowance", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long>("AllowanceTypeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("FrequencyMonths")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("FromDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("ToDate")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AllowanceTypeId");
+
+                    b.HasIndex("CurrencyTypeId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("RequestId")
+                        .IsUnique();
+
+                    b.ToTable("AL_StaffAllowances", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
             modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
                 {
                     b.Property<long>("Id")
@@ -7571,6 +8052,200 @@ namespace HRM.Migrations
                     b.HasIndex("SenderUserId", "SentAtUtc");
 
                     b.ToTable("CH_Messages", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinanceDocument", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<byte[]>("Content")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("UploadedByUserId")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("AD_RequestDocuments", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinancePayrollBatch", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<Guid>("ClientBatchId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("Month")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("PayrollCycleRequestId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PostedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("PostedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PayrollCycleRequestId");
+
+                    b.HasIndex("OrganisationId", "ClientBatchId")
+                        .IsUnique();
+
+                    b.Property<string>("SelectionJson").IsRequired().HasColumnType("nvarchar(max)");
+                    b.Property<string>("Fingerprint").IsRequired().HasMaxLength(64).HasColumnType("nvarchar(64)");
+                    b.ToTable("AD_PayrollBatches", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinancePayrollEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<long>("Id"));
+
+                    b.Property<long?>("AllowanceId")
+                        .HasColumnType("bigint");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<long>("BatchId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("CurrencyTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("InstalmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("JobPositionId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<DateTime>("Month")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<long?>("PositionRuleId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("SourceKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AllowanceId");
+
+                    b.HasIndex("BatchId");
+
+                    b.HasIndex("InstalmentId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("JobPositionId");
+
+                    b.HasIndex("PositionRuleId");
+
+                    b.HasIndex("OrganisationId", "Month", "SourceKey")
+                        .IsUnique();
+
+                    b.ToTable("AD_PayrollEntries", (string)null, t => t.UseSqlOutputClause(false));
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinanceRequest", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("ClientRequestId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("OrganisationId", "ClientRequestId")
+                        .IsUnique();
+
+                    b.ToTable("AD_FinanceRequests", (string)null, t => t.UseSqlOutputClause(false));
                 });
 
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
@@ -10205,6 +10880,42 @@ namespace HRM.Migrations
                     b.Navigation("Request");
                 });
 
+            modelBuilder.Entity("HRM.Models.AllowanceType", b =>
+                {
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.Archives.AssignedWorkType", b =>
+                {
+                    b.HasOne("HRM.Models.Job", "Job")
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", "Organisation")
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Archives.WorkType", "WorkType")
+                        .WithMany("AssignedWorkTypes")
+                        .HasForeignKey("WorkTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Job");
+
+                    b.Navigation("Organisation");
+
+                    b.Navigation("WorkType");
+                });
+
             modelBuilder.Entity("HRM.Models.Archives.AttachedBreakTime", b =>
                 {
                     b.HasOne("HRM.Models.OperationLog", "OperationLog")
@@ -11930,6 +12641,108 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
                 });
 
+            modelBuilder.Entity("HRM.Models.DeductionAgreement", b =>
+                {
+                    b.HasOne("HRM.Models.BusinessEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CreditorBusinessEntityId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.FinanceCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Individual", null)
+                        .WithMany()
+                        .HasForeignKey("IndividualId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionInstalment", b =>
+                {
+                    b.HasOne("HRM.Models.DeductionAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", null)
+                        .WithMany()
+                        .HasForeignKey("SourceRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPayment", b =>
+                {
+                    b.HasOne("HRM.Models.DeductionAgreement", null)
+                        .WithMany()
+                        .HasForeignKey("AgreementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.BusinessEntity", null)
+                        .WithMany()
+                        .HasForeignKey("PayerBusinessEntityId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.StaffFinancePayrollEntry", null)
+                        .WithMany()
+                        .HasForeignKey("PayrollEntryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Request", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPaymentAllocation", b =>
+                {
+                    b.HasOne("HRM.Models.DeductionInstalment", null)
+                        .WithMany()
+                        .HasForeignKey("InstalmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.DeductionPayment", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.DeductionPolicy", b =>
+                {
+                    b.HasOne("HRM.Models.FinanceCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HRM.Models.Group", b =>
                 {
                     b.HasOne("HRM.Models.Organisation", "BusinessEntityOrganisation")
@@ -13328,6 +14141,27 @@ namespace HRM.Migrations
                     b.Navigation("PositionType");
                 });
 
+            modelBuilder.Entity("HRM.Models.PositionAllowanceRule", b =>
+                {
+                    b.HasOne("HRM.Models.AllowanceType", null)
+                        .WithMany()
+                        .HasForeignKey("AllowanceTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.FinanceCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Position", null)
+                        .WithMany()
+                        .HasForeignKey("PositionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HRM.Models.PositionBasicSalary", b =>
                 {
                     b.HasOne("HRM.Models.OperationLog", "OperationLog")
@@ -13586,6 +14420,33 @@ namespace HRM.Migrations
                     b.Navigation("OperationLog");
                 });
 
+            modelBuilder.Entity("HRM.Models.StaffAllowance", b =>
+                {
+                    b.HasOne("HRM.Models.AllowanceType", null)
+                        .WithMany()
+                        .HasForeignKey("AllowanceTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.FinanceCurrency", null)
+                        .WithMany()
+                        .HasForeignKey("CurrencyTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("HRM.Models.StaffChatConversation", b =>
                 {
                     b.HasOne("HRM.Models.User", null)
@@ -13674,6 +14535,82 @@ namespace HRM.Migrations
                         .IsRequired();
 
                     b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinanceDocument", b =>
+                {
+                    b.HasOne("HRM.Models.StaffFinanceRequest", null)
+                        .WithMany()
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinancePayrollBatch", b =>
+                {
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Archives.PayrollCycle", null)
+                        .WithMany()
+                        .HasForeignKey("PayrollCycleRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinancePayrollEntry", b =>
+                {
+                    b.HasOne("HRM.Models.StaffAllowance", null)
+                        .WithMany()
+                        .HasForeignKey("AllowanceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.StaffFinancePayrollBatch", null)
+                        .WithMany()
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.DeductionInstalment", null)
+                        .WithMany()
+                        .HasForeignKey("InstalmentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.JobPosition", null)
+                        .WithMany()
+                        .HasForeignKey("JobPositionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.PositionAllowanceRule", null)
+                        .WithMany()
+                        .HasForeignKey("PositionRuleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("HRM.Models.StaffFinanceRequest", b =>
+                {
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", "Request")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.StaffFinanceRequest", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Request");
                 });
 
             modelBuilder.Entity("HRM.Models.StaffNotification", b =>
@@ -14977,6 +15914,11 @@ namespace HRM.Migrations
                     b.Navigation("Elements");
 
                     b.Navigation("ShiftScheduleDays");
+                });
+
+            modelBuilder.Entity("HRM.Models.Archives.WorkType", b =>
+                {
+                    b.Navigation("AssignedWorkTypes");
                 });
 
             modelBuilder.Entity("HRM.Models.Atoll", b =>

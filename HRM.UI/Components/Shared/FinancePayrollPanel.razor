@@ -1,0 +1,46 @@
+@using HRM.Application.Contracts.Pages
+@using HRM.Components.Admin.My.Workspace
+@using HRM.DTOs
+@inject IStaffFinance Finance
+@inject HRM.Services.Interfaces.Profile.IProfileService Profiles
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject HRM.Services.ToastService Toasts
+<div class="space-y-3 text-sm">
+    @if(error!=null){<p role="alert" class="rounded border p-3">@error</p>}
+    @if(!ReadOnly)
+    {
+        <WorkspaceSearch StaffOnly="true" RequireActivePosition="true" OnSelected="AddStaff" />
+        <div class="flex flex-wrap gap-2">@foreach(var job in jobs){<button class="app-button app-button-secondary" @onclick="()=>Remove(job.Key)">@job.Value ×</button>}</div>
+        <fieldset disabled="@busy" class="flex flex-wrap items-end gap-3">
+            <label>Payroll month<input type="month" value="@month" @onchange="ChangeMonth" /></label>
+            <label>Payroll cycle<select @bind="cycle"><option value="0">Select</option>@foreach(var c in cycles){<option value="@c.Id">@c.Name</option>}</select></label>
+            <label>Reference<input @bind="reference" maxlength="200" /></label><button class="app-button app-button-secondary" @onclick="Preview">Preview payroll</button>
+            <button class="app-button app-button-primary" disabled="@(preview==null||preview.Issues.Count>0||preview.Lines.Count==0)" @onclick="Post">Post and lock payroll</button>
+        </fieldset>
+        <details class="rounded-lg border p-3"><summary class="cursor-pointer">Request a new payroll cycle</summary><div class="flex flex-wrap items-end gap-3 mt-3"><label>Organisation payroll period<select @bind="period"><option value="0">Select</option>@foreach(var p in periods){<option value="@p.Id">@p.Name</option>}</select></label><label>Reason<input @bind="cycleReason" maxlength="2000" /></label><button class="app-button app-button-primary" disabled="@busy" @onclick="RequestCycle">Request cycle approval</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="MonthChanged">Refresh cycles</button></div></details>
+        @if(preview!=null)
+        {
+            @foreach(var issue in preview.Issues){<p role="alert">@issue</p>}
+            <div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Staff</th><th>Type</th><th>Description</th><th>Currency ID</th><th>Amount</th></tr></thead><tbody>@foreach(var line in preview.Lines){<tr><td>@line.Staff</td><td>@line.Kind</td><td>@line.Description</td><td>@line.CurrencyTypeId</td><td>@line.Amount.ToString("N2")</td></tr>}</tbody></table></div>
+        }
+    }
+    <h3 class="font-semibold">Posted payroll</h3>
+    @foreach(var batch in history)
+    {
+        <details class="rounded-lg border p-3"><summary>@batch.Month.ToString("MMMM yyyy") · @batch.Reference · Posted @batch.PostedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</summary><div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Staff</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>@foreach(var line in batch.Lines){<tr><td>@line.Staff</td><td>@line.Kind</td><td>@line.Description</td><td>@line.Amount.ToString("N2") (currency @line.CurrencyTypeId)</td></tr>}</tbody></table></div></details>
+    }
+    @if(history.Count==0){<p>No posted payroll entries.</p>}
+</div>
+@code{
+    [Parameter] public int? StaffId{get;set;}[Parameter]public bool ReadOnly{get;set;}
+    private string month=DateTime.UtcNow.AddHours(5).ToString("yyyy-MM"),reference="",cycleReason="";private int cycle,period;private bool busy;private string? error;private Guid batchId=Guid.NewGuid();private Dictionary<int,string> jobs=[];private List<FinanceOption> cycles=[],periods=[];private FinancePayrollPreview? preview;private List<FinancePayrollHistory> history=[];
+    private DateTime Month=>DateTime.TryParseExact(month+"-01","yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var value)?value:throw new InvalidOperationException("Select a payroll month.");
+    protected override async Task OnInitializedAsync(){try{history=await Finance.PayrollHistoryAsync(StaffId);if(!ReadOnly){periods=(await Finance.GetConfigurationAsync()).PayrollPeriods;await MonthChanged();}}catch(Exception){error="Payroll information could not be loaded.";}}
+    private async Task MonthChanged(){preview=null;cycle=0;batchId=Guid.NewGuid();try{cycles=await Finance.GetPayrollCyclesAsync(Month);}catch(Exception){error="Payroll cycles could not be loaded.";}}
+    private async Task ChangeMonth(ChangeEventArgs e){month=e.Value?.ToString()??"";await MonthChanged();}
+    private async Task AddStaff(WorkspaceSearchResult item){try{var job=(await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId??0;if(job>0){jobs[job]=item.Name;preview=null;batchId=Guid.NewGuid();}}catch(Exception){error="Staff employment could not be loaded.";}}
+    private void Remove(int id){jobs.Remove(id);preview=null;batchId=Guid.NewGuid();}
+    private async Task Preview(){if(busy)return;busy=true;error=null;try{preview=await Finance.PreviewPayrollAsync(Month,jobs.Keys.ToList());}catch(Exception){error="Payroll could not be previewed. Check the selected staff and month.";}finally{busy=false;}}
+    private async Task RequestCycle(){if(busy)return;busy=true;error=null;try{var actor=await Access.RequireContextAsync();var result=await Finance.SubmitAsync(new(){Kind="PayrollCycle",JobId=actor.ActiveJob?.JobId??0,PayrollPeriodId=period,FromDate=Month,Reason=cycleReason});if(result.Success){Toasts.Success(result.Message);cycleReason="";}else error=result.Message;}catch(Exception){error="A payroll cycle could not be requested. Check your active employment and payroll permission.";}finally{busy=false;}}
+    private async Task Post(){if(busy)return;busy=true;error=null;try{var result=await Finance.PostPayrollAsync(new(Month,cycle,reference,batchId,jobs.Keys.ToList(),preview?.Fingerprint??""));if(result.Success){Toasts.Success(result.Message);preview=null;history=await Finance.PayrollHistoryAsync(StaffId);batchId=Guid.NewGuid();}else error=result.Message;}catch(Exception){error="Payroll was not confirmed. Refresh before retrying.";}finally{busy=false;}}
+}
