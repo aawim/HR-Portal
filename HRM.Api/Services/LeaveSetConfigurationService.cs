@@ -17,7 +17,7 @@ public sealed partial class LeaveSetConfigurationService(IDbContextFactory<HrmTe
     public async Task<LeaveSetConfigurationData> LoadAsync()
     {
         var a=await Scope();await using var db=await factory.CreateDbContextAsync();
-        return new(await db.Organisations.AsNoTracking().Where(o=>o.BusinessEntityID==a.Org).ToListAsync(),await db.LeaveSets.AsNoTracking().Include(s=>s.Organisation).Include(s=>s.LeaveSetLeaveTypes.Where(l=>l.IsValid&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal))).Where(s=>s.OrganisationId==a.Org).OrderBy(s=>s.Name).ToListAsync(),a.Super);
+        return new(await db.Organisations.AsNoTracking().Where(o=>o.BusinessEntityID==a.Org).ToListAsync(),await db.LeaveSets.AsNoTracking().Include(s=>s.Organisation).Include(s=>s.LeaveSetLeaveTypes.Where(l=>l.IsValid&&l.LeaveType.IsActive&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal))).Where(s=>s.OrganisationId==a.Org).OrderBy(s=>s.Name).ToListAsync(),a.Super);
     }
     public async Task SaveAsync(LeaveSet model)
     {

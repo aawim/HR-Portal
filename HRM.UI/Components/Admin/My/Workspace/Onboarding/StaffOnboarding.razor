@@ -1,0 +1,47 @@
+@using HRM.Components.Admin.Hr.Individual
+@using HRM.Components.Admin.Hr.Staff
+<PageTitle>Staff onboarding</PageTitle>
+
+<section class="min-w-0 space-y-3 rounded-lg border p-4">
+    <h1 class="text-lg font-semibold">Staff onboarding</h1>
+    <nav class="flex flex-wrap gap-1" aria-label="Staff onboarding">
+        @foreach(var item in Sections)
+        {
+            <a class="app-button @(CurrentSection==item.Key?"app-button-primary":"app-button-secondary") text-xs" aria-current="@(CurrentSection==item.Key?"page":null)" href="@Url(item.Key)">@item.Label</a>
+        }
+    </nav>
+    @if(IndividualId.HasValue || RequestId.HasValue || CurrentSection=="requests")
+    {
+        <StaffOnboardingPage IndividualId="IndividualId" RequestId="RequestId" />
+    }
+    else if(FormerStaffId.HasValue)
+    {
+        <div class="flex flex-wrap gap-2">
+            <a class="app-button app-button-secondary" href="@Url("former-staff")">Back to former staff</a>
+            <a class="app-button app-button-primary" href="@($"/admin/my/workspace/onboarding?individualId={FormerStaffId}")">Start new appointment</a>
+        </div>
+        <FormerStaffRecord StaffId="FormerStaffId.Value" />
+    }
+    else if(CurrentSection=="former-staff")
+    {
+        <FormerStaff ForOnboarding="true" />
+    }
+    else if(CurrentSection=="add-individual")
+    {
+        <AddNewIndividualGrid />
+    }
+    else
+    {
+        <IndividualSearchGrid />
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name="tab")] public string? Tab {get;set;}
+    [SupplyParameterFromQuery(Name="individualId")] public int? IndividualId {get;set;}
+    [SupplyParameterFromQuery(Name="requestId")] public int? RequestId {get;set;}
+    [SupplyParameterFromQuery(Name="formerStaffId")] public int? FormerStaffId {get;set;}
+    private static readonly (string Key,string Label)[] Sections = [("individuals","Search individuals"),("former-staff","Former staff"),("add-individual","Add individual"),("requests","Appointment requests")];
+    private string CurrentSection => IndividualId.HasValue || RequestId.HasValue ? "requests" : FormerStaffId.HasValue ? "former-staff" : Sections.Any(x=>x.Key==Tab) ? Tab! : "individuals";
+    private static string Url(string tab)=>$"/admin/my/workspace/onboarding?tab={tab}";
+}

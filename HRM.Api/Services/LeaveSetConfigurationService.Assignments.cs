@@ -16,7 +16,7 @@ public sealed partial class LeaveSetConfigurationService
     {
         var a=await Scope();await using var db=await factory.CreateDbContextAsync();
         var set=await db.LeaveSets.AsNoTracking().SingleOrDefaultAsync(s=>s.LeaveSetId==id&&s.OrganisationId==a.Org)??throw new UnauthorizedAccessException("Leave set unavailable in this organisation.");
-        var types=await db.LeaveTypes.AsNoTracking().Where(t=>t.OrganisationId==a.Org||t.IsGlobal).OrderBy(t=>t.Name).Select(t=>new LeaveSetTypeOption(t.LeaveTypeId,t.Name)).ToListAsync();
+        var types=await db.LeaveTypes.AsNoTracking().Where(t=>t.IsActive&&(t.OrganisationId==a.Org||t.IsGlobal)).OrderBy(t=>t.Name).Select(t=>new LeaveSetTypeOption(t.LeaveTypeId,t.Name)).ToListAsync();
         var ids=types.Select(t=>t.Id).ToList();
         var selected=await db.LeaveSetLeaveTypes.Where(x=>x.LeaveSetId==id&&x.IsValid&&ids.Contains(x.LeaveTypeId)).Select(x=>x.LeaveTypeId).Distinct().ToListAsync();
         return new(set.Name,set.OperationLogId,a.Super||!set.IsGlobal&&!set.IsPublic,types,selected);
@@ -28,7 +28,7 @@ public sealed partial class LeaveSetConfigurationService
         var set=await db.LeaveSets.SingleOrDefaultAsync(s=>s.LeaveSetId==id&&s.OrganisationId==a.Org)??throw new UnauthorizedAccessException("Leave set unavailable in this organisation.");
         if(!a.Super&&(set.IsGlobal||set.IsPublic))throw new UnauthorizedAccessException("Only Super Administrators can change shared leave sets.");
         if(set.OperationLogId!=expectedAudit)throw new InvalidOperationException("This leave set changed. Refresh before saving.");
-        if(await db.LeaveTypes.CountAsync(t=>ids.Contains(t.LeaveTypeId)&&(t.OrganisationId==a.Org||t.IsGlobal))!=ids.Count)throw new UnauthorizedAccessException("Choose leave types available to this organisation.");
+        if(await db.LeaveTypes.CountAsync(t=>t.IsActive&&ids.Contains(t.LeaveTypeId)&&(t.OrganisationId==a.Org||t.IsGlobal))!=ids.Count)throw new UnauthorizedAccessException("Choose active leave types available to this organisation.");
         if(ids.Count==0&&await db.JobTypeLeaveSets.AnyAsync(x=>x.OrganisationId==a.Org&&x.LeaveSetId==id&&x.IsActive))throw new InvalidOperationException("A set assigned to Job Types must contain at least one leave type.");
         var links=await db.LeaveSetLeaveTypes.Where(x=>x.LeaveSetId==id).ToListAsync();
         var audit=await logs.CreateAsync(db,HRM.Components.Shared.SharedConfig.OperationLogActionTypes.LEAVE_SET_LEAVE_TYPE_UDPATE,$"Leave set {id}, organisation {a.Org}: leave types {string.Join(",",ids.Order())}.");
@@ -46,7 +46,7 @@ public sealed partial class LeaveSetConfigurationService
         var job=await db.JobTypes.Where(j=>j.JobTypeId==jobTypeId&&j.IsActive!=false).Select(j=>j.TypeName).SingleOrDefaultAsync()??throw new InvalidOperationException("Select an active Job Type.");
         var sets=await db.LeaveSets.AsNoTracking().Where(s=>s.OrganisationId==a.Org).OrderBy(s=>s.Name).Select(s=>new{s.LeaveSetId,s.Name}).ToListAsync();
         var setIds=sets.Select(s=>s.LeaveSetId).ToList();
-        var contents=await db.LeaveSetLeaveTypes.AsNoTracking().Where(l=>setIds.Contains(l.LeaveSetId)&&l.IsValid&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal)).Select(l=>new{l.LeaveSetId,l.LeaveTypeId,l.LeaveType.Name}).ToListAsync();
+        var contents=await db.LeaveSetLeaveTypes.AsNoTracking().Where(l=>setIds.Contains(l.LeaveSetId)&&l.IsValid&&l.LeaveType.IsActive&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal)).Select(l=>new{l.LeaveSetId,l.LeaveTypeId,l.LeaveType.Name}).ToListAsync();
         var links=await db.JobTypeLeaveSets.AsNoTracking().Where(l=>l.OrganisationId==a.Org&&l.JobTypeId==jobTypeId).ToListAsync();
         return new(await db.Organisations.Where(o=>o.BusinessEntityID==a.Org).Select(o=>o.OrganisationName).SingleAsync(),job,
             sets.Select(s=>new JobTypeSetOption(s.LeaveSetId,s.Name,contents.Where(c=>c.LeaveSetId==s.LeaveSetId).DistinctBy(c=>c.LeaveTypeId).Select(c=>new LeaveSetTypeOption(c.LeaveTypeId,c.Name)).OrderBy(t=>t.Name).ToList())).ToList(),links.Where(l=>l.IsActive).Select(l=>l.LeaveSetId).ToList(),Version(links));
@@ -56,7 +56,7 @@ public sealed partial class LeaveSetConfigurationService
         var a=await Scope();var ids=setIds.Distinct().ToList();await using var db=await factory.CreateDbContextAsync();await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if(!await db.JobTypes.AnyAsync(j=>j.JobTypeId==jobTypeId&&j.IsActive!=false))throw new InvalidOperationException("Select an active Job Type.");
         if(await db.LeaveSets.CountAsync(s=>ids.Contains(s.LeaveSetId)&&s.OrganisationId==a.Org)!=ids.Count)throw new UnauthorizedAccessException("Choose leave sets owned by the current organisation.");
-        var nonEmpty=await db.LeaveSetLeaveTypes.Where(l=>ids.Contains(l.LeaveSetId)&&l.IsValid&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal)).Select(l=>l.LeaveSetId).Distinct().CountAsync();
+        var nonEmpty=await db.LeaveSetLeaveTypes.Where(l=>ids.Contains(l.LeaveSetId)&&l.IsValid&&l.LeaveType.IsActive&&(l.LeaveType.OrganisationId==a.Org||l.LeaveType.IsGlobal)).Select(l=>l.LeaveSetId).Distinct().CountAsync();
         if(nonEmpty!=ids.Count)throw new InvalidOperationException("Add leave types to every selected set before assigning it.");
         var rows=await db.JobTypeLeaveSets.Where(r=>r.OrganisationId==a.Org&&r.JobTypeId==jobTypeId).ToListAsync();
         if(Version(rows)!=expectedVersion)throw new InvalidOperationException("Job Type leave set assignments changed. Refresh before saving.");

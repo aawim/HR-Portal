@@ -68,6 +68,10 @@ public class LeaveTypeCatalogueService(IDbContextFactory<HrmTeContext> factory, 
         if (!a.Super && (row.IsGlobal || row.IsPublic || row.IsSystemType)) return ServiceResult<int>.Failure("Only Super Administrators can manage shared or system leave types.");
         if (await db.LeaveTypes.AnyAsync(x => x.Code == code && x.LeaveTypeId != row.LeaveTypeId, ct)) return ServiceResult<int>.Failure("This leave type code already exists.");
         if (await db.LeaveTypes.AnyAsync(x => x.OrganisationId == row.OrganisationId && x.Name == name && x.LeaveTypeId != row.LeaveTypeId, ct)) return ServiceResult<int>.Failure("This leave type name already exists in the organisation.");
+        var global = a.Super ? request.IsGlobal : row.IsGlobal;
+        if (request.IsActive && await db.LeaveTypes.AnyAsync(x => x.IsActive && x.LeaveTypeId != row.LeaveTypeId &&
+            x.Name.Trim().ToUpper() == name.ToUpper() && (global || x.IsGlobal || x.OrganisationId == row.OrganisationId), ct))
+            return ServiceResult<int>.Failure("An active leave type with this name is already available. Configure its organisation policy instead of creating another type.");
         var oldRequestType = row.RequestTypeId;
         row.RequestTypeId = request.RequestTypeId; row.Code = code; row.Name = name; row.NameDhivehi = request.NameDhivehi?.Trim(); row.Description = request.Description?.Trim();
         row.IsActive = request.IsActive; row.UpdatedDate = DateTime.UtcNow;

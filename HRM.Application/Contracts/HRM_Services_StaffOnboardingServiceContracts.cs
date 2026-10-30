@@ -10,7 +10,7 @@ public abstract class StaffOnboardingServiceContracts
 {
     public const string RequestTypeName = "Job Position Request";
 
-    public const string PageUrl = "/admin/hr/onboarding";
+    public const string PageUrl = "/admin/my/workspace/onboarding";
 
 public interface IOperations
 {

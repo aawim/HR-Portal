@@ -175,6 +175,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             await ValidateFieldsAsync(db, r);
             var definition = await DefinitionAsync(db, r);
             var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_POSITION_REQUEST_CREATE, $"Submitted staff onboarding for Individual {r.IndividualId} in organisation {org}.");
+            db.AllowStaffAppointment(request);
             request.OperationLogId = audit.OperationLogId;
             db.StaffOnboardingRequests.Add(r); await db.SaveChangesAsync();
             request.ReferenceNumber = $"ONB-{org}-{request.RequestId}";
@@ -293,6 +294,7 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             }
             else if (!await CanApproveAsync(db, r, stage, actor.UserId))
                 throw new UnauthorizedAccessException("You are not an eligible independent approver for the current stage.");
+            db.AllowStaffAppointment(r.Request);
             var from = r.Request.RequestStateId;
             var to = action == "Cancel" ? 5 : action == "Reject" ? 6 : from;
             if (action is "Reject" or "Cancel" && string.IsNullOrWhiteSpace(comment))

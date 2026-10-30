@@ -49,7 +49,8 @@ namespace HRM.Enum
         AssignedRoles,
         Permissions,
         WorkTypes,
-        Finance
+        Finance,
+        Onboarding
     }
 }
 

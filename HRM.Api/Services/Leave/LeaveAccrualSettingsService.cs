@@ -29,7 +29,7 @@ public sealed partial class LeaveAccrualSettingsService(IDbContextFactory<HrmTeC
         await using var db = await factory.CreateDbContextAsync();
         return new(org, await db.Organisations.Where(x => x.BusinessEntityID == org).Select(x => x.OrganisationName).SingleAsync(),
             await db.JobTypes.OrderBy(x => x.TypeName).Select(x => new AccrualOption(x.JobTypeId, x.TypeName)).ToListAsync(),
-            await db.LeaveTypes.Where(x => x.IsGlobal || x.OrganisationId == org).OrderBy(x => x.Name)
+            await db.LeaveTypes.Where(x => x.IsActive && (x.IsGlobal || x.OrganisationId == org)).OrderBy(x => x.Name)
                 .Select(x => new AccrualOption(x.LeaveTypeId, x.Name + " (#" + x.LeaveTypeId + ")")).ToListAsync(),
             await db.JobTypeLeaveAccrualRules.AsNoTracking().Where(x => x.OrganisationId == org).ToListAsync());
     }
@@ -49,7 +49,7 @@ public sealed partial class LeaveAccrualSettingsService(IDbContextFactory<HrmTeC
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         if (!await db.JobTypes.AnyAsync(x => x.JobTypeId == model.JobTypeId) ||
-            !await db.LeaveTypes.AnyAsync(x => x.LeaveTypeId == model.LeaveTypeId && (x.IsGlobal || x.OrganisationId == org)))
+            !await db.LeaveTypes.AnyAsync(x => x.IsActive && x.LeaveTypeId == model.LeaveTypeId && (x.IsGlobal || x.OrganisationId == org)))
             throw new UnauthorizedAccessException("Select an available job type and a leave type belonging to this tenant.");
         var entity = model.Id == 0 ? new JobTypeLeaveAccrualRule { OrganisationId = org } :
             await db.JobTypeLeaveAccrualRules.SingleOrDefaultAsync(x => x.Id == model.Id && x.OrganisationId == org)

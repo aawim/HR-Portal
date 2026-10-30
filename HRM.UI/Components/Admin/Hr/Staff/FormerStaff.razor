@@ -22,7 +22,7 @@
         <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr class="border-b"><th class="p-2">Staff</th><th class="p-2">Employee number</th><th class="p-2">Department / job type</th><th class="p-2">Employment dates</th><th class="p-2">Registry states</th><th class="p-2">View</th></tr></thead><tbody>
         @foreach(var row in data.Staff.Skip((page-1)*25).Take(25))
         {
-            <tr @key="row.Id" class="border-b"><td class="p-2">@row.Name<br />@row.NationalId @row.Passport</td><td class="p-2">@row.EmployeeNumber</td><td class="p-2">@row.Department<br />@row.JobType</td><td class="p-2">@row.Joined.ToString("dd MMM yyyy") – @row.Ended?.ToString("dd MMM yyyy")</td><td class="p-2">@row.VerificationState<br />@row.EntityState</td><td class="p-2"><a class="app-button app-button-secondary" href="@($"/admin/my/workspace?entityType=Staff&entityId={row.Id}")">Staff workspace</a></td></tr>
+            <tr @key="row.Id" class="border-b"><td class="p-2">@row.Name<br />@row.NationalId @row.Passport</td><td class="p-2">@row.EmployeeNumber</td><td class="p-2">@row.Department<br />@row.JobType</td><td class="p-2">@row.Joined.ToString("dd MMM yyyy") – @row.Ended?.ToString("dd MMM yyyy")</td><td class="p-2">@row.VerificationState<br />@row.EntityState</td><td class="p-2"><div class="flex flex-wrap gap-2"><a class="app-button app-button-secondary" href="@($"/admin/my/workspace/onboarding?formerStaffId={row.Id}")">View record</a>@if(ForOnboarding){<a class="app-button app-button-primary" href="@($"/admin/my/workspace/onboarding?individualId={row.Id}")">New appointment</a>}</div></td></tr>
         }
         @if(data.Staff.Count==0){<tr><td colspan="6" class="p-3">No former staff found.</td></tr>}
         </tbody></table></div>
@@ -31,6 +31,7 @@
     @if(loading){<p role="status">Loading former staff…</p>}
 </section>
 @code {
+    [Parameter] public bool ForOnboarding { get; set; }
     private FormerStaffData? data;private string search="";private string? error;private bool loading,disposed;private int version,page=1;private CancellationTokenSource? pending;
     private int? department,jobType,verified,entityState;private DateTime? from,to;
     private List<FormerStaffChoice> departments=[],jobTypes=[],verifiedStates=[],entityStates=[];

@@ -31,7 +31,7 @@ namespace HRM.Services
                         from idCard in idGroup.DefaultIfEmpty()
                         join p in _dbContext.Passports on ind.BusinessEntityId equals p.BusinessEntityId into pGroup
                         from passport in pGroup.DefaultIfEmpty()
-                        join j in _dbContext.Jobs.Where(x => x.TerminatedDate == null || x.TerminatedDate > DateTime.Today)
+                        join j in FormerStaffPolicy.CurrentJobs(_dbContext)
                              on ind.BusinessEntityId equals j.IndividualID into jobGroup
                         from activeJob in jobGroup.DefaultIfEmpty()
                         join org in _dbContext.Organisations on activeJob.OrganisationID equals org.BusinessEntityID into orgGroup

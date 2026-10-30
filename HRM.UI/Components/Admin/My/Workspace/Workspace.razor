@@ -13,7 +13,7 @@
 @implements IDisposable
 
 
-<div class="space-y-2">
+<div class="min-w-0 space-y-2 p-4">
 
     <WorkspaceBreadcrumb SelectedItem="SelectedItem" OnReset="ResetWorkspace" />
   
@@ -24,11 +24,11 @@
     else if (SelectedItem == null)
     {
 
-        <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-2">
+        <div class="flex flex-wrap justify-start items-start gap-2">
             <div class="relative w-full max-w-xl">
                 <WorkspaceSearch OnSelected="SelectItem"  />
             </div>
-            <div class="w-full md:w-auto md:flex-shrink-0 l-0 ">
+            <div class="min-w-0 w-full">
                 <WorkspaceTabs EntityType="WorkspaceEntityType.Workspace"
                                ActiveTab="ActiveTab"
                                ActiveTabChanged="OnTabChanged" />
@@ -36,8 +36,15 @@
         </div>
 
 
+        @if(ActiveTab == WorkspaceTab.Onboarding)
+        {
+            <HRM.Components.Admin.My.Workspace.Onboarding.StaffOnboarding />
+        }
+        else
+        {
         <WorkspaceContentPage ActiveTab="ActiveTab" NavigationVersion="navigationVersion" NotificationRequestId="NotificationRequestId"
                               OnSearchSelected="SelectItem" RecentSearchVersion="recentVersion" />
+        }
          
 
     }
@@ -48,11 +55,11 @@
 
     @if (!resolvingRoute && SelectedItem != null)
     {
-        <div class="flex flex-col md:flex-row  justify-start items-start md:items-center gap-2">
+        <div class="flex flex-wrap justify-start items-start gap-2">
             <div class="relative w-full max-w-xl">
                 <WorkspaceSearch OnSelected="SelectItem" />
             </div>
-            <div class="w-full md:w-auto md:flex-shrink-0 l-0 ">
+            <div class="min-w-0 w-full">
                 <WorkspaceTabs EntityType="SelectedItem.EntityType"
                                ActiveTab="ActiveTab"
                                ActiveTabChanged="OnTabChanged" />
@@ -93,7 +100,7 @@
         if (appliedRoute == route) return;
         appliedRoute = route;
         var version = ++routeVersion;
-        if (NotificationRequestId.HasValue) { resolvingRoute = false; SelectedItem = null; ActiveTab = WorkspaceTab.Overview; return; }
+        if (NotificationRequestId.HasValue && !HRM.Helpers.SectionRoutes.Matches(Section, "onboarding")) { resolvingRoute = false; SelectedItem = null; ActiveTab = WorkspaceTab.Overview; return; }
         var entity = EntityRoute ?? EntityTypeQuery;
         var id = EntityId ?? EntityIdQuery;
         var key = $"{entity}:{id}";
@@ -127,7 +134,7 @@
     private int navigationVersion;
     private WorkspaceTab[] AllowedTabs => (SelectedItem?.EntityType ?? WorkspaceEntityType.Workspace) switch
     {
-        WorkspaceEntityType.Workspace => [WorkspaceTab.Overview, WorkspaceTab.Calendar, WorkspaceTab.Leave, WorkspaceTab.OrgDaily, WorkspaceTab.ShiftWork, WorkspaceTab.Assignments, WorkspaceTab.AssignmentCreate],
+        WorkspaceEntityType.Workspace => [WorkspaceTab.Overview, WorkspaceTab.Calendar, WorkspaceTab.Leave, WorkspaceTab.OrgDaily, WorkspaceTab.ShiftWork, WorkspaceTab.Assignments, WorkspaceTab.AssignmentCreate, WorkspaceTab.Onboarding],
         WorkspaceEntityType.Staff => [WorkspaceTab.Overview, WorkspaceTab.Leave, WorkspaceTab.OT, WorkspaceTab.Attendance, WorkspaceTab.Position, WorkspaceTab.LeaveType, WorkspaceTab.Schedule, WorkspaceTab.WorkTypes, WorkspaceTab.Finance],
         WorkspaceEntityType.Individual => [WorkspaceTab.Overview, WorkspaceTab.Documents],
         WorkspaceEntityType.Organisation => [WorkspaceTab.Overview, WorkspaceTab.Staff, WorkspaceTab.Teams, WorkspaceTab.AssignedRoles, WorkspaceTab.Permissions, WorkspaceTab.LeaveType, WorkspaceTab.Documents],

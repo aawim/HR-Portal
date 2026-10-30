@@ -130,7 +130,13 @@
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)QueryOrganisationId! } : null;
     protected override void OnParametersSet()
     {
-        if(CategoryName.Equals("individuals",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo(Section is "add-new" or "add"?"/admin/hr/staff/add-individual":"/admin/hr/staff/search-individuals",replace:true);return;}
+        if(CategoryName.Equals("individuals",StringComparison.OrdinalIgnoreCase) || CategoryName.Equals("staff",StringComparison.OrdinalIgnoreCase) && Section is "add-individual" or "search-individuals" or "staff-onboarding")
+        {
+            var uri=new Uri(Navigation.Uri);
+            var target="/admin/my/workspace/onboarding"+uri.Query;
+            var tab=Section is "add-new" or "add" or "add-individual" ? "add-individual" : Section=="staff-onboarding" ? "requests" : "individuals";
+            Navigation.NavigateTo(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target,"tab",tab)+uri.Fragment,replace:true);return;
+        }
         if(CategoryName.Equals("leave-sets",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return;}
         if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section != "management")
         {
@@ -174,12 +180,9 @@
     {
         "staff" => new() {
             new("Search", "🔍", "Find active and past employee records.", typeof(StaffSearchGrid)),
-            new("Add Individual", "➕", "Register an individual before staff onboarding.",typeof(AddNewIndividualGrid)),
-            new("Search Individuals", "🔍", "Find individuals available for staff onboarding.",typeof(IndividualSearchGrid)),
             new("Former Staff", "📁", "Read-only staff history and attendance.",typeof(FormerStaff)),
             new("Manage Staff", "👥", "Manage staff records and employee numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffGrid)),
             new("Staff Enrollment", "🪪", "Manage organisation staff enrollment numbers.", typeof(HRM.Components.Admin.Settings.Users.StaffEnrollmentNumberGrid)),
-            new("Staff Onboarding", "💼", "Submit appointments and review approvals before employee accounts are created.", typeof(StaffOnboardingPage)),
             // new("Manage Key Holders", "🔑", "Assign and track physical or system access keys.", null),
             // new("Fetch From CSC Viuga", "🔄", "Sync and import employee data directly from the CSC network.", null),
             new("Employee Bulk Upload", "📤", "Import multiple employee records using a spreadsheet.", typeof(EmployeeBulkUpload))

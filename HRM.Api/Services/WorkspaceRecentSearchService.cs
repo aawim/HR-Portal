@@ -31,9 +31,9 @@ public sealed class WorkspaceRecentSearchService(IDbContextFactory<HrmTeContext>
         if (type is not (WorkspaceEntityType.Staff or WorkspaceEntityType.Individual)) return null;
         var person = await db.Individuals.AsNoTracking().SingleOrDefaultAsync(x => x.BusinessEntityId == id);
         if (person == null) return null;
-        var job = await db.Jobs.AsNoTracking().Where(x => x.IndividualID == id && (actor.IsSuperAdministrator || x.OrganisationID == org))
+        var job = await FormerStaffPolicy.CurrentJobs(db).Where(x => x.IndividualID == id && (actor.IsSuperAdministrator || x.OrganisationID == org))
             .OrderByDescending(x => x.JobStateId == 4 && x.TerminatedDate == null).ThenByDescending(x => x.JoinedDate).Select(x => (int?)x.JobId).FirstOrDefaultAsync();
-        if (!actor.IsSuperAdministrator && !job.HasValue) return null;
+        if (!job.HasValue && (!actor.IsSuperAdministrator || await db.Jobs.AnyAsync(x => x.IndividualID == id))) return null;
         return new WorkspaceSearchResult { Id = id, IndividualId = id, JobId = job, EntityType = job.HasValue ? WorkspaceEntityType.Staff : WorkspaceEntityType.Individual,
             Name = string.Join(" ", new[] { person.FirstNameEnglish, person.MiddleNameEnglish, person.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))) };
     }

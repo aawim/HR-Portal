@@ -30,6 +30,7 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
         var restricted = filter.AllowedStaffIds != null;
         var allowedIds = filter.AllowedStaffIds?.ToArray() ?? [];
         var today = DateTime.UtcNow.AddHours(5).Date;
+        var currentJobs = FormerStaffPolicy.CurrentJobs(Db);
 
 
 
@@ -91,6 +92,7 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
                     : "")
 
             where (!restricted || allowedIds.Contains(i.BusinessEntityId)) &&
+                (job == null || currentJobs.Any(j => j.JobId == job.JobId)) &&
                 (!filter.RequireActivePosition || job != null && job.JobStateId == 4 && job.JoinedDate <= today &&
                     (!job.TerminatedDate.HasValue || job.TerminatedDate > today) &&
                     Db.JobPositions.Any(p => p.JobId == job.JobId && p.JobPositionStateId == 4 &&

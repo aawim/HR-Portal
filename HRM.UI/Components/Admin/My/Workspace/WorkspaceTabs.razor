@@ -1,7 +1,7 @@
 @using HRM.Enum
 
 
-<div class="border-b border-slate-200 @(EntityType == WorkspaceEntityType.Staff ? "staff-workspace-tabs" : null)">
+<div class="workspace-tabs border-b border-slate-200">
 
     <nav class="flex flex-wrap items-end gap-1 px-2">
 
@@ -53,7 +53,8 @@
                     WorkspaceTab.OrgDaily,
                     WorkspaceTab.ShiftWork,
                     WorkspaceTab.Assignments,
-                    WorkspaceTab.AssignmentCreate
+                    WorkspaceTab.AssignmentCreate,
+                    WorkspaceTab.Onboarding
  
                     };
 
@@ -163,6 +164,7 @@
             WorkspaceTab.LeaveType => "Leave types",
             WorkspaceTab.WorkTypes => "Work types",
             WorkspaceTab.Finance => "Allowances & deductions",
+            WorkspaceTab.Onboarding => "Staff onboarding",
 
             _ => tab.ToString()
         };
@@ -217,11 +219,14 @@
             WorkspaceTab.Position =>
                 (MarkupString)"""<span>🗓</span>""",
 
+            WorkspaceTab.Onboarding =>
+                (MarkupString)"""<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><circle cx="9" cy="7" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 11h6m-3-3v6"/></svg>""",
+
             WorkspaceTab.LeaveType =>
                 (MarkupString)"""<span>🗓</span>""",
 
             _ =>
-                (MarkupString)"""<span>•</span"""
+                (MarkupString)"""<span aria-hidden="true">•</span>"""
         };
 
     }

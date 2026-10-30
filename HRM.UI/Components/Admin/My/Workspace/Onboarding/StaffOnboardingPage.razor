@@ -1,5 +1,5 @@
-@page "/admin/hr/onboarding"
 @using HRM.DTOs
+@namespace HRM.Components.Admin.Hr.Staff
 @using HRM.Services
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
@@ -10,14 +10,12 @@
 @inject PortalContext Portal
 
 <PageTitle>Staff Onboarding</PageTitle>
-<div class="mx-auto max-w-5xl space-y-4">
+<div class="min-w-0 space-y-3">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
-            <h1 class="text-2xl font-bold">Staff Onboarding</h1>
-            <p class="mt-1 text-sm text-slate-500">@data?.Organisation · HR submission → configured approvals → employee account.</p>
+            <h2 class="text-lg font-semibold">Staff appointment · @data?.Organisation</h2>
         </div>
         <div class="flex flex-wrap gap-2">
-            <a href="/admin/hr/staff/search-individuals" class="app-button app-button-secondary">Search Individual</a>
             <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
         </div>
     </div>
@@ -28,7 +26,7 @@
     {
         @if (IndividualId.HasValue && data.CanSubmit && !string.IsNullOrEmpty(data.Individual))
         {
-            <section class="space-y-4 rounded-xl border bg-white p-5">
+            <section class="space-y-3 rounded-xl border p-4">
                 <h2 class="text-lg font-semibold">Add @data.Individual as Staff</h2>
                 <p class="text-sm text-slate-500">This submits a Job Position Request. No employee account is created before final approval. Position, address and contact information can be completed later.</p>
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -113,8 +111,8 @@
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "individualId")] public int? IndividualId { get; set; }
-    [SupplyParameterFromQuery(Name = "requestId")] public int? RequestId { get; set; }
+    [Parameter] public int? IndividualId { get; set; }
+    [Parameter] public int? RequestId { get; set; }
     private StaffOnboardingData? data;
     private StaffOnboardingForm form = new();
     private List<StaffOnboardingRow> rows = [];
