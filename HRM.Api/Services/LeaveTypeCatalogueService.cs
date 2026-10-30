@@ -5,8 +5,9 @@ using HRM.Services.Interfaces.LeaveType;
 using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 
-public class LeaveTypeCatalogueService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
-    IOperationLogService? logs = null) : ILeaveTypeCatalogueService
+public partial class LeaveTypeCatalogueService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
+    IOperationLogService? logs = null, IBusinessAccessService? business = null,
+    Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? protection = null) : ILeaveTypeCatalogueService
 {
     private async Task<(int Org, bool Super)> Scope(bool write = false)
     {

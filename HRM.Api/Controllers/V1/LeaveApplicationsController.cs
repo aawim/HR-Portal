@@ -73,6 +73,7 @@ public sealed class LeaveApplicationsController(global::HRM.Application.Contract
     }
 
     [HttpPost("submit-leave")]
+    [RequestSizeLimit(4*1024*1024)]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitLeave([FromBody] LeaveApplicationsSubmitLeaveRequest request)
     {
         return Ok(await service.SubmitLeave(request.model, request.applicantJobId));

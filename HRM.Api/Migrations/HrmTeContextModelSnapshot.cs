@@ -6485,6 +6485,96 @@ namespace HRM.Migrations
                     b.ToTable("LT_LeavePolicyAccrualRules", (string)null);
                 });
 
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveSubtype", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CertificateRule")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("nvarchar(16)");
+
+                    b.Property<decimal>("Days")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("LeaveTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LeaveTypeId");
+
+                    b.HasIndex("OrganisationId", "LeaveTypeId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("LT_LeaveSubtypes", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_LT_LeaveSubtypes_Quota", "[Days]>0 AND [CertificateRule] IN ('Any','Required','Without')");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveSubtypeUsage", b =>
+                {
+                    b.Property<int>("LeaveId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("CertificateName")
+                        .HasMaxLength(180)
+                        .HasColumnType("nvarchar(180)");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<decimal>("DaysLimit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("JobLeaveTypeId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<byte[]>("ProtectedCertificate")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<int>("SubtypeId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SubtypeName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.HasKey("LeaveId");
+
+                    b.HasIndex("SubtypeId");
+
+                    b.HasIndex("JobLeaveTypeId", "SubtypeId", "PeriodStart");
+
+                    b.ToTable("LT_LeaveSubtypeUsages", (string)null);
+                });
+
             modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveTypeMigrationAudit", b =>
                 {
                     b.Property<int>("Id")
@@ -14525,6 +14615,46 @@ namespace HRM.Migrations
                         .HasConstraintName("FK_LeavePolicyAccrualRules_LeavePolicies_LeavePolicyID");
 
                     b.Navigation("LeavePolicy");
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveSubtype", b =>
+                {
+                    b.HasOne("HRM.Models.LeaveType", null)
+                        .WithMany()
+                        .HasForeignKey("LeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.LeaveTypes.LeaveSubtypeUsage", b =>
+                {
+                    b.HasOne("HRM.Models.JobLeaveType", null)
+                        .WithMany()
+                        .HasForeignKey("JobLeaveTypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Leaf", "Leave")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.LeaveTypes.LeaveSubtypeUsage", "LeaveId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.LeaveTypes.LeaveSubtype", "Subtype")
+                        .WithMany()
+                        .HasForeignKey("SubtypeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Leave");
+
+                    b.Navigation("Subtype");
                 });
 
             modelBuilder.Entity("HRM.Models.Location", b =>

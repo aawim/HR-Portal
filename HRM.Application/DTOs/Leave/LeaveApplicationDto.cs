@@ -5,6 +5,9 @@ namespace HRM.DTOs.Leave
         public int JobId { get; set; }
         public int? JobLeaveTypeId { get; set; }
         public int? LeaveTypeId { get; set; }
+        public int? LeaveSubtypeId {get;set;}
+        public string? CertificateFileName {get;set;}
+        public byte[]? CertificateContent {get;set;}
         public DateTime FromDate { get; set; }
         public DateTime ToDate { get; set; }
         public int Duration { get; set; }

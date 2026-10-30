@@ -8,6 +8,21 @@
 <div class="leave-form-card min-w-0 bg-white rounded-lg border border-slate-200 p-3 sm:p-4 space-y-4">
     <h3 class="text-lg font-semibold text-slate-800">@Title</h3>
     <div class="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">Available balance: <strong>@LeaveState.RemainingDays days</strong></div>
+    @if(LeaveState.Subtypes.Count>0)
+    {
+        <section class="space-y-2 rounded border p-3">
+            <label class="block text-sm">Leave sub-type
+                <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="LeaveState.Model.LeaveSubtypeId" @bind:after="SubtypeChanged">
+                    <option value="">Select sub-type</option>
+                    @foreach(var type in LeaveState.Subtypes){<option value="@type.Id">@type.Name · @type.RemainingDays / @type.AllocatedDays days remaining</option>}
+                </select>
+            </label>
+            <label class="block text-sm">Certificate (PDF, PNG or JPEG, up to 2 MB)<InputFile OnChange="UploadCertificate" accept=".pdf,.png,.jpg,.jpeg" class="mt-1 block w-full text-sm" /></label>
+            @if(LeaveState.Model.CertificateContent?.Length>0){<div class="flex flex-wrap items-center gap-2 text-sm"><span>@LeaveState.Model.CertificateFileName</span><button type="button" class="app-button app-button-secondary" @onclick="RemoveCertificate">Remove certificate</button></div>}
+            @if(subtypeError!=null){<p role="alert" class="text-sm text-amber-700">@subtypeError</p>}
+            @if(!SubtypeValid){<p role="alert" class="text-sm text-amber-700">@SubtypeMessage</p>}
+        </section>
+    }
     <div class="leave-date-fields grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div>
             <label class="block text-sm mb-1" for="leave-from">From Date *</label>
@@ -110,12 +125,29 @@
 </div>
 
 @code {
+    private string? subtypeError;
+    private bool routedSubtypes=>LeaveState.Subtypes.Any(x=>x.CertificateRule!="Any");
+    private HRM.DTOs.LeaveTypes.LeaveSubtypeOption? SelectedSubtype=>LeaveState.Subtypes.FirstOrDefault(x=>x.Id==LeaveState.Model.LeaveSubtypeId);
+    private bool SubtypeValid=>LeaveState.Subtypes.Count==0||SelectedSubtype!=null&&SelectedSubtype.RemainingDays>=LeaveState.Model.Duration&&
+        (!routedSubtypes||SelectedSubtype.CertificateRule==(LeaveState.Model.CertificateContent?.Length>0?"Required":"Without"));
+    private string SubtypeMessage=>SelectedSubtype?.CertificateRule=="Required"&&LeaveState.Model.CertificateContent?.Length is not >0?"Attach a certificate to apply under this sub-type.":routedSubtypes&&LeaveState.Model.CertificateContent?.Length is not >0?
+        "Without-certificate days are unavailable or insufficient. Attach a certificate to use the certificate-required balance.":"Select a sub-type with enough remaining days.";
+    private void RouteSubtype(){if(routedSubtypes)LeaveState.Model.LeaveSubtypeId=LeaveState.Subtypes.FirstOrDefault(x=>x.CertificateRule==(LeaveState.Model.CertificateContent?.Length>0?"Required":"Without"))?.Id;}
+    private void SubtypeChanged(){subtypeError=null;}
+    private void RemoveCertificate(){LeaveState.Model.CertificateContent=null;LeaveState.Model.CertificateFileName=null;subtypeError=null;RouteSubtype();}
+    private async Task UploadCertificate(InputFileChangeEventArgs e)
+    {
+        RemoveCertificate();
+        try{var file=e.File;using var stream=new MemoryStream();await file.OpenReadStream(2*1024*1024).CopyToAsync(stream);LeaveState.Model.CertificateContent=stream.ToArray();LeaveState.Model.CertificateFileName=file.Name;RouteSubtype();}
+        catch{RemoveCertificate();subtypeError="Attach a PDF, PNG or JPEG certificate up to 2 MB.";}
+    }
     [Parameter, EditorRequired] public LeaveApplicationState LeaveState { get; set; } = default!;
     [Parameter] public string ExplanationLabel { get; set; } = "Explanation";
     [Parameter] public RenderFragment? AdditionalFields { get; set; }
     private string Title => string.IsNullOrWhiteSpace(LeaveState.SelectedLeaveTypeName)
         ? "Leave Information" : $"{LeaveState.SelectedLeaveTypeName} Information";
     private int? currentBalanceId;
+    private int currentBalanceVersion=-1;
     private List<HRM.DTOs.Leave.LeaveHandoverRecipient> handoverRecipients = [];
     private string? handoverError;
     private bool loadingHandover;
@@ -125,7 +157,7 @@
             handoverRecipients.Any(x => x.JobId == task.JobId) && !string.IsNullOrWhiteSpace(task.Tasks) && task.Tasks.Trim().Length <= 250));
     private int DetailsLength => LeaveApplicationDetails.Build(LeaveState.Model).Length;
     private bool CanSubmit => LeaveState.CanSubmit && !LeaveState.IsSubmitting && !loadingHandover && handoverError == null && HasHandover &&
-        LeaveState.Model.ToDate >= LeaveState.Model.FromDate && LeaveState.Model.Duration <= LeaveState.RemainingDays && DetailsLength <= 250;
+        LeaveState.Model.ToDate >= LeaveState.Model.FromDate && LeaveState.Model.Duration <= LeaveState.RemainingDays && DetailsLength <= 250 && SubtypeValid && subtypeError==null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -133,9 +165,11 @@
     }
     protected override async Task OnParametersSetAsync()
     {
-        if (currentBalanceId == LeaveState.Model.JobLeaveTypeId && LeaveState.Model.FromDate != default) return;
+        if (currentBalanceId == LeaveState.Model.JobLeaveTypeId && currentBalanceVersion==LeaveState.ApplicationBalanceVersion && LeaveState.Model.FromDate != default) return;
+        currentBalanceVersion=LeaveState.ApplicationBalanceVersion;
         if (currentBalanceId.HasValue && currentBalanceId != LeaveState.Model.JobLeaveTypeId)
         {
+            LeaveState.Model.LeaveSubtypeId=null;RemoveCertificate();LeaveState.Subtypes.Clear();
             LeaveState.Model.HandoverJobId = null;
             LeaveState.Model.HandoverNotes = null;
             LeaveState.Model.HandoverTasks.Clear();
@@ -158,6 +192,8 @@
                 ?? throw new InvalidOperationException("This leave type is unavailable. Select another balance or contact HR.");
             if (version != handoverLoadVersion) return;
             LeaveState.IncludeHolidays = applicationType.IncludeHolidays;
+            LeaveState.RemainingDays=applicationType.RemainingDays;
+            LeaveState.Subtypes=applicationType.Subtypes;RouteSubtype();
             LeaveState.Reasons = applicationType.Reasons;
             if (!LeaveState.Reasons.Any(x => x.Id == LeaveState.Model.LeaveReasonId)) LeaveState.Model.LeaveReasonId = null;
             DurationChanged();

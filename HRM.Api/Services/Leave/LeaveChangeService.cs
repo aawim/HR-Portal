@@ -122,6 +122,7 @@ public partial class LeaveChangeService(
             var change = LeaveChangeRules.Calculate(leave.FromDate, leave.ToDate, leave.Duration,
                 model.Kind, model.Date, source.IncludeHolidays);
             await ValidateBalanceAndOverlapAsync(db, leave, change.EndDate, change.BalanceAdjustment);
+            await LeaveSubtypeRules.RequireChangeAsync(db,leave,leave.FromDate,change.EndDate,change.Duration);
 
             var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_CHANGE_REQUEST_CREATE,
                 $"{model.Kind} requested for leave {leave.LeaveId}");
@@ -164,6 +165,7 @@ public partial class LeaveChangeService(
         var target = kind == LeaveChangeKind.EarlyReturn ? change.ToDate.AddDays(1) : change.ToDate;
         var result = LeaveChangeRules.Calculate(leave.FromDate, leave.ToDate, leave.Duration, kind, target, source.IncludeHolidays);
         var balance = await ValidateBalanceAndOverlapAsync(db, leave, result.EndDate, result.BalanceAdjustment);
+        await LeaveSubtypeRules.RequireChangeAsync(db,leave,leave.FromDate,result.EndDate,result.Duration);
         var log = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.LEAVE_CHANGE_REQUEST_UPDATE,
             $"Approved {kind} for leave {leave.LeaveId}; balance adjustment {result.BalanceAdjustment}");
         balance.RemainingDays = checked((balance.RemainingDays ?? 0) + result.BalanceAdjustment);
@@ -186,6 +188,7 @@ public partial class LeaveChangeService(
     private static async Task<JobLeaveType> ValidateBalanceAndOverlapAsync(
         HrmTeContext db, Leaf leave, DateTime targetEnd, int balanceAdjustment)
     {
+        await LeaveSubtypeRules.LockAsync(db,leave.JobId);
         if (targetEnd > leave.ToDate && await db.Leaves.AnyAsync(x => x.JobId == leave.JobId && x.LeaveId != leave.LeaveId &&
             x.FromDate <= targetEnd && x.ToDate > leave.ToDate &&
             x.LeaveStateId != SharedConfig.LeaveStates.CANCELLED && x.LeaveStateId != SharedConfig.LeaveStates.REJECTED))
@@ -204,7 +207,9 @@ public partial class LeaveChangeService(
         }
         var original = candidates.Where(x => x.OperationLogId == leave.OperationLogId).ToList();
         var exactCopy = candidates.Where(x => x.LeaveTypeId == leave.LeaveTypeId && leave.LeaveTypeId != source?.LeaveTypeId).ToList();
-        var selected = original.Count == 1 ? original[0] : exactCopy.Count == 1 ? exactCopy[0] : candidates.Count == 1 ? candidates[0] : null;
+        var reservedBalance=await db.LeaveSubtypeUsages.Where(x=>x.LeaveId==leave.LeaveId).Select(x=>(int?)x.JobLeaveTypeId).SingleOrDefaultAsync();
+        var selected = reservedBalance.HasValue ? candidates.SingleOrDefault(x=>x.JobLeaveTypeId==reservedBalance.Value) :
+            original.Count == 1 ? original[0] : exactCopy.Count == 1 ? exactCopy[0] : candidates.Count == 1 ? candidates[0] : null;
         // Duplicate migrated balances must never receive a guessed deduction/refund.
         if (selected == null) throw new InvalidOperationException("The original leave balance could not be uniquely identified. Contact HR to reconcile the duplicate balances.");
         if (balanceAdjustment < 0)

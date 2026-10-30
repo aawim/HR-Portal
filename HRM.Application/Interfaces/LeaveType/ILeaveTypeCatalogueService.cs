@@ -4,6 +4,9 @@ namespace HRM.Services.Interfaces.LeaveType
 {
     public interface ILeaveTypeCatalogueService
     {
+        Task<LeaveSubtypeSettings> GetSubtypesAsync(int leaveTypeId);
+        Task<ServiceResult<int>> SaveSubtypesAsync(LeaveSubtypeSettings request);
+        Task<LeaveCertificateDownload?> GetCertificateAsync(int leaveId);
         Task<List<LeaveRequestTypeOption>> GetRequestTypesAsync(CancellationToken cancellationToken = default);
 
         Task<List<LeaveTypeCatalogueDto>> GetManagementAsync(CancellationToken cancellationToken = default);

@@ -1,0 +1,27 @@
+@using HRM.DTOs.LeaveTypes
+@inject HRM.Services.Interfaces.LeaveType.ILeaveTypeCatalogueService Service
+<section class="space-y-3 rounded-lg border p-4">
+    <h3 class="text-sm font-semibold">Leave sub-types · @data?.LeaveTypeName</h3>
+    @if(message!=null){<p role="status" class="text-sm">@message</p>}
+    @if(data!=null)
+    {
+        <p class="text-xs text-slate-500">Organisation allocation: @data.TotalDays days. Sub-types divide this total and use the parent approval flow.</p>
+        @foreach(var item in data.Subtypes)
+        {
+            <div class="grid items-end gap-2 sm:grid-cols-2 lg:grid-cols-4" @key="item">
+                <label class="text-xs">Name<input class="block w-full rounded border bg-transparent p-2 text-sm" @bind="item.Name" maxlength="150" /></label>
+                <label class="text-xs">Days<input type="number" class="block w-full rounded border bg-transparent p-2 text-sm" min="0.01" step="0.01" @bind="item.Days" disabled="@item.InUse" /></label>
+                <label class="text-xs">Certificate<select class="block w-full rounded border bg-transparent p-2 text-sm" @bind="item.CertificateRule" disabled="@item.InUse"><option value="Any">Optional / manual selection</option><option value="Required">Required</option><option value="Without">Without certificate</option></select></label>
+                <div class="flex flex-wrap items-center gap-2"><label class="text-sm"><input type="checkbox" @bind="item.IsActive" disabled="@item.InUse" /> Active @if(item.InUse){<span class="text-xs text-slate-500">Allocation in use</span>}</label>@if(!item.InUse){<button type="button" class="app-button app-button-secondary" @onclick="()=>data.Subtypes.Remove(item)">Remove</button>}</div>
+            </div>
+        }
+        <div class="flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="()=>data.Subtypes.Add(new())">Add sub-type</button><button type="button" class="app-button app-button-primary" disabled="@busy" @onclick="Save">Save sub-types</button></div>
+    }
+</section>
+@code{
+    [Parameter] public int LeaveTypeId{get;set;}
+    private LeaveSubtypeSettings? data;private bool busy;private string? message;private int loaded;
+    protected override async Task OnParametersSetAsync(){if(loaded==LeaveTypeId)return;loaded=LeaveTypeId;await Load();}
+    private async Task Load(){try{data=await Service.GetSubtypesAsync(LeaveTypeId);}catch{message="Sub-types could not be loaded.";data=null;}}
+    private async Task Save(){if(busy||data==null)return;busy=true;try{var result=await Service.SaveSubtypesAsync(data);message=result.Message;if(result.Success)await Load();}catch{message="Sub-types could not be saved. Please try again.";}finally{busy=false;}}
+}

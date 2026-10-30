@@ -19,6 +19,8 @@ namespace HRM.Services.State
         public List<JobLeaveTypeDto> JobLeaveTypes { get; set; } = new();
  
         public List<LeaveReasonDto> Reasons { get; set; } = new();
+        public List<HRM.DTOs.LeaveTypes.LeaveSubtypeOption> Subtypes {get;set;}=[];
+        public int ApplicationBalanceVersion {get;set;}
 
        
         public List<Country> Countries { get; set; } = new();
@@ -136,6 +138,7 @@ namespace HRM.Services.State
             JobLeaveTypes.Clear();
 
             Reasons.Clear();
+            Subtypes.Clear();
 
             SelectedLeaveType = null;
             SelectedLeaveTypeName = string.Empty;

@@ -1,0 +1,14 @@
+@using HRM.DTOs.LeaveTypes
+@inject HRM.Services.Interfaces.LeaveType.ILeaveTypeCatalogueService Service
+@inject IJSRuntime JS
+@if(data!=null)
+{
+    <div class="space-y-2 text-sm"><p>Sub-type: <strong>@data.SubtypeName</strong></p>@if(data.Content.Length>0){<button type="button" class="app-button app-button-secondary" @onclick="Download">Download certificate</button>}</div>
+}
+@if(error!=null){<p role="alert" class="text-sm">@error</p>}
+@code{
+    [Parameter]public int LeaveId{get;set;}
+    private int loaded;private LeaveCertificateDownload? data;private string? error;
+    protected override async Task OnParametersSetAsync(){if(loaded==LeaveId)return;loaded=LeaveId;data=null;error=null;try{data=await Service.GetCertificateAsync(LeaveId);}catch{error="Sub-type evidence is unavailable.";}}
+    private async Task Download(){if(data==null)return;try{await using var module=await JS.InvokeAsync<IJSObjectReference>("import","./organisationStaffExport.js");using var stream=new MemoryStream(data.Content);using var reference=new DotNetStreamReference(stream);await module.InvokeVoidAsync("download",data.Name,data.ContentType,reference);}catch{error="Certificate could not be downloaded.";}}
+}

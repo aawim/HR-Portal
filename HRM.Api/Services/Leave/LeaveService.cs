@@ -24,6 +24,7 @@ namespace HRM.Services.Leave
 
         private readonly ToastService _toastService;
         private readonly ILeaveChangeService? _leaveChanges;
+        private readonly Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? _certificateProtection;
 
         public LeaveService(
             IDbContextFactory<HrmTeContext> dbFactory, 
@@ -33,7 +34,8 @@ namespace HRM.Services.Leave
             IUserAccessService access,
             IRequestService requestService,
             IWorkflowEngine workflowEngine,
-            ILeaveChangeService? leaveChanges = null
+            ILeaveChangeService? leaveChanges = null,
+            Microsoft.AspNetCore.DataProtection.IDataProtectionProvider? certificateProtection = null
             )
         {
             _dbFactory = dbFactory;
@@ -44,6 +46,7 @@ namespace HRM.Services.Leave
             _requestService = requestService;
             _workflowEngine = workflowEngine;
             _leaveChanges = leaveChanges;
+            _certificateProtection = certificateProtection;
         }
 
         public async Task<LeaveResource?> BuildAsync(LeaveResource leaveRequestId)
@@ -293,6 +296,7 @@ namespace HRM.Services.Leave
                 LeaveTypeName = leaveType.Name,
                 RemainingDays = balance.RemainingDays ?? 0,
                 IncludeHolidays = leaveType.IncludeHolidays,
+                Subtypes = await LeaveSubtypeRules.OptionsAsync(db,balance,applicant.OrganisationID,date??DateTime.UtcNow.AddHours(5).Date),
                 Reasons = await GetReasonsByLeaveType(leaveType.LeaveTypeId)
             };
         }
@@ -392,6 +396,7 @@ namespace HRM.Services.Leave
 
 
                 model.JobId = jobId;
+                await LeaveSubtypeRules.LockAsync(db,jobId);
                 var organisationId = await db.Jobs.AsNoTracking()
                     .Where(x => x.JobId == jobId)
                     .Select(x => x.OrganisationID)
@@ -441,6 +446,7 @@ namespace HRM.Services.Leave
                 model.Duration = LeaveApplicationDates.Count(model.FromDate, model.ToDate, leaveType.IncludeHolidays);
                 if (model.Duration <= 0 || model.Duration > (jobLeaveType.RemainingDays ?? 0))
                     return ServiceResult.Fail("The requested days must be positive and within your available balance.");
+                var subtypeUsage=await LeaveSubtypeRules.ReserveAsync(db,jobLeaveType,organisationId,model,_certificateProtection);
                 EffectiveHandoverRule handoverRule;
                 try { handoverRule=await LeaveHandoverRuleResolver.ResolveAsync(db,jobId,leaveType.LeaveTypeId,model.FromDate); }
                 catch(HandoverRuleConflictException ex){await transaction.RollbackAsync();await HandoverIssue(applicant,leaveType,ex).NotifyAsync(_dbFactory);return ServiceResult.Fail(WorkflowConfigurationException.StaffMessage);}
@@ -531,6 +537,7 @@ namespace HRM.Services.Leave
                 };
 
                 db.Leaves.Add(leave);
+                if(subtypeUsage!=null){subtypeUsage.Leave=leave;db.LeaveSubtypeUsages.Add(subtypeUsage);}
                 await db.SaveChangesAsync();
 
 
@@ -637,6 +644,11 @@ namespace HRM.Services.Leave
                 };
 
             }
+            catch(LeaveSubtypeValidationException ex)
+            {
+                await transaction.RollbackAsync();
+                return ServiceResult.Fail(ex.Message);
+            }
             catch
             {
                 await transaction.RollbackAsync();
@@ -662,6 +674,7 @@ namespace HRM.Services.Leave
                 var personId = context.IndividualId > 0 ? context.IndividualId : context.BusinessEntityId;
                 if (personId <= 0 || leave.Job.IndividualID != personId)
                     return ServiceResult.Fail("You can only cancel your own leave.");
+                await LeaveSubtypeRules.LockAsync(db,leave.JobId);
                 if (leave.LeaveStateId is SharedConfig.LeaveStates.APPROVED or SharedConfig.LeaveStates.REJECTED)
                     return ServiceResult.Fail("This leave is final and cannot be cancelled as a pending request.");
 

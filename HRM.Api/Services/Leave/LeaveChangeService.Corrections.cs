@@ -134,6 +134,7 @@ public partial class LeaveChangeService
         if (duration <= 0) throw new InvalidOperationException("The revised dates must contain at least one leave day.");
         var adjustment = leave.Duration - duration;
         var balance = await ValidateBalanceAndOverlapAsync(db, leave, model.ToDate.Date, adjustment);
+        await LeaveSubtypeRules.RequireChangeAsync(db,leave,model.FromDate.Date,model.ToDate.Date,duration);
         var handoverRule = await LeaveHandoverRuleResolver.ResolveAsync(db,leave.JobId,source.LeaveTypeId,model.FromDate);
         var needsHandover = handoverRule.Requires(duration);
         var supervisors = new List<int>();
