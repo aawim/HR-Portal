@@ -59,7 +59,8 @@ static class ScheduleFlowTests
         }
         var service = new JobWorkTemplateAssignmentService(factory, NullLogger<JobWorkTemplateAssignmentService>.Instance, access, logs);
         AssignJobWorkTemplateDto Request(int template, string purpose) => new() { JobId = 100, IndividualId = 1000,
-            OrganisationBusinessEntityId = 10, WorkTemplateId = template, SchedulePurpose = purpose, EffectiveFrom = today };
+            OrganisationBusinessEntityId = 10, WorkTemplateId = template, SchedulePurpose = purpose, EffectiveFrom = today,
+            ScheduleMode = "Weekly", WorkingDaysMask = 127 };
         Check((await service.AssignAsync(Request(1, "Official"))).Success, "Official assignment failed");
         Check((await service.AssignAsync(Request(2, "Duty"))).Success, "Duty assignment failed");
         var schedule = await new StaffScheduleService(factory, access).GetScheduleAsync(1000);
@@ -129,7 +130,7 @@ static class ScheduleFlowTests
             Check(!await db.JobWorkTemplateAssignments.AnyAsync(x => x.WorkTemplateID == 2 && x.IsActive && x.EffectiveFrom == today.AddDays(2)), "Temporary duty unexpectedly revived a separately ended duty template");
         }
         var tomorrow = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(today.AddDays(1)));
-        var expectedTomorrowAssignments = HRM.Helpers.StaffScheduleCalendar.IsWeekend(today.AddDays(1)) ? 1 : 2;
+        var expectedTomorrowAssignments = 2;
         Check(tomorrow!.Assignments.Count == expectedTomorrowAssignments && tomorrow.Assignments.Any(x => x.WorkTemplateId == 3), "Selected dutyRequest template was not used in the plan: "+string.Join(",",tomorrow!.Assignments.Select(x=>$"{x.WorkTemplateId}:{x.SchedulePurpose}:{x.IsValid}")));
         dutyRequest.OrganisationBusinessEntityId = 20;
         Check(!(await service.AssignAsync(dutyRequest)).Success, "Duty accepted another tenant");

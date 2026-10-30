@@ -14,6 +14,12 @@ namespace HRM.DTOs.Attendance
 
         public AttendanceClockType ClockType { get; set; }
 
+        public int? SecondaryWorkPlanSegmentId { get; set; }
+
+        public string? SecondarySegmentName { get; set; }
+
+        public AttendanceClockType SecondaryClockType { get; set; } = AttendanceClockType.Unresolved;
+
         public AttendancePlanResolutionState State { get; set; }
 
         public DateTime? BoundaryTime { get; set; }

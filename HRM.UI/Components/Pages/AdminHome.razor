@@ -33,24 +33,32 @@
         </section>
 
 
-      
 
 
-        <section class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2.5 mb-5" aria-label="Executive summary">
-            @foreach (var metric in Metrics)
-            {
-                <article class="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between min-h-[76px] shadow-sm hover:border-slate-300 transition-colors">
-                    <div class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                        <span class="truncate">@metric.Label</span>
-                        <i class="@metric.Icon text-slate-400 text-sm shrink-0 ml-1" aria-hidden="true"></i>
-                    </div>
 
-                    <div class="flex items-baseline justify-between mt-1">
-                        <strong class="text-xl font-bold text-slate-900 leading-tight">@metric.Value</strong>
-                        <small class="text-[11px] text-slate-400 truncate ml-2 text-right">@metric.Note</small>
-                    </div>
-                </article>
-            }
+        <section class="flex flex-col gap-3 mb-5" aria-labelledby="department-status-heading">
+            <!-- Section Heading -->
+            <h2 id="department-status-heading" class="text-sm font-bold text-slate-700 uppercase tracking-wide px-0.5">
+                Department Status
+            </h2>
+
+            <!-- Metrics Grid -->
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-2.5">
+                @foreach (var metric in DepartmentStatus)
+                {
+                    <article class="bg-white border border-slate-200 rounded-lg p-2.5 flex flex-col justify-between min-h-[76px] shadow-sm hover:border-slate-300 transition-colors">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                            <span class="truncate">@metric.Label</span>
+                            <i class="@metric.Icon text-slate-400 text-sm shrink-0 ml-1" aria-hidden="true"></i>
+                        </div>
+
+                        <div class="flex items-baseline justify-between mt-1">
+                            <strong class="text-xl font-bold text-slate-900 leading-tight">@metric.Value</strong>
+                            <small class="text-[11px] text-slate-400 truncate ml-2 text-right">@metric.Note</small>
+                        </div>
+                    </article>
+                }
+            </div>
         </section>
 
 
@@ -288,7 +296,20 @@
         ("Position Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check")
     ];
 
-
+    private IEnumerable<(string Label, string Value, string Note, string Icon)> DepartmentStatus => [
+        ("Total headcount", People.Count().ToString(), "Approved current employment", "bi bi-people"),
+        ("Approved structures", FilteredDepartments.Count().ToString(), "Current organisation", "bi bi-diagram-3"),
+        ("Active teams", organisation!.Teams.Count.ToString(), "Organisation-wide", "bi bi-collection"),
+        ("Processing requests", inbox == null ? "—" : inbox.Groups.Sum(g=>g.Processing).ToString(), inbox?.OrganisationWide == true ? "Organisation-wide" : "Received or assigned to you", "bi bi-hourglass-split"),
+        ("Request categories", inbox == null ? "—" : inbox.Groups.Count.ToString(), "With processing requests", "bi bi-list-check"),
+        ("Populated structures", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff On Leave", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff Work From Office", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Staff Work From Home", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Gender Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Job type Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check"),
+        ("Position Count", FilteredDepartments.Count(d=>d.Members>0).ToString(), "With active staff", "bi bi-building-check")
+    ];
 
     private IEnumerable<(string Label, string Value, string Note, string Icon)> LeaveRequests => [
         ("Annual Leave", People.Count().ToString(), "Approved current employment", "bi bi-people"),

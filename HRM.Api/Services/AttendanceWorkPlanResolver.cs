@@ -333,6 +333,9 @@ namespace HRM.Services
                                 SegmentName =
                                     segment.Name,
 
+                                SchedulePurpose =
+                                    segment.SchedulePurpose,
+
                                 ClockType =
                                     AttendanceClockType.CheckIn,
 
@@ -385,6 +388,9 @@ namespace HRM.Services
 
                                 SegmentName =
                                     segment.Name,
+
+                                SchedulePurpose =
+                                    segment.SchedulePurpose,
 
                                 ClockType =
                                     AttendanceClockType.CheckOut,
@@ -454,7 +460,18 @@ namespace HRM.Services
                 candidates
                     .OrderBy(x =>
                         x.DistanceMinutes)
+                    .ThenBy(x =>
+                        x.SchedulePurpose == "Official" ? 0 : 1)
                     .First();
+
+            // When official and duty boundaries coincide (same expected time),
+            // both must be recorded. Prefer official as primary, duty as secondary.
+            var secondaryCandidate = bestCandidate.SchedulePurpose == "Official"
+                ? candidates.FirstOrDefault(x =>
+                    x.SchedulePurpose == "Duty" &&
+                    x.ClockType == bestCandidate.ClockType &&
+                    x.BoundaryTime == bestCandidate.BoundaryTime)
+                : null;
 
 
             // Match each punch to the nearest scheduled boundary. A prior official
@@ -488,6 +505,15 @@ namespace HRM.Services
                 DistanceMinutes =
                     bestCandidate.DistanceMinutes,
 
+                SecondaryWorkPlanSegmentId =
+                    secondaryCandidate?.WorkPlanSegmentId,
+
+                SecondarySegmentName =
+                    secondaryCandidate?.SegmentName,
+
+                SecondaryClockType =
+                    secondaryCandidate?.ClockType ?? AttendanceClockType.Unresolved,
+
                 Message =
                     $"Attendance event resolved to " +
                     $"'{bestCandidate.SegmentName}' as " +
@@ -502,6 +528,9 @@ namespace HRM.Services
             public int WorkPlanSegmentId { get; set; }
 
             public string SegmentName { get; set; }
+                = string.Empty;
+
+            public string SchedulePurpose { get; set; }
                 = string.Empty;
 
             public AttendanceClockType ClockType { get; set; }

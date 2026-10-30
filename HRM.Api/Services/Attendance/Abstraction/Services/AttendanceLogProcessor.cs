@@ -320,6 +320,26 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                     context.AttendanceLogResolutions.Add(resolvedRecord);
 
+                    // When official and duty boundaries coincide, record the duty
+                    // clock as well (official is primary, duty is secondary).
+                    if (planResult.SecondaryWorkPlanSegmentId.HasValue &&
+                        planResult.SecondaryClockType != AttendanceClockType.Unresolved)
+                    {
+                        var secondaryMessage =
+                            $"Attendance event resolved to " +
+                            $"'{planResult.SecondarySegmentName}' as " +
+                            $"{planResult.SecondaryClockType}.";
+                        var secondaryRecord = CreateResolution(
+                            attendanceLog,
+                            AttendanceResolutionStatusIds.Resolved,
+                            secondaryMessage,
+                            workPlanId: planResult.WorkPlanId,
+                            workPlanSegmentId: planResult.SecondaryWorkPlanSegmentId,
+                            jobId: planResult.JobId,
+                            clockType: planResult.SecondaryClockType);
+                        context.AttendanceLogResolutions.Add(secondaryRecord);
+                    }
+
                     // Save both the old resolution update and new resolution.
                     await context.SaveChangesAsync(cancellationToken);
 

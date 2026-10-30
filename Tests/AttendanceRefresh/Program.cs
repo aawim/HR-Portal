@@ -405,6 +405,8 @@ static async Task TestRefresh(Type clockType)
     {
         "GetContextAsync" or "RequireContextAsync" => Task.FromResult(user),
         "HasUserGroupAsync" => Task.FromResult(true),
+        "GetCurrentOrganisationIdAsync" => Task.FromResult(3),
+        "GetCurrentIndividualIdAsync" => Task.FromResult(1),
         _ => throw new InvalidOperationException(name)
     });
     var plans = Proxy.For<IAttendancePlanService>((_, _) =>
@@ -423,6 +425,8 @@ static async Task TestRefresh(Type clockType)
     await using var db = new TestContext(new DbContextOptionsBuilder<HrmTeContext>()
         .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
     db.Jobs.Add(new Job { JobId = 2, IndividualID = 1, OrganisationID = 3, JobStateId = 4, JoinedDate = DateTime.UtcNow.AddYears(-1) });
+    db.WorkTypes.Add(new HRM.Models.Archives.WorkType { WorkTypeId = 1, Name = "Default", IsValid = true });
+    db.AssignedWorkTypes.Add(new HRM.Models.Archives.AssignedWorkType { AssignedWorkTypeId = 1, WorkTypeId = 1, JobId = 2, OrganisationId = 3, FromDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(-1)), IsValid = true, AssignedByUserId = 1, CreatedDate = DateOnly.FromDateTime(DateTime.UtcNow) });
     await db.SaveChangesAsync();
     var processor = Proxy.For<IAttendanceLogProcessor>((_, args) => Process((int)args[0]!));
     async Task<AttendanceProcessingResult> Process(int logId)
@@ -437,6 +441,7 @@ static async Task TestRefresh(Type clockType)
         .AddLogging()
         .AddSingleton(attendance).AddSingleton(access).AddSingleton(plans)
         .AddSingleton(Proxy.For<IAttendanceResolver>((name, _) => throw new Exception(name)))
+        .AddSingleton(Proxy.For<HRM.Services.Interfaces.IWorkTypeService>((method, _) => method == "CanClockAsync" ? Task.FromResult(true) : throw new Exception(method)))
         .AddSingleton(new AttendanceLogService(db, processor,
             Proxy.For<IOperationLogService>((name, _) => name == "CreateAsync" ? Task.FromResult(new OperationLog { OperationLogId = 1 }) : throw new Exception(name)),
             null!, access, environment: new SecurityTestEnvironment(), configuration:
@@ -762,7 +767,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
     protected override void OnModelCreating(ModelBuilder builder)
     {
         var types = new[] { typeof(Job), typeof(AttendanceLog), typeof(Leaf), typeof(LeaveType), typeof(AttendanceLogResolution),
-            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
+            typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
+            typeof(HRM.Models.Archives.AssignedWorkType), typeof(HRM.Models.Archives.WorkType) }.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         foreach (var type in builder.Model.GetEntityTypes().Select(x => x.ClrType).ToArray())
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
@@ -771,6 +777,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
                 if (!(type == typeof(Leaf) && (property.Name == "Job" || property.Name == "LeaveType")) &&
                     !(type == typeof(AttendanceLog) && property.Name == "AttendanceLogResolutions") &&
                     !(type == typeof(AttendanceLogResolution) && property.Name == "AttendanceLog") &&
+                    !(type == typeof(HRM.Models.Archives.AssignedWorkType) && (property.Name == "Job" || property.Name == "WorkType" || property.Name == "Organisation")) &&
+                    !(type == typeof(HRM.Models.Archives.WorkType) && property.Name == "AssignedWorkTypes") &&
                     !ScheduleTestModel.Navigation(type, property.Name))
                     builder.Entity(type).Ignore(property.Name);
         builder.Entity<Job>().HasKey(x => x.JobId);
@@ -781,6 +789,8 @@ sealed class TestContext(DbContextOptions<HrmTeContext> options) : HrmTeContext(
         builder.Entity<Leaf>().HasOne(x => x.LeaveType).WithMany().HasForeignKey(x => x.LeaveTypeId);
         builder.Entity<AttendanceLogResolution>().HasKey(x => x.AttendanceLogResolutionId);
         builder.Entity<AttendanceLogResolution>().HasOne(x => x.AttendanceLog).WithMany(x => x.AttendanceLogResolutions).HasForeignKey(x => x.AttendanceLogId);
+        builder.Entity<HRM.Models.Archives.AssignedWorkType>().HasKey(x => x.AssignedWorkTypeId);
+        builder.Entity<HRM.Models.Archives.WorkType>().HasKey(x => x.WorkTypeId);
         ScheduleTestModel.Configure(builder);
     }
 }
