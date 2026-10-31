@@ -3,8 +3,11 @@
 @using HRM.Models
 @using HRM.Models.Archives
 @using HRM.Services.Interfaces
+@using System.Linq
 
 @inject HRM.Application.Contracts.Pages.IOrganisationDirectoryQueries Directory
+@inject HRM.Services.Interfaces.ITeam TeamService
+@inject HRM.Services.ToastService Toast
 
 <div class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[60] transition-opacity duration-300 ease-in-out @(IsOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
 @onclick="ClosePanel"></div>
@@ -154,7 +157,7 @@
                                 <h4 class="text-lg font-bold text-slate-800">Assigned Staff</h4>
                                 <p class="text-xs text-slate-500 mt-1">Manage employees currently assigned to this team.</p>
                             </div>
-                            <button class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
+                            <button @onclick="OpenAssignStaffPanel" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
                                 Assign Staff
                             </button>
@@ -216,7 +219,7 @@
                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                                             Edit
                                                         </button>
-                                                        <button aria-label="Remove from Team" class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100 flex items-center gap-1">
+                                                        <button @onclick="() => RemoveStaff(staff.Id)" aria-label="Remove from Team" class="text-rose-600 hover:text-rose-800 font-bold text-xs bg-rose-50 hover:bg-rose-100 px-2 py-1.5 rounded transition-colors border border-rose-100 flex items-center gap-1">
                                                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                                                         </button>
                                                     </div>
@@ -548,6 +551,53 @@
     }
 </div>
 
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[75] transition-opacity duration-300 ease-in-out @(showAssignStaffPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+@onclick="CloseAssignStaffPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-[80] w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAssignStaffPanel ? "translate-x-0" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">Assign Staff to Team</h3>
+        <button @onclick="CloseAssignStaffPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Select Staff <span class="text-rose-500">*</span></label>
+            <select @bind="selectedStaffId" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20">
+                <option value="0">-- Choose Staff --</option>
+                @foreach (var staff in availableStaff)
+                {
+                    <option value="@staff.Id">@staff.Name (@staff.EmployeeNumber)</option>
+                }
+            </select>
+            @if (!availableStaff.Any() && !isLoadingAvailableStaff)
+            {
+                <p class="text-xs text-rose-500 mt-2">No available staff found for this organisation.</p>
+            }
+        </div>
+
+        <div>
+            <label class="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Effective Start Date <span class="text-rose-500">*</span></label>
+            <input type="date" @bind="assignStartDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
+        </div>
+
+        <div class="flex items-center gap-2">
+            <input type="checkbox" id="assignAsSupervisor" @bind="assignAsSupervisor" class="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+            <label for="assignAsSupervisor" class="text-sm text-slate-700 cursor-pointer">Assign as Supervisor</label>
+        </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAssignStaffPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">Cancel</button>
+        <button @onclick="SubmitAssignStaff" disabled="@(isSubmittingAssignStaff || selectedStaffId == 0)" class="px-6 py-2 bg-indigo-600 text-white rounded-md text-sm font-bold hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50">
+            @(isSubmittingAssignStaff ? "Saving..." : "Assign Staff")
+        </button>
+    </div>
+</div>
+
 @code {
     [Parameter]
     public bool IsOpen { get; set; }
@@ -585,6 +635,15 @@
     private bool isFetchingDropdown = false;
     private int selectedNewLeaveSetId = 0;
     private List<LeaveSet> availableLeaveSets = new();
+
+    // Assign Staff Panel
+    private bool showAssignStaffPanel = false;
+    private bool isLoadingAvailableStaff = false;
+    private bool isSubmittingAssignStaff = false;
+    private int selectedStaffId = 0;
+    private DateTime assignStartDate = DateTime.Today;
+    private bool assignAsSupervisor = false;
+    private List<AvailableStaffDto> availableStaff = new();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -646,6 +705,119 @@
     }
     private static TeamStaffDto MapMember(HRM.Application.Contracts.Pages.OrganisationMember m) => new()
     { Id = m.StaffId, Name = m.Name, EmployeeNumber = m.EmployeeNumber ?? "", EffectiveStartDate = m.StartsOn, EffectiveEndDate = m.EndsOn };
+
+    private void OpenAssignStaffPanel()
+    {
+        selectedStaffId = 0;
+        assignStartDate = DateTime.Today;
+        assignAsSupervisor = false;
+        availableStaff.Clear();
+        showAssignStaffPanel = true;
+        _ = LoadAvailableStaff();
+    }
+
+    private void CloseAssignStaffPanel()
+    {
+        showAssignStaffPanel = false;
+        availableStaff.Clear();
+    }
+
+    private async Task LoadAvailableStaff()
+    {
+        if (Team is null) return;
+        isLoadingAvailableStaff = true;
+        try
+        {
+            // Get all staff in the organisation that are not already assigned to this team
+            var data = await Directory.GetDetailsAsync(new(HRM.Application.Contracts.Pages.OrganisationUnitKind.Team, Team.TeamID));
+            if (data == null) return;
+
+            var assignedStaffIds = data.CurrentStaff.Select(s => s.StaffId).ToHashSet();
+            
+            // Get organisation staff from the organisation directory
+            // We need to get staff from the organisation - use the organisation ID from the team
+            var orgId = Team.OrganisationId > 0 ? Team.OrganisationId : 0;
+            if (orgId == 0) return;
+
+            // Use the directory to get structure staff
+            var structures = await Directory.GetApprovedStructureAsync(orgId);
+            var allStaff = new List<HRM.Application.Contracts.Pages.OrganisationMember>();
+            
+            foreach (var structure in structures)
+            {
+                var details = await Directory.GetDetailsAsync(new(HRM.Application.Contracts.Pages.OrganisationUnitKind.Structure, structure.StructureId));
+                if (details != null)
+                {
+                    allStaff.AddRange(details.CurrentStaff);
+                }
+            }
+
+            // Filter out already assigned staff
+            availableStaff = allStaff
+                .Where(s => !assignedStaffIds.Contains(s.StaffId))
+                .Select(s => new AvailableStaffDto
+                {
+                    Id = s.StaffId,
+                    Name = s.Name,
+                    EmployeeNumber = s.EmployeeNumber ?? ""
+                })
+                .DistinctBy(s => s.Id)
+                .OrderBy(s => s.Name)
+                .ToList();
+        }
+        finally
+        {
+            isLoadingAvailableStaff = false;
+        }
+    }
+
+    private async Task SubmitAssignStaff()
+    {
+        if (Team is null || selectedStaffId == 0) return;
+
+        isSubmittingAssignStaff = true;
+        try
+        {
+            await TeamService.AddStaffAsync(Team.TeamID, selectedStaffId, assignStartDate, assignAsSupervisor);
+            
+            // Refresh the staff list
+            await LoadTeamStaff();
+            
+            Toast.Success("Staff assigned to team successfully.");
+            CloseAssignStaffPanel();
+        }
+        catch (Exception ex)
+        {
+            Toast.Error($"Failed to assign staff: {ex.Message}");
+        }
+        finally
+        {
+            isSubmittingAssignStaff = false;
+        }
+    }
+
+    private async Task RemoveStaff(int staffId)
+    {
+        if (Team is null) return;
+
+        try
+        {
+            await TeamService.RemoveStaffAsync(Team.TeamID, staffId);
+            await LoadTeamStaff();
+            Toast.Success("Staff removed from team.");
+        }
+        catch (Exception ex)
+        {
+            Toast.Error($"Failed to remove staff: {ex.Message}");
+        }
+    }
+
+    public class AvailableStaffDto
+    {
+        public int Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string EmployeeNumber { get; set; } = string.Empty;
+    }
 
 
 

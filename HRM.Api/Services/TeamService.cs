@@ -30,6 +30,42 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
     public async Task<List<TeamDto>> GetMyTeamMembersAsync(int teamId)
         => (await GetMyTeamsAsync()).Where(x => x.TeamId == teamId).ToList();
 
+    public async Task<int> AddStaffAsync(int teamId, int staffId, DateTime startDate, bool isSupervisor = false, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Organisation.Edit"))
+            throw new UnauthorizedAccessException();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId, ct);
+        if (team == null) throw new ArgumentException("Team not found.");
+        if (!actor.IsSuperAdministrator && team.OrganisationId != await access.GetCurrentOrganisationIdAsync())
+            throw new UnauthorizedAccessException();
+        if (await db.TeamStaffs.AnyAsync(x => x.TeamId == teamId && x.StaffId == staffId && x.IsValid, ct))
+            throw new InvalidOperationException("Staff member is already assigned to this team.");
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_CREATE, $"Add staff {staffId} to team {teamId}.");
+        var entity = new TeamStaff { TeamId = teamId, StaffId = staffId, IsSuperVisor = isSupervisor, StartDate = startDate.Date, IsValid = true, OperationLogId = audit.OperationLogId };
+        db.TeamStaffs.Add(entity); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return entity.TeamStaffsId;
+    }
+
+    public async Task<bool> RemoveStaffAsync(int teamId, int staffId, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Organisation.Edit"))
+            throw new UnauthorizedAccessException();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
+        var team = await db.Teams.FirstOrDefaultAsync(t => t.TeamId == teamId, ct);
+        if (team == null) throw new ArgumentException("Team not found.");
+        if (!actor.IsSuperAdministrator && team.OrganisationId != await access.GetCurrentOrganisationIdAsync())
+            throw new UnauthorizedAccessException();
+        var assignment = await db.TeamStaffs.FirstOrDefaultAsync(x => x.TeamId == teamId && x.StaffId == staffId && x.IsValid, ct);
+        if (assignment == null) return false;
+        var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE, $"Remove staff {staffId} from team {teamId}.");
+        assignment.IsValid = false; assignment.EndDate = TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date; assignment.OperationLogId = audit.OperationLogId;
+        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return true;
+    }
+
     public async Task<List<TeamDto>> GetMyTeamsAsync()
     {
         var actor = await access.RequireContextAsync();
