@@ -3,35 +3,263 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @using HRM.DTOs.Organisation
-<section class="space-y-4 p-4">
-    <button type="button" class="app-button app-button-secondary" aria-label="Go back to the previous page" @onclick="GoBack">
-        <span aria-hidden="true">←</span> Back
-    </button>
-    <h1 class="text-xl font-semibold">Departments Management</h1>
-    <p class="text-sm text-slate-500">Approved departments and organisation structures, their supervisors and assigned staff.</p>
-    @if(error!=null){<p role="alert" class="rounded border p-3 text-sm">@error</p>}
-    <div class="flex flex-wrap gap-2"><a class="app-button app-button-primary" href="/admin/hr/departments/management">Departments</a><a class="app-button app-button-secondary" href="/admin/settings/org/types">Structure types</a></div>
-    @if(data!=null)
+
+<div class="w-full max-w-[1400px] mx-auto space-y-6 p-4">
+    <!-- Header with Back Button and Title -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[var(--app-border-color)]">
+        <div class="flex items-center gap-3">
+            <button type="button" class="app-button app-button-secondary inline-flex items-center gap-1 text-xs" aria-label="Go back to the previous page" @onclick="GoBack">
+                <span aria-hidden="true">←</span> Back
+            </button>
+            <div>
+                <h1 class="text-xl font-semibold text-[var(--select-text)]">Departments Management</h1>
+                <p class="text-xs text-[var(--select-muted)]">Approved departments, supervisors, and assigned workforce.</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors" href="/admin/hr/departments/management">Departments</a>
+            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--select-hover)] text-[var(--select-text)] border border-[var(--app-border-color)] hover:bg-[var(--app-border-color)] transition-colors" href="/admin/settings/org/types">Structure types</a>
+        </div>
+    </div>
+
+    @if (error != null)
     {
-        <p class="text-sm">Organisation: <strong>@organisation</strong></p>
-        <div class="flex flex-wrap items-end gap-3"><label class="text-sm">Search<input class="mt-1 block rounded border bg-transparent p-2" @bind="search" @bind:event="oninput" /></label><label class="text-sm">Structure type<select class="mt-1 block rounded border bg-transparent p-2" @bind="type"><option value="0">All types</option>@foreach(var t in data.StructureTypes){<option value="@t.Id">@t.Name</option>}</select></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button><a class="app-button app-button-secondary" href="@($"/admin/settings/org/manage/{orgId}/structure")">Organisation structure</a></div>
-        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Department / structure</th><th class="p-3">Type</th><th class="p-3">Supervisors</th><th class="p-3">Staff</th><th class="p-3">Actions</th></tr></thead><tbody>
-        @foreach(var row in Filtered){<tr class="border-t" @key="row.Id"><td class="p-3">@row.Name</td><td class="p-3">@data.StructureTypes.FirstOrDefault(t=>t.Id==row.StructureTypeId)?.Name</td><td class="p-3">@string.Join(", ",row.Supervisors.Select(s=>s.Name))</td><td class="p-3">@row.Members.Count</td><td class="p-3"><button class="app-button app-button-secondary" @onclick="()=>selected=row">View</button></td></tr>}
-        </tbody></table>@if(!Filtered.Any()){<p class="p-4 text-sm text-slate-500">No matching departments.</p>}</div>
-        @if(selected!=null){<section class="space-y-3 rounded-xl border p-4"><div class="flex flex-wrap justify-between gap-3"><h2 class="font-semibold">@selected.Name</h2><button class="app-button app-button-secondary" @onclick="()=>selected=null">Close</button></div><h3 class="text-sm font-semibold">Assigned staff (@selected.Members.Count)</h3>@foreach(var member in selected.Members){<a class="block text-sm text-blue-700 underline dark:text-blue-300" href="@($"/admin/my/workspace/staff/{member.Id}/overview")">@member.Name</a>}@if(selected.Members.Count==0){<p class="text-sm text-slate-500">No active staff assigned.</p>}<a class="app-button app-button-secondary" href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">Manage supervisors</a></section>}
+        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
+            @error
+        </div>
     }
-    else if(busy){<p role="status">Loading departments…</p>}
-</section>
+
+    @if (data != null)
+    {
+        <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+
+            <!-- Left Panel: Department Details & CRUD Panel (Master/Detail) -->
+            <section class="min-w-0 xl:col-span-8">
+                <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
+                    @if (selected == null)
+                    {
+                        <div class="flex flex-col items-center justify-center p-12 text-center text-[var(--select-muted)] min-h-[400px]">
+                            <div class="text-5xl mb-3">👈</div>
+                            <h3 class="text-base font-semibold text-[var(--select-text)]">Select a Department</h3>
+                            <p class="text-xs text-[var(--select-muted)] mt-1 max-w-xs">Choose any department from the list on the right to view assigned staff and management controls.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Details Header -->
+                        <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-6 py-4 bg-[var(--select-hover)]/50">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                    <span class="material-symbols-rounded" aria-hidden="true">corporate_face</span>
+                                </div>
+                                <div>
+                                    <h2 class="text-sm font-semibold text-[var(--select-text)]">@selected.Name</h2>
+                                    <p class="mt-0.5 text-xs text-[var(--select-muted)]">
+                                        @(data.StructureTypes.FirstOrDefault(t => t.Id == selected.StructureTypeId)?.Name ?? "Department") · @selected.Members.Count assigned staff
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                                   href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">
+                                    Manage supervisors
+                                </a>
+                                <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                        @onclick="() => selected = null">
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Details Body -->
+                        <div class="p-6 space-y-6">
+                            <!-- Supervisors Card -->
+                            <div class="bg-[var(--select-hover)]/70 border border-[var(--app-border-color)] rounded-lg p-4 space-y-2">
+                                <h4 class="text-xs font-bold text-[var(--select-muted)] uppercase tracking-wider">Supervisors</h4>
+                                @if (selected.Supervisors.Any())
+                                {
+                                    <div class="flex flex-wrap gap-2">
+                                        @foreach (var sup in selected.Supervisors)
+                                        {
+                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[var(--select-bg)] border border-[var(--app-border-color)] text-[var(--select-text)] shadow-2xs">
+                                                👤 @sup.Name
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <p class="text-xs text-[var(--select-muted)] italic">No supervisors currently assigned to this structure.</p>
+                                }
+                            </div>
+
+                            <!-- Assigned Staff List -->
+                            <div>
+                                <div class="flex items-center justify-between mb-3">
+                                    <h3 class="text-sm font-semibold text-[var(--select-text)]">Assigned Staff Members (@selected.Members.Count)</h3>
+                                </div>
+
+                                @if (selected.Members.Any())
+                                {
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                                        @foreach (var member in selected.Members)
+                                        {
+                                            <a class="flex items-center justify-between p-3 rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] hover:border-blue-400 hover:shadow-xs transition-all group"
+                                               href="@($"/admin/my/workspace/staff/{member.Id}/overview")">
+                                                <div class="flex items-center gap-2.5 min-w-0">
+                                                    <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                                        @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name.Substring(0, 1).ToUpper())
+                                                    </span>
+                                                    <span class="text-xs font-semibold text-[var(--select-text)] group-hover:text-blue-600 truncate">
+                                                        @member.Name
+                                                    </span>
+                                                </div>
+                                                <span class="text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-0.5 transition-transform shrink-0">
+                                                    Profile →
+                                                </span>
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="p-8 text-center border border-dashed border-[var(--app-border-color)] rounded-lg text-[var(--select-muted)]">
+                                        <p class="text-xs">No active staff currently assigned to this department.</p>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </section>
+
+            <!-- Right Panel: Department List (Sidebar) -->
+            <aside class="min-w-0 xl:col-span-4">
+                <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden flex flex-col">
+                    <!-- Section Header -->
+                    <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-5 py-4 bg-[var(--select-hover)]/50">
+                        <div>
+                            <h3 class="font-semibold text-[var(--select-text)] text-sm">Organisation Departments</h3>
+                            <p class="mt-1 text-xs text-[var(--select-muted)]">@organisation · @Filtered.Count() structures</p>
+                        </div>
+                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" title="Refresh" aria-label="Refresh" disabled="@busy" @onclick="Load">
+                            <span class="material-symbols-rounded text-xl">refresh</span>
+                        </button>
+                    </div>
+
+                    <!-- Search Input -->
+                    <div class="p-4 bg-[var(--select-bg)] border-b border-[var(--app-border-color)]">
+                        <input type="search" class="w-full rounded-xl border border-[var(--app-border-color)] bg-[var(--select-hover)] px-3 py-2.5 text-sm text-[var(--select-text)] placeholder-[var(--select-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                               aria-label="Search departments" placeholder="Search departments…"
+                               @bind="search"
+                               @bind:event="oninput" />
+                    </div>
+
+                    <!-- Filter Controls -->
+                    <div class="p-3 border-b border-[var(--app-border-color)] bg-[var(--select-bg)]">
+                        <select class="w-full rounded-lg border border-[var(--app-border-color)] px-3 py-2 text-xs text-[var(--select-text)] bg-[var(--select-bg)] focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="type">
+                            <option value="0">All structure types</option>
+                            @foreach (var t in data.StructureTypes)
+                            {
+                                <option value="@t.Id">@t.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <!-- Department Scrollable List -->
+                    <div class="divide-y divide-[var(--app-border-color)] overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
+                        @foreach (var row in Filtered)
+                        {
+                            var isSelected = selected?.Id == row.Id;
+                            <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20" : "border-transparent hover:bg-[var(--select-hover)]")"
+                                    @onclick="() => selected = row">
+                                <div class="flex items-center justify-between gap-2">
+                                    <div class="min-w-0 flex-1">
+                                        <span class="block text-sm font-semibold text-[var(--select-text)] truncate">🏢 @row.Name</span>
+                                        <span class="mt-0.5 block text-xs text-[var(--select-muted)]">
+                                            Type: @(data.StructureTypes.FirstOrDefault(t => t.Id == row.StructureTypeId)?.Name ?? "N/A")
+                                        </span>
+                                        @if (row.Members.Count > 0)
+                                        {
+                                            <span class="mt-1 block text-xs text-blue-700 dark:text-blue-300 font-medium">
+                                                @row.Members.Count staff →
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="mt-1 block text-xs text-[var(--select-muted)] italic">
+                                                No staff assigned
+                                            </span>
+                                        }
+                                    </div>
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 @(row.Members.Count > 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-[var(--select-hover)] text-[var(--select-muted)]")">
+                                        @row.Members.Count
+                                    </span>
+                                </div>
+                            </button>
+                        }
+
+                        @if (!Filtered.Any())
+                        {
+                            <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">
+                                No matching departments found.
+                            </div>
+                        }
+                    </div>
+                </div>
+            </aside>
+
+        </div>
+    }
+    else if (busy)
+    {
+        <div role="status" class="flex items-center justify-center p-12 text-xs text-[var(--select-muted)]">
+            Loading departments…
+        </div>
+    }
+</div>
+
 @code {
-    [Inject] private HRM.Services.Interfaces.IUserAccessService Access {get;set;}=null!;
-    private OrganisationTeamSettingsData? data;private OrganisationTeamSettingsRow? selected;private int orgId,type;private bool busy;private string organisation="",search="";private string? error;
-    private IEnumerable<OrganisationTeamSettingsRow> Filtered=>data?.Rows.Where(r=>r.Kind=="Department"&&(type==0||r.StructureTypeId==type)&&r.Name.Contains(search,StringComparison.OrdinalIgnoreCase))??[];
-    protected override Task OnInitializedAsync()=>Load();
+    [Inject] private HRM.Services.Interfaces.IUserAccessService Access { get; set; } = null!;
+    private OrganisationTeamSettingsData? data;
+    private OrganisationTeamSettingsRow? selected;
+    private int orgId, type;
+    private bool busy;
+    private string organisation = "", search = "";
+    private string? error;
+
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(r => r.Kind == "Department" && (type == 0 || r.StructureTypeId == type) && r.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
+
+    protected override Task OnInitializedAsync() => Load();
+
     private async Task GoBack()
     {
-        try { await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/navigation-history.js"); await module.InvokeVoidAsync("goBack", "/admin/hr"); }
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/navigation-history.js");
+            await module.InvokeVoidAsync("goBack", "/admin/hr");
+        }
         catch (JSDisconnectedException) { }
         catch (JSException) { Navigation.NavigateTo("/admin/hr"); }
     }
-    private async Task Load(){busy=true;error=null;try{orgId=await Access.GetCurrentOrganisationIdAsync();data=await Settings.GetTeamSettingsAsync(orgId);organisation=(await Settings.GetTeamOrganisationsAsync()).FirstOrDefault(o=>o.Id==orgId)?.Name??"";selected=null;}catch(Exception ex){data=null;Logger.LogError(ex,"Loading departments");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Departments could not be loaded. Refresh or contact HR.";}finally{busy=false;}}
+
+    private async Task Load()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            orgId = await Access.GetCurrentOrganisationIdAsync();
+            data = await Settings.GetTeamSettingsAsync(orgId);
+            organisation = (await Settings.GetTeamOrganisationsAsync()).FirstOrDefault(o => o.Id == orgId)?.Name ?? "";
+            selected = null;
+        }
+        catch (Exception ex)
+        {
+            data = null;
+            Logger.LogError(ex, "Loading departments");
+            error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Departments could not be loaded. Refresh or contact HR.";
+        }
+        finally { busy = false; }
+    }
 }

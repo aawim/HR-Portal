@@ -1,0 +1,109 @@
+@page "/admin/hr/departments/matrix"
+@page "/admin/hr/departments/department-matrix"
+@page "/admin/hr/departments/department-metrix"
+@using HRM.DTOs
+@inject HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations Workspace
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject HRM.Services.Interfaces.IUserContext UserContext
+
+<section class="space-y-4 p-4">
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 id="department-status-heading" class="text-xl font-semibold text-slate-800">Department Status & Matrix</h1>
+            <p class="text-sm text-slate-500">Departments with assigned staff: total, on leave, and available workforce capacity.</p>
+        </div>
+        <div class="flex items-center gap-3 text-xs">
+            <label class="flex items-center gap-1.5 cursor-pointer select-none text-slate-700">
+                <input type="checkbox" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" @bind="departmentsOnLeaveOnly" @bind:after="() => showAllDepartments = false" />
+                Staff on leave only
+            </label>
+            @if (DepartmentStatus.Any())
+            {
+                <button type="button" class="px-2.5 py-1 text-xs font-medium bg-slate-100 text-slate-700 hover:bg-slate-200 rounded border border-slate-300 transition-colors" aria-controls="department-status-cards" aria-expanded="@(showAllDepartments ? "true" : "false")" @onclick="() => showAllDepartments = !showAllDepartments">
+                    @(showAllDepartments ? "Show less" : "Show all")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (organisation == null)
+    {
+        <p role="status" class="text-xs text-slate-500">Loading departments…</p>
+    }
+    else
+    {
+        <div id="department-status-cards" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+            @foreach (var dep in DisplayedDepartments)
+            {
+                <article class="bg-white border border-slate-200 rounded-lg p-4 flex flex-col gap-2 shadow-sm hover:border-slate-300 transition-colors">
+                    <header class="pb-1 border-b border-slate-100">
+                        <h3 class="text-sm font-bold text-slate-800 truncate" title="@dep.DepartmentName">@dep.DepartmentName</h3>
+                    </header>
+                    <dl class="grid grid-cols-3 gap-1 text-xs py-1">
+                        <div>
+                            <dt class="text-[11px] text-slate-500">Total staff</dt>
+                            <dd class="font-semibold text-slate-800">@dep.TotalValue</dd>
+                        </div>
+                        <div>
+                            <dt class="text-[11px] text-slate-500">On leave</dt>
+                            <dd class="font-semibold text-rose-600">@dep.OnLeaveValue</dd>
+                        </div>
+                        <div>
+                            <dt class="text-[11px] text-slate-500">Available</dt>
+                            <dd class="font-semibold text-slate-800">@dep.AvailableValue</dd>
+                        </div>
+                    </dl>
+                    <div class="space-y-1 pt-1 border-t border-slate-100">
+                        <div class="flex justify-between items-center text-xs">
+                            <span class="text-slate-500 text-[11px]">Not on leave</span>
+                            <strong class="text-slate-800 font-semibold">@dep.AvailablePercent%</strong>
+                        </div>
+                        <meter class="w-full h-2 rounded bg-slate-100 overflow-hidden accent-blue-600" min="0" max="@Math.Max(1, dep.TotalValue)" value="@dep.AvailableValue" aria-label="@($"Staff not on leave in {dep.DepartmentName}")">
+                            @dep.AvailableValue of @dep.TotalValue
+                        </meter>
+                    </div>
+                </article>
+            }
+            @if (!DisplayedDepartments.Any())
+            {
+                <p class="text-xs text-slate-400 text-center py-6 col-span-full">
+                    @(departmentsOnLeaveOnly ? "No departments have staff on leave." : "No departments match the criteria.")
+                </p>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    private OrganisationWorkspaceData? organisation;
+    private bool departmentsOnLeaveOnly = false;
+    private bool showAllDepartments = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var organisationId = await Access.GetCurrentOrganisationIdAsync();
+            organisation = await Workspace.LoadAsync(organisationId);
+        }
+        catch { organisation = null; }
+    }
+
+    private IEnumerable<(string DepartmentName, int OnLeaveValue, int AvailableValue, int TotalValue, int AvailablePercent)> DepartmentStatus =>
+        (organisation?.Departments ?? [])
+            .Where(d => d.Members > 0)
+            .Select(d => {
+                var staff = (organisation?.Workforce ?? []).Where(s => s.DepartmentId == d.Id).Select(s => s.IndividualId).Distinct().ToList();
+                var total = staff.Count;
+                var onLeave = staff.Count(id => organisation!.OnLeaveStaffIds.Contains(id));
+                var available = total - onLeave;
+                var percent = total > 0 ? (int)Math.Round(available / (double)total * 100) : 0;
+                return (DepartmentName: d.Name, OnLeaveValue: onLeave, AvailableValue: available, TotalValue: total, AvailablePercent: percent);
+            });
+
+    private IEnumerable<(string DepartmentName, int OnLeaveValue, int AvailableValue, int TotalValue, int AvailablePercent)> DisplayedDepartments =>
+        DepartmentStatus
+            .Where(d => !departmentsOnLeaveOnly || d.OnLeaveValue > 0)
+            .OrderByDescending(d => d.OnLeaveValue)
+            .ThenBy(d => d.DepartmentName);
+}

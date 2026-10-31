@@ -8,6 +8,7 @@ public abstract class OrganisationWorkspaceServiceContracts
 
 public interface IOperations
 {
+Task<OrganisationLeaveOverviewData> LeaveOverviewAsync(OrganisationLeaveOverviewFilter filter,CancellationToken cancellationToken=default);
 Task<OrganisationWorkspaceData> LoadAsync(int organisationId)
 ;
 Task<(List<OrganisationWorkspaceStaff> Rows, int Total)> StaffAsync(int organisationId, string search, int departmentId, int page)
