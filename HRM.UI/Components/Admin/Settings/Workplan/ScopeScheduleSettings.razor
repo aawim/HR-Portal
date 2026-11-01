@@ -1,9 +1,13 @@
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @using HRM.Models
+@using HRM.DTOs.WorkPlanning
 @inject NavigationManager Navigation
 @inject HRM.Services.Contracts.ScopeScheduleSettingsServiceContracts.IOperations Settings
 @inject ILogger<ScopeScheduleSettings> Logger
 @inject HRM.Services.ToastService Toasts
+@inject HRM.WorkPlanning.Abstractions.IWorkAssignmentManagementService Assignments
+@inject HRM.WorkPlanning.Abstractions.IManualWorkAssignmentService ManualAssignments
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
 <section class="space-y-4 p-4">
     <div><h1 class="text-xl font-semibold">@(OrganisationOnly?"Organisation schedules":"Schedule assignments")</h1><p class="mt-1 text-sm text-slate-500">Assign existing templates to the current organisation, approved structures, or staff groups. Staff overrides take priority, followed by group, nearest structure, and organisation default. Duty schedules are additional.</p></div>
     @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm">@error</p>}
@@ -56,10 +60,67 @@
         <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Scope</th><th class="p-3">Schedule</th><th class="p-3">Pattern / period</th><th class="p-3">Status</th><th class="p-3">Actions</th></tr></thead><tbody>
             @foreach(var row in Rows)
             {
-                <tr class="border-t"><td class="p-3">@Target(row)@if(row.GroupId.HasValue){<p class="text-xs text-slate-500">Priority @row.Priority</p>}</td><td class="p-3">@(row.SchedulePurpose=="Official"?"Default official hours":"Duty")<p class="mt-1 text-xs text-slate-500">@data.Templates.FirstOrDefault(t=>t.Id==row.WorkTemplateId)?.Name</p></td><td class="p-3">@row.ScheduleMode<p class="mt-1 text-xs text-slate-500">@row.EffectiveFrom.ToString("dd MMM yyyy")–@(row.EffectiveTo?.ToString("dd MMM yyyy")??"Ongoing")</p></td><td class="p-3">@(!row.IsActive?"Disabled":row.EffectiveTo<Today?"Ended":row.EffectiveFrom>Today?"Enabled · Scheduled":"Enabled")</td><td class="p-3"><div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>Edit(row)">Edit</button><button class="app-button app-button-secondary" disabled="@(busy || !row.IsActive || row.EffectiveTo<Today)" @onclick="()=>BeginEnd(row)">End</button><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>ToggleEnabledAsync(row)">@(row.IsActive?"Disable":"Enable")</button></div></td></tr>
+                <tr class="border-t"><td class="p-3">@Target(row)@if(row.GroupId.HasValue){<p class="text-xs text-slate-500">Priority @row.Priority</p>}</td><td class="p-3">@(row.SchedulePurpose=="Official"?"Default official hours":"Duty")<p class="mt-1 text-xs text-slate-500">@data.Templates.FirstOrDefault(t=>t.Id==row.WorkTemplateId)?.Name</p></td><td class="p-3">@row.ScheduleMode<p class="mt-1 text-xs text-slate-500">@row.EffectiveFrom.ToString("dd MMM yyyy")–@(row.EffectiveTo?.ToString("dd MMM yyyy")??"Ongoing")</p></td><td class="p-3">@(!row.IsActive?"Disabled":row.EffectiveTo<Today?"Ended":row.EffectiveFrom>Today?"Enabled · Scheduled":"Enabled")</td><td class="p-3"><div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>Edit(row)">Edit</button><button class="app-button app-button-secondary" disabled="@(busy || !row.IsActive || row.EffectiveTo<Today)" @onclick="()=>BeginEnd(row)">End</button><button class="app-button app-button-secondary" disabled="@(busy || row.EffectiveTo<Today)" @onclick="()=>ToggleEnabledAsync(row)">@(row.IsActive?"Disable":"Enable")</button><button class="app-button app-button-primary" disabled="@busy" @onclick="()=>OpenAssignStaff(row)">Assign Staff</button></div></td></tr>
             }
             @if(!Rows.Any()){<tr><td colspan="5" class="p-3 text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>}
         </tbody></table></div>
+    }
+    @if (showAssignStaffPanel)
+    {
+        <div class="fixed inset-0 z-50 overflow-hidden">
+            <div class="absolute inset-0 bg-black/40" @onclick="CloseAssignStaff"></div>
+            <div class="absolute inset-y-0 right-0 flex max-w-full pl-10">
+                <div class="pointer-events-auto flex h-full w-screen max-w-3xl flex-col bg-white shadow-2xl">
+                    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+                        <h2 class="text-lg font-semibold text-slate-900">Assign Staff</h2>
+                        <button type="button" class="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" @onclick="CloseAssignStaff">
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-6 w-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
+                        @if (assignStaffLoading) { <p class="text-sm text-slate-500">Loading staff...</p> }
+                        else if (assignStaffList.Count == 0) { <p class="text-sm text-slate-500">No active staff in this scope.</p> }
+                        else
+                        {
+                            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@(assignStaffSelected.Count == assignStaffList.Count)" @onchange="e => SelectAllAssignStaff(e.Value is true)" /> Select all</label>
+                            <div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                @foreach (var s in assignStaffList)
+                                {
+                                    <label class="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-slate-50">
+                                        <span class="flex items-center gap-2">
+                                            <input type="checkbox" checked="@assignStaffSelected.Contains(s.IndividualId)" @onchange="e => ToggleAssignStaff(s.IndividualId, e.Value is true)" />
+                                            <span class="font-medium text-slate-800">@s.EmployeeName</span>
+                                        </span>
+                                        <span class="text-xs text-slate-500">@s.JobTitle</span>
+                                    </label>
+                                }
+                            </div>
+                            @if (assignStaffMessage != null) { <p class="text-sm">@assignStaffMessage</p> }
+                        }
+                    </div>
+                    <div class="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end gap-3">
+                        @if (assignStaffBusy)
+                        {
+                            <span class="inline-flex items-center gap-2 text-sm text-slate-600">
+                                <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
+                                Generating...
+                            </span>
+                        }
+                        <button type="button" class="app-button app-button-secondary" @onclick="CloseAssignStaff" disabled="@assignStaffBusy">Cancel</button>
+                        <button type="button" class="app-button app-button-primary" disabled="@(assignStaffBusy || assignStaffSelected.Count == 0)" @onclick="CreateRosterFromPanel">
+                            @if (assignStaffBusy)
+                            {
+                                <span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>Creating...</span>
+                            }
+                            else
+                            {
+                                <span>Create roster</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
     }
 </section>
 @code {
@@ -96,4 +157,71 @@
     private async Task ToggleEnabledAsync(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row){if(busy)return;await Act(()=>Settings.SetEnabledAsync(row.Id,row.Version,!row.IsActive,OrganisationId),row.IsActive?"Schedule disabled.":"Schedule enabled.");}
     private async Task EndAsync(){if(ending==null||busy)return;await Act(async()=>{await Settings.EndAsync(ending.Id,ending.Version,lastDay,OrganisationId);ending=null;},"Schedule assignment ended.");}
     private async Task Act(Func<Task> action,string success){busy=true;error=null;try{await action();await LoadAsync();Toasts.Success(success);}catch(Exception ex){Logger.LogError(ex,"Saving scope schedules");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"The change could not be saved. Refresh and try again.";}finally{busy=false;}}
+    // Assign Staff panel state
+    private bool showAssignStaffPanel, assignStaffBusy, assignStaffLoading;
+    private List<EligibleAssignmentStaffDto> assignStaffList = [];
+    private readonly HashSet<int> assignStaffSelected = [];
+    private int assignStaffStructureId, assignStaffGroupId, assignStaffTemplateId;
+    private DateTime assignStaffFrom = Today, assignStaffTo = Today.AddDays(7);
+    private string? assignStaffMessage;
+    private async Task OpenAssignStaff(HRM.DTOs.Contracts.ScopeScheduleAssignmentDto row)
+    {
+        assignStaffStructureId = row.OrganisationStructureId ?? 0;
+        assignStaffGroupId = row.GroupId ?? 0;
+        assignStaffTemplateId = row.WorkTemplateId;
+        assignStaffFrom = row.EffectiveFrom < Today ? Today : row.EffectiveFrom;
+        assignStaffTo = row.EffectiveTo.HasValue && row.EffectiveTo.Value >= assignStaffFrom ? row.EffectiveTo.Value : assignStaffFrom.AddDays(7);
+        assignStaffSelected.Clear();
+        assignStaffList = [];
+        assignStaffMessage = null;
+        showAssignStaffPanel = true;
+        await LoadAssignStaffAsync();
+    }
+    private void CloseAssignStaff() { showAssignStaffPanel = false; }
+    private async Task LoadAssignStaffAsync()
+    {
+        assignStaffLoading = true;
+        assignStaffList = [];
+        try
+        {
+            if (assignStaffStructureId > 0) assignStaffList = await Assignments.GetDepartmentStaffAsync(assignStaffStructureId);
+            else if (assignStaffGroupId > 0) assignStaffList = await Assignments.GetGroupStaffAsync(assignStaffGroupId);
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Loading assign staff"); assignStaffMessage = ex.Message; }
+        finally { assignStaffLoading = false; }
+    }
+    private void ToggleAssignStaff(int id, bool on) { if (on) assignStaffSelected.Add(id); else assignStaffSelected.Remove(id); }
+    private void SelectAllAssignStaff(bool on) { assignStaffSelected.Clear(); if (on) foreach (var s in assignStaffList) assignStaffSelected.Add(s.IndividualId); }
+    private async Task CreateRosterFromPanel()
+    {
+        if (assignStaffSelected.Count == 0 || assignStaffBusy) return;
+        assignStaffBusy = true; assignStaffMessage = null;
+        int created = 0, skipped = 0; var warnings = new List<string>();
+        try
+        {
+            var org = await UserAccess.GetCurrentOrganisationIdAsync();
+            var dates = new List<DateTime>();
+            for (var d = assignStaffFrom.Date; d <= assignStaffTo.Date; d = d.AddDays(1)) dates.Add(d);
+            foreach (var id in assignStaffSelected)
+            {
+                var staff = assignStaffList.FirstOrDefault(x => x.IndividualId == id);
+                if (staff == null) continue;
+                foreach (var date in dates)
+                {
+                    try
+                    {
+                        var res = await ManualAssignments.GenerateAsync(new ManualWorkAssignmentRequest { IndividualId = staff.IndividualId, JobId = staff.JobId, OrganisationBusinessEntityId = org, WorkTemplateId = assignStaffTemplateId, WorkDate = date, AssignmentTitle = "Duty", RequiresAttendance = true, RequiresCheckout = true });
+                        if (res.Success) created++; else { skipped++; if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {res.Message}"); }
+                    }
+                    catch (Exception ex) { skipped++; if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {ex.Message}"); }
+                }
+            }
+            assignStaffMessage = $"{created} assignment(s) created; {skipped} skipped.";
+            if (warnings.Count > 0) assignStaffMessage += " " + string.Join(" ", warnings);
+            if (created > 0) { Toasts.Success(assignStaffMessage); CloseAssignStaff(); Navigation.NavigateTo("/admin/hr/work-planning/duty-roster?tab=roster"); }
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Creating roster from panel"); assignStaffMessage = ex.Message; }
+        finally { assignStaffBusy = false; }
+    }
 }
+

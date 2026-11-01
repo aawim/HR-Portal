@@ -154,6 +154,9 @@
     private const int MaxAssignments = 400;
     private static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
 
+    [Parameter] public int PreselectedStructureId { get; set; }
+    [Parameter] public int PreselectedGroupId { get; set; }
+    [Parameter] public string? PreselectedStaffIds { get; set; }
     private bool loading = true, busy, stopRequested;
     private string? error, resultMessage;
     private string staffSearch = "", assignmentTitle = "Duty", remarks = "", staffSource = "Structure";
@@ -195,6 +198,24 @@
             Groups = data.Groups ?? [];
             Templates = (data.Templates ?? []).Where(x => x.IsActive).OrderBy(x => x.Name).ToList();
             if (Templates.Count == 1) workTemplateId = Templates[0].Id;
+            if (PreselectedStructureId > 0)
+            {
+                staffSource = "Structure";
+                structureId = PreselectedStructureId;
+                filterStructureType = Structures.FirstOrDefault(x => x.Id == structureId)?.TypeId ?? 0;
+                await StructureChangedAsync();
+            }
+            else if (PreselectedGroupId > 0)
+            {
+                staffSource = "Group";
+                groupId = PreselectedGroupId;
+                await GroupChangedAsync();
+            }
+            if (!string.IsNullOrWhiteSpace(PreselectedStaffIds))
+            {
+                foreach (var part in PreselectedStaffIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (int.TryParse(part, out var id)) selectedIds.Add(id);
+            }
         }
         catch (Exception ex)
         {
