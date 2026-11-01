@@ -3,7 +3,13 @@
 @inject HRM.Services.ToastService Toasts
 
 <section class="space-y-4">
-    <header class="flex flex-wrap items-center justify-between gap-3"><div><h2 class="text-xl font-semibold">@Title</h2><p class="text-sm">@Description</p></div><button class="app-button app-button-secondary" disabled="@busy" @onclick="Refresh">Refresh</button></header>
+    <div class="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-slate-900">@Title</h1>
+            <p class="mt-1 text-sm text-slate-500">@Description</p>
+        </div>
+        <button type="button" @onclick="Refresh" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50">Refresh</button>
+    </div>
     @if (error != null) { <p role="alert" class="rounded-xl border p-3">@error</p> }
     @if (data == null && error == null) { <p role="status">Loading…</p> }
     @if (data != null)
