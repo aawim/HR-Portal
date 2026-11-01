@@ -5,54 +5,190 @@
 @inject ToastService Toasts
 @inject ILogger<ManageGroupsGrid> Logger
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-<section class="space-y-4 p-4">
-    <h1 class="text-xl font-semibold">Groups Management</h1>
-    <p class="text-sm text-slate-500">Manage operational groups and group types here. Access-control User Groups are managed under Roles &amp; Permissions.</p>
-    @if(error!=null){<p role="alert" class="rounded-lg border p-3 text-sm">@error</p>}
-    @if(data==null){<button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Reload groups</button>}
+<div class="w-full max-w-[1400px] mx-auto space-y-6 p-4">
+    <!-- Header with Back Button and Title -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[var(--app-border-color)]">
+        <div class="flex items-center gap-3">
+            <button type="button" class="app-button app-button-secondary inline-flex items-center gap-1 text-xs" aria-label="Go back to the previous page" @onclick="GoBack">
+                <span aria-hidden="true">←</span> Back
+            </button>
+            <div>
+                <h1 class="text-xl font-semibold text-[var(--select-text)]">Groups Management</h1>
+                <p class="text-xs text-[var(--select-muted)]">Manage operational groups, group types and related information.</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-2">
+            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors" href="/admin/hr/groups/management">Groups</a>
+            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--select-hover)] text-[var(--select-text)] border border-[var(--app-border-color)] hover:bg-[var(--app-border-color)] transition-colors" href="/admin/settings/org/types">Structure types</a>
+        </div>
+    </div>
+
+    @if (error != null)
+    {
+        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
+            @error
+        </div>
+    }
+
+    @if (data == null)
+    {
+        <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm p-6 text-center">
+            <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Reload groups</button>
+        </div>
+    }
     else
     {
-        @if(data.IsSuperAdmin){<label class="block text-sm">Organisation<select value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@busy" class="mt-1 block w-full rounded border bg-transparent p-2">@foreach(var org in data.Organisations){<option value="@org.Id">@org.Name</option>}</select></label>}
-        else{<p class="text-sm">Organisation: <strong>@data.Organisation</strong></p>}
-        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Group management sections"><button class="app-button @(tab=="groups"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="groups")" @onclick='()=>SelectTab("groups")'>Groups</button><button class="app-button @(tab=="types"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="types")" @onclick='()=>SelectTab("types")'>Group types</button></div>
-        <div class="flex flex-wrap items-end gap-3"><label class="text-sm">Search<input @bind="search" @bind:event="oninput" class="mt-1 block rounded border bg-transparent p-2" /></label><button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>@if(data.CanManage){<button class="app-button app-button-primary" disabled="@busy" @onclick="New">@(tab=="types"?"Add group type":"Add group")</button>}</div>
-        @if(editing)
-        {
-            <fieldset disabled="@busy" class="space-y-3 rounded-xl border p-4">
-                <h2 class="font-semibold">@(editId==0?"Add":"Edit") @(tab=="types"?"group type":"group")</h2>
-                <label class="block text-sm">Name<input @bind="name" maxlength="@(tab=="types"?150:250)" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
-                @if(tab=="groups")
+        <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm p-4 space-y-4">
+            @if (data.IsSuperAdmin)
+            {
+                <label class="block text-sm text-[var(--select-text)]">Organisation
+                    <select value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@busy" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        @foreach (var org in data.Organisations)
+                        {
+                            <option value="@org.Id">@org.Name</option>
+                        }
+                    </select>
+                </label>
+            }
+            else
+            {
+                <p class="text-sm text-[var(--select-text)]">Organisation: <strong>@data.Organisation</strong></p>
+            }
+
+            <div class="flex flex-wrap gap-2" role="tablist" aria-label="Group management sections">
+                <button class="app-button @(tab=="groups"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="groups")" @onclick='()=>SelectTab("groups")'>Groups</button>
+                <button class="app-button @(tab=="types"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="types")" @onclick='()=>SelectTab("types")'>Group types</button>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-3">
+                <label class="text-sm text-[var(--select-text)]">Search
+                    <input @bind="search" @bind:event="oninput" class="mt-1 block rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+                <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+                @if (data.CanManage)
                 {
-                    <div class="grid gap-3 sm:grid-cols-2"><label class="text-sm">Group type<select @bind="typeId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select group type</option>@foreach(var type in data.Types){<option value="@type.Id">@type.Name</option>}</select></label><label class="text-sm">Approved organisation structure<select @bind="structureId" class="mt-1 block w-full rounded border bg-transparent p-2"><option value="0">Select structure</option>@foreach(var structure in data.Structures){<option value="@structure.Id">@structure.Name</option>}</select></label></div>
+                    <button class="app-button app-button-primary" disabled="@busy" @onclick="New">@(tab=="types"?"Add group type":"Add group")</button>
                 }
-                <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" @onclick="SaveAsync">Save</button><button class="app-button app-button-secondary" @onclick="()=>editing=false">Cancel</button></div>
+            </div>
+        </div>
+
+        @if (editing)
+        {
+            <fieldset disabled="@busy" class="space-y-3 rounded-2xl border border-[var(--app-border-color)] bg-[var(--select-bg)] p-4 shadow-sm">
+                <h2 class="font-semibold text-[var(--select-text)]">@(editId==0?"Add":"Edit") @(tab=="types"?"group type":"group")</h2>
+                <label class="block text-sm text-[var(--select-text)]">Name
+                    <input @bind="name" maxlength="@(tab=="types"?150:250)" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+                @if (tab == "groups")
+                {
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <label class="text-sm text-[var(--select-text)]">Group type
+                            <select @bind="typeId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="0">Select group type</option>
+                                @foreach (var type in data.Types)
+                                {
+                                    <option value="@type.Id">@type.Name</option>
+                                }
+                            </select>
+                        </label>
+                        <label class="text-sm text-[var(--select-text)]">Approved organisation structure
+                            <select @bind="structureId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="0">Select structure</option>
+                                @foreach (var structure in data.Structures)
+                                {
+                                    <option value="@structure.Id">@structure.Name</option>
+                                }
+                            </select>
+                        </label>
+                    </div>
+                }
+                <div class="flex flex-wrap gap-2">
+                    <button class="app-button app-button-primary" @onclick="SaveAsync">Save</button>
+                    <button class="app-button app-button-secondary" @onclick="()=>editing=false">Cancel</button>
+                </div>
             </fieldset>
         }
-        @if(deletingId.HasValue)
+
+        @if (deletingId.HasValue)
         {
-            <div role="alert" class="space-y-2 rounded-lg border p-3 text-sm"><p>Delete the unused @(tab=="types"?"group type":"group") “@deletingName”? Records with staff, schedule or leave history cannot be deleted.</p><div class="flex gap-2"><button class="app-button app-button-primary" disabled="@busy" @onclick="DeleteAsync">Confirm delete</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>deletingId=null">Cancel</button></div></div>
+            <div role="alert" class="space-y-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
+                <p>Delete the unused @(tab=="types"?"group type":"group") “@deletingName”? Records with staff, schedule or leave history cannot be deleted.</p>
+                <div class="flex gap-2">
+                    <button class="app-button app-button-primary" disabled="@busy" @onclick="DeleteAsync">Confirm delete</button>
+                    <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>deletingId=null">Cancel</button>
+                </div>
+            </div>
         }
-        <div class="overflow-x-auto rounded-lg border"><table class="w-full text-left text-sm"><thead><tr><th class="p-3">Name</th>@if(tab=="groups"){<th class="p-3">Group type</th><th class="p-3">Structure</th>}<th class="p-3">Actions</th></tr></thead><tbody>
-        @if(tab=="groups")
-        {
-            @foreach(var row in data.Groups.Where(g=>g.Name.Contains(search,StringComparison.OrdinalIgnoreCase)||g.Type.Contains(search,StringComparison.OrdinalIgnoreCase)||g.Structure.Contains(search,StringComparison.OrdinalIgnoreCase)))
+
+        <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm text-[var(--select-text)]">
+                    <thead class="bg-[var(--select-hover)]">
+                        <tr>
+                            <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Name</th>
+                            @if (tab == "groups")
+                            {
+                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Group type</th>
+                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Structure</th>
+                            }
+                            <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-[var(--app-border-color)]">
+                        @if (tab == "groups")
+                        {
+                            @foreach (var row in data.Groups.Where(g => g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Structure.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <tr class="hover:bg-[var(--select-hover)] transition-colors">
+                                    <td class="p-3">@row.Name</td>
+                                    <td class="p-3">@row.Type</td>
+                                    <td class="p-3">@row.Structure</td>
+                                    <td class="p-3">
+                                        <div class="flex flex-wrap gap-2">
+                                            <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>View(row)">View</button>
+                                            @if (data.CanManage)
+                                            {
+                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Edit(row)">Edit</button>
+                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,row.AuditId)">Delete</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            @foreach (var row in data.Types.Where(t => t.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
+                            {
+                                <tr class="hover:bg-[var(--select-hover)] transition-colors">
+                                    <td class="p-3">@row.Name</td>
+                                    <td class="p-3">
+                                        @if (data.CanManage)
+                                        {
+                                            <div class="flex flex-wrap gap-2">
+                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EditType(row)">Edit</button>
+                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,0)">Delete</button>
+                                            </div>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+            @if ((tab == "groups" && data.Groups.Count == 0) || (tab == "types" && data.Types.Count == 0))
             {
-                <tr class="border-t"><td class="p-3">@row.Name</td><td class="p-3">@row.Type</td><td class="p-3">@row.Structure</td><td class="p-3"><div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>View(row)">View</button>@if(data.CanManage){<button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Edit(row)">Edit</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,row.AuditId)">Delete</button>}</div></td></tr>
+                <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">No records found.</div>
             }
-        }
-        else
-        {
-            @foreach(var row in data.Types.Where(t=>t.Name.Contains(search,StringComparison.OrdinalIgnoreCase)))
-            {
-                <tr class="border-t"><td class="p-3">@row.Name</td><td class="p-3">@if(data.CanManage){<div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EditType(row)">Edit</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,0)">Delete</button></div>}</td></tr>
-            }
-        }
-        </tbody></table></div>
-        @if(tab=="groups" && data.Groups.Count==0 || tab=="types" && data.Types.Count==0){<p class="text-sm text-slate-500">No records found.</p>}
+        </div>
+
         <GroupDetailPanel @bind-IsOpen="detailOpen" Group="selectedGroup" />
     }
-</section>
+</div>
+
 @code {
     [SupplyParameterFromQuery(Name="organisationId")] public int? OrganisationId {get;set;}
     [SupplyParameterFromQuery(Name="tab")] public string? RequestedTab {get;set;}
@@ -76,4 +212,14 @@
     private Task DeleteAsync()=>Act(async()=>{if(!deletingId.HasValue)return;if(tab=="types")await Groups.DeleteTypeAsync(data!.OrganisationId,deletingId.Value,deletingName);else await Groups.DeleteGroupAsync(data!.OrganisationId,deletingId.Value,deletingAudit);},"Unused record deleted.");
     private async Task Act(Func<Task> action,string message){if(busy)return;busy=true;error=null;var saved=false;try{await action();Toasts.Success(message);saved=true;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
     private void Fail(Exception ex){Logger.LogError(ex,"Managing operational groups");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Groups could not be loaded or saved. Please refresh or contact HR.";}
+    private async Task GoBack()
+    {
+        try
+        {
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/navigation-history.js");
+            await module.InvokeVoidAsync("goBack", "/admin/hr");
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { Navigation.NavigateTo("/admin/hr"); }
+    }
 }
