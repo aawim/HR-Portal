@@ -373,6 +373,55 @@ static class ScheduleFlowTests
         var bothChecks = await new HRM.Services.Attendance.AttendanceEvaluationService(factory).EvaluateAsync(1000, 100, mandatoryDate);
         Check(bothChecks.IsComplete && bothChecks.WorkedMinutes == 360 && bothChecks.PotentialOvertimeMinutes == 0,
             "Separate mandatory check-ins did not complete attendance or double-counted hours");
+        // Official hours 08:00-14:00 with a 10:00-12:00 duty. The official
+        // mandatory clock events stay authoritative while the duty is attended.
+        var precedenceDate = date.AddDays(-4);
+        var precedencePlan = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(precedenceDate));
+        async Task<HRM.DTOs.Attendance.AttendancePlanResolutionResult> Punch(int hour, int minute)
+        {
+            var at = precedenceDate.AddHours(hour).AddMinutes(minute);
+            var result = await resolver.ResolveAsync(1000, 100, 10, at);
+            if (!result.IsResolved || !result.WorkPlanSegmentId.HasValue) return result;
+            await using var db = factory.CreateDbContext();
+            var log = new AttendanceLog
+            {
+                IndividualId = 1000, OrganisationId = 10, OrganisationStructureId = 10,
+                Year = at.Year, Month = at.Month, Day = at.Day, Hour = at.Hour, Minute = at.Minute,
+                Date = at, Uidstamp = $"precedence-{at:HHmm}", AttendanceLogModeId = 1,
+                AttendanceLogStateId = 1, InOutModeId = 1
+            };
+            db.AttendanceLogs.Add(log);
+            await db.SaveChangesAsync();
+            db.AttendanceLogResolutions.Add(new AttendanceLogResolution
+            {
+                AttendanceLogId = log.AttendanceLogId, WorkPlanId = result.WorkPlanId,
+                WorkPlanSegmentId = result.WorkPlanSegmentId, JobId = 100, IsValid = true,
+                AttendanceClockTypeId = (int)result.ClockType, AttendanceResolutionStatusId = 1,
+                ResolutionDate = at
+            });
+            await db.SaveChangesAsync();
+            return result;
+        }
+        var earlyPunch = await Punch(7, 50);
+        var dutyInPunch = await Punch(10, 0);
+        var dutyLateOutPunch = await Punch(12, 31);
+        var officialOutPunch = await Punch(13, 55);
+        var officialCheckoutPunch = await Punch(14, 0);
+        await using (var db = factory.CreateDbContext())
+        {
+            var segments = await db.WorkPlanSegments.Where(x => x.WorkPlanId == precedencePlan!.WorkPlanId && x.WorkTemplateSegmentId.HasValue)
+                .ToDictionaryAsync(x => x.WorkTemplateSegmentId!.Value, x => x.WorkPlanSegmentId);
+            Check(earlyPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && earlyPunch.WorkPlanSegmentId == segments[1],
+                "07:50 punch was not the official check-in");
+            Check(dutyInPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && dutyInPunch.WorkPlanSegmentId == segments[3],
+                "10:00 punch was not the duty check-in");
+            Check(dutyLateOutPunch.ClockType == HRM.Enum.AttendanceClockType.CheckOut && dutyLateOutPunch.WorkPlanSegmentId == segments[4],
+                "A duty punch after its checkout window was recorded as an official check-in");
+            Check(officialOutPunch.ClockType == HRM.Enum.AttendanceClockType.CheckOut && officialOutPunch.WorkPlanSegmentId == segments[2],
+                "The 13:55 punch was attributed to the duty instead of the official checkout");
+            Check(officialCheckoutPunch.ClockType == HRM.Enum.AttendanceClockType.CheckOut && officialCheckoutPunch.WorkPlanSegmentId == segments[2],
+                "The 14:00 official checkout was lost");
+        }
         var nightDate = date.AddDays(-8);
         await using (var db = factory.CreateDbContext())
         {
