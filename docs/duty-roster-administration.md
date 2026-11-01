@@ -2,9 +2,9 @@
 
 ## Location
 
-Open **Admin → Work planning → Duty roster** (`/admin/work-planning/duty-roster`). The page hosts four tabs and the selected tab is kept in the URL:
+Open **Admin → Work planning → Duty roster** (`/admin/hr/work-planning/duty-roster`). The page hosts four tabs and the selected tab is kept in the URL:
 
-- `roster` – dated duties with transfers, swaps and duty requests (`/admin/work-planning/duty-roster?tab=roster`).
+- `roster` – dated duties with transfers, swaps and duty requests (`/admin/hr/work-planning/duty-roster?tab=roster`).
 - `schedule` – shared schedule assignments for the organisation, approved structures and staff groups (`?tab=schedule`). The former Settings → Work planning → Schedule assignments entry now opens this tab. `scope` and `groupId` query values still preselect a group.
 - `manual` – the manual work assignment form for one staff member and one date (`?tab=manual`), also reachable at `/admin/work-planning/manual-assignment`.
 - `create` – create a dated duty roster for several staff members over a date range (`?tab=create`).
