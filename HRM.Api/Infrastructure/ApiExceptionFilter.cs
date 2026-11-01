@@ -23,7 +23,7 @@ public sealed class ApiExceptionFilter(ILogger<ApiExceptionFilter> logger) : IEx
             403 => "You do not have permission to access this information or perform this action.",
             400 => "Check the request fields and try again.",
             404 => "The requested record is unavailable.",
-            409 => "This action could not be completed. Refresh and try again, or contact your organisation's HR team.",
+            409 => context.Exception is InvalidOperationException ? context.Exception.Message : "This action could not be completed. Refresh and try again, or contact your organisation's HR team.",
             _ => "This action could not be completed right now. Please try again."
         };
         if(context.Exception is HRM.Services.WorkflowConfigurationException)

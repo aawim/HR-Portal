@@ -59,7 +59,8 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
             if(response.StatusCode==HttpStatusCode.Conflict&&response.Headers.TryGetValues(ApiProblemCodes.Header,out var problems)&&problems.Contains(ApiProblemCodes.WorkflowUnavailable,StringComparer.Ordinal))
                 throw new ApiOperationException(ApiProblemCodes.WorkflowUnavailable,ApiProblemCodes.WorkflowUnavailableMessage);
             // Do not render arbitrary upstream HTML, exception details, or model-state values in the UI.
-            throw new ApiOperationException(code, response.StatusCode switch
+            var upstreamTitle = await TryReadProblemTitleAsync(response);
+            throw new ApiOperationException(code, upstreamTitle ?? response.StatusCode switch
             {
                 HttpStatusCode.BadRequest => "Check the request fields and try again.",
                 HttpStatusCode.NotFound => "The requested record is unavailable.",
@@ -68,6 +69,30 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
                 _ => "This action could not be completed right now. Please try again."
             });
         }
+    }
+
+    private static async Task<string?> TryReadProblemTitleAsync(HttpResponseMessage response)
+    {
+        try
+        {
+            if (response.Content is null) return null;
+            var media = response.Content.Headers.ContentType?.MediaType;
+            if (media is null || !media.Contains("json", StringComparison.OrdinalIgnoreCase)) return null;
+            using var stream = await response.Content.ReadAsStreamAsync();
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.TryGetProperty("title", out var title) && title.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var value = title.GetString();
+                if (!string.IsNullOrWhiteSpace(value) && value.Length <= 300) return value;
+            }
+            if (doc.RootElement.TryGetProperty("detail", out var detail) && detail.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var value = detail.GetString();
+                if (!string.IsNullOrWhiteSpace(value) && value.Length <= 300) return value;
+            }
+        }
+        catch { }
+        return null;
     }
 
     private static string QueryValue(object value) => value switch
