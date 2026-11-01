@@ -65,63 +65,56 @@
             @if(!Rows.Any()){<tr><td colspan="5" class="p-3 text-slate-500">No @scope.ToLowerInvariant() schedule assignments.</td></tr>}
         </tbody></table></div>
     }
-    @if (showAssignStaffPanel)
-    {
-        <div class="fixed inset-0 z-50 overflow-hidden">
-            <div class="absolute inset-0 bg-black/40" @onclick="CloseAssignStaff"></div>
-            <div class="absolute inset-y-0 right-0 flex max-w-full pl-10">
-                <div class="pointer-events-auto flex h-full w-screen max-w-3xl flex-col bg-white shadow-2xl">
-                    <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-                        <h2 class="text-lg font-semibold text-slate-900">Assign Staff</h2>
-                        <button type="button" class="rounded-md p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700" @onclick="CloseAssignStaff">
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="h-6 w-6"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>
-                        </button>
-                    </div>
-                    <div class="flex-1 overflow-y-auto px-6 py-6 space-y-4">
-                        @if (assignStaffLoading) { <p class="text-sm text-slate-500">Loading staff...</p> }
-                        else if (assignStaffList.Count == 0) { <p class="text-sm text-slate-500">No active staff in this scope.</p> }
-                        else
+    <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAssignStaffPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")" @onclick="CloseAssignStaff"></div>
+    <div class="fixed inset-y-0 right-0 z-50 w-full max-w-3xl bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAssignStaffPanel ? "translate-x-0" : "translate-x-full")">
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                <h3 class="text-lg font-bold text-slate-800">Assign Staff</h3>
+                <button @onclick="CloseAssignStaff" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="flex-1 overflow-y-auto p-6 space-y-5">
+                @if (assignStaffLoading) { <p class="text-sm text-slate-500">Loading staff...</p> }
+                else if (assignStaffList.Count == 0) { <p class="text-sm text-slate-500">No active staff in this scope.</p> }
+                else
+                {
+                    <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@(assignStaffSelected.Count == assignStaffList.Count)" @onchange="e => SelectAllAssignStaff(e.Value is true)" /> Select all</label>
+                    <div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                        @foreach (var s in assignStaffList)
                         {
-                            <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@(assignStaffSelected.Count == assignStaffList.Count)" @onchange="e => SelectAllAssignStaff(e.Value is true)" /> Select all</label>
-                            <div class="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                                @foreach (var s in assignStaffList)
-                                {
-                                    <label class="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-slate-50">
-                                        <span class="flex items-center gap-2">
-                                            <input type="checkbox" checked="@assignStaffSelected.Contains(s.IndividualId)" @onchange="e => ToggleAssignStaff(s.IndividualId, e.Value is true)" />
-                                            <span class="font-medium text-slate-800">@s.EmployeeName</span>
-                                        </span>
-                                        <span class="text-xs text-slate-500">@s.JobTitle</span>
-                                    </label>
-                                }
-                            </div>
-                            @if (assignStaffMessage != null) { <p class="text-sm">@assignStaffMessage</p> }
+                            <label class="flex items-center justify-between gap-2 rounded-md bg-white px-3 py-2 text-sm shadow-sm transition hover:bg-slate-50">
+                                <span class="flex items-center gap-2">
+                                    <input type="checkbox" checked="@assignStaffSelected.Contains(s.IndividualId)" @onchange="e => ToggleAssignStaff(s.IndividualId, e.Value is true)" />
+                                    <span class="font-medium text-slate-800">@s.EmployeeName</span>
+                                </span>
+                                <span class="text-xs text-slate-500">@s.JobTitle</span>
+                            </label>
                         }
                     </div>
-                    <div class="border-t border-slate-200 bg-slate-50 px-6 py-4 flex justify-end gap-3">
-                        @if (assignStaffBusy)
-                        {
-                            <span class="inline-flex items-center gap-2 text-sm text-slate-600">
-                                <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
-                                Generating...
-                            </span>
-                        }
-                        <button type="button" class="app-button app-button-secondary" @onclick="CloseAssignStaff" disabled="@assignStaffBusy">Cancel</button>
-                        <button type="button" class="app-button app-button-primary" disabled="@(assignStaffBusy || assignStaffSelected.Count == 0)" @onclick="CreateRosterFromPanel">
-                            @if (assignStaffBusy)
-                            {
-                                <span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>Creating...</span>
-                            }
-                            else
-                            {
-                                <span>Create roster</span>
-                            }
-                        </button>
-                    </div>
-                </div>
+                    @if (assignStaffBusy)
+                    {
+                        <div class="inline-flex items-center gap-2 text-sm text-slate-600">
+                            <span class="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700"></span>
+                            Generating...
+                        </div>
+                    }
+                    @if (assignStaffMessage != null) { <p class="text-sm">@assignStaffMessage</p> }
+                }
+            </div>
+            <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+                <button type="button" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm" @onclick="CloseAssignStaff" disabled="@assignStaffBusy">Cancel</button>
+                <button type="button" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50" disabled="@(assignStaffBusy || assignStaffSelected.Count == 0)" @onclick="CreateRosterFromPanel">
+                    @if (assignStaffBusy)
+                    {
+                        <span class="inline-flex items-center gap-2"><span class="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"></span>Creating...</span>
+                    }
+                    else
+                    {
+                        <span>Create roster</span>
+                    }
+                </button>
             </div>
         </div>
-    }
 </section>
 @code {
     [Parameter] public int? OrganisationId { get; set; }
@@ -197,6 +190,9 @@
         if (assignStaffSelected.Count == 0 || assignStaffBusy) return;
         assignStaffBusy = true; assignStaffMessage = null;
         int created = 0, skipped = 0; var warnings = new List<string>();
+        var createdIds = new List<long>();
+        var overlappingStaff = new List<string>();
+        bool hadFailure = false;
         try
         {
             var org = await UserAccess.GetCurrentOrganisationIdAsync();
@@ -204,21 +200,42 @@
             for (var d = assignStaffFrom.Date; d <= assignStaffTo.Date; d = d.AddDays(1)) dates.Add(d);
             foreach (var id in assignStaffSelected)
             {
+                if (hadFailure) break;
                 var staff = assignStaffList.FirstOrDefault(x => x.IndividualId == id);
                 if (staff == null) continue;
                 foreach (var date in dates)
                 {
+                    if (hadFailure) break;
                     try
                     {
                         var res = await ManualAssignments.GenerateAsync(new ManualWorkAssignmentRequest { IndividualId = staff.IndividualId, JobId = staff.JobId, OrganisationBusinessEntityId = org, WorkTemplateId = assignStaffTemplateId, WorkDate = date, AssignmentTitle = "Duty", RequiresAttendance = true, RequiresCheckout = true });
-                        if (res.Success) created++; else { skipped++; if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {res.Message}"); }
+                        if (res.Success) { created++; if (res.WorkAssignmentId.HasValue && res.WorkAssignmentId.Value > 0) createdIds.Add(res.WorkAssignmentId.Value); }
+                        else { skipped++; hadFailure = true; overlappingStaff.Add($"{staff.EmployeeName} ({date:dd MMM})"); if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {res.Message}"); }
                     }
-                    catch (Exception ex) { skipped++; if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {ex.Message}"); }
+                    catch (Exception ex) { skipped++; hadFailure = true; overlappingStaff.Add($"{staff.EmployeeName} ({date:dd MMM})"); if (warnings.Count < 8) warnings.Add($"{staff.EmployeeName} · {date:dd MMM}: {ex.Message}"); }
                 }
             }
-            assignStaffMessage = $"{created} assignment(s) created; {skipped} skipped.";
-            if (warnings.Count > 0) assignStaffMessage += " " + string.Join(" ", warnings);
-            if (created > 0) { Toasts.Success(assignStaffMessage); CloseAssignStaff(); Navigation.NavigateTo("/admin/hr/work-planning/duty-roster?tab=roster"); }
+            if (hadFailure && createdIds.Count > 0)
+            {
+                foreach (var aid in createdIds)
+                {
+                    try { await ManualAssignments.CancelAsync(aid, "Rolled back due to overlap."); } catch { }
+                }
+                created = 0; createdIds.Clear();
+            }
+            if (hadFailure)
+            {
+                var overlapText = overlappingStaff.Count > 0 ? " Overlapping staff: " + string.Join(", ", overlappingStaff.Distinct()) + "." : "";
+                assignStaffMessage = $"Roster not created due to overlap.{overlapText} {string.Join(" ", warnings)}".Trim();
+                Toasts.Warning(assignStaffMessage);
+            }
+            else
+            {
+                assignStaffMessage = $"{created} assignment(s) created.";
+                Toasts.Success(assignStaffMessage);
+                CloseAssignStaff();
+                Navigation.NavigateTo("/admin/hr/work-planning/duty-roster?tab=roster");
+            }
         }
         catch (Exception ex) { Logger.LogError(ex, "Creating roster from panel"); assignStaffMessage = ex.Message; }
         finally { assignStaffBusy = false; }

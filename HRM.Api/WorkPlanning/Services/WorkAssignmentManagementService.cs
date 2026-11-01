@@ -483,12 +483,7 @@ public sealed class WorkAssignmentManagementService
 
         var memberIds =
             await db.GroupStaffs.AsNoTracking()
-                .Where(member =>
-                    member.GroupId == groupId &&
-                    member.EffectiveStartDate <= DateTime.Today &&
-                    (
-                        !member.EffectiveEndDate.HasValue ||
-                        member.EffectiveEndDate.Value >= DateTime.Today))
+                .Where(member => member.GroupId == groupId)
                 .Select(member => member.StaffIndividualId)
                 .Distinct()
                 .ToListAsync(cancellationToken);
