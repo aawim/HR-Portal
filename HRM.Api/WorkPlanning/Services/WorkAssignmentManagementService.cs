@@ -459,6 +459,140 @@ public sealed class WorkAssignmentManagementService
             .ToList();
     }
 
+    public async Task<List<EligibleAssignmentStaffDto>>
+        GetGroupStaffAsync(
+            int groupId,
+            CancellationToken cancellationToken = default)
+    {
+        var org = await HRM.WorkPlanning.Services.WorkPlanningAccess.RequireOrganisationAsync(_access);
+        if (groupId <= 0)
+        {
+            return new List<EligibleAssignmentStaffDto>();
+        }
+
+        await using var db =
+            await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+        if (!await db.Groups.AnyAsync(
+                group => group.GroupId == groupId &&
+                         group.BusinessEntityOrganisationId == org,
+                cancellationToken))
+        {
+            return new List<EligibleAssignmentStaffDto>();
+        }
+
+        var memberIds =
+            await db.GroupStaffs.AsNoTracking()
+                .Where(member =>
+                    member.GroupId == groupId &&
+                    member.EffectiveStartDate <= DateTime.Today &&
+                    (
+                        !member.EffectiveEndDate.HasValue ||
+                        member.EffectiveEndDate.Value >= DateTime.Today))
+                .Select(member => member.StaffIndividualId)
+                .Distinct()
+                .ToListAsync(cancellationToken);
+
+        if (memberIds.Count == 0)
+        {
+            return new List<EligibleAssignmentStaffDto>();
+        }
+
+        var today = DateTime.Today;
+
+        var staffRows = await
+        (
+            from job in db.Jobs.AsNoTracking()
+
+            join individual in db.Individuals.AsNoTracking()
+                on job.IndividualID
+                equals individual.BusinessEntityId
+
+            let currentPositionId =
+                db.JobPositions
+                    .Where(jobPosition =>
+                        jobPosition.JobId == job.JobId &&
+                        jobPosition.FromDate <= today &&
+                        (
+                            !jobPosition.ToDate.HasValue ||
+                            jobPosition.ToDate.Value >= today
+                        ))
+                    .OrderByDescending(jobPosition =>
+                        jobPosition.FromDate)
+                    .ThenByDescending(jobPosition =>
+                        jobPosition.JobPositionId)
+                    .Select(jobPosition =>
+                        (int?)jobPosition.PositionId)
+                    .FirstOrDefault()
+
+            join position in db.Positions.AsNoTracking()
+                on currentPositionId
+                equals (int?)position.PositionId
+                into positionJoin
+
+            from position in positionJoin.DefaultIfEmpty()
+
+            where job.OrganisationID == org
+                  && memberIds.Contains(job.IndividualID)
+                  && !job.TerminatedDate.HasValue
+
+            select new
+            {
+                IndividualId =
+                    individual.BusinessEntityId,
+
+                JobId =
+                    job.JobId,
+
+                FirstName =
+                    individual.FirstNameEnglish,
+
+                MiddleName =
+                    individual.MiddleNameEnglish,
+
+                LastName =
+                    individual.LastNameEnglish,
+
+                PositionName =
+                    position == null
+                        ? null
+                        : position.Name
+            }
+        )
+        .ToListAsync(cancellationToken);
+
+        return staffRows
+            .GroupBy(x => x.IndividualId)
+            .Select(group =>
+                group
+                    .OrderByDescending(x => x.JobId)
+                    .First())
+            .Select(x => new EligibleAssignmentStaffDto
+            {
+                IndividualId =
+                    x.IndividualId,
+
+                JobId =
+                    x.JobId,
+
+                EmployeeName =
+                    BuildFullName(
+                        x.FirstName,
+                        x.MiddleName,
+                        x.LastName),
+
+                JobTitle =
+                    string.IsNullOrWhiteSpace(x.PositionName)
+                        ? "No active position"
+                        : x.PositionName,
+
+                IsSelected =
+                    false
+            })
+            .OrderBy(x => x.EmployeeName)
+            .ToList();
+    }
+
     //public async Task<List<WorkAssignmentEmployeeDto>>
     //GetAssignmentEmployeesAsync(
     //    int organisationStructureId,

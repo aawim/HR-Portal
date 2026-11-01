@@ -31,6 +31,11 @@ namespace HRM.WorkPlanning.Abstractions
                 DateTime scheduledEnd,
                 CancellationToken cancellationToken = default);
 
+        Task<List<EligibleAssignmentStaffDto>>
+            GetGroupStaffAsync(
+                int groupId,
+                CancellationToken cancellationToken = default);
+
         Task<BulkAssignmentResultDto>
             AssignDepartmentAsync(
                 BulkDepartmentAssignmentRequest request,

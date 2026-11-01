@@ -2,8 +2,10 @@
 @using HRM.WorkPlanning.Abstractions
 @using HRM.Services
 @using HRM.Services.Interfaces
+@using HRM.Services.Contracts
 @inject IWorkAssignmentManagementService Assignments
-@inject IManualWorkAssignmentLookupService TemplateLookup
+@inject ScopeScheduleSettingsServiceContracts.IOperations Settings
+@inject IWorkTemplateService WorkTemplateService
 @inject IManualWorkAssignmentService ManualAssignments
 @inject IUserAccessService UserAccess
 @inject ToastService Toasts
@@ -12,7 +14,7 @@
 <section class="space-y-4">
     <div>
         <h2 class="text-xl font-semibold">Create a roster</h2>
-        <p class="mt-1 text-sm text-slate-500">Create dated duty assignments for several staff members over a date range. Each staff member keeps their own daily plan and clock events. Duty dates still need the staff member's official hours.</p>
+        <p class="mt-1 text-sm text-slate-500">Create dated duty assignments for several staff members over a date range. Each staff member keeps their own daily plan and clock events. Check-in and check-out requirements come from the selected template. Duty dates still need the staff member's official hours.</p>
     </div>
     @if (error != null) { <p role="alert" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm">@error</p> }
     @if (loading) { <p class="text-sm text-slate-500">Loading roster options...</p> }
@@ -21,25 +23,47 @@
         <div class="grid grid-cols-1 gap-6 xl:grid-cols-3">
             <div class="space-y-4 xl:col-span-2">
                 <fieldset disabled="@busy" class="space-y-4 rounded-xl border p-4">
-                    <h3 class="font-semibold">1. Staff</h3>
-                    <div class="grid gap-3 sm:grid-cols-2">
-                        <label class="block text-sm">Department
-                            <select @bind="departmentId" @bind:after="DepartmentChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2">
-                                <option value="0">Select department</option>
-                                @foreach (var department in Departments) { <option value="@department.OrganisationStructureId">@department.DepartmentName</option> }
+                    <h3 class="font-semibold">1. Staff source</h3>
+                    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Staff source">
+                        <button type="button" class="app-button @(staffSource == "Structure" ? "app-button-primary" : "app-button-secondary")" @onclick='() => ChangeSource("Structure")'>Structure</button>
+                        <button type="button" class="app-button @(staffSource == "Group" ? "app-button-primary" : "app-button-secondary")" @onclick='() => ChangeSource("Group")'>Team / group</button>
+                    </div>
+                    @if (staffSource == "Structure")
+                    {
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="block text-sm">Structure type
+                                <select @bind="filterStructureType" @bind:after="StructureTypeChanged" class="mt-1 block w-full rounded border bg-transparent p-2">
+                                    <option value="0">All types</option>
+                                    @foreach (var type in StructureTypeOptions) { <option value="@type.TypeId">@type.TypeName</option> }
+                                </select>
+                            </label>
+                            <label class="block text-sm">Structure
+                                <select @bind="structureId" @bind:after="StructureChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2">
+                                    <option value="0">Select structure</option>
+                                    @foreach (var structure in FilteredStructures) { <option value="@structure.Id">@structure.Name</option> }
+                                </select>
+                            </label>
+                        </div>
+                    }
+                    else
+                    {
+                        <label class="block text-sm">Team / group
+                            <select @bind="groupId" @bind:after="GroupChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2">
+                                <option value="0">Select team / group</option>
+                                @foreach (var group in Groups) { <option value="@group.Id">@group.Name</option> }
                             </select>
                         </label>
-                        <label class="block text-sm">Search staff
-                            <input @bind="staffSearch" @bind:event="oninput" maxlength="150" placeholder="Name or job title" class="mt-1 block w-full rounded border bg-transparent p-2" />
-                        </label>
-                    </div>
-                    @if (departmentId <= 0)
+                    }
+                    <label class="block text-sm">Search staff
+                        <input @bind="staffSearch" @bind:event="oninput" maxlength="150" placeholder="Name or job title" class="mt-1 block w-full rounded border bg-transparent p-2" />
+                    </label>
+                    @if (SelectedSourceId <= 0)
                     {
-                        <p class="text-sm text-slate-500">Select a department to load its staff.</p>
+                        <p class="text-sm text-slate-500">Select a structure or team to load its staff.</p>
                     }
                     else if (Staff.Count == 0)
                     {
-                        <p class="text-sm text-slate-500">This department has no active staff with a job.</p>
+                        <p class="text-sm text-slate-500">No active staff with a job in this selection.</p>
                     }
                     else
                     {
@@ -63,13 +87,13 @@
                     <h3 class="font-semibold">2. Duty schedule</h3>
                     <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <label class="block text-sm">Duty template
-                            <select @bind="workTemplateId" class="mt-1 block w-full rounded border bg-transparent p-2">
+                            <select @bind="workTemplateId" @bind:after="TemplateChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2">
                                 <option value="0">Select template</option>
-                                @foreach (var template in Templates) { <option value="@template.WorkTemplateId">@template.TemplateName</option> }
+                                @foreach (var template in Templates) { <option value="@template.Id">@template.Name@(template.IsActive ? "" : " (inactive)")</option> }
                             </select>
                         </label>
-                        <label class="block text-sm">From <InputDate @bind-Value="fromDate" @bind-Value:after="FromDateChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
-                        <label class="block text-sm">To <InputDate @bind-Value="toDate" @bind-Value:after="ToDateChangedAsync" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                        <label class="block text-sm">From <InputDate @bind-Value="fromDate" @bind-Value:after="FromDateChanged" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
+                        <label class="block text-sm">To <InputDate @bind-Value="toDate" @bind-Value:after="ToDateChanged" class="mt-1 block w-full rounded border bg-transparent p-2" /></label>
                         <label class="block text-sm">Assignment title
                             <input @bind="assignmentTitle" maxlength="250" class="mt-1 block w-full rounded border bg-transparent p-2" />
                         </label>
@@ -81,15 +105,15 @@
                             <label class="inline-flex items-center gap-1 text-sm"><input type="checkbox" checked="@((weekdayMask & bit) != 0)" @onchange="e => ToggleDay(bit, e.Value is true)" /> @day</label>
                         }
                     </div>
-                    @if (Templates.Count == 0) { <p class="text-xs text-slate-500">No active template covers the selected date in this organisation. Check Templates or Schedule assignments first.</p> }
+                    @if (Templates.Count == 0) { <p class="text-xs text-slate-500">No templates are available for this organisation.</p> }
+                    @if (selectedTemplate != null)
+                    {
+                        <p class="text-xs text-slate-500">Template check-in: @(requiresAttendance ? "required" : "not required") · check-out: @(requiresCheckout ? "required" : "not required").</p>
+                    }
                     <p class="text-xs text-slate-500">Only the selected weekdays inside the date range are created. Existing duties for the same staff, day and template are kept and reported as skipped.</p>
                 </fieldset>
                 <fieldset disabled="@busy" class="space-y-4 rounded-xl border p-4">
                     <h3 class="font-semibold">3. Options</h3>
-                    <div class="flex flex-wrap gap-4">
-                        <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@requiresAttendance" @onchange="e => requiresAttendance = e.Value is true" /> Requires check in</label>
-                        <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" checked="@requiresCheckout" @onchange="e => requiresCheckout = e.Value is true" /> Requires check out</label>
-                    </div>
                     <label class="block text-sm">Remarks
                         <textarea @bind="remarks" maxlength="500" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea>
                     </label>
@@ -132,40 +156,45 @@
 
     private bool loading = true, busy, stopRequested;
     private string? error, resultMessage;
-    private string staffSearch = "", assignmentTitle = "Duty", remarks = "";
+    private string staffSearch = "", assignmentTitle = "Duty", remarks = "", staffSource = "Structure";
     private bool requiresAttendance = true, requiresCheckout = true;
-    private int organisationId, departmentId, workTemplateId;
+    private int organisationId, structureId, filterStructureType, groupId, workTemplateId;
     private int weekdayMask = DefaultWeekdayMask();
     private DateTime fromDate = Today, toDate = Today;
     private int processed, total, created, skipped;
     private readonly HashSet<int> selectedIds = [];
     private readonly List<string> warnings = [];
-    private List<WorkAssignmentDepartmentDto> Departments = [];
+    private List<HRM.Services.ScopeScheduleStructureOption> Structures = [];
+    private List<HRM.Services.ScopeScheduleOption> Groups = [];
+    private List<HRM.Services.ScopeScheduleOption> Templates = [];
     private List<EligibleAssignmentStaffDto> Staff = [];
-    private List<AssignedWorkTemplateDto> Templates = [];
+    private HRM.DTOs.WorkPlanning.WorkTemplateDto? selectedTemplate;
 
     private IEnumerable<EligibleAssignmentStaffDto> FilteredStaff => string.IsNullOrWhiteSpace(staffSearch)
         ? Staff
         : Staff.Where(x => $"{x.EmployeeName} {x.JobTitle}".Contains(staffSearch, StringComparison.OrdinalIgnoreCase));
+    private IEnumerable<HRM.Services.ScopeScheduleStructureOption> FilteredStructures => filterStructureType == 0
+        ? Structures
+        : Structures.Where(x => x.TypeId == filterStructureType);
+    // helper for structure type list (unique types)
+    private IEnumerable<HRM.Services.ScopeScheduleStructureOption> StructureTypeOptions =>
+        Structures.GroupBy(x => x.TypeId).Select(g => g.First());
     private int DayCount => Dates().Count();
     private int TotalAssignments => selectedIds.Count * DayCount;
     private int ProgressPercent => total == 0 ? 0 : (int)Math.Round(processed * 100d / total);
-    private bool CanGenerate => departmentId > 0 && selectedIds.Count > 0 && workTemplateId > 0 && DayCount > 0 && TotalAssignments <= MaxAssignments;
-    private int TemplateOrganisationId => organisationId;
+    private int SelectedSourceId => staffSource == "Structure" ? structureId : groupId;
+    private bool CanGenerate => SelectedSourceId > 0 && selectedIds.Count > 0 && workTemplateId > 0 && DayCount > 0 && TotalAssignments <= MaxAssignments;
 
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            var context = await UserAccess.RequireContextAsync();
-            organisationId = context.UserOrganisationId ?? 0;
-            Departments = await Assignments.GetDepartmentsAsync();
-            if (Departments.Count == 1)
-            {
-                departmentId = Departments[0].OrganisationStructureId;
-                await LoadStaffAsync();
-            }
-            await LoadTemplatesAsync();
+            organisationId = await UserAccess.GetCurrentOrganisationIdAsync();
+            var data = await Settings.LoadAsync(organisationId);
+            Structures = data.Structures ?? [];
+            Groups = data.Groups ?? [];
+            Templates = (data.Templates ?? []).Where(x => x.IsActive).OrderBy(x => x.Name).ToList();
+            if (Templates.Count == 1) workTemplateId = Templates[0].Id;
         }
         catch (Exception ex)
         {
@@ -189,54 +218,77 @@
             if ((weekdayMask & (1 << (int)date.DayOfWeek)) != 0) yield return date;
     }
 
-    private async Task DepartmentChangedAsync()
+    private void ChangeSource(string source)
+    {
+        if (staffSource == source) return;
+        staffSource = source;
+        selectedIds.Clear();
+        Staff = [];
+        structureId = 0;
+        groupId = 0;
+        filterStructureType = 0;
+    }
+
+    private void StructureTypeChanged()
+    {
+        if (structureId > 0 && !FilteredStructures.Any(x => x.Id == structureId)) structureId = 0;
+    }
+
+    private async Task StructureChangedAsync()
     {
         selectedIds.Clear();
-        staffSearch = "";
-        workTemplateId = 0;
-        await LoadStaffAsync();
-        await LoadTemplatesAsync();
-    }
-
-    private async Task LoadStaffAsync()
-    {
         Staff = [];
-        if (departmentId <= 0) return;
-        try { Staff = await Assignments.GetDepartmentStaffAsync(departmentId); }
+        if (structureId <= 0) return;
+        try { Staff = await Assignments.GetDepartmentStaffAsync(structureId); }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Loading department staff for the roster builder");
-            error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Department staff could not be loaded.";
+            Logger.LogError(ex, "Loading structure staff for the roster builder");
+            error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Structure staff could not be loaded.";
         }
     }
 
-    private async Task LoadTemplatesAsync()
+    private async Task GroupChangedAsync()
     {
-        Templates = [];
-        if (TemplateOrganisationId <= 0) return;
+        selectedIds.Clear();
+        Staff = [];
+        if (groupId <= 0) return;
+        try { Staff = await Assignments.GetGroupStaffAsync(groupId); }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Loading group staff for the roster builder");
+            error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Team staff could not be loaded.";
+        }
+    }
+
+    private async Task TemplateChangedAsync()
+    {
+        selectedTemplate = null;
+        requiresAttendance = true;
+        requiresCheckout = true;
+        if (workTemplateId <= 0) return;
         try
         {
-            var templates = await TemplateLookup.GetAvailableTemplatesAsync(TemplateOrganisationId, fromDate);
-            Templates = templates.OrderBy(x => x.TemplateName).ToList();
-            if (Templates.All(x => x.WorkTemplateId != workTemplateId)) workTemplateId = Templates.Count == 1 ? Templates[0].WorkTemplateId : 0;
+            selectedTemplate = await WorkTemplateService.GetByIdAsync(workTemplateId);
+            if (selectedTemplate != null)
+            {
+                requiresAttendance = selectedTemplate.RequiresAttendance;
+                requiresCheckout = selectedTemplate.RequiresCheckOut;
+            }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "Loading duty templates for the roster builder");
-            Templates = [];
+            Logger.LogError(ex, "Loading template {TemplateId} for the roster builder", workTemplateId);
         }
     }
 
-    private async Task FromDateChangedAsync()
+    private void FromDateChanged()
     {
         if (toDate.Date < fromDate.Date) toDate = fromDate;
-        await LoadTemplatesAsync();
     }
 
-    private Task ToDateChangedAsync()
+    private void ToDateChanged()
     {
         if (toDate.Date < fromDate.Date) fromDate = toDate;
-        return Task.CompletedTask;
     }
 
     private void ToggleDay(int bit, bool selected) => weekdayMask = selected ? weekdayMask | bit : weekdayMask & ~bit;
@@ -263,12 +315,12 @@
         warnings.Clear();
         created = skipped = processed = 0;
         var dates = Dates().ToList();
-        if (departmentId <= 0) { error = "Select a department."; return; }
+        if (SelectedSourceId <= 0) { error = "Select a structure or team."; return; }
         if (selectedIds.Count == 0) { error = "Select at least one staff member."; return; }
         if (workTemplateId <= 0) { error = "Select a duty template."; return; }
         if (dates.Count == 0) { error = "Select at least one weekday inside the date range."; return; }
         if (dates.Count * selectedIds.Count > MaxAssignments) { error = $"This would create {dates.Count * selectedIds.Count} assignments. Create at most {MaxAssignments} at a time by shortening the date range or the staff selection."; return; }
-        var organisation = TemplateOrganisationId;
+        var organisation = organisationId;
         if (organisation <= 0) { error = "The current organisation could not be resolved."; return; }
         busy = true;
         stopRequested = false;
