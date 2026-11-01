@@ -2,7 +2,7 @@
 
 ## Configuration
 
-Open **Settings → Work Planning → Schedule assignments** (`/admin/settings/workplaning/schedule-assignments`). This is the only editor for shared schedule attachments. Organisation, Structure and Group tabs use existing templates; each has Official (default) and additional Duty purposes, effective periods and Standard, Weekly and Rotation patterns. Rotations reuse template IDs and 0 means a rest day. Structure choices are restricted to approved state 3 in the selected tenant. Group schedules use staff groups (`Groups`/`GroupStaffs`), not permission User Groups.
+Open **Admin → Work planning → Duty roster → Schedule assignment** (`/admin/work-planning/duty-roster?tab=schedule`). This is the only editor for shared schedule attachments. Organisation, Structure and Group tabs use existing templates; each has Official (default) and additional Duty purposes, effective periods and Standard, Weekly and Rotation patterns. Rotations reuse template IDs and 0 means a rest day. Structure choices are restricted to approved state 3 in the selected tenant. Group schedules use staff groups (`Groups`/`GroupStaffs`), not permission User Groups.
 
 The selected tenant and `Schedule.Attach` permission are checked for every read/write in this configuration, including super administrators selecting an organisation. No live policy is seeded. Staff-specific schedules remain overrides in the workspace; inherited rows identify their source and link to the shared editor. Inherited rows cannot be ended through the individual attachment action. The group detail Schedules tab displays the new attachments and redirects Manage to this editor.
 

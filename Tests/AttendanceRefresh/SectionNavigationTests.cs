@@ -64,6 +64,12 @@ static class SectionNavigationTests
         Check(Route("/admin/settings/org/permissions") == typeof(SettingsPage), "Organisation permissions URL resolves to the wrong page");
         Check(Route("/admin/settings/org/organisations/3/structure") == typeof(SettingsPage), "Organisation record section URL is missing");
         Check(Route("/admin/settings/workplaning/templates") == typeof(SettingsPage), "Work planning section URL is missing");
+        Check(Route("/admin/work-planning/duty-roster") == typeof(HRM.Components.Admin.WorkPlanning.DutyRosterAdmin), "Admin duty roster tabs route is missing");
+        Check(Route("/online/duty-roster") == typeof(HRM.Components.Pages.Online.DutyRoster), "Employee duty roster route was lost");
+        var workPlanningItems = ((System.Collections.IEnumerable)typeof(SettingsPage).GetMethod("GetSubItems", Flags)!.Invoke(new SettingsPage { CategoryName = "workplaning" }, ["workplaning"])!)
+            .Cast<object>().Select(x => (string)x.GetType().GetProperty("Title")!.GetValue(x)!).ToList();
+        Check(!workPlanningItems.Contains("Schedule assignments") && !workPlanningItems.Contains("Manual Assignments") && workPlanningItems.Contains("Duty roster"),
+            "Moved work planning editors are still listed in Settings");
         Check(Route("/admin/settings/leaves/manage-leave-sets")==typeof(SettingsPage),"Canonical leave set settings route is missing");
         Check(Selected(new SettingsPage { CategoryName="leaves",Section="work-handover-rules" })=="Work Handover Rules", "Scoped handover settings route is missing");
         var cataloguePage = new SettingsPage { CategoryName = "leaves", Section = "leave-types" };

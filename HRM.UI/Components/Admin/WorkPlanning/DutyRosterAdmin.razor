@@ -1,0 +1,45 @@
+@page "/admin/work-planning/duty-roster"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@using HRM.Components.Admin.Settings.Workplan
+@using HRM.Components.Pages.Online
+@inject NavigationManager Navigation
+
+<PageTitle>Duty roster</PageTitle>
+
+<section class="space-y-4 p-4">
+    <div class="flex flex-wrap gap-2" role="tablist" aria-label="Duty roster sections">
+        <button type="button" role="tab" aria-selected="@(tab == "roster")" class="app-button @(tab == "roster" ? "app-button-primary" : "app-button-secondary")" @onclick='() => SelectTab("roster")'>Roster</button>
+        <button type="button" role="tab" aria-selected="@(tab == "schedule")" class="app-button @(tab == "schedule" ? "app-button-primary" : "app-button-secondary")" @onclick='() => SelectTab("schedule")'>Schedule assignment</button>
+        <button type="button" role="tab" aria-selected="@(tab == "manual")" class="app-button @(tab == "manual" ? "app-button-primary" : "app-button-secondary")" @onclick='() => SelectTab("manual")'>Manual assignment</button>
+        <button type="button" role="tab" aria-selected="@(tab == "create")" class="app-button @(tab == "create" ? "app-button-primary" : "app-button-secondary")" @onclick='() => SelectTab("create")'>Create a roster</button>
+    </div>
+    @if (tab == "schedule")
+    {
+        <ScopeScheduleSettings />
+    }
+    else if (tab == "manual")
+    {
+        <ManualAssignment />
+    }
+    else if (tab == "create")
+    {
+        <CreateRoster />
+    }
+    else
+    {
+        <DutyRoster />
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "tab")] public string? RequestedTab { get; set; }
+    private static readonly string[] Tabs = ["roster", "schedule", "manual", "create"];
+    private string tab = "roster";
+    protected override void OnParametersSet() => tab = RequestedTab is { } requested && Tabs.Contains(requested) ? requested : "roster";
+    private void SelectTab(string value)
+    {
+        if (!Tabs.Contains(value) || value == tab) return;
+        tab = value;
+        Navigation.NavigateTo($"/admin/work-planning/duty-roster?tab={value}");
+    }
+}
