@@ -1,3 +1,4 @@
+using HRM.Constants;
 using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
@@ -14,6 +15,16 @@ namespace HRM.Services
         private readonly IWorkPlanGenerator _workPlanGenerator;
 
         private const int EarlyCheckInResolutionMinutes = 180;
+
+        // A punch after a scheduled checkout is still that checkout (for example a
+        // duty ending at 12:00 punched at 12:20). It must never be reinterpreted as
+        // an official check-in just because the official check-in window is wide.
+        private const int LateCheckOutResolutionMinutes = 180;
+
+        // A checkout may be punched slightly early (13:55 for a 14:00 checkout).
+        // It is deliberately short so a punch in the middle of a duty is not
+        // turned into an early check-out of the following boundary.
+        private const int EarlyCheckOutResolutionMinutes = 30;
 
 
         public AttendanceWorkPlanResolver(
@@ -100,7 +111,7 @@ namespace HRM.Services
                 .Where(x => x.WorkPlanId == workPlanId && x.IsValid).OrderBy(x => x.SequenceNumber)
                 .Select(x => new { x.WorkPlanSegmentId, x.Name, x.StartDateTime, x.EndDateTime, x.SequenceNumber,
                     x.SchedulePurpose, TemplateId = x.WorkTemplateSegment == null ? (int?)null : x.WorkTemplateSegment.WorkTemplateId,
-                    WorkSegmentTypeCode = x.WorkSegmentType.Code, x.RequiresAttendance, x.GraceBeforeMinutes, x.GraceAfterMinutes })
+                    WorkSegmentTypeCode = x.WorkSegmentType.Code, x.RequiresAttendance, x.IsMandatory, x.GraceBeforeMinutes, x.GraceAfterMinutes })
                 .ToListAsync(cancellationToken);
             var hourAssignments = await db.WorkAssignments.AsNoTracking().Include(a => a.WorkPlan).Where(a => a.WorkPlanId == workPlanId && a.IsValid).ToListAsync(cancellationToken);
             var hourAdjustments = await HRM.Helpers.TemporaryWorkingHours.AdjustmentsAsync(db, hourAssignments, cancellationToken);
@@ -112,7 +123,7 @@ namespace HRM.Services
                 var timing = HRM.Helpers.OfficialScheduleAmendments.Segment(amendmentRows, organisationBusinessEntityId,
                     x.SchedulePurpose, x.WorkSegmentTypeCode, adjusted.Start, adjusted.End, x.GraceBeforeMinutes);
                 return new { x.WorkPlanSegmentId, x.Name, StartDateTime = timing.Start, EndDateTime = timing.End,
-                    x.SequenceNumber, x.TemplateId, x.SchedulePurpose, x.WorkSegmentTypeCode, x.RequiresAttendance,
+                    x.SequenceNumber, x.TemplateId, x.SchedulePurpose, x.WorkSegmentTypeCode, x.RequiresAttendance, x.IsMandatory,
                     GraceBeforeMinutes = timing.GraceBefore, x.GraceAfterMinutes };
             }).ToList();
 
@@ -285,6 +296,56 @@ namespace HRM.Services
 
  
 
+            // ============================================================
+            // OPEN CHECK-IN STATE PER SCHEDULE
+            //
+            // Official hours and each duty template are independent schedules.
+            // A punch inside a schedule whose last resolved clock was a
+            // check-in closes that schedule; it must not re-open it.
+            // ============================================================
+
+            var scheduleGroupKeys = segments.ToDictionary(
+                x => x.WorkPlanSegmentId,
+                x => ScheduleGroupKey(x.SchedulePurpose, x.TemplateId));
+
+            var openScheduleGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            var priorResolutions = await db.AttendanceLogResolutions
+                .AsNoTracking()
+                .Where(x =>
+                    x.WorkPlanId == workPlanId &&
+                    x.IsValid &&
+                    x.WorkPlanSegmentId.HasValue &&
+                    x.AttendanceLog.Date < clockTime &&
+                    x.AttendanceClockTypeId.HasValue &&
+                    (
+                        x.AttendanceClockTypeId.Value == (int)AttendanceClockType.CheckIn ||
+                        x.AttendanceClockTypeId.Value == (int)AttendanceClockType.CheckOut
+                    ))
+                .OrderByDescending(x => x.AttendanceLog.Date)
+                .Select(x => new
+                {
+                    WorkPlanSegmentId = x.WorkPlanSegmentId!.Value,
+                    ClockTypeId = x.AttendanceClockTypeId!.Value
+                })
+                .ToListAsync(cancellationToken);
+
+            var settledScheduleGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var prior in priorResolutions)
+            {
+                if (!scheduleGroupKeys.TryGetValue(prior.WorkPlanSegmentId, out var groupKey))
+                    continue;
+
+                // The first row per schedule is its latest state.
+                if (!settledScheduleGroups.Add(groupKey))
+                    continue;
+
+                if (prior.ClockTypeId == (int)AttendanceClockType.CheckIn)
+                    openScheduleGroups.Add(groupKey);
+            }
+
+
             var candidates =
                 new List<BoundaryCandidate>();
 
@@ -312,17 +373,20 @@ namespace HRM.Services
                         expectedTime.AddMinutes(
                             -EarlyCheckInResolutionMinutes);
 
-                    var windowEnd = segment.EndDateTime;
+                    // The segment's own window ends when the next event begins.
+                    var exactEnd = segment.EndDateTime;
+                    if (exactEnd < expectedTime) exactEnd = expectedTime;
+                    var extendedEnd = exactEnd;
                     if (segment.SchedulePurpose is "Duty" or "Official")
                     {
                         var dutyEnd = segments.Where(s => s.SchedulePurpose == segment.SchedulePurpose && s.TemplateId == segment.TemplateId &&
                             RequiresCheckOut(s.WorkSegmentTypeCode) && s.StartDateTime > expectedTime)
                             .Select(s => (DateTime?)s.StartDateTime).Min();
-                        if (dutyEnd.HasValue && dutyEnd.Value.AddTicks(-1) > windowEnd) windowEnd = dutyEnd.Value.AddTicks(-1);
+                        if (dutyEnd.HasValue && dutyEnd.Value.AddTicks(-1) > extendedEnd) extendedEnd = dutyEnd.Value.AddTicks(-1);
                     }
 
                     if (clockTime >= windowStart &&
-                        clockTime <= windowEnd)
+                        clockTime <= extendedEnd)
                     {
                         candidates.Add(
                             new BoundaryCandidate
@@ -336,6 +400,15 @@ namespace HRM.Services
                                 SchedulePurpose =
                                     segment.SchedulePurpose,
 
+                                IsMandatory =
+                                    segment.IsMandatory,
+
+                                GroupKey =
+                                    scheduleGroupKeys[segment.WorkPlanSegmentId],
+
+                                HasOpenCheckIn =
+                                    openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
+
                                 ClockType =
                                     AttendanceClockType.CheckIn,
 
@@ -346,7 +419,10 @@ namespace HRM.Services
                                     windowStart,
 
                                 WindowEnd =
-                                    windowEnd,
+                                    exactEnd,
+
+                                ExtendedWindowEnd =
+                                    extendedEnd,
 
                                 DistanceMinutes =
                                     Math.Abs(
@@ -375,10 +451,10 @@ namespace HRM.Services
 
                     var windowEnd =
                         segment.EndDateTime;
+                    if (windowEnd < expectedTime) windowEnd = expectedTime;
 
-
-                    if (clockTime >= windowStart &&
-                        clockTime <= windowEnd)
+                    if (clockTime >= windowStart.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
+                        clockTime <= windowEnd.AddMinutes(LateCheckOutResolutionMinutes))
                     {
                         candidates.Add(
                             new BoundaryCandidate
@@ -391,6 +467,15 @@ namespace HRM.Services
 
                                 SchedulePurpose =
                                     segment.SchedulePurpose,
+
+                                IsMandatory =
+                                    segment.IsMandatory,
+
+                                GroupKey =
+                                    scheduleGroupKeys[segment.WorkPlanSegmentId],
+
+                                HasOpenCheckIn =
+                                    openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
 
                                 ClockType =
                                     AttendanceClockType.CheckOut,
@@ -457,12 +542,7 @@ namespace HRM.Services
             // ============================================================
 
             var bestCandidate =
-                candidates
-                    .OrderBy(x =>
-                        x.DistanceMinutes)
-                    .ThenBy(x =>
-                        x.SchedulePurpose == "Official" ? 0 : 1)
-                    .First();
+                SelectBestCandidate(candidates, clockTime);
 
             // When official and duty boundaries coincide (same expected time),
             // both must be recorded. Prefer official as primary, duty as secondary.
@@ -523,6 +603,62 @@ namespace HRM.Services
 
     
 
+        private static BoundaryCandidate SelectBestCandidate(
+            List<BoundaryCandidate> candidates,
+            DateTime clockTime)
+        {
+            // Matching order:
+            // 1. A mandatory official clock event inside its own window always wins.
+            //    An official check-in must be satisfied before an overlapping duty.
+            // 2. Any other exact official window.
+            // 3. Any other exact window (a shift/duty boundary).
+            // 4. Close an already open check-in for the same schedule. A duty that
+            //    ends at 12:00 punched at 12:20 is a check-out even though the
+            //    official check-in window is still wide open, and a 13:55 punch is
+            //    the official 14:00 check-out rather than the duty's earlier one.
+            // 5. A check-in whose schedule was already checked in (a duplicate).
+            // 6. An extended check-in window (late arrival inside the work period).
+            // 7. Nearest boundary.
+            static IOrderedEnumerable<BoundaryCandidate> Nearest(IEnumerable<BoundaryCandidate> rows) =>
+                rows.OrderBy(x => x.DistanceMinutes).ThenBy(x => x.SchedulePurpose == "Official" ? 0 : 1);
+
+            static bool IsCheckOutResolution(BoundaryCandidate x, DateTime clock) =>
+                x.ClockType == AttendanceClockType.CheckOut &&
+                (
+                    // Past its own permitted checkout window but still close.
+                    (clock > x.WindowEnd && clock <= x.WindowEnd.AddMinutes(LateCheckOutResolutionMinutes))
+                    ||
+                    // Or closing a schedule that is still open, even slightly early.
+                    (x.HasOpenCheckIn &&
+                     clock >= x.BoundaryTime.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
+                     clock <= x.BoundaryTime.AddMinutes(LateCheckOutResolutionMinutes))
+                );
+
+            var exact = candidates
+                .Where(x => clockTime >= x.WindowStart && clockTime <= x.WindowEnd)
+                .ToList();
+
+            // A check-in for a schedule that is still open would be a duplicate punch.
+            var exactFresh = exact
+                .Where(x => !(x.ClockType == AttendanceClockType.CheckIn && x.HasOpenCheckIn))
+                .ToList();
+
+            return Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
+                ?? Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
+                ?? Nearest(exactFresh).FirstOrDefault()
+                ?? Nearest(candidates.Where(x => IsCheckOutResolution(x, clockTime))).FirstOrDefault()
+                ?? Nearest(exact).FirstOrDefault()
+                ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
+                        x.ExtendedWindowEnd.HasValue &&
+                        clockTime >= x.WindowStart &&
+                        clockTime <= x.ExtendedWindowEnd.Value)).FirstOrDefault()
+                ?? Nearest(candidates).First();
+        }
+
+        private static string ScheduleGroupKey(string? schedulePurpose, int? templateId) =>
+            $"{schedulePurpose ?? string.Empty}|{templateId?.ToString() ?? "0"}";
+
+
         private sealed class BoundaryCandidate
         {
             public int WorkPlanSegmentId { get; set; }
@@ -533,6 +669,13 @@ namespace HRM.Services
             public string SchedulePurpose { get; set; }
                 = string.Empty;
 
+            public bool IsMandatory { get; set; }
+
+            public string GroupKey { get; set; }
+                = string.Empty;
+
+            public bool HasOpenCheckIn { get; set; }
+
             public AttendanceClockType ClockType { get; set; }
 
             public DateTime BoundaryTime { get; set; }
@@ -540,6 +683,8 @@ namespace HRM.Services
             public DateTime WindowStart { get; set; }
 
             public DateTime WindowEnd { get; set; }
+
+            public DateTime? ExtendedWindowEnd { get; set; }
 
             public double DistanceMinutes { get; set; }
         }
