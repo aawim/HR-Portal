@@ -473,14 +473,6 @@ public sealed class WorkAssignmentManagementService
         await using var db =
             await _dbFactory.CreateDbContextAsync(cancellationToken);
 
-        if (!await db.Groups.AnyAsync(
-                group => group.GroupId == groupId &&
-                         group.BusinessEntityOrganisationId == org,
-                cancellationToken))
-        {
-            return new List<EligibleAssignmentStaffDto>();
-        }
-
         var memberIds =
             await db.GroupStaffs.AsNoTracking()
                 .Where(member => member.GroupId == groupId)
