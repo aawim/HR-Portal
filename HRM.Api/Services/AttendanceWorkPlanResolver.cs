@@ -611,12 +611,13 @@ namespace HRM.Services
             // 1. A mandatory official clock event inside its own window always wins.
             //    An official check-in must be satisfied before an overlapping duty.
             // 2. Any other exact official window.
-            // 3. Any other exact window (a shift/duty boundary).
-            // 4. Close an already open check-in for the same schedule. A duty that
-            //    ends at 12:00 punched at 12:20 is a check-out even though the
-            //    official check-in window is still wide open, and a 13:55 punch is
-            //    the official 14:00 check-out rather than the duty's earlier one.
-            // 5. A check-in whose schedule was already checked in (a duplicate).
+            // 3. Close an open schedule. A duty that ends at 12:00 punched at 12:20
+            //    is a check-out even though the official check-in window is still
+            //    wide open, and a 13:55 punch is the official 14:00 check-out
+            //    rather than the duty's earlier one.
+            // 4. An exact official check-in for a schedule that is already open
+            //    (a duplicate punch, left for duplicate detection).
+            // 5. Any other exact window (a shift/duty boundary).
             // 6. An extended check-in window (late arrival inside the work period).
             // 7. Nearest boundary.
             static IOrderedEnumerable<BoundaryCandidate> Nearest(IEnumerable<BoundaryCandidate> rows) =>
@@ -634,20 +635,24 @@ namespace HRM.Services
                      clock <= x.BoundaryTime.AddMinutes(LateCheckOutResolutionMinutes))
                 );
 
+            // A check-in for a schedule that is still open would be a duplicate punch.
+            static bool IsStaleCheckIn(BoundaryCandidate x) =>
+                x.ClockType == AttendanceClockType.CheckIn && x.HasOpenCheckIn;
+
             var exact = candidates
                 .Where(x => clockTime >= x.WindowStart && clockTime <= x.WindowEnd)
                 .ToList();
 
-            // A check-in for a schedule that is still open would be a duplicate punch.
-            var exactFresh = exact
-                .Where(x => !(x.ClockType == AttendanceClockType.CheckIn && x.HasOpenCheckIn))
-                .ToList();
+            var exactFresh = exact.Where(x => !IsStaleCheckIn(x)).ToList();
+            var exactStale = exact.Where(IsStaleCheckIn).ToList();
 
             return Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
                 ?? Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
-                ?? Nearest(exactFresh).FirstOrDefault()
                 ?? Nearest(candidates.Where(x => IsCheckOutResolution(x, clockTime))).FirstOrDefault()
-                ?? Nearest(exact).FirstOrDefault()
+                ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
+                ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
+                ?? Nearest(exactFresh).FirstOrDefault()
+                ?? Nearest(exactStale).FirstOrDefault()
                 ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
                         x.ExtendedWindowEnd.HasValue &&
                         clockTime >= x.WindowStart &&
