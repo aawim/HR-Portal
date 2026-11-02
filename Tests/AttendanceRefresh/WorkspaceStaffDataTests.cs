@@ -1,5 +1,6 @@
 using HRM.DTOs.UserContext;
 using HRM.Models;
+using HRM.Models.WorkPlanning;
 using HRM.Services;
 using HRM.Services.Interfaces;
 using HRM.Services.Leave;
@@ -18,6 +19,7 @@ static class WorkspaceStaffDataTests
             "RequireContextAsync" => Task.FromResult(actor), "GetCurrentOrganisationIdAsync" => Task.FromResult(3), "HasOrganisationAccessAsync" => Task.FromResult(true),
             "HasPermissionAsync" => Task.FromResult(false), _ => throw new Exception(method) });
         var today = DateTime.UtcNow.AddHours(5).Date; var day = today.AddDays(-1);
+        var punchedDay = day.AddDays(-1);
         await using(var db = factory.CreateDbContext())
         {
             db.Jobs.AddRange(new Job { JobId = 906, IndividualID = 26, OrganisationID = 3, JobStateId = 4, JoinedDate = today.AddDays(-10) },
@@ -26,19 +28,38 @@ static class WorkspaceStaffDataTests
             db.LeaveTypes.Add(new LeaveType { LeaveTypeId = 1, Name = "Annual leave" });
             db.JobLeaveTypes.Add(new JobLeaveType { JobId = 906, LeaveTypeId = 1, IsValid = true, IsLeaveInfoUpdated = true, RemainingDays = 17.5m });
             db.Leaves.Add(new Leaf { JobId = 906, LeaveTypeId = 1, LeaveStateId = 4, FromDate = today.AddDays(-2), ToDate = today.AddDays(-2) });
+            db.WorkPlans.Add(new WorkPlan { WorkPlanId = 880, IndividualId = 26, JobId = 906,
+                OrganisationBusinessEntityId = 3, WorkDate = punchedDay, IsValid = true });
+            db.WorkAssignments.Add(new WorkAssignment { WorkAssignmentId = 880, WorkPlanId = 880,
+                SchedulePurpose = "Official", StartDateTime = punchedDay.AddHours(8),
+                EndDateTime = punchedDay.AddHours(14), RequiresAttendance = true, IsValid = true });
             db.AttendanceLogs.AddRange(
                 new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = day.AddHours(8), InOutModeId = 1, AttendanceLogStateId = 1,
                     AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 1 }] },
                 new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = day.AddHours(12), InOutModeId = 2, AttendanceLogStateId = 1,
                     AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 2 }] },
                 new AttendanceLog { IndividualId = 26, OrganisationId = 4, Date = day.AddHours(7), InOutModeId = 1, AttendanceLogStateId = 1 },
-                new AttendanceLog { IndividualId = 100, OrganisationId = 3, Date = day.AddHours(6), InOutModeId = 1, AttendanceLogStateId = 1 });
+                new AttendanceLog { IndividualId = 100, OrganisationId = 3, Date = day.AddHours(6), InOutModeId = 1, AttendanceLogStateId = 1 },
+                new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = punchedDay.AddHours(6).AddMinutes(20), InOutModeId = 1, AttendanceLogStateId = 1,
+                    AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 1 }] },
+                new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = punchedDay.AddHours(6).AddMinutes(30), InOutModeId = 1, AttendanceLogStateId = 1,
+                    AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 1 }] },
+                new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = punchedDay.AddHours(7).AddMinutes(30), InOutModeId = 1, AttendanceLogStateId = 1,
+                    AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 1 }] },
+                new AttendanceLog { IndividualId = 26, OrganisationId = 3, Date = punchedDay.AddHours(12), InOutModeId = 2, AttendanceLogStateId = 1,
+                    AttendanceLogResolutions = [new() { IsValid = true, AttendanceClockTypeId = 2 }] });
             await db.SaveChangesAsync();
+            var debugFacts = await HRM.Helpers.AttendanceScheduleFacts.LoadAsync(db, 26, punchedDay, punchedDay, null);
+            Console.WriteLine("DEBUG facts: " + string.Join(" | ", debugFacts.Select(x => $"{x.Date}:{x.Purpose}:{x.ScheduledStart}:{x.CheckIn}")));
         }
         var attendance = new AttendanceService(factory, null!, null!, access, null!, NullLogger<AttendanceService>.Instance);
         var days = await attendance.GetStaffYearlyAttendanceAsync(26, today.Year);
         var present = days.Single(x => x.Date == day);
         Check(present.FirstCheckIn == day.AddHours(8) && present.LastCheckOut == day.AddHours(12) && present.ClockEventCount == 2, "Selected attendance mixed staff or tenants");
+        var closest = days.Single(x => x.Date == punchedDay);
+        Console.WriteLine($"DEBUG workspace closest first={closest.FirstCheckIn} scheduled={closest.ScheduledStart} events={closest.ClockEventCount}");
+        Check(closest.FirstCheckIn == punchedDay.AddHours(7).AddMinutes(30),
+            "Attendance summary used an early punch instead of the clock event closest to the scheduled start");
         Check(days.All(x => x.Date >= today.AddDays(-10)), "Attendance marked dates before joining as absent");
         Check(days.Single(x => x.Date == today.AddDays(-2)).LeaveTypeName == "Annual leave", "Selected employee's leave type not shown");
         Check(days.Where(x => x.Date.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday).All(x => !x.IsAbsent), "Weekends count as absent");

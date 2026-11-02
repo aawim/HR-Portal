@@ -9,4 +9,17 @@ public static class AttendanceTiming
         var allowedMinute = scheduled.AddMinutes(Math.Max(0, graceMinutes)).Ticks / TimeSpan.TicksPerMinute;
         return (int)Math.Max(0, actualMinute - allowedMinute);
     }
+
+    // Selects the clock event nearest the expected boundary. With no scheduled
+    // boundary, the earliest event remains the fallback.
+    public static T? Closest<T>(IEnumerable<T> items, Func<T, DateTime> timestamp, DateTime? expected)
+        where T : class
+    {
+        var list = items.ToList();
+        if (list.Count == 0) return null;
+        if (!expected.HasValue) return list.OrderBy(timestamp).First();
+        return list.OrderBy(x => Math.Abs((timestamp(x) - expected.Value).TotalMinutes))
+            .ThenBy(timestamp)
+            .First();
+    }
 }

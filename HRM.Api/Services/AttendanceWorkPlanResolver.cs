@@ -623,9 +623,9 @@ namespace HRM.Services
             // 5. An exact official check-in for a schedule that is already open
             //    (a duplicate punch, left for duplicate detection).
             // 6. Any other exact window (a duplicate shift/duty boundary).
-            // 7. A fresh extended check-in window (late arrival inside the work period).
-            // 8. Any extended check-in window.
-            // 9. Nearest boundary.
+            // 7. An extended check-in window (late arrival inside the work period),
+            //    nearest boundary first, fresh schedule before an open one on ties.
+            // 8. Nearest boundary.
             static IOrderedEnumerable<BoundaryCandidate> Nearest(IEnumerable<BoundaryCandidate> rows) =>
                 rows.OrderBy(x => x.DistanceMinutes).ThenBy(x => x.SchedulePurpose == "Official" ? 0 : 1);
 
@@ -659,15 +659,19 @@ namespace HRM.Services
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
                 ?? Nearest(exactStale).FirstOrDefault()
-                ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
-                        !IsStaleCheckIn(x) &&
+                // An extended check-in window is still valid when the punch is
+                // inside the work period. Distance decides first; a fresh
+                // schedule beats an already-open one only when the boundary is
+                // equally close (for example official and duty starting together).
+                ?? candidates
+                    .Where(x => x.ClockType == AttendanceClockType.CheckIn &&
                         x.ExtendedWindowEnd.HasValue &&
                         clockTime >= x.WindowStart &&
-                        clockTime <= x.ExtendedWindowEnd.Value)).FirstOrDefault()
-                ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
-                        x.ExtendedWindowEnd.HasValue &&
-                        clockTime >= x.WindowStart &&
-                        clockTime <= x.ExtendedWindowEnd.Value)).FirstOrDefault()
+                        clockTime <= x.ExtendedWindowEnd.Value)
+                    .OrderBy(x => x.DistanceMinutes)
+                    .ThenBy(x => IsStaleCheckIn(x) ? 1 : 0)
+                    .ThenBy(x => x.SchedulePurpose == "Official" ? 0 : 1)
+                    .FirstOrDefault()
                 ?? Nearest(candidates).First();
         }
 

@@ -894,9 +894,24 @@ namespace HRM.Services
 
                 // -----------------------------------------------------
                 // First Check In
+                //
+                // When several punches match the same boundary, the
+                // one closest to the scheduled start is the effective
+                // arrival (for example 07:30 rather than 06:20 for
+                // an 08:00 shift).
                 // -----------------------------------------------------
+                var attendanceSchedules = schedulesByDay.GetValueOrDefault(date) ?? [];
+                var attendanceOfficial = attendanceSchedules
+                    .Where(s => s.RequiresAttendance && s.Purpose == "Official")
+                    .ToList();
+                var scheduledAttendance = attendanceOfficial
+                    .OrderBy(s => s.ScheduledStart)
+                    .FirstOrDefault();
                 var firstCheckIn =
-                    checkIns.FirstOrDefault();
+                    HRM.Helpers.AttendanceTiming.Closest(
+                        checkIns,
+                        x => x.Log.Date,
+                        scheduledAttendance?.ScheduledStart);
 
 
                 // -----------------------------------------------------
@@ -943,10 +958,8 @@ namespace HRM.Services
                 // while physical clock details remain available on the DTO.
                 var isOnLeave = approvedLeaves.Any(x =>
                     x.FromDate.Date <= date && x.ToDate.Date >= date);
-                var daySchedules = schedulesByDay.GetValueOrDefault(date) ?? [];
-                var official = daySchedules.Where(s => s.RequiresAttendance && s.Purpose == "Official").ToList();
-                var scheduled = official
-                    .OrderBy(s => s.ScheduledStart).FirstOrDefault();
+                var official = attendanceOfficial;
+                var scheduled = scheduledAttendance;
                 var actualStart = scheduled?.CheckIn ?? (firstCheckIn?.Resolution?.WorkAssignmentId == null ? firstCheckIn?.Log.Date : null);
                 var lateUntil = actualStart ?? (date == DateTime.UtcNow.AddHours(5).Date ? DateTime.UtcNow.AddHours(5) : (DateTime?)null);
                 var isLate = !isOnLeave && eligibility[date].CanBeAbsent && scheduled != null &&

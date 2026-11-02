@@ -218,10 +218,15 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                         var existingLogTime =
                             existingBoundaryResolution.AttendanceLog.Date;
-                        // Duplicate punches must not move an on-time arrival later.
-                        // Keep the first check-in and last check-out for this exact boundary.
+                        // Duplicate punches must keep the clock event nearest the
+                        // scheduled boundary. A later morning punch is a better
+                        // check-in than an early swipe two hours before the shift.
+                        // Check-outs still keep the latest punch for the boundary.
+                        var boundaryTime =
+                            planResult.BoundaryTime ?? attendanceLog.Date;
                         var keepExisting = planResult.ClockType == AttendanceClockType.CheckIn
-                            ? existingLogTime <= attendanceLog.Date
+                            ? Math.Abs((existingLogTime - boundaryTime).TotalMinutes) <=
+                              Math.Abs((attendanceLog.Date - boundaryTime).TotalMinutes)
                             : existingLogTime >= attendanceLog.Date;
                         if (keepExisting)
                         {
@@ -231,7 +236,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                                $"'{planResult.SegmentName}' " +
                                $"{planResult.ClockType}, but attendance log " +
                                $"{existingBoundaryResolution.AttendanceLogId} " +
-                               $"already records the {(planResult.ClockType == AttendanceClockType.CheckIn ? "earliest check-in" : "latest check-out")} for this boundary.";
+                               $"already records the {(planResult.ClockType == AttendanceClockType.CheckIn ? "closest check-in" : "latest check-out")} for this boundary.";
 
                             var duplicateResolution =
                             CreateResolution(
@@ -299,7 +304,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         existingResolution.ResolutionMessage =
                             $"Replaced by attendance log " +
                             $"{attendanceLog.AttendanceLogId}, which records the " +
-                            $"{(planResult.ClockType == AttendanceClockType.CheckIn ? "earlier check-in" : "later check-out")} for this boundary.";
+                            $"{(planResult.ClockType == AttendanceClockType.CheckIn ? "closer check-in" : "later check-out")} for this boundary.";
                     }
 
 

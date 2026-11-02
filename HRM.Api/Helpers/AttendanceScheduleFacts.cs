@@ -49,13 +49,16 @@ public static class AttendanceScheduleFacts
             var type = (a.WorkTemplateType?.Name ?? "") + " " + (a.WorkTemplateType?.Code ?? "");
             var shift = a.SchedulePurpose.Equals("Duty", StringComparison.OrdinalIgnoreCase) ||
                 type.Contains("shift", StringComparison.OrdinalIgnoreCase) || type.Contains("rotat", StringComparison.OrdinalIgnoreCase);
+            var checkInEvent = AttendanceTiming.Closest(
+                events.Where(e => e.Resolution!.AttendanceClockTypeId == 1), e => e.Date, start);
+            var checkOutEvent = events.Where(e => e.Resolution!.AttendanceClockTypeId == 2)
+                .OrderByDescending(e => e.Date).FirstOrDefault();
             return new StaffScheduleAttendanceDto(a.WorkPlan.WorkDate.Date, a.Name, a.SchedulePurpose, shift,
                 a.RequiresAttendance || a.WorkAssignmentSegments.Any(s => s.IsValid && s.IsMandatory && s.RequiresAttendance),
-                start, finish, events.Where(e => e.Resolution!.AttendanceClockTypeId == 1).Select(e => (DateTime?)e.Date).Min(),
-                events.Where(e => e.Resolution!.AttendanceClockTypeId == 2).Select(e => (DateTime?)e.Date).Max())
+                start, finish, checkInEvent?.Date, checkOutEvent?.Date)
             {
                 WorkAssignmentId = a.WorkAssignmentId,
-                CheckInLogId = events.Where(e => e.Resolution!.AttendanceClockTypeId == 1).OrderBy(e => e.Date).Select(e => (int?)e.AttendanceLogId).FirstOrDefault()
+                CheckInLogId = checkInEvent?.AttendanceLogId
             };
         }).OrderBy(a => a.Date).ThenBy(a => a.ScheduledStart).ToList();
     }

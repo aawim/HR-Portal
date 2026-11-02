@@ -159,6 +159,8 @@ namespace HRM.Services.Attendance
                     .Where(x =>
                         x.IsValid &&
                         x.AttendanceLog != null &&
+                        x.AttendanceResolutionStatusId !=
+                            HRM.Constants.AttendanceResolutionStatusIds.DuplicatePunch &&
                         x.AttendanceClockTypeId.HasValue &&
                         (
                             x.AttendanceClockTypeId.Value ==
@@ -219,20 +221,27 @@ namespace HRM.Services.Attendance
             // ========================================================
             // EFFECTIVE CHECK-IN
             //
-            // EARLIEST valid CheckIn wins.
+            // The valid CheckIn closest to the scheduled start wins.
             // ========================================================
 
             // Keep physical work coverage separate from official attendance.
             var allResolvedEvents = resolvedEvents;
             resolvedEvents = resolvedEvents.Where(x => !x.WorkPlanSegmentId.HasValue ||
                 officialSegmentIds.Contains(x.WorkPlanSegmentId.Value)).ToList();
-            var effectiveCheckIn =
-                resolvedEvents
-                    .Where(x =>
-                        x.ClockType ==
-                        AttendanceClockType.CheckIn)
-                    .OrderBy(x => x.LogDateTime)
+            var effectiveCheckInTarget =
+                officialSegments
+                    .Where(x => RequiresCheckIn(x.WorkSegmentType?.Code))
+                    .OrderBy(x => x.StartDateTime)
+                    .Select(x => (DateTime?)x.StartDateTime)
                     .FirstOrDefault();
+
+            var effectiveCheckIn =
+                HRM.Helpers.AttendanceTiming.Closest(
+                    resolvedEvents.Where(x =>
+                        x.ClockType ==
+                        AttendanceClockType.CheckIn),
+                    x => x.LogDateTime,
+                    effectiveCheckInTarget);
 
 
             // ========================================================
@@ -682,17 +691,16 @@ namespace HRM.Services.Attendance
             // ========================================================
             // CHECK IN
             //
-            // EARLIEST CheckIn for the boundary.
+            // Closest CheckIn to the expected start for the boundary.
             // ========================================================
 
             ResolvedAttendanceEvent? checkInEvent =
-                segmentEvents
-                    .Where(x =>
+                HRM.Helpers.AttendanceTiming.Closest(
+                    segmentEvents.Where(x =>
                         x.ClockType ==
-                        AttendanceClockType.CheckIn)
-                    .OrderBy(x =>
-                        x.LogDateTime)
-                    .FirstOrDefault();
+                        AttendanceClockType.CheckIn),
+                    x => x.LogDateTime,
+                    segment.StartDateTime);
 
 
             // ========================================================
