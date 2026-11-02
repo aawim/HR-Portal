@@ -22,7 +22,6 @@
         </div>
         <div class="flex flex-wrap items-center gap-2 text-xs">
             <a class="rounded-lg border px-3 py-1.5 font-semibold transition-colors @(tab == "groups" ? "border-blue-600 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "border-[var(--app-border-color)] bg-[var(--select-bg)] text-[var(--select-text)] hover:bg-[var(--select-hover)]")" href="/admin/hr/groups/management">Groups</a>
-            <a class="rounded-lg border px-3 py-1.5 font-semibold transition-colors @(tab == "types" ? "border-blue-600 bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "border-[var(--app-border-color)] bg-[var(--select-bg)] text-[var(--select-text)] hover:bg-[var(--select-hover)]")" href="/admin/hr/groups/group-type">Group type</a>
             <a class="rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-1.5 font-medium text-[var(--select-text)] hover:bg-[var(--select-hover)] transition-colors" href="/admin/settings/org/types">Structure types</a>
         </div>
     </div>
@@ -41,43 +40,6 @@
     }
     else
     {
-        @if (editing)
-        {
-            <fieldset disabled="@busy" class="space-y-3 rounded-2xl border border-[var(--app-border-color)] bg-[var(--select-bg)] p-4 shadow-sm">
-                <h2 class="font-semibold text-[var(--select-text)]">@(editId==0?"Add":"Edit") @(tab=="types"?"group type":"group")</h2>
-                <label class="block text-sm text-[var(--select-text)]">Name
-                    <input @bind="name" maxlength="@(tab=="types"?150:250)" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-                @if (tab == "groups")
-                {
-                    <div class="grid gap-3 sm:grid-cols-2">
-                        <label class="text-sm text-[var(--select-text)]">Group type
-                            <select @bind="typeId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="0">Select group type</option>
-                                @foreach (var type in data.Types)
-                                {
-                                    <option value="@type.Id">@type.Name</option>
-                                }
-                            </select>
-                        </label>
-                        <label class="text-sm text-[var(--select-text)]">Approved organisation structure
-                            <select @bind="structureId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                <option value="0">Select structure</option>
-                                @foreach (var structure in data.Structures)
-                                {
-                                    <option value="@structure.Id">@structure.Name</option>
-                                }
-                            </select>
-                        </label>
-                    </div>
-                }
-                <div class="flex flex-wrap gap-2">
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="SaveAsync">Save</button>
-                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>editing=false">Cancel</button>
-                </div>
-            </fieldset>
-        }
-
         @if (deletingId.HasValue)
         {
             <div role="alert" class="space-y-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
@@ -95,7 +57,54 @@
                 <!-- Left Panel: Group Details -->
                 <section class="min-w-0 xl:col-span-8">
                     <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
-                        @if (selected == null)
+                        @if (editing)
+                        {
+                            <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-6 py-4 bg-[var(--select-hover)]/50">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                        <span class="material-symbols-rounded" aria-hidden="true">groups</span>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-sm font-semibold text-[var(--select-text)]">@(editId == 0 ? "Add Group" : "Edit Group")</h2>
+                                        <p class="mt-0.5 text-xs text-[var(--select-muted)]">Configure group name, type, and approved structure.</p>
+                                    </div>
+                                </div>
+                                <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                        @onclick="() => editing = false">
+                                    Close
+                                </button>
+                            </div>
+                            <fieldset disabled="@busy" class="p-6 space-y-4">
+                                <label class="block text-sm text-[var(--select-text)]">Name
+                                    <input @bind="name" maxlength="250" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                </label>
+                                <div class="grid gap-3 sm:grid-cols-2">
+                                    <label class="text-sm text-[var(--select-text)]">Group type
+                                        <select @bind="typeId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="0">Select group type</option>
+                                            @foreach (var type in data.Types)
+                                            {
+                                                <option value="@type.Id">@type.Name</option>
+                                            }
+                                        </select>
+                                    </label>
+                                    <label class="text-sm text-[var(--select-text)]">Approved organisation structure
+                                        <select @bind="structureId" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                            <option value="0">Select structure</option>
+                                            @foreach (var structure in data.Structures)
+                                            {
+                                                <option value="@structure.Id">@structure.Name</option>
+                                            }
+                                        </select>
+                                    </label>
+                                </div>
+                                <div class="flex flex-wrap gap-2">
+                                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="SaveAsync">Save</button>
+                                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>editing=false">Cancel</button>
+                                </div>
+                            </fieldset>
+                        }
+                        else if (selected == null)
                         {
                             <div class="flex flex-col items-center justify-center p-12 text-center text-[var(--select-muted)] min-h-[400px]">
                                 <div class="text-5xl mb-3">👈</div>
@@ -141,15 +150,6 @@
                             </div>
 
                             <div class="p-6 space-y-6">
-                                <!-- Supervisors Card -->
-                                <div class="bg-[var(--select-hover)]/70 border border-[var(--app-border-color)] rounded-lg p-4 space-y-2">
-                                    <h4 class="text-xs font-bold text-[var(--select-muted)] uppercase tracking-wider">Group details</h4>
-                                    <div class="text-sm text-[var(--select-text)] space-y-1">
-                                        <p><span class="text-[var(--select-muted)]">Type:</span> @(data.Types.FirstOrDefault(t => t.Id == selected.TypeId)?.Name ?? "N/A")</p>
-                                        <p><span class="text-[var(--select-muted)]">Structure:</span> @selected.Structure</p>
-                                    </div>
-                                </div>
-
                                 <!-- Assigned Staff List -->
                                 <div>
                                     <div class="flex items-center justify-between mb-3">
@@ -265,63 +265,165 @@
         }
         else
         {
-            <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
-                <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-4 py-3">
-                    <div>
-                        <h3 class="text-sm font-semibold text-[var(--select-text)]">Group Types</h3>
-                        <p class="mt-0.5 text-xs text-[var(--select-muted)]">@data.Organisation · @data.Types.Count types</p>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-2">
-                        @if (data.IsSuperAdmin)
-                        {
-                            <select value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@busy" class="rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-1.5 text-xs text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500">
-                                @foreach (var org in data.Organisations)
-                                {
-                                    <option value="@org.Id">@org.Name</option>
-                                }
-                            </select>
-                        }
-                        <input type="search" @bind="search" @bind:event="oninput" placeholder="Search group types..." class="rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-1.5 text-xs text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                        @if (data.CanManage)
-                        {
-                            <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="New">
-                                <span class="material-symbols-rounded text-base">add</span>
-                                Add group type
-                            </button>
-                        }
-                    </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-[var(--select-text)]">
-                        <thead class="bg-[var(--select-hover)]">
-                            <tr>
-                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Name</th>
-                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-[var(--app-border-color)]">
-                            @foreach (var row in data.Types.Where(t => t.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
+            var filteredTypes = data.Types.Where(t => t.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                <!-- Left Panel: Group Type Form & Details -->
+                <section class="min-w-0 xl:col-span-8">
+                    <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
+                        <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-6 py-4 bg-[var(--select-hover)]/50">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                    <span class="material-symbols-rounded" aria-hidden="true">label</span>
+                                </div>
+                                <div>
+                                    <h2 class="text-sm font-semibold text-[var(--select-text)]">@(editId == 0 ? "Add Group Type" : $"Edit Group Type: {originalName}")</h2>
+                                    <p class="mt-0.5 text-xs text-[var(--select-muted)]">
+                                        @(editId == 0 ? "Create a new operational group type for this organisation." : $"{data.Groups.Count(g => g.TypeId == editId)} assigned groups")
+                                    </p>
+                                </div>
+                            </div>
+                            @if (editId != 0)
                             {
-                                <tr class="hover:bg-[var(--select-hover)] transition-colors">
-                                    <td class="p-3">@row.Name</td>
-                                    <td class="p-3">
-                                        @if (data.CanManage)
-                                        {
-                                            <div class="flex flex-wrap gap-2">
-                                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>EditType(row)">Edit</button>
-                                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,0)">Delete</button>
-                                            </div>
-                                        }
-                                    </td>
-                                </tr>
+                                <div class="flex items-center gap-2">
+                                    @if (data.CanManage)
+                                    {
+                                        <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                                disabled="@busy"
+                                                @onclick="() => BeginDelete(editId, originalName ?? name, 0)">
+                                            Delete
+                                        </button>
+                                    }
+                                    <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                            disabled="@busy"
+                                            @onclick="New">
+                                        New type
+                                    </button>
+                                </div>
                             }
-                        </tbody>
-                    </table>
-                </div>
-                @if (data.Types.Count == 0)
-                {
-                    <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">No records found.</div>
-                }
+                        </div>
+
+                        <div class="p-6 space-y-6">
+                            <fieldset disabled="@(busy || !data.CanManage)" class="space-y-4">
+                                <label class="block text-sm text-[var(--select-text)]">Group type name
+                                    <input @bind="name" maxlength="150" placeholder="Enter group type name…" class="mt-1 block w-full rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                </label>
+                                @if (data.CanManage)
+                                {
+                                    <div class="flex flex-wrap gap-2">
+                                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || string.IsNullOrWhiteSpace(name))" @onclick="SaveAsync">
+                                            @(editId == 0 ? "Save group type" : "Update group type")
+                                        </button>
+                                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="New">
+                                            Clear
+                                        </button>
+                                    </div>
+                                }
+                            </fieldset>
+
+                            @if (editId != 0)
+                            {
+                                var typeGroups = data.Groups.Where(g => g.TypeId == editId).ToList();
+                                <div class="border-t border-[var(--app-border-color)] pt-5">
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="text-sm font-semibold text-[var(--select-text)]">Groups in this Type (@typeGroups.Count)</h3>
+                                    </div>
+                                    @if (typeGroups.Any())
+                                    {
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[300px] overflow-y-auto pr-1">
+                                            @foreach (var grp in typeGroups)
+                                            {
+                                                <div class="flex items-center justify-between p-3 rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)]">
+                                                    <div class="min-w-0">
+                                                        <span class="block text-xs font-semibold text-[var(--select-text)] truncate">👥 @grp.Name</span>
+                                                        <span class="block text-[11px] text-[var(--select-muted)] truncate">@grp.Structure</span>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-6 text-center border border-dashed border-[var(--app-border-color)] rounded-lg text-[var(--select-muted)]">
+                                            <p class="text-xs">No groups currently assigned to this group type.</p>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Right Panel: Group Types List (Sidebar) -->
+                <aside class="min-w-0 xl:col-span-4">
+                    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <!-- Section Header -->
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-800">Group Types</h3>
+                                <p class="mt-0.5 text-xs text-slate-500">@data.Organisation · @filteredTypes.Count types</p>
+                            </div>
+                            @if (data.CanManage)
+                            {
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" title="Add group type" aria-label="Add group type" disabled="@busy" @onclick="New">
+                                    <span class="material-symbols-rounded text-xl">add</span>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Filter Controls -->
+                        <div class="border-b border-slate-100 bg-slate-50 px-4 py-2 space-y-2">
+                            @if (data.IsSuperAdmin)
+                            {
+                                <select value="@data.OrganisationId" @onchange="ChangeOrganisation" disabled="@busy" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                    @foreach (var org in data.Organisations)
+                                    {
+                                        <option value="@org.Id">@org.Name</option>
+                                    }
+                                </select>
+                            }
+                            <input type="search" @bind="search" @bind:event="oninput" placeholder="Search group types…" class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                        </div>
+
+                        <!-- Group Types Scrollable List -->
+                        <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
+                            @foreach (var row in filteredTypes)
+                            {
+                                var isSelected = editId == row.Id;
+                                var groupCount = data.Groups.Count(g => g.TypeId == row.Id);
+                                <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")"
+                                        @onclick="() => EditType(row)">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <span class="block text-sm font-semibold text-slate-800 truncate">🏷️ @row.Name</span>
+                                            @if (groupCount > 0)
+                                            {
+                                                <span class="mt-1 block text-xs text-blue-700 font-medium">
+                                                    @groupCount groups →
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="mt-1 block text-xs text-slate-500 italic">
+                                                    No groups assigned
+                                                </span>
+                                            }
+                                        </div>
+                                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 @(groupCount > 0 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
+                                            @groupCount
+                                        </span>
+                                    </div>
+                                </button>
+                            }
+
+                            @if (!filteredTypes.Any())
+                            {
+                                <div class="px-4 py-12 text-center text-xs text-slate-500">
+                                    No matching group types found.
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </aside>
             </div>
         }
 
@@ -345,7 +447,7 @@
     private IEnumerable<OperationalGroupRow> FilteredGroups => data?.Groups.Where(g => (groupTypeFilter == 0 || g.TypeId == groupTypeFilter) && (g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Structure.Contains(search, StringComparison.OrdinalIgnoreCase))) ?? Enumerable.Empty<OperationalGroupRow>();
 
     protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{RequestedTab}";if(loaded==key)return;loaded=key;tab=RequestedTab=="types"?"types":"groups";await LoadAsync();}
-    private async Task LoadAsync(){busy=true;error=null;editing=false;deletingId=null;detailOpen=false;selected=null;selectedDetails=null;try{data=await Groups.LoadAsync(OrganisationId);}catch(Exception ex){data=null;Fail(ex);}finally{busy=false;}}
+    private async Task LoadAsync(){busy=true;error=null;editing=false;editId=0;name="";originalName=null;deletingId=null;detailOpen=false;selected=null;selectedDetails=null;try{data=await Groups.LoadAsync(OrganisationId);}catch(Exception ex){data=null;Fail(ex);}finally{busy=false;}}
     private void SelectTab(string value){if(busy)return;var route=value=="types"?"/admin/hr/groups/group-type":"/admin/hr/groups/management";Navigation.NavigateTo($"{route}?organisationId={data!.OrganisationId}");}
     private void ChangeOrganisation(ChangeEventArgs e){if(!busy && int.TryParse(e.Value?.ToString(),out var id)){var route=tab=="types"?"/admin/hr/groups/group-type":"/admin/hr/groups/management";Navigation.NavigateTo($"{route}?organisationId={id}");}}
     private void New(){editId=0;name="";typeId=structureId=expectedAudit=0;originalName=null;editing=true;deletingId=null;error=null;}
@@ -353,6 +455,8 @@
     private void EditType(OperationalGroupOption row){New();editId=row.Id;name=originalName=row.Name;}
     private async Task Select(OperationalGroupRow row)
     {
+        editing = false;
+        deletingId = null;
         selected = row;
         selectedDetails = null;
         loadingDetails = true;
