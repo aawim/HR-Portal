@@ -1,0 +1,436 @@
+@namespace HRM.Components.Admin.Hr.Transfers
+@using HRM.DTOs
+@using HRM.Enums
+@inject IJSRuntime JS
+
+@if (Document is not null)
+{
+    <div class="space-y-4">
+        <!-- Action Bar (Hidden in Print) -->
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 print:hidden">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                    @Document.TransferReferenceNo · v@Document.ApprovedVersion
+                </span>
+                <span class="text-xs text-slate-600">
+                    Generated @Document.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")
+                </span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                @if (AllowVariantSwitch)
+                {
+                    <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+                        <button type="button"
+                                @onclick="() => OnVariantChanged.InvokeAsync(StaffTransferDocumentVariants.EmployeeNotice)"
+                                class="rounded-md px-2.5 py-1 font-medium transition @(Document.Variant == StaffTransferDocumentVariants.EmployeeNotice ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900")">
+                            Standard Employee Notice
+                        </button>
+                        <button type="button"
+                                @onclick="() => OnVariantChanged.InvokeAsync(StaffTransferDocumentVariants.RestrictedAdminRecord)"
+                                class="rounded-md px-2.5 py-1 font-medium transition @(Document.Variant == StaffTransferDocumentVariants.RestrictedAdminRecord ? "bg-amber-600 text-white" : "text-slate-600 hover:text-slate-900")">
+                            Restricted HR / Admin Record
+                        </button>
+                    </div>
+                }
+
+                <button type="button"
+                        @onclick="PrintDocumentAsync"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800">
+                    <span>🖨️</span>
+                    <span>Print / Save PDF</span>
+                </button>
+
+                @if (OnClose.HasDelegate)
+                {
+                    <button type="button"
+                            @onclick="OnClose"
+                            class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        Close
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Printable A4 Sheet -->
+        <div id="staff-transfer-printable-sheet"
+             class="mx-auto max-w-[210mm] rounded-xl border border-slate-300 bg-white p-6 text-slate-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+
+            <!-- 1. Organization Header -->
+            <div class="flex items-start justify-between border-b-2 border-slate-900 pb-4">
+                <div>
+                    <div class="text-xs font-bold uppercase tracking-widest text-slate-500">
+                        Human Resource Management System
+                    </div>
+                    <h1 class="mt-1 text-xl font-extrabold uppercase tracking-tight text-slate-900">
+                        @(Document.Variant == StaffTransferDocumentVariants.RestrictedAdminRecord
+                            ? "Internal Staff Transfer — Restricted HR & Security Record"
+                            : "Official Internal Staff Transfer Notice")
+                    </h1>
+                    <p class="mt-0.5 text-xs text-slate-600">
+                        Formal Organizational Reassignment, Work Schedule, Access &amp; Reporting Record
+                    </p>
+                </div>
+                <div class="text-right text-xs">
+                    <div class="font-bold text-slate-900">Ref: @Document.TransferReferenceNo</div>
+                    <div class="text-slate-600">Request ID: #@(Document.RequestId?.ToString() ?? Document.StaffTransferId.ToString())</div>
+                    <div class="text-slate-600">Version: v@Document.ApprovedVersion</div>
+                    <div class="text-slate-600">Issued: @Document.GeneratedAt.ToLocalTime().ToString("dd MMM yyyy")</div>
+                    <div class="mt-1 inline-block rounded border border-slate-800 px-2 py-0.5 text-[11px] font-bold uppercase">
+                        @Document.Status
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Employee Identification & 3. Organization Movement -->
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        01 · Employee Identification
+                    </h2>
+                    <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                        <dt class="text-slate-500">Full Name</dt>
+                        <dd class="font-semibold text-slate-900">@Document.EmployeeFullName</dd>
+
+                        <dt class="text-slate-500">Staff Number</dt>
+                        <dd class="font-semibold text-slate-900">@Document.EmployeeStaffNumber</dd>
+
+                        @if (Document.Variant == StaffTransferDocumentVariants.RestrictedAdminRecord && !string.IsNullOrWhiteSpace(Document.IdCardNumber))
+                        {
+                            <dt class="text-slate-500">ID Card Number</dt>
+                            <dd class="font-mono font-semibold text-amber-900">@Document.IdCardNumber</dd>
+                        }
+
+                        <dt class="text-slate-500">Employment Category</dt>
+                        <dd class="text-slate-800">@Document.EmploymentCategory</dd>
+
+                        <dt class="text-slate-500">Employment Status</dt>
+                        <dd class="text-slate-800">@Document.CurrentEmploymentStatus</dd>
+
+                        <dt class="text-slate-500">Date Joined</dt>
+                        <dd class="text-slate-800">@(Document.DateJoined?.ToString("dd MMM yyyy") ?? "—")</dd>
+                    </dl>
+                </div>
+
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        02 · Organizational Movement
+                    </h2>
+                    <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                        <dt class="text-slate-500">Sending Department</dt>
+                        <dd class="font-medium text-slate-800">@Document.SourceOrganisationName @(string.IsNullOrWhiteSpace(Document.SourceDepartmentUnit) ? "" : $"({Document.SourceDepartmentUnit})")</dd>
+
+                        <dt class="text-slate-500">Receiving Department</dt>
+                        <dd class="font-bold text-blue-900">@Document.DestinationOrganisationName @(string.IsNullOrWhiteSpace(Document.DestinationDepartmentUnit) ? "" : $"({Document.DestinationDepartmentUnit})")</dd>
+
+                        <dt class="text-slate-500">Transfer Type</dt>
+                        <dd class="text-slate-800">@Document.TransferType (@Document.AppointmentMode)</dd>
+
+                        <dt class="text-slate-500">Effective Date</dt>
+                        <dd class="font-bold text-slate-900">@Document.EffectiveDate.ToString("dd MMM yyyy")</dd>
+
+                        <dt class="text-slate-500">Reporting Date</dt>
+                        <dd class="font-semibold text-slate-900">@(Document.ReportingDate?.ToString("dd MMM yyyy") ?? Document.EffectiveDate.ToString("dd MMM yyyy"))</dd>
+                    </dl>
+                </div>
+            </div>
+
+            <!-- 4. Job & Position Comparison -->
+            <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    03 · Job, Position &amp; Matrix Comparison
+                </h2>
+                <div class="mt-2 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
+                    <div class="rounded bg-slate-50 p-2.5">
+                        <div class="text-[11px] font-bold uppercase text-slate-500">Current Appointment</div>
+                        <div class="mt-1 font-semibold text-slate-900">@Document.ExistingPositionTitle</div>
+                        <div class="text-slate-600">Matrix: @(Document.ExistingPositionMatrixCode ?? "—") · Grade/Level: @(Document.ExistingGradeLevel ?? "—")</div>
+                        @if (Document.Variant == StaffTransferDocumentVariants.RestrictedAdminRecord && !string.IsNullOrWhiteSpace(Document.ExistingStepSalarySummary))
+                        {
+                            <div class="mt-0.5 text-amber-800">Step / Salary: @Document.ExistingStepSalarySummary</div>
+                        }
+                    </div>
+                    <div class="rounded bg-blue-50/60 p-2.5">
+                        <div class="text-[11px] font-bold uppercase text-blue-700">Approved Destination Appointment</div>
+                        <div class="mt-1 font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(Document.DestinationPositionTitle) ? Document.ExistingPositionTitle : Document.DestinationPositionTitle)</div>
+                        <div class="text-slate-600">Matrix: @(Document.DestinationPositionMatrixCode ?? Document.ExistingPositionMatrixCode ?? "—") · Grade/Level: @(Document.DestinationGradeLevel ?? Document.ExistingGradeLevel ?? "—")</div>
+                        @if (Document.Variant == StaffTransferDocumentVariants.RestrictedAdminRecord && !string.IsNullOrWhiteSpace(Document.DestinationStepSalarySummary))
+                        {
+                            <div class="mt-0.5 text-amber-800">Step / Salary: @Document.DestinationStepSalarySummary</div>
+                        }
+                    </div>
+                </div>
+                <div class="mt-2 text-xs text-slate-700">
+                    <span class="font-semibold">Transfer Reason &amp; Justification:</span> @Document.TransferReason
+                </div>
+            </div>
+
+            <!-- 5. Work Schedule & Attendance Arrangements -->
+            <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    04 · Work Schedule &amp; Attendance Arrangements
+                </h2>
+                <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs md:grid-cols-4">
+                    <div>
+                        <span class="block text-slate-500">Work Location</span>
+                        <span class="font-semibold text-slate-900">@(Document.Work.ProposedWorkLocation ?? Document.Work.CurrentWorkLocation ?? "—")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Working Schedule</span>
+                        <span class="font-semibold text-slate-900">@(Document.Work.OfficialWorkingSchedule ?? Document.Work.ProposedWorkTemplateName ?? "Standard")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Shift / Roster</span>
+                        <span class="font-semibold text-slate-900">@(Document.Work.ShiftOrRosterName ?? "Standard Day")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Working Days &amp; Hours</span>
+                        <span class="font-semibold text-slate-900">@(Document.Work.WorkingDaysPattern ?? "Sun–Thu") (@(Document.Work.StandardStartTime ?? "08:00")–@(Document.Work.StandardEndTime ?? "14:00"))</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Planning Provider</span>
+                        <span class="text-slate-800">@(Document.Work.ProposedPlanningProvider ?? "Organization Default")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Attendance Method / Device</span>
+                        <span class="text-slate-800">@(Document.Work.RequiredAttendanceMethod ?? "Biometric") @(string.IsNullOrWhiteSpace(Document.Work.AttendanceDeviceOrLocation) ? "" : $"· {Document.Work.AttendanceDeviceOrLocation}")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Attendance Supervisor</span>
+                        <span class="text-slate-800">@(Document.Work.AttendanceVerificationSupervisorName ?? Document.NewReportingSupervisorName ?? "—")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Schedule Effective Date</span>
+                        <span class="font-semibold text-slate-900">@((Document.Work.ScheduleEffectiveDate ?? Document.EffectiveDate).ToString("dd MMM yyyy"))</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 6. Organizational Access Summary -->
+            @if (Document.AccessChanges.Count > 0)
+            {
+                <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        05 · Organizational Access &amp; System Permissions
+                    </h2>
+                    <div class="mt-2 overflow-x-auto">
+                        <table class="w-full border-collapse text-left text-[11px]">
+                            <thead>
+                                <tr class="border-b border-slate-200 bg-slate-50 text-slate-600">
+                                    <th class="px-2 py-1">Access Area</th>
+                                    <th class="px-2 py-1">Current Scope</th>
+                                    <th class="px-2 py-1">Action</th>
+                                    <th class="px-2 py-1">Proposed Scope</th>
+                                    <th class="px-2 py-1">Status</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var row in Document.AccessChanges)
+                                {
+                                    <tr>
+                                        <td class="px-2 py-1 font-medium text-slate-900">@row.AccessArea</td>
+                                        <td class="px-2 py-1 text-slate-600">@(row.CurrentAccessSummary ?? "—")</td>
+                                        <td class="px-2 py-1 font-semibold text-slate-800">@row.ProposedAction</td>
+                                        <td class="px-2 py-1 text-slate-800">@(row.ProposedAccessSummary ?? "—")</td>
+                                        <td class="px-2 py-1 text-slate-600">@(row.ProvisioningStatus ?? "Pending")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- 7. Physical Door Access Summary -->
+            @if (Document.DoorAccessItems.Count > 0)
+            {
+                <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        06 · Physical Door Access &amp; Security Provisioning
+                    </h2>
+                    <div class="mt-2 overflow-x-auto">
+                        <table class="w-full border-collapse text-left text-[11px]">
+                            <thead>
+                                <tr class="border-b border-slate-200 bg-slate-50 text-slate-600">
+                                    <th class="px-2 py-1">Building / Floor / Zone</th>
+                                    <th class="px-2 py-1">Card Ref</th>
+                                    <th class="px-2 py-1">Proposed Access Groups</th>
+                                    <th class="px-2 py-1">Revoke Old Dept</th>
+                                    <th class="px-2 py-1">Provisioning State</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var door in Document.DoorAccessItems)
+                                {
+                                    <tr>
+                                        <td class="px-2 py-1 font-medium text-slate-900">
+                                            @door.BuildingName @(string.IsNullOrWhiteSpace(door.FloorName) ? "" : $"/ {door.FloorName}") @(string.IsNullOrWhiteSpace(door.RoomOrZoneName) ? "" : $"/ {door.RoomOrZoneName}")
+                                        </td>
+                                        <td class="px-2 py-1 text-slate-600">@(door.AccessCardReference ?? "—")</td>
+                                        <td class="px-2 py-1 text-slate-800">@(door.ProposedAccessGroups ?? "—")</td>
+                                        <td class="px-2 py-1 text-slate-700">@(door.RevokePreviousDepartmentAccess ? "Yes" : "Retained")</td>
+                                        <td class="px-2 py-1 font-semibold text-slate-800">@door.ProvisioningState</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- 8 & 9. Reporting & Handover Arrangements -->
+            <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                    07 · Reporting Instructions &amp; Handover Obligations
+                </h2>
+                <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs md:grid-cols-4">
+                    <div>
+                        <span class="block text-slate-500">Reporting Date &amp; Time</span>
+                        <span class="font-semibold text-slate-900">@Document.Reporting.ReportingDate.ToString("dd MMM yyyy") @(Document.Reporting.ReportingTime ?? "08:00")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Reporting Location</span>
+                        <span class="font-semibold text-slate-900">@(Document.Reporting.ReportingLocation ?? Document.DestinationOrganisationName)</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Reporting To</span>
+                        <span class="font-semibold text-slate-900">@(Document.Reporting.ReportingToOfficerName ?? Document.NewReportingSupervisorName ?? "—")</span>
+                    </div>
+                    <div>
+                        <span class="block text-slate-500">Handover Required</span>
+                        <span class="font-semibold text-slate-900">
+                            @(Document.Reporting.HandoverRequired
+                                ? $"Yes (by {Document.Reporting.HandoverDeadline?.ToString("dd MMM yyyy") ?? "Effective Date"})"
+                                : "No")
+                        </span>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(Document.Reporting.OutstandingAssignments) ||
+                     !string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReturn) ||
+                     !string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReceive) ||
+                     !string.IsNullOrWhiteSpace(Document.Reporting.SpecialInstructions))
+                {
+                    <div class="mt-2 grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 text-xs md:grid-cols-2">
+                        @if (!string.IsNullOrWhiteSpace(Document.Reporting.OutstandingAssignments))
+                        {
+                            <div><span class="font-semibold text-slate-700">Outstanding Assignments:</span> @Document.Reporting.OutstandingAssignments</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReturn))
+                        {
+                            <div><span class="font-semibold text-slate-700">Assets to Return:</span> @Document.Reporting.AssetsToReturn</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReceive))
+                        {
+                            <div><span class="font-semibold text-slate-700">Assets to Receive:</span> @Document.Reporting.AssetsToReceive</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Document.Reporting.SpecialInstructions))
+                        {
+                            <div><span class="font-semibold text-slate-700">Special Instructions:</span> @Document.Reporting.SpecialInstructions</div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- 10, 11, 12. Confirmation, Optional Advisory Comments, and Final Approval -->
+            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        08 · Employee Confirmation Record
+                    </h2>
+                    @if (Document.ConfirmedVersion.HasValue && Document.ConfirmedAt.HasValue)
+                    {
+                        <div class="mt-2 text-xs">
+                            <div class="font-semibold text-emerald-800">
+                                Confirmed by @Document.ConfirmedByName on @Document.ConfirmedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm") (Version v@Document.ConfirmedVersion)
+                            </div>
+                            <p class="mt-1 italic text-slate-600">"@Document.ConfirmationStatement"</p>
+                            @if (!string.IsNullOrWhiteSpace(Document.EmployeeConfirmationRemarks))
+                            {
+                                <div class="mt-1 text-slate-700"><span class="font-semibold">Remarks:</span> @Document.EmployeeConfirmationRemarks</div>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-2 text-xs text-amber-700">Pending employee confirmation for current version (v@Document.ApprovedVersion).</div>
+                    }
+                </div>
+
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        09 · Receiving Department Final Approval
+                    </h2>
+                    @if (Document.ReceivingApprovedAt.HasValue)
+                    {
+                        <div class="mt-2 text-xs">
+                            <div class="font-semibold text-blue-900">
+                                @Document.ReceivingApprovalDecision by @Document.ReceivingApprovedByName on @Document.ReceivingApprovedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm")
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(Document.ReceivingDecisionRemarks))
+                            {
+                                <div class="mt-1 text-slate-700"><span class="font-semibold">Decision Remarks:</span> @Document.ReceivingDecisionRemarks</div>
+                            }
+                            <div class="mt-1.5 text-slate-600">
+                                <span class="font-semibold">Activation Status:</span> @Document.ActivationStatus
+                                @(Document.ActivatedAt.HasValue ? $" ({Document.ActivatedAt.Value.ToLocalTime():dd MMM yyyy HH:mm})" : "")
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="mt-2 text-xs text-slate-500">Awaiting receiving department final decision.</div>
+                    }
+                </div>
+            </div>
+
+            @if (Document.SupervisorAndHodComments.Count > 0)
+            {
+                <div class="mt-4 rounded-lg border border-slate-200 p-3">
+                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                        10 · Supervisor / HOD Advisory Comments
+                    </h2>
+                    <div class="mt-2 space-y-1.5 text-xs">
+                        @foreach (var comment in Document.SupervisorAndHodComments)
+                        {
+                            <div class="rounded bg-slate-50 px-2.5 py-1.5">
+                                <span class="font-semibold text-slate-800">@comment.AuthorName (@comment.ParticipantRole · @comment.CommentKind):</span>
+                                <span class="text-slate-700">@comment.CommentText</span>
+                                <span class="ml-2 text-[10px] text-slate-400">@comment.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- 14. System Verification Footer -->
+            <div class="mt-5 flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 pt-3 text-[10px] text-slate-500">
+                <div>
+                    Initiated by <span class="font-semibold text-slate-700">@Document.InitiatedByName</span>
+                    @(Document.SubmittedAt.HasValue ? $" · Submitted {Document.SubmittedAt.Value.ToLocalTime():dd MMM yyyy HH:mm}" : "")
+                </div>
+                <div class="font-mono">
+                    SHA-256: @Document.VerificationHash
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public StaffTransferPrintableDocumentDto? Document { get; set; }
+    [Parameter] public bool AllowVariantSwitch { get; set; } = true;
+    [Parameter] public EventCallback<StaffTransferDocumentVariants> OnVariantChanged { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task PrintDocumentAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("window.print");
+        }
+        catch
+        {
+            // Ignore JS interop disconnect errors
+        }
+    }
+}

@@ -387,3 +387,96 @@ public sealed class TransferActivationResult
     public string Message { get; set; } = "";
     public List<string> Warnings { get; set; } = [];
 }
+
+/// <summary>
+/// Lookup options for the New/Edit Staff Transfer multi-tab form.
+/// </summary>
+public sealed class StaffTransferFormLookupDto
+{
+    public int CurrentOrganisationId { get; set; }
+    public string CurrentOrganisationName { get; set; } = "";
+    public List<StaffTransferLookupOption> Employees { get; set; } = [];
+    public List<StaffTransferLookupOption> Organisations { get; set; } = [];
+    public List<StaffTransferDepartmentOption> Departments { get; set; } = [];
+    public List<StaffTransferLookupOption> JobTypes { get; set; } = [];
+    public List<StaffTransferPositionOption> Positions { get; set; } = [];
+    public List<StaffTransferLookupOption> PositionFrameworks { get; set; } = [];
+    public List<StaffTransferMatrixOption> PositionMatrices { get; set; } = [];
+    public List<StaffTransferStepOption> MatrixSteps { get; set; } = [];
+    public List<StaffTransferLookupOption> Locations { get; set; } = [];
+    public List<StaffTransferLookupOption> PlanningProviders { get; set; } = [];
+    public List<StaffTransferLookupOption> WorkTemplates { get; set; } = [];
+    public List<StaffTransferLookupOption> AttendanceDevices { get; set; } = [];
+    public List<StaffTransferLookupOption> Supervisors { get; set; } = [];
+    public List<StaffTransferLookupOption> Roles { get; set; } = [];
+    public List<StaffTransferLookupOption> UserGroups { get; set; } = [];
+    public List<StaffTransferLookupOption> SecurityOfficers { get; set; } = [];
+}
+
+public sealed record StaffTransferLookupOption(int Id, string Name, string? Subtitle = null);
+
+public sealed record StaffTransferDepartmentOption(int Id, int OrganisationId, string Name, int StructureTypeId);
+
+public sealed record StaffTransferPositionOption(
+    int PositionId,
+    int? OrganisationId,
+    string Name,
+    int? FrameworkId,
+    int? PositionMatrixId,
+    bool IsVacant,
+    decimal? BasicSalary,
+    decimal? Allowance);
+
+public sealed record StaffTransferMatrixOption(
+    int PositionMatrixId,
+    int? FrameworkId,
+    int JobMatrixId,
+    string Label,
+    string? GradeCode,
+    int ApprovedSlots,
+    int AvailableSlots);
+
+public sealed record StaffTransferStepOption(
+    int JobMatrixStepId,
+    int JobMatrixId,
+    int StepNumber,
+    decimal BasicSalary,
+    decimal JobAllowance);
+
+/// <summary>
+/// Section 7 — Formal printable A4 transfer document and PDF export model.
+/// Reconstructed strictly from the approved/confirmed versioned snapshot.
+/// </summary>
+public sealed class StaffTransferPrintableDocumentDto
+{
+    public long StaffTransferDocumentId { get; set; }
+    public int StaffTransferId { get; set; }
+    public string DocumentNumber { get; set; } = "";
+    public string DocumentVariant { get; set; } = StaffTransferDocumentVariants.EmployeeNotice;
+    public string? RequestReferenceNumber { get; set; }
+    public DateTime IssueDateUtc { get; set; }
+    public int RequestVersion { get; set; }
+    public int? ConfirmedVersion { get; set; }
+    public string Sha256Hash { get; set; } = "";
+    public string Status { get; set; } = "";
+
+    public string OrganisationBrandingName { get; set; } = "";
+    public StaffTransferStaffTabDto Staff { get; set; } = new();
+    public StaffTransferJobTabDto Job { get; set; } = new();
+    public StaffTransferWorkTabDto Work { get; set; } = new();
+    public List<StaffTransferAccessChangeItemDto> AccessChanges { get; set; } = [];
+    public List<StaffTransferDoorAccessItemDto> DoorAccessChanges { get; set; } = [];
+    public StaffTransferReportingTabDto Reporting { get; set; } = new();
+
+    public string? ConfirmationStatement { get; set; }
+    public string? ConfirmedByName { get; set; }
+    public DateTime? ConfirmedAtUtc { get; set; }
+    public string? EmployeeRemarks { get; set; }
+
+    public List<StaffTransferCommentDto> SupervisorComments { get; set; } = [];
+    public List<StaffTransferCommentDto> HodComments { get; set; } = [];
+
+    public string? FinalApprovedByName { get; set; }
+    public DateTime? FinalApprovedAtUtc { get; set; }
+    public string? FinalDecisionRemarks { get; set; }
+}

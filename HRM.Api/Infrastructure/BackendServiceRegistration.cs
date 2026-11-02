@@ -216,6 +216,9 @@ public static class BackendServiceRegistration
         services.AddScoped<HRM.Services.SupervisorChangeRequestService>();
         services.AddScoped<HRM.Services.HrRequestInboxService>();
         services.AddScoped<HRM.Services.LeaveSetConfigurationService>();
+        services.AddScoped<IStaffTransferActivationService, HRM.Services.StaffTransferActivationService>();
+        services.AddScoped<HRM.Services.StaffTransferService>();
+        if (includeBackgroundWorkers) services.AddHostedService<HRM.Services.StaffTransferActivationWorker>();
 
         services.AddUserAppData();
         services.AddScoped<HRM.Application.Contracts.Pages.ILeaveApplications, HRM.Services.Transport.LeaveApplicationsService>();

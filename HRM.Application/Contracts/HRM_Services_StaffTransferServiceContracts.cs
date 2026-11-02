@@ -12,6 +12,7 @@ public abstract class StaffTransferServiceContracts
     public interface IOperations
     {
         Task<StaffTransferDashboardData> LoadDashboardAsync(int? organisationId = null, string? statusFilter = null);
+        Task<StaffTransferFormLookupDto> LoadFormLookupsAsync(int? organisationId = null, int? individualId = null, int? destinationOrganisationId = null);
         Task<StaffTransferDetailDto> LoadDetailAsync(int? staffTransferId = null, int? individualId = null, int? jobId = null);
         Task<ServiceResult> SaveAsync(StaffTransferSaveInput input);
         Task<ServiceResult> AddCommentAsync(int staffTransferId, string commentKind, string commentText, bool isVisibleToEmployee = true);
@@ -19,5 +20,6 @@ public abstract class StaffTransferServiceContracts
         Task<ServiceResult> SubmitReceivingDecisionAsync(StaffTransferDecisionInput input);
         Task<TransferActivationResult> ActivateTransferAsync(int staffTransferId);
         Task<ServiceResult> UpdateDoorAccessProvisioningAsync(int staffTransferDoorAccessId, string provisioningState, string? notes);
+        Task<StaffTransferPrintableDocumentDto> GetPrintableDocumentAsync(int staffTransferId, string variant = "EmployeeNotice");
     }
 }
