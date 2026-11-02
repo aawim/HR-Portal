@@ -11,7 +11,7 @@ public partial class WorkTemplateService
         var attached = await db.JobWorkTemplateAssignments.AsNoTracking()
             .Where(x => x.IsActive && (x.EffectiveTo == null || x.EffectiveTo >= today))
             .Select(x => new { x.WorkTemplateID, x.RotationTemplateIds }).ToListAsync();
-        return attached.Any(x => x.WorkTemplateID == templateId || HRM.Helpers.StaffScheduleCalendar.Parse(x.RotationTemplateIds).Contains(templateId)) ||
+        var scoped = db.Model.FindEntityType(typeof(ScopeScheduleAssignment)) == null ? [] : await db.ScopeScheduleAssignments.AsNoTracking().Where(x => x.IsActive && (x.EffectiveTo == null || x.EffectiveTo >= today)).Select(x => new { WorkTemplateID = x.WorkTemplateId, x.RotationTemplateIds }).ToListAsync(); return attached.Concat(scoped).Any(x => x.WorkTemplateID == templateId || HRM.Helpers.StaffScheduleCalendar.Parse(x.RotationTemplateIds).Contains(templateId)) ||
             await db.JobWorkTemplates.AnyAsync(x => x.IsActive && x.WorkTemplateId == templateId && (x.EffectiveTo == null || x.EffectiveTo >= today));
     }
 }

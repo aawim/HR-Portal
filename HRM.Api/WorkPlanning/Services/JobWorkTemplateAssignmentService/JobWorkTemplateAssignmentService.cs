@@ -327,9 +327,9 @@ namespace HRM.WorkPlanning.Services.JobWorkTemplateAssignmentService
 
             if (assignment.SchedulePurpose == "Official")
             {
-                var duties = await db.JobWorkTemplateAssignments.AsNoTracking().Where(a => a.JobID == dto.JobId && a.IsActive && a.SchedulePurpose == "Duty" &&
-                    (!a.EffectiveTo.HasValue || a.EffectiveTo >= removalDate)).ToListAsync(cancellationToken);
-                foreach (var duty in duties)
+                var job = await db.Jobs.AsNoTracking().SingleAsync(x => x.JobId == dto.JobId && x.OrganisationID == org, cancellationToken); var duties = (await HRM.Helpers.EffectiveStaffSchedules.LoadAsync(db, job, removalDate, DateTime.MaxValue.Date, cancellationToken)).Where(c => c.Assignment.SchedulePurpose == "Duty").Select(c => c.Assignment).ToList(); foreach (var duty in duties)
+                // Check effective duty schedules across direct and scoped attachments.
+                // Check effective duty schedules across direct and scoped attachments.
                     if (!await HRM.Helpers.OfficialSchedulePrerequisite.CoversAsync(db, dto.JobId, org,
                         duty.EffectiveFrom.Date > removalDate ? duty.EffectiveFrom.Date : removalDate, duty.EffectiveTo, cancellationToken, assignment.JobWorkTemplateAssignmentID))
                         return ServiceResult.Failed("End the dependent duty schedules or assign replacement default official hours before ending this schedule.");
