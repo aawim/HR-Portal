@@ -3,70 +3,89 @@
 @tailwind utilities;
 
 @layer base {
-    html, body {
-        @apply font-sans text-slate-800 bg-slate-50 antialiased selection:bg-primary-100 selection:text-primary-900;
+    :where(html, body) {
+        @apply font-sans antialiased selection:bg-primary-100 selection:text-primary-900;
+        background-color: var(--app-page-bg, #f8fafc);
+        color: var(--app-text, #1e293b);
     }
 
-    h1, h2, h3, h4, h5, h6 {
-        @apply tracking-tight text-slate-900;
+    :where(h1, h2, h3, h4, h5, h6) {
+        @apply tracking-tight;
+        color: inherit;
     }
 
-    label {
-        @apply text-sm font-medium text-slate-700 leading-snug;
+    :where(label) {
+        @apply text-sm font-medium leading-snug;
+        color: inherit;
     }
 
-    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="color"]):not([class*="pl-9"]):not([class*="pl-10"]),
-    select,
-    textarea,
-    .form-control,
-    .form-select {
-        @apply rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition-colors duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 read-only:bg-slate-50;
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="submit"]):not([type="button"]):not([type="reset"]):not([type="color"]):not([class*="pl-9"]):not([class*="pl-10"]), select, textarea, .form-control, .form-select) {
+        @apply rounded-lg border px-3 py-2 text-sm shadow-sm transition-colors duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed;
+        background-color: var(--app-input-bg, #ffffff);
+        color: var(--app-input-text, #1e293b);
+        border-color: var(--app-input-border, #cbd5e1);
     }
 
-    input:is([class*="pl-9"], [class*="pl-10"]) {
-        @apply rounded-lg border border-slate-300 bg-white py-2 pr-3 text-sm text-slate-800 shadow-sm transition-colors duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500;
+    :where(input:is([class*="pl-9"], [class*="pl-10"])) {
+        @apply rounded-lg border py-2 pr-3 text-sm shadow-sm transition-colors duration-150 placeholder:text-slate-400 hover:border-slate-400 focus:border-primary-600 focus:outline-none focus:ring-2 focus:ring-primary-500/20 disabled:cursor-not-allowed;
+        background-color: var(--app-input-bg, #ffffff);
+        color: var(--app-input-text, #1e293b);
+        border-color: var(--app-input-border, #cbd5e1);
     }
 
-    input[type="checkbox"],
-    input[type="radio"],
-    .form-check-input {
+    :where(input[type="checkbox"], input[type="radio"], .form-check-input) {
         @apply h-4 w-4 rounded border-slate-300 text-primary-600 transition-colors focus:ring-2 focus:ring-primary-500/30 focus:ring-offset-0 disabled:cursor-not-allowed disabled:opacity-50;
     }
 
-    input[type="radio"] {
+    :where(input[type="radio"]) {
         @apply rounded-full;
     }
 
-    input[type="file"] {
-        @apply block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-slate-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100;
+    :where(input[type="file"]) {
+        @apply block w-full text-sm file:mr-3 file:rounded-lg file:border file:border-slate-300 file:bg-slate-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-slate-700 hover:file:bg-slate-100;
+        color: inherit;
     }
 
-    table {
-        @apply w-full border-collapse text-left text-sm text-slate-700;
+    :where(table) {
+        @apply w-full border-collapse text-left text-sm;
+        color: inherit;
     }
 
-    thead {
-        @apply bg-slate-50/90 border-b border-slate-200 text-slate-600;
+    :where(thead) {
+        background-color: var(--app-table-header-bg, #f8fafc);
+        border-bottom: 1px solid var(--app-border-color, #e2e8f0);
+        color: var(--app-table-header-text, #475569);
     }
 
-    thead th {
-        @apply px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider text-slate-600 align-middle;
+    :where(thead th) {
+        @apply px-3.5 py-2.5 text-left text-xs font-semibold uppercase tracking-wider align-middle;
+        color: inherit;
     }
 
-    tbody tr {
-        @apply border-b border-slate-100 transition-colors duration-100 hover:bg-slate-50/80 last:border-b-0;
+    :where(tbody tr) {
+        @apply transition-colors duration-100 last:border-b-0;
+        border-bottom: 1px solid var(--app-border-subtle, #f1f5f9);
     }
 
-    tbody td {
-        @apply px-3.5 py-2.5 align-middle text-slate-700;
+    :where(tbody tr:hover) {
+        background-color: var(--app-table-row-hover, rgba(248, 250, 252, 0.85));
     }
 
-    fieldset:is(.border, [class*="rounded"]) {
-        @apply bg-white border-slate-200 shadow-card;
+    :where(tbody td) {
+        @apply px-3.5 py-2.5 align-middle;
+        color: inherit;
     }
 
-    :is(section, aside, article):is(.rounded-lg, .rounded-xl, .rounded-2xl).border:not([class*="bg-"]) {
-        @apply bg-white border-slate-200 shadow-card;
+    :where(fieldset:is(.border, [class*="rounded"])) {
+        @apply shadow-card;
+        background-color: var(--app-surface-bg, #ffffff);
+        border-color: var(--app-border-color, #e2e8f0);
+    }
+
+    :where(:is(section, aside, article, details):is(.rounded-lg, .rounded-xl, .rounded-2xl).border:not([class*="bg-"])) {
+        @apply shadow-card;
+        background-color: var(--app-surface-bg, #ffffff);
+        border-color: var(--app-border-color, #e2e8f0);
     }
 }
 
