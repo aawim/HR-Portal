@@ -64,10 +64,21 @@ builder.Services.AddDbContextFactory<AuditDbContext>(options =>
 builder.Logging.AddDebug();
 builder.Logging.AddConsole();
 builder.Services.AddHrmBackendServices();
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(
+    options => options.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(
+    options => options.Level = System.IO.Compression.CompressionLevel.Fastest);
 
 builder.Services.AddEfaasAuthentication(builder.Configuration, builder.Environment);
 
 var app = builder.Build();
+app.UseResponseCompression();
 if (builder.Environment.IsDevelopment() && CredentialExposure.IsExposed(builder.Configuration["Authentication:OpenIdConnect:ClientSecret"]))
     app.Logger.LogWarning("The development eFaas client secret matches a credential exposed in Git history. Rotate it at the provider and update the development secret store.");
 app.UseTrustedProxyHeaders();

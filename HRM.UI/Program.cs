@@ -12,7 +12,12 @@ builder.Services.AddTrustedProxyHeaders(builder.Configuration, origins.Public);
 builder.Services.AddSingleton(origins);
 builder.Services.AddSingleton<BackendSessionStore>();
 builder.Services.AddHttpClient("backend", client => { client.BaseAddress = origins.Api; client.Timeout = TimeSpan.FromSeconds(60); })
-    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { UseCookies = false, AllowAutoRedirect = false });
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+    {
+        UseCookies = false,
+        AllowAutoRedirect = false,
+        AutomaticDecompression = System.Net.DecompressionMethods.All
+    });
 builder.Services.AddAuthentication(BackendAuthenticationHandler.SchemeName)
     .AddScheme<AuthenticationSchemeOptions, BackendAuthenticationHandler>(BackendAuthenticationHandler.SchemeName, _ => { });
 builder.Services.AddAuthorization();
