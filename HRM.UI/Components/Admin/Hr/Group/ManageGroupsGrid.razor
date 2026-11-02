@@ -1,7 +1,9 @@
 @using HRM.Services
 @using HRM.Components.Admin.Hr.Organisation.Tabs
+@using HRM.Application.Contracts.Pages
 @attribute [Microsoft.AspNetCore.Authorization.Authorize]
 @inject HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations Groups
+@inject HRM.Application.Contracts.Pages.IOrganisationDirectoryQueries Directory
 @inject ToastService Toasts
 @inject ILogger<ManageGroupsGrid> Logger
 @inject NavigationManager Navigation
@@ -61,17 +63,6 @@
                 <button class="app-button @(tab=="groups"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="groups")" @onclick='()=>SelectTab("groups")'>Groups</button>
                 <button class="app-button @(tab=="types"?"app-button-primary":"app-button-secondary")" role="tab" aria-selected="@(tab=="types")" @onclick='()=>SelectTab("types")'>Group types</button>
             </div>
-
-            <div class="flex flex-wrap items-end gap-3">
-                <label class="text-sm text-[var(--select-text)]">Search
-                    <input @bind="search" @bind:event="oninput" class="mt-1 block rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] px-3 py-2 text-sm text-[var(--select-text)] focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-                <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
-                @if (data.CanManage)
-                {
-                    <button class="app-button app-button-primary" disabled="@busy" @onclick="New">@(tab=="types"?"Add group type":"Add group")</button>
-                }
-            </div>
         </div>
 
         @if (editing)
@@ -122,44 +113,183 @@
             </div>
         }
 
-        <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left text-sm text-[var(--select-text)]">
-                    <thead class="bg-[var(--select-hover)]">
-                        <tr>
-                            <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Name</th>
-                            @if (tab == "groups")
-                            {
-                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Group type</th>
-                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Structure</th>
-                            }
-                            <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-[var(--app-border-color)]">
-                        @if (tab == "groups")
+        @if (tab == "groups")
+        {
+            <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                <!-- Left Panel: Group Details -->
+                <section class="min-w-0 xl:col-span-8">
+                    <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
+                        @if (selected == null)
                         {
-                            @foreach (var row in data.Groups.Where(g => g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Structure.Contains(search, StringComparison.OrdinalIgnoreCase)))
-                            {
-                                <tr class="hover:bg-[var(--select-hover)] transition-colors">
-                                    <td class="p-3">@row.Name</td>
-                                    <td class="p-3">@row.Type</td>
-                                    <td class="p-3">@row.Structure</td>
-                                    <td class="p-3">
-                                        <div class="flex flex-wrap gap-2">
-                                            <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>View(row)">View</button>
-                                            @if (data.CanManage)
-                                            {
-                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>Edit(row)">Edit</button>
-                                                <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>BeginDelete(row.Id,row.Name,row.AuditId)">Delete</button>
-                                            }
-                                        </div>
-                                    </td>
-                                </tr>
-                            }
+                            <div class="flex flex-col items-center justify-center p-12 text-center text-[var(--select-muted)] min-h-[400px]">
+                                <div class="text-5xl mb-3">👈</div>
+                                <h3 class="text-base font-semibold text-[var(--select-text)]">Select a Group</h3>
+                                <p class="text-xs text-[var(--select-muted)] mt-1 max-w-xs">Choose any group from the list on the right to view assigned staff and management controls.</p>
+                            </div>
                         }
                         else
                         {
+                            <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-6 py-4 bg-[var(--select-hover)]/50">
+                                <div class="flex items-center gap-3">
+                                    <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                        <span class="material-symbols-rounded" aria-hidden="true">groups</span>
+                                    </div>
+                                    <div>
+                                        <h2 class="text-sm font-semibold text-[var(--select-text)]">@selected.Name</h2>
+                                        <p class="mt-0.5 text-xs text-[var(--select-muted)]">
+                                            @(data.Types.FirstOrDefault(t => t.Id == selected.TypeId)?.Name ?? "Group") · @selected.Structure
+                                        </p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    @if (data.CanManage)
+                                    {
+                                        <button type="button" class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
+                                                @onclick="() => Edit(selected)">
+                                            Edit
+                                        </button>
+                                        <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                                @onclick="() => BeginDelete(selected.Id, selected.Name, selected.AuditId)">
+                                            Delete
+                                        </button>
+                                    }
+                                    <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                            @onclick="() => { selectedGroup = new(){GroupID=selected.Id,Name=selected.Name,GroupTypeName=selected.Type,DivisionName=selected.Structure}; detailOpen=true; }">
+                                        Full details
+                                    </button>
+                                    <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
+                                            @onclick="() => selected = null">
+                                        Close
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="p-6 space-y-6">
+                                <!-- Supervisors Card -->
+                                <div class="bg-[var(--select-hover)]/70 border border-[var(--app-border-color)] rounded-lg p-4 space-y-2">
+                                    <h4 class="text-xs font-bold text-[var(--select-muted)] uppercase tracking-wider">Group details</h4>
+                                    <div class="text-sm text-[var(--select-text)] space-y-1">
+                                        <p><span class="text-[var(--select-muted)]">Type:</span> @(data.Types.FirstOrDefault(t => t.Id == selected.TypeId)?.Name ?? "N/A")</p>
+                                        <p><span class="text-[var(--select-muted)]">Structure:</span> @selected.Structure</p>
+                                    </div>
+                                </div>
+
+                                <!-- Assigned Staff List -->
+                                <div>
+                                    <div class="flex items-center justify-between mb-3">
+                                        <h3 class="text-sm font-semibold text-[var(--select-text)]">Assigned Staff Members</h3>
+                                    </div>
+
+                                    @if (loadingDetails)
+                                    {
+                                        <p role="status" class="text-xs text-[var(--select-muted)]">Loading staff…</p>
+                                    }
+                                    else if (selectedDetails != null && selectedDetails.CurrentStaff.Any())
+                                    {
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
+                                            @foreach (var member in selectedDetails.CurrentStaff)
+                                            {
+                                                <a class="flex items-center justify-between p-3 rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] hover:border-blue-400 hover:shadow-xs transition-all group"
+                                                   href="@($"/admin/my/workspace/staff/{member.StaffId}/overview")">
+                                                    <div class="flex items-center gap-2.5 min-w-0">
+                                                        <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                                            @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name.Substring(0, 1).ToUpper())
+                                                        </span>
+                                                        <span class="text-xs font-semibold text-[var(--select-text)] group-hover:text-blue-600 truncate">
+                                                            @member.Name
+                                                        </span>
+                                                    </div>
+                                                    <span class="text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-0.5 transition-transform shrink-0">
+                                                        Profile →
+                                                    </span>
+                                                </a>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="p-8 text-center border border-dashed border-[var(--app-border-color)] rounded-lg text-[var(--select-muted)]">
+                                            <p class="text-xs">No active staff currently assigned to this group.</p>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+                <!-- Right Panel: Group List (Sidebar) -->
+                <aside class="min-w-0 xl:col-span-4">
+                    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                        <!-- Section Header -->
+                        <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-800">Organisation Groups</h3>
+                                <p class="mt-0.5 text-xs text-slate-500">@data.Organisation · @FilteredGroups.Count() structures</p>
+                            </div>
+                            @if (data.CanManage)
+                            {
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" title="Add group" aria-label="Add group" disabled="@busy" @onclick="New">
+                                    <span class="material-symbols-rounded text-xl">add</span>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- Filter Controls -->
+                        <div class="border-b border-slate-100 bg-slate-50 px-4 py-2">
+                            <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="groupTypeFilter">
+                                <option value="0">All group types</option>
+                                @foreach (var t in data.Types)
+                                {
+                                    <option value="@t.Id">@t.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <!-- Group Scrollable List -->
+                        <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
+                            @foreach (var row in FilteredGroups)
+                            {
+                                var isSelected = selected?.Id == row.Id;
+                                <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")"
+                                        @onclick="() => Select(row)">
+                                    <div class="flex items-center justify-between gap-2">
+                                        <div class="min-w-0 flex-1">
+                                            <span class="block text-sm font-semibold text-slate-800 truncate">👥 @row.Name</span>
+                                            <span class="mt-0.5 block text-xs text-slate-500">
+                                                Type: @row.Type
+                                            </span>
+                                            <span class="mt-0.5 block text-xs text-slate-500">
+                                                Structure: @row.Structure
+                                            </span>
+                                        </div>
+                                    </div>
+                                </button>
+                            }
+
+                            @if (!FilteredGroups.Any())
+                            {
+                                <div class="px-4 py-12 text-center text-xs text-slate-500">
+                                    No matching groups found.
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </aside>
+            </div>
+        }
+        else
+        {
+            <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-[var(--select-text)]">
+                        <thead class="bg-[var(--select-hover)]">
+                            <tr>
+                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Name</th>
+                                <th class="p-3 text-xs font-semibold text-[var(--select-muted)] uppercase tracking-wider">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-[var(--app-border-color)]">
                             @foreach (var row in data.Types.Where(t => t.Name.Contains(search, StringComparison.OrdinalIgnoreCase)))
                             {
                                 <tr class="hover:bg-[var(--select-hover)] transition-colors">
@@ -175,15 +305,15 @@
                                     </td>
                                 </tr>
                             }
-                        }
-                    </tbody>
-                </table>
+                        </tbody>
+                    </table>
+                </div>
+                @if (data.Types.Count == 0)
+                {
+                    <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">No records found.</div>
+                }
             </div>
-            @if ((tab == "groups" && data.Groups.Count == 0) || (tab == "types" && data.Types.Count == 0))
-            {
-                <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">No records found.</div>
-            }
-        </div>
+        }
 
         <GroupDetailPanel @bind-IsOpen="detailOpen" Group="selectedGroup" />
     }
@@ -195,17 +325,34 @@
     private OperationalGroupsData? data;
     private string? error,originalName,loaded;
     private string name="",search="",tab="groups",deletingName="";
-    private bool busy,editing,detailOpen;
-    private int editId,typeId,structureId,expectedAudit,deletingAudit;
+    private bool busy,editing,detailOpen,loadingDetails;
+    private int editId,typeId,structureId,expectedAudit,deletingAudit,groupTypeFilter;
     private int? deletingId;
+    private OrganisationUnitDetails? selectedDetails;
+    private OperationalGroupRow? selected;
     private OrganisationGroupsTab.GroupDto? selectedGroup;
+
+    private IEnumerable<OperationalGroupRow> FilteredGroups => data?.Groups.Where(g => (groupTypeFilter == 0 || g.TypeId == groupTypeFilter) && (g.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Type.Contains(search, StringComparison.OrdinalIgnoreCase) || g.Structure.Contains(search, StringComparison.OrdinalIgnoreCase))) ?? Enumerable.Empty<OperationalGroupRow>();
+
     protected override async Task OnParametersSetAsync(){var key=$"{OrganisationId}:{RequestedTab}";if(loaded==key)return;loaded=key;tab=RequestedTab=="types"?"types":"groups";await LoadAsync();}
-    private async Task LoadAsync(){busy=true;error=null;editing=false;deletingId=null;detailOpen=false;try{data=await Groups.LoadAsync(OrganisationId);}catch(Exception ex){data=null;Fail(ex);}finally{busy=false;}}
+    private async Task LoadAsync(){busy=true;error=null;editing=false;deletingId=null;detailOpen=false;selected=null;selectedDetails=null;try{data=await Groups.LoadAsync(OrganisationId);}catch(Exception ex){data=null;Fail(ex);}finally{busy=false;}}
     private void SelectTab(string value){if(busy)return;Navigation.NavigateTo($"/admin/hr/groups/management?organisationId={data!.OrganisationId}&tab={value}");}
     private void ChangeOrganisation(ChangeEventArgs e){if(!busy && int.TryParse(e.Value?.ToString(),out var id))Navigation.NavigateTo($"/admin/hr/groups/management?organisationId={id}&tab={tab}");}
     private void New(){editId=0;name="";typeId=structureId=expectedAudit=0;originalName=null;editing=true;deletingId=null;error=null;}
     private void Edit(OperationalGroupRow row){New();editId=row.Id;name=row.Name;typeId=row.TypeId;structureId=row.StructureId;expectedAudit=row.AuditId;}
     private void EditType(OperationalGroupOption row){New();editId=row.Id;name=originalName=row.Name;}
+    private async Task Select(OperationalGroupRow row)
+    {
+        selected = row;
+        selectedDetails = null;
+        loadingDetails = true;
+        try
+        {
+            selectedDetails = await Directory.GetDetailsAsync(new(OrganisationUnitKind.Group, row.Id));
+        }
+        catch { selectedDetails = null; }
+        finally { loadingDetails = false; }
+    }
     private void View(OperationalGroupRow row){selectedGroup=new(){GroupID=row.Id,Name=row.Name,GroupTypeName=row.Type,DivisionName=row.Structure};detailOpen=true;}
     private void BeginDelete(int id,string value,int audit){editing=false;deletingId=id;deletingName=value;deletingAudit=audit;error=null;}
     private Task SaveAsync()=>Act(async()=>{if(tab=="types")await Groups.SaveTypeAsync(data!.OrganisationId,editId,name,originalName);else await Groups.SaveGroupAsync(data!.OrganisationId,editId,name,typeId,structureId,expectedAudit);},"Group configuration saved.");

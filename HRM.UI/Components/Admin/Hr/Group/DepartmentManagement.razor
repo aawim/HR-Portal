@@ -135,29 +135,20 @@
 
             <!-- Right Panel: Department List (Sidebar) -->
             <aside class="min-w-0 xl:col-span-4">
-                <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden flex flex-col">
+                <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                     <!-- Section Header -->
-                    <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-5 py-4 bg-[var(--select-hover)]/50">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
                         <div>
-                            <h3 class="font-semibold text-[var(--select-text)] text-sm">Organisation Departments</h3>
-                            <p class="mt-1 text-xs text-[var(--select-muted)]">@organisation · @Filtered.Count() structures</p>
+                            <h3 class="text-sm font-semibold text-slate-800">Organisation Departments</h3>
+                            <p class="mt-0.5 text-xs text-slate-500">@organisation · @Filtered.Count() structures</p>
                         </div>
-                        <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" title="Refresh" aria-label="Refresh" disabled="@busy" @onclick="Load">
-                            <span class="material-symbols-rounded text-xl">refresh</span>
-                        </button>
                     </div>
 
-                    <!-- Search Input -->
-                    <div class="p-4 bg-[var(--select-bg)] border-b border-[var(--app-border-color)]">
-                        <input type="search" class="w-full rounded-xl border border-[var(--app-border-color)] bg-[var(--select-hover)] px-3 py-2.5 text-sm text-[var(--select-text)] placeholder-[var(--select-muted)] focus:outline-none focus:ring-2 focus:ring-blue-500"
-                               aria-label="Search departments" placeholder="Search departments…"
-                               @bind="search"
-                               @bind:event="oninput" />
-                    </div>
+
 
                     <!-- Filter Controls -->
-                    <div class="p-3 border-b border-[var(--app-border-color)] bg-[var(--select-bg)]">
-                        <select class="w-full rounded-lg border border-[var(--app-border-color)] px-3 py-2 text-xs text-[var(--select-text)] bg-[var(--select-bg)] focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="type">
+                    <div class="border-b border-slate-100 bg-slate-50 px-4 py-2">
+                        <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="type">
                             <option value="0">All structure types</option>
                             @foreach (var t in data.StructureTypes)
                             {
@@ -167,32 +158,32 @@
                     </div>
 
                     <!-- Department Scrollable List -->
-                    <div class="divide-y divide-[var(--app-border-color)] overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
+                    <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
                         @foreach (var row in Filtered)
                         {
                             var isSelected = selected?.Id == row.Id;
-                            <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50 dark:bg-blue-900/20" : "border-transparent hover:bg-[var(--select-hover)]")"
+                            <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")"
                                     @onclick="() => selected = row">
                                 <div class="flex items-center justify-between gap-2">
                                     <div class="min-w-0 flex-1">
-                                        <span class="block text-sm font-semibold text-[var(--select-text)] truncate">🏢 @row.Name</span>
-                                        <span class="mt-0.5 block text-xs text-[var(--select-muted)]">
+                                        <span class="block text-sm font-semibold text-slate-800 truncate">🏢 @row.Name</span>
+                                        <span class="mt-0.5 block text-xs text-slate-500">
                                             Type: @(data.StructureTypes.FirstOrDefault(t => t.Id == row.StructureTypeId)?.Name ?? "N/A")
                                         </span>
                                         @if (row.Members.Count > 0)
                                         {
-                                            <span class="mt-1 block text-xs text-blue-700 dark:text-blue-300 font-medium">
+                                            <span class="mt-1 block text-xs text-blue-700 font-medium">
                                                 @row.Members.Count staff →
                                             </span>
                                         }
                                         else
                                         {
-                                            <span class="mt-1 block text-xs text-[var(--select-muted)] italic">
+                                            <span class="mt-1 block text-xs text-slate-500 italic">
                                                 No staff assigned
                                             </span>
                                         }
                                     </div>
-                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 @(row.Members.Count > 0 ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : "bg-[var(--select-hover)] text-[var(--select-muted)]")">
+                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 @(row.Members.Count > 0 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
                                         @row.Members.Count
                                     </span>
                                 </div>
@@ -201,12 +192,12 @@
 
                         @if (!Filtered.Any())
                         {
-                            <div class="px-4 py-12 text-center text-xs text-[var(--select-muted)]">
+                            <div class="px-4 py-12 text-center text-xs text-slate-500">
                                 No matching departments found.
                             </div>
                         }
                     </div>
-                </div>
+                </section>
             </aside>
 
         </div>

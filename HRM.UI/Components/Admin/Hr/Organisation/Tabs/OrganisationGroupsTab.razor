@@ -1,16 +1,140 @@
+@using HRM.DTOs
 @using HRM.DTOs.Organisation
-<section class="space-y-3 rounded-xl border p-4">
-    <h3 class="font-semibold">Organisation groups</h3>
-    <p class="text-sm text-slate-500">Groups and group types are maintained in Groups Management.</p>
-    <a class="app-button app-button-primary" href="/admin/hr/groups/management?organisationId=@Org.BusinessEntityID">Open Groups Management</a>
-</section>
+@inject HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations Groups
+@inject ToastService Toasts
+
+@if (Org == null || Org.BusinessEntityID <= 0)
+{
+    <section class="space-y-3 rounded-xl border p-4">
+        <h3 class="font-semibold">Organisation groups</h3>
+        <p class="text-sm text-slate-500">Select an organisation to view its groups.</p>
+    </section>
+}
+else if (data == null && !busy)
+{
+    <section class="space-y-3 rounded-xl border p-4">
+        <h3 class="font-semibold">Organisation groups</h3>
+        <p class="text-sm text-slate-500">Groups could not be loaded.</p>
+        <button type="button" class="app-button app-button-secondary" @onclick="LoadAsync">Reload</button>
+    </section>
+}
+else if (busy && data == null)
+{
+    <p role="status" class="text-sm text-slate-500">Loading groups…</p>
+}
+else
+{
+    <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <!-- Section Header -->
+        <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+            <div>
+                <h3 class="text-sm font-semibold text-slate-800">Organisation Groups</h3>
+                <p class="mt-0.5 text-xs text-slate-500">@Org.OrganisationName · @Filtered.Count() groups</p>
+            </div>
+        </div>
+
+        <!-- Filter Controls -->
+        <div class="border-b border-slate-100 bg-slate-50 px-4 py-2">
+            <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="typeId">
+                <option value="0">All group types</option>
+                @foreach (var t in data!.Types)
+                {
+                    <option value="@t.Id">@t.Name</option>
+                }
+            </select>
+        </div>
+
+        <!-- Group Scrollable List -->
+        <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
+            @foreach (var row in Filtered)
+            {
+                var isSelected = selectedId == row.Id;
+                <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")"
+                        @onclick="() => View(row)">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <span class="block text-sm font-semibold text-slate-800 truncate">👥 @row.Name</span>
+                            <span class="mt-0.5 block text-xs text-slate-500">
+                                Type: @row.Type
+                            </span>
+                            <span class="mt-0.5 block text-xs text-slate-500">
+                                Structure: @row.Structure
+                            </span>
+                        </div>
+                    </div>
+                </button>
+            }
+
+            @if (!Filtered.Any())
+            {
+                <div class="px-4 py-12 text-center text-xs text-slate-500">
+                    No groups found.
+                </div>
+            }
+        </div>
+    </section>
+
+    <div class="mt-3">
+        <a class="app-button app-button-primary" href="@($"/admin/hr/groups/management?organisationId={Org.BusinessEntityID}")">Open Groups Management</a>
+    </div>
+
+    <GroupDetailPanel @bind-IsOpen="detailOpen" Group="selectedGroup" />
+}
+
 @code {
-    [Parameter] public OrganisationResultDto Org {get;set;} = null!;
+    [Parameter] public OrganisationResultDto Org { get; set; } = null!;
+
+    private OperationalGroupsData? data;
+    private bool busy;
+    private int typeId;
+    private int selectedId;
+    private bool detailOpen;
+    private OrganisationGroupsTab.GroupDto? selectedGroup;
+    private int loadedOrgId;
+
+    private IEnumerable<OperationalGroupRow> Filtered => data?.Groups.Where(r => typeId == 0 || r.TypeId == typeId) ?? Enumerable.Empty<OperationalGroupRow>();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Org != null && Org.BusinessEntityID > 0 && (data == null || loadedOrgId != Org.BusinessEntityID))
+        {
+            loadedOrgId = Org.BusinessEntityID;
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        try
+        {
+            loadedOrgId = Org.BusinessEntityID;
+            data = await Groups.LoadAsync(Org.BusinessEntityID);
+            typeId = 0;
+            selectedId = 0;
+            detailOpen = false;
+            selectedGroup = null;
+        }
+        catch (Exception ex)
+        {
+            data = null;
+            Toasts.Error(ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Groups could not be loaded.");
+        }
+        finally { busy = false; }
+    }
+
+    private void View(OperationalGroupRow row)
+    {
+        selectedId = row.Id;
+        selectedGroup = new() { GroupID = row.Id, Name = row.Name, GroupTypeName = row.Type, DivisionName = row.Structure };
+        detailOpen = true;
+    }
+
     public class GroupDto
     {
-        public int GroupID {get;set;}
-        public string Name {get;set;} = "";
-        public string GroupTypeName {get;set;} = "";
-        public string DivisionName {get;set;} = "";
+        public int GroupID { get; set; }
+        public string Name { get; set; } = "";
+        public string GroupTypeName { get; set; } = "";
+        public string DivisionName { get; set; } = "";
     }
 }
