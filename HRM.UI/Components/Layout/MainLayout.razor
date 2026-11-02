@@ -2,13 +2,13 @@
 @implements IDisposable
 
 
-
 @using HRM.DTOs
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Services
 @using HRM.Components.Shared
 @using HRM.Services.Interfaces
- 
+@using HRM.Enum
+
 @inject ToastService ToastService
 @inject NavigationManager Navigation
 
@@ -17,10 +17,14 @@
 @inject AuthenticationStateProvider AuthenticationProvider
 @inject IUserContextService EmployeeContext
 
- 
 <div class="app-shell flex h-screen bg-slate-50 @ShellContextClass">
 
-    <Sidebar HasSystemAccess="HasSystemAccess" CanAccessAdminPortal="CanAccessAdminPortal" MobileOpen="mobileNavOpen" OnMobileClose="CloseMobileNav" />
+    <Sidebar HasSystemAccess="HasSystemAccess"
+             CanAccessAdminPortal="CanAccessAdminPortal"
+             CanAccessDeveloperPortal="CanAccessDeveloperPortal"
+             CanAccessAuditPortal="CanAccessAuditPortal"
+             MobileOpen="mobileNavOpen"
+             OnMobileClose="CloseMobileNav" />
 
     <div class="app-shell-content flex flex-col flex-1 overflow-hidden">
 
@@ -37,7 +41,7 @@
             {
                 <section role="alert" class="rounded-lg border p-6 space-y-3">
                     <h1 class="text-lg font-semibold">HRM access is not enabled for your account.</h1>
-                    <p>You have signed in successfully through eFaas. Please contact your organisation’s HR team to set up or activate your employee account and grant the appropriate access.</p>
+                    <p>You have signed in successfully through eFaas. Please contact your organisation's HR team to set up or activate your employee account and grant the appropriate access.</p>
                     <p class="text-sm">The employee menu will remain disabled until your HRM access is enabled.</p>
                     <a href="/Online/Auth/NoAccessLogout" class="underline">Sign out</a>
                 </section>
@@ -47,9 +51,19 @@
                 <p role="alert">You do not have access to the Admin portal.</p>
                 <a href="/online" class="mt-3 inline-block underline">Return to employee portal</a>
             }
+            else if (IsDeveloperPortal && _session?.CanAccessDeveloperPortal != true)
+            {
+                <p role="alert">You do not have access to the Developer portal.</p>
+                <a href="/online" class="mt-3 inline-block underline">Return to employee portal</a>
+            }
+            else if (IsAuditPortal && _session?.CanAccessAuditPortal != true)
+            {
+                <p role="alert">You do not have access to the Audit portal.</p>
+                <a href="/online" class="mt-3 inline-block underline">Return to employee portal</a>
+            }
             else
             {
-                
+
                 @Body
             }
         </main>
@@ -66,12 +80,23 @@
     private int _accessLoadVersion;
     private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
     private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
+    private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
+    private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
     [CascadingParameter]
     private Task<AuthenticationState>? AuthenticationState { get; set; }
 
     private bool IsAdminPortal =>
      new Uri(Navigation.Uri).AbsolutePath
          .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsDeveloperPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsAuditPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("audit", StringComparison.OrdinalIgnoreCase) == true;
+
     private bool IsOnlinePortal
     {
         get
@@ -80,7 +105,12 @@
             return _isAuthenticated && (path == "/" || path.Equals("/online", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/online/", StringComparison.OrdinalIgnoreCase));
         }
     }
-    private string ShellContextClass => IsAdminPortal ? "portal-admin" : IsOnlinePortal ? "portal-online" : "portal-public";
+
+    private string ShellContextClass => IsAdminPortal ? "portal-admin" :
+        IsDeveloperPortal ? "portal-developer" :
+        IsAuditPortal ? "portal-audit" :
+        IsOnlinePortal ? "portal-online" : "portal-public";
+
     private void OpenMobileNav() => mobileNavOpen = true;
     private Task CloseMobileNav() { mobileNavOpen = false; return InvokeAsync(StateHasChanged); }
 
@@ -107,14 +137,20 @@
             await EmployeeContext.GetCurrentAsync();
         if (version != _accessLoadVersion) return;
         _session = session;
-        PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "", _session?.CanAccessAdminPortal == true);
-        if (IsAdminPortal) PortalContext.SwitchToAdmin();
-        else PortalContext.SwitchToEmployee();
-        _checkingAccess = false;
+        PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "",
+            _session?.CanAccessAdminPortal == true,
+            _session?.CanAccessDeveloperPortal == true,
+            _session?.CanAccessAuditPortal == true);
 
+        if (IsAdminPortal) PortalContext.SwitchToAdmin();
+        else if (IsDeveloperPortal) PortalContext.SwitchToDeveloper();
+        else if (IsAuditPortal) PortalContext.SwitchToAudit();
+        else PortalContext.SwitchToEmployee();
+
+        _checkingAccess = false;
     }
 
     public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
 
- 
+
 }

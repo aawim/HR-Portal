@@ -42,6 +42,8 @@ Never assume unchanged files are irrelevant to the task.
 
 Do not modify unrelated files.
 
+Never run `git push` or `git commit`. Leave all changes uncommitted unless the user explicitly lifts this restriction in the current conversation.
+
 HRM Project Architecture
 
 HRM.UI communicates with HRM.Api through HTTP clients.

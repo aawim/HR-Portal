@@ -12,7 +12,7 @@
             <header class="flex items-start justify-between gap-3 border-b p-5">
                 <div><h2 id="schedule-form-title" class="text-xl font-semibold">@(CurrentAssignment == null ? "Add" : "Change") @SchedulePurpose.ToLowerInvariant() schedule</h2>
                     <p class="mt-1 text-sm text-slate-500">@StaffName</p></div>
-                <button type="button" class="app-button app-button-secondary" disabled="@saving" @onclick="CloseAsync" aria-label="Close schedule form">✕</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@saving" @onclick="CloseAsync" aria-label="Close schedule form">✕</button>
             </header>
             <div class="flex-1 space-y-5 overflow-y-auto p-5">
                 @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm text-red-600">@error</p> }
@@ -37,9 +37,9 @@
                                 @for (var n = 0; n < rotation.Count; n++)
                                 {
                                     var index = n;
-                                    <div class="flex items-center gap-2"><label class="flex-1 text-sm">Day @(index + 1)<select class="ml-2 rounded-lg border p-2" @bind="rotation[index]"><option value="0">Rest day</option>@foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }</select></label><button type="button" class="app-button app-button-secondary" @onclick="() => rotation.RemoveAt(index)" aria-label="Remove cycle day">Remove</button></div>
+                                    <div class="flex items-center gap-2"><label class="flex-1 text-sm">Day @(index + 1)<select class="ml-2 rounded-lg border p-2" @bind="rotation[index]"><option value="0">Rest day</option>@foreach (var item in templates) { <option value="@item.WorkTemplateId">@item.Name · @item.DefaultStartTime?.ToString("HH:mm")–@item.DefaultEndTime?.ToString("HH:mm")</option> }</select></label><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => rotation.RemoveAt(index)" aria-label="Remove cycle day">Remove</button></div>
                                 }
-                                <button type="button" class="app-button app-button-secondary" disabled="@(rotation.Count >= 90)" @onclick="() => rotation.Add(0)">Add cycle day</button>
+                                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(rotation.Count >= 90)" @onclick="() => rotation.Add(0)">Add cycle day</button>
                             }
                             else
                             {
@@ -83,8 +83,8 @@
                 </fieldset>
             </div>
             <footer class="flex flex-wrap justify-end gap-2 border-t p-5">
-                <button type="button" class="app-button app-button-secondary" disabled="@saving" @onclick="CloseAsync">Cancel</button>
-                <button type="button" class="app-button app-button-primary" disabled="@(!CanSave)" @onclick="SaveAsync">@(saving ? "Saving..." : "Save schedule")</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@saving" @onclick="CloseAsync">Cancel</button>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(!CanSave)" @onclick="SaveAsync">@(saving ? "Saving..." : "Save schedule")</button>
             </footer>
         </aside>
     </div>

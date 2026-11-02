@@ -16,7 +16,7 @@
             <h2 class="text-lg font-semibold">Staff appointment · @data?.Organisation</h2>
         </div>
         <div class="flex flex-wrap gap-2">
-            <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Refresh</button>
         </div>
     </div>
 
@@ -64,7 +64,7 @@
                 <label class="block">Appointment remarks<textarea class="mt-1 w-full rounded-lg border p-2" rows="3" maxlength="1000" @bind="form.Remarks" disabled="@busy"></textarea></label>
                 <div class="flex flex-wrap items-center gap-3">
                     <p class="w-full text-sm">Selected position: <strong>@SelectedPositionName</strong></p>
-                    <button type="button" class="app-button app-button-primary" disabled="@(busy || form.JobTypeId <= 0 || form.OrganisationStructureId <= 0)" @onclick="SubmitAsync">@(busy ? "Processing…" : "Submit for approval")</button>
+                    <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || form.JobTypeId <= 0 || form.OrganisationStructureId <= 0)" @onclick="SubmitAsync">@(busy ? "Processing…" : "Submit for approval")</button>
                     <a href="/admin/settings/config/approval-flows" class="text-sm underline">Configure Request Approval Flows</a>
                 </div>
             </section>
@@ -97,10 +97,10 @@
                         <div class="flex flex-wrap gap-2">
                             @if (row.CanApprove)
                             {
-                                <button type="button" disabled="@busy" class="app-button app-button-primary" @onclick='() => ActAsync(row, "Approve")'>Approve stage</button>
-                                <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick='() => ActAsync(row, "Reject")'>Reject</button>
+                                <button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick='() => ActAsync(row, "Approve")'>Approve stage</button>
+                                <button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick='() => ActAsync(row, "Reject")'>Reject</button>
                             }
-                            @if (row.CanCancel) { <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick='() => ActAsync(row, "Cancel")'>Cancel request</button> }
+                            @if (row.CanCancel) { <button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick='() => ActAsync(row, "Cancel")'>Cancel request</button> }
                         </div>
                     }
                 </article>

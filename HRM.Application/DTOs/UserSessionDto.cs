@@ -8,6 +8,8 @@ namespace HRM.DTOs
         public int? OrganisationId { get; set; }
         public string OrganisationName { get; set; } = "";
         public bool CanAccessAdminPortal { get; set; }
+        public bool CanAccessDeveloperPortal { get; set; }
+        public bool CanAccessAuditPortal { get; set; }
 
         public bool CanAccessSystem { get; set; }
     }

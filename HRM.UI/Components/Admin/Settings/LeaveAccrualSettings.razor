@@ -11,7 +11,7 @@
     @if(!Embedded){<a href="/admin/settings/leaves" class="text-sm text-blue-700 underline">Back to Leaves Management</a>}
     @if(!Embedded){<h1 class="text-2xl font-semibold">Leave accrual by job type</h1>}
     @if (message != null) { <p role="status" class="rounded border bg-slate-50 p-3">@message</p> }
-    @if (data == null) { <button type="button" class="app-button app-button-secondary" @onclick="ReloadAsync">Load configuration</button> }
+    @if (data == null) { <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="ReloadAsync">Load configuration</button> }
     else
     {
         <p class="text-sm text-slate-600">@data.Organisation</p>
@@ -24,16 +24,16 @@
                         <tr class="border-t"><td class="px-3 py-2">@data.JobTypes.FirstOrDefault(x => x.Id == row.JobTypeId)?.Name</td><td class="px-3 py-2">@data.LeaveTypes.FirstOrDefault(x => x.Id == row.LeaveTypeId)?.Name</td>
                             <td class="px-3 py-2">@row.GrantDays.ToString("0.##") days / @row.RepeatEveryMonths month(s)</td><td class="px-3 py-2">@(row.FirstGrantAfterMonths == 0 ? "On joining" : $"After {row.FirstGrantAfterMonths} month(s)")</td>
                             <td class="px-3 py-2">@(row.IsEnabled ? "Enabled" : row.CarryForwardMode == "Unspecified" ? "Draft · carry-forward required" : "Disabled")</td>
-                            <td class="px-3 py-2"><div class="flex flex-wrap gap-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => Edit(row)">Configure</button><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => PreviewAsync(row.Id)">Preview</button></div></td></tr>
+                            <td class="px-3 py-2"><div class="flex flex-wrap gap-2"><button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => Edit(row)">Configure</button><button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => PreviewAsync(row.Id)">Preview</button></div></td></tr>
                     }
                     @foreach (var job in data.JobTypes.Where(j => (!JobTypeId.HasValue||j.Id==JobTypeId)&&!data.Rules.Any(r => r.JobTypeId == j.Id)))
                     {
-                        <tr class="border-t"><td class="px-3 py-2">@job.Name</td><td colspan="4" class="p-3 text-slate-500">No accrual rule configured for this tenant</td><td class="px-3 py-2"><button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(job.Id)">Configure</button></td></tr>
+                        <tr class="border-t"><td class="px-3 py-2">@job.Name</td><td colspan="4" class="p-3 text-slate-500">No accrual rule configured for this tenant</td><td class="px-3 py-2"><button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => New(job.Id)">Configure</button></td></tr>
                     }
                 </tbody>
             </table>
         </div>
-        <button type="button" disabled="@busy" class="app-button app-button-secondary" @onclick="() => New(JobTypeId??0)">Add job type / leave type rule</button>
+        <button type="button" disabled="@busy" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => New(JobTypeId??0)">Add job type / leave type rule</button>
         @if (model != null)
         {
             <fieldset disabled="@busy" class="space-y-3 rounded-xl border bg-white p-3">
@@ -52,7 +52,7 @@
                 <p class="text-sm text-slate-600">Joining-date based. HR processes carry-forward at service-year renewal; carried days do not expire.</p>
                 <label class="flex items-center gap-2"><input type="checkbox" @bind="model.IsEnabled" />Enable automatic accrual for this tenant's matching jobs</label>
                 <p class="text-sm text-amber-700">Existing balances are preserved. Preview before enabling.</p>
-                <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="SaveAsync">Save configuration</button><button type="button" class="app-button app-button-secondary" @onclick="() => model = null">Close</button></div>
+                <div class="flex flex-wrap gap-2"><button type="button" class="rounded bg-blue-600 px-4 py-2 text-white" @onclick="SaveAsync">Save configuration</button><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => model = null">Close</button></div>
             </fieldset>
         }
         @if (preview != null)

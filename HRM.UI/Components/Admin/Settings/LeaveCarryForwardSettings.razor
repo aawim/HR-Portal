@@ -13,7 +13,7 @@
     <h1 class="text-2xl font-semibold">Leave carry forward</h1>
     <p>Leave must be used by the last day of the staff member's contract year. At the anniversary, HR can carry unused days into the next contract year within the Job Type policy. Contract and Temporary staff continue earning 2.5 days per completed month when configured; their 30-day yearly entitlement is earned monthly. Earlier due accruals must be processed first.</p>
     @if (message != null) { <p role="status" class="rounded border p-3">@message</p> }
-    <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Refresh</button>
     @if (loaded)
     {
         <h2 class="text-lg font-semibold">Awaiting HR review (@pending.Count)</h2>
@@ -22,7 +22,7 @@
             <table class="w-full text-left text-sm"><thead><tr><th class="p-3">Staff</th><th class="p-3">Leave</th><th class="p-3">Closing contract year</th><th class="p-3">Renewal</th><th class="p-3">Unused days</th><th class="p-3">Policy maximum</th><th class="p-3">Action</th></tr></thead><tbody>
             @foreach (var row in pending)
             {
-                <tr class="border-t"><td class="p-3">@row.Staff</td><td class="p-3">@row.LeaveType</td><td class="p-3">@row.PeriodStart.ToString("dd MMM yyyy") – @row.PeriodEnd.ToString("dd MMM yyyy")</td><td class="p-3">@row.RenewalDate.ToString("dd MMM yyyy")</td><td class="p-3">@row.UnusedBalance.ToString("0.##")</td><td class="p-3">@row.SuggestedDays.ToString("0.##")</td><td class="p-3">@if (canProcess) { <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => Select(row)">Review</button> }</td></tr>
+                <tr class="border-t"><td class="p-3">@row.Staff</td><td class="p-3">@row.LeaveType</td><td class="p-3">@row.PeriodStart.ToString("dd MMM yyyy") – @row.PeriodEnd.ToString("dd MMM yyyy")</td><td class="p-3">@row.RenewalDate.ToString("dd MMM yyyy")</td><td class="p-3">@row.UnusedBalance.ToString("0.##")</td><td class="p-3">@row.SuggestedDays.ToString("0.##")</td><td class="p-3">@if (canProcess) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => Select(row)">Review</button> }</td></tr>
             }
             </tbody></table>
         </div>
@@ -36,7 +36,7 @@
                 <p>Recorded balance: @selected.Balance.ToString("0.##") · Final completed-period credit: @selected.ClosingGrant.ToString("0.##") · Unused days: @selected.UnusedBalance.ToString("0.##").</p>
                 <p>Carry into next year: @days.ToString("0.##") · Days removed: @((selected.UnusedBalance - days).ToString("0.##")) · New-year grant at renewal: @selected.RenewalGrantFor(days).ToString("0.##") · New balance: @((days + selected.RenewalGrantFor(days)).ToString("0.##")).</p>
                 <p>Next year's configured entitlement rate: @selected.AnnualEntitlement.ToString("0.##") days per year · @selected.AccrualDescription. Monthly entitlement is earned throughout the new contract year.</p>
-                <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" @onclick="ProcessAsync">Process carry forward</button><button class="app-button app-button-secondary" @onclick="() => selected = null">Close</button></div>
+                <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="ProcessAsync">Process carry forward</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => selected = null">Close</button></div>
             </fieldset>
         }
         <h2 class="text-lg font-semibold">Recent carry-forward history</h2>

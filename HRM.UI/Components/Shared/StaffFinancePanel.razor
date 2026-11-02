@@ -10,13 +10,13 @@
 @inject ILogger<StaffFinancePanel> Logger
 
 <section class="space-y-3 staff-finance">
-    <div class="flex flex-wrap justify-between items-center gap-2"><h1 class="text-xl font-semibold">Allowances and deductions</h1><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></div>
+    <div class="flex flex-wrap justify-between items-center gap-2"><h1 class="text-xl font-semibold">Allowances and deductions</h1><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Load">Refresh</button></div>
     @if (error != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@error</p> }
     @if (busy) { <p role="status">Loading…</p> }
     @if (data != null && config != null)
     {
         <nav class="flex flex-wrap gap-2" aria-label="Finance sections">
-            @foreach (var item in Sections) { <button class="app-button @(tab==item?"app-button-primary":"app-button-secondary")" @onclick="()=>tab=item">@item</button> }
+            @foreach (var item in Sections) { <button class="@(tab==item?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>tab=item">@item</button> }
         </nav>
         @if (AdminMode && StaffId == 0 && data.CanManage && tab == "New request")
         {
@@ -65,7 +65,7 @@
                         }
                     </div>
                     <label class="block">Reason<textarea @bind="reason" rows="2" maxlength="2000"></textarea></label>
-                    <div class="flex flex-wrap gap-2">@if(kind=="Agreement"){<button class="app-button app-button-secondary" @onclick="PreviewSchedule">Preview repayments</button>}<button class="app-button app-button-primary" @onclick="Submit">Submit for approval</button></div>
+                    <div class="flex flex-wrap gap-2">@if(kind=="Agreement"){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="PreviewSchedule">Preview repayments</button>}<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="Submit">Submit for approval</button></div>
                     @if(schedule.Count>0&&kind=="Agreement") { <div class="max-h-64 overflow-auto"><table class="w-full text-sm"><thead><tr><th>Due date</th><th>Amount</th></tr></thead><tbody>@foreach(var i in schedule){<tr><td>@i.DueDate.ToString("dd MMM yyyy")</td><td>@i.Amount.ToString("N2")</td></tr>}</tbody></table></div> }
                     <p class="text-xs text-slate-500">Agreement and payment evidence can be attached to the submitted request before approval.</p>
                 </fieldset>
@@ -84,17 +84,17 @@
                         {
                             @if(row.Assessments.Count==0){<p>Awaiting HR amount assessment.</p>}
                             @foreach(var a in row.Assessments){<p>@(a==row.Assessments[0]?"Current HR assessment":"Previous assessment"): @a.Amount.ToString("N2") @CurrencyName(a.CurrencyTypeId) · @a.AssessedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</p>}
-                            @if(AdminMode&&row.CanAssess){<div class="flex flex-wrap items-end gap-3"><label>HR amount<InputNumber @bind-Value="assessmentAmounts[row.Id]" min="0.01" step="0.01" /></label><label>Currency<select @bind="assessmentCurrencies[row.Id]"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label><button class="app-button app-button-primary" disabled="@busy" @onclick="()=>Assess(row)">Save HR assessment</button></div>}
+                            @if(AdminMode&&row.CanAssess){<div class="flex flex-wrap items-end gap-3"><label>HR amount<InputNumber @bind-Value="assessmentAmounts[row.Id]" min="0.01" step="0.01" /></label><label>Currency<select @bind="assessmentCurrencies[row.Id]"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>Assess(row)">Save HR assessment</button></div>}
                         }
                         else{<p>@row.Application.Amount.ToString("N2") @CurrencyName(row.Application.CurrencyTypeId)</p>}
                         <p class="whitespace-pre-wrap">@row.Application.Reason</p>
-                        @foreach(var d in data.Documents.Where(x=>x.RequestId==row.Id)){<button class="app-button app-button-secondary" @onclick="()=>Download(d.Id)">@d.Name</button>}
+                        @foreach(var d in data.Documents.Where(x=>x.RequestId==row.Id)){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>Download(d.Id)">@d.Name</button>}
                         @if(row.CanCancel||data.CanManage&&row.Status.StartsWith("Processing · ",StringComparison.Ordinal))
                         { <label class="block">Attach evidence<InputFile OnChange="e=>Upload(row.Id,e)" accept=".pdf,.png,.jpg,.jpeg" /></label> }
                         @if(row.CanApprove||row.CanCancel)
                         {
                             <label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2"></textarea></label>
-                            <div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="app-button app-button-primary" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="app-button app-button-secondary" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel request</button>}</div>
+                            <div class="flex flex-wrap gap-2">@if(row.CanApprove){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(row.CanCancel){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel request</button>}</div>
                         }
                     </div>
                 </details>

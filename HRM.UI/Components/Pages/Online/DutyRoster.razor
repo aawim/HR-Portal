@@ -10,8 +10,8 @@
         <div><h1 class="text-xl font-semibold">Duty roster</h1><p class="text-sm text-slate-500">View dated duties and arrange transfers or swaps.</p></div>
         <div class="flex flex-wrap items-center gap-2">
             <label>Date <InputDate @bind-Value="date" class="rounded border bg-transparent p-2" /></label>
-            <button class="app-button app-button-secondary" disabled="@busy" @onclick="TodayAsync">Today</button>
-            <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Show roster</button>
+            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="TodayAsync">Today</button>
+            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Show roster</button>
         </div>
     </header>
     @if (message != null) { <p role="status" class="rounded border p-3">@message</p> }
@@ -25,8 +25,8 @@
                     <td class="p-2 whitespace-nowrap">@row.Start.ToString("dd MMM HH:mm") – @row.End.ToString("dd MMM HH:mm")</td>
                     <td class="p-2">@(row.RequiresAttendance ? "Check in" : "No mandatory check in") @(row.RequiresCheckout ? " · Check out" : "")</td>
                     <td class="p-2">@if(row.CanRequest) {
-                        <div class="flex flex-wrap gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Select(row, "Transfer")'>Transfer</button>
-                            <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => SelectSwapAsync(row)">Swap</button></div>
+                        <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => Select(row, "Transfer")'>Transfer</button>
+                            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => SelectSwapAsync(row)">Swap</button></div>
                     }</td></tr>
             }</tbody>
         </table></div>
@@ -48,7 +48,7 @@
                 @if(kind == "Swap")
                 {
                     <label>Other duty date <InputDate @bind-Value="swapDate" @bind-Value:after="LoadSwapAsync" class="block rounded border bg-transparent p-2" /></label>
-                    <button class="app-button app-button-secondary" disabled="@busy" @onclick="LoadSwapAsync">Find duties</button>
+                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadSwapAsync">Find duties</button>
                 }
             </div>
             @if(kind == "Swap")
@@ -68,8 +68,8 @@
             }
             <label class="block">Reason <textarea @bind="reason" maxlength="500" class="block w-full rounded border bg-transparent p-2"></textarea></label>
             @if(formMessage != null) { <p role="alert" class="rounded-lg border p-3 text-sm">@formMessage</p> }
-            <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" disabled="@(busy || targetJob == 0 || string.IsNullOrWhiteSpace(reason) || (kind == "Swap" && swapId == 0))" @onclick="SubmitAsync">Send for acceptance</button>
-                <button class="app-button app-button-secondary" disabled="@busy" @onclick="() => selected = null">Close</button></div>
+            <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || targetJob == 0 || string.IsNullOrWhiteSpace(reason) || (kind == "Swap" && swapId == 0))" @onclick="SubmitAsync">Send for acceptance</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => selected = null">Close</button></div>
         </section>
     }
     <section class="space-y-3 rounded-xl border p-4" id="requests">
@@ -86,9 +86,9 @@
                     @if(request.Stage != null) { <span> · Approval: @request.Stage</span> }</p><p class="text-sm">@request.Reason</p>
                 @if(actionMessages.TryGetValue(request.Id, out var actionMessage)) { <p role="alert" class="rounded-lg border p-3 text-sm">@actionMessage</p> }
                 <div class="flex flex-wrap gap-2">
-                    @if(request.CanAccept) { <button class="app-button app-button-primary" disabled="@busy" @onclick='() => ActAsync(request, "Accept")'>Accept</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => ActAsync(request, "Decline")'>Decline</button> }
-                    @if(request.CanApprove) { <button class="app-button app-button-primary" disabled="@busy" @onclick='() => ActAsync(request, "Approve")'>Approve</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => ActAsync(request, "Reject")'>Reject</button> }
-                    @if(request.CanCancel) { <button class="app-button app-button-secondary" disabled="@busy" @onclick='() => ActAsync(request, "Cancel")'>Cancel request</button> }
+                    @if(request.CanAccept) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => ActAsync(request, "Accept")'>Accept</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => ActAsync(request, "Decline")'>Decline</button> }
+                    @if(request.CanApprove) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => ActAsync(request, "Approve")'>Approve</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => ActAsync(request, "Reject")'>Reject</button> }
+                    @if(request.CanCancel) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => ActAsync(request, "Cancel")'>Cancel request</button> }
                 </div>
             </article>
         }

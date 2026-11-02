@@ -15,7 +15,7 @@
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center gap-3">
-                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><span class="material-symbols-rounded" aria-hidden="true">@(Editing ? "edit_note" : "add_circle")</span></div>
+                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><span class="material-symbols-rounded" aria-hidden="true">@(Editing ? "edit_note" : "add_circle")</span></div>
                                 <div><h2 class="text-sm font-semibold text-slate-900">@(Editing ? "Edit" : "Create") @Singular</h2>
                                     <p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? "Roles are user groups that bundle permissions." : "Permissions are individual actions, grouped by application area.")</p></div>
                             </div>
@@ -42,7 +42,7 @@
                                         <div class="border-b border-slate-200 bg-slate-50 px-4 py-3">
                                             <div class="flex items-center justify-between gap-3">
                                                 <h3 class="text-sm font-semibold text-slate-800">Assigned staff</h3>
-                                                <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-xs font-semibold text-indigo-700">@role.Members.Count</span>
+                                                <span class="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">@role.Members.Count</span>
                                             </div>
                                             <input type="search" class="@InputClass" aria-label="Search assigned staff" placeholder="Search staff name or username…" @bind="staffSearch" @bind:event="oninput" />
                                         </div>
@@ -77,7 +77,7 @@
                         </div>
                         <div class="flex gap-3 border-t border-slate-100 bg-slate-50/50 px-5 py-4">
                             <button type="button" class="rounded-lg border border-slate-200 px-4 py-2.5 text-sm font-medium text-slate-600" @onclick="NewItem">Cancel</button>
-                            <button type="button" class="rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50" @onclick="SaveAsync">@(busy ? "Saving…" : $"Save {Singular.ToLowerInvariant()}")</button>
+                            <button type="button" class="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50" @onclick="SaveAsync">@(busy ? "Saving…" : $"Save {Singular.ToLowerInvariant()}")</button>
                         </div>
                     </div>
                 </section>
@@ -85,8 +85,8 @@
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="border-b border-slate-200 px-5 py-4">
                             <div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">@(GroupsMode ? "Roles" : "Permissions")</h2><p class="mt-0.5 text-xs text-slate-500">@(GroupsMode ? data.Roles.Count : data.Permissions.Count) configured</p></div>
-                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><span class="material-symbols-rounded" aria-hidden="true">add</span></button></div>
-                            <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-indigo-100" placeholder="Search…" aria-label="Search @(GroupsMode ? "roles" : "permissions")" @bind="search" @bind:event="oninput" />
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700" aria-label="Add @Singular" title="Add @Singular" @onclick="NewItem"><span class="material-symbols-rounded" aria-hidden="true">add</span></button></div>
+                            <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-100" placeholder="Search…" aria-label="Search @(GroupsMode ? "roles" : "permissions")" @bind="search" @bind:event="oninput" />
                         </div>
                         <div class="overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0" aria-label="@(GroupsMode ? "Role list" : "Grouped permission list")">
                             @if (GroupsMode)
@@ -101,7 +101,7 @@
                                 @foreach (var group in FilteredPermissions.GroupBy(x => x.Group).OrderBy(x => x.Key))
                                 {
                                     <details open="@(group.Key == "Leave" || !string.IsNullOrWhiteSpace(search))" class="border-b border-slate-100">
-                                        <summary class="cursor-pointer bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700">@group.Key <span class="ml-2 rounded-full bg-indigo-50 px-2 py-0.5 text-xs text-indigo-600">@group.Count()</span></summary>
+                                        <summary class="cursor-pointer bg-slate-50 px-5 py-3 text-sm font-semibold text-slate-700">@group.Key <span class="ml-2 rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-600">@group.Count()</span></summary>
                                         @foreach (var item in group)
                                         {
                                             <button type="button" class="@ItemClass(permission.Id == item.Id)" @onclick="() => SelectPermission(item)"><span class="block text-sm font-semibold text-slate-800">@item.Name</span><span class="mt-1 block break-all text-xs text-slate-500">@item.Key</span></button>
@@ -131,8 +131,8 @@
         x.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase) || x.Username.Contains(staffSearch, StringComparison.OrdinalIgnoreCase));
     private string Singular => GroupsMode ? "Role" : "Permission";
     private bool Editing => GroupsMode ? role.Id > 0 : permission.Id > 0;
-    private const string InputClass = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 read-only:bg-slate-50";
-    private static string ItemClass(bool selected) => "block w-full border-l-4 px-5 py-4 text-left transition-colors " + (selected ? "border-indigo-600 bg-indigo-50" : "border-transparent hover:bg-slate-50");
+    private const string InputClass = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100 read-only:bg-slate-50";
+    private static string ItemClass(bool selected) => "block w-full border-l-4 px-5 py-4 text-left transition-colors " + (selected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50");
     private static bool Matches(PermissionDefinitionDto p, string query) => p.Key.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Name.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Group.Contains(query, StringComparison.OrdinalIgnoreCase) || p.Description.Contains(query, StringComparison.OrdinalIgnoreCase);
     private IEnumerable<PermissionDefinitionDto> FilteredPermissions => data?.Permissions.Where(x => Matches(x, search)) ?? Enumerable.Empty<PermissionDefinitionDto>();
     protected override async Task OnInitializedAsync()

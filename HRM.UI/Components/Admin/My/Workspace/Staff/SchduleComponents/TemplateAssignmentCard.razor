@@ -2,7 +2,7 @@
 <section class="min-w-0 rounded-xl border bg-white p-5 shadow-sm">
     <div class="flex flex-wrap items-center justify-between gap-3">
         <h3 class="font-semibold">@(SchedulePurpose == "Official" ? "Default official working hours" : $"Duty schedules ({DisplayAssignments.Count})")</h3>
-        <button type="button" class="app-button app-button-secondary" disabled="@(IsDisabled || SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule)" @onclick="() => OnAssignRequested.InvokeAsync()">
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(IsDisabled || SchedulePurpose == "Duty" && !HasDefaultOfficialSchedule)" @onclick="() => OnAssignRequested.InvokeAsync()">
             @(SchedulePurpose == "Duty" ? "Add duty" : CurrentAssignment == null ? "Set default working hours" : "Change")
         </button>
     </div>
@@ -32,7 +32,7 @@
                 @foreach (var offset in current.MandatoryCheckOutOffsets) { <p>Check out at <strong>@current.DefaultStartTime.Value.AddMinutes(offset).ToString("HH:mm")</strong> · required</p> }
             }
         </div>
-        <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="app-button app-button-secondary" disabled="@(IsDisabled || current.IsInherited)" @onclick="() => OnRemoveRequested.InvokeAsync(current)">End schedule</button></div>
+        <div class="mt-4 flex flex-wrap gap-2"><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(IsDisabled || current.IsInherited)" @onclick="() => OnRemoveRequested.InvokeAsync(current)">End schedule</button></div>
         }
     }
     else

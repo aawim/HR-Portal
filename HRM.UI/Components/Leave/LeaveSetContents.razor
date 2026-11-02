@@ -3,7 +3,7 @@
 @inject ToastService Toasts
 @inject ILogger<LeaveSetContents> Logger
 <section class="space-y-3 rounded-xl border p-3">
-    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave types · @data?.Name</h3><button class="app-button app-button-secondary" @onclick="()=>OnClose.InvokeAsync()">Close</button></div>
+    <div class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave types · @data?.Name</h3><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>OnClose.InvokeAsync()">Close</button></div>
     @if(error!=null){<p role="alert" class="text-sm">@error</p>}
     @if(data!=null)
     {
@@ -13,7 +13,7 @@
             {<label class="flex items-start gap-2 rounded border p-2 text-sm" @key="type.Id"><input type="checkbox" checked="@selected.Contains(type.Id)" @onchange="e=>Toggle(type.Id,e)" /><span>@type.Name</span></label>}
         </fieldset>
         @if(data.Types.Count==0){<p class="text-sm text-slate-500">No leave types available.</p>}
-        @if(data.CanEdit){<button class="app-button app-button-primary" disabled="@busy" @onclick="Save">Save leave types</button>}
+        @if(data.CanEdit){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Save">Save leave types</button>}
     }
 </section>
 @code {

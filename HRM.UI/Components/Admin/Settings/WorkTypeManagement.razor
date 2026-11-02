@@ -9,7 +9,7 @@
     <h2 class="text-lg font-semibold">Work Types</h2>
     <p class="text-sm text-slate-500">Staff can clock while an active Work Type assignment covers today.</p>
     @if(message != null) { <p role="status" class="rounded border p-3">@message</p> }
-    <button type="button" class="app-button app-button-secondary" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+    <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Refresh</button>
     @if(loaded)
     {
         @if(StaffId == 0)
@@ -19,12 +19,12 @@
             <div class="flex flex-wrap items-end gap-2 rounded border p-3">
                 <label class="text-sm">Name<input class="block rounded border bg-transparent p-2" maxlength="100" @bind="name" /></label>
                 <label class="text-sm"><input type="checkbox" @bind="valid" /> Active</label>
-                <button class="app-button app-button-primary" disabled="@busy" @onclick="SaveType">@(editingType == 0 ? "Add work type" : "Save work type")</button>
-                <button class="app-button app-button-secondary" @onclick="ResetType">Clear</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="SaveType">@(editingType == 0 ? "Add work type" : "Save work type")</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="ResetType">Clear</button>
             </div>
         }
         <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Work type</th><th class="p-2">Status</th><th class="p-2">Assignments</th><th></th></tr></thead><tbody>
-        @foreach(var type in types) { <tr class="border-t"><td class="p-2">@type.Name</td><td class="p-2">@(type.IsValid ? "Active" : "Inactive")</td><td class="p-2">@type.AssignmentCount</td><td class="p-2">@if(isSuperAdmin) { <button class="app-button app-button-secondary" @onclick="()=>EditType(type)">Edit</button> }</td></tr> }
+        @foreach(var type in types) { <tr class="border-t"><td class="p-2">@type.Name</td><td class="p-2">@(type.IsValid ? "Active" : "Inactive")</td><td class="p-2">@type.AssignmentCount</td><td class="p-2">@if(isSuperAdmin) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>EditType(type)">Edit</button> }</td></tr> }
         </tbody></table></div>
         }
         else
@@ -37,10 +37,10 @@
             <label class="text-sm">To (optional)<input type="date" class="block w-full rounded border bg-transparent p-2" @bind="to" /></label>
             <label class="text-sm">Location<input class="block w-full rounded border bg-transparent p-2" maxlength="250" @bind="location" /></label>
             <label class="flex items-center gap-2 text-sm"><input type="checkbox" @bind="assignmentActive" disabled="@busy" /> Active</label>
-            <div class="flex items-end gap-2"><button class="app-button app-button-primary" disabled="@(busy || jobId == 0)" @onclick="SaveAssignment">@(editingAssignment == 0 ? "Assign" : "Save assignment")</button><button class="app-button app-button-secondary" @onclick="ResetAssignment">Clear</button></div>
+            <div class="flex items-end gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || jobId == 0)" @onclick="SaveAssignment">@(editingAssignment == 0 ? "Assign" : "Save assignment")</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="ResetAssignment">Clear</button></div>
         </div>
         <div class="overflow-x-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Staff</th><th class="p-2">Work type</th><th class="p-2">Period</th><th class="p-2">Status</th><th></th></tr></thead><tbody>
-        @foreach(var row in assignments) { <tr class="border-t"><td class="p-2">@row.EmployeeName</td><td class="p-2">@row.WorkTypeName</td><td class="p-2">@row.FromDate.ToString("dd MMM yyyy") – @(row.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")</td><td class="p-2">@(row.IsValid ? "Active" : "Inactive")</td><td class="p-2"><div class="flex gap-2"><button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>EditAssignment(row)">Edit</button>@if(row.IsValid) { <button class="app-button app-button-secondary" disabled="@busy" @onclick="()=>RemoveAssignment(row)">Remove</button> }</div></td></tr> }
+        @foreach(var row in assignments) { <tr class="border-t"><td class="p-2">@row.EmployeeName</td><td class="p-2">@row.WorkTypeName</td><td class="p-2">@row.FromDate.ToString("dd MMM yyyy") – @(row.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")</td><td class="p-2">@(row.IsValid ? "Active" : "Inactive")</td><td class="p-2"><div class="flex gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>EditAssignment(row)">Edit</button>@if(row.IsValid) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>RemoveAssignment(row)">Remove</button> }</div></td></tr> }
         @if(assignments.Count == 0) { <tr><td colspan="5" class="p-3">No Work Type assignments for this staff member.</td></tr> }
         </tbody></table></div>
         }

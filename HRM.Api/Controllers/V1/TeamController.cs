@@ -32,4 +32,30 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         return Ok(await service.GetMyTeamMembersAsync(TeamId));
     }
 
+    [HttpPost("add-staff")]
+    public async Task<ActionResult<global::System.Int32>> AddStaff([FromBody] TeamAddStaffRequest request)
+    {
+        return Ok(await service.AddStaffAsync(request.teamId, request.staffId, request.startDate, request.isSupervisor, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamAddStaffRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+        public global::System.Int32 staffId { get; set; }
+        public global::System.DateTime startDate { get; set; }
+        public global::System.Boolean isSupervisor { get; set; } = false;
+    }
+
+    [HttpPost("remove-staff")]
+    public async Task<ActionResult<global::System.Boolean>> RemoveStaff([FromBody] TeamRemoveStaffRequest request)
+    {
+        return Ok(await service.RemoveStaffAsync(request.teamId, request.staffId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamRemoveStaffRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+        public global::System.Int32 staffId { get; set; }
+    }
+
 }

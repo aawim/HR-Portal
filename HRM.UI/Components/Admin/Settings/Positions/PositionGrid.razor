@@ -2,7 +2,7 @@
 @inject IPositionManagement Positions
 @inject HRM.Services.ToastService Toasts
 <section class="space-y-3 position-management">
-    <div class="flex justify-between gap-2"><h2 class="text-xl font-semibold">Positions</h2><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></div>
+    <div class="flex justify-between gap-2"><h2 class="text-xl font-semibold">Positions</h2><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Load">Refresh</button></div>
     @if(error!=null){<p role="alert" class="rounded border p-3">@error</p>}
     @if(data!=null)
     {
@@ -11,12 +11,12 @@
             <div class="flex flex-wrap gap-2" role="group" aria-label="Position framework">
                 @foreach(var f in data.Frameworks)
                 {
-                    <button type="button" class="app-button @(framework==f.Id?"app-button-primary":"app-button-secondary")" aria-pressed="@(framework==f.Id?"true":"false")" disabled="@(!f.Active||busy)" @onclick="()=>SelectFramework(f.Id)">@f.Name@(!f.Active?" (inactive)":"")</button>
+                    <button type="button" class="@(framework==f.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" aria-pressed="@(framework==f.Id?"true":"false")" disabled="@(!f.Active||busy)" @onclick="()=>SelectFramework(f.Id)">@f.Name@(!f.Active?" (inactive)":"")</button>
                 }
             </div>
             @if(id==0&&CanCreateDirect&&HasJobMatrices)
             {
-                <div class="flex flex-wrap gap-2"><button class="app-button @(matrixCreation?"app-button-secondary":"app-button-primary")" @onclick="()=>matrixCreation=false">Direct position</button><button class="app-button @(matrixCreation?"app-button-primary":"app-button-secondary")" @onclick="()=>matrixCreation=true">From job matrix</button></div>
+                <div class="flex flex-wrap gap-2"><button class="@(matrixCreation?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>matrixCreation=false">Direct position</button><button class="@(matrixCreation?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>matrixCreation=true">From job matrix</button></div>
             }
             @if(id==0&&(!CanCreateDirect||matrixCreation))
             {
@@ -44,12 +44,12 @@
                 </div>
                 <label class="block">Description<textarea @bind="description" maxlength="4000" rows="2"></textarea></label>
                 @if(salaryHistory.Count>0){<details><summary>Basic salary history</summary><div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Effective from</th><th>Basic salary</th></tr></thead><tbody>@foreach(var s in salaryHistory){<tr><td>@s.EffectiveDate.ToString("dd MMM yyyy")</td><td>@s.Amount.ToString("N2")</td></tr>}</tbody></table></div></details>}
-                <div class="flex gap-2"><button class="app-button app-button-primary" disabled="@(id==0&&IsGovernment)" @onclick="Save">Save position</button><button class="app-button app-button-secondary" @onclick="Reset">New / clear</button></div>
+                <div class="flex gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(id==0&&IsGovernment)" @onclick="Save">Save position</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="Reset">New / clear</button></div>
             </fieldset>
             }
         }
         <div class="flex flex-wrap items-end gap-3"><label class="flex-1">Search<input type="search" @bind="search" @bind:event="oninput" placeholder="Position name" /></label><label>Framework<select @bind="filter"><option value="0">All</option>@foreach(var f in data.Frameworks){<option value="@f.Id">@f.Name</option>}</select></label><label>Status<select @bind="state"><option value="active">Active</option><option value="all">All</option><option value="inactive">Inactive</option></select></label></div>
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Position</th><th>Framework</th><th>Scope</th><th>Matrix</th><th>Staff</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var p in data.Positions.Where(x=>(filter==0||x.FrameworkId==filter)&&(state=="all"||x.Active==(state=="active"))&&x.Name.Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>@p.Name · #@p.Id</td><td>@p.Framework</td><td>@(p.Global?"Global":"Organisation")</td><td>@(p.MatrixId?.ToString()??"Custom")</td><td>@p.CurrentStaff</td><td>@(p.Active?"Active":"Inactive")</td><td>@if(p.CanEdit){<button class="app-button app-button-secondary" @onclick="()=>Edit(p)">Edit</button>}</td></tr>}</tbody></table></div>
+        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Position</th><th>Framework</th><th>Scope</th><th>Matrix</th><th>Staff</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var p in data.Positions.Where(x=>(filter==0||x.FrameworkId==filter)&&(state=="all"||x.Active==(state=="active"))&&x.Name.Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>@p.Name · #@p.Id</td><td>@p.Framework</td><td>@(p.Global?"Global":"Organisation")</td><td>@(p.MatrixId?.ToString()??"Custom")</td><td>@p.CurrentStaff</td><td>@(p.Active?"Active":"Inactive")</td><td>@if(p.CanEdit){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>Edit(p)">Edit</button>}</td></tr>}</tbody></table></div>
     }
 </section>
 @code{

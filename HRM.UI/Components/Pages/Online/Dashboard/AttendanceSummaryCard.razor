@@ -160,7 +160,7 @@
                         <!-- Day Card -->
                         <div class="
                             @stateClass
-                            relative flex min-h-28 w-full
+                            relative flex h-28 w-full
                             flex-col items-center justify-center
                             rounded-lg px-2 py-3 text-center
                             transition-all duration-200
@@ -204,7 +204,7 @@
                             }
                             else if (isPresent)
                             {
-                                <span class="text-[10px] font-medium">@(overview != null ? HRM.Helpers.AttendancePresentation.Status(overview) : "Attended")</span>
+                                <!-- Present: show nothing here, times will show below -->
                             }
                             else if (isUnresolvedDay)
                             {
@@ -231,17 +231,23 @@
                                 </span>
                             }
 
-                            @if (!isFutureDay && (displayedCheckIn.HasValue || displayedCheckOut.HasValue ||
-                                overview?.ScheduledStart != null || overview?.ScheduledEnd != null))
+                            @if (!isFutureDay)
                             {
-                                <div class="mt-1 flex flex-wrap items-center justify-center gap-x-1">
-                                    <span class="text-[10px] uppercase opacity-75">@(displayedCheckIn.HasValue ? "In" : "Expected in")</span>
-                                    <span class="text-sm font-semibold tabular-nums">@((displayedCheckIn ?? overview?.ScheduledStart)?.ToString("HH:mm") ?? "--")</span>
+                                <div class="mt-1 flex flex-wrap items-center justify-center gap-x-0.5">
+                                    <span class="text-[10px] uppercase opacity-75">In</span>
+                                    <span class="text-sm font-semibold tabular-nums">@(displayedCheckIn?.ToString("HH:mm") ?? "--")</span>
                                 </div>
-                                <div class="mt-1 flex flex-wrap items-center justify-center gap-x-1">
-                                    <span class="text-[10px] uppercase opacity-75">@(displayedCheckOut.HasValue ? "Out" : "Expected out")</span>
-                                    <span class="text-sm font-medium tabular-nums">@((displayedCheckOut ?? overview?.ScheduledEnd)?.ToString("HH:mm") ?? "--")</span>
+                                <div class="mt-0.5 flex flex-wrap items-center justify-center gap-x-0.5">
+                                    <span class="text-[10px] uppercase opacity-75">Out</span>
+                                    <span class="text-sm font-medium tabular-nums">@(displayedCheckOut?.ToString("HH:mm") ?? "--")</span>
                                 </div>
+
+                                @if (overview?.IsLate == true)
+                                {
+                                    <div class="mt-1 text-[10px] font-medium text-amber-600">
+                                        Late(@overview.LateMinutes)
+                                    </div>
+                                }
                             }
 
                         </div>

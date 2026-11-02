@@ -3,7 +3,7 @@
 @inject ToastService Toasts
 @inject ILogger<JobTypeLeaveSets> Logger
 <section class="space-y-3 rounded-xl border p-3">
-    <header class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave sets · @data?.JobType</h3><a class="app-button app-button-secondary" href="/admin/settings/leaves/manage-leave-sets">Manage leave sets</a></header>
+    <header class="flex flex-wrap items-center justify-between gap-2"><h3 class="text-sm font-semibold">Leave sets · @data?.JobType</h3><a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="/admin/settings/leaves/manage-leave-sets">Manage leave sets</a></header>
     @if(error!=null){<p role="alert" class="text-sm">@error</p>}
     @if(data!=null)
     {
@@ -14,7 +14,7 @@
             {<label class="flex items-start gap-2 rounded border p-3 text-sm" @key="set.Id"><input type="checkbox" checked="@selected.Contains(set.Id)" disabled="@(set.Types.Count==0&&!selected.Contains(set.Id))" @onchange="e=>Toggle(set.Id,e)" /><span><span class="block font-medium">@set.Name</span><span class="mt-1 block text-xs text-slate-500">@(set.Types.Count==0?"No leave types assigned":string.Join(", ",set.Types.Select(t=>t.Name)))</span></span></label>}
         </fieldset>
         @if(data.Sets.Count==0){<p class="text-sm text-slate-500">Create a leave set in HR first.</p>}
-        <div class="flex flex-wrap gap-2"><button class="app-button app-button-primary" disabled="@busy" @onclick="Save">Save assignments</button><button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button></div>
+        <div class="flex flex-wrap gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Save">Save assignments</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Load">Refresh</button></div>
     }
 </section>
 @code {

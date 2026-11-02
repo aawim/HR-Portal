@@ -16,8 +16,12 @@ namespace HRM.Services
         public event Action? OnChange;
 
         public bool IsAdminPortal { get; private set; }
+        public bool IsDeveloperPortal { get; private set; }
+        public bool IsAuditPortal { get; private set; }
 
         public bool CanAccessAdminPortal { get; private set; }
+        public bool CanAccessDeveloperPortal { get; private set; }
+        public bool CanAccessAuditPortal { get; private set; }
 
         public int? CurrentOrganisationId { get; private set; }
 
@@ -30,15 +34,30 @@ namespace HRM.Services
         public void Initialize(
             int? organisationId,
             string organisationName,
-            bool canAccessAdminPortal)
+            bool canAccessAdminPortal,
+            bool canAccessDeveloperPortal,
+            bool canAccessAuditPortal)
         {
             CurrentOrganisationId = organisationId;
             OrganisationName = organisationName;
             CanAccessAdminPortal = canAccessAdminPortal;
-            if (!canAccessAdminPortal) IsAdminPortal = false;
-            CurrentContext = IsAdminPortal ? TransactionContext.Admin : TransactionContext.Online;
+            CanAccessDeveloperPortal = canAccessDeveloperPortal;
+            CanAccessAuditPortal = canAccessAuditPortal;
 
+            if (!canAccessAdminPortal) IsAdminPortal = false;
+            if (!canAccessDeveloperPortal) IsDeveloperPortal = false;
+            if (!canAccessAuditPortal) IsAuditPortal = false;
+
+            CurrentContext = GetDefaultContext();
             OnChange?.Invoke();
+        }
+
+        private TransactionContext GetDefaultContext()
+        {
+            if (IsAdminPortal) return TransactionContext.Admin;
+            if (IsDeveloperPortal) return TransactionContext.Developer;
+            if (IsAuditPortal) return TransactionContext.Audit;
+            return TransactionContext.Online;
         }
 
         public void SwitchToAdmin()
@@ -47,6 +66,8 @@ namespace HRM.Services
                 return;
 
             IsAdminPortal = true;
+            IsDeveloperPortal = false;
+            IsAuditPortal = false;
             CurrentContext = TransactionContext.Admin;
             OnChange?.Invoke();
         }
@@ -54,11 +75,55 @@ namespace HRM.Services
         public void SwitchToEmployee()
         {
             IsAdminPortal = false;
+            IsDeveloperPortal = false;
+            IsAuditPortal = false;
             CurrentContext = TransactionContext.Online;
             OnChange?.Invoke();
         }
 
+        public void SwitchToDeveloper()
+        {
+            if (!CanAccessDeveloperPortal)
+                return;
 
+            IsAdminPortal = false;
+            IsDeveloperPortal = true;
+            IsAuditPortal = false;
+            CurrentContext = TransactionContext.Developer;
+            OnChange?.Invoke();
+        }
+
+        public void SwitchToAudit()
+        {
+            if (!CanAccessAuditPortal)
+                return;
+
+            IsAdminPortal = false;
+            IsDeveloperPortal = false;
+            IsAuditPortal = true;
+            CurrentContext = TransactionContext.Audit;
+            OnChange?.Invoke();
+        }
+
+        public void SwitchToContext(TransactionContext context)
+        {
+            switch (context)
+            {
+                case TransactionContext.Admin:
+                    SwitchToAdmin();
+                    break;
+                case TransactionContext.Developer:
+                    SwitchToDeveloper();
+                    break;
+                case TransactionContext.Audit:
+                    SwitchToAudit();
+                    break;
+                case TransactionContext.Online:
+                default:
+                    SwitchToEmployee();
+                    break;
+            }
+        }
     }
 
 

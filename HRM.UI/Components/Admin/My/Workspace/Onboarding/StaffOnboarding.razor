@@ -7,7 +7,7 @@
     <nav class="flex flex-wrap gap-1" aria-label="Staff onboarding">
         @foreach(var item in Sections)
         {
-            <a class="app-button @(CurrentSection==item.Key?"app-button-primary":"app-button-secondary") text-xs" aria-current="@(CurrentSection==item.Key?"page":null)" href="@Url(item.Key)">@item.Label</a>
+            <a class="@(CurrentSection==item.Key?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors") text-xs" aria-current="@(CurrentSection==item.Key?"page":null)" href="@Url(item.Key)">@item.Label</a>
         }
     </nav>
     @if(IndividualId.HasValue || RequestId.HasValue || CurrentSection=="requests")
@@ -17,8 +17,8 @@
     else if(FormerStaffId.HasValue)
     {
         <div class="flex flex-wrap gap-2">
-            <a class="app-button app-button-secondary" href="@Url("former-staff")">Back to former staff</a>
-            <a class="app-button app-button-primary" href="@($"/admin/my/workspace/onboarding?individualId={FormerStaffId}")">Start new appointment</a>
+            <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@Url("former-staff")">Back to former staff</a>
+            <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@($"/admin/my/workspace/onboarding?individualId={FormerStaffId}")">Start new appointment</a>
         </div>
         <FormerStaffRecord StaffId="FormerStaffId.Value" />
     }

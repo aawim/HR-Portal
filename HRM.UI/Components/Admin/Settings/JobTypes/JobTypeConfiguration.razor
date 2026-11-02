@@ -26,7 +26,7 @@
                                     <h2 class="text-sm font-semibold text-slate-900">@TypeTitlePlural (@data.JobTypes.Count)</h2>
 
                                 </div>
-                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                                <button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white hover:bg-blue-700"
                                         title="Add @TypeLabel" aria-label="Add @TypeLabel" disabled="@(!data.CanManageCatalogues)" @onclick="NewJob">
                                     <span class="material-symbols-rounded text-[19px]" aria-hidden="true">add</span>
                                 </button>
@@ -34,7 +34,7 @@
                             <label class="relative mt-2 block">
                                 <span class="material-symbols-rounded absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400" aria-hidden="true">search</span>
                                 <input type="search" @bind="typeFilter" @bind:event="oninput" aria-label="Search @TypeTitlePlural"
-                                       placeholder="Search @TypeLabel…" class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-indigo-300 focus:bg-white focus:ring-2 focus:ring-indigo-100" />
+                                       placeholder="Search @TypeLabel…" class="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-blue-300 focus:bg-white focus:ring-2 focus:ring-blue-100" />
                             </label>
                         </div>
                         <div class="max-h-52 overflow-y-auto 2xl:max-h-[32rem]" tabindex="0" aria-label="@(RequestTypesMode ? "Request type list" : "Job type list")">
@@ -50,7 +50,7 @@
                                 <div class="divide-y divide-slate-100">
                                     @foreach (var item in FilteredTypes)
                                     {
-                                        <button type="button" class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors @(job.Id == item.Id ? "bg-indigo-50 border-l-4 border-indigo-600" : "border-l-4 border-transparent hover:bg-slate-50")"
+                                        <button type="button" class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors @(job.Id == item.Id ? "bg-blue-50 border-l-4 border-blue-600" : "border-l-4 border-transparent hover:bg-slate-50")"
                                                 aria-pressed="@(job.Id == item.Id)" @onclick="() => SelectJobAsync(item)">
                                             <div class="min-w-0">
                                                 <p class="truncate text-sm font-semibold text-slate-800">@item.Name</p>
@@ -61,7 +61,7 @@
                                                     else { <span class="@(item.IsActive ? "text-emerald-600" : "text-slate-400")">@(item.IsActive ? "Active" : "Inactive")</span> }
                                                 </div>
                                             </div>
-                                            <span class="material-symbols-rounded text-[18px] @(job.Id == item.Id ? "text-indigo-600" : "text-slate-300")" aria-hidden="true">chevron_right</span>
+                                            <span class="material-symbols-rounded text-[18px] @(job.Id == item.Id ? "text-blue-600" : "text-slate-300")" aria-hidden="true">chevron_right</span>
                                         </button>
                                     }
                                 </div>
@@ -75,27 +75,27 @@
                         <div class="border-b p-3"><h2 class="text-sm font-semibold">@(job.Id == 0 ? $"New {TypeTitle}" : TypeTitle)</h2></div>
                         <div class="p-3">
                             <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <label class="block text-xs font-medium text-slate-700">Name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="@(RequestTypesMode ? 500 : 50)" @bind="job.Name" /></label>
+                    <label class="block text-xs font-medium text-slate-700">Name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="@(RequestTypesMode ? 500 : 50)" @bind="job.Name" /></label>
                     @if (RequestTypesMode)
                     {
                         <label class="block text-xs font-medium text-slate-700">Request numbering sequence
-                            <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" @bind="job.SequenceNumberTypeId">
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" @bind="job.SequenceNumberTypeId">
                                 <option value="">Select numbering sequence</option>
                                 @foreach (var option in data.NumberingTypes) { <option value="@option.Id">@option.Name</option> }
                             </select>
                         </label>
                         <div class="sm:col-span-2 space-y-2">
-                        <label class="block text-xs font-medium text-slate-700">View URL (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="1000" placeholder="/requests/details" @bind="job.ViewUrl" /></label>
+                        <label class="block text-xs font-medium text-slate-700">View URL (optional)<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="1000" placeholder="/requests/details" @bind="job.ViewUrl" /></label>
 
                         </div>
                     }
                     else
                     {
-                    <label class="block text-xs font-medium text-slate-700">Dhivehi name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" maxlength="50" dir="rtl" @bind="job.DhivehiName" /></label>
+                    <label class="block text-xs font-medium text-slate-700">Dhivehi name<input class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100" maxlength="50" dir="rtl" @bind="job.DhivehiName" /></label>
                     <div class="sm:col-span-2">
                         <label class="relative inline-flex items-center cursor-pointer">
                             <input type="checkbox" @bind="job.IsActive" class="sr-only peer" />
-                            <span class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-indigo-600 peer-focus-visible:ring-2 peer-focus-visible:ring-indigo-300"></span>
+                            <span class="w-9 h-5 bg-slate-300 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600 peer-focus-visible:ring-2 peer-focus-visible:ring-blue-300"></span>
                             <span class="ml-3 text-sm font-medium text-slate-700">Active</span>
                         </label>
 
@@ -106,7 +106,7 @@
                         </div>
                         <div class="flex flex-wrap items-center gap-2 border-t p-3">
                     <button type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50" @onclick="NewJob">Cancel</button>
-                    <button type="button" class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg px-3 py-2 text-sm font-medium shadow-sm" @onclick="SaveJobAsync">Save @TypeLabel</button>
+                    <button type="button" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-3 py-2 text-sm font-medium shadow-sm" @onclick="SaveJobAsync">Save @TypeLabel</button>
                     @if (RequestTypesMode && job.Id > 0)
                     {
                         <button type="button" class="border border-red-200 text-red-700 hover:bg-red-50 rounded-lg px-3 py-2 text-sm font-medium" @onclick="() => confirmDelete = true">Delete request type</button>
@@ -127,7 +127,7 @@
                 <nav class="flex flex-wrap gap-2" role="tablist" aria-label="Job type configuration">
                     @foreach(var tab in ConfigTabs)
                     {
-                        <button type="button" role="tab" aria-selected="@(activeTab==tab.Id)" aria-controls="job-type-config-panel" class="app-button @(activeTab==tab.Id?"app-button-primary":"app-button-secondary")" @onclick="()=>SelectTab(tab.Id)">@tab.Name</button>
+                        <button type="button" role="tab" aria-selected="@(activeTab==tab.Id)" aria-controls="job-type-config-panel" class="@(activeTab==tab.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>SelectTab(tab.Id)">@tab.Name</button>
                     }
                 </nav>
                 <section id="job-type-config-panel" role="tabpanel" aria-label="@ConfigTabs.First(t=>t.Id==activeTab).Name" @key="(activeTab,job.Id)">
@@ -142,7 +142,7 @@
             }
             @if (job.Id > 0)
             {
-                <a class="app-button app-button-secondary" href="/admin/settings/config/approval-flows">Approval flows</a>
+                <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="/admin/settings/config/approval-flows">Approval flows</a>
             }
 
                 </section>

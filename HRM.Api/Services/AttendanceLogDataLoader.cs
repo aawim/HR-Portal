@@ -19,13 +19,14 @@ namespace HRM.Services
         {
             using var db = await _dbfactory.CreateDbContextAsync();
 
+            // Use resolved clock type from AttendanceLogResolutions
             return await db.AttendanceLogs
                 .AsNoTracking()
                 .Where(x =>
                     x.IndividualId == individualId &&
                     x.AttendanceLogStateId == 1 &&
-                    x.InOutModeId == 1 &&
-                    x.Date.Date == date.Date)
+                    x.Date.Date == date.Date &&
+                    x.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckIn))
                 .OrderBy(x => x.Date)
                 .Select(x => new AttendanceLogDto
                 {
@@ -46,7 +47,8 @@ namespace HRM.Services
                     AttendanceLogStateID = x.AttendanceLogStateId,
                     OperationLogID = x.OperationLogId,
                     RelatedAttendanceLogID = x.RelatedAttendanceLogId,
-                    ActualInOutMode = x.ActualInOutMode
+                    ActualInOutMode = x.ActualInOutMode,
+                    ResolvedClockType = HRM.Enum.AttendanceClockType.CheckIn
                 })
                 .FirstOrDefaultAsync();
         }
@@ -54,14 +56,15 @@ namespace HRM.Services
         public async Task<AttendanceLogDto?>GetLatestCheckOutAsync(int individualId, DateTime date)
         {
             using var db = await _dbfactory.CreateDbContextAsync();
+            // Use resolved clock type from AttendanceLogResolutions
             return await db.AttendanceLogs
               .AsNoTracking()
               .Where(x =>
                   x.IndividualId == individualId &&
                     x.AttendanceLogStateId == 1 &&
-                  x.InOutModeId == 2 &&
-                  x.Date.Date == date.Date)
-              .OrderBy(x => x.Date)
+                    x.Date.Date == date.Date &&
+                    x.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckOut))
+              .OrderByDescending(x => x.Date)
               .Select(x => new AttendanceLogDto
               {
                   AttendanceLogID = x.AttendanceLogId,
@@ -81,7 +84,8 @@ namespace HRM.Services
                   AttendanceLogStateID = x.AttendanceLogStateId,
                   OperationLogID = x.OperationLogId,
                   RelatedAttendanceLogID = x.RelatedAttendanceLogId,
-                  ActualInOutMode = x.ActualInOutMode
+                  ActualInOutMode = x.ActualInOutMode,
+                  ResolvedClockType = HRM.Enum.AttendanceClockType.CheckOut
               })
               .FirstOrDefaultAsync();
         }

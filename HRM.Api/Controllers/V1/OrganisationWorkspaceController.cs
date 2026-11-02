@@ -7,8 +7,16 @@ namespace HRM.Api.Controllers.V1;
 public sealed class OrganisationWorkspaceController(global::HRM.Services.Contracts.OrganisationWorkspaceServiceContracts.IOperations service) : HrmApiController
 {
     [HttpPost("leave-overview")]
-    public async Task<ActionResult<HRM.DTOs.OrganisationLeaveOverviewData>> LeaveOverview([FromBody]LeaveOverviewRequest request)=>Ok(await service.LeaveOverviewAsync(request.filter,HttpContext.RequestAborted));
-    public sealed class LeaveOverviewRequest{public HRM.DTOs.OrganisationLeaveOverviewFilter filter{get;set;}=new();}
+    public async Task<ActionResult<global::HRM.DTOs.OrganisationLeaveOverviewData>> LeaveOverview([FromBody] OrganisationWorkspaceLeaveOverviewRequest request)
+    {
+        return Ok(await service.LeaveOverviewAsync(request.filter, HttpContext.RequestAborted));
+    }
+
+    public sealed class OrganisationWorkspaceLeaveOverviewRequest
+    {
+        public global::HRM.DTOs.OrganisationLeaveOverviewFilter filter { get; set; } = default!;
+    }
+
     [HttpGet("load")]
     public async Task<ActionResult<global::HRM.DTOs.OrganisationWorkspaceData>> Load([FromQuery] global::System.Int32 organisationId)
     {

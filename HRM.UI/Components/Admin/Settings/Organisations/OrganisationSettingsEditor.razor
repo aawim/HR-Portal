@@ -16,12 +16,12 @@
                         <nav aria-label="Organisation sections" class="mb-6 flex flex-wrap gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
                             @foreach (var item in OrganisationSections)
                             {
-                                <button type="button" disabled="@(model.Id == 0 && item.Name != "Edit")" aria-pressed="@(activeSection == item.Name)" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40 @(activeSection == item.Name ? "bg-indigo-50 text-indigo-700" : "text-slate-600 hover:bg-slate-50")" @onclick="() => ChangeSection(item.Name)"><OrganisationIcon Name="@item.Name" />@(item.Name)</button>
+                                <button type="button" disabled="@(model.Id == 0 && item.Name != "Edit")" aria-pressed="@(activeSection == item.Name)" class="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium disabled:opacity-40 @(activeSection == item.Name ? "bg-blue-50 text-blue-700" : "text-slate-600 hover:bg-slate-50")" @onclick="() => ChangeSection(item.Name)"><OrganisationIcon Name="@item.Name" />@(item.Name)</button>
                             }
                         </nav>
             @if (model.Id > 0)
             {
-                <div class="mb-5 flex items-center gap-3 px-1"><span class="text-indigo-600"><OrganisationIcon /></span><h1 class="text-xl font-semibold text-slate-900">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
+                <div class="mb-5 flex items-center gap-3 px-1"><span class="text-blue-600"><OrganisationIcon /></span><h1 class="text-xl font-semibold text-slate-900">@(data.Organisations.FirstOrDefault(x => x.Id == model.Id)?.Name ?? model.Name)</h1></div>
             }
             <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
                 <section class="min-w-0 space-y-6 @(activeSection is "Structure" or "Schedules" ? "xl:col-span-10" : "xl:col-span-8")">
@@ -29,7 +29,7 @@
                     {
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
                         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
-                            <div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600"><OrganisationIcon /></div>
+                            <div class="flex items-center gap-3"><div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><OrganisationIcon /></div>
                                 <div><h2 class="text-sm font-semibold text-slate-900">@(model.Id == 0 ? "Add New Organisation" : model.Name)</h2><p class="mt-1 text-xs text-slate-500">@(model.Id == 0 ? "Save the details, then add addresses and contacts below." : "Manage details, addresses and contacts in one place.")</p></div></div>
                             @if (model.Id > 0) { <button type="button" class="@Secondary" @onclick="() => NewOrganisation(true)">Add new</button> }
                         </div>
@@ -73,14 +73,14 @@
                                 @if (links.Addresses.Count == 0) { <p class="text-sm text-slate-500">No addresses yet. Add a new address or link an existing one.</p> }
                                 @if (addingAddress)
                                 {
-                                    <div class="space-y-4 rounded-xl border border-indigo-100 p-4">
+                                    <div class="space-y-4 rounded-xl border border-blue-100 p-4">
                                         <label class="flex items-center gap-2 text-sm text-slate-700"><input type="checkbox" @bind="useExisting" @bind:after="AddressModeChanged" /> Link an existing address</label>
                                         <label class="@Label">Address usage<select class="@Input" @bind="address.UsageId">@foreach (var option in data.AddressUsages) { <option value="@option.Id">@option.Name</option> }</select></label>
                                         @if (useExisting)
                                         {
                                             <label class="@Label">Search addresses<input type="search" class="@Input" placeholder="Building or street name…" @bind="addressSearch" /></label>
                                             <button type="button" class="@Secondary" @onclick="SearchAddressesAsync">Search addresses</button>
-                                            <div class="max-h-56 space-y-2 overflow-y-auto">@foreach (var result in addressResults) { <button type="button" class="block w-full rounded-lg border p-3 text-left text-sm @(address.ExistingLocationId == result.Id ? "border-indigo-300 bg-indigo-50" : "border-slate-200")" @onclick="() => address.ExistingLocationId = result.Id">@result.Name @(address.ExistingLocationId == result.Id ? "✓" : "")</button> }</div>
+                                            <div class="max-h-56 space-y-2 overflow-y-auto">@foreach (var result in addressResults) { <button type="button" class="block w-full rounded-lg border p-3 text-left text-sm @(address.ExistingLocationId == result.Id ? "border-blue-300 bg-blue-50" : "border-slate-200")" @onclick="() => address.ExistingLocationId = result.Id">@result.Name @(address.ExistingLocationId == result.Id ? "✓" : "")</button> }</div>
                                         }
                                         else
                                         {
@@ -123,7 +123,7 @@
                                 @if (links.Contacts.Count == 0) { <p class="text-sm text-slate-500">No contacts have been added yet.</p> }
                                 @if (addingContact)
                                 {
-                                    <div class="grid grid-cols-1 gap-4 rounded-xl border border-indigo-100 p-4 md:grid-cols-2">
+                                    <div class="grid grid-cols-1 gap-4 rounded-xl border border-blue-100 p-4 md:grid-cols-2">
                                         <label class="@Label">Contact type<select class="@Input" @bind="contact.TypeId"><option value="0">Select type</option>@foreach (var option in data.ContactTypes) { <option value="@option.Id">@option.Name</option> }</select></label>
                                         <label class="@Label">Contact value<input class="@Input" maxlength="250" @bind="contact.Value" /></label>
                                         <div class="flex gap-3 md:col-span-2"><button type="button" class="@Primary" @onclick="SaveContactAsync">Save contact</button><button type="button" class="@Secondary" @onclick="() => addingContact = false">Cancel</button></div>
@@ -146,7 +146,7 @@
                     }
                     @if (model.Id > 0 && activeSection == "Teams")
                     {
-                        <a class="app-button app-button-secondary" href="@($"/admin/hr/supervisors/management?organisationId={model.Id}")">Manage supervisors in HR</a>
+                        <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@($"/admin/hr/supervisors/management?organisationId={model.Id}")">Manage supervisors in HR</a>
                         <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><OrganisationTeamsTab Org="SelectedOrganisation" @key="model.Id" /></div>
                     }
                     @if (model.Id > 0 && activeSection == "Groups")
@@ -164,10 +164,10 @@
                 </section>
                 <aside class="min-w-0 @(activeSection is "Structure" or "Schedules" ? "xl:col-span-2" : "xl:col-span-4")">
                     <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-                        <div class="border-b border-slate-200 px-5 py-4"><div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">Organisations</h2><p class="mt-1 text-xs text-slate-500">@data.Organisations.Count organisations</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-600 text-white" aria-label="Add organisation" @onclick="NewOrganisation"><OrganisationIcon Name="Add" /></button></div>
+                        <div class="border-b border-slate-200 px-5 py-4"><div class="flex items-center justify-between gap-3"><div><h2 class="text-sm font-semibold text-slate-900">Organisations</h2><p class="mt-1 text-xs text-slate-500">@data.Organisations.Count organisations</p></div><button type="button" class="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white" aria-label="Add organisation" @onclick="NewOrganisation"><OrganisationIcon Name="Add" /></button></div>
                             <input type="search" class="mt-4 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm" aria-label="Search organisations" placeholder="Search name or registration number…" @bind="search" @bind:event="oninput" /></div>
                         <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 680px; scrollbar-gutter: stable;" tabindex="0">
-                            @foreach (var item in FilteredOrganisations) { <button type="button" class="block w-full border-l-4 px-5 py-4 text-left @(model.Id == item.Id ? "border-indigo-600 bg-indigo-50" : "border-transparent hover:bg-slate-50")" @onclick="() => SelectAsync(item)"><span class="block text-sm font-semibold text-slate-800">@item.Name</span><span class="mt-1 block text-xs text-slate-500">@item.RegistrationNumber</span></button> }
+                            @foreach (var item in FilteredOrganisations) { <button type="button" class="block w-full border-l-4 px-5 py-4 text-left @(model.Id == item.Id ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")" @onclick="() => SelectAsync(item)"><span class="block text-sm font-semibold text-slate-800">@item.Name</span><span class="mt-1 block text-xs text-slate-500">@item.RegistrationNumber</span></button> }
                             @if (!FilteredOrganisations.Any()) { <p class="px-5 py-12 text-center text-sm text-slate-500">No organisations found.</p> }
                         </div>
                     </div>
@@ -218,8 +218,8 @@
     }
     private const string Danger = "rounded-lg border border-red-200 px-3 py-2 text-xs font-medium text-red-600 hover:bg-red-50";
     private const string Label = "block text-xs font-bold uppercase tracking-wide text-slate-700";
-    private const string Input = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100";
-    private const string Primary = "rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-indigo-700";
+    private const string Input = "mt-2 w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-normal normal-case outline-none focus:border-indigo-400 focus:ring-2 focus:ring-blue-100";
+    private const string Primary = "rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700";
     private const string Secondary = "rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50";
     private IEnumerable<OrganisationSettingsDto> FilteredOrganisations => data?.Organisations.Where(x => x.Name.Contains(search, StringComparison.OrdinalIgnoreCase) || x.RegistrationNumber.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? Enumerable.Empty<OrganisationSettingsDto>();
     protected override async Task OnInitializedAsync()

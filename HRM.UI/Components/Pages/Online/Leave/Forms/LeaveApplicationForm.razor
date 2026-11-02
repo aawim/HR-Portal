@@ -18,7 +18,7 @@
                 </select>
             </label>
             <label class="block text-sm">Certificate (PDF, PNG or JPEG, up to 2 MB)<InputFile OnChange="UploadCertificate" accept=".pdf,.png,.jpg,.jpeg" class="mt-1 block w-full text-sm" /></label>
-            @if(LeaveState.Model.CertificateContent?.Length>0){<div class="flex flex-wrap items-center gap-2 text-sm"><span>@LeaveState.Model.CertificateFileName</span><button type="button" class="app-button app-button-secondary" @onclick="RemoveCertificate">Remove certificate</button></div>}
+            @if(LeaveState.Model.CertificateContent?.Length>0){<div class="flex flex-wrap items-center gap-2 text-sm"><span>@LeaveState.Model.CertificateFileName</span><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="RemoveCertificate">Remove certificate</button></div>}
             @if(subtypeError!=null){<p role="alert" class="text-sm text-amber-700">@subtypeError</p>}
             @if(!SubtypeValid){<p role="alert" class="text-sm text-amber-700">@SubtypeMessage</p>}
         </section>
@@ -64,7 +64,7 @@
     @if (!string.IsNullOrWhiteSpace(LeaveState.HandoverRuleSource)) { <p class="text-xs text-slate-500">@LeaveState.HandoverRuleSource · @(LeaveState.WorkHandoverAfterDays.HasValue ? $"Required for more than {LeaveState.WorkHandoverAfterDays} leave days" : "Handover not required")</p> }
     @if (LeaveState.IsWorkHandoverRequired)
     {
-        <section class="space-y-3 rounded-lg border border-indigo-200 bg-indigo-50/40 p-4">
+        <section class="space-y-3 rounded-lg border border-blue-200 bg-blue-50/40 p-4">
             <h4 class="text-sm font-semibold text-slate-800">Work handover required</h4>
             <p class="text-sm text-slate-600">Your leave policy requires handover for leave longer than @LeaveState.WorkHandoverAfterDays days.</p>
             <p class="text-sm text-slate-600">Assign each task to an employee. Every task needs their verification and approval, followed by approval from any one team or department supervisor, before HR can approve your leave.</p>
