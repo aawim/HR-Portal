@@ -361,17 +361,17 @@ public sealed class StaffTransferService(
             .ToListAsync();
 
         lookup.AttendanceDevices = await db.AttendanceDevices.AsNoTracking()
-            .OrderBy(d => d.DeviceName)
+            .OrderBy(d => d.Location)
             .Take(100)
-            .Select(d => new StaffTransferLookupOption(d.AttendanceDeviceId, d.DeviceName ?? $"Device #{d.AttendanceDeviceId}", null))
+            .Select(d => new StaffTransferLookupOption(d.AttendanceDeviceId, d.Location ?? $"Device #{d.AttendanceDeviceId} ({d.Ipaddress})", null))
             .ToListAsync();
 
         lookup.Supervisors = lookup.Employees;
 
         lookup.Roles = await db.Roles.AsNoTracking()
-            .OrderBy(r => r.RoleName)
+            .OrderBy(r => r.Name)
             .Take(200)
-            .Select(r => new StaffTransferLookupOption(r.RoleId, r.RoleName, null))
+            .Select(r => new StaffTransferLookupOption(r.RoleID, r.Name, r.RoleKey))
             .ToListAsync();
 
         lookup.UserGroups = await db.UserGroups.AsNoTracking()
@@ -586,7 +586,7 @@ public sealed class StaffTransferService(
                     ProposedScopeSummary = a.ProposedScopeSummary,
                     TransitionAction = a.TransitionAction,
                     RoleId = a.RoleId,
-                    RoleName = a.Role?.RoleName,
+                    RoleName = a.Role?.Name,
                     UserGroupId = a.UserGroupId,
                     UserGroupName = a.UserGroup?.GroupName,
                     RemainsActiveInOldDepartmentWarning = a.RemainsActiveInOldDepartmentWarning,

@@ -1241,7 +1241,7 @@
         {
             editInput.SubmitImmediately = submitImmediately;
             var res = await Transfers.SaveAsync(editInput);
-            if (!res.Succeeded)
+            if (!res.Success)
             {
                 Toasts.Show(res.Message, ToastType.Error);
                 return;
@@ -1272,7 +1272,7 @@
             return;
 
         var res = await Transfers.AddCommentAsync(activeDetail.StaffTransferId, newCommentKind, newCommentText, true);
-        if (res.Succeeded)
+        if (res.Success)
         {
             newCommentText = string.Empty;
             Toasts.Show(res.Message, ToastType.Success);
@@ -1292,7 +1292,7 @@
         decisionInput.StaffTransferId = activeDetail.StaffTransferId;
         decisionInput.ExpectedVersion = activeDetail.CurrentVersion;
         var res = await Transfers.SubmitReceivingDecisionAsync(decisionInput);
-        if (res.Succeeded)
+        if (res.Success)
         {
             Toasts.Show(res.Message, ToastType.Success);
             await ReloadDashboardAsync();
@@ -1329,7 +1329,7 @@
             doorAccessId,
             StaffTransferDoorAccessStates.StateProvisioned,
             "Confirmed by security/admin officer.");
-        if (res.Succeeded)
+        if (res.Success)
         {
             Toasts.Show(res.Message, ToastType.Success);
             await OpenTransferAsync(activeDetail.StaffTransferId);
