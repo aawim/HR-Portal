@@ -136,12 +136,12 @@ namespace HRM.Services.Attendance.Repositories
 
             resolution.CreatedDate =
                 resolution.CreatedDate == default
-                    ? DateTime.Now
+                    ? DateTime.UtcNow.AddHours(5)
                     : resolution.CreatedDate;
 
             resolution.ResolutionDate =
                 resolution.ResolutionDate == default
-                    ? DateTime.Now
+                    ? DateTime.UtcNow.AddHours(5)
                     : resolution.ResolutionDate;
 
             resolution.IsValid = true;
@@ -214,7 +214,7 @@ namespace HRM.Services.Attendance.Repositories
                 message;
 
             resolution.ResolutionDate =
-                DateTime.Now;
+                DateTime.UtcNow.AddHours(5);
 
             await db.SaveChangesAsync(
                 cancellationToken);

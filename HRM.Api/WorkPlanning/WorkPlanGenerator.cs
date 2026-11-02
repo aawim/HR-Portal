@@ -243,7 +243,7 @@ namespace HRM.WorkPlanning
                             WorkAssignmentId = plan.WorkAssignments.Where(a=>a.IsValid && a.SchedulePurpose==x.SchedulePurpose &&
                                 a.WorkAssignmentSegments.Any(s=>s.IsValid && s.WorkTemplateSegmentId==x.WorkTemplateSegmentId && s.WorkSegmentTypeId==x.WorkSegmentTypeId && s.StartDateTime==x.StartDateTime))
                                 .Select(a=>(long?)a.WorkAssignmentId).FirstOrDefault(),
-                            SchedulePurpose = x.SchedulePurpose,
+                            SchedulePurpose = x.SchedulePurpose, WorkSegmentTypeCode = x.WorkSegmentType?.Code ?? "",
                             WorkPlanSegmentId = x.WorkPlanSegmentId,
                             WorkPlanId = x.WorkPlanId,
                             WorkTemplateSegmentId = x.WorkTemplateSegmentId,

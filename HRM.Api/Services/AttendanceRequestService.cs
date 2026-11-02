@@ -49,15 +49,15 @@ public class AttendanceRequestService(
         var leave = leaves[0];
         var info = new AttendanceRequestDateInfoDto { LeaveId = leave.LeaveId };
         var type = leave.LeaveType?.Name ?? "approved leave";
-        if (day <= DateTime.Today)
+        if (day <= DateTime.UtcNow.AddHours(5).Date)
         {
-            if (isCorrection && day < DateTime.Today && await HasCheckInAsync(db, individualId, day))
+            if (isCorrection && day < DateTime.UtcNow.AddHours(5).Date && await HasCheckInAsync(db, individualId, day))
             {
                 info.Message = $"This past {type} date has a check-in event. An uneven-log correction can be requested.";
                 return info;
             }
             info.CanSubmit = false;
-            info.Message = isCorrection && day < DateTime.Today
+            info.Message = isCorrection && day < DateTime.UtcNow.AddHours(5).Date
                 ? $"A correction on a past {type} date requires a check-in event for that same date."
                 : $"Attendance cannot be requested for {type} on or before today.";
             return info;

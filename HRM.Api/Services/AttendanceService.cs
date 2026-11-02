@@ -38,7 +38,7 @@ namespace HRM.Services
 
         public async Task<(AttendanceLogDto? checkIn, AttendanceLogDto? checkOut)> GetTodayStatusAsync(int individualId)
         {
-            var today = DateTime.Today;
+            var today = DateTime.UtcNow.AddHours(5).Date;
 
             var checkIn = await _loader.GetEarliestCheckInAsync(individualId, today);
             var checkOut = await _loader.GetLatestCheckOutAsync(individualId, today);
@@ -64,7 +64,7 @@ namespace HRM.Services
             await using var db =
                 await _dbFactory.CreateDbContextAsync();
 
-            var today = DateTime.Today;
+            var today = DateTime.UtcNow.AddHours(5).Date;
 
             // ---------------------------------------------------------
             // Current salary period
@@ -318,10 +318,10 @@ namespace HRM.Services
 
             // Today + previous 6 days = 7 days total
             var startDate =
-                DateTime.Today.AddDays(-6);
+                DateTime.UtcNow.AddHours(5).Date.AddDays(-6);
 
             var endDate =
-                DateTime.Today.AddDays(1);
+                DateTime.UtcNow.AddHours(5).Date.AddDays(1);
 
             // ---------------------------------------------------------
             // Load raw logs together with their resolutions

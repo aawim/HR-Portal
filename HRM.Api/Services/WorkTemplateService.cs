@@ -120,9 +120,9 @@ namespace HRM.Services
                 .Where(x =>
                     x.IsActive && (x.IsGlobal || x.OrganisationBusinessEntityId == org) &&
                     (!x.EffectiveFrom.HasValue ||
-                     x.EffectiveFrom.Value <= DateTime.Today) &&
+                     x.EffectiveFrom.Value <= DateTime.UtcNow.AddHours(5).Date) &&
                     (!x.EffectiveTo.HasValue ||
-                     x.EffectiveTo.Value >= DateTime.Today))
+                     x.EffectiveTo.Value >= DateTime.UtcNow.AddHours(5).Date))
                 .OrderBy(x => x.Name)
                 .Select(x => new WorkTemplateDto
                 {

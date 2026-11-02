@@ -1,4 +1,4 @@
-﻿using HRM.Constants;
+using HRM.Constants;
 using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
@@ -36,6 +36,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     {
                         x.WorkPlanSegmentId,
                         x.Name,
+                        WorkSegmentTypeCode = x.WorkSegmentType.Code,
                         x.StartDateTime,
                         x.EndDateTime,
                         x.GraceBeforeMinutes,
@@ -97,15 +98,25 @@ namespace HRM.Services.Attendance.Abstraction.Services
                             checkOut?.AttendanceLog.Date
                     };
 
-                EvaluateCheckIn(
-                    result,
-                    segment.StartDateTime,
-                    segment.GraceAfterMinutes);
+                var code = segment.WorkSegmentTypeCode?.Trim().ToUpperInvariant() ?? "";
+                var isCheckInOnly = code is "CHECK_IN" or "DUTY_CHECK_IN" or "BREAK_END";
+                var isCheckOutOnly = code is "CHECK_OUT" or "DUTY_CHECK_OUT" or "BREAK_START";
 
-                EvaluateCheckOut(
-                    result,
-                    segment.EndDateTime,
-                    segment.GraceBeforeMinutes);
+                if (!isCheckOutOnly)
+                {
+                    EvaluateCheckIn(
+                        result,
+                        segment.StartDateTime,
+                        segment.GraceAfterMinutes);
+                }
+
+                if (!isCheckInOnly)
+                {
+                    EvaluateCheckOut(
+                        result,
+                        isCheckOutOnly ? segment.StartDateTime : segment.EndDateTime,
+                        segment.GraceBeforeMinutes);
+                }
 
                 results.Add(result);
             }

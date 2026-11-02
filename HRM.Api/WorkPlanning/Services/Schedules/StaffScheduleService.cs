@@ -229,10 +229,10 @@ namespace HRM.WorkPlanning.Services.Schedules
                 CancellationToken cancellationToken)
         {
             var fromDate =
-                DateTime.Today.AddDays(-30);
+                DateTime.UtcNow.AddHours(5).Date.AddDays(-30);
 
             var toDate =
-                DateTime.Today.AddDays(90);
+                DateTime.UtcNow.AddHours(5).Date.AddDays(90);
 
             return await db.WorkAssignments
                 .AsNoTracking()

@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Attendance;
+using HRM.DTOs.Attendance;
 using HRM.Enum;
 using HRM.Models;
 
@@ -61,6 +61,9 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
             foreach (var segment in segments)
             {
+                var code = segment.WorkSegmentTypeCode?.Trim().ToUpperInvariant() ?? "";
+                var isCheckInOnly = code is "CHECK_IN" or "DUTY_CHECK_IN" or "BREAK_END";
+                var isCheckOutOnly = code is "CHECK_OUT" or "DUTY_CHECK_OUT" or "BREAK_START";
                 var midpoint =
                     segment.StartDateTime.AddTicks(
                         (segment.EndDateTime -
@@ -71,34 +74,37 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 // CHECK IN WINDOW
                 // ========================================
 
-                var checkInFrom =
-                     segment.StartDateTime.AddMinutes(
-                         -CheckInResolutionBeforeMinutes);
-
-                var checkInTo =
-                    midpoint;
-
-                if (log.LogDateTime >= checkInFrom &&
-                    log.LogDateTime <= checkInTo)
+                if (!isCheckOutOnly)
                 {
-                    candidates.Add(
-                        new AttendanceBoundaryCandidate
-                        {
-                            Segment =
-                                segment,
+                    var checkInFrom =
+                         segment.StartDateTime.AddMinutes(
+                             -CheckInResolutionBeforeMinutes);
 
-                            ClockType =
-                                AttendanceClockType.CheckIn,
+                    var checkInTo =
+                        isCheckInOnly ? segment.EndDateTime : midpoint;
 
-                            TargetTime =
-                                segment.StartDateTime,
+                    if (log.LogDateTime >= checkInFrom &&
+                        log.LogDateTime <= checkInTo)
+                    {
+                        candidates.Add(
+                            new AttendanceBoundaryCandidate
+                            {
+                                Segment =
+                                    segment,
 
-                            DistanceMinutes =
-                                Math.Abs(
-                                    (log.LogDateTime -
-                                     segment.StartDateTime)
-                                    .TotalMinutes)
-                        });
+                                ClockType =
+                                    AttendanceClockType.CheckIn,
+
+                                TargetTime =
+                                    segment.StartDateTime,
+
+                                DistanceMinutes =
+                                    Math.Abs(
+                                        (log.LogDateTime -
+                                         segment.StartDateTime)
+                                        .TotalMinutes)
+                            });
+                    }
                 }
 
 
@@ -106,34 +112,42 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 // CHECK OUT WINDOW
                 // ========================================
 
-                var checkOutFrom =
-                    midpoint;
-
-                var checkOutTo =
-                    segment.EndDateTime.AddMinutes(
-                        CheckOutResolutionAfterMinutes);
-
-                if (log.LogDateTime >= checkOutFrom &&
-                    log.LogDateTime <= checkOutTo)
+                if (!isCheckInOnly)
                 {
-                    candidates.Add(
-                        new AttendanceBoundaryCandidate
-                        {
-                            Segment =
-                                segment,
+                    var expectedCheckOut =
+                        isCheckOutOnly ? segment.StartDateTime : segment.EndDateTime;
 
-                            ClockType =
-                                AttendanceClockType.CheckOut,
+                    var checkOutFrom =
+                        isCheckOutOnly
+                            ? segment.StartDateTime.AddMinutes(-segment.GraceBeforeMinutes - CheckInResolutionBeforeMinutes)
+                            : midpoint;
 
-                            TargetTime =
-                                segment.EndDateTime,
+                    var checkOutTo =
+                        segment.EndDateTime.AddMinutes(
+                            CheckOutResolutionAfterMinutes);
 
-                            DistanceMinutes =
-                                Math.Abs(
-                                    (log.LogDateTime -
-                                     segment.EndDateTime)
-                                    .TotalMinutes)
-                        });
+                    if (log.LogDateTime >= checkOutFrom &&
+                        log.LogDateTime <= checkOutTo)
+                    {
+                        candidates.Add(
+                            new AttendanceBoundaryCandidate
+                            {
+                                Segment =
+                                    segment,
+
+                                ClockType =
+                                    AttendanceClockType.CheckOut,
+
+                                TargetTime =
+                                    expectedCheckOut,
+
+                                DistanceMinutes =
+                                    Math.Abs(
+                                        (log.LogDateTime -
+                                         expectedCheckOut)
+                                        .TotalMinutes)
+                            });
+                    }
                 }
             }
 

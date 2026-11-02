@@ -144,7 +144,7 @@ namespace HRM.Services
             // =====================================================
 
             var eligibility = new Dictionary<int, HRM.Helpers.AttendanceEligibilityDay>();
-            foreach (var person in staffIds)
+            foreach (var person in (_attendance == null ? staffIds : []))
                 eligibility[person] = (await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, person, today, today, organisationId))[today];
             var leavePeople = await db.Leaves.Where(l => staffIds.Contains(l.Job.IndividualID) && l.Job.OrganisationID == organisationId &&
                 l.LeaveStateId == 4 && l.FromDate <= today && l.ToDate >= today).Select(l => l.Job.IndividualID).Distinct().ToListAsync();
@@ -163,9 +163,9 @@ namespace HRM.Services
 
 
                     if (leavePeople.Contains(staff.StaffID)) status = AttendanceStatus.Leave;
-                    else if (!eligibility[staff.StaffID].HasActiveSchedule) status = AttendanceStatus.NoActiveSchedule;
-                    else if (!eligibility[staff.StaffID].HasApprovedPosition) status = AttendanceStatus.BeforePositionApproval;
-                    else if (!eligibility[staff.StaffID].CanBeAbsent) status = AttendanceStatus.RestDay;
+                    else if (eligibility.TryGetValue(staff.StaffID, out var elig0) && !elig0.HasActiveSchedule) status = AttendanceStatus.NoActiveSchedule;
+                    else if (eligibility.TryGetValue(staff.StaffID, out var elig1) && !elig1.HasApprovedPosition) status = AttendanceStatus.BeforePositionApproval;
+                    else if (eligibility.TryGetValue(staff.StaffID, out var elig2) && !elig2.CanBeAbsent) status = AttendanceStatus.RestDay;
                     else if (!logs.Any())
                     {
                         status = AttendanceStatus.Absent;
@@ -197,7 +197,7 @@ namespace HRM.Services
                     return new TeamAttendanceDto
                     {
                         StaffID = staff.StaffID,
-                        StatusMessage = eligibility[staff.StaffID].Message,
+                        StatusMessage = eligibility.TryGetValue(staff.StaffID, out var eligMsg) ? eligMsg.Message : null,
 
                         TeamID = staff.TeamID,
 
@@ -231,7 +231,7 @@ namespace HRM.Services
                 foreach (var row in result)
                 {
                     var day = (await _attendance.GetStaffAttendanceRangeAsync(row.StaffID, today, today)).FirstOrDefault();
-                    if (day == null) continue;
+                    if (day == null) { var elig = (await HRM.Helpers.AttendanceEligibilityCalendar.LoadAsync(db, row.StaffID, today, today, organisationId))[today]; row.StatusMessage = elig.Message; if (!leavePeople.Contains(row.StaffID)) row.Status = !elig.HasActiveSchedule ? AttendanceStatus.NoActiveSchedule : !elig.HasApprovedPosition ? AttendanceStatus.BeforePositionApproval : !elig.CanBeAbsent ? AttendanceStatus.RestDay : row.Status; continue; }
                     row.CheckIn = day.FirstCheckIn; row.CheckOut = day.LastCheckOut;
                     row.StatusMessage = HRM.Helpers.AttendancePresentation.Status(day);
                     row.Status = day.IsOnLeave ? AttendanceStatus.Leave : day.IsPresent ?
@@ -256,7 +256,7 @@ namespace HRM.Services
             var clockTime =
                 checkTime ?? DateTime.UtcNow.AddHours(5);
             if (!await WorkTypeService.HasClockAssignmentAsync(_context, individualId, actor.ActiveJob?.JobId ?? 0,
-                    await _access.GetCurrentOrganisationIdAsync(), DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5))))
+                    await _access.GetCurrentOrganisationIdAsync(), DateOnly.FromDateTime(clockTime)))
                 throw new UnauthorizedAccessException("An active Work Type assignment is required to clock attendance. Contact your HR team.");
 
             var job =
@@ -390,17 +390,17 @@ namespace HRM.Services
         {
             var organisation = await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(_context, _access, individualId);
             // Define the salary period dates (15th and 16th of current month)
-            int year = DateTime.Today.Year;
-            int month = DateTime.Today.Month;
+            var now = DateTime.UtcNow.AddHours(5).Date; int year = now.Year;
+            int month = now.Month;
             //DateTime start = new DateTime(year, month, 15);
             //DateTime end = new DateTime(year, month, 16);
 
-            DateTime start = new DateTime(year, 4, 15);
-            DateTime end = new DateTime(year, 5, 16);
+            DateTime start = now.Day >= 16 ? new DateTime(year, month, 15) : new DateTime(year, month, 15).AddMonths(-1);
+            DateTime end = now.AddDays(1);
 
             // Fetch all logs for this specific period
             var logs = await _context.AttendanceLogs
-                .Where(a => a.IndividualId == individualId && a.Date >= start && a.Date <= end &&
+                .Include(a => a.AttendanceLogResolutions).Where(a => a.IndividualId == individualId && a.AttendanceLogStateId == 1 && a.Date >= start && a.Date < end &&
                     (!organisation.HasValue || a.OrganisationId == organisation.Value))
                 .ToListAsync();
 
@@ -411,8 +411,8 @@ namespace HRM.Services
 
             foreach (var group in dailyGroups)
             {
-                var checkIn = group.FirstOrDefault(l => l.InOutModeId == 1);
-                var checkOut = group.FirstOrDefault(l => l.InOutModeId == 2);
+                var checkIn = group.FirstOrDefault(l => l.InOutModeId == 1 || l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1));
+                var checkOut = group.FirstOrDefault(l => l.InOutModeId == 2 || l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2));
 
                 // Condition 1: Late check-in (later than 08:00:00)
                 if (checkIn != null && (checkIn.Hour > 8 || (checkIn.Hour == 8 && checkIn.Minute > 0)))
@@ -427,7 +427,7 @@ namespace HRM.Services
                 }
             }
 
-            return uneven;
+            return uneven.DistinctBy(l => l.AttendanceLogId).ToList();
         }
 
 

@@ -594,7 +594,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     (int)clockType,
 
                 ResolutionDate =
-                    DateTime.Now,
+                    DateTime.UtcNow.AddHours(5),
 
                 ResolutionMessage =
                     message,
@@ -603,7 +603,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     true,
 
                 CreatedDate =
-                    DateTime.Now
+                    DateTime.UtcNow.AddHours(5)
             };
         }
 
