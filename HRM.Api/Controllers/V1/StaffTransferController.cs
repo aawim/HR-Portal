@@ -1,5 +1,5 @@
-using HRM.Contracts;
 using HRM.DTOs;
+using HRM.DTOs.StaffTransfer;
 using HRM.Enums;
 using HRM.Services.Contracts;
 using Microsoft.AspNetCore.Authorization;
@@ -20,79 +20,61 @@ public sealed class StaffTransferController : ControllerBase
     }
 
     [HttpGet("load-dashboard")]
-    public Task<StaffTransferDashboardDto> LoadDashboardAsync(
+    public Task<StaffTransferDashboardData> LoadDashboardAsync(
         [FromQuery] int? organisationId = null,
-        [FromQuery] StaffTransferStatuses? statusFilter = null,
-        CancellationToken cancellationToken = default)
-        => _service.LoadDashboardAsync(organisationId, statusFilter, cancellationToken);
+        [FromQuery] string? statusFilter = null)
+        => _service.LoadDashboardAsync(organisationId, statusFilter);
 
     [HttpGet("load-form-lookups")]
     public Task<StaffTransferFormLookupDto> LoadFormLookupsAsync(
         [FromQuery] int? organisationId = null,
         [FromQuery] int? individualId = null,
-        [FromQuery] int? destinationOrganisationId = null,
-        CancellationToken cancellationToken = default)
-        => _service.LoadFormLookupsAsync(organisationId, individualId, destinationOrganisationId, cancellationToken);
+        [FromQuery] int? destinationOrganisationId = null)
+        => _service.LoadFormLookupsAsync(organisationId, individualId, destinationOrganisationId);
 
     [HttpGet("load-detail")]
-    public Task<StaffTransferDetailDto?> LoadDetailAsync(
+    public Task<StaffTransferDetailDto> LoadDetailAsync(
         [FromQuery] int? staffTransferId = null,
         [FromQuery] int? individualId = null,
-        [FromQuery] int? jobId = null,
-        CancellationToken cancellationToken = default)
-        => _service.LoadDetailAsync(staffTransferId, individualId, jobId, cancellationToken);
+        [FromQuery] int? jobId = null)
+        => _service.LoadDetailAsync(staffTransferId, individualId, jobId);
 
     [HttpPost("save")]
-    public Task<ServiceResult> SaveAsync(
-        [FromBody] SaveRequest request,
-        CancellationToken cancellationToken = default)
-        => _service.SaveAsync(request.input, cancellationToken);
+    public Task<ServiceResult> SaveAsync([FromBody] SaveRequest request)
+        => _service.SaveAsync(request.input);
 
     [HttpPost("add-comment")]
-    public Task<ServiceResult> AddCommentAsync(
-        [FromBody] AddCommentRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<ServiceResult> AddCommentAsync([FromBody] AddCommentRequest request)
         => _service.AddCommentAsync(
             request.staffTransferId,
             request.commentKind,
             request.commentText,
-            request.isVisibleToEmployee,
-            cancellationToken);
+            request.isVisibleToEmployee);
 
     [HttpPost("submit-employee-confirmation")]
-    public Task<ServiceResult> SubmitEmployeeConfirmationAsync(
-        [FromBody] SubmitEmployeeConfirmationRequest request,
-        CancellationToken cancellationToken = default)
-        => _service.SubmitEmployeeConfirmationAsync(request.input, cancellationToken);
+    public Task<ServiceResult> SubmitEmployeeConfirmationAsync([FromBody] SubmitEmployeeConfirmationRequest request)
+        => _service.SubmitEmployeeConfirmationAsync(request.input);
 
     [HttpPost("submit-receiving-decision")]
-    public Task<ServiceResult> SubmitReceivingDecisionAsync(
-        [FromBody] SubmitReceivingDecisionRequest request,
-        CancellationToken cancellationToken = default)
-        => _service.SubmitReceivingDecisionAsync(request.input, cancellationToken);
+    public Task<ServiceResult> SubmitReceivingDecisionAsync([FromBody] SubmitReceivingDecisionRequest request)
+        => _service.SubmitReceivingDecisionAsync(request.input);
 
     [HttpPost("activate-transfer")]
-    public Task<TransferActivationResult> ActivateTransferAsync(
-        [FromBody] ActivateTransferRequest request,
-        CancellationToken cancellationToken = default)
-        => _service.ActivateTransferAsync(request.staffTransferId, cancellationToken);
+    public Task<TransferActivationResult> ActivateTransferAsync([FromBody] ActivateTransferRequest request)
+        => _service.ActivateTransferAsync(request.staffTransferId);
 
     [HttpPost("update-door-access-provisioning")]
-    public Task<ServiceResult> UpdateDoorAccessProvisioningAsync(
-        [FromBody] UpdateDoorAccessProvisioningRequest request,
-        CancellationToken cancellationToken = default)
+    public Task<ServiceResult> UpdateDoorAccessProvisioningAsync([FromBody] UpdateDoorAccessProvisioningRequest request)
         => _service.UpdateDoorAccessProvisioningAsync(
             request.staffTransferDoorAccessId,
             request.provisioningState,
-            request.notes,
-            cancellationToken);
+            request.notes);
 
     [HttpGet("get-printable-document")]
-    public Task<StaffTransferPrintableDocumentDto?> GetPrintableDocumentAsync(
+    public Task<StaffTransferPrintableDocumentDto> GetPrintableDocumentAsync(
         [FromQuery] int staffTransferId,
-        [FromQuery] StaffTransferDocumentVariants variant = StaffTransferDocumentVariants.EmployeeNotice,
-        CancellationToken cancellationToken = default)
-        => _service.GetPrintableDocumentAsync(staffTransferId, variant, cancellationToken);
+        [FromQuery] string variant = StaffTransferDocumentVariants.EmployeeNotice)
+        => _service.GetPrintableDocumentAsync(staffTransferId, variant);
 
     public sealed class SaveRequest
     {
@@ -102,19 +84,19 @@ public sealed class StaffTransferController : ControllerBase
     public sealed class AddCommentRequest
     {
         public int staffTransferId { get; set; }
-        public StaffTransferCommentKinds commentKind { get; set; }
+        public string commentKind { get; set; } = StaffTransferCommentKinds.AdvisoryComment;
         public string commentText { get; set; } = string.Empty;
         public bool isVisibleToEmployee { get; set; } = true;
     }
 
     public sealed class SubmitEmployeeConfirmationRequest
     {
-        public StaffTransferConfirmationInput input { get; set; } = new();
+        public StaffTransferEmployeeConfirmationInput input { get; set; } = new();
     }
 
     public sealed class SubmitReceivingDecisionRequest
     {
-        public StaffTransferReceivingDecisionInput input { get; set; } = new();
+        public StaffTransferDecisionInput input { get; set; } = new();
     }
 
     public sealed class ActivateTransferRequest
@@ -125,7 +107,7 @@ public sealed class StaffTransferController : ControllerBase
     public sealed class UpdateDoorAccessProvisioningRequest
     {
         public int staffTransferDoorAccessId { get; set; }
-        public StaffTransferDoorAccessStates provisioningState { get; set; }
+        public string provisioningState { get; set; } = StaffTransferDoorAccessStates.StateProvisioned;
         public string? notes { get; set; }
     }
 }

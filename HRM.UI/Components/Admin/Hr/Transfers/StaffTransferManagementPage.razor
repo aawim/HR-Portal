@@ -1,6 +1,7 @@
 @page "/admin/hr/staff-transfers"
 @namespace HRM.Components.Admin.Hr.Transfers
 @using HRM.DTOs
+@using HRM.DTOs.StaffTransfer
 @using HRM.Enums
 @using HRM.Services
 @using Microsoft.AspNetCore.Authorization
@@ -68,7 +69,7 @@
             <button type="button" @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Scheduled)"
                     class="rounded-xl border border-indigo-200 bg-indigo-50/50 p-3.5 text-left shadow-sm transition hover:border-indigo-400">
                 <div class="text-[11px] font-semibold uppercase text-indigo-700">Approved / Scheduled</div>
-                <div class="mt-1 text-2xl font-extrabold text-indigo-900">@dashboard.ScheduledCount</div>
+                <div class="mt-1 text-2xl font-extrabold text-indigo-900">@dashboard.ApprovedScheduledCount</div>
             </button>
 
             <button type="button" @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Active)"
@@ -87,7 +88,7 @@
 
             <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 text-left shadow-sm">
                 <div class="text-[11px] font-semibold uppercase text-slate-600">Pending Door Access</div>
-                <div class="mt-1 text-2xl font-extrabold text-slate-800">@dashboard.PendingDoorAccessTaskCount</div>
+                <div class="mt-1 text-2xl font-extrabold text-slate-800">@dashboard.PendingDoorProvisioningCount</div>
             </div>
         </div>
     }
@@ -106,36 +107,36 @@
     <!-- Active Transfer Editor / Review Panel (7 Structured Tabs) -->
     @if (activeDetail is not null && editInput is not null)
     {
+        var isConfirmedCurrent = activeDetail.ConfirmedVersion.HasValue && activeDetail.ConfirmedVersion.Value == activeDetail.CurrentVersion;
         <div class="rounded-2xl border border-slate-200 bg-white shadow-sm">
-            <!-- Top Summary Banner (Matches Spec Wireframe) -->
+            <!-- Top Summary Banner -->
             <div class="border-b border-slate-200 bg-slate-50/70 p-4">
                 <div class="flex flex-wrap items-start justify-between gap-4">
                     <div class="flex items-center gap-3">
                         <div class="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
-                            @(string.IsNullOrWhiteSpace(activeDetail.EmployeeFullName) ? "ST" : activeDetail.EmployeeFullName[..1].ToUpperInvariant())
+                            @(string.IsNullOrWhiteSpace(activeDetail.Staff.FullName) ? "ST" : activeDetail.Staff.FullName[..1].ToUpperInvariant())
                         </div>
                         <div>
                             <div class="flex flex-wrap items-center gap-2">
                                 <span class="text-base font-bold text-slate-900">
-                                    @(string.IsNullOrWhiteSpace(activeDetail.EmployeeFullName) ? "Select Employee to Initiate Transfer" : activeDetail.EmployeeFullName)
+                                    @(string.IsNullOrWhiteSpace(activeDetail.Staff.FullName) ? "Select Employee to Initiate Transfer" : activeDetail.Staff.FullName)
                                 </span>
-                                @if (!string.IsNullOrWhiteSpace(activeDetail.EmployeeStaffNumber))
+                                @if (!string.IsNullOrWhiteSpace(activeDetail.Staff.EmployeeNumber))
                                 {
                                     <span class="rounded bg-slate-200 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">
-                                        #@activeDetail.EmployeeStaffNumber
+                                        #@activeDetail.Staff.EmployeeNumber
                                     </span>
                                 }
                                 <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @GetStatusBadgeClass(activeDetail.Status)">
                                     @activeDetail.Status
                                 </span>
                                 <span class="text-xs text-slate-500">
-                                    Ref: <strong>@activeDetail.TransferReferenceNo</strong> · v@activeDetail.CurrentVersion
+                                    Ref: <strong>@(activeDetail.ReferenceNumber ?? "Draft")</strong> · v@activeDetail.CurrentVersion
                                 </span>
                             </div>
                             <p class="mt-0.5 text-xs text-slate-600">
-                                @(activeDetail.Job.ExistingPositionTitle.Length > 0 ? activeDetail.Job.ExistingPositionTitle : "Current Position")
-                                · @(activeDetail.SourceOrganisationName.Length > 0 ? activeDetail.SourceOrganisationName : "Sending Department")
-                                → <strong class="text-blue-700">@(string.IsNullOrWhiteSpace(activeDetail.DestinationOrganisationName) ? "Select Receiving Department" : activeDetail.DestinationOrganisationName)</strong>
+                                @(string.IsNullOrWhiteSpace(activeDetail.Job.ExistingPositionTitle) ? "Current Position" : activeDetail.Job.ExistingPositionTitle)
+                                · @(string.IsNullOrWhiteSpace(activeDetail.Staff.CurrentDepartmentName) ? activeDetail.Staff.CurrentOrganisationName : activeDetail.Staff.CurrentDepartmentName)
                             </p>
                         </div>
                     </div>
@@ -191,13 +192,13 @@
                                 <div class="flex items-center gap-2">
                                     <label class="text-xs font-semibold text-slate-700">Select Employee:</label>
                                     <select class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900"
-                                            value="@selectedEmployeeKey"
+                                            value="@selectedEmployeeId"
                                             @onchange="OnEmployeeSelectionChangedAsync">
-                                        <option value="">-- Choose active staff member --</option>
+                                        <option value="0">-- Choose active staff member --</option>
                                         @foreach (var emp in lookups.Employees)
                                         {
-                                            <option value="@($"{emp.IndividualId}:{emp.JobId}")">
-                                                @emp.FullName (#@emp.StaffNumber) — @emp.PositionTitle · @emp.OrganisationName
+                                            <option value="@emp.Id">
+                                                @emp.Name @(string.IsNullOrWhiteSpace(emp.Subtitle) ? "" : $"— {emp.Subtitle}")
                                             </option>
                                         }
                                     </select>
@@ -209,38 +210,33 @@
                             <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
                                 <div class="text-[11px] font-bold uppercase text-slate-400">Identity</div>
                                 <dl class="mt-2 space-y-1.5 text-xs">
-                                    <div class="flex justify-between"><dt class="text-slate-500">Full Name</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.EmployeeFullName) ? "—" : activeDetail.EmployeeFullName)</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Staff Number</dt><dd class="font-mono font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.EmployeeStaffNumber) ? "—" : activeDetail.EmployeeStaffNumber)</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">ID Card (Restricted)</dt><dd class="font-mono text-slate-800">@(activeDetail.IdCardNumber ?? "Protected / Role-Restricted")</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Official Email</dt><dd class="text-slate-800">@(activeDetail.OfficialEmail ?? "—")</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Official Phone</dt><dd class="text-slate-800">@(activeDetail.OfficialPhone ?? "—")</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Full Name</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.Staff.FullName) ? "—" : activeDetail.Staff.FullName)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Staff Number</dt><dd class="font-mono font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.Staff.EmployeeNumber) ? "—" : activeDetail.Staff.EmployeeNumber)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">ID Card (Restricted)</dt><dd class="font-mono text-slate-800">@(activeDetail.Staff.IdCardNumber ?? "Protected / Role-Restricted")</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Official Email</dt><dd class="text-slate-800">@(activeDetail.Staff.OfficialEmail ?? "—")</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Official Phone</dt><dd class="text-slate-800">@(activeDetail.Staff.OfficialPhone ?? "—")</dd></div>
                                 </dl>
                             </div>
 
                             <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
                                 <div class="text-[11px] font-bold uppercase text-slate-400">Current Employment</div>
                                 <dl class="mt-2 space-y-1.5 text-xs">
-                                    <div class="flex justify-between"><dt class="text-slate-500">Current Organization</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.SourceOrganisationName) ? "—" : activeDetail.SourceOrganisationName)</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Employment Status</dt><dd class="text-emerald-700 font-semibold">@activeDetail.CurrentEmploymentStatus</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Employment Category</dt><dd class="text-slate-800">@activeDetail.EmploymentCategory</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Date Joined</dt><dd class="text-slate-800">@(activeDetail.DateJoined?.ToString("dd MMM yyyy") ?? "—")</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Current Job ID</dt><dd class="font-mono text-slate-800">#@activeDetail.SourceJobId</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current Organization</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.Staff.CurrentOrganisationName) ? "—" : activeDetail.Staff.CurrentOrganisationName)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current Department</dt><dd class="font-medium text-slate-800">@(string.IsNullOrWhiteSpace(activeDetail.Staff.CurrentDepartmentName) ? "—" : activeDetail.Staff.CurrentDepartmentName)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Employment Status</dt><dd class="text-emerald-700 font-semibold">@activeDetail.Staff.CurrentEmploymentStatus</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Employment Category</dt><dd class="text-slate-800">@activeDetail.Staff.EmploymentCategory</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Date Joined</dt><dd class="text-slate-800">@(activeDetail.Staff.DateJoined.Year > 1900 ? activeDetail.Staff.DateJoined.ToString("dd MMM yyyy") : "—")</dd></div>
                                 </dl>
                             </div>
 
                             <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
                                 <div class="text-[11px] font-bold uppercase text-slate-400">Sending Department &amp; Supervision</div>
                                 <dl class="mt-2 space-y-1.5 text-xs">
-                                    <div class="flex justify-between"><dt class="text-slate-500">Current Supervisor</dt><dd class="font-medium text-slate-900">@(activeDetail.CurrentSupervisorName ?? "Unassigned")</dd></div>
-                                    <div class="flex justify-between"><dt class="text-slate-500">Current HOD</dt><dd class="font-medium text-slate-900">@(activeDetail.CurrentHodName ?? "Unassigned")</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current Job ID</dt><dd class="font-mono text-slate-800">#@activeDetail.Staff.CurrentJobId</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current Position</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(activeDetail.Staff.CurrentPositionTitle) ? "—" : activeDetail.Staff.CurrentPositionTitle)</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current Supervisor</dt><dd class="font-medium text-slate-900">@(activeDetail.Staff.CurrentSupervisorName ?? "Unassigned")</dd></div>
+                                    <div class="flex justify-between"><dt class="text-slate-500">Current HOD</dt><dd class="font-medium text-slate-900">@(activeDetail.Staff.CurrentHodName ?? "Unassigned")</dd></div>
                                 </dl>
-                                <div class="mt-3">
-                                    <label class="block text-[11px] font-semibold text-slate-600">Current Section / Unit Label</label>
-                                    <input type="text"
-                                           @bind="editInput.SourceDepartmentUnit"
-                                           placeholder="e.g., Operations Section / Unit A"
-                                           class="mt-1 w-full rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs" />
-                                </div>
                             </div>
                         </div>
                     </div>
@@ -258,11 +254,11 @@
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Receiving Department / Structure *</label>
+                                <label class="block text-xs font-semibold text-slate-700">Destination Organization *</label>
                                 <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                                        value="@editInput.DestinationOrganisationId"
+                                        value="@editInput.Job.DestinationOrganisationId"
                                         @onchange="OnDestinationOrganisationChangedAsync">
-                                    <option value="0">-- Select receiving department --</option>
+                                    <option value="0">-- Select destination organization --</option>
                                     @if (lookups is not null)
                                     {
                                         @foreach (var org in lookups.Organisations)
@@ -274,30 +270,37 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Destination Section / Unit</label>
-                                <input type="text"
-                                       @bind="editInput.DestinationDepartmentUnit"
-                                       placeholder="Optional unit/section within receiving department"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <label class="block text-xs font-semibold text-slate-700">Receiving Department / Structure *</label>
+                                <select @bind="editInput.Job.DestinationOrganisationStructureId"
+                                        class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                    <option value="0">-- Select receiving department / unit --</option>
+                                    @if (lookups is not null)
+                                    {
+                                        @foreach (var dept in lookups.Departments.Where(d => editInput.Job.DestinationOrganisationId <= 0 || d.OrganisationId == editInput.Job.DestinationOrganisationId))
+                                        {
+                                            <option value="@dept.Id">@dept.Name</option>
+                                        }
+                                    }
+                                </select>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Transfer Type *</label>
-                                <select @bind="editInput.TransferType"
+                                <select @bind="editInput.Job.TransferTypeId"
                                         class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
                                     @foreach (var tt in Enum.GetValues<StaffTransferType>())
                                     {
-                                        <option value="@tt">@tt</option>
+                                        <option value="@((int)tt)">@tt</option>
                                     }
                                 </select>
                             </div>
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Job Appointment Mode *</label>
-                                <select @bind="editInput.AppointmentMode"
+                                <select @bind="editInput.Job.TransferAppointmentMode"
                                         class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
-                                    <option value="@TransferAppointmentModes.OrganizationalReassignmentSameJob">Organizational Reassignment (Keep Same JobID)</option>
-                                    <option value="@TransferAppointmentModes.PositionChangeWithinSameJob">Position Change Within Same Job</option>
+                                    <option value="@TransferAppointmentModes.OrganisationalReassignment">Organizational Reassignment (Keep Same JobID)</option>
+                                    <option value="@TransferAppointmentModes.SameJobPositionChange">Position Change Within Same Job</option>
                                     <option value="@TransferAppointmentModes.NewEmploymentAppointment">New Employment Appointment (Create New Job Record)</option>
                                 </select>
                             </div>
@@ -305,14 +308,14 @@
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Effective Transfer Date *</label>
                                 <input type="date"
-                                       @bind="editInput.EffectiveDate"
+                                       @bind="editInput.Job.EffectiveDate"
                                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Reporting Date *</label>
                                 <input type="date"
-                                       @bind="editInput.ReportingDate"
+                                       @bind="editInput.Reporting.ReportingDate"
                                        class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
 
@@ -323,10 +326,10 @@
                                     <option value="">-- Retain existing position (@activeDetail.Job.ExistingPositionTitle) --</option>
                                     @if (lookups is not null)
                                     {
-                                        @foreach (var pos in lookups.DestinationPositions)
+                                        @foreach (var pos in lookups.Positions)
                                         {
                                             <option value="@pos.PositionId">
-                                                @pos.Title (Vacancies: @Math.Max(0, pos.ApprovedCapacity - pos.OccupiedCount)/@pos.ApprovedCapacity)
+                                                @pos.Name @(pos.IsVacant ? "(Vacant)" : "(Occupied)")
                                             </option>
                                         }
                                     }
@@ -337,12 +340,12 @@
                                 <label class="block text-xs font-semibold text-slate-700">Destination Position Matrix (PF_PositionMatrix)</label>
                                 <select @bind="editInput.Job.DestinationPositionMatrixId"
                                         class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
-                                    <option value="">-- Retain existing matrix (@(activeDetail.Job.ExistingPositionMatrixCode ?? "None")) --</option>
+                                    <option value="">-- Retain existing matrix (@(activeDetail.Job.ExistingPositionMatrixLabel ?? "None")) --</option>
                                     @if (lookups is not null)
                                     {
                                         @foreach (var pm in lookups.PositionMatrices)
                                         {
-                                            <option value="@pm.PositionMatrixId">@pm.PositionCode · @pm.Title (@pm.GradeLevel)</option>
+                                            <option value="@pm.PositionMatrixId">@pm.Label (Available: @pm.AvailableSlots/@pm.ApprovedSlots)</option>
                                         }
                                     }
                                 </select>
@@ -368,22 +371,21 @@
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Transfer Reason &amp; Justification *</label>
                                 <textarea rows="3"
-                                          @bind="editInput.TransferReason"
+                                          @bind="editInput.Job.TransferReason"
                                           placeholder="State the operational reason and justification for this internal transfer..."
                                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
                             </div>
                             <div class="space-y-2">
                                 <div>
-                                    <label class="block text-xs font-semibold text-slate-700">Salary / Step / Benefit Change Summary (Authorized HR Only)</label>
+                                    <label class="block text-xs font-semibold text-slate-700">Salary / Step / Benefit Change Notes (Authorized HR Only)</label>
                                     <input type="text"
-                                           @bind="editInput.Job.SalaryOrBenefitChangeSummary"
+                                           @bind="editInput.Job.SalaryBenefitChangeNotes"
                                            placeholder="No change to base salary/step, or specify approved step adjustment"
                                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                                 </div>
                                 <div class="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs text-slate-600">
                                     <div><strong>Existing Position:</strong> @activeDetail.Job.ExistingPositionTitle</div>
-                                    <div><strong>Existing Matrix / Grade:</strong> @(activeDetail.Job.ExistingPositionMatrixCode ?? "—") · @(activeDetail.Job.ExistingGradeLevel ?? "—")</div>
-                                    <div><strong>Existing Step:</strong> @(activeDetail.Job.ExistingStepSalarySummary ?? "Restricted / Unchanged")</div>
+                                    <div><strong>Existing Matrix / Grade:</strong> @(activeDetail.Job.ExistingPositionMatrixLabel ?? "—") · @(activeDetail.Job.ExistingGradeLevel ?? "—")</div>
                                 </div>
                             </div>
                         </div>
@@ -403,11 +405,11 @@
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Current Work Location</label>
-                                <input type="text" @bind="editInput.Work.CurrentWorkLocation" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs" />
+                                <input type="text" @bind="editInput.Work.CurrentLocationName" class="mt-1 w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2 text-xs" />
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Proposed Work Location *</label>
-                                <input type="text" @bind="editInput.Work.ProposedWorkLocation" placeholder="Building / Office / Site" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <input type="text" @bind="editInput.Work.ProposedLocationName" placeholder="Building / Office / Site" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Assigned Work Template</label>
@@ -424,42 +426,38 @@
                             </div>
 
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Official Working Schedule</label>
-                                <input type="text" @bind="editInput.Work.OfficialWorkingSchedule" placeholder="e.g., Regular Civil Service Hours" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <label class="block text-xs font-semibold text-slate-700">Proposed Schedule Mode</label>
+                                <input type="text" @bind="editInput.Work.ProposedScheduleMode" placeholder="Standard / Shift / Roster" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Shift Duty / Roster</label>
-                                <input type="text" @bind="editInput.Work.ShiftOrRosterName" placeholder="e.g., Standard Day / 24x7 Shift A" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <label class="block text-xs font-semibold text-slate-700">Work Arrangement Mode</label>
+                                <input type="text" @bind="editInput.Work.WorkArrangementMode" placeholder="OnSite / Hybrid / Remote" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Working Days Pattern</label>
-                                <input type="text" @bind="editInput.Work.WorkingDaysPattern" placeholder="Sun–Thu" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700">Standard Start Time</label>
-                                <input type="text" @bind="editInput.Work.StandardStartTime" placeholder="08:00" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700">Standard End Time</label>
-                                <input type="text" @bind="editInput.Work.StandardEndTime" placeholder="14:00" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700">Weekly Working Hours</label>
+                                <label class="block text-xs font-semibold text-slate-700">Weekly Working Hours *</label>
                                 <input type="number" step="0.5" @bind="editInput.Work.WeeklyWorkingHours" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Work Planning Provider</label>
-                                <input type="text" @bind="editInput.Work.ProposedPlanningProvider" placeholder="FixedTemplate / DutyRoster" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <select @bind="editInput.Work.ProposedPlanningProviderId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                    <option value="">-- Organization Default --</option>
+                                    @if (lookups is not null)
+                                    {
+                                        @foreach (var pp in lookups.PlanningProviders)
+                                        {
+                                            <option value="@pp.Id">@pp.Name</option>
+                                        }
+                                    }
+                                </select>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Required Attendance Method</label>
                                 <input type="text" @bind="editInput.Work.RequiredAttendanceMethod" placeholder="Biometric / Web / Mobile" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Attendance Device / Location</label>
-                                <input type="text" @bind="editInput.Work.AttendanceDeviceOrLocation" placeholder="Terminal ID / Entrance" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                <label class="block text-xs font-semibold text-slate-700">Attendance Device / Location Notes</label>
+                                <input type="text" @bind="editInput.Work.AttendanceDeviceLocationNotes" placeholder="Terminal ID / Entrance" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
 
                             <div>
@@ -481,12 +479,12 @@
                             </div>
                             <div class="flex items-center gap-4 pt-5 text-xs">
                                 <label class="inline-flex items-center gap-1.5 font-medium text-slate-700">
-                                    <input type="checkbox" @bind="editInput.Work.OvertimeEligible" class="rounded border-slate-300" />
+                                    <input type="checkbox" @bind="editInput.Work.IsOvertimeEligible" class="rounded border-slate-300" />
                                     <span>Overtime Eligible</span>
                                 </label>
                                 <label class="inline-flex items-center gap-1.5 font-medium text-slate-700">
-                                    <input type="checkbox" @bind="editInput.Work.RemoteOrHybridArrangement" class="rounded border-slate-300" />
-                                    <span>Remote / Hybrid</span>
+                                    <input type="checkbox" @bind="editInput.Work.ReconcileFutureWorkPlans" class="rounded border-slate-300" />
+                                    <span>Reconcile Future Plans</span>
                                 </label>
                             </div>
                         </div>
@@ -529,35 +527,30 @@
                                         var row = editInput.AccessChanges[idx];
                                         <tr>
                                             <td class="px-3 py-2">
-                                                <select @bind="row.AccessArea" class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs">
-                                                    @foreach (var area in Enum.GetValues<StaffTransferAccessAreas>())
-                                                    {
-                                                        <option value="@area">@area</option>
-                                                    }
-                                                </select>
+                                                <input type="text" @bind="row.AccessAreaName" placeholder="Access Area" class="w-full rounded border border-slate-300 px-2 py-1 text-xs font-medium" />
                                             </td>
                                             <td class="px-3 py-2">
-                                                <input type="text" @bind="row.CurrentAccessSummary" class="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+                                                <input type="text" @bind="row.CurrentScopeSummary" class="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
                                             </td>
                                             <td class="px-3 py-2">
-                                                <select @bind="row.ProposedAction" class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold">
-                                                    @foreach (var act in Enum.GetValues<StaffTransferAccessActions>())
+                                                <select @bind="row.TransitionAction" class="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs font-semibold">
+                                                    @foreach (var act in StaffTransferAccessActions.All)
                                                     {
                                                         <option value="@act">@act</option>
                                                     }
                                                 </select>
                                             </td>
                                             <td class="px-3 py-2">
-                                                <input type="text" @bind="row.ProposedAccessSummary" class="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
+                                                <input type="text" @bind="row.ProposedScopeSummary" class="w-full rounded border border-slate-300 px-2 py-1 text-xs" />
                                             </td>
                                             <td class="px-3 py-2">
                                                 <div class="flex flex-col gap-1 text-[11px]">
                                                     <label class="inline-flex items-center gap-1 text-amber-800">
-                                                        <input type="checkbox" @bind="row.FlaggedRetainedOldDeptAccess" />
+                                                        <input type="checkbox" @bind="row.RemainsActiveInOldDepartmentWarning" />
                                                         <span>Retains Old Dept</span>
                                                     </label>
                                                     <label class="inline-flex items-center gap-1 text-purple-800">
-                                                        <input type="checkbox" @bind="row.RequiresSecurityAuthorization" />
+                                                        <input type="checkbox" @bind="row.RequiresSeparateSecurityAuth" />
                                                         <span>Security Auth Req.</span>
                                                     </label>
                                                 </div>
@@ -593,10 +586,10 @@
                         </div>
 
                         <div class="space-y-3">
-                            @for (var i = 0; i < editInput.DoorAccessItems.Count; i++)
+                            @for (var i = 0; i < editInput.DoorAccessChanges.Count; i++)
                             {
                                 var idx = i;
-                                var door = editInput.DoorAccessItems[idx];
+                                var door = editInput.DoorAccessChanges[idx];
                                 <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5">
                                     <div class="grid grid-cols-1 gap-3 md:grid-cols-4">
                                         <div>
@@ -608,8 +601,8 @@
                                             <input type="text" @bind="door.FloorName" placeholder="Floor 3" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
                                         </div>
                                         <div>
-                                            <label class="block text-[11px] font-semibold text-slate-600">Department Office / Restricted Room</label>
-                                            <input type="text" @bind="door.RoomOrZoneName" placeholder="Dept Office / Server Room" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
+                                            <label class="block text-[11px] font-semibold text-slate-600">Department Office / Area</label>
+                                            <input type="text" @bind="door.DepartmentOfficeArea" placeholder="Dept Office / Restricted Room" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
                                         </div>
                                         <div>
                                             <label class="block text-[11px] font-semibold text-slate-600">Access Card / Biometric Ref</label>
@@ -617,36 +610,35 @@
                                         </div>
                                         <div>
                                             <label class="block text-[11px] font-semibold text-slate-600">Existing Access Groups</label>
-                                            <input type="text" @bind="door.CurrentAccessGroups" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
+                                            <input type="text" @bind="door.ExistingAccessGroups" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
                                         </div>
                                         <div>
                                             <label class="block text-[11px] font-semibold text-slate-600">Proposed Access Groups</label>
                                             <input type="text" @bind="door.ProposedAccessGroups" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" />
                                         </div>
-                                        <div class="flex items-center gap-3 pt-4 text-xs">
-                                            <label class="inline-flex items-center gap-1">
-                                                <input type="checkbox" @bind="door.RetainCommonAreaAccess" />
-                                                <span>Retain Common Areas</span>
-                                            </label>
-                                            <label class="inline-flex items-center gap-1">
-                                                <input type="checkbox" @bind="door.RevokePreviousDepartmentAccess" />
-                                                <span>Revoke Old Dept</span>
-                                            </label>
+                                        <div>
+                                            <label class="block text-[11px] font-semibold text-slate-600">Transition Action</label>
+                                            <select @bind="door.TransitionAction" class="mt-0.5 w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs">
+                                                <option value="@StaffTransferDoorAccessStates.ActionReplace">Replace Old Dept Access</option>
+                                                <option value="@StaffTransferDoorAccessStates.ActionRetainCommon">Retain Common Access</option>
+                                                <option value="@StaffTransferDoorAccessStates.ActionGrantNew">Grant New Access</option>
+                                                <option value="@StaffTransferDoorAccessStates.ActionRevokeOld">Revoke Old Access</option>
+                                            </select>
                                         </div>
                                         <div class="flex items-center justify-end gap-2 pt-4">
                                             <span class="rounded bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
                                                 @door.ProvisioningState
                                             </span>
-                                            @if (door.Id > 0 && door.ProvisioningState != StaffTransferDoorAccessStates.Provisioned)
+                                            @if (door.StaffTransferDoorAccessId > 0 && door.ProvisioningState != StaffTransferDoorAccessStates.StateProvisioned)
                                             {
                                                 <button type="button"
-                                                        @onclick="() => MarkDoorProvisionedAsync(door.Id)"
+                                                        @onclick="() => MarkDoorProvisionedAsync(door.StaffTransferDoorAccessId)"
                                                         class="rounded bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700">
                                                     Confirm Provisioned
                                                 </button>
                                             }
                                             <button type="button"
-                                                    @onclick="() => editInput.DoorAccessItems.RemoveAt(idx)"
+                                                    @onclick="() => editInput.DoorAccessChanges.RemoveAt(idx)"
                                                     class="text-xs text-rose-600 hover:underline">Remove</button>
                                         </div>
                                     </div>
@@ -672,17 +664,12 @@
                                 <input type="date" @bind="editInput.Reporting.ReportingDate" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-700">Reporting Time</label>
-                                <input type="text" @bind="editInput.Reporting.ReportingTime" placeholder="08:00" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
-                            </div>
-                            <div>
                                 <label class="block text-xs font-semibold text-slate-700">Reporting Location *</label>
                                 <input type="text" @bind="editInput.Reporting.ReportingLocation" placeholder="Building, floor, office or unit" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
-
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Reporting To (Officer / Supervisor)</label>
-                                <select @bind="editInput.Reporting.ReportingToOfficerIndividualId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                <select @bind="editInput.Reporting.ReportingToIndividualId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
                                     <option value="">-- Select receiving officer --</option>
                                     @if (lookups is not null)
                                     {
@@ -693,6 +680,7 @@
                                     }
                                 </select>
                             </div>
+
                             <div class="flex items-center pt-5">
                                 <label class="inline-flex items-center gap-2 text-xs font-semibold text-slate-700">
                                     <input type="checkbox" @bind="editInput.Reporting.HandoverRequired" class="rounded border-slate-300" />
@@ -703,24 +691,33 @@
                                 <label class="block text-xs font-semibold text-slate-700">Handover Deadline</label>
                                 <input type="date" @bind="editInput.Reporting.HandoverDeadline" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
                             </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700">Pending Approvals Routing Rule</label>
+                                <select @bind="editInput.Reporting.OutstandingApprovalsRoutingRule" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                    @foreach (var rule in StaffTransferApprovalRoutingRules.All)
+                                    {
+                                        <option value="@rule">@rule</option>
+                                    }
+                                </select>
+                            </div>
                         </div>
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Outstanding Assignments &amp; Tasks</label>
-                                <textarea rows="2" @bind="editInput.Reporting.OutstandingAssignments" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
+                                <textarea rows="2" @bind="editInput.Reporting.OutstandingAssignmentsSummary" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Outstanding Approvals Needing Reassignment</label>
-                                <textarea rows="2" @bind="editInput.Reporting.OutstandingApprovalsToReassign" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
+                                <textarea rows="2" @bind="editInput.Reporting.OutstandingApprovalsSummary" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Assets / Cards / Equipment to Return (Sending Dept)</label>
-                                <textarea rows="2" @bind="editInput.Reporting.AssetsToReturn" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
+                                <textarea rows="2" @bind="editInput.Reporting.AssetsToReturnSummary" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Assets &amp; Credentials to Receive (Receiving Dept)</label>
-                                <textarea rows="2" @bind="editInput.Reporting.AssetsToReceive" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
+                                <textarea rows="2" @bind="editInput.Reporting.AssetsToReceiveSummary" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs"></textarea>
                             </div>
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-semibold text-slate-700">Special Instructions from Receiving Department</label>
@@ -734,16 +731,16 @@
                     <!-- TAB 07: STAFF CONFIRMATION, OPTIONAL COMMENTS & RECEIVING APPROVAL -->
                     <div class="space-y-6">
                         <!-- A. Employee Confirmation Status & History -->
-                        <div class="rounded-xl border @(activeDetail.IsConfirmedForCurrentVersion ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40") p-4">
+                        <div class="rounded-xl border @(isConfirmedCurrent ? "border-emerald-200 bg-emerald-50/40" : "border-amber-200 bg-amber-50/40") p-4">
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <div>
-                                    <h3 class="text-xs font-bold uppercase tracking-wider @(activeDetail.IsConfirmedForCurrentVersion ? "text-emerald-800" : "text-amber-800")">
+                                    <h3 class="text-xs font-bold uppercase tracking-wider @(isConfirmedCurrent ? "text-emerald-800" : "text-amber-800")">
                                         Mandatory Employee Confirmation Gate
                                     </h3>
                                     <p class="mt-0.5 text-xs text-slate-700">
-                                        @if (activeDetail.IsConfirmedForCurrentVersion)
+                                        @if (isConfirmedCurrent)
                                         {
-                                            <span>Confirmed for current version (v@activeDetail.ConfirmedVersion) by <strong>@activeDetail.ConfirmedByName</strong> on @activeDetail.ConfirmedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm").</span>
+                                            <span>Confirmed for current version (v@activeDetail.ConfirmedVersion). Ready for Receiving Department final approval.</span>
                                         }
                                         else
                                         {
@@ -764,13 +761,13 @@
                                     {
                                         <div class="flex flex-wrap items-center justify-between rounded bg-white/80 px-2.5 py-1.5">
                                             <div>
-                                                <span class="font-semibold">@conf.ResponseType</span> (v@conf.VersionNumber) by @conf.EmployeeName
-                                                @if (!string.IsNullOrWhiteSpace(conf.Remarks))
+                                                <span class="font-semibold">@conf.ResponseKind</span> (v@conf.ConfirmedVersion) by @conf.ConfirmedByName
+                                                @if (!string.IsNullOrWhiteSpace(conf.EmployeeRemarks))
                                                 {
-                                                    <span class="text-slate-600"> — "@conf.Remarks"</span>
+                                                    <span class="text-slate-600"> — "@conf.EmployeeRemarks"</span>
                                                 }
                                             </div>
-                                            <span class="text-[11px] text-slate-400">@conf.RespondedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                                            <span class="text-[11px] text-slate-400">@conf.ConfirmedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
                                         </div>
                                     }
                                 </div>
@@ -796,7 +793,7 @@
                                             <div class="rounded-lg bg-slate-50 p-2.5 text-xs">
                                                 <div class="flex items-center justify-between">
                                                     <span class="font-semibold text-slate-800">@c.AuthorName (@c.ParticipantRole · @c.CommentKind)</span>
-                                                    <span class="text-[11px] text-slate-400">@c.CreatedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
+                                                    <span class="text-[11px] text-slate-400">@c.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>
                                                 </div>
                                                 <p class="mt-1 text-slate-700">@c.CommentText</p>
                                             </div>
@@ -806,15 +803,15 @@
 
                                 <div class="mt-3 grid grid-cols-1 gap-2 md:grid-cols-4">
                                     <select @bind="newCommentKind" class="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs">
-                                        <option value="@StaffTransferCommentKinds.AdvisoryObservation">Advisory Observation</option>
-                                        <option value="@StaffTransferCommentKinds.HandoverReadinessNote">Handover Readiness Note</option>
-                                        <option value="@StaffTransferCommentKinds.ReleaseTimingConcern">Release Timing Note</option>
-                                        <option value="@StaffTransferCommentKinds.ReplacementNeedNote">Replacement Need Note</option>
+                                        @foreach (var ck in StaffTransferCommentKinds.All)
+                                        {
+                                            <option value="@ck">@ck</option>
+                                        }
                                     </select>
                                     <input type="text"
                                            @bind="newCommentText"
                                            placeholder="Add optional Supervisor / HOD / HR comment..."
-                                           class=" rounded-lg border border-slate-300 px-3 py-1.5 text-xs md:col-span-2" />
+                                           class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs md:col-span-2" />
                                     <button type="button"
                                             @onclick="SubmitAdvisoryCommentAsync"
                                             class="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900">
@@ -852,22 +849,21 @@
 
                                 <div class="mt-3 flex flex-wrap items-center justify-between gap-2">
                                     <div class="text-xs text-slate-500">
-                                        Routing Rule: <strong>@activeDetail.ApprovalRoutingRule</strong>
-                                        @if (activeDetail.ReceivingApprovedAt.HasValue)
+                                        @if (activeDetail.FinalApprovedAt.HasValue)
                                         {
-                                            <span> · Last Decision: <strong>@activeDetail.ReceivingApprovalDecision</strong> by @activeDetail.ReceivingApprovedByName (@activeDetail.ReceivingApprovedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm"))</span>
+                                            <span>Approved by <strong>@activeDetail.FinalApprovedByName</strong> (@activeDetail.FinalApprovedAt.Value.ToLocalTime().ToString("dd MMM yyyy HH:mm"))</span>
                                         }
                                     </div>
 
                                     <div class="flex items-center gap-2">
                                         <button type="button"
-                                                disabled="@(decisionInput.Decision == "Approve" && !activeDetail.IsConfirmedForCurrentVersion)"
+                                                disabled="@(decisionInput.Decision == "Approve" && !isConfirmedCurrent)"
                                                 @onclick="SubmitReceivingDecisionAsync"
                                                 class="rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
                                             Submit Receiving Department Decision
                                         </button>
 
-                                        @if (activeDetail.Status is StaffTransferStatuses.Scheduled or StaffTransferStatuses.ApprovedPendingEffectiveDate or StaffTransferStatuses.ActivationFailed)
+                                        @if (activeDetail.Status is StaffTransferStatuses.Scheduled or StaffTransferStatuses.Approved or StaffTransferStatuses.ActivationFailed)
                                         {
                                             <button type="button"
                                                     @onclick="() => TriggerActivationNowAsync(activeDetail.StaffTransferId)"
@@ -891,12 +887,12 @@
                                         {
                                             <div class="flex items-center justify-between rounded bg-slate-50 px-2.5 py-1.5">
                                                 <div>
-                                                    <span class="font-semibold @(log.Succeeded ? "text-emerald-700" : "text-rose-700")">
-                                                        @(log.Succeeded ? "✓" : "✕") @log.Step
+                                                    <span class="font-semibold @(log.StepStatus == "Succeeded" ? "text-emerald-700" : "text-rose-700")">
+                                                        @log.StepCode (@log.StepStatus)
                                                     </span>
-                                                    <span class="ml-2 text-slate-700">@log.DetailMessage</span>
+                                                    <span class="ml-2 text-slate-700">@(log.ErrorMessage ?? log.DetailsJson)</span>
                                                 </div>
-                                                <span class="text-[11px] text-slate-400">@log.ExecutedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")</span>
+                                                <span class="text-[11px] text-slate-400">@log.ExecutedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm:ss")</span>
                                             </div>
                                         }
                                     </div>
@@ -927,18 +923,18 @@
                         }
                     </div>
 
-                    @if (activeDetail.Status is StaffTransferStatuses.Draft or StaffTransferStatuses.PendingStaffConfirmation or StaffTransferStatuses.CorrectionRequested or StaffTransferStatuses.ClarificationSubmitted or StaffTransferStatuses.PendingReceivingApproval)
+                    @if (activeDetail.IsOpen)
                     {
                         <div class="flex flex-wrap items-center gap-2">
                             <button type="button"
                                     disabled="@isSaving"
-                                    @onclick="() => SaveTransferAsync(submitForConfirmation: false)"
+                                    @onclick="() => SaveTransferAsync(submitImmediately: false)"
                                     class="rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
                                 💾 Save Draft / Changes
                             </button>
                             <button type="button"
                                     disabled="@isSaving"
-                                    @onclick="() => SaveTransferAsync(submitForConfirmation: true)"
+                                    @onclick="() => SaveTransferAsync(submitImmediately: true)"
                                     class="rounded-xl bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
                                 🚀 Submit for Employee Confirmation
                             </button>
@@ -998,33 +994,34 @@
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100">
-                    @if (dashboard?.Rows.Count > 0)
+                    @if (dashboard?.Items.Count > 0)
                     {
-                        @foreach (var row in dashboard.Rows)
+                        @foreach (var row in dashboard.Items)
                         {
+                            var rowConfirmed = row.ConfirmedVersion.HasValue && row.ConfirmedVersion.Value == row.CurrentVersion;
                             <tr class="hover:bg-slate-50/80">
                                 <td class="px-3 py-2.5 font-mono font-semibold text-slate-900">
-                                    @row.TransferReferenceNo
+                                    @(row.ReferenceNumber ?? $"#{row.StaffTransferId}")
                                     <div class="text-[10px] font-normal text-slate-400">v@row.CurrentVersion</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="font-semibold text-slate-900">@row.EmployeeFullName</div>
-                                    <div class="text-[11px] text-slate-500">#@row.EmployeeStaffNumber</div>
+                                    <div class="font-semibold text-slate-900">@row.FullName</div>
+                                    <div class="text-[11px] text-slate-500">#@row.EmployeeNumber</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="text-slate-700">@row.SourceOrganisationName</div>
-                                    <div class="font-semibold text-blue-700">→ @row.DestinationOrganisationName</div>
+                                    <div class="text-slate-700">@row.FromDepartmentName (@row.FromOrganisationName)</div>
+                                    <div class="font-semibold text-blue-700">→ @row.ToDepartmentName (@row.ToOrganisationName)</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    <div class="font-medium text-slate-800">@(string.IsNullOrWhiteSpace(row.DestinationPositionTitle) ? row.ExistingPositionTitle : row.DestinationPositionTitle)</div>
-                                    <div class="text-[11px] text-slate-500">@row.TransferType</div>
+                                    <div class="font-medium text-slate-800">@(string.IsNullOrWhiteSpace(row.DestinationPositionTitle) ? row.CurrentPositionTitle : row.DestinationPositionTitle)</div>
+                                    <div class="text-[11px] text-slate-500">@row.TransferTypeName</div>
                                 </td>
                                 <td class="px-3 py-2.5">
                                     <div class="font-semibold text-slate-900">@row.EffectiveDate.ToString("dd MMM yyyy")</div>
-                                    <div class="text-[11px] text-slate-500">Report: @(row.ReportingDate?.ToString("dd MMM yyyy") ?? "Same")</div>
+                                    <div class="text-[11px] text-slate-500">Report: @row.ReportingDate.ToString("dd MMM yyyy")</div>
                                 </td>
                                 <td class="px-3 py-2.5">
-                                    @if (row.IsConfirmedForCurrentVersion)
+                                    @if (rowConfirmed)
                                     {
                                         <span class="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">
                                             ✓ Confirmed (v@row.ConfirmedVersion)
@@ -1085,19 +1082,19 @@
         (7, "07", "Confirmation & Approval")
     ];
 
-    private StaffTransferDashboardDto? dashboard;
+    private StaffTransferDashboardData? dashboard;
     private StaffTransferFormLookupDto? lookups;
     private StaffTransferDetailDto? activeDetail;
     private StaffTransferSaveInput? editInput;
     private StaffTransferPrintableDocumentDto? printableDocument;
-    private StaffTransferStatuses? selectedStatusFilter;
+    private string? selectedStatusFilter;
     private int activeTab = 1;
-    private string selectedEmployeeKey = string.Empty;
+    private int selectedEmployeeId;
     private bool isSaving;
 
-    private StaffTransferCommentKinds newCommentKind = StaffTransferCommentKinds.AdvisoryObservation;
+    private string newCommentKind = StaffTransferCommentKinds.AdvisoryComment;
     private string newCommentText = string.Empty;
-    private StaffTransferReceivingDecisionInput decisionInput = new() { Decision = "Approve" };
+    private StaffTransferDecisionInput decisionInput = new() { Decision = "Approve" };
 
     protected override async Task OnInitializedAsync()
     {
@@ -1117,7 +1114,7 @@
         }
     }
 
-    private async Task FilterByStatusAsync(StaffTransferStatuses? status)
+    private async Task FilterByStatusAsync(string? status)
     {
         selectedStatusFilter = status;
         await ReloadDashboardAsync();
@@ -1126,7 +1123,7 @@
     private async Task StartNewTransferAsync()
     {
         printableDocument = null;
-        selectedEmployeeKey = string.Empty;
+        selectedEmployeeId = 0;
         lookups ??= await Transfers.LoadFormLookupsAsync();
         activeDetail = await Transfers.LoadDetailAsync();
         if (activeDetail is not null)
@@ -1138,17 +1135,13 @@
 
     private async Task OnEmployeeSelectionChangedAsync(ChangeEventArgs e)
     {
-        selectedEmployeeKey = e.Value?.ToString() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(selectedEmployeeKey))
-            return;
-
-        var parts = selectedEmployeeKey.Split(':');
-        if (parts.Length == 2 && int.TryParse(parts[0], out var individualId) && int.TryParse(parts[1], out var jobId))
+        if (int.TryParse(e.Value?.ToString(), out var individualId) && individualId > 0)
         {
-            activeDetail = await Transfers.LoadDetailAsync(null, individualId, jobId);
+            selectedEmployeeId = individualId;
+            activeDetail = await Transfers.LoadDetailAsync(null, individualId, null);
             if (activeDetail is not null)
             {
-                lookups = await Transfers.LoadFormLookupsAsync(activeDetail.SourceOrganisationId, individualId, activeDetail.DestinationOrganisationId);
+                lookups = await Transfers.LoadFormLookupsAsync(activeDetail.Staff.CurrentOrganisationId, individualId, activeDetail.Job.DestinationOrganisationId);
                 BindEditInputFromDetail(activeDetail);
             }
         }
@@ -1161,13 +1154,11 @@
 
         if (int.TryParse(e.Value?.ToString(), out var destOrgId))
         {
-            editInput.DestinationOrganisationId = destOrgId;
-            lookups = await Transfers.LoadFormLookupsAsync(activeDetail.SourceOrganisationId, activeDetail.IndividualId, destOrgId);
+            editInput.Job.DestinationOrganisationId = destOrgId;
+            lookups = await Transfers.LoadFormLookupsAsync(activeDetail.Staff.CurrentOrganisationId, activeDetail.Staff.IndividualId, destOrgId);
             var orgName = lookups.Organisations.FirstOrDefault(x => x.Id == destOrgId)?.Name ?? string.Empty;
-            activeDetail.DestinationOrganisationId = destOrgId;
-            activeDetail.DestinationOrganisationName = orgName;
-            if (string.IsNullOrWhiteSpace(editInput.Work.ProposedWorkLocation))
-                editInput.Work.ProposedWorkLocation = orgName;
+            if (string.IsNullOrWhiteSpace(editInput.Work.ProposedLocationName))
+                editInput.Work.ProposedLocationName = orgName;
             if (string.IsNullOrWhiteSpace(editInput.Reporting.ReportingLocation))
                 editInput.Reporting.ReportingLocation = orgName;
         }
@@ -1180,13 +1171,14 @@
         if (activeDetail is not null)
         {
             lookups = await Transfers.LoadFormLookupsAsync(
-                activeDetail.SourceOrganisationId,
-                activeDetail.IndividualId,
-                activeDetail.DestinationOrganisationId > 0 ? activeDetail.DestinationOrganisationId : null);
+                activeDetail.Staff.CurrentOrganisationId,
+                activeDetail.Staff.IndividualId,
+                activeDetail.Job.DestinationOrganisationId > 0 ? activeDetail.Job.DestinationOrganisationId : null);
             BindEditInputFromDetail(activeDetail);
-            decisionInput = new StaffTransferReceivingDecisionInput
+            decisionInput = new StaffTransferDecisionInput
             {
                 StaffTransferId = activeDetail.StaffTransferId,
+                ExpectedVersion = activeDetail.CurrentVersion,
                 Decision = "Approve"
             };
             activeTab = 1;
@@ -1197,23 +1189,14 @@
     {
         editInput = new StaffTransferSaveInput
         {
-            StaffTransferId = d.StaffTransferId > 0 ? d.StaffTransferId : null,
-            IndividualId = d.IndividualId,
-            SourceJobId = d.SourceJobId,
-            SourceOrganisationId = d.SourceOrganisationId,
-            SourceDepartmentUnit = d.SourceDepartmentUnit,
-            DestinationOrganisationId = d.DestinationOrganisationId,
-            DestinationDepartmentUnit = d.DestinationDepartmentUnit,
-            TransferType = d.TransferType,
-            AppointmentMode = d.AppointmentMode,
-            EffectiveDate = d.EffectiveDate,
-            ReportingDate = d.ReportingDate ?? d.EffectiveDate,
-            TransferReason = d.TransferReason,
-            ApprovalRoutingRule = d.ApprovalRoutingRule,
+            StaffTransferId = d.StaffTransferId,
+            IndividualId = d.Staff.IndividualId,
+            CurrentJobId = d.Staff.CurrentJobId,
+            ExpectedVersion = d.CurrentVersion,
             Job = d.Job,
             Work = d.Work,
             AccessChanges = d.AccessChanges.ToList(),
-            DoorAccessItems = d.DoorAccessItems.ToList(),
+            DoorAccessChanges = d.DoorAccessChanges.ToList(),
             Reporting = d.Reporting
         };
     }
@@ -1226,28 +1209,29 @@
 
     private void AddAccessChangeRow()
     {
-        editInput?.AccessChanges.Add(new StaffTransferAccessChangeDto
+        editInput?.AccessChanges.Add(new StaffTransferAccessChangeItemDto
         {
-            AccessArea = StaffTransferAccessAreas.DepartmentSpecificInformation,
-            CurrentAccessSummary = "Current department scope",
-            ProposedAction = StaffTransferAccessActions.RevokeOldAndGrantNew,
-            ProposedAccessSummary = "Receiving department scope",
+            AccessAreaCode = StaffTransferAccessAreas.DepartmentInformation,
+            AccessAreaName = "Department Information",
+            CurrentScopeSummary = "Current department scope",
+            TransitionAction = StaffTransferAccessActions.RevokeOldGrantNew,
+            ProposedScopeSummary = "Receiving department scope",
             ProvisioningStatus = "Pending"
         });
     }
 
     private void AddDoorAccessRow()
     {
-        editInput?.DoorAccessItems.Add(new StaffTransferDoorAccessDto
+        editInput?.DoorAccessChanges.Add(new StaffTransferDoorAccessItemDto
         {
-            BuildingName = activeDetail?.DestinationOrganisationName ?? "Main Building",
-            RetainCommonAreaAccess = true,
-            RevokePreviousDepartmentAccess = true,
-            ProvisioningState = StaffTransferDoorAccessStates.PendingTask
+            BuildingName = "Main Building",
+            TransitionAction = StaffTransferDoorAccessStates.ActionReplace,
+            AccessStartDate = editInput.Job.EffectiveDate,
+            ProvisioningState = StaffTransferDoorAccessStates.StatePending
         });
     }
 
-    private async Task SaveTransferAsync(bool submitForConfirmation)
+    private async Task SaveTransferAsync(bool submitImmediately)
     {
         if (editInput is null)
             return;
@@ -1255,7 +1239,7 @@
         isSaving = true;
         try
         {
-            editInput.SubmitForConfirmation = submitForConfirmation;
+            editInput.SubmitImmediately = submitImmediately;
             var res = await Transfers.SaveAsync(editInput);
             if (!res.Succeeded)
             {
@@ -1266,13 +1250,13 @@
             Toasts.Show(res.Message, ToastType.Success);
             await ReloadDashboardAsync();
 
-            if (editInput.StaffTransferId.HasValue && editInput.StaffTransferId.Value > 0)
+            if (editInput.StaffTransferId > 0)
             {
-                await OpenTransferAsync(editInput.StaffTransferId.Value);
+                await OpenTransferAsync(editInput.StaffTransferId);
             }
-            else if (dashboard?.Rows.Count > 0)
+            else if (dashboard?.Items.Count > 0)
             {
-                var latest = dashboard.Rows.OrderByDescending(x => x.StaffTransferId).First();
+                var latest = dashboard.Items.OrderByDescending(x => x.StaffTransferId).First();
                 await OpenTransferAsync(latest.StaffTransferId);
             }
         }
@@ -1306,6 +1290,7 @@
             return;
 
         decisionInput.StaffTransferId = activeDetail.StaffTransferId;
+        decisionInput.ExpectedVersion = activeDetail.CurrentVersion;
         var res = await Transfers.SubmitReceivingDecisionAsync(decisionInput);
         if (res.Succeeded)
         {
@@ -1342,7 +1327,7 @@
 
         var res = await Transfers.UpdateDoorAccessProvisioningAsync(
             doorAccessId,
-            StaffTransferDoorAccessStates.Provisioned,
+            StaffTransferDoorAccessStates.StateProvisioned,
             "Confirmed by security/admin officer.");
         if (res.Succeeded)
         {
@@ -1355,7 +1340,7 @@
         }
     }
 
-    private async Task OpenPrintableViewAsync(int staffTransferId, StaffTransferDocumentVariants variant)
+    private async Task OpenPrintableViewAsync(int staffTransferId, string variant)
     {
         printableDocument = await Transfers.GetPrintableDocumentAsync(staffTransferId, variant);
         if (printableDocument is null)
@@ -1364,21 +1349,20 @@
         }
     }
 
-    private async Task SwitchPrintableVariantAsync(StaffTransferDocumentVariants variant)
+    private async Task SwitchPrintableVariantAsync(string variant)
     {
         if (printableDocument is null)
             return;
         await OpenPrintableViewAsync(printableDocument.StaffTransferId, variant);
     }
 
-    private static string GetStatusBadgeClass(StaffTransferStatuses status) => status switch
+    private static string GetStatusBadgeClass(string status) => status switch
     {
         StaffTransferStatuses.Draft => "bg-slate-100 text-slate-700",
         StaffTransferStatuses.PendingStaffConfirmation => "bg-amber-100 text-amber-800",
         StaffTransferStatuses.CorrectionRequested => "bg-rose-100 text-rose-800",
-        StaffTransferStatuses.ClarificationSubmitted => "bg-purple-100 text-purple-800",
         StaffTransferStatuses.PendingReceivingApproval => "bg-blue-100 text-blue-800",
-        StaffTransferStatuses.Scheduled or StaffTransferStatuses.ApprovedPendingEffectiveDate => "bg-indigo-100 text-indigo-800",
+        StaffTransferStatuses.Scheduled or StaffTransferStatuses.Approved => "bg-indigo-100 text-indigo-800",
         StaffTransferStatuses.Active => "bg-emerald-100 text-emerald-800",
         StaffTransferStatuses.Rejected or StaffTransferStatuses.ActivationFailed => "bg-rose-100 text-rose-800",
         _ => "bg-slate-100 text-slate-600"

@@ -2,6 +2,7 @@
 @namespace HRM.Components.Pages.Online
 @using HRM.Components.Admin.Hr.Transfers
 @using HRM.DTOs
+@using HRM.DTOs.StaffTransfer
 @using HRM.Enums
 @using HRM.Services
 @using Microsoft.AspNetCore.Authorization
@@ -43,25 +44,26 @@
     }
 
     <!-- Transfer Selector List -->
-    @if (dashboard?.Rows.Count > 0)
+    @if (dashboard?.Items.Count > 0)
     {
         <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-            @foreach (var row in dashboard.Rows)
+            @foreach (var row in dashboard.Items)
             {
                 var isSelected = selectedDetail?.StaffTransferId == row.StaffTransferId;
+                var rowConfirmed = row.ConfirmedVersion.HasValue && row.ConfirmedVersion.Value == row.CurrentVersion;
                 <div @onclick="() => SelectTransferAsync(row.StaffTransferId)"
                      class="cursor-pointer rounded-xl border p-4 transition @(isSelected ? "border-blue-500 bg-blue-50/40 ring-2 ring-blue-500/20" : "border-slate-200 bg-white hover:border-blue-300")">
                     <div class="flex items-center justify-between">
-                        <span class="font-mono text-xs font-bold text-slate-800">@row.TransferReferenceNo · v@row.CurrentVersion</span>
-                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(row.IsConfirmedForCurrentVersion ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
-                            @(row.IsConfirmedForCurrentVersion ? $"Confirmed (v{row.ConfirmedVersion})" : $"Action Required (v{row.CurrentVersion})")
+                        <span class="font-mono text-xs font-bold text-slate-800">@(row.ReferenceNumber ?? $"#{row.StaffTransferId}") · v@row.CurrentVersion</span>
+                        <span class="rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(rowConfirmed ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                            @(rowConfirmed ? $"Confirmed (v{row.ConfirmedVersion})" : $"Action Required (v{row.CurrentVersion})")
                         </span>
                     </div>
                     <div class="mt-1.5 text-sm font-bold text-slate-900">
-                        @row.SourceOrganisationName → <span class="text-blue-700">@row.DestinationOrganisationName</span>
+                        @row.FromDepartmentName → <span class="text-blue-700">@row.ToDepartmentName</span>
                     </div>
                     <div class="mt-1 flex flex-wrap items-center justify-between text-xs text-slate-600">
-                        <span>@row.EmployeeFullName (#@row.EmployeeStaffNumber)</span>
+                        <span>@row.FullName (#@row.EmployeeNumber)</span>
                         <span>Effective: <strong>@row.EffectiveDate.ToString("dd MMM yyyy")</strong></span>
                     </div>
                 </div>
@@ -78,12 +80,13 @@
     <!-- Read-Only Side-by-Side Summary & Formal Confirmation Step -->
     @if (selectedDetail is not null)
     {
+        var isConfirmedForCurrentVersion = selectedDetail.ConfirmedVersion.HasValue && selectedDetail.ConfirmedVersion.Value == selectedDetail.CurrentVersion;
         <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-6">
             <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
                 <div>
                     <div class="flex items-center gap-2">
                         <h2 class="text-lg font-extrabold text-slate-900">
-                            Transfer Summary — @selectedDetail.TransferReferenceNo (Version v@selectedDetail.CurrentVersion)
+                            Transfer Summary — @(selectedDetail.ReferenceNumber ?? $"#{selectedDetail.StaffTransferId}") (Version v@selectedDetail.CurrentVersion)
                         </h2>
                         <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
                             @selectedDetail.Status
@@ -107,24 +110,23 @@
                 <div class="rounded-xl border border-slate-200 bg-slate-50 p-4">
                     <div class="text-xs font-bold uppercase tracking-wider text-slate-500">Current Assignment (Sending Department)</div>
                     <dl class="mt-3 space-y-2 text-xs">
-                        <div class="flex justify-between"><dt class="text-slate-500">Employee</dt><dd class="font-semibold text-slate-900">@selectedDetail.EmployeeFullName (#@selectedDetail.EmployeeStaffNumber)</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Department / Unit</dt><dd class="font-semibold text-slate-900">@selectedDetail.SourceOrganisationName @(string.IsNullOrWhiteSpace(selectedDetail.SourceDepartmentUnit) ? "" : $"({selectedDetail.SourceDepartmentUnit})")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Employee</dt><dd class="font-semibold text-slate-900">@selectedDetail.Staff.FullName (#@selectedDetail.Staff.EmployeeNumber)</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Organization / Dept</dt><dd class="font-semibold text-slate-900">@selectedDetail.Staff.CurrentOrganisationName · @selectedDetail.Staff.CurrentDepartmentName</dd></div>
                         <div class="flex justify-between"><dt class="text-slate-500">Position</dt><dd class="font-semibold text-slate-900">@selectedDetail.Job.ExistingPositionTitle</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Matrix / Grade</dt><dd class="text-slate-800">@(selectedDetail.Job.ExistingPositionMatrixCode ?? "—") · @(selectedDetail.Job.ExistingGradeLevel ?? "—")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Work Location</dt><dd class="text-slate-800">@(selectedDetail.Work.CurrentWorkLocation ?? "—")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Current Supervisor</dt><dd class="text-slate-800">@(selectedDetail.CurrentSupervisorName ?? "—")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Matrix / Grade</dt><dd class="text-slate-800">@(selectedDetail.Job.ExistingPositionMatrixLabel ?? "—") · @(selectedDetail.Job.ExistingGradeLevel ?? "—")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Work Location</dt><dd class="text-slate-800">@(selectedDetail.Work.CurrentLocationName ?? "—")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Current Supervisor</dt><dd class="text-slate-800">@(selectedDetail.Staff.CurrentSupervisorName ?? "—")</dd></div>
                     </dl>
                 </div>
 
                 <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4">
                     <div class="text-xs font-bold uppercase tracking-wider text-blue-800">Proposed Assignment (Receiving Department)</div>
                     <dl class="mt-3 space-y-2 text-xs">
-                        <div class="flex justify-between"><dt class="text-slate-600">Transfer Type</dt><dd class="font-semibold text-blue-900">@selectedDetail.TransferType (@selectedDetail.AppointmentMode)</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-600">Receiving Department</dt><dd class="font-bold text-blue-900">@selectedDetail.DestinationOrganisationName @(string.IsNullOrWhiteSpace(selectedDetail.DestinationDepartmentUnit) ? "" : $"({selectedDetail.DestinationDepartmentUnit})")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-600">Appointment Mode</dt><dd class="font-semibold text-blue-900">@selectedDetail.Job.TransferAppointmentMode</dd></div>
                         <div class="flex justify-between"><dt class="text-slate-600">Proposed Position</dt><dd class="font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(selectedDetail.Job.DestinationPositionTitle) ? selectedDetail.Job.ExistingPositionTitle : selectedDetail.Job.DestinationPositionTitle)</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-600">Proposed Matrix / Grade</dt><dd class="text-slate-800">@(selectedDetail.Job.DestinationPositionMatrixCode ?? selectedDetail.Job.ExistingPositionMatrixCode ?? "—") · @(selectedDetail.Job.DestinationGradeLevel ?? selectedDetail.Job.ExistingGradeLevel ?? "—")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-600">Proposed Work Location</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Work.ProposedWorkLocation ?? selectedDetail.DestinationOrganisationName)</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-600">New Reporting Supervisor</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Job.NewReportingSupervisorName ?? selectedDetail.Reporting.ReportingToOfficerName ?? "—")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-600">Proposed Grade</dt><dd class="text-slate-800">@(selectedDetail.Job.DestinationGradeLevel ?? selectedDetail.Job.ExistingGradeLevel ?? "—")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-600">Proposed Work Location</dt><dd class="font-semibold text-slate-900">@selectedDetail.Work.ProposedLocationName</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-600">New Reporting Supervisor</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Job.NewReportingSupervisorName ?? selectedDetail.Reporting.ReportingToName ?? "—")</dd></div>
                     </dl>
                 </div>
             </div>
@@ -134,19 +136,19 @@
                 <div class="rounded-xl border border-slate-200 p-4">
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Work Schedule &amp; Attendance</h3>
                     <dl class="mt-2.5 space-y-1.5 text-xs">
-                        <div class="flex justify-between"><dt class="text-slate-500">Schedule / Template</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Work.OfficialWorkingSchedule ?? selectedDetail.Work.ProposedWorkTemplateName ?? "Standard")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Shift / Roster</dt><dd class="text-slate-800">@(selectedDetail.Work.ShiftOrRosterName ?? "Standard Day")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Working Days &amp; Hours</dt><dd class="text-slate-800">@(selectedDetail.Work.WorkingDaysPattern ?? "Sun–Thu") · @(selectedDetail.Work.StandardStartTime ?? "08:00")–@(selectedDetail.Work.StandardEndTime ?? "14:00")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Attendance Method</dt><dd class="text-slate-800">@(selectedDetail.Work.RequiredAttendanceMethod ?? "Biometric") @(string.IsNullOrWhiteSpace(selectedDetail.Work.AttendanceDeviceOrLocation) ? "" : $"({selectedDetail.Work.AttendanceDeviceOrLocation})")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Schedule / Template</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Work.ProposedWorkTemplateName ?? selectedDetail.Work.ProposedScheduleMode)</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Work Arrangement</dt><dd class="text-slate-800">@selectedDetail.Work.WorkArrangementMode (@selectedDetail.Work.WeeklyWorkingHours hrs/wk)</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Working Hours</dt><dd class="text-slate-800">@(selectedDetail.Work.StandardStartTime?.ToString("HH:mm") ?? "08:00")–@(selectedDetail.Work.StandardEndTime?.ToString("HH:mm") ?? "14:00")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Attendance Method</dt><dd class="text-slate-800">@selectedDetail.Work.RequiredAttendanceMethod @(string.IsNullOrWhiteSpace(selectedDetail.Work.AttendanceDeviceName) ? "" : $"({selectedDetail.Work.AttendanceDeviceName})")</dd></div>
                     </dl>
                 </div>
 
                 <div class="rounded-xl border border-slate-200 p-4">
                     <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Reporting &amp; Handover Instructions</h3>
                     <dl class="mt-2.5 space-y-1.5 text-xs">
-                        <div class="flex justify-between"><dt class="text-slate-500">Effective Transfer Date</dt><dd class="font-bold text-slate-900">@selectedDetail.EffectiveDate.ToString("dd MMM yyyy")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Reporting Date &amp; Time</dt><dd class="font-bold text-blue-900">@selectedDetail.Reporting.ReportingDate.ToString("dd MMM yyyy") @(selectedDetail.Reporting.ReportingTime ?? "08:00")</dd></div>
-                        <div class="flex justify-between"><dt class="text-slate-500">Reporting Location</dt><dd class="font-semibold text-slate-900">@(selectedDetail.Reporting.ReportingLocation ?? selectedDetail.DestinationOrganisationName)</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Effective Transfer Date</dt><dd class="font-bold text-slate-900">@selectedDetail.Job.EffectiveDate.ToString("dd MMM yyyy")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Reporting Date &amp; Time</dt><dd class="font-bold text-blue-900">@selectedDetail.Reporting.ReportingDate.ToString("dd MMM yyyy") @(selectedDetail.Reporting.ReportingTime?.ToString("HH:mm") ?? "08:00")</dd></div>
+                        <div class="flex justify-between"><dt class="text-slate-500">Reporting Location</dt><dd class="font-semibold text-slate-900">@selectedDetail.Reporting.ReportingLocation</dd></div>
                         <div class="flex justify-between"><dt class="text-slate-500">Handover Required</dt><dd class="text-slate-800">@(selectedDetail.Reporting.HandoverRequired ? $"Yes (by {selectedDetail.Reporting.HandoverDeadline?.ToString("dd MMM yyyy") ?? "Effective Date"})" : "No")</dd></div>
                     </dl>
                     @if (!string.IsNullOrWhiteSpace(selectedDetail.Reporting.SpecialInstructions))
@@ -159,7 +161,7 @@
             </div>
 
             <!-- Access & Door Summary -->
-            @if (selectedDetail.AccessChanges.Count > 0 || selectedDetail.DoorAccessItems.Count > 0)
+            @if (selectedDetail.AccessChanges.Count > 0 || selectedDetail.DoorAccessChanges.Count > 0)
             {
                 <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div class="rounded-xl border border-slate-200 p-4">
@@ -168,8 +170,8 @@
                             @foreach (var acc in selectedDetail.AccessChanges)
                             {
                                 <li class="flex items-center justify-between rounded bg-slate-50 px-2.5 py-1.5">
-                                    <span class="font-medium text-slate-800">@acc.AccessArea</span>
-                                    <span class="font-semibold text-blue-800">@acc.ProposedAction → @(acc.ProposedAccessSummary ?? "Reviewed")</span>
+                                    <span class="font-medium text-slate-800">@acc.AccessAreaName</span>
+                                    <span class="font-semibold text-blue-800">@acc.TransitionAction → @(acc.ProposedScopeSummary ?? "Reviewed")</span>
                                 </li>
                             }
                         </ul>
@@ -178,10 +180,10 @@
                     <div class="rounded-xl border border-slate-200 p-4">
                         <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Physical Door Access</h3>
                         <ul class="mt-2 space-y-1.5 text-xs">
-                            @foreach (var door in selectedDetail.DoorAccessItems)
+                            @foreach (var door in selectedDetail.DoorAccessChanges)
                             {
                                 <li class="flex items-center justify-between rounded bg-slate-50 px-2.5 py-1.5">
-                                    <span class="font-medium text-slate-800">@door.BuildingName @(string.IsNullOrWhiteSpace(door.FloorName) ? "" : $"/ {door.FloorName}") @(string.IsNullOrWhiteSpace(door.RoomOrZoneName) ? "" : $"/ {door.RoomOrZoneName}")</span>
+                                    <span class="font-medium text-slate-800">@door.BuildingName @(string.IsNullOrWhiteSpace(door.FloorName) ? "" : $"/ {door.FloorName}") @(string.IsNullOrWhiteSpace(door.DepartmentOfficeArea) ? "" : $"/ {door.DepartmentOfficeArea}")</span>
                                     <span class="text-slate-600">@(door.ProposedAccessGroups ?? "Standard Access") (@door.ProvisioningState)</span>
                                 </li>
                             }
@@ -191,7 +193,7 @@
             }
 
             <!-- Formal Auditable Staff Confirmation Box -->
-            <div class="rounded-2xl border-2 @(selectedDetail.IsConfirmedForCurrentVersion ? "border-emerald-300 bg-emerald-50/40" : "border-blue-300 bg-blue-50/30") p-5">
+            <div class="rounded-2xl border-2 @(isConfirmedForCurrentVersion ? "border-emerald-300 bg-emerald-50/40" : "border-blue-300 bg-blue-50/30") p-5">
                 <h3 class="text-sm font-extrabold text-slate-900">
                     Tab 07 — Formal Staff Confirmation (Version v@selectedDetail.CurrentVersion)
                 </h3>
@@ -218,10 +220,10 @@
 
                 <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
                     <div class="text-xs text-slate-600">
-                        @if (selectedDetail.IsConfirmedForCurrentVersion)
+                        @if (isConfirmedForCurrentVersion)
                         {
                             <span class="font-semibold text-emerald-800">
-                                ✓ You confirmed version v@selectedDetail.ConfirmedVersion on @selectedDetail.ConfirmedAt?.ToLocalTime().ToString("dd MMM yyyy HH:mm").
+                                ✓ You have confirmed version v@selectedDetail.ConfirmedVersion.
                             </span>
                         }
                         else
@@ -233,21 +235,21 @@
                     <div class="flex flex-wrap items-center gap-2">
                         <button type="button"
                                 disabled="@isSubmitting"
-                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.RequestCorrection)"
+                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.CorrectionRequested)"
                                 class="rounded-xl border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50">
                             Request Correction
                         </button>
 
                         <button type="button"
                                 disabled="@isSubmitting"
-                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.SubmitClarification)"
+                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.ClarificationSubmitted)"
                                 class="rounded-xl border border-amber-300 bg-white px-3.5 py-2 text-xs font-semibold text-amber-800 hover:bg-amber-50">
                             Submit Clarification
                         </button>
 
                         <button type="button"
                                 disabled="@(isSubmitting || !acknowledgedStatement)"
-                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.ConfirmInformation)"
+                                @onclick="() => SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses.Confirmed)"
                                 class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50">
                             ✓ Confirm Information (v@selectedDetail.CurrentVersion)
                         </button>
@@ -262,7 +264,7 @@
     [SupplyParameterFromQuery(Name = "transferId")]
     public int? QueryTransferId { get; set; }
 
-    private StaffTransferDashboardDto? dashboard;
+    private StaffTransferDashboardData? dashboard;
     private StaffTransferDetailDto? selectedDetail;
     private StaffTransferPrintableDocumentDto? printableDocument;
     private bool acknowledgedStatement = true;
@@ -283,9 +285,9 @@
             {
                 await SelectTransferAsync(QueryTransferId.Value);
             }
-            else if (dashboard?.Rows.Count > 0)
+            else if (dashboard?.Items.Count > 0)
             {
-                await SelectTransferAsync(dashboard.Rows[0].StaffTransferId);
+                await SelectTransferAsync(dashboard.Items[0].StaffTransferId);
             }
         }
         catch (Exception ex)
@@ -301,12 +303,12 @@
         selectedDetail = await Transfers.LoadDetailAsync(staffTransferId);
     }
 
-    private async Task SubmitConfirmationResponseAsync(StaffTransferConfirmationResponses responseType)
+    private async Task SubmitConfirmationResponseAsync(string responseKind)
     {
         if (selectedDetail is null)
             return;
 
-        if (responseType == StaffTransferConfirmationResponses.ConfirmInformation && !acknowledgedStatement)
+        if (responseKind == StaffTransferConfirmationResponses.Confirmed && !acknowledgedStatement)
         {
             Toasts.Show("Please check the confirmation statement box before confirming.", ToastType.Warning);
             return;
@@ -315,14 +317,13 @@
         isSubmitting = true;
         try
         {
-            var input = new StaffTransferConfirmationInput
+            var input = new StaffTransferEmployeeConfirmationInput
             {
                 StaffTransferId = selectedDetail.StaffTransferId,
-                VersionNumber = selectedDetail.CurrentVersion,
-                ResponseType = responseType,
+                ReviewedVersion = selectedDetail.CurrentVersion,
+                ResponseKind = responseKind,
                 AcknowledgedStatement = acknowledgedStatement,
-                ConfirmationStatement = StaffTransferValidator.DefaultConfirmationStatement,
-                Remarks = employeeRemarks
+                EmployeeRemarks = employeeRemarks
             };
 
             var res = await Transfers.SubmitEmployeeConfirmationAsync(input);
