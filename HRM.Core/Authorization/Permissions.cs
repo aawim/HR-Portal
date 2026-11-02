@@ -1,4 +1,4 @@
-﻿namespace HRM.Authorization
+namespace HRM.Authorization
 {
     public static class Permissions
     {
@@ -62,6 +62,7 @@
         
 
 
+
         // =========================
         // Attendance
         // =========================
@@ -86,5 +87,19 @@
 
 
         public const string RoleManage = "Role.Manage";
+
+        // =========================
+        // Staff Transfer
+        // =========================
+
+        public const string StaffTransferView = "StaffTransfer.View";
+        public const string StaffTransferCreate = "StaffTransfer.Create";
+        public const string StaffTransferEdit = "StaffTransfer.Edit";
+        public const string StaffTransferComment = "StaffTransfer.Comment";
+        public const string StaffTransferConfirm = "StaffTransfer.Confirm";
+        public const string StaffTransferApprove = "StaffTransfer.Approve";
+        public const string StaffTransferActivate = "StaffTransfer.Activate";
+        public const string StaffTransferProvisionAccess = "StaffTransfer.ProvisionAccess";
+        public const string StaffTransferExportRestrictedPdf = "StaffTransfer.ExportRestrictedPdf";
     }
 }
