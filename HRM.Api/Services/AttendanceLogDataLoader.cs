@@ -1,4 +1,4 @@
-﻿using HRM.DTOs.Attendance;
+using HRM.DTOs.Attendance;
 using HRM.Models;
 using HRM.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -18,15 +18,22 @@ namespace HRM.Services
         public async Task<AttendanceLogDto?>GetEarliestCheckInAsync(int individualId,DateTime date)
         {
             using var db = await _dbfactory.CreateDbContextAsync();
+            var dayStart = date.Date;
+            var dayEnd = dayStart.AddDays(1);
 
-            // Use resolved clock type from AttendanceLogResolutions
+            // Use resolved clock type from AttendanceLogResolutions, excluding replaced duplicate punches
             return await db.AttendanceLogs
                 .AsNoTracking()
                 .Where(x =>
                     x.IndividualId == individualId &&
                     x.AttendanceLogStateId == 1 &&
-                    x.Date.Date == date.Date &&
-                    x.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckIn))
+                    x.Date >= dayStart &&
+                    x.Date < dayEnd &&
+                    (x.AttendanceLogResolutions.Any(r =>
+                        r.IsValid &&
+                        r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved &&
+                        r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckIn) ||
+                     (!x.AttendanceLogResolutions.Any(r => r.IsValid) && x.InOutModeId == 1)))
                 .OrderBy(x => x.Date)
                 .Select(x => new AttendanceLogDto
                 {
@@ -56,14 +63,22 @@ namespace HRM.Services
         public async Task<AttendanceLogDto?>GetLatestCheckOutAsync(int individualId, DateTime date)
         {
             using var db = await _dbfactory.CreateDbContextAsync();
-            // Use resolved clock type from AttendanceLogResolutions
+            var dayStart = date.Date;
+            var dayEnd = dayStart.AddDays(1);
+
+            // Use resolved clock type from AttendanceLogResolutions, excluding replaced duplicate punches
             return await db.AttendanceLogs
               .AsNoTracking()
               .Where(x =>
                   x.IndividualId == individualId &&
                     x.AttendanceLogStateId == 1 &&
-                    x.Date.Date == date.Date &&
-                    x.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckOut))
+                    x.Date >= dayStart &&
+                    x.Date < dayEnd &&
+                    (x.AttendanceLogResolutions.Any(r =>
+                        r.IsValid &&
+                        r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved &&
+                        r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.CheckOut) ||
+                     (!x.AttendanceLogResolutions.Any(r => r.IsValid) && x.InOutModeId == 2)))
               .OrderByDescending(x => x.Date)
               .Select(x => new AttendanceLogDto
               {
@@ -97,6 +112,7 @@ namespace HRM.Services
               .AsNoTracking()
               .Where(x =>
                   x.IndividualId == individualId &&
+                    x.AttendanceLogStateId == 1 &&
                     x.Date >= from &&
                     x.Date <= to)
               .OrderBy(x => x.Date)

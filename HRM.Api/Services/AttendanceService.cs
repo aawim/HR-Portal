@@ -184,7 +184,7 @@ namespace HRM.Services
                 {
                     var resolvedLog = dayLogs
                         .Where(log =>
-                            log.AttendanceLogResolutions.Any(r =>
+                            log.AttendanceLogResolutions.Where(r => r.IsValid).Any(r =>
                                 r.WorkPlanSegmentId ==
                                     segment.WorkPlanSegmentId))
                         .OrderBy(log => log.Date)
@@ -207,7 +207,7 @@ namespace HRM.Services
                         {
                             // Already belongs to another valid segment.
                             var hasResolution =
-                                log.AttendanceLogResolutions.Any(r =>
+                                log.AttendanceLogResolutions.Where(r => r.IsValid).Any(r =>
                                     r.WorkPlanSegmentId.HasValue);
 
                             if (hasResolution)
@@ -347,7 +347,7 @@ namespace HRM.Services
                     //
                     // This is important because later a clock event may
                     // be reprocessed and receive a newer resolution.
-                    var resolution = log.AttendanceLogResolutions
+                    var resolution = log.AttendanceLogResolutions.Where(x => x.IsValid).OrderByDescending(x => x.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenBy(x => x.AttendanceLogResolutionId).Take(1)
                         .OrderByDescending(x =>
                             x.AttendanceLogResolutionId)
                         .FirstOrDefault();
@@ -624,14 +624,14 @@ namespace HRM.Services
             if (from.Date > to.Date || (to.Date - from.Date).Days > 366) throw new InvalidOperationException("Select a date range of up to one year.");
             var end = to.Date.AddDays(1);
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-            var logs = await db.AttendanceLogs.AsNoTracking().Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkAssignment)
+            var logs = await db.AttendanceLogs.AsNoTracking().Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkAssignment).Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkPlan).ThenInclude(x => x!.WorkPlanSegments)
                 .Where(x => x.IndividualId == staffId && x.OrganisationId == org && x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid && x.Date >= from.Date && x.Date < end)
                 .OrderByDescending(x => x.Date).Take(1000).ToListAsync(cancellationToken);
             return logs.Select(x => {
-                var resolution = x.AttendanceLogResolutions.Where(r => r.IsValid).OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault();
+                var resolution = x.AttendanceLogResolutions.Where(r => r.IsValid).OrderByDescending(r => r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenBy(r => r.AttendanceLogResolutionId).FirstOrDefault();
                 var code = resolution?.AttendanceClockTypeId ?? (x.AttendanceLogResolutions.Count == 0 ? x.InOutModeId : null);
                 var label = code switch { 1 => "Check in", 2 => "Check out", 3 => "Break out", 4 => "Break in", _ => "Unresolved" };
-                return new StaffAttendanceClockEventDto(x.Date, label, resolution?.WorkAssignment == null ? "—" : $"{resolution.WorkAssignment.SchedulePurpose} · {resolution.WorkAssignment.Name}");
+                var planSegment = resolution?.WorkPlanSegmentId.HasValue == true ? resolution.WorkPlan?.WorkPlanSegments.FirstOrDefault(s => s.WorkPlanSegmentId == resolution.WorkPlanSegmentId.Value) : null; return new StaffAttendanceClockEventDto(x.Date, label, resolution?.WorkAssignment != null ? $"{resolution.WorkAssignment.SchedulePurpose} · {resolution.WorkAssignment.Name}" : planSegment != null ? $"{planSegment.SchedulePurpose} · {planSegment.Name}" : "—");
             }).ToList();
         }
 
@@ -786,7 +786,7 @@ namespace HRM.Services
                     .Select(log =>
                     {
                         var resolution =
-                            log.AttendanceLogResolutions
+                            log.AttendanceLogResolutions.Where(x => x.IsValid).OrderByDescending(x => !(x.WorkPlanSegmentId.HasValue && dutySegmentIds.Contains(x.WorkPlanSegmentId.Value)) && !(x.WorkAssignmentId.HasValue && dutyAssignmentIds.Contains(x.WorkAssignmentId.Value))).ThenByDescending(x => x.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenByDescending(x => x.AttendanceLogResolutionId).Take(1)
                                 .OrderByDescending(x =>
                                     x.AttendanceLogResolutionId)
                                 .FirstOrDefault();

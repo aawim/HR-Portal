@@ -35,8 +35,8 @@ public static class AttendanceScheduleFacts
         var adjustments = await TemporaryWorkingHours.AdjustmentsAsync(db, assignments, ct);
         return assignments.Select(a =>
         {
-            var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid)
-                .OrderByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution != null &&
+            var events = logs.Select(l => new { l.Date, l.AttendanceLogId, Resolution = l.AttendanceLogResolutions.Where(r => r.IsValid && (r.WorkAssignmentId ?? snapshotOwners.GetValueOrDefault(r.WorkPlanSegmentId ?? 0)) == a.WorkAssignmentId)
+                .OrderByDescending(r => r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenByDescending(r => r.AttendanceLogResolutionId).FirstOrDefault() }).Where(e => e.Resolution != null &&
                     (e.Resolution.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved ||
                      e.Resolution.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.DuplicatePunch) &&
                     (e.Resolution.WorkAssignmentId ?? snapshotOwners.GetValueOrDefault(e.Resolution.WorkPlanSegmentId ?? 0)) == a.WorkAssignmentId).ToList();

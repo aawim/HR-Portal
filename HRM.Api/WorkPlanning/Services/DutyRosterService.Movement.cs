@@ -24,7 +24,19 @@ public sealed partial class DutyRosterService
             (swapDate.HasValue && x.JobId == c.SourceJobId && x.WorkDate == swapDate))))
             throw new InvalidOperationException("A receiving work plan has been finalized. This duty change cannot proceed.");
         var assignmentIds = locked.Keys.ToArray();
-        if (await db.AttendanceLogResolutions.AnyAsync(x => x.WorkAssignmentId.HasValue && assignmentIds.Contains(x.WorkAssignmentId.Value)))
+        var planIds = locked.Values.Select(x => x.WorkPlanId).Distinct().ToArray();
+        var dutyPlanSegments = await db.WorkPlanSegments
+            .AsNoTracking()
+            .Where(x => planIds.Contains(x.WorkPlanId) && x.IsValid && x.SchedulePurpose == "Duty")
+            .ToListAsync();
+        var planSegmentIds = dutyPlanSegments
+            .Where(x => locked.Values.Any(a => a.WorkPlanId == x.WorkPlanId &&
+                a.WorkAssignmentSegments.Any(s => s.IsValid && s.WorkTemplateSegmentId == x.WorkTemplateSegmentId && s.StartDateTime == x.StartDateTime)))
+            .Select(x => x.WorkPlanSegmentId)
+            .ToArray();
+        if (await db.AttendanceLogResolutions.AnyAsync(x => x.IsValid &&
+            ((x.WorkAssignmentId.HasValue && assignmentIds.Contains(x.WorkAssignmentId.Value)) ||
+             (x.WorkPlanSegmentId.HasValue && planSegmentIds.Contains(x.WorkPlanSegmentId.Value)))))
             throw new InvalidOperationException("A duty already has clock records. This duty change cannot proceed.");
         var audit = await logs.CreateAsync(db, HRM.Components.Shared.SharedConfig.OperationLogActionTypes.WORK_ASSIGNMENT_CREATE,
             $"Approved duty {c.Kind}: {c.Request.ReferenceNumber}; {c.SourceIndividualId} → {c.TargetIndividualId}");

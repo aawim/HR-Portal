@@ -1,4 +1,4 @@
-﻿using HRM.Constants;
+using HRM.Constants;
 using HRM.Models;
 using HRM.Services.Attendance.Processing;
 using HRM.Services.Attendance.Repositories;
@@ -206,6 +206,11 @@ namespace HRM.Services.Attendance.Abstraction.Services
                          planResult.WorkPlanSegmentId!.Value,
                          planResult.ClockType,
                          cancellationToken);
+                var primaryLink = await ResolveAssignmentLinkAsync(
+                    context,
+                    planResult.WorkPlanId,
+                    planResult.WorkPlanSegmentId,
+                    cancellationToken);
 
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
@@ -245,6 +250,10 @@ namespace HRM.Services.Attendance.Abstraction.Services
                                 duplicateMessage,
                                 workPlanId:
                                     planResult.WorkPlanId,
+                                workAssignmentId:
+                                    primaryLink.WorkAssignmentId,
+                                workAssignmentSegmentId:
+                                    primaryLink.WorkAssignmentSegmentId,
                                 workPlanSegmentId:
                                     planResult.WorkPlanSegmentId,
                                 jobId:
@@ -263,27 +272,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                                 duplicateResolution,
                                 duplicateMessage);
 
-
-
-                            //var savedDuplicate =
-                            //    await _resolutionRepository.AddAsync(
-                            //        duplicateResolution,
-                            //        cancellationToken);
-
-                            //return AttendanceProcessingResult.Recorded(
-                            //    savedDuplicate,
-                            //    duplicateMessage);
-
                         }
-
-
-                        //await _resolutionRepository
-                        //    .MarkAsDuplicateAsync(
-                        //        existingBoundaryResolution.AttendanceLogResolutionId,
-                        //        $"Replaced by attendance log " +
-                        //        $"{attendanceLog.AttendanceLogId}, which is closer " +
-                        //        $"to the scheduled boundary.",
-                        //        cancellationToken);
 
                         var existingResolution =
            await context.AttendanceLogResolutions
@@ -318,6 +307,8 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         AttendanceResolutionStatusIds.Resolved,
                         resolvedMessage,
                         workPlanId: planResult.WorkPlanId,
+                        workAssignmentId: primaryLink.WorkAssignmentId,
+                        workAssignmentSegmentId: primaryLink.WorkAssignmentSegmentId,
                         workPlanSegmentId: planResult.WorkPlanSegmentId,
                         jobId: planResult.JobId,
                         clockType: planResult.ClockType);
@@ -330,15 +321,50 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     if (planResult.SecondaryWorkPlanSegmentId.HasValue &&
                         planResult.SecondaryClockType != AttendanceClockType.Unresolved)
                     {
-                        var secondaryMessage =
-                            $"Attendance event resolved to " +
-                            $"'{planResult.SecondarySegmentName}' as " +
-                            $"{planResult.SecondaryClockType}.";
+                        var secondaryLink = await ResolveAssignmentLinkAsync(
+                            context,
+                            planResult.WorkPlanId,
+                            planResult.SecondaryWorkPlanSegmentId,
+                            cancellationToken);
+                        var existingSecondaryResolution =
+                            await _resolutionRepository.GetResolvedBoundaryAsync(
+                                planResult.WorkPlanId!.Value,
+                                planResult.SecondaryWorkPlanSegmentId.Value,
+                                planResult.SecondaryClockType,
+                                cancellationToken);
+                        var boundaryTime = planResult.BoundaryTime ?? attendanceLog.Date;
+                        var keepExistingSecondary = existingSecondaryResolution is not null &&
+                            (planResult.SecondaryClockType == AttendanceClockType.CheckIn
+                                ? Math.Abs((existingSecondaryResolution.AttendanceLog.Date - boundaryTime).TotalMinutes) <=
+                                  Math.Abs((attendanceLog.Date - boundaryTime).TotalMinutes)
+                                : existingSecondaryResolution.AttendanceLog.Date >= attendanceLog.Date);
+                        if (existingSecondaryResolution is not null && !keepExistingSecondary)
+                        {
+                            var trackedSecondary = await context.AttendanceLogResolutions
+                                .FirstOrDefaultAsync(
+                                    x => x.AttendanceLogResolutionId == existingSecondaryResolution.AttendanceLogResolutionId,
+                                    cancellationToken);
+                            if (trackedSecondary is not null)
+                            {
+                                trackedSecondary.AttendanceResolutionStatusId = AttendanceResolutionStatusIds.DuplicatePunch;
+                                trackedSecondary.ResolutionMessage =
+                                    $"Replaced by attendance log {attendanceLog.AttendanceLogId}, which records the " +
+                                    $"{(planResult.SecondaryClockType == AttendanceClockType.CheckIn ? "closer check-in" : "later check-out")} for this boundary.";
+                            }
+                        }
+                        var secondaryStatusId = keepExistingSecondary
+                            ? AttendanceResolutionStatusIds.DuplicatePunch
+                            : AttendanceResolutionStatusIds.Resolved;
+                        var secondaryMessage = keepExistingSecondary
+                            ? $"Attendance event matched '{planResult.SecondarySegmentName}' {planResult.SecondaryClockType}, but attendance log {existingSecondaryResolution!.AttendanceLogId} already records the {(planResult.SecondaryClockType == AttendanceClockType.CheckIn ? "closest check-in" : "latest check-out")} for this boundary."
+                            : $"Attendance event resolved to '{planResult.SecondarySegmentName}' as {planResult.SecondaryClockType}.";
                         var secondaryRecord = CreateResolution(
                             attendanceLog,
-                            AttendanceResolutionStatusIds.Resolved,
+                            secondaryStatusId,
                             secondaryMessage,
                             workPlanId: planResult.WorkPlanId,
+                            workAssignmentId: secondaryLink.WorkAssignmentId,
+                            workAssignmentSegmentId: secondaryLink.WorkAssignmentSegmentId,
                             workPlanSegmentId: planResult.SecondaryWorkPlanSegmentId,
                             jobId: planResult.JobId,
                             clockType: planResult.SecondaryClockType);
@@ -492,7 +518,43 @@ namespace HRM.Services.Attendance.Abstraction.Services
                 message);
         }
 
-      
+        private static async Task<(long? WorkAssignmentId, long? WorkAssignmentSegmentId)> ResolveAssignmentLinkAsync(
+            HrmTeContext db,
+            long? workPlanId,
+            int? workPlanSegmentId,
+            CancellationToken cancellationToken)
+        {
+            if (!workPlanId.HasValue || !workPlanSegmentId.HasValue)
+            {
+                return (null, null);
+            }
+
+            var planSegment = await db.WorkPlanSegments
+                .AsNoTracking()
+                .Where(x => x.WorkPlanId == workPlanId.Value && x.WorkPlanSegmentId == workPlanSegmentId.Value && x.IsValid)
+                .Select(x => new { x.SchedulePurpose, x.WorkTemplateSegmentId, x.WorkSegmentTypeId, x.StartDateTime })
+                .SingleOrDefaultAsync(cancellationToken);
+
+            if (planSegment is null)
+            {
+                return (null, null);
+            }
+
+            var match = await db.WorkAssignmentSegments
+                .AsNoTracking()
+                .Where(x =>
+                    x.IsValid &&
+                    x.WorkAssignment.IsValid &&
+                    x.WorkAssignment.WorkPlanId == workPlanId.Value &&
+                    x.WorkAssignment.SchedulePurpose == planSegment.SchedulePurpose &&
+                    x.WorkTemplateSegmentId == planSegment.WorkTemplateSegmentId &&
+                    x.WorkSegmentTypeId == planSegment.WorkSegmentTypeId)
+                .OrderBy(x => x.StartDateTime == planSegment.StartDateTime ? 0 : 1)
+                .Select(x => new { x.WorkAssignmentId, x.WorkAssignmentSegmentId })
+                .FirstOrDefaultAsync(cancellationToken);
+
+            return (match?.WorkAssignmentId, match?.WorkAssignmentSegmentId);
+        }
 
         private static AttendanceLogResolution CreateResolution(
             AttendanceLog attendanceLog,

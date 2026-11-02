@@ -1,4 +1,4 @@
-﻿
+
 using HRM.Constants;
 using HRM.Enum;
 using HRM.Models;
@@ -57,10 +57,15 @@ namespace HRM.Services.Attendance.Repositories
                 .Include(x => x.WorkPlan)
                 .Include(x => x.WorkAssignment)
                 .Include(x => x.WorkAssignmentSegment)
-                .SingleOrDefaultAsync(
+                .Where(
                     x =>
                         x.AttendanceLogId == attendanceLogId &&
-                        x.IsValid,
+                        x.IsValid)
+                .OrderByDescending(
+                    x => x.AttendanceResolutionStatusId == AttendanceResolutionStatusIds.Resolved)
+                .ThenBy(
+                    x => x.AttendanceLogResolutionId)
+                .FirstOrDefaultAsync(
                     cancellationToken);
         }
 
