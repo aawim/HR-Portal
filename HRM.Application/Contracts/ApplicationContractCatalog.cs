@@ -46,6 +46,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.HrRequestInboxServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.UserServiceContracts.IOperations),
         typeof(global::HRM.Services.Interfaces.IUserAppDataService),
         typeof(global::HRM.Services.Interfaces.IUserContext),

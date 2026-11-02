@@ -1,0 +1,198 @@
+@using HRM.DTOs.Items
+@inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Items
+@inject HRM.Services.ToastService Toasts
+
+<section class="space-y-4">
+    <header class="flex flex-wrap items-center justify-between gap-2">
+        <div><h2 class="text-lg font-semibold">@(InitialItemsMode ? "Initial staff items" : JobRelatedOnly ? "Job related items" : "My item requisitions")</h2>
+            <p class="text-sm text-slate-500">Add each item as a separate line. Items are issued after final approval.</p></div>
+        <button class="app-button app-button-secondary" disabled="@busy" @onclick="Load">Refresh</button>
+    </header>
+    @if (error != null) { <p role="alert" class="rounded border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">@error</p> }
+    <div class="grid gap-4 lg:grid-cols-[minmax(15rem,1fr)_minmax(0,2fr)]">
+        <aside class="min-w-0 rounded-xl border border-slate-200 p-3 lg:order-2 @(SelectedRequest is not null && !showForm ? "hidden" : "")" aria-label="Item requests">
+            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="font-semibold">Requested items</h3>
+                <button type="button" class="app-button app-button-primary" disabled="@busy" @onclick="AddNew">Add new</button>
+            </div>
+            @if (!ListRows.Any()) { <p class="text-sm text-slate-500">No item requests yet. Select Add new to start.</p> }
+            <div class="max-h-[36rem] space-y-2 overflow-y-auto">
+                @foreach (var row in ListRows)
+                {
+                    <article class="rounded-lg border p-3 text-sm @(SelectedRequest?.RequestId == row.RequestId && !showForm ? "border-blue-400 bg-blue-50" : "border-slate-200")" @key="row.RequestId">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <strong class="block truncate">@row.Reference</strong>
+                                <span class="text-slate-600">@row.Lines.Count item@(row.Lines.Count == 1 ? "" : "s") · @row.Purpose</span>
+                            </div>
+                            <span class="text-xs">@row.Status</span>
+                        </div>
+                        <p class="mt-1 truncate text-slate-600">@string.Join(", ", row.Lines.Select(l => l.ItemName))</p>
+                        <button type="button" class="mt-2 text-blue-700 underline" @onclick="() => ViewDetail(row.RequestId)">View detail</button>
+                    </article>
+                }
+            </div>
+        </aside>
+        <div class="min-w-0 rounded-xl border border-slate-200 p-4 @(SelectedRequest is not null && !showForm ? "lg:col-start-2" : "lg:order-1")">
+            @if (showForm)
+            {
+                <fieldset disabled="@busy" class="space-y-3">
+                    <legend class="font-semibold">@(IndividualId > 0 ? "Request initial issue" : "New requisition")</legend>
+                    @if (!JobRelatedOnly)
+                    {
+                        <label class="block text-sm">Purpose
+                            <select class="mt-1 w-full rounded border p-2" @bind="form.Purpose"><option>Common</option><option>Job related</option></select>
+                        </label>
+                    }
+                    <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                        <label class="text-sm">Previously requested item
+                            <select class="mt-1 w-full rounded border p-2" @bind="selectedName"><option value="">Select or enter a new name</option>
+                                @foreach (var name in previousNames) { <option value="@name">@name</option> }
+                            </select>
+                        </label>
+                        <label class="text-sm">New item name
+                            <input class="mt-1 w-full rounded border p-2" maxlength="200" @bind="newName" placeholder="Type an item not listed" />
+                        </label>
+                        <button type="button" class="app-button app-button-secondary self-end" @onclick="AddLine">Add item</button>
+                    </div>
+                    @if (form.Lines.Count > 0)
+                    {
+                        <div class="space-y-2" aria-label="Requested item lines">
+                            @foreach (var line in form.Lines.ToList())
+                            {
+                                <div class="flex flex-wrap items-center gap-2 rounded border p-2" @key="line">
+                                    <span class="min-w-32 flex-1">@line.ItemName</span>
+                                    <label class="text-sm">Quantity <input type="number" min="1" max="1000" class="ml-1 w-20 rounded border p-1" @bind="line.Quantity" /></label>
+                                    <button type="button" class="app-button app-button-secondary" @onclick="() => RemoveLine(line)">Remove</button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <label class="block text-sm">Reason
+                        <textarea class="mt-1 w-full rounded border p-2" maxlength="1000" rows="2" @bind="form.Reason"></textarea>
+                    </label>
+                    <div class="flex gap-2">
+                        <button class="app-button app-button-primary" disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))" @onclick="Submit">Submit for approval</button>
+                        <button type="button" class="app-button app-button-secondary" @onclick="CloseForm">Cancel</button>
+                    </div>
+                </fieldset>
+            }
+            else if (SelectedRequest is { } row)
+            {
+                <div class="space-y-3 text-sm">
+                    <button type="button" class="text-blue-700 underline" @onclick="BackToRequests">← Back to requests</button>
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div><h3 class="text-base font-semibold">@row.Reference</h3><p class="text-slate-600">@row.StaffName · @row.Kind · @row.Purpose</p></div>
+                        <span class="rounded bg-slate-100 px-2 py-1">@row.Status</span>
+                    </div>
+                    <p><span class="font-medium">Requested:</span> @row.CreatedAtUtc.ToLocalTime().ToString("g")</p>
+                    <p><span class="font-medium">Reason:</span> @row.Reason</p>
+                    <div><h4 class="font-medium">Items</h4>
+                        <ul class="mt-1 divide-y rounded border">
+                            @foreach (var line in row.Lines)
+                            {
+                                <li class="flex flex-wrap justify-between gap-2 p-2"><span>@line.ItemName × @line.Quantity</span>
+                                    @if (line.IssuedAtUtc.HasValue) { <span class="text-slate-600">Issued @line.IssuedAtUtc.Value.ToLocalTime().ToString("g")</span> }
+                                </li>
+                            }
+                        </ul>
+                    </div>
+                    @if (row.StateId == 4) { <p class="rounded bg-green-50 p-2 text-green-800">Approved request · read only</p> }
+                    @if (row.CanApprove || row.CanCancel)
+                    {
+                        <div class="flex flex-wrap items-center gap-2 border-t pt-3">
+                            <input class="rounded border p-2" placeholder="Action comment" @bind="comments[row.RequestId]" />
+                            @if (row.CanApprove) { <button class="app-button app-button-primary" disabled="@busy" @onclick='() => Act(row, "Approve")'>Approve</button><button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Act(row, "Reject")'>Reject</button> }
+                            @if (row.CanCancel) { <button class="app-button app-button-secondary" disabled="@busy" @onclick='() => Act(row, "Cancel")'>Cancel request</button> }
+                        </div>
+                    }
+                </div>
+            }
+            else { <p class="text-sm text-slate-500">Select Add new from the request list to open the form here.</p> }
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter] public int IndividualId { get; set; }
+    [Parameter] public bool InitialItemsMode { get; set; }
+    [Parameter] public bool JobRelatedOnly { get; set; }
+    private List<string> previousNames = [];
+    private List<ItemStaffRequestDto> rows = [];
+    private List<ItemStaffRequestDto> approvalRows = [];
+    private readonly Dictionary<int, string> comments = [];
+    private ItemStaffRequestInput form = new();
+    private string selectedName = "";
+    private string newName = "";
+    private string? error;
+    private bool busy;
+    private bool showForm;
+    private int? selectedRequestId;
+    private int loadedIndividualId = -1;
+    private IEnumerable<ItemStaffRequestDto> VisibleRows => JobRelatedOnly ? rows.Where(r => r.Purpose == "Job related") : rows;
+    private List<ItemStaffRequestDto> ListRows => VisibleRows.Concat(IndividualId == 0 ? approvalRows : [])
+        .DistinctBy(r => r.RequestId).OrderByDescending(r => r.CreatedAtUtc).ToList();
+    private ItemStaffRequestDto? SelectedRequest => ListRows.FirstOrDefault(r => r.RequestId == selectedRequestId);
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedIndividualId == IndividualId) return;
+        loadedIndividualId = IndividualId;
+        showForm = false; selectedRequestId = null; ResetForm(); await Load();
+    }
+    private void AddNew() { ResetForm(); selectedName = newName = ""; selectedRequestId = null; error = null; showForm = true; }
+    private void CloseForm() { showForm = false; error = null; }
+    private void ViewDetail(int requestId) { selectedRequestId = requestId; showForm = false; error = null; }
+    private void BackToRequests() { selectedRequestId = null; error = null; }
+    private void ResetForm() => form = new ItemStaffRequestInput { IndividualId = IndividualId,
+        Kind = IndividualId > 0 ? "Issue" : "Requisition", Purpose = JobRelatedOnly ? "Job related" : "Common" };
+    private async Task Load()
+    {
+        busy = true; error = null;
+        try
+        {
+            var selected = IndividualId > 0 ? IndividualId : (int?)null;
+            rows = await Items.GetStaffRequestsAsync(null, selected);
+            previousNames = await Items.GetRequestedItemNamesAsync(selected);
+            approvalRows = IndividualId == 0 ? await Items.GetPendingItemApprovalsAsync() : [];
+            foreach (var row in rows.Concat(approvalRows)) comments.TryAdd(row.RequestId, "");
+            if (selectedRequestId.HasValue && SelectedRequest is null) selectedRequestId = null;
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private void AddLine()
+    {
+        var name = !string.IsNullOrWhiteSpace(newName) ? newName.Trim() : selectedName.Trim();
+        if (name.Length is 0 or > 200) { error = "Enter an item name of up to 200 characters."; return; }
+        if (form.Lines.Any(l => l.ItemName.Equals(name, StringComparison.OrdinalIgnoreCase))) { error = "This item is already on a line."; return; }
+        if (form.Lines.Count >= 30) { error = "A request can contain up to 30 item lines."; return; }
+        form.Lines.Add(new() { ItemName = name, Quantity = 1 });
+        newName = selectedName = ""; error = null;
+    }
+    private void RemoveLine(ItemStaffRequestLineInput line) => form.Lines.Remove(line);
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Items.SubmitStaffRequestAsync(form);
+            if (!result.Success) { error = result.Message; return; }
+            Toasts.Success(result.Message); ResetForm(); selectedRequestId = null; showForm = false; await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+    private async Task Act(ItemStaffRequestDto row, string action)
+    {
+        busy = true; error = null;
+        try
+        {
+            comments.TryGetValue(row.RequestId, out var comment);
+            var result = await Items.ActStaffRequestAsync(row.RequestId, row.StateId, action, comment);
+            if (!result.Success) { error = result.Message; return; }
+            Toasts.Success(result.Message); await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

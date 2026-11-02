@@ -15,6 +15,7 @@ namespace HRM.Enum
         Leave,
 
         OT,
+        JobRelatedItems,
 
         Payroll,
 

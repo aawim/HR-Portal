@@ -105,6 +105,8 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.IndividualRegistrationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.IndividualRegistrationService>());
         services.TryAddScoped<global::HRM.Services.HrRequestInboxService>();
         services.TryAddScoped<global::HRM.Services.Contracts.HrRequestInboxServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.HrRequestInboxService>());
+        services.TryAddScoped<global::HRM.Services.ItemCatalogueService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.ItemCatalogueService>());
         services.TryAddScoped<global::HRM.Services.UserService>();
         services.TryAddScoped<global::HRM.Services.Contracts.UserServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.UserService>());
         services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(

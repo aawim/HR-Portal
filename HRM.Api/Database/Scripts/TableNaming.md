@@ -10,6 +10,8 @@ Allowances use `AL_AllowanceTypes`, `AL_PositionAllowanceRules`, `AL_StaffAllowa
 
 New physical tables must use an uppercase feature-initial prefix followed by an underscore and a descriptive PascalCase plural name. Example: `LC_LateCheckInRequests`. Related tables share a prefix, as the existing workflow tables share `WF_`.
 
+`IM_` is the item management feature prefix. `IM_ItemCategories` stores organisation-scoped catalogue groups, `IM_Items` stores asset and consumable catalogue entries, `IM_ItemUnits` stores individually tracked asset units, `IM_ItemStaffRequests` stores requisition and direct issue headers, and `IM_ItemStaffRequestLines` stores the separately requested and approved item names and quantities.
+
 | Previous name | Current name |
 | --- | --- |
 | `LateCheckInRequests` | `LC_LateCheckInRequests` |

@@ -5037,6 +5037,293 @@ namespace HRM.Migrations
                     b.ToTable("Islands");
                 });
 
+            modelBuilder.Entity("HRM.Models.Item", b =>
+                {
+                    b.Property<int>("ItemId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemId"));
+
+                    b.Property<string>("Brand")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<int>("ItemCategoryId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Model")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("QuantityOnHand")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ReorderLevel")
+                        .HasColumnType("int");
+
+                    b.Property<string>("UnitOfMeasure")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ItemId");
+
+                    b.HasIndex("ItemCategoryId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId", "ItemCategoryId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("IM_Items", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IM_Items_Kind", "[Kind] IN ('Asset','Consumable') AND [QuantityOnHand] >= 0 AND [ReorderLevel] >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemCategory", b =>
+                {
+                    b.Property<int>("ItemCategoryId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemCategoryId"));
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ItemCategoryId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("OrganisationId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("IM_ItemCategories", (string)null);
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemStaffRequest", b =>
+                {
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("IndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("IssuedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int?>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<int?>("ItemUnitId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("JobId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Purpose")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<DateTime?>("ReturnedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("RequestId");
+
+                    b.HasIndex("IndividualId");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("ItemUnitId");
+
+                    b.HasIndex("JobId");
+
+                    b.HasIndex("OrganisationId", "IndividualId", "CreatedAtUtc");
+
+                    b.ToTable("IM_ItemStaffRequests", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IM_ItemStaffRequests_Values", "[Quantity] > 0 AND [Purpose] IN ('Job related','Common') AND [Kind] IN ('Issue','Requisition')");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemStaffRequestLine", b =>
+                {
+                    b.Property<int>("ItemStaffRequestLineId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemStaffRequestLineId"));
+
+                    b.Property<DateTime?>("IssuedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("ItemName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.Property<int>("RequestId")
+                        .HasColumnType("int");
+
+                    b.HasKey("ItemStaffRequestLineId");
+
+                    b.HasIndex("RequestId", "ItemStaffRequestLineId");
+
+                    b.ToTable("IM_ItemStaffRequestLines", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IM_ItemStaffRequestLines_Quantity", "[Quantity] > 0");
+                        });
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemUnit", b =>
+                {
+                    b.Property<int>("ItemUnitId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("ItemUnitId"));
+
+                    b.Property<DateOnly?>("CollectedDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("Condition")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("InventoryNumber")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateOnly?>("IssuedDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("IssuedToIndividualId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<int?>("OperationLogId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("OrganisationId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("SerialNumber")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("int");
+
+                    b.HasKey("ItemUnitId");
+
+                    b.HasIndex("IssuedToIndividualId");
+
+                    b.HasIndex("OperationLogId");
+
+                    b.HasIndex("ItemId", "Status");
+
+                    b.HasIndex("OrganisationId", "InventoryNumber")
+                        .IsUnique();
+
+                    b.ToTable("IM_ItemUnits", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_IM_ItemUnits_Status", "[Status] IN ('Available','Issued','Returned','Damaged','Lost','Retired') AND [Condition] IN ('Good','Fair','Damaged','Unusable')");
+                        });
+                });
+
             modelBuilder.Entity("HRM.Models.Job", b =>
                 {
                     b.Property<int>("JobId")
@@ -13989,6 +14276,123 @@ namespace HRM.Migrations
                     b.Navigation("City");
                 });
 
+            modelBuilder.Entity("HRM.Models.Item", b =>
+                {
+                    b.HasOne("HRM.Models.ItemCategory", "Category")
+                        .WithMany("Items")
+                        .HasForeignKey("ItemCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemCategory", b =>
+                {
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemStaffRequest", b =>
+                {
+                    b.HasOne("HRM.Models.Individual", null)
+                        .WithMany()
+                        .HasForeignKey("IndividualId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.ItemUnit", "ItemUnit")
+                        .WithMany()
+                        .HasForeignKey("ItemUnitId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Job", null)
+                        .WithMany()
+                        .HasForeignKey("JobId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.Request", "Request")
+                        .WithOne()
+                        .HasForeignKey("HRM.Models.ItemStaffRequest", "RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("ItemUnit");
+
+                    b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemStaffRequestLine", b =>
+                {
+                    b.HasOne("HRM.Models.ItemStaffRequest", "Request")
+                        .WithMany("Lines")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Request");
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemUnit", b =>
+                {
+                    b.HasOne("HRM.Models.Individual", null)
+                        .WithMany()
+                        .HasForeignKey("IssuedToIndividualId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Item", "Item")
+                        .WithMany("Units")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("HRM.Models.OperationLog", null)
+                        .WithMany()
+                        .HasForeignKey("OperationLogId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("HRM.Models.Organisation", null)
+                        .WithMany()
+                        .HasForeignKey("OrganisationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+                });
+
             modelBuilder.Entity("HRM.Models.Job", b =>
                 {
                     b.HasOne("HRM.Models.Individual", "Individual")
@@ -17197,6 +17601,21 @@ namespace HRM.Migrations
                     b.Navigation("LeaveSpendingLocations");
 
                     b.Navigation("Wards");
+                });
+
+            modelBuilder.Entity("HRM.Models.Item", b =>
+                {
+                    b.Navigation("Units");
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemCategory", b =>
+                {
+                    b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("HRM.Models.ItemStaffRequest", b =>
+                {
+                    b.Navigation("Lines");
                 });
 
             modelBuilder.Entity("HRM.Models.Job", b =>
