@@ -377,9 +377,9 @@ static class ScheduleFlowTests
         // mandatory clock events stay authoritative while the duty is attended.
         var precedenceDate = date.AddDays(-4);
         var precedencePlan = await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(precedenceDate));
-        async Task<HRM.DTOs.Attendance.AttendancePlanResolutionResult> Punch(int hour, int minute)
+        async Task<HRM.DTOs.Attendance.AttendancePlanResolutionResult> PunchOn(DateTime day, int hour, int minute)
         {
-            var at = precedenceDate.AddHours(hour).AddMinutes(minute);
+            var at = day.AddHours(hour).AddMinutes(minute);
             var result = await resolver.ResolveAsync(1000, 100, 10, at);
             if (!result.IsResolved || !result.WorkPlanSegmentId.HasValue) return result;
             await using var db = factory.CreateDbContext();
@@ -387,7 +387,7 @@ static class ScheduleFlowTests
             {
                 IndividualId = 1000, OrganisationId = 10, OrganisationStructureId = 10,
                 Year = at.Year, Month = at.Month, Day = at.Day, Hour = at.Hour, Minute = at.Minute,
-                Date = at, Uidstamp = $"precedence-{at:HHmm}", AttendanceLogModeId = 1,
+                Date = at, Uidstamp = $"punch-{day:yyyyMMdd}-{at:HHmm}", AttendanceLogModeId = 1,
                 AttendanceLogStateId = 1, InOutModeId = 1
             };
             db.AttendanceLogs.Add(log);
@@ -402,6 +402,7 @@ static class ScheduleFlowTests
             await db.SaveChangesAsync();
             return result;
         }
+        Task<HRM.DTOs.Attendance.AttendancePlanResolutionResult> Punch(int hour, int minute) => PunchOn(precedenceDate, hour, minute);
         var earlyPunch = await Punch(7, 50);
         var dutyInPunch = await Punch(10, 0);
         var dutyLateOutPunch = await Punch(12, 31);
@@ -423,6 +424,54 @@ static class ScheduleFlowTests
                 "The 14:00 official checkout was lost");
         }
         var nightDate = date.AddDays(-8);
+        // Official and duty schedules start together. The first punch belongs to
+        // the official schedule; the next punch must satisfy the duty check-in
+        // instead of being treated as an early duty checkout.
+        await using (var db = factory.CreateDbContext())
+        {
+            var duty = await db.WorkTemplates.SingleAsync(x => x.WorkTemplateId == 2);
+            duty.DefaultStartTime = new(8, 0); duty.DefaultEndTime = new(14, 0);
+            (await db.WorkTemplateSegments.SingleAsync(x => x.WorkTemplateSegmentId == 3)).OffsetMinutes = 0;
+            (await db.WorkTemplateSegments.SingleAsync(x => x.WorkTemplateSegmentId == 4)).OffsetMinutes = 360;
+            await db.SaveChangesAsync();
+        }
+        var sameStartDate = date.AddDays(-5);
+        await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(sameStartDate));
+        var firstCoincidentPunch = await PunchOn(sameStartDate, 8, 5);
+        var secondCoincidentPunch = await PunchOn(sameStartDate, 8, 10);
+        await using (var db = factory.CreateDbContext())
+        {
+            var segments = await db.WorkPlanSegments.Where(x => x.WorkPlan.WorkDate == sameStartDate && x.WorkTemplateSegmentId.HasValue)
+                .ToDictionaryAsync(x => x.WorkTemplateSegmentId!.Value, x => x.WorkPlanSegmentId);
+            Check(firstCoincidentPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && firstCoincidentPunch.WorkPlanSegmentId == segments[1],
+                "The first coincident punch was not allocated to the official check-in");
+            Check(!firstCoincidentPunch.SecondaryWorkPlanSegmentId.HasValue,
+                "The first coincident punch also consumed the duty check-in");
+            Check(secondCoincidentPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && secondCoincidentPunch.WorkPlanSegmentId == segments[3],
+                "The punch after the official check-in was not allocated to the duty check-in");
+        }
+        // A short duty that starts with the official schedule must not turn the
+        // next punch into an automatic duty checkout.
+        await using (var db = factory.CreateDbContext())
+        {
+            var duty = await db.WorkTemplates.SingleAsync(x => x.WorkTemplateId == 2);
+            duty.DefaultEndTime = new(8, 45);
+            (await db.WorkTemplateSegments.SingleAsync(x => x.WorkTemplateSegmentId == 4)).OffsetMinutes = 45;
+            await db.SaveChangesAsync();
+        }
+        var shortDutyDate = date.AddDays(-6);
+        await generator.GenerateOrGetAsync(1000, 100, 10, DateOnly.FromDateTime(shortDutyDate));
+        var shortDutyFirstPunch = await PunchOn(shortDutyDate, 8, 5);
+        var shortDutySecondPunch = await PunchOn(shortDutyDate, 8, 20);
+        await using (var db = factory.CreateDbContext())
+        {
+            var segments = await db.WorkPlanSegments.Where(x => x.WorkPlan.WorkDate == shortDutyDate && x.WorkTemplateSegmentId.HasValue)
+                .ToDictionaryAsync(x => x.WorkTemplateSegmentId!.Value, x => x.WorkPlanSegmentId);
+            Check(shortDutyFirstPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && shortDutyFirstPunch.WorkPlanSegmentId == segments[1],
+                "The first short-duty punch was not allocated to the official check-in");
+            Check(shortDutySecondPunch.ClockType == HRM.Enum.AttendanceClockType.CheckIn && shortDutySecondPunch.WorkPlanSegmentId == segments[3],
+                "The second short-duty punch was automatically recorded as a checkout instead of the duty check-in");
+        }
         await using (var db = factory.CreateDbContext())
         {
             var office = await db.WorkTemplates.SingleAsync(x => x.WorkTemplateId == 1);

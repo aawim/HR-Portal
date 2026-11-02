@@ -544,12 +544,14 @@ namespace HRM.Services
             var bestCandidate =
                 SelectBestCandidate(candidates, clockTime);
 
-            // When official and duty boundaries coincide (same expected time),
-            // both must be recorded. Prefer official as primary, duty as secondary.
-            var secondaryCandidate = bestCandidate.SchedulePurpose == "Official"
+            // Coincident check-outs close both schedules with one physical punch.
+            // Coincident check-ins are allocated in sequence instead: the first
+            // punch satisfies the official schedule, the next punch satisfies duty.
+            var secondaryCandidate = bestCandidate.SchedulePurpose == "Official" &&
+                bestCandidate.ClockType == AttendanceClockType.CheckOut
                 ? candidates.FirstOrDefault(x =>
                     x.SchedulePurpose == "Duty" &&
-                    x.ClockType == bestCandidate.ClockType &&
+                    x.ClockType == AttendanceClockType.CheckOut &&
                     x.BoundaryTime == bestCandidate.BoundaryTime)
                 : null;
 
@@ -615,11 +617,15 @@ namespace HRM.Services
             //    is a check-out even though the official check-in window is still
             //    wide open, and a 13:55 punch is the official 14:00 check-out
             //    rather than the duty's earlier one.
-            // 4. An exact official check-in for a schedule that is already open
+            // 4. Any other fresh exact window. This is the next punch for a schedule
+            //    that starts at the same time as an official schedule: the first
+            //    punch is official, so the following punch must satisfy duty.
+            // 5. An exact official check-in for a schedule that is already open
             //    (a duplicate punch, left for duplicate detection).
-            // 5. Any other exact window (a shift/duty boundary).
-            // 6. An extended check-in window (late arrival inside the work period).
-            // 7. Nearest boundary.
+            // 6. Any other exact window (a duplicate shift/duty boundary).
+            // 7. A fresh extended check-in window (late arrival inside the work period).
+            // 8. Any extended check-in window.
+            // 9. Nearest boundary.
             static IOrderedEnumerable<BoundaryCandidate> Nearest(IEnumerable<BoundaryCandidate> rows) =>
                 rows.OrderBy(x => x.DistanceMinutes).ThenBy(x => x.SchedulePurpose == "Official" ? 0 : 1);
 
@@ -649,10 +655,15 @@ namespace HRM.Services
             return Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
                 ?? Nearest(exactFresh.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
                 ?? Nearest(candidates.Where(x => IsCheckOutResolution(x, clockTime))).FirstOrDefault()
+                ?? Nearest(exactFresh).FirstOrDefault()
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
-                ?? Nearest(exactFresh).FirstOrDefault()
                 ?? Nearest(exactStale).FirstOrDefault()
+                ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
+                        !IsStaleCheckIn(x) &&
+                        x.ExtendedWindowEnd.HasValue &&
+                        clockTime >= x.WindowStart &&
+                        clockTime <= x.ExtendedWindowEnd.Value)).FirstOrDefault()
                 ?? Nearest(candidates.Where(x => x.ClockType == AttendanceClockType.CheckIn &&
                         x.ExtendedWindowEnd.HasValue &&
                         clockTime >= x.WindowStart &&
