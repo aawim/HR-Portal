@@ -902,6 +902,118 @@ public sealed class StaffTransferService(
                 r.Request.RequestState.StateName.Trim(),
                 $"/admin/hr/items/staff-items?requestId={r.RequestId}"))
             .ToList();
+
+        // 3. Tab 07 — Open Requests (Leave, OT, Item, Attendance, etc. NOT in [Approved, Cancelled, Rejected])
+        static bool IsExcludedTerminalState(string? stateName)
+        {
+            if (string.IsNullOrWhiteSpace(stateName))
+                return false;
+            var s = stateName.Trim();
+            return s.Contains("Approv", StringComparison.OrdinalIgnoreCase) ||
+                   s.Contains("Cancel", StringComparison.OrdinalIgnoreCase) ||
+                   s.Contains("Reject", StringComparison.OrdinalIgnoreCase);
+        }
+
+        var openList = new List<StaffTransferOpenRequestItemDto>();
+
+        // 3a. Open Item / Asset Requests
+        foreach (var ir in itemRequests.Where(r => !IsExcludedTerminalState(r.Request.RequestState.StateName)))
+        {
+            openList.Add(new StaffTransferOpenRequestItemDto(
+                ir.RequestId,
+                ir.Request.ReferenceNumber ?? $"IM-{ir.RequestId}",
+                $"Item Request ({ir.Kind})",
+                string.Join(", ", ir.Lines.Select(l => l.ItemName)),
+                ir.Request.RequestState.StateName.Trim(),
+                ir.Request.ApplicationDate,
+                $"/admin/hr/items/staff-items?requestId={ir.RequestId}"));
+        }
+
+        // 3b. Open Leave Requests
+        var openLeaves = await db.LeaveRequests.AsNoTracking()
+            .Include(x => x.Leave).ThenInclude(l => l.LeaveType)
+            .Include(x => x.Request).ThenInclude(r => r.RequestState)
+            .Where(x => x.Leave.Job.IndividualID == individualId &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.APPROVED &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.REJECTED)
+            .OrderByDescending(x => x.Request.ApplicationDate)
+            .Take(25)
+            .ToListAsync();
+
+        foreach (var lr in openLeaves.Where(x => !IsExcludedTerminalState(x.Request.RequestState.StateName)))
+        {
+            if (openList.All(o => o.RequestId != lr.RequestId))
+            {
+                openList.Add(new StaffTransferOpenRequestItemDto(
+                    lr.RequestId,
+                    lr.Request.ReferenceNumber ?? $"LV-{lr.LeaveId}",
+                    "Leave Request",
+                    $"{lr.Leave.LeaveType?.Name ?? "Leave"} ({lr.Leave.FromDate:dd MMM yyyy} – {lr.Leave.ToDate:dd MMM yyyy}, {lr.Leave.Duration}d)",
+                    lr.Request.RequestState.StateName.Trim(),
+                    lr.Request.ApplicationDate,
+                    "/online/leaves"));
+            }
+        }
+
+        // 3c. Open Overtime (OT) Requests
+        var openOts = await db.OtpreApprovals.AsNoTracking()
+            .Include(x => x.Request).ThenInclude(r => r.RequestState)
+            .Where(x => x.StaffJob.IndividualID == individualId &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.APPROVED &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.REJECTED)
+            .OrderByDescending(x => x.Request.ApplicationDate)
+            .Take(25)
+            .ToListAsync();
+
+        foreach (var ot in openOts.Where(x => !IsExcludedTerminalState(x.Request.RequestState.StateName)))
+        {
+            if (openList.All(o => o.RequestId != ot.RequestId))
+            {
+                openList.Add(new StaffTransferOpenRequestItemDto(
+                    ot.RequestId,
+                    ot.Request.ReferenceNumber ?? $"OT-{ot.RequestId}",
+                    "Overtime (OT) Request",
+                    $"{ot.StartDate:dd MMM yyyy} – {ot.EndDate:dd MMM yyyy}: {ot.Works}",
+                    ot.Request.RequestState.StateName.Trim(),
+                    ot.Request.ApplicationDate,
+                    "/online/overtime"));
+            }
+        }
+
+        // 3d. All Other Open Requests for the Employee (Attendance, Out of Office, Data Correction, etc.)
+        var otherOpenRequests = await db.Requests.AsNoTracking()
+            .Include(r => r.RequestType)
+            .Include(r => r.RequestState)
+            .Where(r => (r.ApplicantBusinessEntityId == individualId ||
+                         r.RequestJobs.Any(rj => rj.Job.IndividualID == individualId)) &&
+                        r.RequestStateId != SharedConfig.RequestStates.APPROVED &&
+                        r.RequestStateId != SharedConfig.RequestStates.CANCELLED &&
+                        r.RequestStateId != SharedConfig.RequestStates.REJECTED)
+            .OrderByDescending(r => r.ApplicationDate)
+            .Take(40)
+            .ToListAsync();
+
+        foreach (var req in otherOpenRequests.Where(r => !IsExcludedTerminalState(r.RequestState.StateName)))
+        {
+            if (openList.All(o => o.RequestId != req.RequestId))
+            {
+                openList.Add(new StaffTransferOpenRequestItemDto(
+                    req.RequestId,
+                    req.ReferenceNumber ?? $"REQ-{req.RequestId}",
+                    req.RequestType?.TypeName?.Trim() ?? "Service Request",
+                    string.IsNullOrWhiteSpace(req.StateChangeRemarks) ? (req.RequestType?.TypeName?.Trim() ?? "Pending workflow request") : req.StateChangeRemarks,
+                    req.RequestState.StateName.Trim(),
+                    req.ApplicationDate,
+                    string.IsNullOrWhiteSpace(req.RequestType?.ViewUrl) ? "/online/requests" : req.RequestType.ViewUrl));
+            }
+        }
+
+        dto.OpenRequests = openList
+            .OrderByDescending(x => x.ApplicationDate)
+            .ThenByDescending(x => x.RequestId)
+            .ToList();
     }
 
     private async Task<StaffTransferDetailDto> BuildNewDraftFromDatabaseAsync(
@@ -1127,7 +1239,8 @@ public sealed class StaffTransferService(
                 ReportingToName = supervisorName,
                 HandoverRequired = true,
                 HandoverDeadline = defaultEffective.AddDays(-1),
-                AssetsToReturnSummary = issuedAssets.Count > 0 ? string.Join(", ", issuedAssets) : "No issued serialized assets currently pending return",
+                OutstandingAssignmentsSummary = "",
+                AssetsToReturnSummary = "",
                 AssetsToReceiveSummary = "Managed via Staff Item / Asset Returning & Requisition process",
                 OutstandingApprovalsRoutingRule = StaffTransferApprovalRoutingRules.RetainHistoricalReassignOpen
             }

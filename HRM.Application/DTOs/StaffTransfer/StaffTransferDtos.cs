@@ -252,6 +252,18 @@ public sealed record StaffTransferResourceLinkDto(
     string Url);
 
 /// <summary>
+/// Tab 7 — Open employee request item (Item requests, Leave requests, OT requests, etc. not in Approved/Cancelled/Rejected).
+/// </summary>
+public sealed record StaffTransferOpenRequestItemDto(
+    int RequestId,
+    string ReferenceNumber,
+    string RequestCategory,
+    string Summary,
+    string Status,
+    DateTime ApplicationDate,
+    string Url);
+
+/// <summary>
 /// Advisory comment, clarification, or decision note.
 /// </summary>
 public sealed record StaffTransferCommentDto(
@@ -316,6 +328,7 @@ public sealed class StaffTransferDetailDto
     public List<StaffTransferAccessChangeItemDto> AccessChanges { get; set; } = [];
     public List<StaffTransferDoorAccessItemDto> DoorAccessChanges { get; set; } = [];
     public StaffTransferReportingTabDto Reporting { get; set; } = new();
+    public List<StaffTransferOpenRequestItemDto> OpenRequests { get; set; } = [];
     public List<StaffTransferCommentDto> Comments { get; set; } = [];
     public List<StaffTransferConfirmationDto> Confirmations { get; set; } = [];
     public List<StaffTransferActivationLogDto> ActivationLogs { get; set; } = [];
