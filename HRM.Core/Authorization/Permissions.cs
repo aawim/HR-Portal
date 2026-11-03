@@ -101,5 +101,18 @@ namespace HRM.Authorization
         public const string StaffTransferActivate = "StaffTransfer.Activate";
         public const string StaffTransferProvisionAccess = "StaffTransfer.ProvisionAccess";
         public const string StaffTransferExportRestrictedPdf = "StaffTransfer.ExportRestrictedPdf";
+
+        // =========================
+        // Staff Asset Management
+        // =========================
+
+        public const string AssetView = "Asset.View";
+        public const string AssetInventoryManage = "Asset.Inventory.Manage";
+        public const string AssetIssuanceInitiate = "Asset.Issuance.Initiate";
+        public const string AssetAcknowledge = "Asset.Acknowledge";
+        public const string AssetHrApprove = "Asset.HR.Approve";
+        public const string AssetReturnInspect = "Asset.Return.Inspect";
+        public const string AssetAuditView = "Asset.Audit.View";
+        public const string AssetExportRestrictedPdf = "Asset.ExportRestrictedPdf";
     }
 }

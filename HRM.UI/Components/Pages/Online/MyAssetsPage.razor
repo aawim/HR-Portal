@@ -1,0 +1,664 @@
+@page "/online/my-assets"
+@namespace HRM.Components.Pages.Online
+@using HRM.Components.Admin.Hr.Items
+@using HRM.DTOs
+@using HRM.DTOs.Assets
+@using HRM.Enums
+@using HRM.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject HRM.Services.Contracts.StaffAssetServiceContracts.IOperations AssetService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>My Assets & Equipment - Employee Portal</PageTitle>
+
+<div class="mx-auto max-w-7xl space-y-6 px-4 py-6">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="rounded-lg bg-teal-50 px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-teal-700">
+                    Staff Custody & Handover
+                </span>
+                <span class="text-xs text-slate-400">My Assigned Assets & Acknowledgements</span>
+            </div>
+            <h1 class="mt-1 text-2xl font-extrabold text-slate-900">My Assets & Official Property</h1>
+            <p class="text-sm text-slate-500">
+                Acknowledge physical receipt of organizational property, view active custody, track historical issuances, and report returns or damages.
+            </p>
+        </div>
+
+        @if (portalData?.ActiveCustodies.Count > 0)
+        {
+            <button type="button"
+                    @onclick="OpenInitiateReturnModal"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
+                <svg class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                </svg>
+                <span>Initiate Return / Report Issue</span>
+            </button>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex min-h-[350px] items-center justify-center">
+            <div class="flex flex-col items-center gap-2">
+                <div class="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"></div>
+                <p class="text-xs text-slate-500">Loading your property & equipment records...</p>
+            </div>
+        </div>
+    }
+    else if (portalData is not null)
+    {
+        <!-- Pending Issuance Notification Alert Banner -->
+        @if (portalData.PendingIssuances.Count > 0)
+        {
+            <div class="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">📦</span>
+                        <div>
+                            <h3 class="text-sm font-bold text-amber-900">
+                                You have @portalData.PendingIssuances.Count issuance request(s) awaiting your acknowledgement
+                            </h3>
+                            <p class="mt-0.5 text-xs text-amber-800">
+                                Please physically inspect each item listed below. Accept each verified item or reject with remarks if defective or not received.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- Staff Profile Summary Bar -->
+        <div class="grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-white p-4 text-xs shadow-sm sm:grid-cols-4">
+            <div>
+                <span class="text-slate-500">Employee Name:</span>
+                <div class="font-bold text-slate-900">@portalData.FullName</div>
+            </div>
+            <div>
+                <span class="text-slate-500">Employee ID:</span>
+                <div class="font-mono font-semibold text-slate-900">@portalData.EmployeeNumber</div>
+            </div>
+            <div>
+                <span class="text-slate-500">Position & Department:</span>
+                <div class="font-medium text-slate-900">@portalData.PositionTitle [@portalData.DepartmentName]</div>
+            </div>
+            <div>
+                <span class="text-slate-500">Organization:</span>
+                <div class="font-medium text-slate-900">@portalData.OrganisationName</div>
+            </div>
+        </div>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-slate-200">
+            <nav class="-mb-px flex space-x-6 text-xs font-semibold">
+                <button type="button"
+                        @onclick='() => activeTab = "pending"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "pending" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Pending Acknowledgements (@portalData.PendingIssuances.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "current"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "current" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    My Current Assets (@portalData.ActiveCustodies.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "history"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "history" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Custody History & Returns (@portalData.CustodyHistory.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "documents"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "documents" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Handover Records & Documents (@portalData.ApprovedDocuments.Count)
+                </button>
+            </nav>
+        </div>
+
+        <!-- TAB 1: Pending Acknowledgements -->
+        @if (activeTab == "pending")
+        {
+            <div class="space-y-6">
+                @if (portalData.PendingIssuances.Count == 0)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-400">
+                        <div class="text-4xl mb-2">✓</div>
+                        <div class="font-bold text-slate-700">No Pending Asset Issuances</div>
+                        <p class="text-xs text-slate-500 mt-1">All handed-over items have been acknowledged.</p>
+                    </div>
+                }
+
+                @foreach (var issuance in portalData.PendingIssuances)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div>
+                                <span class="font-mono text-xs font-bold text-teal-700">@issuance.ReferenceNumber</span>
+                                <h2 class="text-base font-extrabold text-slate-900">Equipment Handover from @issuance.OrganisationName</h2>
+                                <p class="text-xs text-slate-500">Purpose: @issuance.Reason</p>
+                            </div>
+                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                Awaiting Employee Review
+                            </span>
+                        </div>
+
+                        <!-- Items to Review -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Items Handed Over for Custody</h3>
+                            @foreach (var line in issuance.Lines.Where(l => l.Status == AssetIssuanceLineStatuses.HandedOver))
+                            {
+                                var decision = GetOrCreateDraftDecision(issuance.AssetIssuanceId, line.AssetIssuanceItemId, line.Version);
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs">
+                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                            <div class="font-mono font-bold text-slate-900">@line.AssetCode</div>
+                                            <div class="text-sm font-bold text-slate-800">@line.ItemName</div>
+                                            <div class="text-slate-500 text-[11px]">
+                                                Category: @line.CategoryName • S/N: <span class="font-mono">@(line.SerialNumber ?? "None")</span>
+                                                @(string.IsNullOrWhiteSpace(line.Brand) ? "" : $" • {line.Brand} {line.Model}")
+                                            </div>
+                                        </div>
+
+                                        <div class="text-right">
+                                            <div class="rounded bg-white px-2 py-1 text-[11px] font-medium text-slate-700 border border-slate-200">
+                                                Condition: <span class="font-bold">@line.ConditionName</span>
+                                            </div>
+                                            <div class="mt-1 text-[10px] text-slate-400">
+                                                Handed over: @line.HandedOverAtLocal?.ToString("dd MMM yyyy HH:mm")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(line.Accessories))
+                                    {
+                                        <div class="rounded bg-white p-2 border border-slate-200 text-[11px] text-slate-700">
+                                            <span class="font-semibold text-slate-900">Bundled Accessories:</span> @line.Accessories
+                                        </div>
+                                    }
+
+                                    <!-- Decision Radio Toggle -->
+                                    <div class="border-t border-slate-200 pt-3">
+                                        <div class="flex items-center gap-4">
+                                            <label class="inline-flex items-center gap-2 font-semibold cursor-pointer @(decision.Decision == AssetStaffDecisions.Accepted ? "text-emerald-700" : "text-slate-600")">
+                                                <input type="radio"
+                                                       name="@($"dec_{line.AssetIssuanceItemId}")"
+                                                       value="@AssetStaffDecisions.Accepted"
+                                                       checked="@(decision.Decision == AssetStaffDecisions.Accepted)"
+                                                       @onchange='() => decision.Decision = AssetStaffDecisions.Accepted'
+                                                       class="text-emerald-600 focus:ring-emerald-500" />
+                                                <span>✓ Accept Item (Received in Good Condition)</span>
+                                            </label>
+
+                                            <label class="inline-flex items-center gap-2 font-semibold cursor-pointer @(decision.Decision == AssetStaffDecisions.Rejected ? "text-rose-700" : "text-slate-600")">
+                                                <input type="radio"
+                                                       name="@($"dec_{line.AssetIssuanceItemId}")"
+                                                       value="@AssetStaffDecisions.Rejected"
+                                                       checked="@(decision.Decision == AssetStaffDecisions.Rejected)"
+                                                       @onchange='() => decision.Decision = AssetStaffDecisions.Rejected'
+                                                       class="text-rose-600 focus:ring-rose-500" />
+                                                <span>✕ Reject Item</span>
+                                            </label>
+                                        </div>
+
+                                        <!-- If Rejected: Mandatory Reason & Remarks -->
+                                        @if (decision.Decision == AssetStaffDecisions.Rejected)
+                                        {
+                                            <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50/60 p-3 space-y-2">
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label class="block font-semibold text-rose-900 text-[11px]">Reason for Rejection *</label>
+                                                        <select @bind="decision.RejectionReasonCode" class="mt-1 w-full rounded border border-rose-300 bg-white p-1.5 text-xs text-slate-800">
+                                                            <option value="@AssetRejectionReasons.NotPhysicallyReceived">Not physically received</option>
+                                                            <option value="@AssetRejectionReasons.DamagedOrDefective">Damaged or defective item</option>
+                                                            <option value="@AssetRejectionReasons.WrongSerialOrModel">Wrong serial number or model</option>
+                                                            <option value="@AssetRejectionReasons.MissingAccessories">Missing listed accessories</option>
+                                                            <option value="@AssetRejectionReasons.NotRequiredForRole">Not required for assigned role</option>
+                                                            <option value="@AssetRejectionReasons.Other">Other reason</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="block font-semibold text-rose-900 text-[11px]">Specific Remarks / Evidence *</label>
+                                                        <input type="text"
+                                                               @bind="decision.Remarks"
+                                                               placeholder="Detail defects, missing cables, or non-delivery..."
+                                                               class="mt-1 w-full rounded border border-rose-300 bg-white p-1.5 text-xs" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="mt-2">
+                                                <input type="text"
+                                                       @bind="decision.Remarks"
+                                                       placeholder="Optional remarks (e.g. noted minor scratch on casing)..."
+                                                       class="w-full rounded border border-slate-300 bg-white p-1.5 text-xs text-slate-700" />
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Undertaking / Statement Checkbox -->
+                        <div class="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-3 text-xs">
+                            <div class="flex items-start gap-3">
+                                <input type="checkbox"
+                                       id="@($"stmt_{issuance.AssetIssuanceId}")"
+                                       @bind="statementConfirmedMap[issuance.AssetIssuanceId]"
+                                       class="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                <label for="@($"stmt_{issuance.AssetIssuanceId}")" class="text-slate-800 leading-relaxed cursor-pointer font-medium">
+                                    I confirm that I have physically reviewed the items listed above. For each accepted item, I acknowledge physical receipt and take full custody and responsibility in accordance with organizational property regulations.
+                                </label>
+                            </div>
+                            <div class="text-[10px] text-slate-500 italic">
+                                Note: This is an internal electronic staff acknowledgement recorded with your authenticated user identity and timestamp; it is not a statutory qualified digital signature.
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="flex justify-end pt-2">
+                            <button type="button"
+                                    @onclick="() => SubmitStaffDecisionBatchAsync(issuance.AssetIssuanceId)"
+                                    class="rounded-xl bg-teal-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-teal-700 transition">
+                                Submit Decision for Issuance @issuance.ReferenceNumber
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- TAB 2: Current Assets (Active Custody) -->
+        @if (activeTab == "current")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Currently in Your Custody</h2>
+                    <span class="text-xs text-slate-500">@portalData.ActiveCustodies.Count active asset(s)</span>
+                </div>
+
+                @if (portalData.ActiveCustodies.Count == 0)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-400">
+                        <div class="text-4xl mb-2">🛡️</div>
+                        <div class="font-bold text-slate-700">No Active Property Assigned</div>
+                        <p class="text-xs text-slate-500 mt-1">You currently have no physical assets registered under your custody.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        @foreach (var c in portalData.ActiveCustodies)
+                        {
+                            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between">
+                                <div class="space-y-2">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <span class="font-mono text-xs font-bold text-teal-700">@c.AssetCode</span>
+                                            <h3 class="text-sm font-bold text-slate-900">@c.ItemName</h3>
+                                        </div>
+                                        <span class="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                            ACTIVE
+                                        </span>
+                                    </div>
+
+                                    <div class="text-xs text-slate-600 space-y-1">
+                                        <div>Category: <span class="font-medium text-slate-800">@c.CategoryName</span></div>
+                                        <div>Serial: <span class="font-mono font-medium text-slate-800">@(c.SerialNumber ?? "None")</span></div>
+                                        <div>Condition: <span class="font-medium text-slate-800">@c.ConditionAtIssueName</span></div>
+                                        @if (!string.IsNullOrWhiteSpace(c.Accessories))
+                                        {
+                                            <div class="text-[11px] text-slate-500">Accessories: @c.Accessories</div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-1">
+                                    <div>Received: <span class="text-slate-800 font-medium">@c.CustodyFromLocal.ToString("dd MMM yyyy")</span></div>
+                                    @if (c.ExpectedReturnDate.HasValue)
+                                    {
+                                        <div>Return Due: <span class="@(c.IsOverdueReturn ? "text-rose-600 font-bold" : "text-slate-800 font-medium")">@c.ExpectedReturnDate.Value.ToString("dd MMM yyyy")</span></div>
+                                    }
+                                    <div class="pt-1 flex items-center justify-between">
+                                        <span class="text-[10px] text-slate-400">Ref: @c.IssuanceReference</span>
+                                        <button type="button"
+                                                @onclick="() => RequestReturnForCustody(c)"
+                                                class="text-xs font-bold text-teal-600 hover:text-teal-800">
+                                            Report / Return →
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- TAB 3: Custody History & Returns -->
+        @if (activeTab == "history")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Past Property Custody & Return History</h2>
+                    <span class="text-xs text-slate-500">@portalData.CustodyHistory.Count historical record(s)</span>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Asset Code / Serial</th>
+                                <th class="px-4 py-3">Item Description</th>
+                                <th class="px-4 py-3">Custody Period</th>
+                                <th class="px-4 py-3">Outcome / Reason</th>
+                                <th class="px-4 py-3">Final Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!portalData.CustodyHistory.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+                                        No past custody records found.
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var h in portalData.CustodyHistory)
+                            {
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="px-4 py-3 font-mono font-bold text-slate-900">
+                                        @h.AssetCode
+                                        <div class="text-[10px] font-normal text-slate-400">S/N: @(h.SerialNumber ?? "None")</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-slate-800">@h.ItemName</div>
+                                        <div class="text-[11px] text-slate-500">@h.CategoryName</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @h.CustodyFromLocal.ToString("dd/MM/yyyy") — @(h.CustodyToLocal?.ToString("dd/MM/yyyy") ?? "Present")
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @(h.ClosedReason ?? "Standard return / transfer")
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                            @h.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- TAB 4: Handover Records & Documents -->
+        @if (activeTab == "documents")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Approved Handover Sheets (A4 Printable)</h2>
+                    <span class="text-xs text-slate-500">@portalData.ApprovedDocuments.Count document(s)</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach (var doc in portalData.ApprovedDocuments)
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <span class="font-mono text-xs font-bold text-blue-600">@doc.DocumentNumber</span>
+                                    <h4 class="text-xs font-bold text-slate-800">Asset Handover Record</h4>
+                                </div>
+                                <span class="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">v@doc.DocumentVersion</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 font-mono truncate">
+                                SHA-256: @doc.Sha256Hash
+                            </div>
+                            <div class="flex items-center justify-between border-t border-slate-100 pt-2">
+                                <span class="text-[10px] text-slate-400">@doc.GeneratedAtLocal.ToString("dd MMM yyyy HH:mm")</span>
+                                <button type="button"
+                                        @onclick="() => ViewPrintableDocumentAsync(doc.AssetIssuanceId)"
+                                        class="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800">
+                                    View / Print A4 Sheet
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    }
+</div>
+
+<!-- Modal: Initiate Return -->
+@if (showReturnModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Initiate Return or Report Issue</h3>
+                <button type="button" @onclick="() => showReturnModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Select Item in Your Custody *</label>
+                    <select @bind="selectedCustodyIdToReturn" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        @foreach (var c in portalData?.ActiveCustodies ?? [])
+                        {
+                            <option value="@c.AssetCustodyId">[@c.AssetCode] @c.ItemName (S/N: @(c.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Transaction Type *</label>
+                    <select @bind="returnType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="@AssetReturnTypes.StandardReturn">Standard Return to Store</option>
+                        <option value="@AssetReturnTypes.DamageReport">Report Damage / Fault</option>
+                        <option value="@AssetReturnTypes.LossReport">Report Lost / Stolen Item</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Reason / Details *</label>
+                    <textarea @bind="returnNotes" rows="3" placeholder="Provide reason for return or describe defect/loss..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showReturnModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitReturnRequestAsync" class="rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 shadow-sm">
+                    Submit Return
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Printable Document Preview -->
+@if (showPrintModal && printableDoc is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 flex items-center justify-center">
+        <div class="w-full max-w-5xl rounded-2xl bg-white p-6 shadow-2xl">
+            <StaffAssetPrintableView Document="printableDoc"
+                                    AllowVariantSwitch="false"
+                                    OnClose="() => showPrintModal = false" />
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private MyAssetsPortalData? portalData;
+    private string activeTab = "pending";
+
+    // Draft decisions per issuance and line: issuanceId -> lineId -> decision object
+    private Dictionary<string, StaffAssetLineDecisionInput> draftDecisions = new();
+    private Dictionary<int, bool> statementConfirmedMap = new();
+
+    // Modals
+    private bool showReturnModal;
+    private int selectedCustodyIdToReturn;
+    private string returnType = AssetReturnTypes.StandardReturn;
+    private string returnNotes = "";
+
+    private bool showPrintModal;
+    private AssetPrintableDocumentDto? printableDoc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPortalDataAsync();
+    }
+
+    private async Task LoadPortalDataAsync()
+    {
+        loading = true;
+        try
+        {
+            portalData = await AssetService.LoadMyAssetsPortalAsync();
+            if (portalData.PendingIssuances.Count == 0 && portalData.ActiveCustodies.Count > 0)
+            {
+                activeTab = "current";
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load employee property: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private StaffAssetLineDecisionInput GetOrCreateDraftDecision(int issuanceId, int lineId, int version)
+    {
+        var key = $"{issuanceId}_{lineId}";
+        if (!draftDecisions.TryGetValue(key, out var decision))
+        {
+            decision = new StaffAssetLineDecisionInput
+            {
+                AssetIssuanceItemId = lineId,
+                ExpectedVersion = version,
+                Decision = AssetStaffDecisions.Accepted,
+                RejectionReasonCode = AssetRejectionReasons.NotPhysicallyReceived
+            };
+            draftDecisions[key] = decision;
+        }
+        return decision;
+    }
+
+    private async Task SubmitStaffDecisionBatchAsync(int issuanceId)
+    {
+        if (!statementConfirmedMap.TryGetValue(issuanceId, out var confirmed) || !confirmed)
+        {
+            Toasts.Error("You must check the confirmation statement to acknowledge receipt of property.");
+            return;
+        }
+
+        var issuance = portalData?.PendingIssuances.FirstOrDefault(i => i.AssetIssuanceId == issuanceId);
+        if (issuance == null) return;
+
+        var lineDecisions = new List<StaffAssetLineDecisionInput>();
+        foreach (var line in issuance.Lines.Where(l => l.Status == AssetIssuanceLineStatuses.HandedOver))
+        {
+            var key = $"{issuanceId}_{line.AssetIssuanceItemId}";
+            if (draftDecisions.TryGetValue(key, out var dec))
+            {
+                lineDecisions.Add(dec);
+            }
+        }
+
+        var batch = new StaffAssetDecisionBatchInput
+        {
+            AssetIssuanceId = issuanceId,
+            ExplicitStatementConfirmed = true,
+            Decisions = lineDecisions
+        };
+
+        var res = await AssetService.SubmitStaffDecisionsAsync(batch);
+        if (res.Success)
+        {
+            Toasts.Success("Your asset acknowledgement has been recorded successfully.");
+            await LoadPortalDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenInitiateReturnModal()
+    {
+        selectedCustodyIdToReturn = portalData?.ActiveCustodies.FirstOrDefault()?.AssetCustodyId ?? 0;
+        returnType = AssetReturnTypes.StandardReturn;
+        returnNotes = "";
+        showReturnModal = true;
+    }
+
+    private void RequestReturnForCustody(AssetCustodyRowDto c)
+    {
+        selectedCustodyIdToReturn = c.AssetCustodyId;
+        returnType = AssetReturnTypes.StandardReturn;
+        returnNotes = "";
+        showReturnModal = true;
+    }
+
+    private async Task SubmitReturnRequestAsync()
+    {
+        if (selectedCustodyIdToReturn <= 0)
+        {
+            Toasts.Error("Select an item to return.");
+            return;
+        }
+
+        var input = new AssetReturnCreateInput
+        {
+            OrganisationId = portalData?.ActiveCustodies.FirstOrDefault(c => c.AssetCustodyId == selectedCustodyIdToReturn)?.OrganisationId ?? 0,
+            ReturnType = returnType,
+            Notes = returnNotes,
+            AssetCustodyIds = [selectedCustodyIdToReturn]
+        };
+
+        var res = await AssetService.CreateReturnAsync(input);
+        if (res.Success)
+        {
+            Toasts.Success("Return request submitted. Please hand over the physical equipment to the asset officer.");
+            showReturnModal = false;
+            await LoadPortalDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task ViewPrintableDocumentAsync(int assetIssuanceId)
+    {
+        try
+        {
+            printableDoc = await AssetService.GetPrintableDocumentAsync(assetIssuanceId, AssetDocumentVariants.StandardHandoverRecord);
+            showPrintModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load document: {ex.Message}");
+        }
+    }
+}

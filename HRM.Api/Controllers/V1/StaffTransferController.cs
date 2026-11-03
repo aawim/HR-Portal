@@ -1,16 +1,14 @@
+using HRM.Api.Infrastructure;
 using HRM.DTOs;
 using HRM.DTOs.StaffTransfer;
 using HRM.Enums;
 using HRM.Services.Contracts;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HRM.Api.Controllers.V1;
 
-[ApiController]
-[Authorize]
 [Route("api/v1/staff-transfer")]
-public sealed class StaffTransferController : ControllerBase
+public sealed class StaffTransferController : HrmApiController
 {
     private readonly StaffTransferServiceContracts.IOperations _service;
 
