@@ -16,6 +16,8 @@ namespace HRM.Enum
 
         OT,
         JobRelatedItems,
+        [Display(Name = "Personal Items")]
+        PersonalItems,
 
         Payroll,
 

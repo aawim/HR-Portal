@@ -9,18 +9,26 @@
             <div class="flex items-center gap-2">
                 <h2 class="text-lg font-bold text-slate-900">
                     @(InitialItemsMode ? "Initial Staff Equipment & Items" :
+                      PersonalItemsOnly ? "Personal Items & Staff Requisitions" :
+                      JobRelatedOnly ? "Job-Related Equipment & Assets" :
                       IndividualId > 0 ? "Staff Items & Assigned Equipment" :
                       "Item Requisitions & Custody")
                 </h2>
-                @if (IndividualId > 0)
+                @if (PersonalItemsOnly)
                 {
-                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
-                        @(JobRelatedOnly ? "Job Related" : "All Staff Items")
-                    </span>
+                    <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">Personal Items</span>
+                }
+                else if (JobRelatedOnly)
+                {
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Job Related</span>
                 }
             </div>
             <p class="text-xs text-slate-500 mt-0.5">
-                @(IndividualId > 0
+                @(PersonalItemsOnly
+                    ? "Manage office supplies, consumables, and personal items requested or issued to this staff member."
+                    : JobRelatedOnly
+                    ? "Assign and track job-related physical items, hardware, and inventory assets issued to staff."
+                    : IndividualId > 0
                     ? "Manage equipment assignments, serialized inventory assets, and requisitions for this staff member."
                     : "Submit item requisitions, track issued inventory assets, and review approval workflows.")
             </p>
@@ -37,7 +45,7 @@
                     disabled="@busy"
                     @onclick="AddNew">
                 <span>+</span>
-                <span>@(IndividualId > 0 ? "Assign New Items" : "New Requisition")</span>
+                <span>@(PersonalItemsOnly ? "New Personal Requisition" : IndividualId > 0 ? "Assign New Items" : "New Requisition")</span>
             </button>
         </div>
     </header>
@@ -50,20 +58,20 @@
         </div>
     }
 
-    <!-- 2-Panel Layout: Left Panel Form/Details, Right Panel Request List -->
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-12 items-start">
+    <!-- 2-Panel Layout: Left Panel Form/Details, Right Panel Request List with gap-4 and p-2 -->
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start p-2">
         
         <!-- LEFT PANEL: Request Form (Default) or Selected Request Details -->
-        <div class="min-w-0 lg:col-span-7 xl:col-span-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <div class="min-w-0 lg:col-span-7 xl:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
             
             @if (selectedRequestId.HasValue && SelectedRequest is { } row)
             {
                 <!-- Selected Request Detail View -->
-                <div class="space-y-4 text-xs">
-                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                <div class="flex flex-col gap-3 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
                         <div class="flex items-center gap-2">
                             <button type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
                                     @onclick="AddNew">
                                 <span>← Back to Form</span>
                             </button>
@@ -83,13 +91,13 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
                                     @onclick="AddNew">
-                                <span>+ New @(IndividualId > 0 ? "Assignment" : "Requisition")</span>
+                                <span>+ New @(PersonalItemsOnly ? "Requisition" : IndividualId > 0 ? "Assignment" : "Requisition")</span>
                             </button>
                         </div>
                     </div>
 
                     <!-- Metadata Header -->
-                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-2">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
                         <div class="flex flex-wrap items-start justify-between gap-2">
                             <div>
                                 <p class="text-xs text-slate-600 font-medium">Assigned to: <strong class="text-slate-900 text-sm">@row.StaffName</strong></p>
@@ -114,7 +122,7 @@
                     </div>
 
                     <!-- Line Items Table -->
-                    <div class="space-y-2">
+                    <div class="flex flex-col gap-1.5">
                         <div class="flex items-center justify-between">
                             <h4 class="font-bold text-slate-900 text-sm">Issued & Requested Lines (@row.Lines.Count)</h4>
                             <span class="text-[11px] text-slate-500">Total units: @row.Lines.Sum(l => l.Quantity)</span>
@@ -187,10 +195,10 @@
                     </div>
 
                     <!-- Workflow Actions -->
-                    <div class="border-t border-slate-200 pt-3 space-y-3">
+                    <div class="border-t border-slate-200 pt-3">
                         @if (row.CanApprove || row.CanCancel || (row.IssuedAtUtc.HasValue && !row.ReturnedAtUtc.HasValue && canManageStaffItems))
                         {
-                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
                                 <span class="font-bold text-slate-800">Action Controls</span>
                                 <div class="flex flex-wrap items-center gap-2">
                                     @if (row.CanApprove || row.CanCancel)
@@ -240,14 +248,18 @@
             else
             {
                 <!-- Active Form (Default on Load) -->
-                <fieldset disabled="@busy" class="space-y-4 text-xs">
-                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                <fieldset disabled="@busy" class="flex flex-col gap-3 text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                         <div>
                             <legend class="text-sm font-bold text-slate-900">
-                                @(IndividualId > 0 ? "Assign Items & Equipment to Staff Member" : "New Item Requisition Request")
+                                @(PersonalItemsOnly ? "Request Personal / Consumable Items" :
+                                  IndividualId > 0 ? "Assign Items & Equipment to Staff Member" :
+                                  "New Item Requisition Request")
                             </legend>
                             <p class="text-[11px] text-slate-500 mt-0.5">
-                                @(IndividualId > 0
+                                @(PersonalItemsOnly
+                                    ? "Request personal office equipment, accessories, or consumables for this staff member."
+                                    : IndividualId > 0
                                     ? "Add serialized items with inventory/serial numbers, specify handover condition, and submit for custody approval."
                                     : "Draft required hardware or office supplies for administrative review and approval.")
                             </p>
@@ -256,7 +268,7 @@
 
                     <!-- Header Options: Purpose & Source -->
                     <div class="grid gap-3 sm:grid-cols-2">
-                        @if (!JobRelatedOnly)
+                        @if (!JobRelatedOnly && !PersonalItemsOnly)
                         {
                             <div>
                                 <label class="block font-medium text-slate-700">Requisition Purpose</label>
@@ -266,7 +278,7 @@
                                 </select>
                             </div>
                         }
-                        <div>
+                        <div class="@(JobRelatedOnly || PersonalItemsOnly ? "sm:col-span-2" : "")">
                             <label class="block font-medium text-slate-700">Item Catalogue Source</label>
                             <div class="mt-1 flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
                                 <button type="button"
@@ -284,7 +296,7 @@
                     </div>
 
                     <!-- Add Line Item Card -->
-                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-slate-800">Add Line Item</span>
                             <span class="text-[11px] text-slate-500">Inventory numbers are optional for assets</span>
@@ -422,7 +434,7 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm"
                                     @onclick="AddLine">
-                                <span>+ Add Item to Assignment</span>
+                                <span>+ Add Item</span>
                             </button>
                         </div>
                     </div>
@@ -430,42 +442,42 @@
                     <!-- Drafted Lines Review -->
                     @if (form.Lines.Count > 0)
                     {
-                        <div class="space-y-2">
+                        <div class="flex flex-col gap-1.5">
                             <div class="flex items-center justify-between font-medium text-slate-700">
                                 <span>Items in this Requisition (@form.Lines.Count)</span>
                                 <span class="text-[11px] text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
                             </div>
-                            <div class="space-y-2 max-h-60 overflow-y-auto">
+                            <div class="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
                                 @foreach (var line in form.Lines.ToList())
                                 {
-                                    <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs" @key="line">
+                                    <div class="rounded-xl border border-slate-200 bg-white p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs" @key="line">
                                         <div class="space-y-1 min-w-0 flex-1">
-                                            <div class="flex flex-wrap items-center gap-2">
+                                            <div class="flex flex-wrap items-center gap-1.5">
                                                 <strong class="text-slate-900">@line.ItemName</strong>
-                                                <span class="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 text-[11px]">Qty: @line.Quantity</span>
+                                                <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700 text-[10px]">Qty: @line.Quantity</span>
                                                 @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
                                                 {
-                                                    <span class="rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-700">
+                                                    <span class="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
                                                         #@line.InventoryNumber
                                                     </span>
                                                 }
                                                 @if (!string.IsNullOrWhiteSpace(line.SerialNumber))
                                                 {
-                                                    <span class="rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-mono text-[11px] text-indigo-700">
+                                                    <span class="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 font-mono text-[10px] text-indigo-700">
                                                         S/N: @line.SerialNumber
                                                     </span>
                                                 }
-                                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">@line.Condition</span>
+                                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">@line.Condition</span>
                                                 @if (line.ExpectedReturnDate.HasValue)
                                                 {
-                                                    <span class="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px]">
+                                                    <span class="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[10px]">
                                                         Return: @line.ExpectedReturnDate.Value.ToString("dd MMM yyyy")
                                                     </span>
                                                 }
                                             </div>
                                             @if (!string.IsNullOrWhiteSpace(line.Remarks))
                                             {
-                                                <p class="text-[11px] text-slate-500 italic">Accessories/Remarks: @line.Remarks</p>
+                                                <p class="text-[11px] text-slate-500 italic">Remarks: @line.Remarks</p>
                                             }
                                         </div>
                                         <button type="button"
@@ -482,12 +494,12 @@
                     <!-- Reason / Justification -->
                     <div>
                         <label class="block font-medium text-slate-700">
-                            Reason / Assignment Justification *
+                            Reason / Justification *
                         </label>
                         <textarea class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                   maxlength="1000"
                                   rows="2"
-                                  placeholder="Provide the official purpose or duties requiring this assignment..."
+                                  placeholder="Provide the purpose or justification for this requisition..."
                                   @bind="form.Reason"></textarea>
                     </div>
 
@@ -497,7 +509,7 @@
                                 disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))"
                                 @onclick="Submit">
                             <span>✓</span>
-                            <span>@(IndividualId > 0 ? "Submit Assignment for Approval" : "Submit Requisition")</span>
+                            <span>@(PersonalItemsOnly ? "Submit Personal Requisition" : IndividualId > 0 ? "Submit Assignment for Approval" : "Submit Requisition")</span>
                         </button>
                         <button type="button"
                                 class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
@@ -509,15 +521,19 @@
             }
         </div>
 
-        <!-- RIGHT PANEL: Request List & Custody Records -->
-        <aside class="min-w-0 lg:col-span-5 xl:col-span-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-4 space-y-3.5" aria-label="Item requests">
-            <div class="flex items-center justify-between">
+        <!-- RIGHT PANEL: Request List with style gap p-2 -->
+        <aside class="min-w-0 lg:col-span-5 xl:col-span-4 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2 flex flex-col gap-2" aria-label="Item requests">
+            
+            <!-- Header Card with p-2 -->
+            <div class="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
                 <div>
-                    <h3 class="font-bold text-slate-800 text-sm">Assigned & Requested</h3>
-                    <p class="text-[11px] text-slate-500">Click a record to view details & actions</p>
+                    <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                        @(PersonalItemsOnly ? "Personal Items" : JobRelatedOnly ? "Assigned Equipment" : "Item Requests")
+                    </h3>
+                    <span class="text-[11px] text-slate-500">@ListRows.Count record@(ListRows.Count == 1 ? "" : "s")</span>
                 </div>
                 <div class="flex items-center gap-1.5">
-                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@ListRows.Count</span>
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@ListRows.Count</span>
                     @if (selectedRequestId.HasValue)
                     {
                         <button type="button" class="text-xs text-blue-600 hover:underline font-semibold" @onclick="AddNew">
@@ -527,81 +543,54 @@
                 </div>
             </div>
 
-            <!-- Search Box -->
-            <div>
+            <!-- Search & Filters Container with p-2 and gap-2 -->
+            <div class="rounded-xl border border-slate-200/80 bg-white p-2 shadow-2xs flex flex-col gap-2">
                 <input type="text"
-                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                       class="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-2.5 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                        placeholder="Search reference, item, inv #..."
                        @bind="searchTerm"
                        @bind:event="oninput" />
-            </div>
 
-            <!-- Staff Workspace Filter Tabs (when viewing specific individual) -->
-            @if (IndividualId > 0 && !JobRelatedOnly)
-            {
-                <div class="flex rounded-lg border border-slate-200 bg-white p-0.5 text-[11px]">
+                <!-- Filter Status Pills with p-2 and gap-1 -->
+                <div class="flex flex-wrap gap-1 text-[11px]">
                     <button type="button"
-                            @onclick='() => typeFilter = "all"'
-                            class="flex-1 rounded-md py-1 font-medium transition text-center @(typeFilter == "all" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:text-slate-900")">
-                        All Items
+                            @onclick='() => filterStatus = "all"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "all" ? "bg-slate-900 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        All
                     </button>
                     <button type="button"
-                            @onclick='() => typeFilter = "requisitions"'
-                            class="flex-1 rounded-md py-1 font-medium transition text-center @(typeFilter == "requisitions" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:text-slate-900")">
-                        Requisitions
+                            @onclick='() => filterStatus = "pending"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        Pending
                     </button>
                     <button type="button"
-                            @onclick='() => typeFilter = "job"'
-                            class="flex-1 rounded-md py-1 font-medium transition text-center @(typeFilter == "job" ? "bg-slate-900 text-white shadow-xs" : "text-slate-600 hover:text-slate-900")">
-                        Job Equipment
+                            @onclick='() => filterStatus = "issued"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "issued" ? "bg-emerald-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        Issued
+                    </button>
+                    <button type="button"
+                            @onclick='() => filterStatus = "returned"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        Returned
                     </button>
                 </div>
-            }
-
-            <!-- Filter Status Pills -->
-            <div class="flex flex-wrap gap-1 text-[11px]">
-                <button type="button"
-                        @onclick='() => filterStatus = "all"'
-                        class="rounded-full px-2.5 py-0.5 font-medium transition @(filterStatus == "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
-                    All
-                </button>
-                <button type="button"
-                        @onclick='() => filterStatus = "pending"'
-                        class="rounded-full px-2.5 py-0.5 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
-                    Pending
-                </button>
-                <button type="button"
-                        @onclick='() => filterStatus = "issued"'
-                        class="rounded-full px-2.5 py-0.5 font-medium transition @(filterStatus == "issued" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
-                    Issued
-                </button>
-                <button type="button"
-                        @onclick='() => filterStatus = "returned"'
-                        class="rounded-full px-2.5 py-0.5 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
-                    Returned
-                </button>
             </div>
 
-            <!-- List of Requests -->
+            <!-- List of Request Cards with gap-2 and p-2 -->
             @if (!ListRows.Any())
             {
-                <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
                     No matching item requests found.
                 </div>
             }
-            <div class="max-h-[38rem] space-y-2 overflow-y-auto pr-0.5">
+            <div class="flex flex-col gap-2 max-h-[38rem] overflow-y-auto pr-0.5">
                 @foreach (var r in ListRows)
                 {
-                    <article class="rounded-xl border p-3 text-xs transition cursor-pointer @(SelectedRequest?.RequestId == r.RequestId ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")"
+                    <article class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(SelectedRequest?.RequestId == r.RequestId ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
                              @key="r.RequestId"
                              @onclick="() => ViewDetail(r.RequestId)">
-                        <div class="flex items-start justify-between gap-2">
-                            <div class="min-w-0">
-                                <strong class="block truncate font-mono text-slate-900 text-xs">@r.Reference</strong>
-                                <span class="text-slate-500 text-[11px]">
-                                    @r.Lines.Count line@(r.Lines.Count == 1 ? "" : "s") · @r.Purpose
-                                </span>
-                            </div>
+                        <div class="flex items-center justify-between gap-1.5">
+                            <span class="font-mono font-bold text-slate-900 text-xs truncate">@r.Reference</span>
                             <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @StatusBadgeClass(r.Status, r.ReturnedAtUtc.HasValue)">
                                 @(r.ReturnedAtUtc.HasValue ? "Returned" : r.Status)
                             </span>
@@ -610,35 +599,40 @@
                         <!-- Staff Name if general view -->
                         @if (IndividualId == 0)
                         {
-                            <div class="mt-1 text-[11px] font-medium text-slate-700 truncate">Staff: @r.StaffName</div>
+                            <div class="text-[11px] font-medium text-slate-700 truncate">Staff: @r.StaffName</div>
                         }
 
-                        <!-- Items Summary with Inventory Badges -->
-                        <div class="mt-1.5 space-y-1">
-                            <p class="truncate text-slate-700 font-medium text-[11px]">
-                                @string.Join(", ", r.Lines.Select(l => l.ItemName))
-                            </p>
-                            @if (r.Lines.Any(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)))
-                            {
-                                <div class="flex flex-wrap gap-1">
-                                    @foreach (var inv in r.Lines.Where(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)).Take(2))
-                                    {
-                                        <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.2 font-mono text-[10px] text-blue-700 font-semibold">
-                                            #@inv.InventoryNumber
-                                        </span>
-                                    }
-                                    @if (r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) > 2)
-                                    {
-                                        <span class="text-[10px] text-slate-400">+@(r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) - 2) more</span>
-                                    }
-                                </div>
-                            }
+                        <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                            <span class="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">@r.Purpose</span>
+                            <span>·</span>
+                            <span>@r.Lines.Count item@(r.Lines.Count == 1 ? "" : "s")</span>
                         </div>
 
-                        <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-1.5">
+                        <!-- Items Summary with Inventory Badges -->
+                        <div class="text-[11px] text-slate-700 font-medium truncate">
+                            @string.Join(", ", r.Lines.Select(l => l.ItemName))
+                        </div>
+
+                        @if (r.Lines.Any(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)))
+                        {
+                            <div class="flex flex-wrap gap-1">
+                                @foreach (var inv in r.Lines.Where(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)).Take(2))
+                                {
+                                    <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] text-blue-700 font-semibold">
+                                        #@inv.InventoryNumber
+                                    </span>
+                                }
+                                @if (r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) > 2)
+                                {
+                                    <span class="text-[10px] text-slate-400 self-center">+@(r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) - 2) more</span>
+                                }
+                            </div>
+                        }
+
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
                             <span>@r.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</span>
                             <span class="text-blue-600 font-semibold hover:underline">
-                                @(SelectedRequest?.RequestId == r.RequestId ? "Selected" : "View details →")
+                                @(SelectedRequest?.RequestId == r.RequestId ? "Selected" : "View →")
                             </span>
                         </div>
                     </article>
@@ -652,6 +646,7 @@
     [Parameter] public int IndividualId { get; set; }
     [Parameter] public bool InitialItemsMode { get; set; }
     [Parameter] public bool JobRelatedOnly { get; set; }
+    [Parameter] public bool PersonalItemsOnly { get; set; }
 
     [Parameter]
     [SupplyParameterFromQuery(Name = "requestId")]
@@ -679,7 +674,6 @@
     private int lineQuantity = 1;
 
     private string searchTerm = "";
-    private string typeFilter = "all";
     private string filterStatus = "all";
     private string? error;
     private bool busy;
@@ -690,13 +684,13 @@
     {
         get
         {
-            var baseRows = JobRelatedOnly ? rows.Where(r => r.Purpose == "Job related") : rows;
-            var combined = baseRows.Concat(IndividualId == 0 ? approvalRows : []).DistinctBy(r => r.RequestId);
+            var baseRows = JobRelatedOnly
+                ? rows.Where(r => r.Purpose == "Job related")
+                : PersonalItemsOnly
+                ? rows.Where(r => r.Purpose != "Job related" || r.Kind == "Requisition")
+                : rows;
 
-            if (typeFilter == "requisitions")
-                combined = combined.Where(r => r.Kind == "Requisition" || r.Purpose != "Job related");
-            else if (typeFilter == "job")
-                combined = combined.Where(r => r.Purpose == "Job related");
+            var combined = baseRows.Concat(IndividualId == 0 ? approvalRows : []).DistinctBy(r => r.RequestId);
 
             if (!string.IsNullOrWhiteSpace(searchTerm))
             {
@@ -756,7 +750,7 @@
         form = new ItemStaffRequestInput
         {
             IndividualId = IndividualId,
-            Kind = IndividualId > 0 ? "Issue" : "Requisition",
+            Kind = PersonalItemsOnly ? "Requisition" : IndividualId > 0 ? "Issue" : "Requisition",
             Purpose = JobRelatedOnly ? "Job related" : "Common"
         };
         ResetLineInputs();
