@@ -137,6 +137,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.ViewUrl == StaffPositionManagementService.RequestsPageUrl ? StaffPositionManagementService.RequestsPageUrl :
             n.ViewUrl == WeeklyHourExceptionService.PageUrl ? WeeklyHourExceptionService.PageUrl :
             n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :
+            n.ViewUrl == "/online/item-requests" ? (n.NotificationKind == "ActionRequired" ? $"/admin/hr/items/staff-items?requestId={n.RequestId}" : $"/online/item-requests?requestId={n.RequestId}") :
             n.ViewUrl == AdminAccessGrantService.PageUrl ? "/online/admin-access" :
             n.ViewUrl == StaffOnboardingService.PageUrl ? $"{StaffOnboardingService.PageUrl}?requestId={n.RequestId}" :
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :
