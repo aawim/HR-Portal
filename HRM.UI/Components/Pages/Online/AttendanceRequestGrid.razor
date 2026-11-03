@@ -113,113 +113,61 @@
                 </div>
             }
 
-            @if (activeTab == "uneven-log-correction")
-            {
-                <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
-                    <h3 class="font-semibold text-slate-800">Uneven-log corrections</h3>
-                    <p class="mb-3 text-sm text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
-                    @if (unevenLogs.Count == 0)
-                    {
-                        <p class="text-sm text-slate-500">No uneven clock events in the current salary period.</p>
-                    }
-                    @foreach (var log in unevenLogs)
-                    {
-                        <div class="flex items-center justify-between gap-3 border-t border-slate-200/80 py-2.5">
-                            <span class="text-sm font-medium text-slate-700">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
-                            @if (CanRequestCorrection(log.AttendanceLogID))
-                            {
-                                <button type="button" class="portal-action-btn portal-action-btn--compact" @onclick="() => OpenCorrection(log)">Request correction</button>
-                            }
-                            else
-                            {
-                                <span class="max-w-md text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
-                            }
-                        </div>
-                    }
-                </section>
-            }
-
             @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
             {
-                <!-- Filter Controls -->
-                <div class="bg-slate-50/70 p-4 rounded-xl border border-slate-200">
-                    <div class="grid grid-cols-12 gap-3 mb-3">
-                        @if (activeTab != "uneven-log-correction")
+                <!-- TWO-COLUMN GRID (like /online/ot): Left = Uneven-Log Actions & Selected Request Detail/Chit, Right = Filterable DataTable -->
+                <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                    <!-- LEFT COLUMN (2fr): Uneven-log correction actions + Selected Request Detail + Request Chit -->
+                    <div class="min-w-0 space-y-4">
+                        @if (activeTab == "uneven-log-correction")
                         {
-                            <div class="col-span-12 md:col-span-5 lg:col-span-5">
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Organisation</label>
-                                <select @bind="selectedOrgId" disabled class="w-full h-9 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
-                                    <option value="0">-- All Organisations --</option>
-                                    @foreach (var org in organisations)
-                                    {
-                                        <option value="@org.Id">@org.Name</option>
-                                    }
-                                </select>
-                            </div>
-                        }
-                        <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-6" : "md:col-span-3 lg:col-span-3")">
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Request Status</label>
-                            <select @bind="selectedStatusId" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 cursor-pointer">
-                                <option value="0">-- All Statuses --</option>
-                                @foreach (var state in requestStates)
+                            <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Uneven-log corrections">
+                                <div class="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                                    <div>
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Clock Event Correction</span>
+                                        <h3 class="mt-0.5 text-base font-bold text-slate-800">Uneven-log corrections</h3>
+                                        <p class="mt-0.5 text-xs text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
+                                    </div>
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                                        @unevenLogs.Count event(s)
+                                    </span>
+                                </div>
+
+                                @if (unevenLogs.Count == 0)
                                 {
-                                    <option value="@state.Id">@state.Name</option>
-                                }
-                            </select>
-                        </div>
-
-                        <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-3" : "md:col-span-2 lg:col-span-2")">
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">From</label>
-                            <input type="date" @bind="startDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
-                        </div>
-
-                        <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-3" : "md:col-span-2 lg:col-span-2")">
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">To</label>
-                            <input type="date" @bind="endDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
-                        </div>
-                    </div>
-
-                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200/80">
-                        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span class="px-2.5 py-1 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
-                                Total: @VisibleRequests.Count()
-                            </span>
-                            @foreach (var stat in stateStatistics)
-                            {
-                                <span class="px-2.5 py-1 rounded-full font-semibold @GetStateColorClass(stat.Key)">
-                                    @stat.Key: @stat.Value
-                                </span>
-                            }
-                        </div>
-
-                        <div class="flex items-center gap-2">
-                            <button type="button" @onclick="ResetFilters" class="portal-action-btn">
-                                Reset
-                            </button>
-                            <button type="button" @onclick="ExecuteSearch" disabled="@isLoading" class="portal-action-btn portal-action-btn--primary">
-                                @if (isLoading)
-                                {
-                                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                    <span>Searching...</span>
+                                    <p class="rounded-md border border-dashed border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-500">
+                                        No uneven clock events in the current salary period.
+                                    </p>
                                 }
                                 else
                                 {
-                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                                    <span>Search</span>
+                                    <div class="max-h-72 divide-y divide-slate-100 overflow-y-auto pr-1">
+                                        @foreach (var log in unevenLogs)
+                                        {
+                                            <div class="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                                                <div>
+                                                    <span class="block text-sm font-semibold text-slate-800">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
+                                                    <span class="text-xs text-slate-500">@log.Date.ToString("dddd") · Log #@log.AttendanceLogID</span>
+                                                </div>
+                                                @if (CanRequestCorrection(log.AttendanceLogID))
+                                                {
+                                                    <button type="button" class="portal-action-btn portal-action-btn--compact portal-action-btn--primary" @onclick="() => OpenCorrection(log)">Request correction</button>
+                                                }
+                                                else
+                                                {
+                                                    <span class="max-w-xs text-right text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
                                 }
-                            </button>
-                        </div>
-                    </div>
-                </div>
+                            </section>
+                        }
 
-                <!-- TWO-COLUMN GRID: Left = Request Detail & Chit, Right = Attendance Requests DataTable -->
-                <div class="master-detail-split">
-                    <!-- LEFT COLUMN: Selected Request Detail + Request Chit -->
-                    <div class="master-detail-left">
                         @if (SelectedRequest == null)
                         {
-                            <div class="detail-panel-card text-center py-12 text-slate-500">
-                                <p class="font-semibold text-slate-700 mb-1">No Attendance Request Selected</p>
+                            <div class="detail-panel-card text-center py-10 text-slate-500">
+                                <p class="font-semibold text-slate-700 mb-1">No Request Selected</p>
                                 <p class="text-xs text-slate-500">Select a request from the datatable on the right (or click Search) to view its details and attendance request chit.</p>
                             </div>
                         }
@@ -313,28 +261,101 @@
                         }
                     </div>
 
-                    <!-- RIGHT COLUMN: Attendance Requests DataTable -->
-                    <div class="master-detail-right">
+                    <!-- RIGHT COLUMN (3fr): Filter Controls + Attendance Requests DataTable -->
+                    <aside class="min-w-0 space-y-4">
                         <section class="datatable-panel-card" aria-label="Attendance requests datatable">
-                            <div class="datatable-toolbar">
-                                <input type="search"
-                                       value="@tableSearch"
-                                       @oninput="OnTableSearchInput"
-                                       placeholder="Filter datatable by reference, staff, mode, status…"
-                                       aria-label="Filter attendance requests datatable"
-                                       class="h-9 px-3 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 flex-1 min-w-[200px]" />
+                            <div class="border-b border-slate-200 bg-slate-50/70 p-4">
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h3 class="text-base font-bold text-slate-800">
+                                            @(activeTab == "uneven-log-correction" ? "Uneven-Log Correction Requests" : "Attendance Requests")
+                                        </h3>
+                                        <p class="text-xs text-slate-500">Filter by date range, status, or reference and select a row to inspect its detail &amp; chit on the left.</p>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                                        <span class="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
+                                            Total: @VisibleRequests.Count()
+                                        </span>
+                                        @foreach (var stat in stateStatistics)
+                                        {
+                                            <span class="px-2.5 py-0.5 rounded-full font-semibold @GetStateColorClass(stat.Key)">
+                                                @stat.Key: @stat.Value
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
 
-                                <div class="flex items-center gap-2 text-xs text-slate-600">
-                                    <label class="flex items-center gap-1.5">
-                                        <span>Rows:</span>
-                                        <select value="@pageSize"
-                                                @onchange="OnPageSizeChanged"
-                                                class="h-8 px-2 text-xs bg-white border border-slate-200 rounded-md">
-                                            <option value="10">10</option>
-                                            <option value="25">25</option>
-                                            <option value="50">50</option>
+                                <div class="grid grid-cols-12 gap-3 mb-3">
+                                    @if (activeTab != "uneven-log-correction")
+                                    {
+                                        <div class="col-span-12 md:col-span-5">
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation</label>
+                                            <select @bind="selectedOrgId" disabled class="w-full h-9 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
+                                                <option value="0">-- All Organisations --</option>
+                                                @foreach (var org in organisations)
+                                                {
+                                                    <option value="@org.Id">@org.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    }
+                                    <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-3")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Request Status</label>
+                                        <select @bind="selectedStatusId" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 cursor-pointer">
+                                            <option value="0">-- All Statuses --</option>
+                                            @foreach (var state in requestStates)
+                                            {
+                                                <option value="@state.Id">@state.Name</option>
+                                            }
                                         </select>
-                                    </label>
+                                    </div>
+
+                                    <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-2")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">From</label>
+                                        <input type="date" @bind="startDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                                    </div>
+
+                                    <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-2")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">To</label>
+                                        <input type="date" @bind="endDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                                    <input type="search"
+                                           value="@tableSearch"
+                                           @oninput="OnTableSearchInput"
+                                           placeholder="Filter datatable by reference, staff, mode, status…"
+                                           aria-label="Filter attendance requests datatable"
+                                           class="h-9 px-3 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 flex-1 min-w-[180px]" />
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-600">
+                                            <span>Rows:</span>
+                                            <select value="@pageSize"
+                                                    @onchange="OnPageSizeChanged"
+                                                    class="h-9 px-2 text-xs bg-white border border-slate-200 rounded-md">
+                                                <option value="10">10</option>
+                                                <option value="25">25</option>
+                                                <option value="50">50</option>
+                                            </select>
+                                        </label>
+                                        <button type="button" @onclick="ResetFilters" class="portal-action-btn">
+                                            Reset
+                                        </button>
+                                        <button type="button" @onclick="ExecuteSearch" disabled="@isLoading" class="portal-action-btn portal-action-btn--primary">
+                                            @if (isLoading)
+                                            {
+                                                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                <span>Searching...</span>
+                                            }
+                                            else
+                                            {
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                                <span>Search</span>
+                                            }
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
 
@@ -378,7 +399,7 @@
                                                         <button type="button"
                                                                 class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
                                                                 @onclick="() => SelectRequest(req)">
-                                                            Chit & Detail
+                                                            View
                                                         </button>
                                                     </td>
                                                 </tr>
@@ -417,7 +438,7 @@
                                 </div>
                             }
                         </section>
-                    </div>
+                    </aside>
                 </div>
             }
         </div>

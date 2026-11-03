@@ -2,60 +2,88 @@
 @using Microsoft.AspNetCore.Components.Authorization
 @using HRM.Models
 @using HRM.Services
+@using HRM.Components.Pages.Online
 
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>Attendance - HR Portal</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        
+        <div class="max-w-12xl mx-auto py-4 px-2 sm:px-4 space-y-6">
+            <div class="flex flex-wrap items-end justify-between gap-4 border-b border-slate-200 pb-4">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-800">Attendance</h1>
+                    <p class="text-slate-500 text-sm mt-1">Manage your attendance logs, clock events, schedules, and operational requests.</p>
+                </div>
 
-        <div class="max-w-12xl mx-auto py-8 px-">
-            <div class="mb-10">
-                <h1 class="text-3xl font-extrabold text-slate-800">Attendance</h1>
-                <p class="text-slate-500 mt-2">Manage your organization's core configuration and operational parameters.</p>
+                <!-- Tab Switcher on /online/attendance -->
+                <nav class="flex flex-wrap gap-2" aria-label="Attendance views">
+                    <button type="button"
+                            @onclick='() => activeView = "hub"'
+                            class="portal-action-btn @(activeView == "hub" ? "portal-action-btn--primary" : "")">
+                        <span>Attendance Hub</span>
+                    </button>
+                    <button type="button"
+                            @onclick='() => activeView = "clock-events"'
+                            class="portal-action-btn @(activeView == "clock-events" ? "portal-action-btn--primary" : "")">
+                        <span>My Clock Events</span>
+                    </button>
+                </nav>
             </div>
 
-            <!-- Grid: 4 columns on large screens, 2 on medium -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                @foreach (var cat in mainCategories)
-                {
-                    <a href="/online/attendance/@cat.Url"
-                       class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
+            @if (activeView == "clock-events")
+            {
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+                    <MyClockEventsPanel />
+                </div>
+            }
+            else
+            {
+                <!-- Grid: 3 columns on medium+ screens -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    @foreach (var cat in mainCategories)
+                    {
+                        @if (cat.Url == "#clock-events")
+                        {
+                            <button type="button"
+                                    @onclick='() => activeView = "clock-events"'
+                                    class="text-left bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6">
+                                <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
+                                    @cat.Icon
+                                </div>
+                                <div class="flex-grow">
+                                    <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
+                                    <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
+                                </div>
+                                <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </div>
+                            </button>
+                        }
+                        else
+                        {
+                            <a href="/online/attendance/@cat.Url"
+                               class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm hover:shadow-md hover:border-blue-400 hover:bg-slate-50 transition-all duration-200 group flex items-center gap-6 no-underline">
 
-                        <!-- Left: Icon Container -->
-                        <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
-                            @cat.Icon
-                        </div>
+                                <div class="w-16 h-16 flex items-center justify-center rounded-lg bg-blue-50 text-3xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300 flex-shrink-0">
+                                    @cat.Icon
+                                </div>
 
-                        <!-- Right: Text Content -->
-                        <div class="flex-grow">
-                            <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
-                            <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
-                        </div>
+                                <div class="flex-grow">
+                                    <h3 class="font-bold text-slate-800 text-lg mb-1 group-hover:text-blue-700">@cat.Title</h3>
+                                    <p class="text-slate-500 text-sm leading-tight">@cat.Description</p>
+                                </div>
 
-                        <!-- Right: Arrow (Optional) -->
-                        <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
-                            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                        </div>
-                    </a>
-                }
-            </div>
+                                <div class="text-slate-300 group-hover:text-blue-600 transition-colors">
+                                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                </div>
+                            </a>
+                        }
+                    }
+                </div>
+            }
         </div>
-
-        @code {
-                private record Category(string Title, string Url, string Icon, string Description);
-
-                private List<Category> mainCategories = new() {
-                    new("My Attendance","my-attendance","👤","View your personal attendance logs, clock-in history, lateness records, and attendance summaries."),
-                    new("Attendance Request","attendance-request","✉️","Submit and track attendance correction requests for missed, incorrect, or incomplete attendance logs."),
-                    new("Organisation Daily","organisation-daily","🏢","Review the daily attendance status, absences, and workforce presence across the entire organisation."),
-                    new("Out Of Office Request","out-of-office-request","🚶‍♂️","Request approval for off-site work, client visits, meetings, training sessions, or temporary absences."),
-                    new("Official Request","official-request","✈️","Submit and manage official duty, business travel, field work, and company-assigned trip requests.")
-                };
-        }
-      
     </Authorized>
 
     <NotAuthorized>
@@ -68,6 +96,17 @@
 </AuthorizeView>
 
 @code {
-  
+    private string activeView = "hub";
 
+    private record Category(string Title, string Url, string Icon, string Description);
+
+    private List<Category> mainCategories = new()
+    {
+        new("My Attendance", "my-attendance", "👤", "View your personal attendance logs, clock-in history, lateness records, and attendance summaries."),
+        new("My Clock Events", "#clock-events", "⏱️", "Inspect daily check-in/check-out records alongside all scheduled segments and physical clock events."),
+        new("Attendance Request", "attendance-request", "✉️", "Submit and track attendance correction requests for missed, incorrect, or incomplete attendance logs."),
+        new("Organisation Daily", "organisation-daily", "🏢", "Review the daily attendance status, absences, and workforce presence across the entire organisation."),
+        new("Out Of Office Request", "out-of-office-request", "🚶‍♂️", "Request approval for off-site work, client visits, meetings, training sessions, or temporary absences."),
+        new("Official Request", "official-request", "✈️", "Submit and manage official duty, business travel, field work, and company-assigned trip requests.")
+    };
 }
