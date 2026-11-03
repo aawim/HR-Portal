@@ -72,8 +72,16 @@ public sealed class ItemCatalogueMapping : IEntityTypeConfiguration<ItemCategory
         b.ToTable("IM_ItemStaffRequestLines", t => t.HasCheckConstraint("CK_IM_ItemStaffRequestLines_Quantity", "[Quantity] > 0"));
         b.HasKey(x => x.ItemStaffRequestLineId);
         b.Property(x => x.ItemName).HasMaxLength(200);
+        b.Property(x => x.InventoryNumber).HasMaxLength(100);
+        b.Property(x => x.SerialNumber).HasMaxLength(120);
+        b.Property(x => x.Condition).HasMaxLength(30);
+        b.Property(x => x.Remarks).HasMaxLength(500);
         b.HasIndex(x => new { x.RequestId, x.ItemStaffRequestLineId });
+        b.HasIndex(x => x.ItemId);
+        b.HasIndex(x => x.ItemUnitId);
         b.HasOne(x => x.Request).WithMany(x => x.Lines).HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.ItemUnit).WithMany().HasForeignKey(x => x.ItemUnitId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 

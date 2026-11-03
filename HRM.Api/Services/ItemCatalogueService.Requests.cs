@@ -78,11 +78,22 @@ public sealed partial class ItemCatalogueService
             if (approvalsOnly && !canApprove) continue;
             result.Add(new(row.RequestId, row.Request.RequestStateId, row.Request.ReferenceNumber ?? $"IM-{row.RequestId}",
                 row.IndividualId, name, row.Purpose, row.Kind,
-                row.Reason, row.Request.RequestState.StateName.Trim(), row.CreatedAtUtc, row.IssuedAtUtc,
+                row.Reason, row.Request.RequestState.StateName.Trim(), row.CreatedAtUtc, row.IssuedAtUtc, row.ReturnedAtUtc,
                 canApprove,
                 row.IndividualId == actor.Person && instance?.WorkflowStatus == "InProgress",
                 row.Lines.OrderBy(l => l.ItemStaffRequestLineId)
-                    .Select(l => new ItemStaffRequestLineDto(l.ItemStaffRequestLineId, l.ItemName, l.Quantity, l.IssuedAtUtc)).ToList()));
+                    .Select(l => new ItemStaffRequestLineDto(
+                        l.ItemStaffRequestLineId,
+                        l.ItemId,
+                        l.ItemUnitId,
+                        l.ItemName,
+                        l.InventoryNumber,
+                        l.SerialNumber,
+                        l.Condition,
+                        l.ExpectedReturnDate,
+                        l.Remarks,
+                        l.Quantity,
+                        l.IssuedAtUtc)).ToList()));
         }
         return result;
     }
@@ -98,9 +109,21 @@ public sealed partial class ItemCatalogueService
             model.Lines is null || model.Lines.Count is < 1 or > 30 ||
             model.Lines.Any(l => string.IsNullOrWhiteSpace(l.ItemName) || l.ItemName.Trim().Length > 200 || l.Quantity is < 1 or > 1000))
             return ServiceResult.Fail("Enter 1–30 item lines, each with a name and positive quantity, plus a reason of up to 1,000 characters.");
-        var lines = model.Lines.Select(l => new ItemStaffRequestLine { ItemName = l.ItemName.Trim(), Quantity = l.Quantity }).ToList();
-        if (lines.Select(l => l.ItemName).Distinct(StringComparer.OrdinalIgnoreCase).Count() != lines.Count)
-            return ServiceResult.Fail("Combine duplicate item names into one line.");
+        var lines = model.Lines.Select(l => new ItemStaffRequestLine
+        {
+            ItemId = l.ItemId,
+            ItemUnitId = l.ItemUnitId,
+            ItemName = l.ItemName.Trim(),
+            InventoryNumber = string.IsNullOrWhiteSpace(l.InventoryNumber) ? null : l.InventoryNumber.Trim(),
+            SerialNumber = string.IsNullOrWhiteSpace(l.SerialNumber) ? null : l.SerialNumber.Trim(),
+            Condition = string.IsNullOrWhiteSpace(l.Condition) ? "Good" : l.Condition.Trim(),
+            ExpectedReturnDate = l.ExpectedReturnDate,
+            Remarks = string.IsNullOrWhiteSpace(l.Remarks) ? null : l.Remarks.Trim(),
+            Quantity = l.Quantity
+        }).ToList();
+        var duplicates = lines.GroupBy(l => (l.ItemName.ToLowerInvariant(), (l.InventoryNumber ?? "").ToLowerInvariant(), (l.SerialNumber ?? "").ToLowerInvariant()));
+        if (duplicates.Any(g => g.Count() > 1))
+            return ServiceResult.Fail("Combine duplicate item lines into one line or specify distinct inventory/serial numbers.");
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
@@ -140,6 +163,41 @@ public sealed partial class ItemCatalogueService
             var row = await db.ItemStaffRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
                 .Include(r => r.Lines).SingleOrDefaultAsync(r => r.RequestId == requestId && r.OrganisationId == actor.Org)
                 ?? throw new UnauthorizedAccessException("Item request unavailable in this organisation.");
+            if (action is "Return" or "MarkReturned")
+            {
+                if (!actor.Manage) throw new UnauthorizedAccessException("Only an administrator can record an item return.");
+                row.ReturnedAtUtc = DateTime.UtcNow;
+                foreach (var line in row.Lines)
+                {
+                    if (line.ItemUnitId.HasValue)
+                    {
+                        var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == line.ItemUnitId.Value && u.OrganisationId == actor.Org);
+                        if (unit != null)
+                        {
+                            unit.Status = "Returned";
+                            unit.CollectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+                            unit.IssuedToIndividualId = null;
+                            unit.Version++;
+                        }
+                    }
+                }
+                if (row.ItemUnitId.HasValue)
+                {
+                    var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == row.ItemUnitId.Value && u.OrganisationId == actor.Org);
+                    if (unit != null)
+                    {
+                        unit.Status = "Returned";
+                        unit.CollectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+                        unit.IssuedToIndividualId = null;
+                        unit.Version++;
+                    }
+                }
+                await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,
+                    $"Recorded item return for staff {row.IndividualId}; request {row.RequestId}.");
+                await db.SaveChangesAsync();
+                await tx.CommitAsync();
+                return ServiceResult.Ok("Items successfully marked as returned.");
+            }
             if (action is "Approve" or "Reject" && await db.WfRequestActions.AnyAsync(a =>
                 a.WorkflowRequestInstance.RequestId == requestId && a.ActionCode == "START" && a.PerformedByUserId == actor.User))
                 throw new UnauthorizedAccessException("You cannot decide an item request that you submitted.");
@@ -160,6 +218,47 @@ public sealed partial class ItemCatalogueService
                             row.ItemUnitId = unit.ItemUnitId;
                         }
                         else { item.QuantityOnHand -= row.Quantity; item.Version++; }
+                    }
+                    foreach (var line in row.Lines)
+                    {
+                        if (line.ItemUnitId.HasValue)
+                        {
+                            var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == line.ItemUnitId.Value && u.OrganisationId == actor.Org);
+                            if (unit != null)
+                            {
+                                unit.Status = "Issued";
+                                unit.IssuedToIndividualId = row.IndividualId;
+                                unit.IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+                                unit.Version++;
+                            }
+                        }
+                        else if (line.ItemId.HasValue)
+                        {
+                            var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == line.ItemId.Value && i.OrganisationId == actor.Org);
+                            if (item != null)
+                            {
+                                if (item.Kind == "Asset")
+                                {
+                                    var unit = await db.ItemUnits.Where(u => u.ItemId == item.ItemId && u.Status == "Available")
+                                        .OrderBy(u => u.ItemUnitId).FirstOrDefaultAsync();
+                                    if (unit != null)
+                                    {
+                                        unit.Status = "Issued";
+                                        unit.IssuedToIndividualId = row.IndividualId;
+                                        unit.IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+                                        unit.Version++;
+                                        line.ItemUnitId = unit.ItemUnitId;
+                                        if (string.IsNullOrWhiteSpace(line.InventoryNumber)) line.InventoryNumber = unit.InventoryNumber;
+                                        if (string.IsNullOrWhiteSpace(line.SerialNumber)) line.SerialNumber = unit.SerialNumber;
+                                    }
+                                }
+                                else
+                                {
+                                    item.QuantityOnHand = Math.Max(0, item.QuantityOnHand - line.Quantity);
+                                    item.Version++;
+                                }
+                            }
+                        }
                     }
                     row.IssuedAtUtc = DateTime.UtcNow;
                     foreach (var line in row.Lines) line.IssuedAtUtc = row.IssuedAtUtc;

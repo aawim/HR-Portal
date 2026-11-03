@@ -85,8 +85,17 @@ public sealed class ItemStaffRequestLine
 {
     public int ItemStaffRequestLineId { get; set; }
     public int RequestId { get; set; }
+    public int? ItemId { get; set; }
+    public int? ItemUnitId { get; set; }
     public string ItemName { get; set; } = "";
+    public string? InventoryNumber { get; set; }
+    public string? SerialNumber { get; set; }
+    public string? Condition { get; set; }
+    public DateOnly? ExpectedReturnDate { get; set; }
+    public string? Remarks { get; set; }
     public int Quantity { get; set; }
     public DateTime? IssuedAtUtc { get; set; }
     public ItemStaffRequest Request { get; set; } = null!;
+    public Item? Item { get; set; }
+    public ItemUnit? ItemUnit { get; set; }
 }

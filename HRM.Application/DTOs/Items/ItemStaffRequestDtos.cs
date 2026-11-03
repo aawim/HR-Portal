@@ -14,13 +14,45 @@ public sealed class ItemStaffRequestInput
 
 public sealed class ItemStaffRequestLineInput
 {
+    public int? ItemId { get; set; }
+    public int? ItemUnitId { get; set; }
     public string ItemName { get; set; } = "";
+    public string? InventoryNumber { get; set; }
+    public string? SerialNumber { get; set; }
+    public string? Condition { get; set; } = "Good";
+    public DateOnly? ExpectedReturnDate { get; set; }
+    public string? Remarks { get; set; }
     public int Quantity { get; set; } = 1;
 }
 
-public sealed record ItemStaffRequestLineDto(int ItemStaffRequestLineId, string ItemName, int Quantity, DateTime? IssuedAtUtc);
+public sealed record ItemStaffRequestLineDto(
+    int ItemStaffRequestLineId,
+    int? ItemId,
+    int? ItemUnitId,
+    string ItemName,
+    string? InventoryNumber,
+    string? SerialNumber,
+    string? Condition,
+    DateOnly? ExpectedReturnDate,
+    string? Remarks,
+    int Quantity,
+    DateTime? IssuedAtUtc
+);
 
-public sealed record ItemStaffRequestDto(int RequestId, int StateId, string Reference, int IndividualId,
-    string StaffName, string Purpose, string Kind,
-    string Reason, string Status, DateTime CreatedAtUtc, DateTime? IssuedAtUtc,
-    bool CanApprove, bool CanCancel, List<ItemStaffRequestLineDto> Lines);
+public sealed record ItemStaffRequestDto(
+    int RequestId,
+    int StateId,
+    string Reference,
+    int IndividualId,
+    string StaffName,
+    string Purpose,
+    string Kind,
+    string Reason,
+    string Status,
+    DateTime CreatedAtUtc,
+    DateTime? IssuedAtUtc,
+    DateTime? ReturnedAtUtc,
+    bool CanApprove,
+    bool CanCancel,
+    List<ItemStaffRequestLineDto> Lines
+);

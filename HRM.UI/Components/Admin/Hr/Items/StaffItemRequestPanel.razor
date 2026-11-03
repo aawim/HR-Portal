@@ -3,113 +3,598 @@
 @inject HRM.Services.ToastService Toasts
 
 <section class="space-y-4">
-    <header class="flex flex-wrap items-center justify-between gap-2">
-        <div><h2 class="text-lg font-semibold">@(InitialItemsMode ? "Initial staff items" : JobRelatedOnly ? "Job related items" : "My item requisitions")</h2>
-            <p class="text-sm text-slate-500">Add each item as a separate line. Items are issued after final approval.</p></div>
-        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Load">Refresh</button>
-    </header>
-    @if (error != null) { <p role="alert" class="rounded border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">@error</p> }
-    <div class="grid gap-2 lg:grid-cols-[minmax(0,2fr)_minmax(15rem,1fr)]">
-        <aside class="min-w-0 rounded-xl border border-slate-200 p-3 lg:order-2" aria-label="Item requests">
-            <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <h3 class="font-semibold">Requested items</h3>
-                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="AddNew">Add new</button>
-            </div>
-            @if (!ListRows.Any()) { <p class="text-sm text-slate-500">No item requests yet. Select Add new to start.</p> }
-            <div class="max-h-[36rem] space-y-2 overflow-y-auto">
-                @foreach (var row in ListRows)
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">
+                    @(InitialItemsMode ? "Initial Staff Equipment & Items" : JobRelatedOnly ? "Job-Related Items & Asset Assignment" : "Item Requisitions & Custody")
+                </h2>
+                @if (JobRelatedOnly)
                 {
-                    <article class="rounded-lg border p-3 text-sm @(SelectedRequest?.RequestId == row.RequestId && !showForm ? "border-blue-400 bg-blue-50" : "border-slate-200")" @key="row.RequestId">
-                        <div class="flex flex-wrap items-start justify-between gap-2">
-                            <div class="min-w-0">
-                                <strong class="block truncate">@row.Reference</strong>
-                                <span class="text-slate-600">@row.Lines.Count item@(row.Lines.Count == 1 ? "" : "s") · @row.Purpose</span>
-                            </div>
-                            <span class="text-xs">@row.Status</span>
-                        </div>
-                        <p class="mt-1 truncate text-slate-600">@string.Join(", ", row.Lines.Select(l => l.ItemName))</p>
-                        <button type="button" class="mt-2 text-blue-700 underline" @onclick="() => ViewDetail(row.RequestId)">View detail</button>
-                    </article>
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Job Related</span>
                 }
             </div>
-        </aside>
-        <div class="min-w-0 rounded-xl border border-slate-200 p-4 lg:order-1">
+            <p class="text-xs text-slate-500 mt-0.5">
+                Assign and track job-related physical items, hardware, and inventory assets issued to staff.
+            </p>
+        </div>
+        <div class="flex items-center gap-2">
+            <button class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="AddNew">
+                <span>+</span>
+                <span>@(IndividualId > 0 ? "Assign New Items" : "New Requisition")</span>
+            </button>
+        </div>
+    </header>
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    <!-- Main Grid: History / Queue on Left/Right, Form or Detail in Center -->
+    <div class="grid gap-4 lg:grid-cols-[minmax(0,2.2fr)_minmax(18rem,1fr)]">
+        <!-- Center Workspace: Form or Selected Request Detail -->
+        <div class="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:order-1">
             @if (showForm)
             {
-                <fieldset disabled="@busy" class="space-y-3">
-                    <legend class="font-semibold">@(IndividualId > 0 ? "Request initial issue" : "New requisition")</legend>
-                    @if (!JobRelatedOnly)
-                    {
-                        <label class="block text-sm">Purpose
-                            <select class="mt-1 w-full rounded border p-2" @bind="form.Purpose"><option>Common</option><option>Job related</option></select>
-                        </label>
-                    }
-                    <div class="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
-                        <label class="text-sm">Previously requested item
-                            <select class="mt-1 w-full rounded border p-2" @bind="selectedName"><option value="">Select or enter a new name</option>
-                                @foreach (var name in previousNames) { <option value="@name">@name</option> }
-                            </select>
-                        </label>
-                        <label class="text-sm">New item name
-                            <input class="mt-1 w-full rounded border p-2" maxlength="200" @bind="newName" placeholder="Type an item not listed" />
-                        </label>
-                        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end" @onclick="AddLine">Add item</button>
+                <fieldset disabled="@busy" class="space-y-4 text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <legend class="text-sm font-bold text-slate-900">
+                            @(IndividualId > 0 ? "Assign Items & Equipment to Staff Member" : "New Item Requisition Request")
+                        </legend>
+                        <button type="button" class="text-slate-400 hover:text-slate-600 text-sm font-semibold" @onclick="CloseForm">✕</button>
                     </div>
+
+                    <!-- Header Options: Purpose & Source -->
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        @if (!JobRelatedOnly)
+                        {
+                            <div>
+                                <label class="block font-medium text-slate-700">Requisition Purpose</label>
+                                <select class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="form.Purpose">
+                                    <option value="Common">Common Office Items</option>
+                                    <option value="Job related">Job Related Equipment</option>
+                                </select>
+                            </div>
+                        }
+                        <div>
+                            <label class="block font-medium text-slate-700">Item Catalogue Source</label>
+                            <div class="mt-1 flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                                <button type="button"
+                                        @onclick='() => itemSource = "catalogue"'
+                                        class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "catalogue" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                                    Catalogue Items
+                                </button>
+                                <button type="button"
+                                        @onclick='() => itemSource = "custom"'
+                                        class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "custom" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                                    Manual / Custom Item
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Line Item Card -->
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-slate-800">Add Item Line</span>
+                            <span class="text-[11px] text-slate-500">Inventory numbers are optional for assets</span>
+                        </div>
+
+                        @if (itemSource == "catalogue")
+                        {
+                            <div class="grid gap-2 sm:grid-cols-2">
+                                <div>
+                                    <label class="block font-medium text-slate-700">Select Item *</label>
+                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                            value="@selectedCatalogueItemId"
+                                            @onchange="OnCatalogueItemChanged">
+                                        <option value="0">Choose from active catalogue...</option>
+                                        @foreach (var catGroup in catalogueItems.GroupBy(i => i.Kind))
+                                        {
+                                            <optgroup label="@(catGroup.Key == "Asset" ? "Assets / Equipment" : "Consumables")">
+                                                @foreach (var item in catGroup)
+                                                {
+                                                    <option value="@item.ItemId">
+                                                        @item.Name (@item.Kind · @item.Available @item.UnitOfMeasure available)
+                                                    </option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </div>
+                                @if (availableUnits.Count > 0)
+                                {
+                                    <div>
+                                        <label class="block font-medium text-slate-700">Registered Asset Units</label>
+                                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono"
+                                                value="@selectedItemUnitId"
+                                                @onchange="OnUnitChanged">
+                                            <option value="0">Select inventory unit (or enter manual number)...</option>
+                                            @foreach (var u in availableUnits)
+                                            {
+                                                <option value="@u.ItemUnitId">
+                                                    [@u.InventoryNumber] @(u.SerialNumber != null ? $"S/N: {u.SerialNumber} · " : "")Condition: @u.Condition
+                                                </option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="grid gap-2 sm:grid-cols-2">
+                                <div>
+                                    <label class="block font-medium text-slate-700">Previously Requested Item</label>
+                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                            @bind="selectedName">
+                                        <option value="">Select previously used name...</option>
+                                        @foreach (var name in previousNames)
+                                        {
+                                            <option value="@name">@name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block font-medium text-slate-700">New Item Name *</label>
+                                    <input class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                           maxlength="200"
+                                           @bind="newName"
+                                           placeholder="e.g. Dell Latitude 5420, Wireless Mouse, ID Badge" />
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Item Specific Details: Inventory Number (Optional), Serial Number, Condition, Expected Return, Remarks -->
+                        <div class="grid gap-2 sm:grid-cols-3">
+                            <div>
+                                <label class="block font-medium text-slate-700">
+                                    Inventory Number <span class="font-normal text-slate-500">(Optional)</span>
+                                </label>
+                                <input type="text"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                       maxlength="100"
+                                       @bind="lineInventoryNumber"
+                                       placeholder="e.g. INV-2026-0042" />
+                            </div>
+                            <div>
+                                <label class="block font-medium text-slate-700">
+                                    Serial Number <span class="font-normal text-slate-500">(Optional)</span>
+                                </label>
+                                <input type="text"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                       maxlength="120"
+                                       @bind="lineSerialNumber"
+                                       placeholder="e.g. SN-8849204A" />
+                            </div>
+                            <div>
+                                <label class="block font-medium text-slate-700">Condition at Handover</label>
+                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="lineCondition">
+                                    <option value="New">Brand New</option>
+                                    <option value="Good">Good Condition</option>
+                                    <option value="Fair">Fair / Used</option>
+                                    <option value="Excellent">Excellent</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid gap-2 sm:grid-cols-3">
+                            <div>
+                                <label class="block font-medium text-slate-700">
+                                    Expected Return Date <span class="font-normal text-slate-500">(Optional)</span>
+                                </label>
+                                <input type="date"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                       @bind="lineExpectedReturnDate" />
+                            </div>
+                            <div>
+                                <label class="block font-medium text-slate-700">Quantity</label>
+                                <input type="number"
+                                       min="1"
+                                       max="1000"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                       @bind="lineQuantity" />
+                            </div>
+                            <div>
+                                <label class="block font-medium text-slate-700">
+                                    Accessories / Remarks <span class="font-normal text-slate-500">(Optional)</span>
+                                </label>
+                                <input type="text"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                       maxlength="500"
+                                       @bind="lineRemarks"
+                                       placeholder="e.g. 65W charger, laptop bag, HDMI adapter" />
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-1">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm"
+                                    @onclick="AddLine">
+                                <span>+ Add Item to Assignment</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Drafted Lines Review -->
                     @if (form.Lines.Count > 0)
                     {
-                        <div class="space-y-2" aria-label="Requested item lines">
-                            @foreach (var line in form.Lines.ToList())
-                            {
-                                <div class="flex flex-wrap items-center gap-2 rounded border p-2" @key="line">
-                                    <span class="min-w-32 flex-1">@line.ItemName</span>
-                                    <label class="text-sm">Quantity <input type="number" min="1" max="1000" class="ml-1 w-20 rounded border p-1" @bind="line.Quantity" /></label>
-                                    <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="() => RemoveLine(line)">Remove</button>
-                                </div>
-                            }
+                        <div class="space-y-2">
+                            <div class="flex items-center justify-between font-medium text-slate-700">
+                                <span>Items in this Requisition (@form.Lines.Count)</span>
+                                <span class="text-[11px] text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
+                            </div>
+                            <div class="space-y-2 max-h-60 overflow-y-auto">
+                                @foreach (var line in form.Lines.ToList())
+                                {
+                                    <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-wrap items-center justify-between gap-3 shadow-xs" @key="line">
+                                        <div class="space-y-1 min-w-0 flex-1">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <strong class="text-slate-900">@line.ItemName</strong>
+                                                <span class="rounded-md bg-slate-100 px-2 py-0.5 font-semibold text-slate-700 text-[11px]">Qty: @line.Quantity</span>
+                                                @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
+                                                {
+                                                    <span class="rounded-md bg-blue-50 border border-blue-200 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-700">
+                                                        Inv: #@line.InventoryNumber
+                                                    </span>
+                                                }
+                                                @if (!string.IsNullOrWhiteSpace(line.SerialNumber))
+                                                {
+                                                    <span class="rounded-md bg-indigo-50 border border-indigo-200 px-2 py-0.5 font-mono text-[11px] text-indigo-700">
+                                                        S/N: @line.SerialNumber
+                                                    </span>
+                                                }
+                                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-600">@line.Condition</span>
+                                                @if (line.ExpectedReturnDate.HasValue)
+                                                {
+                                                    <span class="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[11px]">
+                                                        Return: @line.ExpectedReturnDate.Value.ToString("dd MMM yyyy")
+                                                    </span>
+                                                }
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(line.Remarks))
+                                            {
+                                                <p class="text-[11px] text-slate-500 italic">Accessories/Remarks: @line.Remarks</p>
+                                            }
+                                        </div>
+                                        <button type="button"
+                                                class="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition"
+                                                @onclick="() => RemoveLine(line)">
+                                            ✕ Remove
+                                        </button>
+                                    </div>
+                                }
+                            </div>
                         </div>
                     }
-                    <label class="block text-sm">Reason
-                        <textarea class="mt-1 w-full rounded border p-2" maxlength="1000" rows="2" @bind="form.Reason"></textarea>
-                    </label>
-                    <div class="flex gap-2">
-                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))" @onclick="Submit">Submit for approval</button>
-                        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="CloseForm">Cancel</button>
+
+                    <!-- Reason / Justification -->
+                    <div>
+                        <label class="block font-medium text-slate-700">
+                            Reason / Assignment Justification *
+                        </label>
+                        <textarea class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  maxlength="1000"
+                                  rows="2"
+                                  placeholder="Provide the official purpose or duties requiring this assignment..."
+                                  @bind="form.Reason"></textarea>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="flex items-center gap-2 pt-2 border-t border-slate-200">
+                        <button class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))"
+                                @onclick="Submit">
+                            <span>✓</span>
+                            <span>@(IndividualId > 0 ? "Submit Assignment for Approval" : "Submit Requisition")</span>
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                                @onclick="CloseForm">
+                            Cancel
+                        </button>
                     </div>
                 </fieldset>
             }
             else if (SelectedRequest is { } row)
             {
-                <div class="space-y-3 text-sm">
-                    <button type="button" class="text-blue-700 underline" @onclick="BackToRequests">← Back to requests</button>
-                    <div class="flex flex-wrap items-start justify-between gap-2">
-                        <div><h3 class="text-base font-semibold">@row.Reference</h3><p class="text-slate-600">@row.StaffName · @row.Kind · @row.Purpose</p></div>
-                        <span class="rounded bg-slate-100 px-2 py-1">@row.Status</span>
-                    </div>
-                    <p><span class="font-medium">Requested:</span> @row.CreatedAtUtc.ToLocalTime().ToString("g")</p>
-                    <p><span class="font-medium">Reason:</span> @row.Reason</p>
-                    <div><h4 class="font-medium">Items</h4>
-                        <ul class="mt-1 divide-y rounded border">
-                            @foreach (var line in row.Lines)
-                            {
-                                <li class="flex flex-wrap justify-between gap-2 p-2"><span>@line.ItemName × @line.Quantity</span>
-                                    @if (line.IssuedAtUtc.HasValue) { <span class="text-slate-600">Issued @line.IssuedAtUtc.Value.ToLocalTime().ToString("g")</span> }
-                                </li>
-                            }
-                        </ul>
-                    </div>
-                    @if (row.StateId == 4) { <p class="rounded bg-green-50 p-2 text-green-800">Approved request · read only</p> }
-                    @if (row.CanApprove || row.CanCancel)
-                    {
-                        <div class="flex flex-wrap items-center gap-2 border-t pt-3">
-                            <input class="rounded border p-2" placeholder="Action comment" @bind="comments[row.RequestId]" />
-                            @if (row.CanApprove) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => Act(row, "Approve")'>Approve</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => Act(row, "Reject")'>Reject</button> }
-                            @if (row.CanCancel) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='() => Act(row, "Cancel")'>Cancel request</button> }
+                <div class="space-y-4 text-xs">
+                    <!-- Detail Top Bar -->
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
+                        <button type="button" class="inline-flex items-center gap-1 text-blue-700 hover:underline font-semibold" @onclick="BackToRequests">
+                            <span>←</span>
+                            <span>Back to queue</span>
+                        </button>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @StatusBadgeClass(row.Status, row.ReturnedAtUtc.HasValue)">
+                                @(row.ReturnedAtUtc.HasValue ? "Returned" : row.Status)
+                            </span>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 font-medium text-[11px]">
+                                @row.Kind
+                            </span>
+                            <span class="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 font-medium text-[11px]">
+                                @row.Purpose
+                            </span>
                         </div>
-                    }
+                    </div>
+
+                    <!-- Request Metadata Card -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-3.5 space-y-2">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-900 font-mono">@row.Reference</h3>
+                                <p class="text-xs text-slate-600 font-medium">Assigned to: <strong class="text-slate-900">@row.StaffName</strong></p>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-500 space-y-0.5">
+                                <div>Requested: @row.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                @if (row.IssuedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-emerald-700">Issued: @row.IssuedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                                @if (row.ReturnedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-purple-700">Returned: @row.ReturnedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="font-medium text-slate-700">Purpose / Justification:</span>
+                            <p class="mt-0.5 text-slate-800 bg-white rounded-lg p-2 border border-slate-200">@row.Reason</p>
+                        </div>
+                    </div>
+
+                    <!-- Items Detail Table -->
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-900 text-sm">Issued & Requested Lines (@row.Lines.Count)</h4>
+                            <span class="text-[11px] text-slate-500">Total units: @row.Lines.Sum(l => l.Quantity)</span>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2.5">Item Name</th>
+                                        <th class="p-2.5">Qty</th>
+                                        <th class="p-2.5">Inventory #</th>
+                                        <th class="p-2.5">Serial #</th>
+                                        <th class="p-2.5">Condition</th>
+                                        <th class="p-2.5">Return Due</th>
+                                        <th class="p-2.5">Accessories & Remarks</th>
+                                        <th class="p-2.5">Line Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var line in row.Lines)
+                                    {
+                                        <tr class="hover:bg-slate-50/50">
+                                            <td class="p-2.5 font-medium text-slate-900">@line.ItemName</td>
+                                            <td class="p-2.5 font-semibold">@line.Quantity</td>
+                                            <td class="p-2.5">
+                                                @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                                        @line.InventoryNumber
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-slate-400">—</span>
+                                                }
+                                            </td>
+                                            <td class="p-2.5 font-mono text-[11px] text-slate-600">@(line.SerialNumber ?? "—")</td>
+                                            <td class="p-2.5">
+                                                @if (!string.IsNullOrWhiteSpace(line.Condition))
+                                                {
+                                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">@line.Condition</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-slate-400">—</span>
+                                                }
+                                            </td>
+                                            <td class="p-2.5 text-slate-600">@(line.ExpectedReturnDate?.ToString("dd MMM yyyy") ?? "—")</td>
+                                            <td class="p-2.5 text-slate-600 max-w-xs truncate" title="@line.Remarks">@(line.Remarks ?? "—")</td>
+                                            <td class="p-2.5">
+                                                @if (row.ReturnedAtUtc.HasValue)
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700 border border-purple-200">Returned</span>
+                                                }
+                                                else if (line.IssuedAtUtc.HasValue)
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Issued</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Workflow Decision & Management Actions -->
+                    <div class="border-t border-slate-200 pt-4 space-y-3">
+                        @if (row.CanApprove || row.CanCancel || (row.IssuedAtUtc.HasValue && !row.ReturnedAtUtc.HasValue && canManageStaffItems))
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                                <span class="font-bold text-slate-800">Action Controls</span>
+                                <div class="flex flex-wrap items-center gap-2">
+                                    @if (row.CanApprove || row.CanCancel)
+                                    {
+                                        <input class="flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                               placeholder="Action comment or notes..."
+                                               @bind="comments[row.RequestId]" />
+                                    }
+                                    @if (row.CanApprove)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition"
+                                                disabled="@busy"
+                                                @onclick='() => Act(row, "Approve")'>
+                                            <span>✓</span>
+                                            <span>Approve & Issue</span>
+                                        </button>
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                                disabled="@busy"
+                                                @onclick='() => Act(row, "Reject")'>
+                                            <span>✕</span>
+                                            <span>Reject</span>
+                                        </button>
+                                    }
+                                    @if (row.CanCancel)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                                                disabled="@busy"
+                                                @onclick='() => Act(row, "Cancel")'>
+                                            Cancel Request
+                                        </button>
+                                    }
+                                    @if (row.IssuedAtUtc.HasValue && !row.ReturnedAtUtc.HasValue && canManageStaffItems)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
+                                                disabled="@busy"
+                                                @onclick='() => Act(row, "MarkReturned")'>
+                                            <span>↩</span>
+                                            <span>Mark as Returned</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
                 </div>
             }
-            else { <p class="text-sm text-slate-500">Select Add new from the request list to open the form here.</p> }
+            else
+            {
+                <div class="flex flex-col items-center justify-center p-12 text-center text-slate-500 space-y-2">
+                    <span class="text-3xl">📦</span>
+                    <h3 class="text-sm font-semibold text-slate-700">No Item Request Selected</h3>
+                    <p class="text-xs max-w-sm">
+                        Select a request from the list to inspect assigned item details, inventory numbers, and physical condition, or click <strong>@(IndividualId > 0 ? "Assign New Items" : "New Requisition")</strong> to draft a new assignment.
+                    </p>
+                </div>
+            }
         </div>
+
+        <!-- Right/Aside: List of Requests & Custody Records -->
+        <aside class="min-w-0 rounded-2xl border border-slate-200 bg-slate-50/50 p-3.5 lg:order-2 space-y-3" aria-label="Item requests">
+            <div class="flex items-center justify-between">
+                <h3 class="font-bold text-slate-800 text-sm">Assigned & Requested</h3>
+                <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@ListRows.Count</span>
+            </div>
+
+            <!-- Search Box -->
+            <div>
+                <input type="text"
+                       class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                       placeholder="Search reference, item, inv #..."
+                       @bind="searchTerm"
+                       @bind:event="oninput" />
+            </div>
+
+            <!-- Filter Status Pills -->
+            <div class="flex flex-wrap gap-1 text-[11px]">
+                <button type="button"
+                        @onclick='() => filterStatus = "all"'
+                        class="rounded-full px-2 py-0.5 font-medium transition @(filterStatus == "all" ? "bg-slate-900 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
+                    All
+                </button>
+                <button type="button"
+                        @onclick='() => filterStatus = "pending"'
+                        class="rounded-full px-2 py-0.5 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
+                    Pending
+                </button>
+                <button type="button"
+                        @onclick='() => filterStatus = "issued"'
+                        class="rounded-full px-2 py-0.5 font-medium transition @(filterStatus == "issued" ? "bg-emerald-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
+                    Issued
+                </button>
+                <button type="button"
+                        @onclick='() => filterStatus = "returned"'
+                        class="rounded-full px-2 py-0.5 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white" : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100")">
+                    Returned
+                </button>
+            </div>
+
+            <!-- List of Requests -->
+            @if (!ListRows.Any())
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">
+                    No matching item requests found.
+                </div>
+            }
+            <div class="max-h-[38rem] space-y-2 overflow-y-auto pr-0.5">
+                @foreach (var row in ListRows)
+                {
+                    <article class="rounded-xl border p-3 text-xs transition cursor-pointer @(SelectedRequest?.RequestId == row.RequestId && !showForm ? "border-blue-500 bg-blue-50/60 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300 shadow-2xs")"
+                             @key="row.RequestId"
+                             @onclick="() => ViewDetail(row.RequestId)">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <strong class="block truncate font-mono text-slate-900 text-xs">@row.Reference</strong>
+                                <span class="text-slate-500 text-[11px]">
+                                    @row.Lines.Count line@(row.Lines.Count == 1 ? "" : "s") · @row.Purpose
+                                </span>
+                            </div>
+                            <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @StatusBadgeClass(row.Status, row.ReturnedAtUtc.HasValue)">
+                                @(row.ReturnedAtUtc.HasValue ? "Returned" : row.Status)
+                            </span>
+                        </div>
+
+                        <!-- Staff Name if general view -->
+                        @if (IndividualId == 0)
+                        {
+                            <div class="mt-1 text-[11px] font-medium text-slate-700 truncate">Staff: @row.StaffName</div>
+                        }
+
+                        <!-- Items Summary with Inventory Badges -->
+                        <div class="mt-1.5 space-y-1">
+                            <p class="truncate text-slate-700 font-medium text-[11px]">
+                                @string.Join(", ", row.Lines.Select(l => l.ItemName))
+                            </p>
+                            @if (row.Lines.Any(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)))
+                            {
+                                <div class="flex flex-wrap gap-1">
+                                    @foreach (var inv in row.Lines.Where(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)).Take(2))
+                                    {
+                                        <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.2 font-mono text-[10px] text-blue-700 font-semibold">
+                                            #@inv.InventoryNumber
+                                        </span>
+                                    }
+                                    @if (row.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) > 2)
+                                    {
+                                        <span class="text-[10px] text-slate-400">+@(row.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) - 2) more</span>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-2 flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 pt-1.5">
+                            <span>@row.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</span>
+                            <span class="text-blue-600 font-semibold hover:underline">View details →</span>
+                        </div>
+                    </article>
+                }
+            </div>
+        </aside>
     </div>
 </section>
 
@@ -117,34 +602,111 @@
     [Parameter] public int IndividualId { get; set; }
     [Parameter] public bool InitialItemsMode { get; set; }
     [Parameter] public bool JobRelatedOnly { get; set; }
+
     private List<string> previousNames = [];
     private List<ItemStaffRequestDto> rows = [];
     private List<ItemStaffRequestDto> approvalRows = [];
+    private List<RequestableItemDto> catalogueItems = [];
+    private List<ItemUnitDto> availableUnits = [];
+    private bool canManageStaffItems;
     private readonly Dictionary<int, string> comments = [];
     private ItemStaffRequestInput form = new();
+
+    private string itemSource = "catalogue";
+    private int selectedCatalogueItemId;
+    private int selectedItemUnitId;
     private string selectedName = "";
     private string newName = "";
+    private string lineInventoryNumber = "";
+    private string lineSerialNumber = "";
+    private string lineCondition = "Good";
+    private DateOnly? lineExpectedReturnDate;
+    private string lineRemarks = "";
+    private int lineQuantity = 1;
+
+    private string searchTerm = "";
+    private string filterStatus = "all";
     private string? error;
     private bool busy;
     private bool showForm;
     private int? selectedRequestId;
     private int loadedIndividualId = -1;
-    private IEnumerable<ItemStaffRequestDto> VisibleRows => JobRelatedOnly ? rows.Where(r => r.Purpose == "Job related") : rows;
-    private List<ItemStaffRequestDto> ListRows => VisibleRows.Concat(IndividualId == 0 ? approvalRows : [])
-        .DistinctBy(r => r.RequestId).OrderByDescending(r => r.CreatedAtUtc).ToList();
+
+    private IEnumerable<ItemStaffRequestDto> FilteredRows
+    {
+        get
+        {
+            var baseRows = JobRelatedOnly ? rows.Where(r => r.Purpose == "Job related") : rows;
+            var combined = baseRows.Concat(IndividualId == 0 ? approvalRows : []).DistinctBy(r => r.RequestId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var q = searchTerm.Trim();
+                combined = combined.Where(r =>
+                    r.Reference.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.StaffName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.Reason.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.Lines.Any(l => l.ItemName.Contains(q, StringComparison.OrdinalIgnoreCase)
+                        || (l.InventoryNumber != null && l.InventoryNumber.Contains(q, StringComparison.OrdinalIgnoreCase))
+                        || (l.SerialNumber != null && l.SerialNumber.Contains(q, StringComparison.OrdinalIgnoreCase))));
+            }
+
+            if (filterStatus == "pending")
+                combined = combined.Where(r => !r.IssuedAtUtc.HasValue && r.Status != "Rejected" && r.Status != "Cancelled");
+            else if (filterStatus == "issued")
+                combined = combined.Where(r => r.IssuedAtUtc.HasValue && !r.ReturnedAtUtc.HasValue);
+            else if (filterStatus == "returned")
+                combined = combined.Where(r => r.ReturnedAtUtc.HasValue);
+
+            return combined.OrderByDescending(r => r.CreatedAtUtc);
+        }
+    }
+
+    private List<ItemStaffRequestDto> ListRows => FilteredRows.ToList();
     private ItemStaffRequestDto? SelectedRequest => ListRows.FirstOrDefault(r => r.RequestId == selectedRequestId);
+
     protected override async Task OnParametersSetAsync()
     {
         if (loadedIndividualId == IndividualId) return;
         loadedIndividualId = IndividualId;
         showForm = false; selectedRequestId = null; ResetForm(); await Load();
     }
-    private void AddNew() { ResetForm(); selectedName = newName = ""; selectedRequestId = null; error = null; showForm = true; }
+
+    private void AddNew()
+    {
+        ResetForm();
+        ResetLineInputs();
+        selectedRequestId = null;
+        error = null;
+        showForm = true;
+    }
+
     private void CloseForm() { showForm = false; error = null; }
     private void ViewDetail(int requestId) { selectedRequestId = requestId; showForm = false; error = null; }
     private void BackToRequests() { selectedRequestId = null; error = null; }
-    private void ResetForm() => form = new ItemStaffRequestInput { IndividualId = IndividualId,
-        Kind = IndividualId > 0 ? "Issue" : "Requisition", Purpose = JobRelatedOnly ? "Job related" : "Common" };
+
+    private void ResetForm() => form = new ItemStaffRequestInput
+    {
+        IndividualId = IndividualId,
+        Kind = IndividualId > 0 ? "Issue" : "Requisition",
+        Purpose = JobRelatedOnly ? "Job related" : "Common"
+    };
+
+    private void ResetLineInputs()
+    {
+        selectedCatalogueItemId = 0;
+        selectedItemUnitId = 0;
+        selectedName = "";
+        newName = "";
+        lineInventoryNumber = "";
+        lineSerialNumber = "";
+        lineCondition = "Good";
+        lineExpectedReturnDate = null;
+        lineRemarks = "";
+        lineQuantity = 1;
+        availableUnits.Clear();
+    }
+
     private async Task Load()
     {
         busy = true; error = null;
@@ -154,22 +716,125 @@
             rows = await Items.GetStaffRequestsAsync(null, selected);
             previousNames = await Items.GetRequestedItemNamesAsync(selected);
             approvalRows = IndividualId == 0 ? await Items.GetPendingItemApprovalsAsync() : [];
+            try
+            {
+                catalogueItems = await Items.GetRequestableItemsAsync();
+            }
+            catch { catalogueItems = []; }
+
+            try
+            {
+                canManageStaffItems = await Items.CanManageStaffItemsAsync();
+            }
+            catch { canManageStaffItems = IndividualId > 0; }
+
             foreach (var row in rows.Concat(approvalRows)) comments.TryAdd(row.RequestId, "");
             if (selectedRequestId.HasValue && SelectedRequest is null) selectedRequestId = null;
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
     }
+
+    private async Task OnCatalogueItemChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
+        {
+            selectedCatalogueItemId = id;
+            var item = catalogueItems.FirstOrDefault(i => i.ItemId == id);
+            if (item != null)
+            {
+                selectedName = item.Name;
+                lineQuantity = 1;
+                selectedItemUnitId = 0;
+                lineInventoryNumber = "";
+                lineSerialNumber = "";
+                availableUnits.Clear();
+                if (item.Kind == "Asset")
+                {
+                    try
+                    {
+                        var units = await Items.GetItemUnitsAsync(id);
+                        availableUnits = units.Where(u => u.Status == "Available").ToList();
+                    }
+                    catch { availableUnits.Clear(); }
+                }
+            }
+        }
+        else
+        {
+            selectedCatalogueItemId = 0;
+            selectedItemUnitId = 0;
+            availableUnits.Clear();
+        }
+    }
+
+    private void OnUnitChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var unitId) && unitId > 0)
+        {
+            selectedItemUnitId = unitId;
+            var unit = availableUnits.FirstOrDefault(u => u.ItemUnitId == unitId);
+            if (unit != null)
+            {
+                lineInventoryNumber = unit.InventoryNumber;
+                lineSerialNumber = unit.SerialNumber ?? "";
+                lineCondition = unit.Condition;
+                lineQuantity = 1;
+            }
+        }
+        else
+        {
+            selectedItemUnitId = 0;
+        }
+    }
+
     private void AddLine()
     {
-        var name = !string.IsNullOrWhiteSpace(newName) ? newName.Trim() : selectedName.Trim();
-        if (name.Length is 0 or > 200) { error = "Enter an item name of up to 200 characters."; return; }
-        if (form.Lines.Any(l => l.ItemName.Equals(name, StringComparison.OrdinalIgnoreCase))) { error = "This item is already on a line."; return; }
-        if (form.Lines.Count >= 30) { error = "A request can contain up to 30 item lines."; return; }
-        form.Lines.Add(new() { ItemName = name, Quantity = 1 });
-        newName = selectedName = ""; error = null;
+        var name = itemSource == "catalogue" && selectedCatalogueItemId > 0
+            ? (catalogueItems.FirstOrDefault(i => i.ItemId == selectedCatalogueItemId)?.Name ?? "")
+            : (!string.IsNullOrWhiteSpace(newName) ? newName.Trim() : selectedName.Trim());
+
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+        {
+            error = "Please specify an item name of up to 200 characters.";
+            return;
+        }
+
+        if (form.Lines.Count >= 30)
+        {
+            error = "A request can contain up to 30 item lines.";
+            return;
+        }
+
+        var inv = string.IsNullOrWhiteSpace(lineInventoryNumber) ? null : lineInventoryNumber.Trim();
+        var sn = string.IsNullOrWhiteSpace(lineSerialNumber) ? null : lineSerialNumber.Trim();
+        if (form.Lines.Any(l => l.ItemName.Equals(name, StringComparison.OrdinalIgnoreCase)
+            && (l.InventoryNumber ?? "").Equals(inv ?? "", StringComparison.OrdinalIgnoreCase)
+            && (l.SerialNumber ?? "").Equals(sn ?? "", StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "This item and inventory number combination is already added to the list.";
+            return;
+        }
+
+        form.Lines.Add(new ItemStaffRequestLineInput
+        {
+            ItemId = selectedCatalogueItemId > 0 ? selectedCatalogueItemId : null,
+            ItemUnitId = selectedItemUnitId > 0 ? selectedItemUnitId : null,
+            ItemName = name,
+            InventoryNumber = inv,
+            SerialNumber = sn,
+            Condition = string.IsNullOrWhiteSpace(lineCondition) ? "Good" : lineCondition.Trim(),
+            ExpectedReturnDate = lineExpectedReturnDate,
+            Remarks = string.IsNullOrWhiteSpace(lineRemarks) ? null : lineRemarks.Trim(),
+            Quantity = Math.Max(1, lineQuantity)
+        });
+
+        ResetLineInputs();
+        error = null;
     }
+
     private void RemoveLine(ItemStaffRequestLineInput line) => form.Lines.Remove(line);
+
     private async Task Submit()
     {
         busy = true; error = null;
@@ -177,11 +842,16 @@
         {
             var result = await Items.SubmitStaffRequestAsync(form);
             if (!result.Success) { error = result.Message; return; }
-            Toasts.Success(result.Message); ResetForm(); selectedRequestId = null; showForm = false; await Load();
+            Toasts.Success(result.Message);
+            ResetForm();
+            selectedRequestId = null;
+            showForm = false;
+            await Load();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
     }
+
     private async Task Act(ItemStaffRequestDto row, string action)
     {
         busy = true; error = null;
@@ -190,9 +860,22 @@
             comments.TryGetValue(row.RequestId, out var comment);
             var result = await Items.ActStaffRequestAsync(row.RequestId, row.StateId, action, comment);
             if (!result.Success) { error = result.Message; return; }
-            Toasts.Success(result.Message); await Load();
+            Toasts.Success(result.Message);
+            await Load();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
+    }
+
+    private static string StatusBadgeClass(string status, bool isReturned)
+    {
+        if (isReturned) return "bg-purple-100 text-purple-800";
+        return status switch
+        {
+            "Approved" or "Issued" => "bg-emerald-100 text-emerald-800",
+            "Rejected" or "Cancelled" => "bg-rose-100 text-rose-800",
+            "Pending" or "Draft" or "InProgress" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
     }
 }
