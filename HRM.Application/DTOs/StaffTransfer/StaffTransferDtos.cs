@@ -239,7 +239,17 @@ public sealed class StaffTransferReportingTabDto
     public string OutstandingApprovalsRoutingRule { get; set; } = StaffTransferApprovalRoutingRules.RetainHistoricalReassignOpen;
     public string? OutstandingApprovalsSummary { get; set; }
     public string? SpecialInstructions { get; set; }
+    public List<StaffTransferResourceLinkDto> WorkHandoverLinks { get; set; } = [];
+    public List<StaffTransferResourceLinkDto> AssetReturnRequestLinks { get; set; } = [];
+    public List<StaffTransferResourceLinkDto> AssetReceiveRequestLinks { get; set; } = [];
 }
+
+public sealed record StaffTransferResourceLinkDto(
+    int RequestId,
+    string Reference,
+    string Title,
+    string Status,
+    string Url);
 
 /// <summary>
 /// Advisory comment, clarification, or decision note.
@@ -298,6 +308,7 @@ public sealed class StaffTransferDetailDto
     public bool CanApproveAsReceiving { get; set; }
     public bool CanActivate { get; set; }
     public bool CanExportRestrictedPdf { get; set; }
+    public string PortalAccessContext { get; set; } = "Online";
 
     public StaffTransferStaffTabDto Staff { get; set; } = new();
     public StaffTransferJobTabDto Job { get; set; } = new();
@@ -340,6 +351,7 @@ public sealed class StaffTransferSaveInput
     public int CurrentJobId { get; set; }
     public bool SubmitImmediately { get; set; }
     public int ExpectedVersion { get; set; } = 1;
+    public string PortalAccessContext { get; set; } = "Online";
 
     public StaffTransferJobTabDto Job { get; set; } = new();
     public StaffTransferWorkTabDto Work { get; set; } = new();
@@ -396,8 +408,13 @@ public sealed class StaffTransferFormLookupDto
     public int CurrentOrganisationId { get; set; }
     public string CurrentOrganisationName { get; set; } = "";
     public List<StaffTransferLookupOption> Employees { get; set; } = [];
+    public List<StaffTransferEmployeeOption> EmployeeItems { get; set; } = [];
+    public List<StaffTransferLookupOption> StructureTypes { get; set; } = [];
     public List<StaffTransferLookupOption> Organisations { get; set; } = [];
     public List<StaffTransferDepartmentOption> Departments { get; set; } = [];
+    public List<StaffTransferSupervisorOption> DepartmentSupervisors { get; set; } = [];
+    public List<StaffTransferStructureAccessOption> StructureAccessScopes { get; set; } = [];
+    public List<StaffTransferLookupOption> DoorAccessGroups { get; set; } = [];
     public List<StaffTransferLookupOption> JobTypes { get; set; } = [];
     public List<StaffTransferPositionOption> Positions { get; set; } = [];
     public List<StaffTransferLookupOption> PositionFrameworks { get; set; } = [];
@@ -414,6 +431,27 @@ public sealed class StaffTransferFormLookupDto
 }
 
 public sealed record StaffTransferLookupOption(int Id, string Name, string? Subtitle = null);
+
+public sealed record StaffTransferEmployeeOption(
+    int IndividualId,
+    int JobId,
+    int OrganisationId,
+    int OrganisationStructureId,
+    int StructureTypeId,
+    string Name,
+    string? Subtitle = null);
+
+public sealed record StaffTransferSupervisorOption(
+    int IndividualId,
+    int OrganisationId,
+    int OrganisationStructureId,
+    string Name,
+    string? RoleLabel = null);
+
+public sealed record StaffTransferStructureAccessOption(
+    int OrganisationStructureId,
+    string StructureName,
+    string ScopeLabel);
 
 public sealed record StaffTransferDepartmentOption(int Id, int OrganisationId, string Name, int StructureTypeId);
 

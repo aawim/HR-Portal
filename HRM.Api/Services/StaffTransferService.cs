@@ -232,13 +232,16 @@ public sealed class StaffTransferService(
             {
                 j.IndividualID,
                 j.JobId,
+                j.OrganisationID,
+                j.OrganisationStructureId,
+                j.OrganisationStructure.OrganisationStructureTypeId,
                 j.Individual.FirstNameEnglish,
                 j.Individual.MiddleNameEnglish,
                 j.Individual.LastNameEnglish,
                 EmployeeNo = j.Staff.EmployeeNumber,
                 DeptName = j.OrganisationStructure.Name
             })
-            .Take(300)
+            .Take(400)
             .ToListAsync();
 
         lookup.Employees = activeJobs
@@ -254,6 +257,29 @@ public sealed class StaffTransferService(
                     $"Job #{first.JobId} · {first.DeptName}");
             })
             .ToList();
+
+        lookup.EmployeeItems = activeJobs
+            .GroupBy(x => x.IndividualID)
+            .Select(g =>
+            {
+                var first = g.First();
+                var fullName = string.Join(" ", new[] { first.FirstNameEnglish, first.MiddleNameEnglish, first.LastNameEnglish }
+                    .Where(s => !string.IsNullOrWhiteSpace(s)));
+                return new StaffTransferEmployeeOption(
+                    first.IndividualID,
+                    first.JobId,
+                    first.OrganisationID,
+                    first.OrganisationStructureId,
+                    first.OrganisationStructureTypeId,
+                    $"{fullName} ({first.EmployeeNo})",
+                    $"Job #{first.JobId} · {first.DeptName}");
+            })
+            .ToList();
+
+        lookup.StructureTypes = await db.OrganisationStructureTypes.AsNoTracking()
+            .OrderBy(t => t.TypeName)
+            .Select(t => new StaffTransferLookupOption(t.OrganisationStructureTypeId, t.TypeName, null))
+            .ToListAsync();
 
         lookup.Organisations = await db.Organisations.AsNoTracking()
             .Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == org || o.BusinessEntityID == destOrg)
@@ -271,6 +297,82 @@ public sealed class StaffTransferService(
                 s.Name,
                 s.OrganisationStructureTypeId))
             .ToListAsync();
+
+        var structureIds = lookup.Departments.Select(d => d.Id).ToList();
+        var rawStructureSups = await (from s in db.OrganisationStructureSupervisors.AsNoTracking()
+                                      join ind in db.Individuals.AsNoTracking() on s.SupervisorStaffId equals ind.BusinessEntityId
+                                      join str in db.OrganisationStructures.AsNoTracking() on s.OrganisationStructureId equals str.OrganisationStructureId
+                                      where structureIds.Contains(s.OrganisationStructureId) && s.IsActive && s.IsValid
+                                      select new
+                                      {
+                                          s.SupervisorStaffId,
+                                          str.OrganisationBusinessEntityID,
+                                          s.OrganisationStructureId,
+                                          ind.FirstNameEnglish,
+                                          ind.MiddleNameEnglish,
+                                          ind.LastNameEnglish,
+                                          DeptName = str.Name
+                                      }).ToListAsync();
+
+        var rawStructureHods = await (from h in db.OrganisationStructureHeadIncharges.AsNoTracking()
+                                      join ind in db.Individuals.AsNoTracking() on h.IndividualId equals ind.BusinessEntityId
+                                      join str in db.OrganisationStructures.AsNoTracking() on h.OrganisationStructureId equals str.OrganisationStructureId
+                                      where structureIds.Contains(h.OrganisationStructureId) && h.IsValid
+                                      select new
+                                      {
+                                          IndividualId = h.IndividualId,
+                                          str.OrganisationBusinessEntityID,
+                                          h.OrganisationStructureId,
+                                          ind.FirstNameEnglish,
+                                          ind.MiddleNameEnglish,
+                                          ind.LastNameEnglish,
+                                          DeptName = str.Name
+                                      }).ToListAsync();
+
+        var deptSupervisors = new List<StaffTransferSupervisorOption>();
+        foreach (var s in rawStructureSups)
+        {
+            var fn = string.Join(" ", new[] { s.FirstNameEnglish, s.MiddleNameEnglish, s.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            deptSupervisors.Add(new StaffTransferSupervisorOption(
+                s.SupervisorStaffId,
+                s.OrganisationBusinessEntityID,
+                s.OrganisationStructureId,
+                fn,
+                $"Supervisor · {s.DeptName}"));
+        }
+        foreach (var h in rawStructureHods)
+        {
+            if (deptSupervisors.Any(x => x.OrganisationStructureId == h.OrganisationStructureId && x.IndividualId == h.IndividualId))
+                continue;
+            var fn = string.Join(" ", new[] { h.FirstNameEnglish, h.MiddleNameEnglish, h.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x)));
+            deptSupervisors.Add(new StaffTransferSupervisorOption(
+                h.IndividualId,
+                h.OrganisationBusinessEntityID,
+                h.OrganisationStructureId,
+                fn,
+                $"HOD / In-Charge · {h.DeptName}"));
+        }
+        lookup.DepartmentSupervisors = deptSupervisors.OrderBy(x => x.Name).ToList();
+
+        lookup.StructureAccessScopes = lookup.Departments
+            .SelectMany(d => new[]
+            {
+                new StaffTransferStructureAccessOption(d.Id, d.Name, $"{d.Name} — Staff & Directory Access"),
+                new StaffTransferStructureAccessOption(d.Id, d.Name, $"{d.Name} — Department Records & Reports"),
+                new StaffTransferStructureAccessOption(d.Id, d.Name, $"{d.Name} — Attendance & Roster Administration"),
+                new StaffTransferStructureAccessOption(d.Id, d.Name, $"{d.Name} — Leave & Request Processing"),
+                new StaffTransferStructureAccessOption(d.Id, d.Name, $"{d.Name} — Supervisor / HOD Approval Scope")
+            })
+            .ToList();
+
+        lookup.DoorAccessGroups = lookup.Departments
+            .SelectMany(d => new[]
+            {
+                new StaffTransferLookupOption(d.Id, $"{d.Name} — Standard Staff Door Access", d.Name),
+                new StaffTransferLookupOption(d.Id, $"{d.Name} — Restricted Office & Biometric Access", d.Name)
+            })
+            .Append(new StaffTransferLookupOption(0, "Common Building & Main Entrance Access", "Common"))
+            .ToList();
 
         lookup.JobTypes = await db.JobTypes.AsNoTracking()
             .Where(jt => jt.IsActive != false)
@@ -687,7 +789,77 @@ public sealed class StaffTransferService(
                     d.GeneratedAtUtc)).ToList()
         };
 
+        await PopulateLinkedResourcesAsync(db, t.FromOrganisationId, t.IndividualId, dto);
         return dto;
+    }
+
+    private static async Task PopulateLinkedResourcesAsync(
+        HrmTeContext db,
+        int org,
+        int individualId,
+        StaffTransferDetailDto dto)
+    {
+        var userAccount = await db.Users.AsNoTracking()
+            .Where(u => u.BusinessEntityID == individualId && u.IsActive)
+            .Select(u => new { u.AdminPortalAccessEnabled })
+            .FirstOrDefaultAsync();
+        dto.PortalAccessContext = userAccount?.AdminPortalAccessEnabled == true ? "AdminAndOnline" : "Online";
+
+        // 1. Work Handover requests from LeaveRequests / LeaveWorkHandOvers / LeaveHandoverReviews
+        var handoverLeaves = await db.LeaveRequests.AsNoTracking()
+            .Include(x => x.Leave)
+            .Include(x => x.Request).ThenInclude(r => r.RequestState)
+            .Where(x => x.Leave.Job.IndividualID == individualId &&
+                        (db.LeaveHandoverReviews.Any(r => r.LeaveId == x.LeaveId) ||
+                         db.LeaveWorkHandOvers.Any(w => w.LeaveId == x.LeaveId && w.IsValid)))
+            .OrderByDescending(x => x.LeaveId)
+            .Take(10)
+            .Select(x => new
+            {
+                x.RequestId,
+                x.LeaveId,
+                Reference = x.Request.ReferenceNumber ?? ("LHO-" + x.LeaveId),
+                StateName = x.Request.RequestState.StateName
+            })
+            .ToListAsync();
+
+        dto.Reporting.WorkHandoverLinks = handoverLeaves
+            .Select(h => new StaffTransferResourceLinkDto(
+                h.RequestId,
+                h.Reference,
+                $"Work Handover (#{h.LeaveId})",
+                h.StateName.Trim(),
+                $"/online/leave-handovers?leaveId={h.LeaveId}"))
+            .ToList();
+
+        // 2. Staff Item / Asset Requests for returning (Sending Dept) and receiving (Receiving Dept)
+        var itemRequests = await db.ItemStaffRequests.AsNoTracking()
+            .Include(r => r.Request).ThenInclude(req => req.RequestState)
+            .Include(r => r.Lines)
+            .Where(r => r.OrganisationId == org && r.IndividualId == individualId)
+            .OrderByDescending(r => r.CreatedAtUtc)
+            .Take(20)
+            .ToListAsync();
+
+        dto.Reporting.AssetReturnRequestLinks = itemRequests
+            .Where(r => r.Kind == "Issue" || r.IssuedAtUtc.HasValue || r.Purpose == "Job related")
+            .Select(r => new StaffTransferResourceLinkDto(
+                r.RequestId,
+                r.Request.ReferenceNumber ?? $"IM-{r.RequestId}",
+                string.Join(", ", r.Lines.Select(l => l.ItemName).Take(3)),
+                r.ReturnedAtUtc.HasValue ? "Returned" : (r.IssuedAtUtc.HasValue ? "Issued (Pending Return)" : r.Request.RequestState.StateName.Trim()),
+                $"/admin/hr/items/staff-items?requestId={r.RequestId}"))
+            .ToList();
+
+        dto.Reporting.AssetReceiveRequestLinks = itemRequests
+            .Where(r => r.Kind == "Requisition")
+            .Select(r => new StaffTransferResourceLinkDto(
+                r.RequestId,
+                r.Request.ReferenceNumber ?? $"IM-{r.RequestId}",
+                string.Join(", ", r.Lines.Select(l => l.ItemName).Take(3)),
+                r.Request.RequestState.StateName.Trim(),
+                $"/admin/hr/items/staff-items?requestId={r.RequestId}"))
+            .ToList();
     }
 
     private async Task<StaffTransferDetailDto> BuildNewDraftFromDatabaseAsync(
@@ -732,7 +904,7 @@ public sealed class StaffTransferService(
 
         var userProfile = await db.Users.AsNoTracking()
             .Where(u => u.BusinessEntityID == individualId && u.IsActive)
-            .Select(u => new { u.Email, u.Mobile })
+            .Select(u => new { u.Email, u.Mobile, u.AdminPortalAccessEnabled })
             .FirstOrDefaultAsync();
 
         var supervisorIndividualId = await db.OrganisationStructureSupervisors.AsNoTracking()
@@ -763,6 +935,14 @@ public sealed class StaffTransferService(
             .Where(s => s.OrganisationBusinessEntityId == org && s.IsActive && (!s.EffectiveTo.HasValue || s.EffectiveTo.Value >= today))
             .FirstOrDefaultAsync();
 
+        var otRule = await db.JobTypeOvertimeRules.AsNoTracking()
+            .SingleOrDefaultAsync(r => r.OrganisationId == org && r.JobTypeId == job.JobTypeId);
+
+        var primaryDevice = await db.AttendanceDevices.AsNoTracking()
+            .OrderByDescending(d => d.IsPrimary)
+            .ThenBy(d => d.AttendanceDeviceId)
+            .FirstOrDefaultAsync();
+
         var issuedAssets = await db.ItemUnits.AsNoTracking()
             .Include(u => u.Item)
             .Where(u => u.OrganisationId == org && u.IssuedToIndividualId == individualId && u.Status == "Issued")
@@ -770,8 +950,14 @@ public sealed class StaffTransferService(
             .ToListAsync();
 
         var defaultEffective = today.AddDays(7);
+        var existingPosTitle = activeJobPosition?.Position.Name ?? "Unassigned Position";
+        var basicSal = stepHistory?.BasicSalarySnapshot ?? job.BasicSalary;
+        var allowSal = stepHistory?.JobAllowanceSnapshot ?? 0m;
+        var salaryNotes = $"Position: {existingPosTitle} · Basic Salary: MVR {basicSal:N2}" +
+                          (allowSal > 0 ? $" · Allowance: MVR {allowSal:N2}" : "") +
+                          " (Configured from current position; unchanged on internal transfer)";
 
-        return new StaffTransferDetailDto
+        var dto = new StaffTransferDetailDto
         {
             Status = StaffTransferStatuses.Draft,
             IsOpen = true,
@@ -782,6 +968,7 @@ public sealed class StaffTransferService(
             CanEdit = true,
             CanSubmit = true,
             CanExportRestrictedPdf = isHrOrAdmin,
+            PortalAccessContext = userProfile?.AdminPortalAccessEnabled == true ? "AdminAndOnline" : "Online",
             Staff = new StaffTransferStaffTabDto
             {
                 IndividualId = individualId,
@@ -806,18 +993,18 @@ public sealed class StaffTransferService(
                 CurrentJobId = job.JobId,
                 CurrentJobPositionId = activeJobPosition?.JobPositionId,
                 CurrentPositionId = activeJobPosition?.PositionId,
-                CurrentPositionTitle = activeJobPosition?.Position.Name ?? "Unassigned Position"
+                CurrentPositionTitle = existingPosTitle
             },
             Job = new StaffTransferJobTabDto
             {
                 ExistingJobId = job.JobId,
                 ExistingJobPositionId = activeJobPosition?.JobPositionId,
                 ExistingPositionId = activeJobPosition?.PositionId,
-                ExistingPositionTitle = activeJobPosition?.Position.Name ?? "Unassigned Position",
+                ExistingPositionTitle = existingPosTitle,
                 ExistingPositionFrameworkId = activeJobPosition?.Position.PositionFrameworkId,
                 ExistingPositionMatrixId = activeJobPosition?.Position.PositionMatrixId ?? stepHistory?.PositionMatrixId,
                 ExistingJobMatrixStepId = stepHistory?.JobMatrixStepId,
-                ExistingBasicSalary = isHrOrAdmin ? (stepHistory?.BasicSalarySnapshot ?? job.BasicSalary) : null,
+                ExistingBasicSalary = isHrOrAdmin ? basicSal : null,
                 ExistingAllowance = isHrOrAdmin ? stepHistory?.JobAllowanceSnapshot : null,
                 DestinationOrganisationId = job.OrganisationID,
                 DestinationOrganisationStructureId = 0,
@@ -825,17 +1012,18 @@ public sealed class StaffTransferService(
                 DestinationPositionId = activeJobPosition?.PositionId,
                 DestinationPositionTitle = activeJobPosition?.Position.Name,
                 DestinationPositionFrameworkId = activeJobPosition?.Position.PositionFrameworkId,
-                DestinationPositionMatrixId = activeJobPosition?.Position.PositionMatrixId,
+                DestinationPositionMatrixId = activeJobPosition?.Position.PositionMatrixId ?? stepHistory?.PositionMatrixId,
                 DestinationJobMatrixStepId = stepHistory?.JobMatrixStepId,
                 TransferTypeId = (int)StaffTransferType.InternalDepartmental,
                 TransferAppointmentMode = TransferAppointmentModes.OrganisationalReassignment,
+                SalaryBenefitChangeNotes = salaryNotes,
                 EffectiveDate = defaultEffective,
                 TransferReason = ""
             },
             Work = new StaffTransferWorkTabDto
             {
                 CurrentLocationName = job.OrganisationStructure.Name,
-                ProposedLocationName = "",
+                ProposedLocationName = job.OrganisationStructure.Name,
                 CurrentPlanningProviderId = currentProviderSetting?.PlanningProviderId,
                 CurrentPlanningProviderName = currentProviderSetting?.PlanningProvider?.Name,
                 ProposedPlanningProviderId = currentProviderSetting?.PlanningProviderId,
@@ -849,19 +1037,38 @@ public sealed class StaffTransferService(
                 StandardEndTime = new TimeOnly(14, 0),
                 WeeklyWorkingHours = 35m,
                 RequiredAttendanceMethod = "Biometric",
+                AttendanceDeviceId = primaryDevice?.AttendanceDeviceId,
+                AttendanceDeviceName = primaryDevice?.Location,
+                AttendanceDeviceLocationNotes = primaryDevice != null
+                    ? $"{primaryDevice.Location ?? "Primary Terminal"} ({primaryDevice.Ipaddress})"
+                    : $"{job.OrganisationStructure.Name} Biometric Terminal",
+                IsOvertimeEligible = otRule?.IsAllowed ?? false,
                 WorkArrangementMode = "OnSite",
+                AttendanceVerificationSupervisorIndividualId = supervisorIndividualId,
+                AttendanceVerificationSupervisorName = supervisorName,
                 ScheduleEffectiveDate = defaultEffective,
                 ReconcileFutureWorkPlans = true
             },
-            AccessChanges = BuildDefaultAccessComparisonRows(job.OrganisationStructure.Name),
+            AccessChanges =
+            [
+                new StaffTransferAccessChangeItemDto
+                {
+                    AccessAreaCode = job.OrganisationStructureId.ToString(),
+                    AccessAreaName = job.OrganisationStructure.Name,
+                    CurrentScopeSummary = $"{job.OrganisationStructure.Name} — Staff & Directory Access",
+                    ProposedScopeSummary = "Receiving department scope",
+                    TransitionAction = StaffTransferAccessActions.RevokeOldGrantNew
+                }
+            ],
             DoorAccessChanges =
             [
                 new StaffTransferDoorAccessItemDto
                 {
                     BuildingName = job.Organisation.OrganisationName,
+                    FloorName = "Main Office Floor",
                     DepartmentOfficeArea = job.OrganisationStructure.Name,
-                    ExistingAccessGroups = $"{job.OrganisationStructure.Name} Staff Access",
-                    ProposedAccessGroups = "Destination Department Staff Access",
+                    ExistingAccessGroups = $"{job.OrganisationStructure.Name} — Standard Staff Door Access",
+                    ProposedAccessGroups = $"{job.OrganisationStructure.Name} — Standard Staff Door Access",
                     TransitionAction = StaffTransferDoorAccessStates.ActionReplace,
                     AccessStartDate = defaultEffective,
                     PreviousAccessExpiryDate = defaultEffective.AddDays(-1),
@@ -873,14 +1080,19 @@ public sealed class StaffTransferService(
                 ApprovedTransferEffectiveDate = defaultEffective,
                 ReportingDate = defaultEffective,
                 ReportingTime = new TimeOnly(8, 0),
-                ReportingLocation = "",
+                ReportingLocation = job.OrganisationStructure.Name,
+                ReportingToIndividualId = supervisorIndividualId,
+                ReportingToName = supervisorName,
                 HandoverRequired = true,
                 HandoverDeadline = defaultEffective.AddDays(-1),
-                AssetsToReturnSummary = issuedAssets.Count > 0 ? string.Join(", ", issuedAssets) : "Departmental keys and assigned items if applicable",
-                AssetsToReceiveSummary = "Destination department workstation and access credentials",
+                AssetsToReturnSummary = issuedAssets.Count > 0 ? string.Join(", ", issuedAssets) : "No issued serialized assets currently pending return",
+                AssetsToReceiveSummary = "Managed via Staff Item / Asset Returning & Requisition process",
                 OutstandingApprovalsRoutingRule = StaffTransferApprovalRoutingRules.RetainHistoricalReassignOpen
             }
         };
+
+        await PopulateLinkedResourcesAsync(db, org, individualId, dto);
+        return dto;
     }
 
     private static List<StaffTransferAccessChangeItemDto> BuildDefaultAccessComparisonRows(string sourceDeptName) =>
