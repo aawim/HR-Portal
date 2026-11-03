@@ -57,6 +57,34 @@
                     <span>Issue Assets</span>
                 </button>
             }
+
+            <button type="button"
+                    @onclick="OpenNewServiceRequestModal"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3.5 py-2 text-xs font-semibold text-amber-800 shadow-sm hover:bg-amber-100">
+                <span>🛠</span>
+                <span>+ Service Ticket</span>
+            </button>
+
+            <button type="button"
+                    @onclick="OpenNewUpgradeModal"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-indigo-300 bg-indigo-50 px-3.5 py-2 text-xs font-semibold text-indigo-800 shadow-sm hover:bg-indigo-100">
+                <span>⚡</span>
+                <span>+ Upgrade</span>
+            </button>
+
+            <button type="button"
+                    @onclick="OpenNewLoanerModal"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-teal-300 bg-teal-50 px-3.5 py-2 text-xs font-semibold text-teal-800 shadow-sm hover:bg-teal-100">
+                <span>💻</span>
+                <span>+ Issue Loaner</span>
+            </button>
+
+            <button type="button"
+                    @onclick='() => activeTab = "clearance"'
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                <span>📋</span>
+                <span>Staff Clearance</span>
+            </button>
         </div>
     </div>
 
@@ -162,7 +190,37 @@
                 <button type="button"
                         @onclick='() => activeTab = "returns"'
                         class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "returns" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
-                    Returns & Clearance (@dashboard.Returns.Count)
+                    Returns (@dashboard.Returns.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "service"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "service" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    IT Workshop & Repairs (@dashboard.ServiceRequests.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "upgrades"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "upgrades" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Hardware Upgrades
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "loaners"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "loaners" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Temporary Loaners (@dashboard.ActiveLoaners.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "replacements"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "replacements" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Replacements (@dashboard.ReplacementLinks.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "clearance"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "clearance" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Staff Clearance
                 </button>
 
                 <button type="button"
@@ -725,6 +783,496 @@
                 </div>
             </div>
         }
+
+        <!-- TAB: IT Workshop & Repairs -->
+        @if (activeTab == "service")
+        {
+            <div class="space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">IT Maintenance, Repairs & Service Tickets</h2>
+                        <p class="text-xs text-slate-500">Corrective repairs, hardware diagnostics, parts replacement, and technician work orders.</p>
+                    </div>
+                    <button type="button"
+                            @onclick="OpenNewServiceRequestModal"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-amber-700">
+                        <span>+</span>
+                        <span>Create Service Ticket</span>
+                    </button>
+                </div>
+
+                <!-- Service Requests Queue -->
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Reference / Title</th>
+                                <th class="px-4 py-3">Staff Requester</th>
+                                <th class="px-4 py-3">Type & Priority</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3">Submitted</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!dashboard.ServiceRequests.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+                                        No active service requests or repair tickets found.
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var req in dashboard.ServiceRequests)
+                            {
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-bold text-slate-900">@req.ReferenceNumber</div>
+                                        <div class="font-medium text-slate-800">@req.Title</div>
+                                        <div class="text-[11px] text-slate-400">@req.ItemsCount item(s) logged</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium text-slate-800">@req.StaffName</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@req.RequestType</span>
+                                        <span class="ml-1 rounded px-2 py-0.5 text-[10px] font-bold @(req.Priority == "Critical" || req.Priority == "High" ? "bg-rose-100 text-rose-800" : "bg-blue-50 text-blue-700")">
+                                            @req.Priority
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(req.Status == AssetServiceRequestStatuses.Completed ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                            @req.Status
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-500">
+                                        @req.SubmittedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button type="button"
+                                                    @onclick="() => OpenAssignTechModal(req.AssetServiceRequestId)"
+                                                    class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                                Assign Tech
+                                            </button>
+                                            <button type="button"
+                                                    @onclick='() => PrintServiceDocAsync(req.AssetServiceRequestId, "ServiceReport")'
+                                                    class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-800">
+                                                🖨️ Report
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Maintenance Jobs & Bench Diagnostics -->
+                <div class="space-y-3">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-slate-600">Active Bench Diagnostics & Work Orders (@dashboard.MaintenanceJobs.Count)</h3>
+                    <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <table class="w-full text-left text-xs text-slate-700">
+                            <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                                <tr>
+                                    <th class="px-4 py-3">Work Order #</th>
+                                    <th class="px-4 py-3">Asset Code</th>
+                                    <th class="px-4 py-3">Job Type</th>
+                                    <th class="px-4 py-3">Technician</th>
+                                    <th class="px-4 py-3">Total Cost</th>
+                                    <th class="px-4 py-3">Status</th>
+                                    <th class="px-4 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @if (!dashboard.MaintenanceJobs.Any())
+                                {
+                                    <tr>
+                                        <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                                            No bench work orders currently recorded.
+                                        </td>
+                                    </tr>
+                                }
+                                @foreach (var job in dashboard.MaintenanceJobs)
+                                {
+                                    <tr class="hover:bg-slate-50/80 transition">
+                                        <td class="px-4 py-3 font-mono font-bold text-slate-900">@job.WorkOrderNumber</td>
+                                        <td class="px-4 py-3 font-mono font-bold text-blue-600">@job.AssetCode</td>
+                                        <td class="px-4 py-3 font-medium text-slate-700">@job.JobType</td>
+                                        <td class="px-4 py-3 text-slate-800">@job.TechnicianName</td>
+                                        <td class="px-4 py-3 font-mono font-semibold text-slate-900">$@job.TotalCost.ToString("F2")</td>
+                                        <td class="px-4 py-3">
+                                            <span class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold @(job.Status == AssetMaintenanceJobStatuses.Completed ? "bg-emerald-100 text-emerald-800" : "bg-indigo-100 text-indigo-800")">
+                                                @job.Status
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <div class="flex items-center justify-end gap-1.5">
+                                                @if (job.Status != AssetMaintenanceJobStatuses.Completed)
+                                                {
+                                                    <button type="button"
+                                                            @onclick="() => OpenCompleteJobModal(job)"
+                                                            class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
+                                                        Complete Order
+                                                    </button>
+                                                }
+                                                <button type="button"
+                                                        @onclick='() => PrintServiceDocAsync(job.AssetMaintenanceJobId, "ServiceReport")'
+                                                        class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 hover:bg-slate-50">
+                                                    Report
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- TAB: Hardware Upgrades -->
+        @if (activeTab == "upgrades")
+        {
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Hardware Component Upgrades & Snapshots</h2>
+                        <p class="text-xs text-slate-500">Perform RAM and storage upgrades with custody preservation, serial tracking, and configuration baselines.</p>
+                    </div>
+                    <button type="button"
+                            @onclick="OpenNewUpgradeModal"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-indigo-700">
+                        <span>⚡</span>
+                        <span>Perform Hardware Upgrade</span>
+                    </button>
+                </div>
+
+                <div class="rounded-xl border border-blue-200 bg-blue-50/70 p-4 text-xs text-blue-900 space-y-1">
+                    <div class="font-bold">Architectural Note: Custody & Identity Preservation</div>
+                    <p class="text-blue-800 text-[11px]">
+                        Upgrades preserve the physical asset's <code>AssetItemID</code> and active <code>AssetCustodyID</code>. Removed modules are logged to inventory with their disposition (Retained / Scrapped), and installed parts generate an immutable hardware snapshot.
+                    </p>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Asset Code / Name</th>
+                                <th class="px-4 py-3">Category</th>
+                                <th class="px-4 py-3">Serial Number</th>
+                                <th class="px-4 py-3">Current Custodian</th>
+                                <th class="px-4 py-3">Inventory Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var asset in (dashboard?.Assets ?? []).Take(60))
+                            {
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-bold text-slate-900">@asset.AssetCode</div>
+                                        <div class="text-slate-800">@asset.Name</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">@asset.CategoryName</td>
+                                    <td class="px-4 py-3 font-mono text-slate-500">@(asset.SerialNumber ?? "N/A")</td>
+                                    <td class="px-4 py-3">
+                                        @if (asset.ActiveCustodianName != null)
+                                        {
+                                            <div class="font-medium text-emerald-800">@asset.ActiveCustodianName</div>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-slate-400">In Pool</span>
+                                        }
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold @GetAssetStatusBadgeClass(asset.Status)">
+                                            @asset.Status
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button type="button"
+                                                    @onclick="() => OpenUpgradeModalForAsset(asset)"
+                                                    class="rounded-lg bg-indigo-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-indigo-700">
+                                                Upgrade
+                                            </button>
+                                            <button type="button"
+                                                    @onclick="() => ViewConfigTimelineAsync(asset.AssetItemId)"
+                                                    class="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                                Timeline
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- TAB: Temporary Loaners -->
+        @if (activeTab == "loaners")
+        {
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Temporary Loaner Equipment Pool</h2>
+                        <p class="text-xs text-slate-500">Deploy temporary loaners while primary devices are in workshop maintenance or warranty repair.</p>
+                    </div>
+                    <button type="button"
+                            @onclick="OpenNewLoanerModal"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-teal-700">
+                        <span>💻</span>
+                        <span>+ Issue Loaner Asset</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Staff Borrower</th>
+                                <th class="px-4 py-3">Loaner Asset</th>
+                                <th class="px-4 py-3">Primary Asset Under Repair</th>
+                                <th class="px-4 py-3">Issued Date</th>
+                                <th class="px-4 py-3">Expected Return</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!dashboard.ActiveLoaners.Any())
+                            {
+                                <tr>
+                                    <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                                        No active temporary loaners currently checked out.
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var loaner in dashboard.ActiveLoaners)
+                            {
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3">
+                                        <div class="font-bold text-slate-900">@loaner.StaffName</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-bold text-teal-700">@loaner.LoanerAssetCode</div>
+                                        <div class="text-[11px] text-slate-600">@loaner.LoanerAssetSummary</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-semibold text-slate-800">@loaner.PrimaryAssetCode</div>
+                                        <div class="text-[11px] text-slate-500">@loaner.PrimaryAssetSummary</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @loaner.HandedOverAtUtc.AddHours(5).ToString("dd MMM yyyy")
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium @(loaner.ExpectedReturnDate < DateTime.UtcNow ? "text-rose-600 font-bold" : "text-slate-800")">
+                                            @loaner.ExpectedReturnDate.ToString("dd MMM yyyy")
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold bg-teal-100 text-teal-800">
+                                            @loaner.Status
+                                        </span>
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <div class="flex items-center justify-end gap-1.5">
+                                            <button type="button"
+                                                    @onclick="() => OpenReturnLoanerModal(loaner)"
+                                                    class="rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700">
+                                                Return
+                                            </button>
+                                            <button type="button"
+                                                    @onclick='() => PrintServiceDocAsync(loaner.AssetTemporaryHandoverId, "LoanerAgreement")'
+                                                    class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                                Agreement
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- TAB: Replacements -->
+        @if (activeTab == "replacements")
+        {
+            <div class="space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Equipment Replacement Links</h2>
+                        <p class="text-xs text-slate-500">Traceable cross-references linking retired/irreparable devices to new replacement equipment.</p>
+                    </div>
+                    <button type="button"
+                            @onclick="OpenNewReplacementModal"
+                            class="inline-flex items-center gap-1.5 rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+                        <span>+</span>
+                        <span>Link Replacement Asset</span>
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Original Asset</th>
+                                <th class="px-4 py-3">Replacement Asset</th>
+                                <th class="px-4 py-3">Replacement Type</th>
+                                <th class="px-4 py-3">Reason & Disposition</th>
+                                <th class="px-4 py-3">Staff Acknowledgement</th>
+                                <th class="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!dashboard.ReplacementLinks.Any())
+                            {
+                                <tr>
+                                    <td colspan="6" class="px-4 py-8 text-center text-slate-400">
+                                        No asset replacement links currently recorded.
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var link in dashboard.ReplacementLinks)
+                            {
+                                <tr class="hover:bg-slate-50/80 transition">
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-bold text-rose-700">@link.OriginalAssetCode</div>
+                                        <div class="text-[11px] text-slate-600">@link.OriginalAssetSummary</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-mono font-bold text-emerald-700">@link.ReplacementAssetCode</div>
+                                        <div class="text-[11px] text-slate-600">@link.ReplacementAssetSummary</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@link.ReplacementType</span>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-medium text-slate-800">@link.ReplacementReason</div>
+                                        <div class="text-[11px] text-slate-400">Disposition: @link.OriginalAssetDisposition</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        @if (link.StaffAcknowledged)
+                                        {
+                                            <span class="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">Confirmed Accepted</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="rounded bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">Pending Decision</span>
+                                        }
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <button type="button"
+                                                @onclick='() => PrintServiceDocAsync(link.AssetReplacementLinkId, "ReplacementCertificate")'
+                                                class="rounded-lg bg-slate-900 px-2.5 py-1 text-xs font-semibold text-white hover:bg-slate-800">
+                                            🖨️ Certificate
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- TAB: Staff Clearance -->
+        @if (activeTab == "clearance")
+        {
+            <div class="space-y-6">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800">Staff Asset Clearance & Transfer Verification</h2>
+                        <p class="text-xs text-slate-500">Atomic real-time audit of assigned equipment, temporary loaners, and open service tickets for transfer or separation.</p>
+                    </div>
+                </div>
+
+                <!-- Staff Selector -->
+                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-3 items-end">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-bold uppercase tracking-wider text-slate-600">Select Employee for Clearance Audit *</label>
+                            <select @bind="selectedClearanceStaffId" class="mt-1 w-full rounded-xl border border-slate-300 p-2 text-xs">
+                                <option value="0">Choose Staff Member...</option>
+                                @foreach (var s in dashboard?.StaffOptions ?? [])
+                                {
+                                    <option value="@s.IndividualId">@s.FullName (@s.EmployeeNumber) — @s.PositionTitle [@s.DepartmentName]</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <button type="button"
+                                    @onclick="() => EvaluateStaffClearanceAsync(selectedClearanceStaffId)"
+                                    disabled="@(selectedClearanceStaffId == 0 || isEvaluatingClearance)"
+                                    class="w-full rounded-xl bg-blue-600 px-4 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50">
+                                @(isEvaluatingClearance ? "Auditing Records..." : "Audit Staff Clearance")
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                @if (clearanceCheck is not null)
+                {
+                    <div class="rounded-2xl border @(clearanceCheck.IsEligibleForClearance ? "border-emerald-300 bg-emerald-50/50" : "border-rose-300 bg-rose-50/50") p-6 shadow-sm space-y-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start gap-3">
+                                <span class="text-3xl">@(clearanceCheck.IsEligibleForClearance ? "✅" : "⚠️")</span>
+                                <div>
+                                    <h3 class="text-base font-extrabold @(clearanceCheck.IsEligibleForClearance ? "text-emerald-900" : "text-rose-900")">
+                                        @(clearanceCheck.IsEligibleForClearance ? "Staff Asset Clearance Granted — Cleared for Transfer / Separation" : "Asset Clearance Blocked — Outstanding Liabilities Present")
+                                    </h3>
+                                    <p class="mt-1 text-xs @(clearanceCheck.IsEligibleForClearance ? "text-emerald-800" : "text-rose-800")">
+                                        @clearanceCheck.ClearanceSummary
+                                    </p>
+                                </div>
+                            </div>
+
+                            <span class="rounded-full px-3 py-1 text-xs font-bold @(clearanceCheck.IsEligibleForClearance ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">
+                                @(clearanceCheck.IsEligibleForClearance ? "CLEARED" : "BLOCKED")
+                            </span>
+                        </div>
+
+                        <!-- 3 Status Metric Boxes -->
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Active Custodies</div>
+                                <div class="text-2xl font-black @(clearanceCheck.ActiveCustodiesCount > 0 ? "text-rose-600" : "text-slate-900")">@clearanceCheck.ActiveCustodiesCount</div>
+                                <div class="text-[11px] text-slate-500">Unreturned assigned property</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Active Loaners</div>
+                                <div class="text-2xl font-black @(clearanceCheck.ActiveLoanersCount > 0 ? "text-rose-600" : "text-slate-900")">@clearanceCheck.ActiveLoanersCount</div>
+                                <div class="text-[11px] text-slate-500">Unreturned loaner equipment</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Open Service Requests</div>
+                                <div class="text-2xl font-black @(clearanceCheck.OpenServiceRequestsCount > 0 ? "text-amber-600" : "text-slate-900")">@clearanceCheck.OpenServiceRequestsCount</div>
+                                <div class="text-[11px] text-slate-500">Unresolved tickets or work orders</div>
+                            </div>
+                        </div>
+
+                        @if (clearanceCheck.IsEligibleForClearance)
+                        {
+                            <div class="border-t border-emerald-200 pt-3 flex justify-end">
+                                <button type="button"
+                                        @onclick="() => PrintClearanceCertificateAsync(clearanceCheck.IndividualId)"
+                                        class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-800">
+                                    🖨️ Print Official Clearance Certificate (SHA-256)
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
     }
 </div>
 
@@ -1196,6 +1744,624 @@
     </div>
 }
 
+<!-- Modal 7: Create IT Service Ticket -->
+@if (showServiceModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Create IT Service Ticket</h3>
+                <button type="button" @onclick="() => showServiceModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Affected Staff Member *</label>
+                    <select @bind="selectedServiceStaffId" @bind:after="OnServiceStaffChanged" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Employee...</option>
+                        @foreach (var s in dashboard?.StaffOptions ?? [])
+                        {
+                            <option value="@s.IndividualId">@s.FullName (@s.EmployeeNumber)</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Select Equipment / Asset *</label>
+                    <select @bind="serviceAssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Asset Item...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Ticket Type *</label>
+                        <select @bind="serviceInput.RequestType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="@AssetServiceRequestTypes.FaultCorrective">Corrective Repair / Fault</option>
+                            <option value="@AssetServiceRequestTypes.HardwareUpgrade">Hardware Upgrade</option>
+                            <option value="@AssetServiceRequestTypes.DeviceReplacement">Asset Replacement</option>
+                            <option value="@AssetServiceRequestTypes.Preventive">Preventive Maintenance</option>
+                            <option value="@AssetServiceRequestTypes.ComponentReplacement">Component Replacement</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700">Priority *</label>
+                        <select @bind="serviceInput.Priority" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="Standard">Standard</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical (Immediate SLA)</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Issue Title *</label>
+                    <input type="text" @bind="serviceInput.Title" placeholder="e.g. Broken display hinge / SSD upgrade required" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Detailed Description & Symptoms *</label>
+                    <textarea @bind="serviceInput.Description" rows="3" placeholder="Describe symptoms, error codes, hardware behavior..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showServiceModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitServiceRequestAsync" class="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 shadow-sm">
+                    Submit Service Ticket
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 8: Assign Technician & Work Order -->
+@if (showAssignTechModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Assign Technician & Start Work Order</h3>
+                <button type="button" @onclick="() => showAssignTechModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Job Classification *</label>
+                    <select @bind="assignTechInput.JobType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="@AssetMaintenanceJobTypes.Corrective">Corrective Maintenance / Repair</option>
+                        <option value="@AssetMaintenanceJobTypes.Upgrade">Hardware Upgrade</option>
+                        <option value="@AssetMaintenanceJobTypes.Preventive">Preventive Servicing</option>
+                        <option value="@AssetMaintenanceJobTypes.ReplacementInspection">Replacement Inspection</option>
+                        <option value="@AssetMaintenanceJobTypes.DataSanitization">Data Sanitization</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Initial Bench Diagnosis Notes</label>
+                    <textarea @bind="assignTechInput.InitialDiagnosis" rows="3" placeholder="Enter initial triage diagnosis or hardware inspection observations..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showAssignTechModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitAssignTechAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-sm">
+                    Assign & Start Work Order
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 9: Complete Maintenance Job & Bench Diagnostics -->
+@if (showCompleteJobModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Complete Maintenance Job & Bench Testing</h3>
+                <button type="button" @onclick="() => showCompleteJobModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Diagnostic Summary *</label>
+                    <input type="text" @bind="completeJobInput.DiagnosticSummary" placeholder="e.g. S.M.A.R.T. bad sectors confirmed; thermal throttling at 98°C" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Work Performed Summary *</label>
+                    <textarea @bind="completeJobInput.WorkPerformedSummary" rows="2" placeholder="e.g. Replaced NVMe SSD, cleaned heatsink fins, applied thermal paste..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+
+                <!-- Bench Testing Checklist -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                    <span class="font-bold text-slate-800">Hardware Test Results Verification</span>
+                    <div class="grid grid-cols-2 gap-2">
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" @bind="completeJobInput.MemTestPassed" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                            <span>MemTest86+ Passed</span>
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" @bind="completeJobInput.SmartCheckPassed" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                            <span>S.M.A.R.T. Health 100% Passed</span>
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" @bind="completeJobInput.ThermalBenchmarkPassed" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                            <span>Thermal Benchmark Passed</span>
+                        </label>
+                        <label class="flex items-center gap-2">
+                            <input type="checkbox" @bind="completeJobInput.PortsCheckPassed" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+                            <span>I/O & Power Ports Verified</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Costs & Warranty -->
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Parts Cost ($)</label>
+                        <input type="number" step="0.01" @bind="completeJobInput.PartsCost" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700">Labour Cost ($)</label>
+                        <input type="number" step="0.01" @bind="completeJobInput.LabourCost" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Warranty Claim # (Optional)</label>
+                        <input type="text" @bind="completeJobInput.VendorWarrantyClaimNumber" placeholder="e.g. DELL-RMA-84920" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700">Data Sanitization Method</label>
+                        <input type="text" @bind="completeJobInput.DataSanitizationMethod" placeholder="e.g. NIST 800-88 Purge" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" @bind="completeJobInput.DataSanitizationVerified" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span class="font-medium text-slate-700">Data sanitization / drive wipe verified</span>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showCompleteJobModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitCompleteJobAsync" class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm">
+                    Complete Work Order & Generate SHA-256 Seal
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 10: Perform Hardware Upgrade -->
+@if (showUpgradeModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Perform Hardware Component Upgrade</h3>
+                <button type="button" @onclick="() => showUpgradeModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Target Asset *</label>
+                    <select @bind="upgradeInput.AssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Asset...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Component Type *</label>
+                        <select @bind="upgradeInput.ComponentType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="@AssetComponentTypes.RAM">RAM (Memory)</option>
+                            <option value="@AssetComponentTypes.StorageDrive">Storage (SSD / NVMe / HDD)</option>
+                            <option value="@AssetComponentTypes.Battery">Battery Pack</option>
+                            <option value="@AssetComponentTypes.DisplayPanel">Display Panel</option>
+                            <option value="@AssetComponentTypes.Motherboard">Motherboard / Logic Board</option>
+                            <option value="@AssetComponentTypes.WiFiAdapter">Wi-Fi / Network Adapter</option>
+                            <option value="@AssetComponentTypes.Accessory">Modular Accessory</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700">Slot / Port Location</label>
+                        <input type="text" @bind="upgradeInput.SlotOrPosition" placeholder="e.g. SODIMM Slot 1, M.2 Slot 2" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                    <span class="font-bold text-slate-800">New Installed Component Details</span>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-medium text-slate-700">Brand *</label>
+                            <input type="text" @bind="upgradeInput.NewComponentBrand" placeholder="e.g. Crucial, Kingston, Samsung" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                        </div>
+                        <div>
+                            <label class="block font-medium text-slate-700">Model *</label>
+                            <input type="text" @bind="upgradeInput.NewComponentModel" placeholder="e.g. 990 PRO, Fury Impact" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                        </div>
+                        <div>
+                            <label class="block font-medium text-slate-700">Serial Number</label>
+                            <input type="text" @bind="upgradeInput.NewComponentSerialNumber" placeholder="e.g. S990PRO-2026-X1" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono" />
+                        </div>
+                        <div>
+                            <label class="block font-medium text-slate-700">Capacity / Rating *</label>
+                            <input type="text" @bind="upgradeInput.NewCapacityOrRating" placeholder="e.g. 16 GB, 1 TB, 65 Wh" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                        </div>
+                        <div class="col-span-2">
+                            <label class="block font-medium text-slate-700">Technical Specification *</label>
+                            <input type="text" @bind="upgradeInput.NewComponentSpecification" placeholder="e.g. 16GB DDR5 5600MHz CL46 SODIMM" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Removed Part Disposition</label>
+                        <select @bind="upgradeInput.RemovedPartDisposition" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="RetainedSpare">Retained as Spare in Store</option>
+                            <option value="EWASTE_Scrapped">E-Waste Scrapped</option>
+                            <option value="ReturnedToVendor">Returned to Vendor / Warranty</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700">Component Cost ($)</label>
+                        <input type="number" step="0.01" @bind="upgradeInput.NewComponentCost" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Upgrade Remarks *</label>
+                    <input type="text" @bind="upgradeInput.UpgradeRemarks" placeholder="Reason for upgrade, performance improvement..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showUpgradeModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitUpgradeAsync" class="rounded-lg bg-indigo-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700 shadow-sm">
+                    Execute Upgrade & Capture Snapshot
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 11: Configuration & Component History Timeline -->
+@if (showConfigTimelineModal && configTimeline is not null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                    <h3 class="text-base font-extrabold text-slate-900">Hardware Configuration Timeline</h3>
+                    <p class="text-xs font-mono text-blue-600">[@configTimeline.AssetCode] @configTimeline.Name (S/N: @configTimeline.SerialNumber)</p>
+                </div>
+                <button type="button" @onclick="() => showConfigTimelineModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <!-- Current Specs Summary -->
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Total Installed RAM</div>
+                    <div class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(configTimeline.CurrentRamSummary) ? "Not captured" : configTimeline.CurrentRamSummary)</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Storage Summary</div>
+                    <div class="font-bold text-slate-900">@(string.IsNullOrWhiteSpace(configTimeline.CurrentStorageSummary) ? "Not captured" : configTimeline.CurrentStorageSummary)</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Processor</div>
+                    <div class="font-bold text-slate-900">@(configTimeline.CurrentProcessorSpec ?? "N/A")</div>
+                </div>
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Battery Health</div>
+                    <div class="font-bold text-slate-900">@(configTimeline.CurrentBatteryHealth.HasValue ? $"{configTimeline.CurrentBatteryHealth}%" : "N/A")</div>
+                </div>
+            </div>
+
+            <!-- Active Installed Modular Components -->
+            <div class="space-y-2 text-xs">
+                <span class="font-bold text-slate-800">Currently Installed Hardware Components (@configTimeline.ActiveComponents.Count)</span>
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold">
+                            <tr>
+                                <th class="p-2.5">Type</th>
+                                <th class="p-2.5">Brand & Model</th>
+                                <th class="p-2.5">Specification / Capacity</th>
+                                <th class="p-2.5">Serial #</th>
+                                <th class="p-2.5">Slot</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!configTimeline.ActiveComponents.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="p-3 text-center text-slate-400">No modular component records logged.</td>
+                                </tr>
+                            }
+                            @foreach (var comp in configTimeline.ActiveComponents)
+                            {
+                                <tr>
+                                    <td class="p-2.5 font-bold text-slate-800">@comp.ComponentType</td>
+                                    <td class="p-2.5 text-slate-700">@comp.Brand @comp.Model</td>
+                                    <td class="p-2.5 font-medium text-slate-800">@(comp.CapacityOrRating ?? comp.Specification)</td>
+                                    <td class="p-2.5 font-mono text-slate-600">@(comp.SerialNumber ?? "N/A")</td>
+                                    <td class="p-2.5 text-slate-500">@(comp.SlotOrPortLocation ?? "Internal")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Snapshots History -->
+            @if (configTimeline.Snapshots.Count > 0)
+            {
+                <div class="space-y-2 text-xs">
+                    <span class="font-bold text-slate-800">Configuration Snapshot History (@configTimeline.Snapshots.Count)</span>
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        @foreach (var snap in configTimeline.Snapshots)
+                        {
+                            <div class="rounded-xl border border-slate-200 p-3 bg-white space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-800">@snap.TriggerEvent</span>
+                                    <span class="text-slate-400 text-[10px]">@snap.CapturedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</span>
+                                </div>
+                                <div class="text-[11px] text-slate-600">
+                                    RAM: <span class="font-medium text-slate-800">@snap.RamSummary</span> | Storage: <span class="font-medium text-slate-800">@snap.StorageSummary</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400">Captured by: @snap.CapturedByName</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="flex justify-end border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showConfigTimelineModal = false" class="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 12: Issue Temporary Loaner -->
+@if (showIssueLoanerModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Issue Temporary Loaner Equipment</h3>
+                <button type="button" @onclick="() => showIssueLoanerModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Staff Member (Borrower) *</label>
+                    <select @bind="selectedLoanerStaffId" @bind:after="OnLoanerStaffChanged" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Employee...</option>
+                        @foreach (var s in dashboard?.StaffOptions ?? [])
+                        {
+                            <option value="@s.IndividualId">@s.FullName (@s.EmployeeNumber)</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Primary Asset (Being Repaired) *</label>
+                    <select @bind="loanerInput.PrimaryAssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Primary Asset...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Loaner Asset to Issue (Available Pool) *</label>
+                    <select @bind="loanerInput.LoanerAssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Available Loaner Device...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []).Where(a => a.Status == AssetInventoryStatuses.Available))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Expected Return Date *</label>
+                        <input type="date" @bind="loanerInput.ExpectedReturnDate" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700">Condition at Handover</label>
+                        <select @bind="loanerInput.ConditionOutId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            @foreach (var c in dashboard?.Conditions ?? [])
+                            {
+                                <option value="@c.AssetConditionId">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Notes / Accessories</label>
+                    <input type="text" @bind="loanerInput.Notes" placeholder="Charger provided, loaner agreement terms..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showIssueLoanerModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitLoanerIssueAsync" class="rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 shadow-sm">
+                    Issue Loaner Equipment
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 13: Return Loaner Equipment -->
+@if (showReturnLoanerModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Process Loaner Return</h3>
+                <button type="button" @onclick="() => showReturnLoanerModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Condition at Return *</label>
+                    <select @bind="loanerReturnInput.ConditionInId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        @foreach (var c in dashboard?.Conditions ?? [])
+                        {
+                            <option value="@c.AssetConditionId">@c.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Return Inspection Remarks</label>
+                    <textarea @bind="loanerReturnInput.Notes" rows="3" placeholder="Condition verified, charger returned in good order..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showReturnLoanerModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitLoanerReturnAsync" class="rounded-lg bg-emerald-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-sm">
+                    Confirm Return & Restore Pool
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 14: Link Replacement Asset -->
+@if (showReplacementModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Link Equipment Replacement</h3>
+                <button type="button" @onclick="() => showReplacementModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Original Asset (Being Replaced) *</label>
+                    <select @bind="replacementInput.OriginalAssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Original Asset...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Replacement Asset (Available) *</label>
+                    <select @bind="replacementInput.ReplacementAssetItemId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="0">Select Replacement Asset...</option>
+                        @foreach (var a in (dashboard?.Assets ?? []).Where(a => a.Status == AssetInventoryStatuses.Available))
+                        {
+                            <option value="@a.AssetItemId">[@a.AssetCode] @a.Name (S/N: @(a.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700">Replacement Type *</label>
+                        <select @bind="replacementInput.ReplacementType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="@AssetReplacementTypes.CompleteDeviceReplacement">Complete Device Replacement</option>
+                            <option value="@AssetReplacementTypes.ComponentUpgradeReplacement">Component Upgrade Replacement</option>
+                            <option value="@AssetReplacementTypes.AccessoryReplacement">Accessory Replacement</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700">Replacement Reason *</label>
+                        <select @bind="replacementInput.ReplacementReason" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                            <option value="@AssetReplacementReasons.BeyondEconomicalRepair">Beyond Economical Repair</option>
+                            <option value="@AssetReplacementReasons.TotalLossOrTheft">Total Loss or Theft</option>
+                            <option value="@AssetReplacementReasons.EndOfLifeUpgrade">End of Life Upgrade</option>
+                            <option value="@AssetReplacementReasons.ComponentDefect">Component Defect</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Original Asset Disposition</label>
+                    <select @bind="replacementInput.OriginalAssetDisposition" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="PendingReturn">Pending Physical Return</option>
+                        <option value="RetainedForParts">Retained for Spare Parts</option>
+                        <option value="EWASTE_Scrapped">E-Waste Scrapped</option>
+                        <option value="ReturnedToVendor">Returned to Manufacturer</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Handover Remarks</label>
+                    <input type="text" @bind="replacementInput.StaffRemarks" placeholder="Notes on transfer of custody..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showReplacementModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitReplacementLinkAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-sm">
+                    Link Replacement Equipment
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal 15: Printable Lifecycle Document Preview (SHA-256 Sealed) -->
+@if (showServicePrintModal && servicePrintDoc is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 flex items-center justify-center">
+        <div class="w-full max-w-5xl rounded-2xl bg-white p-6 shadow-2xl">
+            <StaffAssetServicePrintableView Document="servicePrintDoc"
+                                            OnClose="() => showServicePrintModal = false" />
+        </div>
+    </div>
+}
+
 @code {
     private bool loading = true;
     private AssetDashboardData? dashboard;
@@ -1229,6 +2395,41 @@
     private bool showInspectModal;
     private AssetReturnDetailDto? returnToInspect;
     private Dictionary<int, AssetReturnItemInspectInput> inspectItemsMap = new();
+
+    // Lifecycle Modals & State
+    private bool showServiceModal;
+    private AssetServiceRequestCreateInput serviceInput = new();
+    private int selectedServiceStaffId;
+    private int serviceAssetItemId;
+
+    private bool showAssignTechModal;
+    private AssetTechnicianAssignInput assignTechInput = new();
+
+    private bool showCompleteJobModal;
+    private AssetMaintenanceJobCompleteInput completeJobInput = new();
+
+    private bool showUpgradeModal;
+    private AssetHardwareUpgradeInput upgradeInput = new();
+
+    private bool showConfigTimelineModal;
+    private AssetConfigurationTimelineDto? configTimeline;
+
+    private bool showIssueLoanerModal;
+    private AssetLoanerIssueInput loanerInput = new();
+    private int selectedLoanerStaffId;
+
+    private bool showReturnLoanerModal;
+    private AssetLoanerReturnInput loanerReturnInput = new();
+
+    private bool showReplacementModal;
+    private AssetReplacementLinkInput replacementInput = new();
+
+    private bool showServicePrintModal;
+    private AssetServicePrintableDocumentDto? servicePrintDoc;
+
+    private int selectedClearanceStaffId;
+    private AssetClearanceCheckDto? clearanceCheck;
+    private bool isEvaluatingClearance;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1559,4 +2760,351 @@
         AssetIssuanceLineStatuses.ReturnedForCorrection => "bg-rose-100 text-rose-800",
         _ => "bg-slate-100 text-slate-800"
     };
+
+    // --- Lifecycle Management Handlers ---
+
+    private void OpenNewServiceRequestModal()
+    {
+        selectedServiceStaffId = dashboard?.StaffOptions.FirstOrDefault()?.IndividualId ?? 0;
+        var staff = dashboard?.StaffOptions.FirstOrDefault(s => s.IndividualId == selectedServiceStaffId);
+        serviceAssetItemId = dashboard?.Assets.FirstOrDefault()?.AssetItemId ?? 0;
+        serviceInput = new AssetServiceRequestCreateInput
+        {
+            OrganisationId = dashboard?.OrganisationId ?? 0,
+            IndividualId = staff?.IndividualId ?? 0,
+            JobId = staff?.JobId ?? 0,
+            StructureId = staff?.StructureId,
+            RequestType = AssetServiceRequestTypes.FaultCorrective,
+            Priority = "Standard",
+            Title = "Equipment repair ticket",
+            Description = ""
+        };
+        showServiceModal = true;
+    }
+
+    private void OnServiceStaffChanged()
+    {
+        var staff = dashboard?.StaffOptions.FirstOrDefault(s => s.IndividualId == selectedServiceStaffId);
+        if (staff != null)
+        {
+            serviceInput.IndividualId = staff.IndividualId;
+            serviceInput.JobId = staff.JobId;
+            serviceInput.StructureId = staff.StructureId;
+        }
+    }
+
+    private async Task SubmitServiceRequestAsync()
+    {
+        if (serviceAssetItemId <= 0)
+        {
+            Toasts.Error("Please select an equipment asset item.");
+            return;
+        }
+
+        var asset = dashboard?.Assets.FirstOrDefault(a => a.AssetItemId == serviceAssetItemId);
+        serviceInput.Items =
+        [
+            new AssetServiceRequestItemInput
+            {
+                AssetItemId = serviceAssetItemId,
+                AssetCustodyId = asset?.ActiveCustodianIndividualId == serviceInput.IndividualId ? (int?)null : null,
+                ItemRequestType = serviceInput.RequestType,
+                ReportedFaultOrRequirement = string.IsNullOrWhiteSpace(serviceInput.Description) ? serviceInput.Title : serviceInput.Description
+            }
+        ];
+
+        var res = await AssetService.CreateServiceRequestAsync(serviceInput);
+        if (res.Success)
+        {
+            Toasts.Success("Service ticket created successfully.");
+            showServiceModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenAssignTechModal(int requestId, int assetItemId = 0)
+    {
+        if (assetItemId == 0)
+        {
+            var req = dashboard?.ServiceRequests.FirstOrDefault(r => r.AssetServiceRequestId == requestId);
+            assetItemId = dashboard?.Assets.FirstOrDefault()?.AssetItemId ?? 1;
+        }
+
+        assignTechInput = new AssetTechnicianAssignInput
+        {
+            AssetServiceRequestId = requestId,
+            AssetItemId = assetItemId,
+            TechnicianUserId = 1,
+            JobType = AssetMaintenanceJobTypes.Corrective,
+            Priority = "Standard",
+            InitialDiagnosis = "Bench diagnosis scheduled."
+        };
+        showAssignTechModal = true;
+    }
+
+    private async Task SubmitAssignTechAsync()
+    {
+        var res = await AssetService.AssignTechnicianAsync(assignTechInput);
+        if (res.Success)
+        {
+            Toasts.Success("Technician assigned and work order initiated.");
+            showAssignTechModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenCompleteJobModal(AssetMaintenanceJobSummaryDto job)
+    {
+        completeJobInput = new AssetMaintenanceJobCompleteInput
+        {
+            AssetMaintenanceJobId = job.AssetMaintenanceJobId,
+            DiagnosticSummary = "Hardware diagnostics and component testing complete.",
+            WorkPerformedSummary = "Internal servicing and modular testing performed.",
+            MemTestPassed = true,
+            SmartCheckPassed = true,
+            ThermalBenchmarkPassed = true,
+            PortsCheckPassed = true,
+            DataSanitizationVerified = false,
+            PartsCost = 0,
+            LabourCost = 50,
+            ResolutionSummary = "Hardware issue resolved; ready for user handover."
+        };
+        showCompleteJobModal = true;
+    }
+
+    private async Task SubmitCompleteJobAsync()
+    {
+        var res = await AssetService.CompleteMaintenanceJobAsync(completeJobInput);
+        if (res.Success)
+        {
+            Toasts.Success("Work order completed and SHA-256 report sealed.");
+            showCompleteJobModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenNewUpgradeModal()
+    {
+        var asset = dashboard?.Assets.FirstOrDefault();
+        upgradeInput = new AssetHardwareUpgradeInput
+        {
+            AssetItemId = asset?.AssetItemId ?? 0,
+            ComponentType = AssetComponentTypes.RAM,
+            SlotOrPosition = "SODIMM Slot 1",
+            RemovedPartDisposition = "RetainedSpare",
+            NewComponentBrand = "Crucial",
+            NewComponentModel = "DDR5-5600",
+            NewCapacityOrRating = "16 GB",
+            NewComponentSpecification = "16GB DDR5 5600MHz CL46 SODIMM",
+            NewComponentCost = 75,
+            UpgradeRemarks = "Standard memory capacity upgrade"
+        };
+        showUpgradeModal = true;
+    }
+
+    private void OpenUpgradeModalForAsset(AssetItemDto asset)
+    {
+        upgradeInput = new AssetHardwareUpgradeInput
+        {
+            AssetItemId = asset.AssetItemId,
+            ComponentType = AssetComponentTypes.RAM,
+            SlotOrPosition = "SODIMM Slot 1",
+            RemovedPartDisposition = "RetainedSpare",
+            NewComponentBrand = "Crucial",
+            NewComponentModel = "DDR5-5600",
+            NewCapacityOrRating = "16 GB",
+            NewComponentSpecification = "16GB DDR5 5600MHz CL46 SODIMM",
+            NewComponentCost = 75,
+            UpgradeRemarks = $"Component upgrade for {asset.AssetCode}"
+        };
+        showUpgradeModal = true;
+    }
+
+    private async Task SubmitUpgradeAsync()
+    {
+        var res = await AssetService.PerformHardwareUpgradeAsync(upgradeInput);
+        if (res.Success)
+        {
+            Toasts.Success("Hardware upgrade performed; snapshot captured.");
+            showUpgradeModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task ViewConfigTimelineAsync(int assetItemId)
+    {
+        try
+        {
+            configTimeline = await AssetService.GetAssetConfigurationHistoryAsync(assetItemId);
+            showConfigTimelineModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load configuration history: {ex.Message}");
+        }
+    }
+
+    private void OpenNewLoanerModal()
+    {
+        selectedLoanerStaffId = dashboard?.StaffOptions.FirstOrDefault()?.IndividualId ?? 0;
+        var staff = dashboard?.StaffOptions.FirstOrDefault(s => s.IndividualId == selectedLoanerStaffId);
+        var primaryAsset = dashboard?.Assets.FirstOrDefault(a => a.Status == AssetInventoryStatuses.Assigned);
+        var loanerAsset = dashboard?.Assets.FirstOrDefault(a => a.Status == AssetInventoryStatuses.Available);
+
+        loanerInput = new AssetLoanerIssueInput
+        {
+            OrganisationId = dashboard?.OrganisationId ?? 0,
+            IndividualId = staff?.IndividualId ?? 0,
+            JobId = staff?.JobId ?? 0,
+            PrimaryAssetItemId = primaryAsset?.AssetItemId ?? 0,
+            LoanerAssetItemId = loanerAsset?.AssetItemId ?? 0,
+            ExpectedReturnDate = DateTime.UtcNow.AddDays(14).Date,
+            ConditionOutId = dashboard?.Conditions.FirstOrDefault()?.AssetConditionId ?? 1,
+            Notes = "Temporary laptop issued during repairs"
+        };
+        showIssueLoanerModal = true;
+    }
+
+    private void OnLoanerStaffChanged()
+    {
+        var staff = dashboard?.StaffOptions.FirstOrDefault(s => s.IndividualId == selectedLoanerStaffId);
+        if (staff != null)
+        {
+            loanerInput.IndividualId = staff.IndividualId;
+            loanerInput.JobId = staff.JobId;
+        }
+    }
+
+    private async Task SubmitLoanerIssueAsync()
+    {
+        var res = await AssetService.IssueLoanerAssetAsync(loanerInput);
+        if (res.Success)
+        {
+            Toasts.Success("Loaner equipment issued successfully.");
+            showIssueLoanerModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenReturnLoanerModal(AssetTemporaryHandoverDto loaner)
+    {
+        loanerReturnInput = new AssetLoanerReturnInput
+        {
+            AssetTemporaryHandoverId = loaner.AssetTemporaryHandoverId,
+            ConditionInId = dashboard?.Conditions.FirstOrDefault()?.AssetConditionId ?? 1,
+            Notes = "Returned in good order."
+        };
+        showReturnLoanerModal = true;
+    }
+
+    private async Task SubmitLoanerReturnAsync()
+    {
+        var res = await AssetService.ReturnLoanerAssetAsync(loanerReturnInput);
+        if (res.Success)
+        {
+            Toasts.Success("Loaner returned and inventory restored to pool.");
+            showReturnLoanerModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private void OpenNewReplacementModal()
+    {
+        var orig = dashboard?.Assets.FirstOrDefault(a => a.Status == AssetInventoryStatuses.Assigned);
+        var rep = dashboard?.Assets.FirstOrDefault(a => a.Status == AssetInventoryStatuses.Available);
+
+        replacementInput = new AssetReplacementLinkInput
+        {
+            OriginalAssetItemId = orig?.AssetItemId ?? 0,
+            ReplacementAssetItemId = rep?.AssetItemId ?? 0,
+            ReplacementType = AssetReplacementTypes.CompleteDeviceReplacement,
+            ReplacementReason = AssetReplacementReasons.BeyondEconomicalRepair,
+            OriginalAssetDisposition = "PendingReturn",
+            StaffRemarks = "Replacement device issued."
+        };
+        showReplacementModal = true;
+    }
+
+    private async Task SubmitReplacementLinkAsync()
+    {
+        var res = await AssetService.RecordReplacementLinkAsync(replacementInput);
+        if (res.Success)
+        {
+            Toasts.Success("Equipment replacement link recorded.");
+            showReplacementModal = false;
+            await LoadDataAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task EvaluateStaffClearanceAsync(int individualId)
+    {
+        if (individualId <= 0) return;
+        isEvaluatingClearance = true;
+        try
+        {
+            clearanceCheck = await AssetService.CheckStaffAssetClearanceAsync(individualId);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Clearance audit failed: {ex.Message}");
+        }
+        finally
+        {
+            isEvaluatingClearance = false;
+        }
+    }
+
+    private async Task PrintClearanceCertificateAsync(int individualId)
+    {
+        try
+        {
+            servicePrintDoc = await AssetService.GetServicePrintableDocumentAsync(individualId, "TransferClearanceReport");
+            showServicePrintModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to generate clearance certificate: {ex.Message}");
+        }
+    }
+
+    private async Task PrintServiceDocAsync(long id, string docType)
+    {
+        try
+        {
+            servicePrintDoc = await AssetService.GetServicePrintableDocumentAsync(id, docType);
+            showServicePrintModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to generate document: {ex.Message}");
+        }
+    }
 }

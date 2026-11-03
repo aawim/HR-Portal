@@ -77,6 +77,14 @@ public sealed class AssetItem
     public ICollection<AssetIssuanceItem> IssuanceItems { get; set; } = new List<AssetIssuanceItem>();
     public ICollection<AssetCustody> Custodies { get; set; } = new List<AssetCustody>();
     public ICollection<AssetEvent> Events { get; set; } = new List<AssetEvent>();
+    public ICollection<AssetComponent> Components { get; set; } = new List<AssetComponent>();
+    public ICollection<AssetMaintenanceJob> MaintenanceJobs { get; set; } = new List<AssetMaintenanceJob>();
+    public ICollection<AssetTemporaryHandover> PrimaryHandovers { get; set; } = new List<AssetTemporaryHandover>();
+    public ICollection<AssetTemporaryHandover> LoanerHandovers { get; set; } = new List<AssetTemporaryHandover>();
+    public ICollection<AssetReplacementLink> OriginalReplacementLinks { get; set; } = new List<AssetReplacementLink>();
+    public ICollection<AssetReplacementLink> NewReplacementLinks { get; set; } = new List<AssetReplacementLink>();
+    public ICollection<AssetInspection> Inspections { get; set; } = new List<AssetInspection>();
+    public ICollection<AssetConfigurationSnapshot> ConfigurationSnapshots { get; set; } = new List<AssetConfigurationSnapshot>();
 }
 
 /// <summary>
@@ -243,6 +251,10 @@ public sealed class AssetCustody
 
     public ICollection<AssetReturnItem> ReturnItems { get; set; } = new List<AssetReturnItem>();
     public ICollection<AssetTransferDisposition> TransferDispositions { get; set; } = new List<AssetTransferDisposition>();
+    public ICollection<AssetServiceRequestItem> ServiceRequestItems { get; set; } = new List<AssetServiceRequestItem>();
+    public ICollection<AssetTemporaryHandover> TemporaryHandovers { get; set; } = new List<AssetTemporaryHandover>();
+    public ICollection<AssetReplacementLink> OriginalReplacementLinks { get; set; } = new List<AssetReplacementLink>();
+    public ICollection<AssetReplacementLink> NewReplacementLinks { get; set; } = new List<AssetReplacementLink>();
 }
 
 /// <summary>
@@ -409,4 +421,354 @@ public sealed class AssetDocument
 
     public AssetIssuance AssetIssuance { get; set; } = null!;
     public User GeneratedByUser { get; set; } = null!;
+}
+
+/// <summary>
+/// Service, fault repair, hardware upgrade, replacement, and clearance request header.
+/// Mapped to dbo.AM_AssetServiceRequests.
+/// </summary>
+public sealed class AssetServiceRequest
+{
+    public int AssetServiceRequestId { get; set; }
+    public int? RequestId { get; set; }
+    public string ReferenceNumber { get; set; } = "";
+    public int IndividualId { get; set; }
+    public int JobId { get; set; }
+    public int OrganisationId { get; set; }
+    public int? StructureId { get; set; }
+    public int? StaffTransferId { get; set; }
+    public string RequestType { get; set; } = AssetServiceRequestTypes.FaultCorrective;
+    public string Priority { get; set; } = "Standard";
+    public string Title { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string Status { get; set; } = AssetServiceRequestStatuses.Submitted;
+    public int RequestedByUserId { get; set; }
+    public int? AssignedTechnicianUserId { get; set; }
+    public decimal? EstimatedCost { get; set; }
+    public decimal? ActualCost { get; set; }
+    public DateTime SubmittedAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
+    public string? ResolutionSummary { get; set; }
+    public int? OperationLogId { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public Request? Request { get; set; }
+    public Individual Individual { get; set; } = null!;
+    public Job Job { get; set; } = null!;
+    public Organisation Organisation { get; set; } = null!;
+    public OrganisationStructure? Structure { get; set; }
+    public StaffTransfer? StaffTransfer { get; set; }
+    public User RequestedByUser { get; set; } = null!;
+    public User? AssignedTechnicianUser { get; set; }
+    public OperationLog? OperationLog { get; set; }
+
+    public ICollection<AssetServiceRequestItem> Items { get; set; } = new List<AssetServiceRequestItem>();
+    public ICollection<AssetMaintenanceJob> MaintenanceJobs { get; set; } = new List<AssetMaintenanceJob>();
+    public ICollection<AssetReplacementLink> ReplacementLinks { get; set; } = new List<AssetReplacementLink>();
+    public ICollection<AssetTemporaryHandover> TemporaryHandovers { get; set; } = new List<AssetTemporaryHandover>();
+    public ICollection<AssetInspection> Inspections { get; set; } = new List<AssetInspection>();
+    public ICollection<AssetServiceDocument> ServiceDocuments { get; set; } = new List<AssetServiceDocument>();
+}
+
+/// <summary>
+/// Individual items subject to service/upgrade/replacement within a service request.
+/// Mapped to dbo.AM_AssetServiceRequestItems.
+/// </summary>
+public sealed class AssetServiceRequestItem
+{
+    public int AssetServiceRequestItemId { get; set; }
+    public int AssetServiceRequestId { get; set; }
+    public int? AssetCustodyId { get; set; }
+    public int AssetItemId { get; set; }
+    public string ItemRequestType { get; set; } = AssetServiceRequestTypes.FaultCorrective;
+    public string ReportedFaultOrRequirement { get; set; } = "";
+    public string? TargetComponentCategory { get; set; }
+    public string? TargetSpecification { get; set; }
+    public string Status { get; set; } = "Pending";
+    public bool StaffAcknowledged { get; set; }
+    public string? StaffDecision { get; set; }
+    public string? StaffRemarks { get; set; }
+    public DateTime? StaffConfirmedAtUtc { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public AssetServiceRequest ServiceRequest { get; set; } = null!;
+    public AssetCustody? AssetCustody { get; set; }
+    public AssetItem AssetItem { get; set; } = null!;
+}
+
+/// <summary>
+/// Technical repair, upgrade, or testing work order.
+/// Mapped to dbo.AM_AssetMaintenanceJobs.
+/// </summary>
+public sealed class AssetMaintenanceJob
+{
+    public int AssetMaintenanceJobId { get; set; }
+    public string WorkOrderNumber { get; set; } = "";
+    public int? AssetServiceRequestId { get; set; }
+    public int AssetItemId { get; set; }
+    public string JobType { get; set; } = AssetMaintenanceJobTypes.Corrective;
+    public string Priority { get; set; } = "Standard";
+    public int AssignedTechnicianUserId { get; set; }
+    public string Status { get; set; } = AssetMaintenanceJobStatuses.Assigned;
+    public DateTime? StartedAtUtc { get; set; }
+    public DateTime? CompletedAtUtc { get; set; }
+    public string? DiagnosticSummary { get; set; }
+    public string? WorkPerformedSummary { get; set; }
+    public string? HardwareTestSummary { get; set; }
+    public string? DataSanitizationMethod { get; set; }
+    public bool DataSanitizationVerified { get; set; }
+    public string? VendorWarrantyClaimNumber { get; set; }
+    public decimal PartsCost { get; set; }
+    public decimal LabourCost { get; set; }
+    public decimal TotalCost { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public AssetServiceRequest? ServiceRequest { get; set; }
+    public AssetItem AssetItem { get; set; } = null!;
+    public User AssignedTechnicianUser { get; set; } = null!;
+
+    public ICollection<AssetMaintenanceAction> Actions { get; set; } = new List<AssetMaintenanceAction>();
+    public ICollection<AssetComponentTransaction> ComponentTransactions { get; set; } = new List<AssetComponentTransaction>();
+    public ICollection<AssetServiceDocument> ServiceDocuments { get; set; } = new List<AssetServiceDocument>();
+}
+
+/// <summary>
+/// Technician activity log and milestone action during servicing.
+/// Mapped to dbo.AM_AssetMaintenanceActions.
+/// </summary>
+public sealed class AssetMaintenanceAction
+{
+    public long AssetMaintenanceActionId { get; set; }
+    public int AssetMaintenanceJobId { get; set; }
+    public string ActionType { get; set; } = "Diagnosis";
+    public int TechnicianUserId { get; set; }
+    public DateTime ActionAtUtc { get; set; }
+    public int DurationMinutes { get; set; }
+    public string Remarks { get; set; } = "";
+    public string? MetadataJson { get; set; }
+
+    public AssetMaintenanceJob MaintenanceJob { get; set; } = null!;
+    public User TechnicianUser { get; set; } = null!;
+}
+
+/// <summary>
+/// Physical hardware component (RAM, SSD, battery, display, etc.) installed or stocked.
+/// Mapped to dbo.AM_AssetComponents.
+/// </summary>
+public sealed class AssetComponent
+{
+    public int AssetComponentId { get; set; }
+    public int OwnerOrganisationId { get; set; }
+    public int? AssetItemId { get; set; }
+    public string ComponentType { get; set; } = AssetComponentTypes.RAM;
+    public string? Brand { get; set; }
+    public string? Model { get; set; }
+    public string? PartNumber { get; set; }
+    public string? SerialNumber { get; set; }
+    public string Specification { get; set; } = "";
+    public string? CapacityOrRating { get; set; }
+    public string? SlotOrPortLocation { get; set; }
+    public string Status { get; set; } = AssetComponentStatuses.StockSpare;
+    public decimal? Cost { get; set; }
+    public DateTime? InstalledAtUtc { get; set; }
+    public DateTime? RemovedAtUtc { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public Organisation OwnerOrganisation { get; set; } = null!;
+    public AssetItem? AssetItem { get; set; }
+
+    public ICollection<AssetComponentTransaction> Transactions { get; set; } = new List<AssetComponentTransaction>();
+}
+
+/// <summary>
+/// Immutable audit log of every component install, removal, upgrade, swap, and disposal.
+/// Mapped to dbo.AM_AssetComponentTransactions.
+/// </summary>
+public sealed class AssetComponentTransaction
+{
+    public long AssetComponentTransactionId { get; set; }
+    public int AssetComponentId { get; set; }
+    public int AssetItemId { get; set; }
+    public int? AssetMaintenanceJobId { get; set; }
+    public string TransactionType { get; set; } = AssetComponentTransactionTypes.InstalledAsUpgrade;
+    public string? FromStatus { get; set; }
+    public string ToStatus { get; set; } = AssetComponentStatuses.Installed;
+    public int TechnicianUserId { get; set; }
+    public DateTime TransactedAtUtc { get; set; }
+    public string? Notes { get; set; }
+
+    public AssetComponent AssetComponent { get; set; } = null!;
+    public AssetItem AssetItem { get; set; } = null!;
+    public AssetMaintenanceJob? MaintenanceJob { get; set; }
+    public User TechnicianUser { get; set; } = null!;
+}
+
+/// <summary>
+/// Inventory of spare parts and replacement components stocked in the IT workshop.
+/// Mapped to dbo.AM_AssetServiceParts.
+/// </summary>
+public sealed class AssetServicePart
+{
+    public int AssetServicePartId { get; set; }
+    public int OrganisationId { get; set; }
+    public string PartCode { get; set; } = "";
+    public string Name { get; set; } = "";
+    public string Category { get; set; } = "";
+    public string Specification { get; set; } = "";
+    public string? CompatibleModels { get; set; }
+    public int QuantityOnHand { get; set; }
+    public int QuantityReserved { get; set; }
+    public decimal UnitCost { get; set; }
+    public int ReorderLevel { get; set; } = 5;
+    public string? LocationBin { get; set; }
+    public bool IsActive { get; set; } = true;
+
+    public Organisation Organisation { get; set; } = null!;
+}
+
+/// <summary>
+/// Explicit link between an original device/accessory and its replacement.
+/// Mapped to dbo.AM_AssetReplacementLinks.
+/// </summary>
+public sealed class AssetReplacementLink
+{
+    public int AssetReplacementLinkId { get; set; }
+    public int? AssetServiceRequestId { get; set; }
+    public int OriginalAssetItemId { get; set; }
+    public int? OriginalAssetCustodyId { get; set; }
+    public int ReplacementAssetItemId { get; set; }
+    public int? ReplacementAssetCustodyId { get; set; }
+    public string ReplacementType { get; set; } = AssetReplacementTypes.CompleteDeviceReplacement;
+    public string ReplacementReason { get; set; } = AssetReplacementReasons.BeyondEconomicalRepair;
+    public string OriginalAssetDisposition { get; set; } = "PendingReturn";
+    public bool StaffAcknowledged { get; set; }
+    public string? StaffDecision { get; set; }
+    public string? StaffRemarks { get; set; }
+    public DateTime? StaffConfirmedAtUtc { get; set; }
+    public int RecordedByUserId { get; set; }
+    public DateTime RecordedAtUtc { get; set; }
+
+    public AssetServiceRequest? ServiceRequest { get; set; }
+    public AssetItem OriginalAssetItem { get; set; } = null!;
+    public AssetCustody? OriginalAssetCustody { get; set; }
+    public AssetItem ReplacementAssetItem { get; set; } = null!;
+    public AssetCustody? ReplacementAssetCustody { get; set; }
+    public User RecordedByUser { get; set; } = null!;
+}
+
+/// <summary>
+/// Temporary loaner device assigned while an employee's primary device is serviced.
+/// Mapped to dbo.AM_AssetTemporaryHandovers.
+/// </summary>
+public sealed class AssetTemporaryHandover
+{
+    public int AssetTemporaryHandoverId { get; set; }
+    public int? AssetServiceRequestId { get; set; }
+    public int PrimaryAssetItemId { get; set; }
+    public int LoanerAssetItemId { get; set; }
+    public int IndividualId { get; set; }
+    public int JobId { get; set; }
+    public int OrganisationId { get; set; }
+    public DateTime HandedOverAtUtc { get; set; }
+    public DateTime ExpectedReturnDate { get; set; }
+    public DateTime? ActualReturnedAtUtc { get; set; }
+    public int HandedOverByUserId { get; set; }
+    public int? ReceivedBackByUserId { get; set; }
+    public int ConditionOutId { get; set; }
+    public int? ConditionInId { get; set; }
+    public string Status { get; set; } = AssetTemporaryHandoverStatuses.ActiveLoaner;
+    public bool StaffAcknowledgementConfirmed { get; set; }
+    public DateTime? StaffConfirmedAtUtc { get; set; }
+    public string? Notes { get; set; }
+
+    public AssetServiceRequest? ServiceRequest { get; set; }
+    public AssetItem PrimaryAssetItem { get; set; } = null!;
+    public AssetItem LoanerAssetItem { get; set; } = null!;
+    public Individual Individual { get; set; } = null!;
+    public Job Job { get; set; } = null!;
+    public Organisation Organisation { get; set; } = null!;
+    public User HandedOverByUser { get; set; } = null!;
+    public User? ReceivedBackByUser { get; set; }
+    public AssetCondition ConditionOut { get; set; } = null!;
+    public AssetCondition? ConditionIn { get; set; }
+}
+
+/// <summary>
+/// Technical and physical condition inspection record.
+/// Mapped to dbo.AM_AssetInspections.
+/// </summary>
+public sealed class AssetInspection
+{
+    public int AssetInspectionId { get; set; }
+    public int AssetItemId { get; set; }
+    public int? AssetCustodyId { get; set; }
+    public int? AssetServiceRequestId { get; set; }
+    public int? AssetReturnItemId { get; set; }
+    public string InspectionStage { get; set; } = AssetInspectionStages.PreServiceTriage;
+    public int InspectorUserId { get; set; }
+    public DateTime InspectedAtUtc { get; set; }
+    public int OverallConditionId { get; set; }
+    public string? PhysicalDamageReport { get; set; }
+    public string? FunctionalTestSummary { get; set; }
+    public string? AccessoriesChecklist { get; set; }
+    public bool DataSanitizationVerified { get; set; }
+    public string InspectorDecision { get; set; } = AssetInspectorDecisions.Passed;
+    public string? Notes { get; set; }
+
+    public AssetItem AssetItem { get; set; } = null!;
+    public AssetCustody? AssetCustody { get; set; }
+    public AssetServiceRequest? ServiceRequest { get; set; }
+    public AssetReturnItem? ReturnItem { get; set; }
+    public User InspectorUser { get; set; } = null!;
+    public AssetCondition OverallCondition { get; set; } = null!;
+}
+
+/// <summary>
+/// Immutable versioned service/upgrade/replacement/clearance report snapshot with SHA-256 hash.
+/// Mapped to dbo.AM_AssetServiceDocuments.
+/// </summary>
+public sealed class AssetServiceDocument
+{
+    public long AssetServiceDocumentId { get; set; }
+    public string DocumentType { get; set; } = AssetServiceDocumentTypes.ServiceReport;
+    public string DocumentNumber { get; set; } = "";
+    public int DocumentVersion { get; set; } = 1;
+    public int? AssetServiceRequestId { get; set; }
+    public int? AssetMaintenanceJobId { get; set; }
+    public int? AssetItemId { get; set; }
+    public int? IndividualId { get; set; }
+    public string SnapshotJson { get; set; } = "";
+    public string Sha256Hash { get; set; } = "";
+    public int GeneratedByUserId { get; set; }
+    public DateTime GeneratedAtUtc { get; set; }
+    public bool IsRestrictedSecurityVariant { get; set; }
+
+    public AssetServiceRequest? ServiceRequest { get; set; }
+    public AssetMaintenanceJob? MaintenanceJob { get; set; }
+    public AssetItem? AssetItem { get; set; }
+    public Individual? Individual { get; set; }
+    public User GeneratedByUser { get; set; } = null!;
+}
+
+/// <summary>
+/// Complete historical configuration profile of an asset (CPU, RAM, storage, battery, installed parts).
+/// Mapped to dbo.AM_AssetConfigurationSnapshots.
+/// </summary>
+public sealed class AssetConfigurationSnapshot
+{
+    public long AssetConfigurationSnapshotId { get; set; }
+    public int AssetItemId { get; set; }
+    public string TriggerEvent { get; set; } = AssetConfigurationTriggerEvents.InitialRegistration;
+    public string? ProcessorSpec { get; set; }
+    public string RamSummary { get; set; } = "";
+    public string StorageSummary { get; set; } = "";
+    public string? GraphicsSpec { get; set; }
+    public int? BatteryHealthPercentage { get; set; }
+    public string? OsVersion { get; set; }
+    public string ComponentsJson { get; set; } = "";
+    public DateTime CapturedAtUtc { get; set; }
+    public int CapturedByUserId { get; set; }
+
+    public AssetItem AssetItem { get; set; } = null!;
+    public User CapturedByUser { get; set; } = null!;
 }

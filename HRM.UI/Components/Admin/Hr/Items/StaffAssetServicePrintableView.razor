@@ -1,0 +1,176 @@
+@namespace HRM.Components.Admin.Hr.Items
+@using HRM.DTOs.Assets
+@inject IJSRuntime JS
+
+@if (Document is not null)
+{
+    <div class="space-y-4">
+        <!-- Action Bar (Hidden in Print) -->
+        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 print:hidden">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                    @Document.DocumentNumber • v@Document.DocumentVersion
+                </span>
+                <span class="text-xs text-slate-600">
+                    Generated @Document.GeneratedAtUtc.ToString("dd MMM yyyy HH:mm UTC")
+                </span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <button type="button"
+                        @onclick="PrintDocumentAsync"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                    </svg>
+                    <span>Print / Save PDF</span>
+                </button>
+
+                @if (OnClose.HasDelegate)
+                {
+                    <button type="button"
+                            @onclick="OnClose"
+                            class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                        Close
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Printable A4 Document Sheet -->
+        <div class="mx-auto max-w-[210mm] border border-slate-200 bg-white p-8 shadow-sm print:m-0 print:max-w-none print:border-none print:p-0 print:shadow-none font-sans text-slate-900">
+            <!-- Header -->
+            <div class="border-b-2 border-slate-900 pb-4">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <div class="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            @Document.OrganisationName
+                        </div>
+                        <h1 class="mt-1 text-xl font-black uppercase tracking-tight text-slate-900">
+                            @Document.Title
+                        </h1>
+                        <div class="mt-1 text-xs text-slate-600">
+                            Auditable Lifecycle & Equipment Custody Record
+                        </div>
+                    </div>
+                    <div class="text-right text-xs">
+                        <div class="font-mono font-bold text-slate-900">@Document.DocumentNumber</div>
+                        <div class="text-[11px] text-slate-500">Version @Document.DocumentVersion</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Metadata Grid -->
+            <div class="mt-6 grid grid-cols-2 gap-4 border-b border-slate-200 pb-6 text-xs sm:grid-cols-4">
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Staff Recipient</div>
+                    <div class="mt-1 font-bold text-slate-900">@Document.StaffName</div>
+                    <div class="text-[11px] text-slate-500">Staff #@Document.StaffNumber</div>
+                </div>
+
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Asset Code</div>
+                    <div class="mt-1 font-mono font-bold text-slate-900">@Document.AssetCode</div>
+                    <div class="text-[11px] text-slate-500">@Document.AssetDescription</div>
+                </div>
+
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Serial Number</div>
+                    <div class="mt-1 font-mono font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(Document.SerialNumber) ? "N/A" : Document.SerialNumber)</div>
+                    <div class="text-[11px] text-slate-500">Document Type: @Document.DocumentType</div>
+                </div>
+
+                <div>
+                    <div class="text-[10px] font-semibold uppercase text-slate-400">Issued / Verified By</div>
+                    <div class="mt-1 font-semibold text-slate-900">@Document.GeneratedByName</div>
+                    <div class="text-[11px] text-slate-500">@Document.GeneratedAtUtc.ToString("dd MMM yyyy HH:mm")</div>
+                </div>
+            </div>
+
+            <!-- Key Attributes Table -->
+            @if (Document.KeyAttributes.Count > 0)
+            {
+                <div class="mt-6 space-y-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Specification & Event Details</h2>
+                    <div class="overflow-hidden rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var kvp in Document.KeyAttributes)
+                                {
+                                    <tr>
+                                        <td class="w-1/3 bg-slate-50 px-4 py-2 font-semibold text-slate-600">@kvp.Key</td>
+                                        <td class="px-4 py-2 font-mono text-slate-900">@kvp.Value</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- Checklist & Bench Verification -->
+            @if (Document.ChecklistItems.Count > 0)
+            {
+                <div class="mt-6 space-y-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Verification & Inspection Checklist</h2>
+                    <div class="grid grid-cols-1 gap-2 rounded-xl border border-slate-200 p-3 sm:grid-cols-2">
+                        @foreach (var item in Document.ChecklistItems)
+                        {
+                            <div class="flex items-center gap-2 text-xs text-slate-800">
+                                <span class="font-bold text-emerald-600">✓</span>
+                                <span>@item</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <!-- Summary & Technical Log -->
+            @if (!string.IsNullOrWhiteSpace(Document.SummaryDetails))
+            {
+                <div class="mt-6 space-y-2">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-700">Cryptographic Technical Payload</h2>
+                    <pre class="overflow-x-auto rounded-xl border border-slate-200 bg-slate-50 p-3 font-mono text-[11px] text-slate-700">@Document.SummaryDetails</pre>
+                </div>
+            }
+
+            <!-- Signatures & Acceptance Block -->
+            <div class="mt-8 border-t border-slate-200 pt-6">
+                <div class="grid grid-cols-2 gap-8 text-xs">
+                    <div>
+                        <div class="text-[10px] font-semibold uppercase text-slate-400">Technical Officer Verification</div>
+                        <div class="mt-6 border-b border-slate-300 pb-1 font-semibold text-slate-900">@Document.GeneratedByName</div>
+                        <div class="mt-1 text-[11px] text-slate-500">Hardware & Diagnostics Certified</div>
+                    </div>
+
+                    <div>
+                        <div class="text-[10px] font-semibold uppercase text-slate-400">Staff Custodian Acknowledgement</div>
+                        <div class="mt-6 border-b border-slate-300 pb-1 font-semibold text-slate-900">@Document.StaffName</div>
+                        <div class="mt-1 text-[11px] text-slate-500">Physical Receipt & Responsibility Confirmed</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Footer: Hash Verification & Audit Seal -->
+            <div class="mt-8 border-t border-slate-200 pt-4 text-[10px] text-slate-400">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <span>SHA-256 Audit Seal: </span>
+                        <span class="font-mono font-semibold text-slate-600">@Document.Sha256Hash</span>
+                    </div>
+                    <div>Immutable Document Version @Document.DocumentVersion</div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public AssetServicePrintableDocumentDto? Document { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task PrintDocumentAsync()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+}

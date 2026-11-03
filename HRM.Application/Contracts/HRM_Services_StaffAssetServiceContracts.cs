@@ -28,5 +28,22 @@ public abstract class StaffAssetServiceContracts
         Task<ServiceResult> InspectReturnAsync(AssetReturnInspectInput input);
         Task<ServiceResult> RecordTransferDispositionAsync(AssetTransferDispositionInput input);
         Task<AssetPrintableDocumentDto> GetPrintableDocumentAsync(int assetIssuanceId, string variant = AssetDocumentVariants.StandardHandoverRecord);
+
+        // --- Lifecycle, Maintenance, Upgrades, Replacement, Loaners & Clearance ---
+        Task<AssetServiceRequestDetailDto> LoadServiceRequestDetailAsync(int assetServiceRequestId);
+        Task<ServiceResult> CreateServiceRequestAsync(AssetServiceRequestCreateInput input);
+        Task<ServiceResult> AssignTechnicianAsync(AssetTechnicianAssignInput input);
+        Task<ServiceResult> RecordMaintenanceActionAsync(AssetMaintenanceActionInput input);
+        Task<ServiceResult> CompleteMaintenanceJobAsync(AssetMaintenanceJobCompleteInput input);
+        Task<ServiceResult> PerformHardwareUpgradeAsync(AssetHardwareUpgradeInput input);
+        Task<ServiceResult> IssueLoanerAssetAsync(AssetLoanerIssueInput input);
+        Task<ServiceResult> ReturnLoanerAssetAsync(AssetLoanerReturnInput input);
+        Task<ServiceResult> RecordReplacementLinkAsync(AssetReplacementLinkInput input);
+        Task<ServiceResult> AcknowledgeServiceItemAsync(AssetServiceStaffAcknowledgeInput input);
+        Task<ServiceResult> RecordInspectionAsync(AssetInspectionInput input);
+        Task<AssetConfigurationTimelineDto> GetAssetConfigurationHistoryAsync(int assetItemId);
+        Task<AssetClearanceCheckDto> CheckStaffAssetClearanceAsync(int individualId, int? staffTransferId = null);
+        Task<AssetServicePrintableDocumentDto> GetServicePrintableDocumentAsync(long documentIdOrRequestId, string documentType = "ServiceReport");
+        Task<ServiceResult> SaveServicePartAsync(AssetServicePartSaveInput input);
     }
 }

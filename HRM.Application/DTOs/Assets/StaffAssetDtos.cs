@@ -45,6 +45,12 @@ public sealed class AssetDashboardData
     public List<AssetReturnDetailDto> Returns { get; set; } = [];
     public List<AssetTransferDispositionDto> TransferDispositions { get; set; } = [];
     public List<AssetEventDto> RecentAuditEvents { get; set; } = [];
+
+    // Lifecycle Management: Repairs, Work Orders, Loaners, Replacements
+    public List<AssetServiceRequestSummaryDto> ServiceRequests { get; set; } = [];
+    public List<AssetMaintenanceJobSummaryDto> MaintenanceJobs { get; set; } = [];
+    public List<AssetTemporaryHandoverDto> ActiveLoaners { get; set; } = [];
+    public List<AssetReplacementLinkDto> ReplacementLinks { get; set; } = [];
 }
 
 public sealed record AssetDepartmentOptionDto(int StructureId, int OrganisationId, string Name);

@@ -14,7 +14,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public sealed class StaffAssetService(
+public sealed partial class StaffAssetService(
     IDbContextFactory<HrmTeContext> factory,
     IUserAccessService access,
     IOperationLogService logs,
@@ -548,6 +548,122 @@ public sealed class StaffAssetService(
                 e.MetadataJson))
             .ToListAsync();
 
+        // Lifecycle: Service Requests
+        var rawServiceRequests = await db.AssetServiceRequests.AsNoTracking()
+            .Where(r => r.OrganisationId == org)
+            .Include(r => r.Individual)
+            .Include(r => r.Items)
+            .OrderByDescending(r => r.SubmittedAtUtc)
+            .Take(100)
+            .ToListAsync();
+
+        var serviceRequests = rawServiceRequests.Select(r => new AssetServiceRequestSummaryDto
+        {
+            AssetServiceRequestId = r.AssetServiceRequestId,
+            ReferenceNumber = r.ReferenceNumber,
+            RequestType = r.RequestType,
+            Priority = r.Priority,
+            Title = r.Title,
+            Status = r.Status,
+            StaffName = string.Join(" ", new[] { r.Individual.FirstNameEnglish, r.Individual.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))),
+            SubmittedAtUtc = r.SubmittedAtUtc,
+            ItemsCount = r.Items.Count
+        }).ToList();
+
+        // Lifecycle: Maintenance Jobs
+        var maintenanceJobs = await db.AssetMaintenanceJobs.AsNoTracking()
+            .Where(j => j.AssetItem.OwnerOrganisationId == org)
+            .Include(j => j.AssetItem)
+            .Include(j => j.AssignedTechnicianUser)
+            .OrderByDescending(j => j.StartedAtUtc ?? DateTime.UtcNow)
+            .Take(100)
+            .Select(j => new AssetMaintenanceJobSummaryDto
+            {
+                AssetMaintenanceJobId = j.AssetMaintenanceJobId,
+                WorkOrderNumber = j.WorkOrderNumber,
+                AssetServiceRequestId = j.AssetServiceRequestId,
+                AssetItemId = j.AssetItemId,
+                AssetCode = j.AssetItem.AssetCode,
+                JobType = j.JobType,
+                Priority = j.Priority,
+                AssignedTechnicianUserId = j.AssignedTechnicianUserId,
+                TechnicianName = j.AssignedTechnicianUser.Username,
+                Status = j.Status,
+                StartedAtUtc = j.StartedAtUtc,
+                CompletedAtUtc = j.CompletedAtUtc,
+                TotalCost = j.TotalCost,
+                DataSanitizationVerified = j.DataSanitizationVerified
+            })
+            .ToListAsync();
+
+        // Lifecycle: Active Loaners
+        var rawLoaners = await db.AssetTemporaryHandovers.AsNoTracking()
+            .Where(h => h.OrganisationId == org && h.Status == AssetTemporaryHandoverStatuses.ActiveLoaner)
+            .Include(h => h.PrimaryAssetItem)
+            .Include(h => h.LoanerAssetItem)
+            .Include(h => h.Individual)
+            .Include(h => h.ConditionOut)
+            .Include(h => h.ConditionIn)
+            .OrderByDescending(h => h.HandedOverAtUtc)
+            .Take(100)
+            .ToListAsync();
+
+        var activeLoaners = rawLoaners.Select(h => new AssetTemporaryHandoverDto
+        {
+            AssetTemporaryHandoverId = h.AssetTemporaryHandoverId,
+            AssetServiceRequestId = h.AssetServiceRequestId,
+            PrimaryAssetItemId = h.PrimaryAssetItemId,
+            PrimaryAssetCode = h.PrimaryAssetItem.AssetCode,
+            PrimaryAssetSummary = h.PrimaryAssetItem.Name,
+            LoanerAssetItemId = h.LoanerAssetItemId,
+            LoanerAssetCode = h.LoanerAssetItem.AssetCode,
+            LoanerAssetSummary = h.LoanerAssetItem.Name,
+            IndividualId = h.IndividualId,
+            StaffName = string.Join(" ", new[] { h.Individual.FirstNameEnglish, h.Individual.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))),
+            HandedOverAtUtc = h.HandedOverAtUtc,
+            ExpectedReturnDate = h.ExpectedReturnDate,
+            ActualReturnedAtUtc = h.ActualReturnedAtUtc,
+            ConditionOutName = h.ConditionOut.Name,
+            ConditionInName = h.ConditionIn != null ? h.ConditionIn.Name : null,
+            Status = h.Status,
+            StaffAcknowledgementConfirmed = h.StaffAcknowledgementConfirmed,
+            StaffConfirmedAtUtc = h.StaffConfirmedAtUtc,
+            Notes = h.Notes
+        }).ToList();
+
+        // Lifecycle: Replacement Links
+        var rawReplacementLinks = await db.AssetReplacementLinks.AsNoTracking()
+            .Where(l => l.OriginalAssetItem.OwnerOrganisationId == org)
+            .Include(l => l.OriginalAssetItem)
+            .Include(l => l.ReplacementAssetItem)
+            .Include(l => l.RecordedByUser)
+            .OrderByDescending(l => l.RecordedAtUtc)
+            .Take(100)
+            .ToListAsync();
+
+        var replacementLinks = rawReplacementLinks.Select(l => new AssetReplacementLinkDto
+        {
+            AssetReplacementLinkId = l.AssetReplacementLinkId,
+            AssetServiceRequestId = l.AssetServiceRequestId,
+            OriginalAssetItemId = l.OriginalAssetItemId,
+            OriginalAssetCode = l.OriginalAssetItem.AssetCode,
+            OriginalAssetSummary = l.OriginalAssetItem.Name,
+            OriginalAssetCustodyId = l.OriginalAssetCustodyId,
+            ReplacementAssetItemId = l.ReplacementAssetItemId,
+            ReplacementAssetCode = l.ReplacementAssetItem.AssetCode,
+            ReplacementAssetSummary = l.ReplacementAssetItem.Name,
+            ReplacementAssetCustodyId = l.ReplacementAssetCustodyId,
+            ReplacementType = l.ReplacementType,
+            ReplacementReason = l.ReplacementReason,
+            OriginalAssetDisposition = l.OriginalAssetDisposition,
+            StaffAcknowledged = l.StaffAcknowledged,
+            StaffDecision = l.StaffDecision,
+            StaffRemarks = l.StaffRemarks,
+            StaffConfirmedAtUtc = l.StaffConfirmedAtUtc,
+            RecordedAtUtc = l.RecordedAtUtc,
+            RecordedByName = l.RecordedByUser.Username
+        }).ToList();
+
         return new AssetDashboardData
         {
             OrganisationId = org,
@@ -588,7 +704,11 @@ public sealed class StaffAssetService(
             Custodies = custodies,
             Returns = returns,
             TransferDispositions = dispositions,
-            RecentAuditEvents = recentAuditEvents
+            RecentAuditEvents = recentAuditEvents,
+            ServiceRequests = serviceRequests,
+            MaintenanceJobs = maintenanceJobs,
+            ActiveLoaners = activeLoaners,
+            ReplacementLinks = replacementLinks
         };
     }
 

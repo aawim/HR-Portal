@@ -114,5 +114,10 @@ namespace HRM.Authorization
         public const string AssetReturnInspect = "Asset.Return.Inspect";
         public const string AssetAuditView = "Asset.Audit.View";
         public const string AssetExportRestrictedPdf = "Asset.ExportRestrictedPdf";
+        public const string AssetServiceRequest = "Asset.Service.Request";
+        public const string AssetServiceManage = "Asset.Service.Manage";
+        public const string AssetTechnicianExecute = "Asset.Technician.Execute";
+        public const string AssetUpgradeAuthorize = "Asset.Upgrade.Authorize";
+        public const string AssetClearanceAuthorize = "Asset.Clearance.Authorize";
     }
 }

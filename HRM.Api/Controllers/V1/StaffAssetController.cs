@@ -85,6 +85,66 @@ public sealed class StaffAssetController : HrmApiController
         [FromQuery] string variant = AssetDocumentVariants.StandardHandoverRecord)
         => _service.GetPrintableDocumentAsync(assetIssuanceId, variant);
 
+    [HttpGet("load-service-request-detail")]
+    public Task<AssetServiceRequestDetailDto> LoadServiceRequestDetailAsync([FromQuery] int assetServiceRequestId)
+        => _service.LoadServiceRequestDetailAsync(assetServiceRequestId);
+
+    [HttpPost("create-service-request")]
+    public Task<ServiceResult> CreateServiceRequestAsync([FromBody] CreateServiceRequestRequest request)
+        => _service.CreateServiceRequestAsync(request.input);
+
+    [HttpPost("assign-technician")]
+    public Task<ServiceResult> AssignTechnicianAsync([FromBody] AssignTechnicianRequest request)
+        => _service.AssignTechnicianAsync(request.input);
+
+    [HttpPost("record-maintenance-action")]
+    public Task<ServiceResult> RecordMaintenanceActionAsync([FromBody] RecordMaintenanceActionRequest request)
+        => _service.RecordMaintenanceActionAsync(request.input);
+
+    [HttpPost("complete-maintenance-job")]
+    public Task<ServiceResult> CompleteMaintenanceJobAsync([FromBody] CompleteMaintenanceJobRequest request)
+        => _service.CompleteMaintenanceJobAsync(request.input);
+
+    [HttpPost("perform-hardware-upgrade")]
+    public Task<ServiceResult> PerformHardwareUpgradeAsync([FromBody] PerformHardwareUpgradeRequest request)
+        => _service.PerformHardwareUpgradeAsync(request.input);
+
+    [HttpPost("issue-loaner-asset")]
+    public Task<ServiceResult> IssueLoanerAssetAsync([FromBody] IssueLoanerAssetRequest request)
+        => _service.IssueLoanerAssetAsync(request.input);
+
+    [HttpPost("return-loaner-asset")]
+    public Task<ServiceResult> ReturnLoanerAssetAsync([FromBody] ReturnLoanerAssetRequest request)
+        => _service.ReturnLoanerAssetAsync(request.input);
+
+    [HttpPost("record-replacement-link")]
+    public Task<ServiceResult> RecordReplacementLinkAsync([FromBody] RecordReplacementLinkRequest request)
+        => _service.RecordReplacementLinkAsync(request.input);
+
+    [HttpPost("acknowledge-service-item")]
+    public Task<ServiceResult> AcknowledgeServiceItemAsync([FromBody] AcknowledgeServiceItemRequest request)
+        => _service.AcknowledgeServiceItemAsync(request.input);
+
+    [HttpPost("record-inspection")]
+    public Task<ServiceResult> RecordInspectionAsync([FromBody] RecordInspectionRequest request)
+        => _service.RecordInspectionAsync(request.input);
+
+    [HttpGet("get-asset-configuration-history")]
+    public Task<AssetConfigurationTimelineDto> GetAssetConfigurationHistoryAsync([FromQuery] int assetItemId)
+        => _service.GetAssetConfigurationHistoryAsync(assetItemId);
+
+    [HttpGet("check-staff-asset-clearance")]
+    public Task<AssetClearanceCheckDto> CheckStaffAssetClearanceAsync([FromQuery] int individualId, [FromQuery] int? staffTransferId = null)
+        => _service.CheckStaffAssetClearanceAsync(individualId, staffTransferId);
+
+    [HttpGet("get-service-printable-document")]
+    public Task<AssetServicePrintableDocumentDto> GetServicePrintableDocumentAsync([FromQuery] long documentIdOrRequestId, [FromQuery] string documentType = "ServiceReport")
+        => _service.GetServicePrintableDocumentAsync(documentIdOrRequestId, documentType);
+
+    [HttpPost("save-service-part")]
+    public Task<ServiceResult> SaveServicePartAsync([FromBody] SaveServicePartRequest request)
+        => _service.SaveServicePartAsync(request.input);
+
     public sealed class SaveCategoryRequest
     {
         public AssetCategorySaveInput input { get; set; } = new();
@@ -144,5 +204,60 @@ public sealed class StaffAssetController : HrmApiController
     public sealed class RecordTransferDispositionRequest
     {
         public AssetTransferDispositionInput input { get; set; } = new();
+    }
+
+    public sealed class CreateServiceRequestRequest
+    {
+        public AssetServiceRequestCreateInput input { get; set; } = new();
+    }
+
+    public sealed class AssignTechnicianRequest
+    {
+        public AssetTechnicianAssignInput input { get; set; } = new();
+    }
+
+    public sealed class RecordMaintenanceActionRequest
+    {
+        public AssetMaintenanceActionInput input { get; set; } = new();
+    }
+
+    public sealed class CompleteMaintenanceJobRequest
+    {
+        public AssetMaintenanceJobCompleteInput input { get; set; } = new();
+    }
+
+    public sealed class PerformHardwareUpgradeRequest
+    {
+        public AssetHardwareUpgradeInput input { get; set; } = new();
+    }
+
+    public sealed class IssueLoanerAssetRequest
+    {
+        public AssetLoanerIssueInput input { get; set; } = new();
+    }
+
+    public sealed class ReturnLoanerAssetRequest
+    {
+        public AssetLoanerReturnInput input { get; set; } = new();
+    }
+
+    public sealed class RecordReplacementLinkRequest
+    {
+        public AssetReplacementLinkInput input { get; set; } = new();
+    }
+
+    public sealed class AcknowledgeServiceItemRequest
+    {
+        public AssetServiceStaffAcknowledgeInput input { get; set; } = new();
+    }
+
+    public sealed class RecordInspectionRequest
+    {
+        public AssetInspectionInput input { get; set; } = new();
+    }
+
+    public sealed class SaveServicePartRequest
+    {
+        public AssetServicePartSaveInput input { get; set; } = new();
     }
 }
