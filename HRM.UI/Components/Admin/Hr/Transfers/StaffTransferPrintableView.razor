@@ -8,9 +8,9 @@
 {
     <div class="space-y-4">
         <!-- Action Bar (Hidden in Print) -->
-        <div class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 print:hidden">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-300 pb-3 print:hidden">
             <div class="flex items-center gap-2">
-                <span class="inline-flex items-center rounded-md bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                <span class="text-xs font-bold text-blue-800">
                     @Document.DocumentNumber · v@Document.RequestVersion
                 </span>
                 <span class="text-xs text-slate-600">
@@ -18,18 +18,18 @@
                 </span>
             </div>
 
-            <div class="flex flex-wrap items-center gap-2">
+            <div class="flex flex-wrap items-center gap-3">
                 @if (AllowVariantSwitch)
                 {
-                    <div class="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-xs">
+                    <div class="inline-flex gap-3 text-xs">
                         <button type="button"
                                 @onclick="() => OnVariantChanged.InvokeAsync(StaffTransferDocumentVariants.EmployeeNotice)"
-                                class="rounded-md px-2.5 py-1 font-medium transition @(Document.DocumentVariant == StaffTransferDocumentVariants.EmployeeNotice ? "bg-blue-600 text-white" : "text-slate-600 hover:text-slate-900")">
+                                class="border-b-2 pb-0.5 font-semibold transition @(Document.DocumentVariant == StaffTransferDocumentVariants.EmployeeNotice ? "border-blue-700 text-blue-700" : "border-transparent text-slate-600 hover:text-slate-900")">
                             Standard Employee Notice
                         </button>
                         <button type="button"
                                 @onclick="() => OnVariantChanged.InvokeAsync(StaffTransferDocumentVariants.RestrictedAdminRecord)"
-                                class="rounded-md px-2.5 py-1 font-medium transition @(Document.DocumentVariant == StaffTransferDocumentVariants.RestrictedAdminRecord ? "bg-amber-600 text-white" : "text-slate-600 hover:text-slate-900")">
+                                class="border-b-2 pb-0.5 font-semibold transition @(Document.DocumentVariant == StaffTransferDocumentVariants.RestrictedAdminRecord ? "border-amber-700 text-amber-800" : "border-transparent text-slate-600 hover:text-slate-900")">
                             Restricted HR / Admin Record
                         </button>
                     </div>
@@ -37,7 +37,7 @@
 
                 <button type="button"
                         @onclick="PrintDocumentAsync"
-                        class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800">
+                        class="inline-flex items-center gap-1.5 bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
                     <span>🖨️</span>
                     <span>Print / Save PDF</span>
                 </button>
@@ -46,16 +46,16 @@
                 {
                     <button type="button"
                             @onclick="OnClose"
-                            class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50">
+                            class="text-xs font-semibold text-slate-700 underline hover:text-slate-900">
                         Close
                     </button>
                 }
             </div>
         </div>
 
-        <!-- Printable A4 Sheet -->
+        <!-- Printable Formal A4 Document (No Borders / Panels) -->
         <div id="staff-transfer-printable-sheet"
-             class="mx-auto max-w-[210mm] rounded-xl border border-slate-300 bg-white p-6 text-slate-900 shadow-sm print:max-w-none print:rounded-none print:border-0 print:p-0 print:shadow-none">
+             class="mx-auto max-w-[210mm] bg-white py-4 text-slate-900 print:max-w-none print:p-0">
 
             <!-- 1. Organization Header -->
             <div class="flex items-start justify-between border-b-2 border-slate-900 pb-4">
@@ -77,16 +77,16 @@
                     <div class="text-slate-600">Ref: @(Document.RequestReferenceNumber ?? $"#{Document.StaffTransferId}")</div>
                     <div class="text-slate-600">Version: v@Document.RequestVersion</div>
                     <div class="text-slate-600">Issued: @Document.IssueDateUtc.ToLocalTime().ToString("dd MMM yyyy")</div>
-                    <div class="mt-1 inline-block rounded border border-slate-800 px-2 py-0.5 text-[11px] font-bold uppercase">
-                        @Document.Status
+                    <div class="mt-1 text-[11px] font-bold uppercase text-slate-900">
+                        [@Document.Status]
                     </div>
                 </div>
             </div>
 
             <!-- 2. Employee Identification & 3. Organization Movement -->
-            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div class="rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         01 · Employee Identification
                     </h2>
                     <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
@@ -113,8 +113,8 @@
                     </dl>
                 </div>
 
-                <div class="rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div class="p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         02 · Organizational Movement
                     </h2>
                     <dl class="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
@@ -137,12 +137,12 @@
             </div>
 
             <!-- 4. Job & Position Comparison -->
-            <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="mt-5 p-2">
+                <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                     03 · Job, Position &amp; Matrix Comparison
                 </h2>
-                <div class="mt-2 grid grid-cols-1 gap-3 text-xs md:grid-cols-2">
-                    <div class="rounded bg-slate-50 p-2.5">
+                <div class="mt-2 grid grid-cols-1 gap-4 text-xs md:grid-cols-2">
+                    <div>
                         <div class="text-[11px] font-bold uppercase text-slate-500">Current Appointment</div>
                         <div class="mt-1 font-semibold text-slate-900">@Document.Job.ExistingPositionTitle</div>
                         <div class="text-slate-600">Matrix: @(Document.Job.ExistingPositionMatrixLabel ?? "—") · Grade/Level: @(Document.Job.ExistingGradeLevel ?? "—")</div>
@@ -151,8 +151,8 @@
                             <div class="mt-0.5 text-amber-800">Salary: @Document.Job.ExistingBasicSalary.Value.ToString("N2") @(Document.Job.ExistingAllowance.HasValue ? $"+ Allowance {Document.Job.ExistingAllowance.Value:N2}" : "")</div>
                         }
                     </div>
-                    <div class="rounded bg-blue-50/60 p-2.5">
-                        <div class="text-[11px] font-bold uppercase text-blue-700">Approved Destination Appointment</div>
+                    <div>
+                        <div class="text-[11px] font-bold uppercase text-blue-800">Approved Destination Appointment</div>
                         <div class="mt-1 font-semibold text-slate-900">@(string.IsNullOrWhiteSpace(Document.Job.DestinationPositionTitle) ? Document.Job.ExistingPositionTitle : Document.Job.DestinationPositionTitle)</div>
                         <div class="text-slate-600">Grade/Level: @(Document.Job.DestinationGradeLevel ?? Document.Job.ExistingGradeLevel ?? "—")</div>
                         @if (Document.DocumentVariant == StaffTransferDocumentVariants.RestrictedAdminRecord && Document.Job.ProposedBasicSalary.HasValue)
@@ -167,8 +167,8 @@
             </div>
 
             <!-- 5. Work Schedule & Attendance Arrangements -->
-            <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="mt-5 p-2">
+                <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                     04 · Work Schedule &amp; Attendance Arrangements
                 </h2>
                 <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs md:grid-cols-4">
@@ -210,18 +210,17 @@
             <!-- 6. Organizational Access Summary -->
             @if (Document.AccessChanges.Count > 0)
             {
-                <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div class="mt-5 p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         05 · Organizational Access &amp; System Permissions
                     </h2>
                     <div class="mt-2 overflow-x-auto">
                         <table class="w-full border-collapse text-left text-[11px]">
                             <thead>
-                                <tr class="border-b border-slate-200 bg-slate-50 text-slate-600">
+                                <tr class="border-b border-slate-300 text-slate-600">
                                     <th class="px-2 py-1">Access Area</th>
-                                    <th class="px-2 py-1">Current Scope</th>
+                                    <th class="px-2 py-1">Current Access</th>
                                     <th class="px-2 py-1">Action</th>
-                                    <th class="px-2 py-1">Proposed Scope</th>
                                     <th class="px-2 py-1">Status</th>
                                 </tr>
                             </thead>
@@ -232,7 +231,6 @@
                                         <td class="px-2 py-1 font-medium text-slate-900">@row.AccessAreaName</td>
                                         <td class="px-2 py-1 text-slate-600">@(row.CurrentScopeSummary ?? "—")</td>
                                         <td class="px-2 py-1 font-semibold text-slate-800">@row.TransitionAction</td>
-                                        <td class="px-2 py-1 text-slate-800">@(row.ProposedScopeSummary ?? "—")</td>
                                         <td class="px-2 py-1 text-slate-600">@row.ProvisioningStatus</td>
                                     </tr>
                                 }
@@ -245,14 +243,14 @@
             <!-- 7. Physical Door Access Summary -->
             @if (Document.DoorAccessChanges.Count > 0)
             {
-                <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div class="mt-5 p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         06 · Physical Door Access &amp; Security Provisioning
                     </h2>
                     <div class="mt-2 overflow-x-auto">
                         <table class="w-full border-collapse text-left text-[11px]">
                             <thead>
-                                <tr class="border-b border-slate-200 bg-slate-50 text-slate-600">
+                                <tr class="border-b border-slate-300 text-slate-600">
                                     <th class="px-2 py-1">Building / Floor / Office</th>
                                     <th class="px-2 py-1">Card Ref</th>
                                     <th class="px-2 py-1">Proposed Access Groups</th>
@@ -280,8 +278,8 @@
             }
 
             <!-- 8 & 9. Reporting & Handover Arrangements -->
-            <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="mt-5 p-2">
+                <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                     07 · Reporting Instructions &amp; Handover Obligations
                 </h2>
                 <div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs md:grid-cols-4">
@@ -314,11 +312,11 @@
                     <div class="mt-2 grid grid-cols-1 gap-2 border-t border-slate-100 pt-2 text-xs md:grid-cols-2">
                         @if (!string.IsNullOrWhiteSpace(Document.Reporting.OutstandingAssignmentsSummary))
                         {
-                            <div><span class="font-semibold text-slate-700">Outstanding Assignments:</span> @Document.Reporting.OutstandingAssignmentsSummary</div>
+                            <div><span class="font-semibold text-slate-700">Selected Work Handovers:</span> @Document.Reporting.OutstandingAssignmentsSummary</div>
                         }
                         @if (!string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReturnSummary))
                         {
-                            <div><span class="font-semibold text-slate-700">Assets to Return:</span> @Document.Reporting.AssetsToReturnSummary</div>
+                            <div><span class="font-semibold text-slate-700">Selected Items to Return:</span> @Document.Reporting.AssetsToReturnSummary</div>
                         }
                         @if (!string.IsNullOrWhiteSpace(Document.Reporting.AssetsToReceiveSummary))
                         {
@@ -333,9 +331,9 @@
             </div>
 
             <!-- 10, 11, 12. Confirmation & Final Approval -->
-            <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div class="rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+            <div class="mt-5 grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div class="p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         08 · Employee Confirmation Record
                     </h2>
                     @if (Document.ConfirmedVersion.HasValue && Document.ConfirmedAtUtc.HasValue)
@@ -357,8 +355,8 @@
                     }
                 </div>
 
-                <div class="rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div class="p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         09 · Receiving Department Final Approval
                     </h2>
                     @if (Document.FinalApprovedAtUtc.HasValue)
@@ -382,14 +380,14 @@
 
             @if (Document.SupervisorComments.Count > 0 || Document.HodComments.Count > 0)
             {
-                <div class="mt-4 rounded-lg border border-slate-200 p-3">
-                    <h2 class="border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wider text-slate-700">
+                <div class="mt-5 p-2">
+                    <h2 class="border-b border-slate-300 pb-1 text-xs font-bold uppercase tracking-wider text-slate-800">
                         10 · Supervisor / HOD Advisory Comments
                     </h2>
                     <div class="mt-2 space-y-1.5 text-xs">
                         @foreach (var comment in Document.SupervisorComments.Concat(Document.HodComments))
                         {
-                            <div class="rounded bg-slate-50 px-2.5 py-1.5">
+                            <div class="py-1">
                                 <span class="font-semibold text-slate-800">@comment.AuthorName (@comment.ParticipantRole · @comment.CommentKind):</span>
                                 <span class="text-slate-700">@comment.CommentText</span>
                                 <span class="ml-2 text-[10px] text-slate-400">@comment.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy HH:mm")</span>

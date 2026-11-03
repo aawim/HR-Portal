@@ -805,44 +805,69 @@ public sealed class StaffTransferService(
             .FirstOrDefaultAsync();
         dto.PortalAccessContext = userAccount?.AdminPortalAccessEnabled == true ? "AdminAndOnline" : "Online";
 
-        // 1. Work Handover requests from LeaveRequests / LeaveWorkHandOvers / LeaveHandoverReviews
+        // 1. Work Handover requests from LeaveRequests / LeaveWorkHandOvers / LeaveHandoverReviews (exclude Cancelled)
         var handoverLeaves = await db.LeaveRequests.AsNoTracking()
             .Include(x => x.Leave)
             .Include(x => x.Request).ThenInclude(r => r.RequestState)
             .Where(x => x.Leave.Job.IndividualID == individualId &&
+                        x.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED &&
+                        !x.Request.RequestState.StateName.Contains("Cancel") &&
                         (db.LeaveHandoverReviews.Any(r => r.LeaveId == x.LeaveId) ||
                          db.LeaveWorkHandOvers.Any(w => w.LeaveId == x.LeaveId && w.IsValid)))
             .OrderByDescending(x => x.LeaveId)
-            .Take(10)
+            .Take(20)
             .Select(x => new
             {
                 x.RequestId,
                 x.LeaveId,
                 Reference = x.Request.ReferenceNumber ?? ("LHO-" + x.LeaveId),
-                StateName = x.Request.RequestState.StateName
+                StateName = x.Request.RequestState.StateName,
+                TasksSummary = db.LeaveWorkHandOvers
+                    .Where(w => w.LeaveId == x.LeaveId && w.IsValid && w.Decision != "Cancelled")
+                    .Select(w => w.TaskDetails)
+                    .FirstOrDefault()
             })
             .ToListAsync();
 
         dto.Reporting.WorkHandoverLinks = handoverLeaves
+            .Where(h => !h.StateName.Contains("Cancel", StringComparison.OrdinalIgnoreCase))
             .Select(h => new StaffTransferResourceLinkDto(
                 h.RequestId,
                 h.Reference,
-                $"Work Handover (#{h.LeaveId})",
+                string.IsNullOrWhiteSpace(h.TasksSummary)
+                    ? $"Work Handover (#{h.LeaveId})"
+                    : $"Work Handover (#{h.LeaveId}): {h.TasksSummary}",
                 h.StateName.Trim(),
                 $"/online/leave-handovers?leaveId={h.LeaveId}"))
             .ToList();
 
-        // 2. Staff Item / Asset Requests for returning (Sending Dept) and receiving (Receiving Dept)
+        // 2. Staff Item / Asset Requests & Issued Custody Units (exclude Cancelled)
         var itemRequests = await db.ItemStaffRequests.AsNoTracking()
             .Include(r => r.Request).ThenInclude(req => req.RequestState)
             .Include(r => r.Lines)
-            .Where(r => r.OrganisationId == org && r.IndividualId == individualId)
+            .Where(r => r.OrganisationId == org &&
+                        r.IndividualId == individualId &&
+                        r.Request.RequestStateId != SharedConfig.RequestStates.CANCELLED &&
+                        !r.Request.RequestState.StateName.Contains("Cancel"))
             .OrderByDescending(r => r.CreatedAtUtc)
             .Take(20)
             .ToListAsync();
 
-        dto.Reporting.AssetReturnRequestLinks = itemRequests
-            .Where(r => r.Kind == "Issue" || r.IssuedAtUtc.HasValue || r.Purpose == "Job related")
+        var issuedUnits = await db.ItemUnits.AsNoTracking()
+            .Include(u => u.Item)
+            .Where(u => u.OrganisationId == org && u.IssuedToIndividualId == individualId && u.Status == "Issued")
+            .OrderBy(u => u.Item.Name)
+            .Select(u => new
+            {
+                u.ItemUnitId,
+                ItemName = u.Item.Name,
+                Tag = u.InventoryNumber ?? u.SerialNumber ?? ("UNIT-" + u.ItemUnitId)
+            })
+            .ToListAsync();
+
+        var returnLinks = itemRequests
+            .Where(r => !r.Request.RequestState.StateName.Contains("Cancel", StringComparison.OrdinalIgnoreCase) &&
+                        (r.Kind == "Issue" || r.IssuedAtUtc.HasValue || r.Purpose == "Job related"))
             .Select(r => new StaffTransferResourceLinkDto(
                 r.RequestId,
                 r.Request.ReferenceNumber ?? $"IM-{r.RequestId}",
@@ -851,8 +876,25 @@ public sealed class StaffTransferService(
                 $"/admin/hr/items/staff-items?requestId={r.RequestId}"))
             .ToList();
 
+        foreach (var unit in issuedUnits)
+        {
+            var unitRef = $"CUST-{unit.Tag}";
+            if (returnLinks.All(x => x.Reference != unitRef))
+            {
+                returnLinks.Add(new StaffTransferResourceLinkDto(
+                    unit.ItemUnitId,
+                    unitRef,
+                    unit.ItemName,
+                    "Issued in Custody",
+                    "/admin/hr/items/staff-items"));
+            }
+        }
+
+        dto.Reporting.AssetReturnRequestLinks = returnLinks;
+
         dto.Reporting.AssetReceiveRequestLinks = itemRequests
-            .Where(r => r.Kind == "Requisition")
+            .Where(r => r.Kind == "Requisition" &&
+                        !r.Request.RequestState.StateName.Contains("Cancel", StringComparison.OrdinalIgnoreCase))
             .Select(r => new StaffTransferResourceLinkDto(
                 r.RequestId,
                 r.Request.ReferenceNumber ?? $"IM-{r.RequestId}",
