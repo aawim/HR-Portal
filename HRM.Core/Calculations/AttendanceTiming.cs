@@ -10,6 +10,19 @@ public static class AttendanceTiming
         return (int)Math.Max(0, actualMinute - allowedMinute);
     }
 
+    public static int EarlyDepartureMinutes(DateTime actual, DateTime scheduled, int graceMinutes = 0)
+    {
+        var actualMinute = actual.Ticks / TimeSpan.TicksPerMinute;
+        var allowedMinute = scheduled.AddMinutes(-Math.Max(0, graceMinutes)).Ticks / TimeSpan.TicksPerMinute;
+        return (int)Math.Max(0, allowedMinute - actualMinute);
+    }
+
+    public static int CalculateLateMinutes(DateTime scheduled, DateTime actual, int graceMinutes = 0)
+        => LateMinutes(actual, scheduled, graceMinutes);
+
+    public static int CalculateEarlyDepartureMinutes(DateTime scheduled, DateTime actual, int graceMinutes = 0)
+        => EarlyDepartureMinutes(actual, scheduled, graceMinutes);
+
     // Selects the clock event nearest the expected boundary. With no scheduled
     // boundary, the earliest event remains the fallback.
     public static T? Closest<T>(IEnumerable<T> items, Func<T, DateTime> timestamp, DateTime? expected)

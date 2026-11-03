@@ -411,8 +411,21 @@ namespace HRM.Services
 
             foreach (var group in dailyGroups)
             {
-                var checkIn = group.FirstOrDefault(l => l.InOutModeId == 1 || l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1));
-                var checkOut = group.FirstOrDefault(l => l.InOutModeId == 2 || l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2));
+                var checkIn = group.FirstOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r =>
+                        r.IsValid &&
+                        r.AttendanceClockTypeId == 1 &&
+                        r.SchedulePurpose != "Duty" &&
+                        r.LogicalEventType != "DutyCheckIn") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 1));
+                var checkOut = group.FirstOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r =>
+                        r.IsValid &&
+                        r.AttendanceClockTypeId == 2 &&
+                        r.SchedulePurpose != "Duty" &&
+                        r.LogicalEventType != "DutyCheckOut" &&
+                        r.LogicalEventType != "OfficialBreakOut") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 2));
 
                 // Condition 1: Late check-in (later than 08:00:00)
                 if (checkIn != null && (checkIn.Hour > 8 || (checkIn.Hour == 8 && checkIn.Minute > 0)))

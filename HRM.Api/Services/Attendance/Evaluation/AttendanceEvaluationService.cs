@@ -483,6 +483,20 @@ namespace HRM.Services.Attendance
             // RESULT
             // ========================================================
 
+            var reconciliation = await new HRM.Services.Attendance.Reconciliation.AttendanceReconciliationService(_dbFactory)
+                .ReconcileInternalAsync(
+                    db,
+                    individualId,
+                    jobId,
+                    workPlan.OrganisationBusinessEntityId,
+                    DateOnly.FromDateTime(date),
+                    persistChanges: false,
+                    allowFinalizedOverride: false,
+                    triggerSource: "EvaluationRead",
+                    initiatedByUserId: null,
+                    operationLogId: null,
+                    cancellationToken: cancellationToken);
+
             return new AttendanceDailyEvaluationDto
             {
                 IndividualId =
@@ -518,14 +532,53 @@ namespace HRM.Services.Attendance
                 PlannedMinutes =
                     plannedMinutes,
 
+                PlannedOfficialMinutes =
+                    reconciliation.PlannedOfficialMinutes > 0 ? reconciliation.PlannedOfficialMinutes : plannedMinutes,
+
+                PlannedDutyMinutes =
+                    reconciliation.PlannedDutyMinutes,
+
                 FirstCheckIn =
-                    effectiveCheckIn?.LogDateTime,
+                    effectiveCheckIn?.LogDateTime ?? reconciliation.OfficialCheckIn,
 
                 LastCheckOut =
-                    effectiveCheckOut?.LogDateTime,
+                    effectiveCheckOut?.LogDateTime ?? reconciliation.OfficialCheckOut,
+
+                OfficialBreakOut =
+                    reconciliation.OfficialBreakOut,
+
+                OfficialBreakIn =
+                    reconciliation.OfficialBreakIn,
 
                 WorkedMinutes =
                     workedMinutes,
+
+                ActualOfficialPresenceMinutes =
+                    reconciliation.ActualOfficialPresenceMinutes > 0 ? reconciliation.ActualOfficialPresenceMinutes : workedMinutes,
+
+                CreditedOfficialMinutes =
+                    reconciliation.CreditedOfficialMinutes,
+
+                OfficialBreakMinutes =
+                    reconciliation.OfficialBreakMinutes,
+
+                ExcessBreakMinutes =
+                    reconciliation.ExcessBreakMinutes,
+
+                LateBreakReturnMinutes =
+                    reconciliation.LateBreakReturnMinutes,
+
+                ActualDutyPresenceMinutes =
+                    reconciliation.ActualDutyPresenceMinutes,
+
+                CreditedDutyMinutes =
+                    reconciliation.CreditedDutyMinutes,
+
+                TotalPhysicalPresenceMinutes =
+                    reconciliation.TotalPhysicalPresenceMinutes,
+
+                TotalCreditedPayableMinutes =
+                    reconciliation.TotalCreditedPayableMinutes,
 
                 LateMinutes =
                     lateMinutes,
@@ -548,20 +601,41 @@ namespace HRM.Services.Attendance
                 UnresolvedClockCount =
                     unresolvedClockCount,
 
+                SharedEventCount =
+                    reconciliation.SharedEventCount,
+
+                DuplicateIgnoredCount =
+                    reconciliation.DuplicateSuppressedCount,
+
+                ConflictCount =
+                    reconciliation.ConflictCount,
+
                 Status =
                     status,
+
+                OfficialState =
+                    reconciliation.OfficialState,
+
+                PolicyVersion =
+                    reconciliation.PolicyVersion,
 
                 IsComplete =
                     isComplete,
 
                 HasException =
-                    hasException,
+                    hasException || reconciliation.HasConflicts,
 
                 Issues =
                     issues,
 
                 Segments =
-                    evaluatedSegments
+                    evaluatedSegments,
+
+                Obligations =
+                    reconciliation.Obligations,
+
+                EventInterpretations =
+                    reconciliation.Events
             };
         }
 
@@ -1336,26 +1410,49 @@ namespace HRM.Services.Attendance
         private static IEnumerable<(DateTime Start, DateTime End)> WorkedPeriods(IEnumerable<ResolvedAttendanceEvent> events)
         {
             var all = events.ToList();
-            static List<(DateTime Start, DateTime End)> Pair(IEnumerable<ResolvedAttendanceEvent> source)
+            static (List<(DateTime Start, DateTime End)> Periods, HashSet<ResolvedAttendanceEvent> Consumed) PairWithConsumed(IEnumerable<ResolvedAttendanceEvent> source)
             {
                 var periods = new List<(DateTime Start, DateTime End)>();
-                DateTime? start = null;
+                var consumed = new HashSet<ResolvedAttendanceEvent>();
+                ResolvedAttendanceEvent? startEvent = null;
                 foreach (var item in source.OrderBy(x => x.LogDateTime))
                 {
-                    if (item.ClockType == AttendanceClockType.CheckIn) start ??= item.LogDateTime;
-                    else if (item.ClockType == AttendanceClockType.CheckOut && start.HasValue)
+                    if (item.ClockType == AttendanceClockType.CheckIn) startEvent ??= item;
+                    else if (item.ClockType == AttendanceClockType.CheckOut && startEvent is not null)
                     {
-                        if (item.LogDateTime > start.Value) periods.Add((start.Value, item.LogDateTime));
-                        start = null;
+                        if (item.LogDateTime > startEvent.LogDateTime)
+                        {
+                            periods.Add((startEvent.LogDateTime, item.LogDateTime));
+                            consumed.Add(startEvent);
+                            consumed.Add(item);
+                        }
+                        startEvent = null;
                     }
                 }
-                return periods;
+                return (periods, consumed);
             }
-            var grouped = all.GroupBy(x => x.ScheduleTemplateId).SelectMany(Pair).ToList();
-            // A single physical in/out pair can span office and duty assignments.
-            // Use the coverage supported by either pairing, never add their totals.
-            var physical = Pair(all);
-            return HRM.Helpers.WorkHourCoverage.Minutes(grouped) >= HRM.Helpers.WorkHourCoverage.Minutes(physical) ? grouped : physical;
+
+            var groupedPeriods = new List<(DateTime Start, DateTime End)>();
+            var consumedEvents = new HashSet<ResolvedAttendanceEvent>();
+            foreach (var group in all.GroupBy(x => x.ScheduleTemplateId))
+            {
+                var (periods, consumed) = PairWithConsumed(group);
+                groupedPeriods.AddRange(periods);
+                foreach (var c in consumed)
+                    consumedEvents.Add(c);
+            }
+
+            // Only events that were NOT already paired inside their own schedule (for example a contiguous
+            // official check-in + duty check-out with no intermediate duty check-in) may pair across schedules.
+            // A duty check-out that already closed its own duty check-in must never close an unclosed official check-in.
+            var unpaired = all.Where(x => !consumedEvents.Contains(x)).ToList();
+            if (unpaired.Count >= 2)
+            {
+                var (crossPeriods, _) = PairWithConsumed(unpaired);
+                groupedPeriods.AddRange(crossPeriods);
+            }
+
+            return groupedPeriods;
         }
 
         private static bool IsPairedBreakSegment(string? code)

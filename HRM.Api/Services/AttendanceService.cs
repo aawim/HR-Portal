@@ -462,98 +462,118 @@ namespace HRM.Services
 
             var organisation = await db.Jobs.Where(j => j.JobId == jobId && j.IndividualID == individualId).Select(j => (int?)j.OrganisationID).SingleOrDefaultAsync(cancellationToken);
             if (!organisation.HasValue) return [];
-            var logs =
-        await (
-            from log in db.AttendanceLogs.AsNoTracking()
+            var rawLogEntities = await db.AttendanceLogs.AsNoTracking()
+                .Where(log =>
+                    log.IndividualId == individualId &&
+                    log.OrganisationId == organisation.Value &&
+                    log.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
+                    log.Date >= date &&
+                    log.Date < nextDate)
+                .OrderBy(log => log.Date)
+                .ThenBy(log => log.AttendanceLogId)
+                .ToListAsync(cancellationToken);
 
-            where
-                log.IndividualId == individualId && log.OrganisationId == organisation.Value &&
-                log.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid &&
-                log.Date >= date &&
-                log.Date < nextDate
+            var logIds = rawLogEntities.Select(l => l.AttendanceLogId).ToList();
+            var activeResolutions = logIds.Count == 0
+                ? []
+                : await (
+                    from res in db.AttendanceLogResolutions.AsNoTracking()
+                    where res.IsValid && logIds.Contains(res.AttendanceLogId)
+                    join seg in db.WorkPlanSegments.AsNoTracking()
+                        on res.WorkPlanSegmentId equals seg.WorkPlanSegmentId into segGroup
+                    from seg in segGroup.DefaultIfEmpty()
+                    join assign in db.WorkAssignments.AsNoTracking()
+                        on res.WorkAssignmentId equals assign.WorkAssignmentId into assignGroup
+                    from assign in assignGroup.DefaultIfEmpty()
+                    select new
+                    {
+                        Resolution = res,
+                        Segment = seg,
+                        Assignment = assign
+                    })
+                    .ToListAsync(cancellationToken);
 
-            join resolution in
-                db.AttendanceLogResolutions.AsNoTracking()
-                .Where(x => x.IsValid && !db.AttendanceLogResolutions.Any(newer => newer.IsValid && newer.AttendanceLogId == x.AttendanceLogId && newer.AttendanceLogResolutionId > x.AttendanceLogResolutionId))
+            var resolutionsByLog = activeResolutions
+                .GroupBy(x => x.Resolution.AttendanceLogId)
+                .ToDictionary(
+                    g => g.Key,
+                    g => g.OrderByDescending(x => x.Resolution.IsPrimaryClassification)
+                          .ThenBy(x => (x.Resolution.SchedulePurpose ?? x.Segment?.SchedulePurpose ?? x.Assignment?.SchedulePurpose) == "Official" ? 0 : 1)
+                          .ThenBy(x => x.Resolution.AttendanceLogResolutionId)
+                          .ToList());
 
-                on log.AttendanceLogId
-                equals resolution.AttendanceLogId
-                into resolutionGroup
-
-            from resolution in
-                resolutionGroup.DefaultIfEmpty()
-
-            join segment in
-                db.WorkPlanSegments.AsNoTracking()
-
-                on resolution.WorkPlanSegmentId
-                equals segment.WorkPlanSegmentId
-                into segmentGroup
-
-            from segment in
-                segmentGroup.DefaultIfEmpty()
-
-            orderby log.Date
-
-            select new AttendanceRawLogDto
+            var logs = rawLogEntities.Select(log =>
             {
-                AttendanceLogId =
-                    log.AttendanceLogId,
+                var orderedRes = resolutionsByLog.GetValueOrDefault(log.AttendanceLogId) ?? [];
+                var primary = orderedRes.FirstOrDefault();
+                var res = primary?.Resolution;
+                var seg = primary?.Segment;
+                var assign = primary?.Assignment;
+                var purpose = res?.SchedulePurpose ?? seg?.SchedulePurpose ?? assign?.SchedulePurpose;
+                var clockType = res is { AttendanceClockTypeId: not null }
+                    ? (AttendanceClockType)res.AttendanceClockTypeId.Value
+                    : AttendanceClockType.Unresolved;
 
-                InOutModeId = log.InOutModeId,
-                WorkAssignmentId = resolution != null ? resolution.WorkAssignmentId : null,
-                SchedulePurpose = segment != null ? segment.SchedulePurpose : null,
-                IndividualId =
-                    log.IndividualId,
+                var associations = orderedRes.Select(item =>
+                {
+                    var itemPurpose = item.Resolution.SchedulePurpose ?? item.Segment?.SchedulePurpose ?? item.Assignment?.SchedulePurpose ?? "Official";
+                    var itemClock = item.Resolution.AttendanceClockTypeId.HasValue
+                        ? (AttendanceClockType)item.Resolution.AttendanceClockTypeId.Value
+                        : AttendanceClockType.Unresolved;
+                    return new AttendanceEventAssociationDto
+                    {
+                        AttendanceLogResolutionId = item.Resolution.AttendanceLogResolutionId,
+                        AttendanceLogId = log.AttendanceLogId,
+                        WorkPlanId = item.Resolution.WorkPlanId,
+                        WorkAssignmentId = item.Resolution.WorkAssignmentId,
+                        WorkPlanSegmentId = item.Resolution.WorkPlanSegmentId,
+                        SchedulePurpose = itemPurpose,
+                        ScheduleName = item.Assignment?.Name ?? item.Segment?.Name ?? itemPurpose,
+                        SegmentName = item.Segment?.Name ?? itemPurpose,
+                        ClockType = itemClock,
+                        LogicalEventType = item.Resolution.LogicalEventType ?? $"{itemPurpose}{itemClock}",
+                        IsPrimaryClassification = item.Resolution.IsPrimaryClassification,
+                        MatchMethod = item.Resolution.MatchMethod ?? "Deterministic",
+                        MatchReason = item.Resolution.MatchReason ?? item.Resolution.ResolutionMessage ?? string.Empty,
+                        ConfidenceState = item.Resolution.ConfidenceState ?? "Deterministic",
+                        PolicyVersion = item.Resolution.PolicyVersion ?? "v2.0-OfficialPriority",
+                        ScheduledStart = item.Assignment?.StartDateTime ?? item.Segment?.StartDateTime,
+                        ScheduledEnd = item.Assignment?.EndDateTime ?? item.Segment?.EndDateTime
+                    };
+                }).ToList();
 
-                LogDateTime =
-                    log.Date,
-
-                AttendanceLogResolutionId =
-                    resolution != null
-                        ? resolution.AttendanceLogResolutionId
+                return new AttendanceRawLogDto
+                {
+                    AttendanceLogId = log.AttendanceLogId,
+                    InOutModeId = log.InOutModeId,
+                    WorkAssignmentId = res?.WorkAssignmentId,
+                    SchedulePurpose = purpose,
+                    ScheduleName = assign?.Name,
+                    ScheduledStart = assign?.StartDateTime,
+                    ScheduledEnd = assign?.EndDateTime,
+                    IndividualId = log.IndividualId,
+                    LogDateTime = log.Date,
+                    AttendanceLogResolutionId = res?.AttendanceLogResolutionId,
+                    WorkPlanId = res?.WorkPlanId,
+                    WorkPlanSegmentId = res?.WorkPlanSegmentId,
+                    SegmentName = seg?.Name,
+                    ClockType = clockType,
+                    ResolutionStatusId = res?.AttendanceResolutionStatusId,
+                    ResolutionMessage = res?.ResolutionMessage,
+                    ResolutionDate = res?.ResolutionDate,
+                    IsPrimaryClassification = res?.IsPrimaryClassification ?? true,
+                    LogicalEventType = res?.LogicalEventType,
+                    MatchMethod = res?.MatchMethod,
+                    MatchReason = res?.MatchReason ?? res?.ResolutionMessage,
+                    ConfidenceState = res?.ConfidenceState ?? "Deterministic",
+                    PolicyVersion = res?.PolicyVersion ?? "v2.0-OfficialPriority",
+                    IsSharedAcrossSchedules = associations.Count > 1,
+                    SharedScheduleSummary = associations.Count > 1
+                        ? $"Shared physical event (#{log.AttendanceLogId}): " + string.Join(" + ", associations.Select(a => $"{a.SchedulePurpose} {a.ClockType}"))
                         : null,
-
-                WorkPlanId =
-                        resolution != null
-                            ? resolution.WorkPlanId
-                            : null,
-
-                WorkPlanSegmentId =
-                        resolution != null
-                            ? resolution.WorkPlanSegmentId
-                            : null,
-
-                SegmentName =
-                    segment != null
-                        ? segment.Name
-                        : null,
-
-                ClockType =
-                    resolution != null &&
-                    resolution.AttendanceClockTypeId.HasValue
-
-                        ? (AttendanceClockType)
-                            resolution.AttendanceClockTypeId.Value
-
-                        : AttendanceClockType.Unresolved,
-
-                ResolutionStatusId =
-                    resolution != null
-                        ? resolution.AttendanceResolutionStatusId
-                        : null,
-
-                ResolutionMessage =
-                    resolution != null
-                        ? resolution.ResolutionMessage
-                        : null,
-
-                ResolutionDate =
-                    resolution != null
-                        ? resolution.ResolutionDate
-                        : null
-            })
-            .ToListAsync(cancellationToken);
+                    Associations = associations
+                };
+            }).ToList();
 
             await HRM.Helpers.DutyClockEventPresentation.ApplyAsync(db, logs, individualId, jobId, organisation.Value, date, cancellationToken);
             return logs;
@@ -624,14 +644,72 @@ namespace HRM.Services
             if (from.Date > to.Date || (to.Date - from.Date).Days > 366) throw new InvalidOperationException("Select a date range of up to one year.");
             var end = to.Date.AddDays(1);
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
-            var logs = await db.AttendanceLogs.AsNoTracking().Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkAssignment).Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkPlan).ThenInclude(x => x!.WorkPlanSegments)
+            var logs = await db.AttendanceLogs.AsNoTracking()
+                .Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkAssignment)
+                .Include(x => x.AttendanceLogResolutions).ThenInclude(x => x.WorkPlan).ThenInclude(x => x!.WorkPlanSegments)
                 .Where(x => x.IndividualId == staffId && x.OrganisationId == org && x.AttendanceLogStateId == SharedConfig.AttendanceLogStates.Valid && x.Date >= from.Date && x.Date < end)
                 .OrderByDescending(x => x.Date).Take(1000).ToListAsync(cancellationToken);
-            return logs.Select(x => {
-                var resolution = x.AttendanceLogResolutions.Where(r => r.IsValid).OrderByDescending(r => r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenBy(r => r.AttendanceLogResolutionId).FirstOrDefault();
-                var code = resolution?.AttendanceClockTypeId ?? (x.AttendanceLogResolutions.Count == 0 ? x.InOutModeId : null);
-                var label = code switch { 1 => "Check in", 2 => "Check out", 3 => "Break out", 4 => "Break in", _ => "Unresolved" };
-                var planSegment = resolution?.WorkPlanSegmentId.HasValue == true ? resolution.WorkPlan?.WorkPlanSegments.FirstOrDefault(s => s.WorkPlanSegmentId == resolution.WorkPlanSegmentId.Value) : null; return new StaffAttendanceClockEventDto(x.Date, label, resolution?.WorkAssignment != null ? $"{resolution.WorkAssignment.SchedulePurpose} · {resolution.WorkAssignment.Name}" : planSegment != null ? $"{planSegment.SchedulePurpose} · {planSegment.Name}" : "—");
+            return logs.Select(x =>
+            {
+                var validResolutions = x.AttendanceLogResolutions
+                    .Where(r => r.IsValid)
+                    .OrderByDescending(r => r.IsPrimaryClassification)
+                    .ThenByDescending(r => !string.Equals(r.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(r => r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved)
+                    .ThenBy(r => r.AttendanceLogResolutionId)
+                    .ToList();
+                var resolution = validResolutions.FirstOrDefault();
+                var code = resolution?.AttendanceClockTypeId ?? (validResolutions.Count == 0 ? x.InOutModeId : null);
+                var label = resolution?.LogicalEventType switch
+                {
+                    "OfficialCheckIn" => "Official Check in",
+                    "OfficialCheckOut" => "Official Check out",
+                    "OfficialBreakOut" => "Official Break out",
+                    "OfficialBreakIn" => "Official Break in",
+                    "DutyCheckIn" => "Duty Check in",
+                    "DutyCheckOut" => "Duty Check out",
+                    "DuplicateIgnored" => "Duplicate (Ignored)",
+                    "UnmatchedException" => "Unresolved / Exception",
+                    _ => code switch
+                    {
+                        1 => "Check in",
+                        2 => "Check out",
+                        3 => "Break out",
+                        4 => "Break in",
+                        5 => "Ignored",
+                        _ => "Unresolved"
+                    }
+                };
+                string FormatSchedule(HRM.Models.AttendanceLogResolution? r)
+                {
+                    if (r == null) return "—";
+                    var seg = r.WorkPlanSegmentId.HasValue
+                        ? r.WorkPlan?.WorkPlanSegments.FirstOrDefault(s => s.WorkPlanSegmentId == r.WorkPlanSegmentId.Value)
+                        : null;
+                    if (r.WorkAssignment != null)
+                        return $"{r.WorkAssignment.SchedulePurpose} · {r.WorkAssignment.Name}";
+                    if (seg != null)
+                        return $"{seg.SchedulePurpose} · {seg.Name}";
+                    if (!string.IsNullOrWhiteSpace(r.SchedulePurpose))
+                        return r.SchedulePurpose;
+                    return "—";
+                }
+                var primarySchedule = FormatSchedule(resolution);
+                var isShared = validResolutions.Count > 1;
+                var sharedSummary = isShared
+                    ? string.Join(" + ", validResolutions.Select(r => $"{FormatSchedule(r)} ({r.LogicalEventType ?? "Matched"})"))
+                    : null;
+                return new StaffAttendanceClockEventDto(
+                    x.Date,
+                    label,
+                    primarySchedule,
+                    IsSharedAcrossSchedules: isShared,
+                    SharedScheduleSummary: sharedSummary,
+                    LogicalEventType: resolution?.LogicalEventType,
+                    MatchMethod: resolution?.MatchMethod,
+                    MatchReason: resolution?.MatchReason,
+                    ConfidenceState: resolution?.ConfidenceState,
+                    AttendanceLogId: x.AttendanceLogId);
             }).ToList();
         }
 
@@ -782,13 +860,21 @@ namespace HRM.Services
                 // -----------------------------------------------------
                 // Get effective resolution for every physical log
                 // -----------------------------------------------------
+                bool IsDutyResolution(HRM.Models.AttendanceLogResolution x) =>
+                    string.Equals(x.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase) ||
+                    (x.WorkPlanSegmentId.HasValue && dutySegmentIds.Contains(x.WorkPlanSegmentId.Value)) ||
+                    (x.WorkAssignmentId.HasValue && dutyAssignmentIds.Contains(x.WorkAssignmentId.Value));
+
                 var events = dayLogs
                     .Select(log =>
                     {
                         var resolution =
-                            log.AttendanceLogResolutions.Where(x => x.IsValid).OrderByDescending(x => !(x.WorkPlanSegmentId.HasValue && dutySegmentIds.Contains(x.WorkPlanSegmentId.Value)) && !(x.WorkAssignmentId.HasValue && dutyAssignmentIds.Contains(x.WorkAssignmentId.Value))).ThenByDescending(x => x.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved).ThenByDescending(x => x.AttendanceLogResolutionId).Take(1)
-                                .OrderByDescending(x =>
-                                    x.AttendanceLogResolutionId)
+                            log.AttendanceLogResolutions
+                                .Where(x => x.IsValid)
+                                .OrderByDescending(x => x.IsPrimaryClassification)
+                                .ThenByDescending(x => !IsDutyResolution(x))
+                                .ThenByDescending(x => x.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Resolved)
+                                .ThenByDescending(x => x.AttendanceLogResolutionId)
                                 .FirstOrDefault();
 
                         return new
@@ -797,9 +883,7 @@ namespace HRM.Services
                             Resolution = resolution
                         };
                     })
-                    .Where(x => x.Resolution == null ||
-                        !(x.Resolution.WorkPlanSegmentId.HasValue && dutySegmentIds.Contains(x.Resolution.WorkPlanSegmentId.Value)) &&
-                        !(x.Resolution.WorkAssignmentId.HasValue && dutyAssignmentIds.Contains(x.Resolution.WorkAssignmentId.Value)))
+                    .Where(x => x.Resolution == null || !IsDutyResolution(x.Resolution))
                     .OrderBy(x => x.Log.Date)
                     .ToList();
 
@@ -861,6 +945,12 @@ namespace HRM.Services
                             x.Resolution
                                 .AttendanceClockTypeId ==
                             (int)AttendanceClockType.CheckOut
+                            ||
+                            x.Resolution
+                                .AttendanceClockTypeId == (int)AttendanceClockType.BreakOut
+                            ||
+                            x.Resolution
+                                .AttendanceClockTypeId == (int)AttendanceClockType.BreakIn
                         ))
                     .ToList();
 
@@ -884,6 +974,12 @@ namespace HRM.Services
                             x.Resolution
                                 .AttendanceClockTypeId !=
                             (int)AttendanceClockType.CheckOut
+                            &&
+                            x.Resolution
+                                .AttendanceClockTypeId != (int)AttendanceClockType.BreakOut
+                            &&
+                            x.Resolution
+                                .AttendanceClockTypeId != (int)AttendanceClockType.BreakIn
                             &&
                             x.Resolution
                                 .AttendanceClockTypeId !=
@@ -1007,6 +1103,45 @@ namespace HRM.Services
                     !isUnresolved;
 
 
+                var dutySchedules = attendanceSchedules
+                    .Where(s => s.Purpose == "Duty" && s.CheckIn.HasValue && s.CheckOut.HasValue && s.CheckOut.Value > s.CheckIn.Value)
+                    .ToList();
+                decimal dutyWorkedHours = 0m;
+                foreach (var ds in dutySchedules)
+                {
+                    var effIn = ds.CheckIn!.Value < ds.ScheduledStart ? ds.ScheduledStart : ds.CheckIn.Value;
+                    var effOut = ds.CheckOut!.Value > ds.ScheduledEnd ? ds.ScheduledEnd : ds.CheckOut.Value;
+                    if (effOut > effIn)
+                    {
+                        dutyWorkedHours += Math.Round((decimal)(effOut - effIn).TotalHours, 2);
+                    }
+                }
+
+                var breakOuts = events
+                    .Where(x => x.Resolution?.AttendanceClockTypeId == (int)AttendanceClockType.BreakOut || x.Resolution?.LogicalEventType == "OfficialBreakOut")
+                    .OrderBy(x => x.Log.Date)
+                    .Select(x => x.Log.Date)
+                    .ToList();
+                var breakIns = events
+                    .Where(x => x.Resolution?.AttendanceClockTypeId == (int)AttendanceClockType.BreakIn || x.Resolution?.LogicalEventType == "OfficialBreakIn")
+                    .OrderBy(x => x.Log.Date)
+                    .Select(x => x.Log.Date)
+                    .ToList();
+                int officialBreakMinutes = 0;
+                for (int bi = 0; bi < Math.Min(breakOuts.Count, breakIns.Count); bi++)
+                {
+                    if (breakIns[bi] > breakOuts[bi])
+                    {
+                        officialBreakMinutes += (int)Math.Round((breakIns[bi] - breakOuts[bi]).TotalMinutes);
+                    }
+                }
+
+                var sharedEventCount = dayLogs.Count(l => l.AttendanceLogResolutions.Count(r => r.IsValid) > 1);
+                var conflictCount = dayLogs.Count(l => l.AttendanceLogResolutions.Any(r =>
+                    r.IsValid &&
+                    (r.AttendanceResolutionStatusId == HRM.Constants.AttendanceResolutionStatusIds.Conflict ||
+                     string.Equals(r.ConfidenceState, "Conflict", StringComparison.OrdinalIgnoreCase))));
+
                 // -----------------------------------------------------
                 // Add day
                 // -----------------------------------------------------
@@ -1046,6 +1181,18 @@ namespace HRM.Services
 
                         WorkedHours =
                             workedHours,
+
+                        DutyWorkedHours =
+                            dutyWorkedHours,
+
+                        OfficialBreakMinutes =
+                            officialBreakMinutes,
+
+                        SharedEventCount =
+                            sharedEventCount,
+
+                        ConflictCount =
+                            conflictCount,
 
                         IsPresent =
                             isPresent,

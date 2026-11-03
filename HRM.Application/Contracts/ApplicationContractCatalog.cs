@@ -79,6 +79,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment.IJobWorkTemplateAssignmentService),
         typeof(global::HRM.WorkPlanning.Abstractions.Schedules.IStaffScheduleService),
         typeof(global::HRM.Services.Attendance.AttendancePlan.IAttendancePlanService),
+        typeof(global::HRM.Services.Attendance.Reconciliation.IAttendanceReconciliationService),
         typeof(global::HRM.Application.Contracts.Pages.IAttendanceRequestQueries),
         typeof(global::HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries),
         typeof(global::HRM.Application.Contracts.Pages.IOrganisationDirectoryQueries),

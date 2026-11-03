@@ -601,11 +601,19 @@
                 if (!isOnLeave && eligibility[day.Date].HasApprovedPosition && eligibility[day.Date].HasActiveSchedule)
                     row.Status = "Present";
 
-                // Clock In/Out
-                var clockIn = dayLogs.FirstOrDefault(l => l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1) || (!l.AttendanceLogResolutions.Any() && l.InOutModeId == 1));
-                var clockOut = dayLogs.LastOrDefault(l => l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2) || (!l.AttendanceLogResolutions.Any() && l.InOutModeId == 2));
-                var breakOut = dayLogs.LastOrDefault(l => l.InOutModeId == 3 && !l.AttendanceLogResolutions.Any());
-                var breakIn = dayLogs.LastOrDefault(l => l.InOutModeId == 4);
+                // Clock In/Out (Official Priority: do not treat Duty check-out or OfficialBreakOut as Official final check-out)
+                var clockIn = dayLogs.FirstOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1 && !string.Equals(r.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase) && r.LogicalEventType != "OfficialBreakIn") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 1));
+                var clockOut = dayLogs.LastOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2 && !string.Equals(r.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase) && r.LogicalEventType != "OfficialBreakOut") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 2));
+                var breakOut = dayLogs.LastOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && (r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.BreakOut || r.LogicalEventType == "OfficialBreakOut")) ||
+                    (l.InOutModeId == 3 && !l.AttendanceLogResolutions.Any(r => r.IsValid)));
+                var breakIn = dayLogs.LastOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && (r.AttendanceClockTypeId == (int)HRM.Enum.AttendanceClockType.BreakIn || r.LogicalEventType == "OfficialBreakIn")) ||
+                    l.InOutModeId == 4);
 
                 row.ClockIn = clockIn != null ? clockIn.Date.ToString("HH:mm") : "--:--";
                 row.ClockOut = clockOut != null ? clockOut.Date.ToString("HH:mm") : "--:--";

@@ -95,6 +95,10 @@ public static class BackendServiceRegistration
             AttendanceEvaluationService>();
 
         services.AddScoped<
+            global::HRM.Services.Attendance.Reconciliation.IAttendanceReconciliationService,
+            global::HRM.Services.Attendance.Reconciliation.AttendanceReconciliationService>();
+
+        services.AddScoped<
             IWorkflowDefinitionService,
             WorkflowDefinitionService>();
 

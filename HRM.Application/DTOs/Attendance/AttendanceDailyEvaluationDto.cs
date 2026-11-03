@@ -40,16 +40,42 @@ namespace HRM.DTOs.Attendance
 
         public int PlannedMinutes { get; set; }
 
+        public int PlannedOfficialMinutes { get; set; }
+
+        public int PlannedDutyMinutes { get; set; }
+
 
         // =========================================================
-        // Actual
+        // Actual & Credited (Official vs Duty Separated)
         // =========================================================
 
         public DateTime? FirstCheckIn { get; set; }
 
         public DateTime? LastCheckOut { get; set; }
 
+        public DateTime? OfficialBreakOut { get; set; }
+
+        public DateTime? OfficialBreakIn { get; set; }
+
         public int WorkedMinutes { get; set; }
+
+        public int ActualOfficialPresenceMinutes { get; set; }
+
+        public int CreditedOfficialMinutes { get; set; }
+
+        public int OfficialBreakMinutes { get; set; }
+
+        public int ExcessBreakMinutes { get; set; }
+
+        public int LateBreakReturnMinutes { get; set; }
+
+        public int ActualDutyPresenceMinutes { get; set; }
+
+        public int CreditedDutyMinutes { get; set; }
+
+        public int TotalPhysicalPresenceMinutes { get; set; }
+
+        public int TotalCreditedPayableMinutes { get; set; }
 
 
         // =========================================================
@@ -77,12 +103,22 @@ namespace HRM.DTOs.Attendance
 
         public int UnresolvedClockCount { get; set; }
 
+        public int SharedEventCount { get; set; }
+
+        public int DuplicateIgnoredCount { get; set; }
+
+        public int ConflictCount { get; set; }
+
 
         // =========================================================
         // Result
         // =========================================================
 
         public AttendanceDailyStatus Status { get; set; }
+
+        public AttendanceObligationState OfficialState { get; set; } = AttendanceObligationState.NotStarted;
+
+        public string PolicyVersion { get; set; } = "v2.0-OfficialPriority";
 
         public bool IsComplete { get; set; }
 
@@ -96,5 +132,9 @@ namespace HRM.DTOs.Attendance
         public List<AttendanceEvaluationIssueDto> Issues { get; set; } = [];
 
         public List<AttendanceEvaluatedSegmentDto> Segments { get; set; } = [];
+
+        public List<AttendanceObligationSummaryDto> Obligations { get; set; } = [];
+
+        public List<AttendanceEventInterpretationDto> EventInterpretations { get; set; } = [];
     }
 }

@@ -39,5 +39,23 @@ namespace HRM.DTOs.Attendance
         public DateTime? LastCheckOut { get; set; }
 
         public decimal WorkedHours { get; set; }
+
+        public decimal DutyWorkedHours { get; set; }
+
+        public int OfficialBreakMinutes { get; set; }
+
+        public int SharedEventCount { get; set; }
+
+        public int ConflictCount { get; set; }
+
+        public string ObligationState { get; set; } = "NotStarted";
+
+        public decimal CreditedOfficialHours { get; set; }
+
+        public decimal CreditedDutyHours { get; set; }
+
+        public int DutyCount { get; set; }
+
+        public bool HasDutyConflict { get; set; }
     }
 }

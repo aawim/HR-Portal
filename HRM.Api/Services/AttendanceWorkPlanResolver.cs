@@ -47,10 +47,6 @@ namespace HRM.Services
             var workDate =
                 DateOnly.FromDateTime(clockTime);
 
-            // GenerateOrGetAsync does both:
-            //
-            // 1. Return an existing WorkPlan if one exists.
-            // 2. Otherwise generate one from JobWorkTemplate.
             var generatedPlan =
                 await _workPlanGenerator.GenerateOrGetAsync(
                     individualId,
@@ -88,22 +84,13 @@ namespace HRM.Services
                 return new AttendancePlanResolutionResult
                 {
                     JobId = jobId,
-
-                    State =
-                        AttendancePlanResolutionState.NoWorkPlan,
-
-                    ClockType =
-                        AttendanceClockType.Unresolved,
-
-                    Message =
-                        "No applicable work plan or work-template assignment " +
-                        "was found for this attendance event."
+                    State = AttendancePlanResolutionState.NoWorkPlan,
+                    ClockType = AttendanceClockType.Unresolved,
+                    Message = "No applicable work plan or work-template assignment was found for this attendance event."
                 };
             }
 
-            var workPlanId =
-                selectedPlanId.Value;
- 
+            var workPlanId = selectedPlanId.Value;
 
             var amendmentRows = await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, organisationBusinessEntityId,
                 clockTime.Date.AddDays(-1), clockTime.Date, cancellationToken);
@@ -133,18 +120,11 @@ namespace HRM.Services
                 {
                     WorkPlanId = workPlanId,
                     JobId = jobId,
-
-                    State =
-                        AttendancePlanResolutionState.NoSegment,
-
-                    ClockType =
-                        AttendanceClockType.Unresolved,
-
-                    Message =
-                         "The work plan does not contain any valid segments."
+                    State = AttendancePlanResolutionState.NoSegment,
+                    ClockType = AttendanceClockType.Unresolved,
+                    Message = "The work plan does not contain any valid segments."
                 };
             }
-
 
             var pairedBreakSegment =
                 segments
@@ -157,151 +137,7 @@ namespace HRM.Services
                     .FirstOrDefault();
 
             // ============================================================
-            // LUNCH BREAK
-            //
-            // Lunch Break is state-based:
-            //
-            // Current state = CheckIn  -> Lunch event = CheckOut
-            // Current state = CheckOut -> Lunch event = CheckIn
-            // ============================================================
-
-            // Explicit shift/duty clock boundaries take precedence over a simultaneous break.
-            var hasExplicitBoundary = segments.Any(x => x.RequiresAttendance &&
-                (RequiresCheckIn(x.WorkSegmentTypeCode) || RequiresCheckOut(x.WorkSegmentTypeCode)) &&
-                clockTime >= x.StartDateTime.AddMinutes(-x.GraceBeforeMinutes) && clockTime <= x.EndDateTime);
-            if (pairedBreakSegment != null && !hasExplicitBoundary)
-            {
-                var scheduleSegmentIds = segments.Where(x => x.TemplateId == pairedBreakSegment.TemplateId).Select(x => x.WorkPlanSegmentId).ToList();
-                var lastAttendanceState =
-                    await db.AttendanceLogResolutions
-                        .AsNoTracking()
-                        .Where(x =>
-                            x.WorkPlanId == workPlanId &&
-                            x.IsValid &&
-                            x.AttendanceLog.Date <= clockTime &&
-                            x.WorkPlanSegmentId.HasValue && scheduleSegmentIds.Contains(x.WorkPlanSegmentId.Value) &&
-                            x.AttendanceClockTypeId.HasValue &&
-                            (
-                                x.AttendanceClockTypeId.Value ==
-                                    (int)AttendanceClockType.CheckIn
-                                ||
-                                x.AttendanceClockTypeId.Value ==
-                                    (int)AttendanceClockType.CheckOut
-                            ))
-                        .OrderByDescending(x =>
-                            x.AttendanceLog.Date)
-                        .Select(x =>
-                            (AttendanceClockType?)
-                                x.AttendanceClockTypeId!.Value)
-                        .FirstOrDefaultAsync(cancellationToken);
-
-
-                // No previous IN/OUT state.
-                // We cannot safely determine the direction.
-                if (!lastAttendanceState.HasValue)
-                {
-                    return new AttendancePlanResolutionResult
-                    {
-                        WorkPlanId =
-                            workPlanId,
-
-                        WorkPlanSegmentId =
-                            pairedBreakSegment.WorkPlanSegmentId,
-
-                        JobId =
-                            jobId,
-
-                        SegmentName =
-                            pairedBreakSegment.Name,
-
-                        ClockType =
-                            AttendanceClockType.Unresolved,
-
-                        State =
-                            AttendancePlanResolutionState.Unresolved,
-
-                        BoundaryTime =
-                            clockTime,
-
-                        DistanceMinutes =
-                            0,
-
-                        Message =
-                            $"Cannot determine attendance direction for " +
-                            $"'{pairedBreakSegment.Name}' because no previous " +
-                            $"CheckIn or CheckOut exists."
-                    };
-                }
-
-
-                AttendanceClockType lunchClockType;
-
-                if (lastAttendanceState.Value ==
-                    AttendanceClockType.CheckIn)
-                {
-                    // Employee is currently IN.
-                    // First Lunch Break clock means OUT.
-                    lunchClockType =
-                        AttendanceClockType.CheckOut;
-                }
-                else
-                {
-                    // Employee is currently OUT.
-                    // Next Lunch Break clock means IN.
-                    lunchClockType =
-                        AttendanceClockType.CheckIn;
-                }
-
-
-                return new AttendancePlanResolutionResult
-                {
-                    WorkPlanId =
-                        workPlanId,
-
-                    WorkPlanSegmentId =
-                        pairedBreakSegment.WorkPlanSegmentId,
-
-                    JobId =
-                        jobId,
-
-                    SegmentName =
-                        pairedBreakSegment.Name,
-
-                    ClockType =
-                        lunchClockType,
-
-                    State =
-                        AttendancePlanResolutionState.Resolved,
-
-                    BoundaryTime =
-                        clockTime,
-
-                    DistanceMinutes =
-                        0,
-
-                    Message =
-                        lunchClockType ==
-                            AttendanceClockType.CheckOut
-
-                            ? $"Checked out for '{pairedBreakSegment.Name}'."
-
-                            : $"Checked in from '{pairedBreakSegment.Name}'."
-                };
-            }
-
-
-            // ============================================================
-            // NORMAL CHECK-IN / CHECK-OUT BOUNDARIES
-            // ============================================================
-
- 
-
-            // ============================================================
             // OPEN CHECK-IN STATE PER SCHEDULE
-            //
-            // Official hours and each duty template are independent schedules.
-            // A punch inside a schedule whose last resolved clock was a
-            // check-in closes that schedule; it must not re-open it.
             // ============================================================
 
             var scheduleGroupKeys = segments.ToDictionary(
@@ -337,7 +173,6 @@ namespace HRM.Services
                 if (!scheduleGroupKeys.TryGetValue(prior.WorkPlanSegmentId, out var groupKey))
                     continue;
 
-                // The first row per schedule is its latest state.
                 if (!settledScheduleGroups.Add(groupKey))
                     continue;
 
@@ -345,35 +180,104 @@ namespace HRM.Services
                     openScheduleGroups.Add(groupKey);
             }
 
+            // ============================================================
+            // LUNCH BREAK
+            //
+            // Explicit shift/duty clock boundaries OR an open duty awaiting
+            // check-out take precedence over a standalone break return, while
+            // still allowing the break to be attached as a shared association!
+            // ============================================================
+            var hasOpenDutyAwaitingExit = segments.Any(x =>
+                x.SchedulePurpose == "Duty" &&
+                RequiresCheckOut(x.WorkSegmentTypeCode) &&
+                openScheduleGroups.Contains(scheduleGroupKeys[x.WorkPlanSegmentId]) &&
+                clockTime >= x.StartDateTime.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
+                clockTime <= x.EndDateTime.AddMinutes(LateCheckOutResolutionMinutes));
 
-            var candidates =
-                new List<BoundaryCandidate>();
+            var hasExplicitBoundary = hasOpenDutyAwaitingExit || segments.Any(x => x.RequiresAttendance &&
+                (RequiresCheckIn(x.WorkSegmentTypeCode) || RequiresCheckOut(x.WorkSegmentTypeCode)) &&
+                clockTime >= x.StartDateTime.AddMinutes(-x.GraceBeforeMinutes) && clockTime <= x.EndDateTime);
 
+            if (pairedBreakSegment != null && !hasExplicitBoundary)
+            {
+                var scheduleSegmentIds = segments.Where(x => x.TemplateId == pairedBreakSegment.TemplateId).Select(x => x.WorkPlanSegmentId).ToList();
+                var lastAttendanceState =
+                    await db.AttendanceLogResolutions
+                        .AsNoTracking()
+                        .Where(x =>
+                            x.WorkPlanId == workPlanId &&
+                            x.IsValid &&
+                            x.AttendanceLog.Date <= clockTime &&
+                            x.WorkPlanSegmentId.HasValue && scheduleSegmentIds.Contains(x.WorkPlanSegmentId.Value) &&
+                            x.AttendanceClockTypeId.HasValue &&
+                            (
+                                x.AttendanceClockTypeId.Value ==
+                                    (int)AttendanceClockType.CheckIn
+                                ||
+                                x.AttendanceClockTypeId.Value ==
+                                    (int)AttendanceClockType.CheckOut
+                            ))
+                        .OrderByDescending(x =>
+                            x.AttendanceLog.Date)
+                        .Select(x =>
+                            (AttendanceClockType?)
+                                x.AttendanceClockTypeId!.Value)
+                        .FirstOrDefaultAsync(cancellationToken);
+
+                if (!lastAttendanceState.HasValue)
+                {
+                    return new AttendancePlanResolutionResult
+                    {
+                        WorkPlanId = workPlanId,
+                        WorkPlanSegmentId = pairedBreakSegment.WorkPlanSegmentId,
+                        JobId = jobId,
+                        SchedulePurpose = "Official",
+                        SegmentName = pairedBreakSegment.Name,
+                        ClockType = AttendanceClockType.Unresolved,
+                        State = AttendancePlanResolutionState.Unresolved,
+                        BoundaryTime = clockTime,
+                        DistanceMinutes = 0,
+                        Message =
+                            $"Cannot determine attendance direction for '{pairedBreakSegment.Name}' because no previous CheckIn or CheckOut exists."
+                    };
+                }
+
+                var lunchClockType = lastAttendanceState.Value == AttendanceClockType.CheckIn
+                    ? AttendanceClockType.CheckOut
+                    : AttendanceClockType.CheckIn;
+
+                return new AttendancePlanResolutionResult
+                {
+                    WorkPlanId = workPlanId,
+                    WorkPlanSegmentId = pairedBreakSegment.WorkPlanSegmentId,
+                    JobId = jobId,
+                    SchedulePurpose = "Official",
+                    SegmentName = pairedBreakSegment.Name,
+                    ClockType = lunchClockType,
+                    LogicalEventType = lunchClockType == AttendanceClockType.CheckOut ? "OfficialBreakOut" : "OfficialBreakIn",
+                    MatchMethod = "OfficialBreakWindow",
+                    MatchReason = lunchClockType == AttendanceClockType.CheckOut
+                        ? $"Checked out for '{pairedBreakSegment.Name}'."
+                        : $"Checked in from '{pairedBreakSegment.Name}'.",
+                    State = AttendancePlanResolutionState.Resolved,
+                    BoundaryTime = clockTime,
+                    DistanceMinutes = 0,
+                    Message = lunchClockType == AttendanceClockType.CheckOut
+                        ? $"Checked out for '{pairedBreakSegment.Name}'."
+                        : $"Checked in from '{pairedBreakSegment.Name}'."
+                };
+            }
+
+            var candidates = new List<BoundaryCandidate>();
 
             foreach (var segment in segments.Where(x => x.RequiresAttendance))
             {
-                var code =
-                    segment.WorkSegmentTypeCode;
-
-
-                // ========================================================
-                // CHECK-IN BOUNDARY
-                //
-                // StartDateTime = expected check-in
-                // EndDateTime   = end of permitted check-in window
-                // ========================================================
+                var code = segment.WorkSegmentTypeCode;
 
                 if (RequiresCheckIn(code))
                 {
-                    var expectedTime =
-                        segment.StartDateTime;
-
-                    // Resolution window is independent of attendance grace.
-                    var windowStart =
-                        expectedTime.AddMinutes(
-                            -EarlyCheckInResolutionMinutes);
-
-                    // The segment's own window ends when the next event begins.
+                    var expectedTime = segment.StartDateTime;
+                    var windowStart = expectedTime.AddMinutes(-EarlyCheckInResolutionMinutes);
                     var exactEnd = segment.EndDateTime;
                     if (exactEnd < expectedTime) exactEnd = expectedTime;
                     var extendedEnd = exactEnd;
@@ -385,72 +289,32 @@ namespace HRM.Services
                         if (dutyEnd.HasValue && dutyEnd.Value.AddTicks(-1) > extendedEnd) extendedEnd = dutyEnd.Value.AddTicks(-1);
                     }
 
-                    if (clockTime >= windowStart &&
-                        clockTime <= extendedEnd)
+                    if (clockTime >= windowStart && clockTime <= extendedEnd)
                     {
                         candidates.Add(
                             new BoundaryCandidate
                             {
-                                WorkPlanSegmentId =
-                                    segment.WorkPlanSegmentId,
-
-                                SegmentName =
-                                    segment.Name,
-
-                                SchedulePurpose =
-                                    segment.SchedulePurpose,
-
-                                IsMandatory =
-                                    segment.IsMandatory,
-
-                                GroupKey =
-                                    scheduleGroupKeys[segment.WorkPlanSegmentId],
-
-                                HasOpenCheckIn =
-                                    openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
-
-                                ClockType =
-                                    AttendanceClockType.CheckIn,
-
-                                BoundaryTime =
-                                    expectedTime,
-
-                                WindowStart =
-                                    windowStart,
-
-                                WindowEnd =
-                                    exactEnd,
-
-                                ExtendedWindowEnd =
-                                    extendedEnd,
-
-                                DistanceMinutes =
-                                    Math.Abs(
-                                        (clockTime - expectedTime)
-                                        .TotalMinutes)
+                                WorkPlanSegmentId = segment.WorkPlanSegmentId,
+                                SegmentName = segment.Name,
+                                SchedulePurpose = segment.SchedulePurpose,
+                                IsMandatory = segment.IsMandatory,
+                                GroupKey = scheduleGroupKeys[segment.WorkPlanSegmentId],
+                                HasOpenCheckIn = openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
+                                ClockType = AttendanceClockType.CheckIn,
+                                BoundaryTime = expectedTime,
+                                WindowStart = windowStart,
+                                WindowEnd = exactEnd,
+                                ExtendedWindowEnd = extendedEnd,
+                                DistanceMinutes = Math.Abs((clockTime - expectedTime).TotalMinutes)
                             });
                     }
                 }
 
-                // ========================================================
-                // CHECK-OUT BOUNDARY
-                //
-                // StartDateTime = expected checkout
-                // EndDateTime   = latest permitted checkout
-                // ========================================================
-
                 if (RequiresCheckOut(code))
                 {
-                    var expectedTime =
-                        segment.StartDateTime;
-
-                    var windowStart =
-                        segment.StartDateTime
-                            .AddMinutes(
-                                -segment.GraceBeforeMinutes);
-
-                    var windowEnd =
-                        segment.EndDateTime;
+                    var expectedTime = segment.StartDateTime;
+                    var windowStart = segment.StartDateTime.AddMinutes(-segment.GraceBeforeMinutes);
+                    var windowEnd = segment.EndDateTime;
                     if (windowEnd < expectedTime) windowEnd = expectedTime;
 
                     if (clockTime >= windowStart.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
@@ -459,90 +323,37 @@ namespace HRM.Services
                         candidates.Add(
                             new BoundaryCandidate
                             {
-                                WorkPlanSegmentId =
-                                    segment.WorkPlanSegmentId,
-
-                                SegmentName =
-                                    segment.Name,
-
-                                SchedulePurpose =
-                                    segment.SchedulePurpose,
-
-                                IsMandatory =
-                                    segment.IsMandatory,
-
-                                GroupKey =
-                                    scheduleGroupKeys[segment.WorkPlanSegmentId],
-
-                                HasOpenCheckIn =
-                                    openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
-
-                                ClockType =
-                                    AttendanceClockType.CheckOut,
-
-                                BoundaryTime =
-                                    expectedTime,
-
-                                WindowStart =
-                                    windowStart,
-
-                                WindowEnd =
-                                    windowEnd,
-
-                                DistanceMinutes =
-                                    Math.Abs(
-                                        (clockTime - expectedTime)
-                                        .TotalMinutes)
+                                WorkPlanSegmentId = segment.WorkPlanSegmentId,
+                                SegmentName = segment.Name,
+                                SchedulePurpose = segment.SchedulePurpose,
+                                IsMandatory = segment.IsMandatory,
+                                GroupKey = scheduleGroupKeys[segment.WorkPlanSegmentId],
+                                HasOpenCheckIn = openScheduleGroups.Contains(scheduleGroupKeys[segment.WorkPlanSegmentId]),
+                                ClockType = AttendanceClockType.CheckOut,
+                                BoundaryTime = expectedTime,
+                                WindowStart = windowStart,
+                                WindowEnd = windowEnd,
+                                DistanceMinutes = Math.Abs((clockTime - expectedTime).TotalMinutes)
                             });
                     }
                 }
             }
 
-
-            // ============================================================
-            // NO MATCHING BOUNDARY
-            // ============================================================
-
             if (candidates.Count == 0)
             {
                 return new AttendancePlanResolutionResult
                 {
-                    WorkPlanId =
-                        workPlanId,
-
-                    JobId =
-                        jobId,
-
-                    State =
-                        AttendancePlanResolutionState
-                            .OutsideResolutionWindow,
-
-                    ClockType =
-                        AttendanceClockType.Unresolved,
-
-                    BoundaryTime =
-                        clockTime,
-
-                    DistanceMinutes =
-                        0,
-
-                    Message =
-                        $"Attendance event at {clockTime:HH:mm} " +
-                        $"does not fall inside an applicable " +
-                        $"attendance window."
+                    WorkPlanId = workPlanId,
+                    JobId = jobId,
+                    State = AttendancePlanResolutionState.OutsideResolutionWindow,
+                    ClockType = AttendanceClockType.Unresolved,
+                    BoundaryTime = clockTime,
+                    DistanceMinutes = 0,
+                    Message = $"Attendance event at {clockTime:HH:mm} does not fall inside an applicable attendance window."
                 };
             }
 
-
-            // ============================================================
-            // CHOOSE BEST MATCH
-            //
-            // If windows overlap, choose the boundary whose expected
-            // time is closest to the physical clock.
-            // ============================================================
-
-            var bestCandidate =
-                SelectBestCandidate(candidates, clockTime);
+            var bestCandidate = SelectBestCandidate(candidates, clockTime);
 
             // Coincident check-outs close both schedules with one physical punch.
             // Coincident check-ins are allocated in sequence instead: the first
@@ -555,93 +366,75 @@ namespace HRM.Services
                     x.BoundaryTime == bestCandidate.BoundaryTime)
                 : null;
 
+            int? secondarySegmentId = secondaryCandidate?.WorkPlanSegmentId;
+            string? secondarySegmentName = secondaryCandidate?.SegmentName;
+            AttendanceClockType secondaryClockType = secondaryCandidate?.ClockType ?? AttendanceClockType.Unresolved;
+            string? secondaryPurpose = secondaryCandidate?.SchedulePurpose;
+            string? secondaryLogicalType = secondaryCandidate is not null ? $"{secondaryCandidate.SchedulePurpose}{secondaryCandidate.ClockType}" : null;
+            string? secondaryMethod = secondaryCandidate is not null ? "SharedCoincidentEnd" : null;
+            string? secondaryReason = secondaryCandidate is not null
+                ? $"Shared coincident check-out for {secondaryCandidate.SegmentName}."
+                : null;
 
-            // Match each punch to the nearest scheduled boundary. A prior official
-            // check-in never changes the direction of a separate duty check-in.
-
-
+            if (secondarySegmentId == null &&
+                bestCandidate.SchedulePurpose == "Duty" &&
+                bestCandidate.ClockType == AttendanceClockType.CheckOut &&
+                pairedBreakSegment != null)
+            {
+                secondarySegmentId = pairedBreakSegment.WorkPlanSegmentId;
+                secondarySegmentName = pairedBreakSegment.Name;
+                secondaryClockType = AttendanceClockType.BreakOut;
+                secondaryPurpose = "Official";
+                secondaryLogicalType = "OfficialBreakOut";
+                secondaryMethod = "SharedDelayedDutyExitAndLunch";
+                secondaryReason = $"Official lunch break out shared with {bestCandidate.SegmentName} check-out.";
+            }
 
             return new AttendancePlanResolutionResult
             {
-                WorkPlanId =
-                    workPlanId,
-
-                WorkPlanSegmentId =
-                    bestCandidate.WorkPlanSegmentId,
-
-                JobId =
-                    jobId,
-
-                SegmentName =
-                    bestCandidate.SegmentName,
-
-                ClockType =
-                    bestCandidate.ClockType,
-
-                State =
-                    AttendancePlanResolutionState.Resolved,
-
-                BoundaryTime =
-                    bestCandidate.BoundaryTime,
-
-                DistanceMinutes =
-                    bestCandidate.DistanceMinutes,
-
-                SecondaryWorkPlanSegmentId =
-                    secondaryCandidate?.WorkPlanSegmentId,
-
-                SecondarySegmentName =
-                    secondaryCandidate?.SegmentName,
-
-                SecondaryClockType =
-                    secondaryCandidate?.ClockType ?? AttendanceClockType.Unresolved,
-
-                Message =
-                    $"Attendance event resolved to " +
-                    $"'{bestCandidate.SegmentName}' as " +
-                    $"{bestCandidate.ClockType}."
+                WorkPlanId = workPlanId,
+                WorkPlanSegmentId = bestCandidate.WorkPlanSegmentId,
+                JobId = jobId,
+                SchedulePurpose = bestCandidate.SchedulePurpose,
+                SegmentName = bestCandidate.SegmentName,
+                ClockType = bestCandidate.ClockType,
+                LogicalEventType = $"{bestCandidate.SchedulePurpose}{bestCandidate.ClockType}",
+                MatchMethod = clockTime >= bestCandidate.WindowStart && clockTime <= bestCandidate.WindowEnd
+                    ? $"{bestCandidate.SchedulePurpose}BoundaryWindow"
+                    : "DelayedBoundaryWindow",
+                MatchReason = $"Matched to '{bestCandidate.SegmentName}' ({bestCandidate.SchedulePurpose}) as {bestCandidate.ClockType}.",
+                ConfidenceState = secondarySegmentId.HasValue ? "PolicyShared" : "Deterministic",
+                State = AttendancePlanResolutionState.Resolved,
+                BoundaryTime = bestCandidate.BoundaryTime,
+                DistanceMinutes = bestCandidate.DistanceMinutes,
+                SecondaryWorkPlanSegmentId = secondarySegmentId,
+                SecondarySegmentName = secondarySegmentName,
+                SecondaryClockType = secondaryClockType,
+                SecondarySchedulePurpose = secondaryPurpose,
+                SecondaryLogicalEventType = secondaryLogicalType,
+                SecondaryMatchMethod = secondaryMethod,
+                SecondaryMatchReason = secondaryReason,
+                Message = $"Attendance event resolved to '{bestCandidate.SegmentName}' as {bestCandidate.ClockType}."
             };
         }
-
-    
 
         private static BoundaryCandidate SelectBestCandidate(
             List<BoundaryCandidate> candidates,
             DateTime clockTime)
         {
-            // Matching order:
-            // 1. A mandatory official clock event inside its own window always wins.
-            //    An official check-in must be satisfied before an overlapping duty.
-            // 2. Any other exact official window.
-            // 3. Close an open schedule. A duty that ends at 12:00 punched at 12:20
-            //    is a check-out even though the official check-in window is still
-            //    wide open, and a 13:55 punch is the official 14:00 check-out
-            //    rather than the duty's earlier one.
-            // 4. Any other fresh exact window. This is the next punch for a schedule
-            //    that starts at the same time as an official schedule: the first
-            //    punch is official, so the following punch must satisfy duty.
-            // 5. An exact official check-in for a schedule that is already open
-            //    (a duplicate punch, left for duplicate detection).
-            // 6. Any other exact window (a duplicate shift/duty boundary).
-            // 7. An extended check-in window (late arrival inside the work period),
-            //    nearest boundary first, fresh schedule before an open one on ties.
-            // 8. Nearest boundary.
             static IOrderedEnumerable<BoundaryCandidate> Nearest(IEnumerable<BoundaryCandidate> rows) =>
                 rows.OrderBy(x => x.DistanceMinutes).ThenBy(x => x.SchedulePurpose == "Official" ? 0 : 1);
 
             static bool IsCheckOutResolution(BoundaryCandidate x, DateTime clock) =>
                 x.ClockType == AttendanceClockType.CheckOut &&
                 (
-                    // Past its own permitted checkout window but still close.
                     (clock > x.WindowEnd && clock <= x.WindowEnd.AddMinutes(LateCheckOutResolutionMinutes))
                     ||
-                    // Or closing a schedule that is still open, even slightly early.
                     (x.HasOpenCheckIn &&
                      clock >= x.BoundaryTime.AddMinutes(-EarlyCheckOutResolutionMinutes) &&
                      clock <= x.BoundaryTime.AddMinutes(LateCheckOutResolutionMinutes))
                 );
 
-            // A check-in for a schedule that is still open would be a duplicate punch.
             static bool IsStaleCheckIn(BoundaryCandidate x) =>
                 x.ClockType == AttendanceClockType.CheckIn && x.HasOpenCheckIn;
 
@@ -659,10 +452,6 @@ namespace HRM.Services
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official" && x.IsMandatory)).FirstOrDefault()
                 ?? Nearest(exactStale.Where(x => x.SchedulePurpose == "Official")).FirstOrDefault()
                 ?? Nearest(exactStale).FirstOrDefault()
-                // An extended check-in window is still valid when the punch is
-                // inside the work period. Distance decides first; a fresh
-                // schedule beats an already-open one only when the boundary is
-                // equally close (for example official and duty starting together).
                 ?? candidates
                     .Where(x => x.ClockType == AttendanceClockType.CheckIn &&
                         x.ExtendedWindowEnd.HasValue &&
@@ -678,39 +467,22 @@ namespace HRM.Services
         private static string ScheduleGroupKey(string? schedulePurpose, int? templateId) =>
             $"{schedulePurpose ?? string.Empty}|{templateId?.ToString() ?? "0"}";
 
-
         private sealed class BoundaryCandidate
         {
             public int WorkPlanSegmentId { get; set; }
-
-            public string SegmentName { get; set; }
-                = string.Empty;
-
-            public string SchedulePurpose { get; set; }
-                = string.Empty;
-
+            public string SegmentName { get; set; } = string.Empty;
+            public string SchedulePurpose { get; set; } = string.Empty;
             public bool IsMandatory { get; set; }
-
-            public string GroupKey { get; set; }
-                = string.Empty;
-
+            public string GroupKey { get; set; } = string.Empty;
             public bool HasOpenCheckIn { get; set; }
-
             public AttendanceClockType ClockType { get; set; }
-
             public DateTime BoundaryTime { get; set; }
-
             public DateTime WindowStart { get; set; }
-
             public DateTime WindowEnd { get; set; }
-
             public DateTime? ExtendedWindowEnd { get; set; }
-
             public double DistanceMinutes { get; set; }
         }
 
-    
-    
         private static bool IsPairedBreakSegment(string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
@@ -723,55 +495,32 @@ namespace HRM.Services
             };
         }
 
-
-
-        //private static bool IsPairedBreakSegment(string? code)
-        //{
-        //    return string.Equals(
-        //        code,
-        //        "LUNCH",
-        //        StringComparison.OrdinalIgnoreCase);
-        //}
-
-
-        private static bool RequiresCheckIn(
-            string? code)
+        private static bool RequiresCheckIn(string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return false;
 
-            return code
-                .Trim()
-                .ToUpperInvariant() switch
+            return code.Trim().ToUpperInvariant() switch
             {
                 "CHECK_IN" => true,
                 "DUTY_CHECK_IN" => true,
                 "BREAK_END" => true,
-
                 _ => false
             };
         }
 
-
-        private static bool RequiresCheckOut(
-            string? code)
+        private static bool RequiresCheckOut(string? code)
         {
             if (string.IsNullOrWhiteSpace(code))
                 return false;
 
-            return code
-                .Trim()
-                .ToUpperInvariant() switch
+            return code.Trim().ToUpperInvariant() switch
             {
                 "CHECK_OUT" => true,
                 "DUTY_CHECK_OUT" => true,
                 "BREAK_START" => true,
-
                 _ => false
             };
         }
-
-
-
     }
 }

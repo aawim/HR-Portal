@@ -22,12 +22,12 @@
         else if (_evaluation is not null)
         {
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <span class="text-sm text-slate-500">Attendance status</span>
-                <span class="@(_attendanceDay?.IsLate == true ? "rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700" : GetStatusClass(_evaluation.Status))">@(_attendanceDay != null ? HRM.Helpers.AttendancePresentation.Status(_attendanceDay) : GetStatusText(_evaluation.Status))</span>
+                <span class="text-sm text-slate-500">Official schedule status</span>
+                <span class="@(_attendanceDay?.IsLate == true ? "rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700" : GetStatusClass(_evaluation.Status))">@(_evaluation.OfficialState is AttendanceObligationState.OnBreak ? "On Break" : _evaluation.OfficialState is AttendanceObligationState.MissingClockOut ? "Missing Official Check-Out" : _attendanceDay != null ? HRM.Helpers.AttendancePresentation.Status(_attendanceDay) : GetStatusText(_evaluation.Status))</span>
             </div>
             <dl class="space-y-3 text-sm">
                 <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                    <dt class="text-slate-500">Scheduled</dt>
+                    <dt class="text-slate-500">Official schedule</dt>
                     <dd class="m-0 font-medium tabular-nums text-slate-800">
                         @if (_evaluation.RequiresAttendance)
                         {
@@ -38,18 +38,73 @@
                 </div>
                 <div class="grid grid-cols-2 gap-3">
                     <div class="min-w-0 rounded-lg bg-slate-50 p-3">
-                        <dt class="text-xs text-slate-500">Check in</dt>
+                        <dt class="text-xs text-slate-500">Official check in</dt>
                         <dd class="mb-0 mt-2 font-semibold tabular-nums text-slate-800">@FormatTime(_evaluation.FirstCheckIn)</dd>
                     </div>
                     <div class="min-w-0 rounded-lg bg-slate-50 p-3">
-                        <dt class="text-xs text-slate-500">Check out</dt>
+                        <dt class="text-xs text-slate-500">Official check out</dt>
                         <dd class="mb-0 mt-2 font-semibold tabular-nums text-slate-800">@FormatTime(_evaluation.LastCheckOut)</dd>
                     </div>
                 </div>
+                @{
+                    var officialOb = _evaluation.Obligations.FirstOrDefault(o => o.ObligationType == "Official");
+                }
+                @if (officialOb?.BreakOutDateTime != null || officialOb?.BreakInDateTime != null || _evaluation.OfficialBreakMinutes > 0)
+                {
+                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs">
+                        <span class="text-slate-500">Official break / lunch</span>
+                        <span class="font-medium tabular-nums text-slate-700">
+                            @(officialOb?.BreakOutDateTime?.ToString("HH:mm") ?? "--") – @(officialOb?.BreakInDateTime?.ToString("HH:mm") ?? "Pending return")
+                            @if (_evaluation.OfficialBreakMinutes > 0)
+                            {
+                                <span> · @FormatMinutes(_evaluation.OfficialBreakMinutes)</span>
+                            }
+                        </span>
+                    </div>
+                }
+                @{
+                    var dutyObs = _evaluation.Obligations.Where(o => o.ObligationType == "Duty").ToList();
+                }
+                @if (dutyObs.Count > 0)
+                {
+                    <div class="space-y-2 border-t border-slate-100 pt-3">
+                        <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <span>Additional duties (@dutyObs.Count)</span>
+                            <span>Credited: @FormatMinutes(_evaluation.CreditedDutyMinutes) / @FormatMinutes(_evaluation.PlannedDutyMinutes)</span>
+                        </div>
+                        @foreach (var duty in dutyObs)
+                        {
+                            <div class="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 text-xs space-y-1">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="font-semibold text-slate-800">@duty.ScheduleName (@duty.ScheduledStart.ToString("HH:mm")–@duty.ScheduledEnd.ToString("HH:mm"))</span>
+                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">@duty.State</span>
+                                </div>
+                                <div class="flex flex-wrap items-center justify-between gap-2 text-slate-600 tabular-nums">
+                                    <span>In: @(duty.ActualStartDateTime?.ToString("HH:mm") ?? "--") · Out: @(duty.ActualEndDateTime?.ToString("HH:mm") ?? "--")</span>
+                                    <span>Actual @FormatMinutes(duty.ActualPresenceMinutes) · Credited @FormatMinutes(duty.CreditedWorkedMinutes)</span>
+                                </div>
+                                @if (duty.SharesStartEvent || duty.SharesEndEvent)
+                                {
+                                    <p class="m-0 text-[11px] text-indigo-700">Shares physical punch with Official schedule</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
                 <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-                    <dt class="text-slate-500">Time worked</dt>
+                    <dt class="text-slate-500">Official time worked</dt>
                     <dd class="m-0 text-xl font-semibold tabular-nums text-slate-900">@FormatMinutes(_evaluation.WorkedMinutes)</dd>
                 </div>
+                @if (_evaluation.TotalCreditedPayableMinutes > 0 || _evaluation.SharedEventCount > 0)
+                {
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                        <span>Total payable (no double count): <strong class="text-slate-800">@FormatMinutes(_evaluation.TotalCreditedPayableMinutes)</strong></span>
+                        @if (_evaluation.SharedEventCount > 0)
+                        {
+                            <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 border border-indigo-200">@_evaluation.SharedEventCount shared @(_evaluation.SharedEventCount == 1 ? "event" : "events")</span>
+                        }
+                    </div>
+                }
             </dl>
             @if (ArrivalLateMinutes > 0 || _evaluation.EarlyDepartureMinutes > 0)
             {

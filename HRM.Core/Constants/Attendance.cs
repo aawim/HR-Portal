@@ -1,4 +1,4 @@
-﻿namespace HRM.Constants
+namespace HRM.Constants
 {
     public static class AttendanceResolutionStatusIds
     {
@@ -13,5 +13,13 @@
         public const int NoWorkPlan = 9;
         public const int OutsideResolutionWindow = 10;
         public const int DuplicatePunch = 11;
+        public const int Conflict = 12;
+        public const int PartiallyResolved = 13;
+    }
+
+    public static class AttendanceReconciliationPolicy
+    {
+        public const string CurrentVersion = "v2.0-OfficialPriority";
+        public const int DefaultDuplicateSuppressionSeconds = 120;
     }
 }

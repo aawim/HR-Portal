@@ -1,7 +1,15 @@
 namespace HRM.Helpers;
 
-public sealed record WorkHourCoverageResult(bool HasOfficialSchedule, int OfficialMinutes, int DutyMinutes,
-    int DutyWithinOfficialMinutes, int PotentialOvertimeMinutes);
+public sealed record WorkHourCoverageResult(
+    bool HasOfficialSchedule,
+    int OfficialMinutes,
+    int DutyMinutes,
+    int DutyWithinOfficialMinutes,
+    int PotentialOvertimeMinutes)
+{
+    public int DutyOutsideOfficialMinutes => Math.Max(0, DutyMinutes - DutyWithinOfficialMinutes);
+    public int TotalDistinctScheduledMinutes => OfficialMinutes + DutyOutsideOfficialMinutes;
+}
 
 public static class WorkHourCoverage
 {

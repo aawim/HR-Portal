@@ -46,16 +46,18 @@ public static class DutyClockEventPresentation
                 p.WorkTemplateSegmentId == b.Segment.WorkTemplateSegmentId && p.WorkSegmentTypeId == b.Segment.WorkSegmentTypeId &&
                 p.StartDateTime == b.Segment.StartDateTime)).ToList();
             var match = linked.Count == 1 ? linked[0] : null;
-            if ((log.ClockType == AttendanceClockType.Unresolved || log.ClockType == AttendanceClockType.CheckIn && match != null && log.LogDateTime < match.Start) && log.InOutModeId != 2)
+            // Never overwrite an already-resolved Official classification with a Duty boundary.
+            if (log.ClockType == AttendanceClockType.Unresolved && log.InOutModeId != 2)
             {
                 var candidates = boundaries.Where(b => b.Clock == AttendanceClockType.CheckIn && !occupied.Contains(b.Assignment.WorkAssignmentId) &&
                     log.LogDateTime >= b.Start.AddMinutes(-180) && log.LogDateTime < boundaries.Where(e => e.Assignment.WorkAssignmentId == b.Assignment.WorkAssignmentId && e.Clock == AttendanceClockType.CheckOut && e.Start > b.Start)
                         .Select(e => e.Start).DefaultIfEmpty(b.End).Min())
-                    .OrderBy(b => Math.Abs((log.LogDateTime - b.Start).TotalMinutes)).ToList();
+                    .OrderBy(b => b.Assignment.SchedulePurpose == "Official" ? 0 : 1)
+                    .ThenBy(b => Math.Abs((log.LogDateTime - b.Start).TotalMinutes)).ToList();
                 if (candidates.Count == 1 || candidates.Count > 1 && Math.Abs((log.LogDateTime - candidates[0].Start).TotalMinutes) < Math.Abs((log.LogDateTime - candidates[1].Start).TotalMinutes))
                     match = candidates[0];
             }
-            if (match == null || log.ClockType == AttendanceClockType.Ignored) continue;
+            if (match == null || log.ClockType == AttendanceClockType.Ignored || log.ClockType == AttendanceClockType.BreakOut || log.ClockType == AttendanceClockType.BreakIn) continue;
             log.WorkAssignmentId = match.Assignment.WorkAssignmentId;
             log.ScheduleName = match.Assignment.Name;
             log.ScheduledStart = boundaries.Where(b => b.Assignment.WorkAssignmentId == match.Assignment.WorkAssignmentId && b.Clock == AttendanceClockType.CheckIn).Select(b => b.Start).DefaultIfEmpty(match.Assignment.StartDateTime).Min();
@@ -63,7 +65,8 @@ public static class DutyClockEventPresentation
             log.SchedulePurpose = match.Assignment.SchedulePurpose;
             log.ClockType = match.Clock;
             log.SegmentName = $"{match.Assignment.SchedulePurpose} · {(match.Clock == AttendanceClockType.CheckIn ? "Check in" : "Check out")}";
-            log.ResolutionMessage = $"{match.Assignment.SchedulePurpose} {(match.Clock == AttendanceClockType.CheckIn ? "check-in" : "check-out")} matched to {match.Assignment.Name} at {match.Start:HH:mm}.";
+            if (string.IsNullOrWhiteSpace(log.ResolutionMessage))
+                log.ResolutionMessage = $"{match.Assignment.SchedulePurpose} {(match.Clock == AttendanceClockType.CheckIn ? "check-in" : "check-out")} matched to {match.Assignment.Name} at {match.Start:HH:mm}.";
             if (match.Clock != AttendanceClockType.CheckIn) continue;
             occupied.Add(match.Assignment.WorkAssignmentId);
             log.LateMinutes = log.LogDateTime > match.Start.AddMinutes(match.Segment.GraceAfterMinutes)

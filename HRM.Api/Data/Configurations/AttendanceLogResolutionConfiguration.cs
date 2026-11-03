@@ -1,4 +1,4 @@
-﻿using HRM.Models;
+using HRM.Models;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore;
 
@@ -56,6 +56,45 @@ namespace HRM.Data.Configurations
             entity.Property(x => x.CreatedDate)
                 .HasColumnType("datetime2(0)");
 
+            entity.Property(x => x.IsPrimaryClassification)
+                .HasColumnName("IsPrimaryClassification")
+                .HasDefaultValue(true);
+
+            entity.Property(x => x.SchedulePurpose)
+                .HasMaxLength(30);
+
+            entity.Property(x => x.LogicalEventType)
+                .HasMaxLength(50);
+
+            entity.Property(x => x.MatchMethod)
+                .HasMaxLength(50);
+
+            entity.Property(x => x.MatchReason)
+                .HasMaxLength(500);
+
+            entity.Property(x => x.ConfidenceState)
+                .HasMaxLength(30)
+                .HasDefaultValue("Deterministic");
+
+            entity.Property(x => x.PolicyVersion)
+                .HasMaxLength(40)
+                .HasDefaultValue("v2.0-OfficialPriority");
+
+            entity.Property(x => x.ReconciliationRunId)
+                .HasColumnName("ReconciliationRunID");
+
+            entity.Property(x => x.AttendanceObligationId)
+                .HasColumnName("AttendanceObligationID");
+
+            entity.Property(x => x.OverriddenByUserId)
+                .HasColumnName("OverriddenByUserID");
+
+            entity.Property(x => x.OverrideReason)
+                .HasMaxLength(1000);
+
+            entity.Property(x => x.OverriddenAtUtc)
+                .HasColumnType("datetime2(0)");
+
             entity.HasOne(x => x.AttendanceLog)
                 .WithMany(x => x.AttendanceLogResolutions)
                 .HasForeignKey(x => x.AttendanceLogId)
@@ -85,9 +124,15 @@ namespace HRM.Data.Configurations
 
             entity.HasIndex(x => x.AttendanceLogId)
                 .IsUnique()
-                .HasFilter("[IsValid] = 1")
+                .HasFilter("[IsValid] = 1 AND [IsPrimaryClassification] = 1")
                 .HasDatabaseName(
-                    "UX_AttendanceLogResolutions_ActiveAttendanceLog");
+                    "UX_AttendanceLogResolutions_ActivePrimaryPerLog");
+
+            entity.HasIndex(x => new { x.AttendanceLogId, x.WorkPlanSegmentId })
+                .IsUnique()
+                .HasFilter("[IsValid] = 1 AND [WorkPlanSegmentId] IS NOT NULL")
+                .HasDatabaseName(
+                    "UX_AttendanceLogResolutions_ActiveSegmentPerLog");
 
             entity.HasIndex(x => new
             {

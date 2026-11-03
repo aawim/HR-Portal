@@ -30,12 +30,15 @@
             <div class="overflow-x-auto rounded-lg border">
                 <table class="w-full whitespace-nowrap text-left text-sm">
                     <caption class="p-3 text-left font-semibold">Required shift/duty attendance</caption>
-                    <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Schedule</th><th class="p-3">Scheduled time</th><th class="p-3">Status</th><th class="p-3">Check in</th><th class="p-3">Check out</th></tr></thead>
+                    <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Schedule</th><th class="p-3">Scheduled time</th><th class="p-3">Status</th><th class="p-3">Check in</th><th class="p-3">Check out</th><th class="p-3">Credited / Planned</th></tr></thead>
                     <tbody>@foreach (var duty in dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance))
                     {
                         <tr class="border-b"><td class="p-3">@duty.Date.ToString("dd MMM yyyy")</td><td class="p-3">@duty.Purpose · @duty.Name</td>
                             <td class="p-3">@duty.ScheduledStart.ToString("dd MMM HH:mm") – @duty.ScheduledEnd.ToString("dd MMM HH:mm")</td>
-                            <td class="p-3">@DutyStatus(duty)</td><td class="p-3">@(duty.CheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(duty.CheckOut?.ToString("HH:mm") ?? "—")</td></tr>
+                            <td class="p-3">@DutyStatus(duty)</td>
+                            <td class="p-3">@(duty.CheckIn?.ToString("HH:mm") ?? "—") @(duty.SharesCheckInWithOfficial ? "(Shared)" : "")</td>
+                            <td class="p-3">@(duty.CheckOut?.ToString("HH:mm") ?? "—") @(duty.SharesCheckOutWithOfficial ? "(Shared)" : "")</td>
+                            <td class="p-3">@duty.CreditedMinutes min / @duty.PlannedMinutes min</td></tr>
                     }</tbody>
                 </table>
                 @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-sm">No required shift/duty assignments were found for this period.</p> }
@@ -46,18 +49,19 @@
         </div>
         <div class="overflow-x-auto rounded-lg border">
             <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</caption>
-                <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Status</th><th class="p-3">First check in</th><th class="p-3">Last check out</th><th class="p-3">Worked hours</th><th class="p-3">Clock events</th></tr></thead>
+                <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Status</th><th class="p-3">First check in</th><th class="p-3">Last check out</th><th class="p-3">Worked hours</th><th class="p-3">Duty hours</th><th class="p-3">Clock events</th></tr></thead>
                 <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
                     <tr class="border-b"><td class="whitespace-nowrap p-3">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="p-3 @(day.IsOnLeave ? "text-blue-600" : day.IsLate ? "text-amber-700" : "")">@Status(day)</td>
-                        <td class="p-3">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="p-3">@day.WorkedHours.ToString("0.##")</td><td class="p-3">@day.ClockEventCount</td></tr>
+                        <td class="p-3">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="p-3">@day.WorkedHours.ToString("0.##")</td><td class="p-3">@day.DutyWorkedHours.ToString("0.##")</td>
+                        <td class="p-3">@day.ClockEventCount @(day.SharedEventCount > 0 ? $"({day.SharedEventCount} shared)" : "")</td></tr>
                 }</tbody>
             </table>
             @if(!PeriodDays.Any()) { <p class="p-3 text-sm">No attendance days in this employment period.</p> }
         </div>
         <div class="overflow-x-auto rounded-lg border">
             <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Clock events</caption>
-                <thead><tr class="border-b"><th class="p-3">Date and time</th><th class="p-3">Event</th><th class="p-3">Schedule</th></tr></thead>
-                <tbody>@foreach(var entry in events) { <tr class="border-b"><td class="whitespace-nowrap p-3">@entry.Time.ToString("dd MMM yyyy HH:mm:ss")</td><td class="p-3">@entry.Event</td><td class="p-3">@entry.Schedule</td></tr> }</tbody>
+                <thead><tr class="border-b"><th class="p-3">Date and time</th><th class="p-3">Event</th><th class="p-3">Schedule</th><th class="p-3">Reconciliation details</th></tr></thead>
+                <tbody>@foreach(var entry in events) { <tr class="border-b"><td class="whitespace-nowrap p-3">@entry.Time.ToString("dd MMM yyyy HH:mm:ss")</td><td class="p-3">@entry.Event @(entry.IsSharedAcrossSchedules ? "· Shared" : "")</td><td class="p-3">@(entry.SharedScheduleSummary ?? entry.Schedule)</td><td class="p-3 text-xs text-slate-500">@(entry.MatchReason ?? entry.MatchMethod ?? "—")</td></tr> }</tbody>
             </table>
             @if(events.Count == 0) { <p class="p-3 text-sm">No clock events for this date range.</p> }
             @if(events.Count == 1000) { <p class="p-3 text-sm">Showing the latest 1,000 events. Narrow the date range to see other events.</p> }

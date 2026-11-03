@@ -13,44 +13,29 @@ namespace HRM.Services.Attendance.Abstraction.Services
     public sealed class AttendanceLogProcessor : IAttendanceLogProcessor
     {
         private readonly IDbContextFactory<HrmTeContext> _dbFactory;
-
         private readonly IAttendanceDuplicateValidator _duplicateValidator;
- 
         private readonly IAttendanceLogResolutionRepository _resolutionRepository;
-
         private readonly ILogger<AttendanceLogProcessor> _logger;
-
         private readonly IAttendanceWorkPlanResolver _workPlanResolver;
 
         public AttendanceLogProcessor(
             IDbContextFactory<HrmTeContext> dbFactory,
             IAttendanceDuplicateValidator duplicateValidator,
- 
             IAttendanceLogResolutionRepository resolutionRepository,
             ILogger<AttendanceLogProcessor> logger,
-               IAttendanceWorkPlanResolver workPlanResolver
-
-
-            )
+            IAttendanceWorkPlanResolver workPlanResolver)
         {
             _dbFactory = dbFactory;
             _duplicateValidator = duplicateValidator;
- 
             _resolutionRepository = resolutionRepository;
             _logger = logger;
             _workPlanResolver = workPlanResolver;
         }
 
-        
-
         public async Task<AttendanceProcessingResult> ProcessAsync(
             int attendanceLogId,
             CancellationToken cancellationToken = default)
         {
-
-
-            //using var context = _dbFactory.CreateDbContext();
-
             await using var context = await _dbFactory.CreateDbContextAsync(cancellationToken);
 
             if (attendanceLogId <= 0)
@@ -62,14 +47,10 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
             try
             {
-        
                 var duplicateResult =
                     await _duplicateValidator.ValidateAsync(
                         attendanceLogId,
                         cancellationToken);
-
-
-
 
                 if (duplicateResult.IsDuplicate &&
                     duplicateResult.ExistingResolution is not null)
@@ -77,9 +58,8 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     return AttendanceProcessingResult.AlreadyExists(
                         duplicateResult.ExistingResolution);
                 }
-           
 
-                var attendanceLog = await LoadAttendanceLogAsync(attendanceLogId,cancellationToken);
+                var attendanceLog = await LoadAttendanceLogAsync(attendanceLogId, cancellationToken);
 
                 if (attendanceLog is null)
                 {
@@ -104,8 +84,6 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         cancellationToken);
                 }
 
-
-
                 var attendanceDate = attendanceLog.Date.Date;
                 var nextDate = attendanceDate.AddDays(1);
 
@@ -116,21 +94,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         x.OrganisationID == attendanceLog.OrganisationId &&
                         x.OrganisationStructureId ==
                             attendanceLog.OrganisationStructureId &&
-
-                        // Job started on or before attendance date
                         x.JoinedDate < nextDate &&
-
-                        // Job was active on attendance date
                         (x.TerminatedDate == null ||
                          x.TerminatedDate >= attendanceDate))
                     .OrderByDescending(x => x.JoinedDate)
                     .Select(x => (int?)x.JobId)
                     .FirstOrDefaultAsync(cancellationToken);
-
-
-
-
-
 
                 if (!jobId.HasValue)
                 {
@@ -150,62 +119,62 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         "No active job was found for this attendance event.");
                 }
 
-
                 var planResult =
-                   await _workPlanResolver.ResolveAsync(
-                       attendanceLog.IndividualId,
-                       jobId.Value,
-                       attendanceLog.OrganisationId,
-                       attendanceLog.Date,
-                       cancellationToken);
-
-
+                    await _workPlanResolver.ResolveAsync(
+                        attendanceLog.IndividualId,
+                        jobId.Value,
+                        attendanceLog.OrganisationId,
+                        attendanceLog.Date,
+                        cancellationToken);
 
                 if (!planResult.IsResolved)
                 {
-
                     var resolutionStatusId =
-                          planResult.State switch
-                          {
-                              AttendancePlanResolutionState.NoWorkPlan
-                                  => AttendanceResolutionStatusIds.NoWorkPlan,
-
-                              AttendancePlanResolutionState.NoSegment
-                                  => AttendanceResolutionStatusIds.NoSegment,
-
-                              AttendancePlanResolutionState.OutsideResolutionWindow
-                                  => AttendanceResolutionStatusIds.OutsideResolutionWindow,
-
-                              _ => AttendanceResolutionStatusIds.Invalid
-                          };
-
+                        planResult.State switch
+                        {
+                            AttendancePlanResolutionState.NoWorkPlan
+                                => AttendanceResolutionStatusIds.NoWorkPlan,
+                            AttendancePlanResolutionState.NoSegment
+                                => AttendanceResolutionStatusIds.NoSegment,
+                            AttendancePlanResolutionState.OutsideResolutionWindow
+                                => AttendanceResolutionStatusIds.OutsideResolutionWindow,
+                            AttendancePlanResolutionState.Conflict
+                                => AttendanceResolutionStatusIds.Conflict,
+                            _ => AttendanceResolutionStatusIds.Invalid
+                        };
 
                     var unresolvedResolution =
-                   CreateResolution(
-                       attendanceLog,
-                       resolutionStatusId,
-                       planResult.Message,
-                       workPlanId: planResult.WorkPlanId,
-                       jobId: planResult.JobId,
-                       clockType: AttendanceClockType.Unresolved);
+                        CreateResolution(
+                            attendanceLog,
+                            resolutionStatusId,
+                            planResult.Message,
+                            workPlanId: planResult.WorkPlanId,
+                            jobId: planResult.JobId,
+                            clockType: AttendanceClockType.Unresolved,
+                            isPrimaryClassification: true,
+                            schedulePurpose: planResult.SchedulePurpose ?? "Unresolved",
+                            logicalEventType: "Unresolved",
+                            matchMethod: "Unresolved",
+                            matchReason: planResult.Message,
+                            confidenceState: "Conflict");
 
-                                var savedResolution =
-                                    await _resolutionRepository.AddAsync(
-                                        unresolvedResolution,
-                                        cancellationToken);
+                    var savedResolution =
+                        await _resolutionRepository.AddAsync(
+                            unresolvedResolution,
+                            cancellationToken);
 
-                                return AttendanceProcessingResult.Recorded(
-                                    savedResolution,
-                                    planResult.Message);
+                    return AttendanceProcessingResult.Recorded(
+                        savedResolution,
+                        planResult.Message);
                 }
 
                 var existingBoundaryResolution =
-                 await _resolutionRepository
-                     .GetResolvedBoundaryAsync(
-                         planResult.WorkPlanId!.Value,
-                         planResult.WorkPlanSegmentId!.Value,
-                         planResult.ClockType,
-                         cancellationToken);
+                    await _resolutionRepository
+                        .GetResolvedBoundaryAsync(
+                            planResult.WorkPlanId!.Value,
+                            planResult.WorkPlanSegmentId!.Value,
+                            planResult.ClockType,
+                            cancellationToken);
                 var primaryLink = await ResolveAssignmentLinkAsync(
                     context,
                     planResult.WorkPlanId,
@@ -214,19 +183,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
 
                 await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
-
                 try
                 {
-
                     if (existingBoundaryResolution is not null)
                     {
-
                         var existingLogTime =
                             existingBoundaryResolution.AttendanceLog.Date;
-                        // Duplicate punches must keep the clock event nearest the
-                        // scheduled boundary. A later morning punch is a better
-                        // check-in than an early swipe two hours before the shift.
-                        // Check-outs still keep the latest punch for the boundary.
                         var boundaryTime =
                             planResult.BoundaryTime ?? attendanceLog.Date;
                         var keepExisting = planResult.ClockType == AttendanceClockType.CheckIn
@@ -235,51 +197,42 @@ namespace HRM.Services.Attendance.Abstraction.Services
                             : existingLogTime >= attendanceLog.Date;
                         if (keepExisting)
                         {
-
                             var duplicateMessage =
-                               $"Attendance event matched " +
-                               $"'{planResult.SegmentName}' " +
-                               $"{planResult.ClockType}, but attendance log " +
-                               $"{existingBoundaryResolution.AttendanceLogId} " +
-                               $"already records the {(planResult.ClockType == AttendanceClockType.CheckIn ? "closest check-in" : "latest check-out")} for this boundary.";
+                                $"Attendance event matched '{planResult.SegmentName}' {planResult.ClockType}, but attendance log " +
+                                $"{existingBoundaryResolution.AttendanceLogId} already records the {(planResult.ClockType == AttendanceClockType.CheckIn ? "closest check-in" : "latest check-out")} for this boundary.";
 
                             var duplicateResolution =
-                            CreateResolution(
-                                attendanceLog,
-                                AttendanceResolutionStatusIds.DuplicatePunch,
-                                duplicateMessage,
-                                workPlanId:
-                                    planResult.WorkPlanId,
-                                workAssignmentId:
-                                    primaryLink.WorkAssignmentId,
-                                workAssignmentSegmentId:
-                                    primaryLink.WorkAssignmentSegmentId,
-                                workPlanSegmentId:
-                                    planResult.WorkPlanSegmentId,
-                                jobId:
-                                    planResult.JobId,
-                                clockType:
-                                    planResult.ClockType);
-
+                                CreateResolution(
+                                    attendanceLog,
+                                    AttendanceResolutionStatusIds.DuplicatePunch,
+                                    duplicateMessage,
+                                    workPlanId: planResult.WorkPlanId,
+                                    workAssignmentId: primaryLink.WorkAssignmentId,
+                                    workAssignmentSegmentId: primaryLink.WorkAssignmentSegmentId,
+                                    workPlanSegmentId: planResult.WorkPlanSegmentId,
+                                    jobId: planResult.JobId,
+                                    clockType: planResult.ClockType,
+                                    isPrimaryClassification: true,
+                                    schedulePurpose: planResult.SchedulePurpose,
+                                    logicalEventType: "DuplicateIgnored",
+                                    matchMethod: "DuplicateSuppression",
+                                    matchReason: duplicateMessage);
 
                             context.AttendanceLogResolutions.Add(duplicateResolution);
-
                             await context.SaveChangesAsync(cancellationToken);
-
                             await transaction.CommitAsync(cancellationToken);
 
                             return AttendanceProcessingResult.Recorded(
                                 duplicateResolution,
                                 duplicateMessage);
-
                         }
 
                         var existingResolution =
-           await context.AttendanceLogResolutions
-               .FirstOrDefaultAsync(
-                   x => x.AttendanceLogResolutionId ==
-                        existingBoundaryResolution.AttendanceLogResolutionId,
-                   cancellationToken);
+                            await context.AttendanceLogResolutions
+                                .FirstOrDefaultAsync(
+                                    x => x.AttendanceLogResolutionId ==
+                                         existingBoundaryResolution.AttendanceLogResolutionId,
+                                    cancellationToken);
 
                         if (existingResolution is null)
                         {
@@ -291,16 +244,20 @@ namespace HRM.Services.Attendance.Abstraction.Services
                             AttendanceResolutionStatusIds.DuplicatePunch;
 
                         existingResolution.ResolutionMessage =
-                            $"Replaced by attendance log " +
-                            $"{attendanceLog.AttendanceLogId}, which records the " +
+                            $"Replaced by attendance log {attendanceLog.AttendanceLogId}, which records the " +
                             $"{(planResult.ClockType == AttendanceClockType.CheckIn ? "closer check-in" : "later check-out")} for this boundary.";
                     }
 
+                    bool hasSecondary = planResult.SecondaryWorkPlanSegmentId.HasValue &&
+                                        planResult.SecondaryClockType != AttendanceClockType.Unresolved;
+
+                    // Official Working Schedule always takes primary classification priority
+                    bool secondaryIsOfficial = hasSecondary &&
+                        string.Equals(planResult.SecondarySchedulePurpose, "Official", StringComparison.OrdinalIgnoreCase) &&
+                        !string.Equals(planResult.SchedulePurpose, "Official", StringComparison.OrdinalIgnoreCase);
 
                     var resolvedMessage =
-                    $"Attendance event resolved to " +
-                    $"'{planResult.SegmentName}' as " +
-                    $"{planResult.ClockType}.";
+                        $"Attendance event resolved to '{planResult.SegmentName}' as {planResult.ClockType}.";
 
                     var resolvedRecord = CreateResolution(
                         attendanceLog,
@@ -311,15 +268,17 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         workAssignmentSegmentId: primaryLink.WorkAssignmentSegmentId,
                         workPlanSegmentId: planResult.WorkPlanSegmentId,
                         jobId: planResult.JobId,
-                        clockType: planResult.ClockType);
-
+                        clockType: planResult.ClockType,
+                        isPrimaryClassification: !secondaryIsOfficial,
+                        schedulePurpose: planResult.SchedulePurpose,
+                        logicalEventType: planResult.LogicalEventType ?? $"{planResult.SchedulePurpose}{planResult.ClockType}",
+                        matchMethod: planResult.MatchMethod ?? "Deterministic",
+                        matchReason: planResult.MatchReason ?? resolvedMessage,
+                        confidenceState: planResult.ConfidenceState);
 
                     context.AttendanceLogResolutions.Add(resolvedRecord);
 
-                    // When official and duty boundaries coincide, record the duty
-                    // clock as well (official is primary, duty is secondary).
-                    if (planResult.SecondaryWorkPlanSegmentId.HasValue &&
-                        planResult.SecondaryClockType != AttendanceClockType.Unresolved)
+                    if (hasSecondary)
                     {
                         var secondaryLink = await ResolveAssignmentLinkAsync(
                             context,
@@ -329,7 +288,7 @@ namespace HRM.Services.Attendance.Abstraction.Services
                         var existingSecondaryResolution =
                             await _resolutionRepository.GetResolvedBoundaryAsync(
                                 planResult.WorkPlanId!.Value,
-                                planResult.SecondaryWorkPlanSegmentId.Value,
+                                planResult.SecondaryWorkPlanSegmentId!.Value,
                                 planResult.SecondaryClockType,
                                 cancellationToken);
                         var boundaryTime = planResult.BoundaryTime ?? attendanceLog.Date;
@@ -367,68 +326,28 @@ namespace HRM.Services.Attendance.Abstraction.Services
                             workAssignmentSegmentId: secondaryLink.WorkAssignmentSegmentId,
                             workPlanSegmentId: planResult.SecondaryWorkPlanSegmentId,
                             jobId: planResult.JobId,
-                            clockType: planResult.SecondaryClockType);
+                            clockType: planResult.SecondaryClockType,
+                            isPrimaryClassification: secondaryIsOfficial,
+                            schedulePurpose: planResult.SecondarySchedulePurpose ?? "Duty",
+                            logicalEventType: planResult.SecondaryLogicalEventType ?? $"{planResult.SecondarySchedulePurpose ?? "Duty"}{planResult.SecondaryClockType}",
+                            matchMethod: planResult.SecondaryMatchMethod ?? "PolicyShared",
+                            matchReason: planResult.SecondaryMatchReason ?? secondaryMessage,
+                            confidenceState: "PolicyShared");
                         context.AttendanceLogResolutions.Add(secondaryRecord);
                     }
 
-                    // Save both the old resolution update and new resolution.
                     await context.SaveChangesAsync(cancellationToken);
-
-                    // Commit only when everything succeeds.
                     await transaction.CommitAsync(cancellationToken);
 
                     return AttendanceProcessingResult.Completed(
                         resolvedRecord,
                         resolvedMessage);
-
-
                 }
                 catch
                 {
                     await transaction.RollbackAsync(CancellationToken.None);
                     throw;
-
                 }
-
-
-               
-
-                //var resolvedMessage =
-                //    $"Attendance event resolved to " +
-                //    $"'{planResult.SegmentName}' as " +
-                //    $"{planResult.ClockType}.";
-
-
-
-
-                //var resolvedRecord =
-                //     CreateResolution(
-                //         attendanceLog,
-                //         AttendanceResolutionStatusIds.Resolved,
-                //         resolvedMessage,
-                //         workPlanId:
-                //             planResult.WorkPlanId,
-                //         workPlanSegmentId:
-                //             planResult.WorkPlanSegmentId,
-                //         jobId:
-                //             planResult.JobId,
-                //         clockType:
-                //             planResult.ClockType);
-
-
-
-
-
-                //var savedResolvedRecord =
-                //await _resolutionRepository.AddAsync(
-                //    resolvedRecord,
-                //    cancellationToken);
-
-                //            return AttendanceProcessingResult.Completed(
-                //                savedResolvedRecord,
-                //                resolvedMessage);
-
-        
             }
             catch (DbUpdateException exception)
                  when (exception.InnerException is SqlException sqlException &&
@@ -440,10 +359,6 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     "Attendance log {AttendanceLogId} could not be processed.",
                     attendanceLogId);
 
-                /*
-                 * This can happen when two requests attempt to process
-                 * the same event at almost the same time.
-                 */
                 var existingResolution =
                     await _resolutionRepository
                         .GetByAttendanceLogIdAsync(
@@ -464,21 +379,12 @@ namespace HRM.Services.Attendance.Abstraction.Services
             {
                 _logger.LogError(
                     exception,
-                    "Unexpected error while processing attendance log " +
-                    "{AttendanceLogId}.",
+                    "Unexpected error while processing attendance log {AttendanceLogId}.",
                     attendanceLogId);
 
-
-                var errorMessage = exception.ToString();
-
-
                 return AttendanceProcessingResult.Failed(
-               attendanceLogId,
-               errorMessage);
-
-                //return AttendanceProcessingResult.Failed(
-                //    attendanceLogId,
-                //    "An unexpected error occurred while processing the attendance log.");
+                    attendanceLogId,
+                    exception.ToString());
             }
         }
 
@@ -497,10 +403,10 @@ namespace HRM.Services.Attendance.Abstraction.Services
                     cancellationToken);
         }
 
-        private async Task<AttendanceProcessingResult>SaveInvalidResolutionAsync(
-                AttendanceLog attendanceLog,
-                string message,
-                CancellationToken cancellationToken)
+        private async Task<AttendanceProcessingResult> SaveInvalidResolutionAsync(
+            AttendanceLog attendanceLog,
+            string message,
+            CancellationToken cancellationToken)
         {
             var invalidResolution =
                 CreateResolution(
@@ -565,48 +471,36 @@ namespace HRM.Services.Attendance.Abstraction.Services
             long? workAssignmentSegmentId = null,
             int? workPlanSegmentId = null,
             int? jobId = null,
-            AttendanceClockType clockType = AttendanceClockType.Unresolved)
+            AttendanceClockType clockType = AttendanceClockType.Unresolved,
+            bool isPrimaryClassification = true,
+            string? schedulePurpose = null,
+            string? logicalEventType = null,
+            string? matchMethod = null,
+            string? matchReason = null,
+            string confidenceState = "Deterministic")
         {
             return new AttendanceLogResolution
             {
-                AttendanceLogId =
-                    attendanceLog.AttendanceLogId,
-
-                WorkPlanId =
-                    workPlanId,
-
-                WorkAssignmentId =
-                    workAssignmentId,
-
-                WorkAssignmentSegmentId =
-                    workAssignmentSegmentId,
-
-                WorkPlanSegmentId =
-                    workPlanSegmentId,
-
-                JobId =
-                    jobId,
-
-                AttendanceResolutionStatusId =
-                    resolutionStatusId,
-
-                AttendanceClockTypeId =
-                    (int)clockType,
-
-                ResolutionDate =
-                    DateTime.UtcNow.AddHours(5),
-
-                ResolutionMessage =
-                    message,
-
-                IsValid =
-                    true,
-
-                CreatedDate =
-                    DateTime.UtcNow.AddHours(5)
+                AttendanceLogId = attendanceLog.AttendanceLogId,
+                WorkPlanId = workPlanId,
+                WorkAssignmentId = workAssignmentId,
+                WorkAssignmentSegmentId = workAssignmentSegmentId,
+                WorkPlanSegmentId = workPlanSegmentId,
+                JobId = jobId,
+                AttendanceResolutionStatusId = resolutionStatusId,
+                AttendanceClockTypeId = (int)clockType,
+                ResolutionDate = DateTime.UtcNow.AddHours(5),
+                ResolutionMessage = message,
+                IsPrimaryClassification = isPrimaryClassification,
+                SchedulePurpose = schedulePurpose,
+                LogicalEventType = logicalEventType,
+                MatchMethod = matchMethod,
+                MatchReason = matchReason ?? message,
+                ConfidenceState = confidenceState,
+                PolicyVersion = AttendanceReconciliationPolicy.CurrentVersion,
+                IsValid = true,
+                CreatedDate = DateTime.UtcNow.AddHours(5)
             };
         }
-
-    
     }
 }

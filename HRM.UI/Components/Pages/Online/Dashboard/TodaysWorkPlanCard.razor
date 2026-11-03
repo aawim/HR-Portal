@@ -24,7 +24,12 @@
             @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime))
             {
                 <section class="border-t pt-2" aria-label="@assignment.Name">
-                    <h4 class="break-words text-sm font-semibold">@assignment.Name</h4>
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h4 class="break-words text-sm font-semibold">@assignment.Name</h4>
+                        <span class="rounded-full px-2 py-0.5 text-[11px] font-medium @(assignment.SchedulePurpose == "Official" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200")">
+                            @(assignment.SchedulePurpose == "Official" ? "Primary · Official" : $"Additional · {assignment.SchedulePurpose}") (@Time(assignment.StartDateTime)–@Time(assignment.EndDateTime))
+                        </span>
+                    </div>
                     <ol class="mt-1 divide-y">
                         @foreach(var item in EventsFor(assignment))
                         {

@@ -40,6 +40,30 @@ namespace HRM.Models;
 
         public DateTime CreatedDate { get; set; }
 
+        public bool IsPrimaryClassification { get; set; } = true;
+
+        public string? SchedulePurpose { get; set; }
+
+        public string? LogicalEventType { get; set; }
+
+        public string? MatchMethod { get; set; }
+
+        public string? MatchReason { get; set; }
+
+        public string ConfidenceState { get; set; } = "Deterministic";
+
+        public string PolicyVersion { get; set; } = "v2.0-OfficialPriority";
+
+        public long? ReconciliationRunId { get; set; }
+
+        public long? AttendanceObligationId { get; set; }
+
+        public int? OverriddenByUserId { get; set; }
+
+        public string? OverrideReason { get; set; }
+
+        public DateTime? OverriddenAtUtc { get; set; }
+
         public virtual AttendanceLog AttendanceLog { get; set; } = null!;
 
         public virtual AttendanceResolutionStatus

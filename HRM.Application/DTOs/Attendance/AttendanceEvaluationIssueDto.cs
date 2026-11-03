@@ -8,10 +8,14 @@ namespace HRM.DTOs.Attendance
 
         public AttendanceEvaluationIssueSeverity Severity { get; set; }
 
+        public AttendanceExceptionType? ExceptionType { get; set; }
+
         public string Message { get; set; } = string.Empty;
 
 
         // Related WorkPlan information
+
+        public long? WorkPlanId { get; set; }
 
         public long? WorkAssignmentId { get; set; }
 

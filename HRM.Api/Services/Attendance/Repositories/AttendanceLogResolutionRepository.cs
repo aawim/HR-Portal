@@ -1,8 +1,8 @@
-
 using HRM.Constants;
 using HRM.Enum;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
+
 namespace HRM.Services.Attendance.Repositories
 {
     public sealed class AttendanceLogResolutionRepository : IAttendanceLogResolutionRepository
@@ -39,11 +39,7 @@ namespace HRM.Services.Attendance.Repositories
                     cancellationToken);
         }
 
-
-
-
-        public async Task<AttendanceLogResolution?>
-        GetByAttendanceLogIdAsync(
+        public async Task<AttendanceLogResolution?> GetByAttendanceLogIdAsync(
             int attendanceLogId,
             CancellationToken cancellationToken = default)
         {
@@ -63,6 +59,8 @@ namespace HRM.Services.Attendance.Repositories
                         x.IsValid)
                 .OrderByDescending(
                     x => x.AttendanceResolutionStatusId == AttendanceResolutionStatusIds.Resolved)
+                .ThenByDescending(
+                    x => x.IsPrimaryClassification)
                 .ThenBy(
                     x => x.AttendanceLogResolutionId)
                 .FirstOrDefaultAsync(
@@ -86,10 +84,9 @@ namespace HRM.Services.Attendance.Repositories
                     cancellationToken);
         }
 
-        public async Task<IReadOnlyList<AttendanceLogResolution>>
-            GetByAssignmentAsync(
-                long workAssignmentId,
-                CancellationToken cancellationToken = default)
+        public async Task<IReadOnlyList<AttendanceLogResolution>> GetByAssignmentAsync(
+            long workAssignmentId,
+            CancellationToken cancellationToken = default)
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
@@ -121,17 +118,16 @@ namespace HRM.Services.Attendance.Repositories
                 await db.AttendanceLogResolutions
                     .AnyAsync(
                         x =>
-                            x.AttendanceLogId ==
-                                resolution.AttendanceLogId &&
-                            x.IsValid,
+                            x.AttendanceLogId == resolution.AttendanceLogId &&
+                            x.IsValid &&
+                            ((resolution.IsPrimaryClassification && x.IsPrimaryClassification) ||
+                             (resolution.WorkPlanSegmentId.HasValue && x.WorkPlanSegmentId == resolution.WorkPlanSegmentId)),
                         cancellationToken);
 
             if (alreadyExists)
             {
                 throw new InvalidOperationException(
-                    $"Attendance log " +
-                    $"{resolution.AttendanceLogId} already has " +
-                    "an active resolution.");
+                    $"Attendance log {resolution.AttendanceLogId} already has an active resolution for this classification.");
             }
 
             resolution.CreatedDate =
@@ -173,8 +169,7 @@ namespace HRM.Services.Attendance.Repositories
             if (resolution is null)
             {
                 throw new InvalidOperationException(
-                    $"Active attendance resolution " +
-                    $"{attendanceLogResolutionId} was not found.");
+                    $"Active attendance resolution {attendanceLogResolutionId} was not found.");
             }
 
             resolution.IsValid = false;
@@ -182,11 +177,10 @@ namespace HRM.Services.Attendance.Repositories
             await db.SaveChangesAsync(cancellationToken);
         }
 
-
         public async Task MarkAsDuplicateAsync(
-    long attendanceLogResolutionId,
-    string message,
-    CancellationToken cancellationToken = default)
+            long attendanceLogResolutionId,
+            string message,
+            CancellationToken cancellationToken = default)
         {
             await using var db =
                 await _dbFactory.CreateDbContextAsync(
@@ -203,8 +197,7 @@ namespace HRM.Services.Attendance.Repositories
             if (resolution == null)
             {
                 throw new InvalidOperationException(
-                    $"Attendance resolution " +
-                    $"{attendanceLogResolutionId} was not found.");
+                    $"Attendance resolution {attendanceLogResolutionId} was not found.");
             }
 
             resolution.AttendanceResolutionStatusId =
@@ -219,7 +212,5 @@ namespace HRM.Services.Attendance.Repositories
             await db.SaveChangesAsync(
                 cancellationToken);
         }
-
-        
     }
 }

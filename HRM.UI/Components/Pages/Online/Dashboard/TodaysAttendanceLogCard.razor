@@ -27,8 +27,13 @@
                         <ol class="mt-1 divide-y">
                             @foreach(var log in group.OrderByDescending(x=>x.LogDateTime))
                             {
-                                <AttendanceEventRow Timestamp="log.LogDateTime" Event="@ClockEventName(log)" Condition="@ClockCondition(log)"
-                                    Tone="@ClockTone(log)" Description="@(log.ClockType==AttendanceClockType.Unresolved?log.ResolutionMessage:null)" />
+                                <AttendanceEventRow Timestamp="log.LogDateTime"
+                                    Event="@ClockEventName(log)"
+                                    Condition="@ClockCondition(log)"
+                                    Tone="@ClockTone(log)"
+                                    Badge="@(log.IsSharedAcrossSchedules ? $"Shared #{log.AttendanceLogId}" : null)"
+                                    SharedSummary="@(log.IsSharedAcrossSchedules ? log.SharedScheduleSummary : null)"
+                                    Description="@(log.MatchReason ?? log.ResolutionMessage)" />
                             }
                         </ol>
                     </section>
@@ -51,17 +56,33 @@
     // STATE
     // ==============================================================
 
-    private static string ClockEventName(AttendanceRawLogDto log) => log.ClockType switch {
-        AttendanceClockType.CheckIn => "Clock in", AttendanceClockType.CheckOut => "Clock out",
-        _ => "Clock event" };
+    private static string ClockEventName(AttendanceRawLogDto log) => log.LogicalEventType switch {
+        "OfficialCheckIn" => "Official clock in",
+        "OfficialCheckOut" => "Official clock out",
+        "OfficialBreakOut" => "Official lunch / break out",
+        "OfficialBreakIn" => "Official lunch / break in",
+        "DutyCheckIn" => "Duty clock in",
+        "DutyCheckOut" => "Duty clock out",
+        "DuplicateIgnored" => "Duplicate punch (ignored)",
+        _ => log.ClockType switch {
+            AttendanceClockType.CheckIn => "Clock in",
+            AttendanceClockType.CheckOut => "Clock out",
+            AttendanceClockType.BreakOut => "Break out",
+            AttendanceClockType.BreakIn => "Break in",
+            AttendanceClockType.Ignored => "Duplicate (ignored)",
+            _ => "Clock event"
+        }
+    };
     private static string ClockCondition(AttendanceRawLogDto log) => log.ClockType switch {
         AttendanceClockType.CheckIn when log.LateMinutes > 0 => $"Late by {log.LateMinutes} {(log.LateMinutes == 1 ? "minute" : "minutes")}",
         AttendanceClockType.CheckIn when log.ScheduledStart.HasValue => "On time",
-        AttendanceClockType.CheckIn or AttendanceClockType.CheckOut => "Recorded",
+        AttendanceClockType.CheckIn or AttendanceClockType.CheckOut or AttendanceClockType.BreakOut or AttendanceClockType.BreakIn => "Recorded",
         AttendanceClockType.Ignored => "Ignored", _ => "Unresolved" };
     private static string ClockTone(AttendanceRawLogDto log) => log.ClockType switch {
         AttendanceClockType.CheckIn when log.LateMinutes > 0 => "late",
-        AttendanceClockType.CheckIn => "success", AttendanceClockType.CheckOut => "info", _ => "muted" };
+        AttendanceClockType.CheckIn or AttendanceClockType.BreakIn => "success",
+        AttendanceClockType.CheckOut or AttendanceClockType.BreakOut => "info",
+        _ => "muted" };
 
     private List<AttendanceRawLogDto> _attendanceLogs = [];
 

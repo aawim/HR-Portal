@@ -1,28 +1,382 @@
 @page "/admin/attendance/manage-attendance/attendance-invalidate"
-@using Microsoft.AspNetCore.Components.Authorization
-@using HRM.Models
-@using HRM.Services
+@using HRM.DTOs.Attendance
+@using HRM.Enum
+@using HRM.Services.Attendance.Reconciliation
+@using HRM.Services.Interfaces
 
 @rendermode RenderMode.InteractiveServer
 
-@inject HRM.Services.Contracts.UserServiceContracts.IOperations UserService
+@inject IAttendanceReconciliationService ReconciliationService
+@inject IUserAccessService UserAccessService
 
-
-<!-- Header & Action Bar -->
-<div class="flex justify-between items-end border-b border-slate-100 mb-4 mt-[-10px]">
-    <div>
-        <h2 class="text-xl font-bold text-slate-800">My Attendance</h2>
-        <p class="text-sm text-slate-500 mt-1">Configure global leave policies, durations, and system rules.</p>
+<div class="space-y-6">
+    <div class="flex flex-wrap justify-between items-end border-b border-slate-200 pb-4">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Attendance Reconciliation &amp; Conflict Review</h2>
+            <p class="text-sm text-slate-500 mt-1">Inspect official and duty obligations, review shared physical clock events, apply audited manual overrides, or run historical batch reconciliation.</p>
+        </div>
     </div>
+
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div role="alert" class="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">@_errorMessage</div>
+    }
+    @if (!string.IsNullOrWhiteSpace(_statusMessage))
+    {
+        <div role="status" class="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">@_statusMessage</div>
+    }
+
+    <!-- Single Employee-Day Reconciliation & Manual Override -->
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-slate-800">1. Single-Day Obligation &amp; Event Reconciliation</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-4 items-end">
+            <label class="text-xs font-medium text-slate-600">Employee ID (IndividualID)
+                <input type="number" class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind="_individualId" />
+            </label>
+            <label class="text-xs font-medium text-slate-600">Job ID
+                <input type="number" class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind="_jobId" />
+            </label>
+            <label class="text-xs font-medium text-slate-600">Work Date
+                <InputDate class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind-Value="_workDate" />
+            </label>
+            <div>
+                <button type="button" class="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50" disabled="@_isBusy" @onclick="RunSingleReconciliationAsync">
+                    @(_isBusy ? "Reconciling..." : "Reconcile Day")
+                </button>
+            </div>
+        </div>
+
+        @if (_singleResult is not null)
+        {
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                <div class="flex flex-wrap justify-between gap-2 font-semibold text-slate-800">
+                    <span>Policy: @_singleResult.PolicyVersion · Official State: @_singleResult.OfficialState (@_singleResult.DailyStatus)</span>
+                    <span>Shared Events: @_singleResult.SharedEventCount · Conflicts: @_singleResult.ConflictCount · Total Payable: @_singleResult.TotalCreditedPayableMinutes min</span>
+                </div>
+                <p class="text-slate-600 m-0">@_singleResult.SummaryMessage</p>
+            </div>
+
+            <!-- Obligations Table -->
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                <table class="w-full text-left text-xs">
+                    <caption class="p-2.5 text-left font-semibold text-slate-700 bg-slate-50 border-b">Logical Attendance Obligations (Official Priority First)</caption>
+                    <thead>
+                        <tr class="border-b bg-slate-50/60">
+                            <th class="p-2.5">Type</th>
+                            <th class="p-2.5">Schedule</th>
+                            <th class="p-2.5">Priority</th>
+                            <th class="p-2.5">Scheduled</th>
+                            <th class="p-2.5">State</th>
+                            <th class="p-2.5">Actual In / Out</th>
+                            <th class="p-2.5">Planned / Actual / Credited</th>
+                            <th class="p-2.5">Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ob in _singleResult.Obligations)
+                        {
+                            <tr class="border-b">
+                                <td class="p-2.5 font-semibold @(ob.ObligationType == "Official" ? "text-emerald-700" : "text-blue-700")">@ob.ObligationType</td>
+                                <td class="p-2.5">@ob.ScheduleName</td>
+                                <td class="p-2.5">@ob.Priority</td>
+                                <td class="p-2.5 tabular-nums">@ob.ScheduledStart.ToString("HH:mm") – @ob.ScheduledEnd.ToString("HH:mm")</td>
+                                <td class="p-2.5 font-medium">@ob.State</td>
+                                <td class="p-2.5 tabular-nums">
+                                    @(ob.ActualStartDateTime?.ToString("HH:mm") ?? "—") / @(ob.ActualEndDateTime?.ToString("HH:mm") ?? "—")
+                                    @if (ob.SharesStartEvent || ob.SharesEndEvent)
+                                    {
+                                        <span class="ml-1 rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] text-indigo-700">Shared</span>
+                                    }
+                                </td>
+                                <td class="p-2.5 tabular-nums">@ob.PlannedMinutes m / @ob.ActualPresenceMinutes m / <strong>@ob.CreditedWorkedMinutes m</strong></td>
+                                <td class="p-2.5 text-slate-600">@ob.StatusReason</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Physical Events & Multi-Obligation Interpretations -->
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                <table class="w-full text-left text-xs">
+                    <caption class="p-2.5 text-left font-semibold text-slate-700 bg-slate-50 border-b">Physical Clock Events &amp; Resolved Associations</caption>
+                    <thead>
+                        <tr class="border-b bg-slate-50/60">
+                            <th class="p-2.5">Log ID</th>
+                            <th class="p-2.5">Timestamp</th>
+                            <th class="p-2.5">Primary Classification</th>
+                            <th class="p-2.5">Shared?</th>
+                            <th class="p-2.5">All Logical Associations</th>
+                            <th class="p-2.5">Confidence</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var ev in _singleResult.Events)
+                        {
+                            <tr class="border-b">
+                                <td class="p-2.5 font-mono">#@ev.AttendanceLogId</td>
+                                <td class="p-2.5 tabular-nums">@ev.LogDateTime.ToString("yyyy-MM-dd HH:mm:ss")</td>
+                                <td class="p-2.5 font-medium">@ev.PrimaryPurpose · @ev.PrimaryEventLabel</td>
+                                <td class="p-2.5">@(ev.IsSharedAcrossObligations ? "Yes (Multi-Schedule)" : "No")</td>
+                                <td class="p-2.5">
+                                    @foreach (var assoc in ev.Associations)
+                                    {
+                                        <div class="mb-1 last:mb-0">
+                                            <span class="font-semibold">@(assoc.IsPrimaryClassification ? "[Primary]" : "[Secondary]") @assoc.SchedulePurpose (@assoc.LogicalEventType):</span>
+                                            <span class="text-slate-600"> @assoc.MatchReason (@assoc.MatchMethod)</span>
+                                        </div>
+                                    }
+                                </td>
+                                <td class="p-2.5">@ev.ConfidenceState</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Manual Override Form -->
+            <div class="rounded-lg border border-amber-200 bg-amber-50/40 p-3 space-y-3">
+                <h4 class="text-xs font-semibold uppercase tracking-wide text-amber-900">Apply Audited Manual Override</h4>
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-5 items-end">
+                    <label class="text-xs text-slate-700">Raw Log ID (optional)
+                        <input type="number" class="mt-1 block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" @bind="_overrideLogId" />
+                    </label>
+                    <label class="text-xs text-slate-700">Override Action
+                        <select class="mt-1 block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" @bind="_overrideAction">
+                            <option value="AssignPrimary">Assign Primary</option>
+                            <option value="AssignSecondary">Assign Secondary (Shared)</option>
+                            <option value="IgnoreEvent">Ignore Event</option>
+                            <option value="AcknowledgeMissingEvent">Acknowledge Missing Event</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-slate-700">Target Schedule Purpose
+                        <select class="mt-1 block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" @bind="_overridePurpose">
+                            <option value="Official">Official</option>
+                            <option value="OfficialBreak">OfficialBreak</option>
+                            <option value="Duty">Duty</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-slate-700">Target Clock Type
+                        <select class="mt-1 block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" @bind="_overrideClockTypeId">
+                            <option value="1">CheckIn (1)</option>
+                            <option value="2">CheckOut (2)</option>
+                            <option value="4">BreakOut (4)</option>
+                            <option value="5">BreakIn (5)</option>
+                            <option value="3">Ignored (3)</option>
+                        </select>
+                    </label>
+                    <label class="text-xs text-slate-700">Mandatory Audit Reason
+                        <input type="text" placeholder="Enter HR audit justification..." class="mt-1 block w-full rounded border border-slate-300 bg-white px-2.5 py-1.5 text-xs" @bind="_overrideReason" />
+                    </label>
+                </div>
+                <button type="button" class="rounded-md bg-amber-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 disabled:opacity-50" disabled="@_isBusy" @onclick="ApplyOverrideAsync">
+                    Apply Manual Override &amp; Reconcile
+                </button>
+            </div>
+        }
+    </section>
+
+    <!-- Historical Batch Reconciliation (Dry-Run & Commit) -->
+    <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm space-y-4">
+        <h3 class="text-base font-semibold text-slate-800">2. Historical Batch Reconciliation (Dry-Run Preview &amp; Commit)</h3>
+        <div class="grid grid-cols-1 gap-3 sm:grid-cols-5 items-end">
+            <label class="text-xs font-medium text-slate-600">From Date
+                <InputDate class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind-Value="_batchFrom" />
+            </label>
+            <label class="text-xs font-medium text-slate-600">To Date
+                <InputDate class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind-Value="_batchTo" />
+            </label>
+            <label class="text-xs font-medium text-slate-600">Filter Employee ID (0 = All)
+                <input type="number" class="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm" @bind="_batchIndividualId" />
+            </label>
+            <div class="flex gap-2 sm:col-span-2">
+                <button type="button" class="flex-1 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-200 disabled:opacity-50" disabled="@_isBusy" @onclick="() => RunBatchAsync(true)">
+                    Dry-Run Preview
+                </button>
+                <button type="button" class="flex-1 rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50" disabled="@_isBusy" @onclick="() => RunBatchAsync(false)">
+                    Commit Reconciliation
+                </button>
+            </div>
+        </div>
+
+        @if (_batchResult is not null)
+        {
+            <div class="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+                <div class="font-semibold text-slate-800">
+                    @(_batchResult.IsDryRun ? "Dry-Run Preview Result" : $"Committed Run #{_batchResult.ReconciliationRunId}") · @_batchResult.SummaryMessage
+                </div>
+            </div>
+            @if (_batchResult.Changes.Count > 0)
+            {
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="border-b bg-slate-50">
+                                <th class="p-2.5">Employee</th>
+                                <th class="p-2.5">Date</th>
+                                <th class="p-2.5">Before State</th>
+                                <th class="p-2.5">After State</th>
+                                <th class="p-2.5">Official In / Out</th>
+                                <th class="p-2.5">Credited (Off / Duty)</th>
+                                <th class="p-2.5">Shared / Conflicts</th>
+                                <th class="p-2.5">Summary</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var diff in _batchResult.Changes)
+                            {
+                                <tr class="border-b">
+                                    <td class="p-2.5 font-medium">@diff.EmployeeName (#@diff.IndividualId)</td>
+                                    <td class="p-2.5 tabular-nums">@diff.WorkDate.ToString("yyyy-MM-dd")</td>
+                                    <td class="p-2.5">@diff.BeforeOfficialState</td>
+                                    <td class="p-2.5 font-semibold">@diff.AfterOfficialState</td>
+                                    <td class="p-2.5 tabular-nums">@(diff.AfterOfficialCheckIn?.ToString("HH:mm") ?? "—") / @(diff.AfterOfficialCheckOut?.ToString("HH:mm") ?? "—")</td>
+                                    <td class="p-2.5 tabular-nums">@diff.AfterCreditedOfficialMinutes m / @diff.AfterCreditedDutyMinutes m</td>
+                                    <td class="p-2.5 tabular-nums">@diff.SharedEventsResolved / @diff.ConflictsDetected</td>
+                                    <td class="p-2.5 text-slate-600">@diff.ChangeSummary</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        }
+    </section>
 </div>
 
-<div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden p-0">
-
-   
-   
-</div>
- 
- 
 @code {
-   
+    private int _organisationId;
+    private int _individualId;
+    private int _jobId;
+    private DateTime _workDate = DateTime.UtcNow.AddHours(5).Date;
+
+    private int? _overrideLogId;
+    private string _overrideAction = "AssignPrimary";
+    private string _overridePurpose = "Official";
+    private int _overrideClockTypeId = 1;
+    private string _overrideReason = string.Empty;
+
+    private DateTime _batchFrom = DateTime.UtcNow.AddHours(5).Date.AddDays(-7);
+    private DateTime _batchTo = DateTime.UtcNow.AddHours(5).Date;
+    private int _batchIndividualId;
+
+    private bool _isBusy;
+    private string? _errorMessage;
+    private string? _statusMessage;
+    private AttendanceReconciliationResult? _singleResult;
+    private AttendanceBatchReconciliationResult? _batchResult;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ctx = await UserAccessService.GetContextAsync();
+            _organisationId = await UserAccessService.GetCurrentOrganisationIdAsync();
+            if (ctx is not null)
+            {
+                _individualId = ctx.IndividualId;
+                _jobId = ctx.ActiveJob?.JobId ?? 0;
+            }
+        }
+        catch
+        {
+            // Ignore initialization context errors if not selected yet
+        }
+    }
+
+    private async Task RunSingleReconciliationAsync()
+    {
+        if (_individualId <= 0 || _jobId <= 0)
+        {
+            _errorMessage = "Please enter a valid Employee ID and Job ID.";
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        _statusMessage = null;
+        try
+        {
+            _singleResult = await ReconciliationService.ReconcileAsync(
+                _individualId,
+                _jobId,
+                _organisationId,
+                DateOnly.FromDateTime(_workDate.Date));
+            _statusMessage = $"Reconciled {_workDate:yyyy-MM-dd} using policy {_singleResult.PolicyVersion}.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task ApplyOverrideAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_overrideReason))
+        {
+            _errorMessage = "A mandatory audit reason is required to apply a manual override.";
+            return;
+        }
+
+        _isBusy = true;
+        _errorMessage = null;
+        _statusMessage = null;
+        try
+        {
+            _singleResult = await ReconciliationService.ApplyManualOverrideAsync(new AttendanceManualOverrideRequest
+            {
+                OrganisationId = _organisationId,
+                IndividualId = _individualId,
+                JobId = _jobId,
+                WorkDate = DateOnly.FromDateTime(_workDate.Date),
+                AttendanceLogId = _overrideLogId,
+                OverrideAction = _overrideAction,
+                TargetSchedulePurpose = _overridePurpose,
+                TargetClockTypeId = _overrideClockTypeId,
+                Reason = _overrideReason
+            });
+            _statusMessage = "Manual override recorded and day reconciled.";
+            _overrideReason = string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
+
+    private async Task RunBatchAsync(bool dryRun)
+    {
+        _isBusy = true;
+        _errorMessage = null;
+        _statusMessage = null;
+        try
+        {
+            _batchResult = await ReconciliationService.ReconcileRangeAsync(new AttendanceBatchReconciliationRequest
+            {
+                OrganisationId = _organisationId,
+                IndividualId = _batchIndividualId > 0 ? _batchIndividualId : null,
+                FromDate = DateOnly.FromDateTime(_batchFrom.Date),
+                ToDate = DateOnly.FromDateTime(_batchTo.Date),
+                DryRunOnly = dryRun,
+                Reason = dryRun ? "UI Dry-Run Preview" : "UI Historical Batch Reconciliation"
+            });
+            _statusMessage = _batchResult.SummaryMessage;
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+        finally
+        {
+            _isBusy = false;
+        }
+    }
 }
