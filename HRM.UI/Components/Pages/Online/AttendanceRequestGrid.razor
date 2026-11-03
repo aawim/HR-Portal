@@ -21,199 +21,411 @@
 @inject IAttendanceService Attendance
 @inject ILeaveChangeService LeaveChanges
 
-
+<PageTitle>Attendance Requests - HR Portal</PageTitle>
 <BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
 
-<div class="px-2 sm:px-4 md:px-6 lg:px-6">
+<div class="leave-page min-w-0 w-full mx-auto px-2 sm:px-4">
+    <div class="leave-page-shell">
+        <!-- LEFT: Collapsible Category Navigation Rail (Same style as /online/leaves, with hover transitions) -->
+        <nav class="leave-page-nav @(isSidebarExpanded ? "" : "leave-page-nav--collapsed")" aria-label="Attendance request categories">
+            <div class="leave-navigation-heading flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-2">
+                <h2 class="text-lg font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                    Attendance Requests
+                </h2>
 
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-end border-b border-slate-100 mb-2 mt-[-10px] gap-4">
-        <div>
-            <h2 class="text-xl font-bold text-slate-800">Attendance Requests</h2>
-            <p class="text-sm text-slate-500 mt-1">Review and manage manual attendance log modifications.</p>
-        </div>
-        @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
-        {
-        <button @onclick="OpenAddPanel" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-sm transition-colors flex items-center gap-2 mb-2">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
-            Add Request
-        </button>
-        }
-    </div>
+                <button @onclick="ToggleSidebar" type="button"
+                        class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0"
+                        title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
+                    <svg class="w-5 h-5 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                    </svg>
+                </button>
+            </div>
 
-    <nav class="mb-4 flex flex-wrap gap-2 border-b pb-3" aria-label="Attendance request categories">
-        @foreach (var tab in RequestTabs)
-        {
-            <a href="@($"/online/attendance/attendance-request/{tab.Key}")" aria-current="@(activeTab == tab.Key ? "page" : null)"
-               class="@(activeTab == tab.Key ? "bg-blue-600 text-white" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")">@tab.Label</a>
-        }
-    </nav>
-    @if (activeTab == "late-check-in")
-    {
-        <LateCheckInRequests @key="activeTab" />
-    }
-    @if (activeTab == "weekly-hours-exception") { <HRM.Components.Shared.WeeklyHoursExceptions /> }
-    @if (activeTab == "early-check-out") { <LateCheckInRequests @key="activeTab" Kind="EarlyCheckOut" /> }
-
-    @if (!string.IsNullOrWhiteSpace(requestSuccess))
-    {
-        <div role="status" class="mb-4 rounded-lg bg-green-50 p-3 text-sm text-green-800">
-            @requestSuccess
-            @if (submittedLeaveChange)
+            @foreach (var tab in RequestTabs)
             {
-                <a class="ml-2 underline" href="/online/leaves/leave-change-request">View leave change requests</a>
+                var isActive = activeTab == tab.Key;
+                <a href="@($"/online/attendance/attendance-request/{tab.Key}")"
+                   aria-current="@(isActive ? "page" : null)"
+                   title="@(!isSidebarExpanded ? tab.Label : null)"
+                   class="leave-nav-item group @(isActive ? "leave-nav-item--active" : "")">
+                    <div class="leave-nav-item__icon mx-auto">
+                        @tab.Icon
+                    </div>
+
+                    <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
+                        <h3 class="leave-nav-item__title mb-0.5 truncate">
+                            @tab.Label
+                        </h3>
+                        <p class="text-slate-500 text-xs leading-tight line-clamp-2">
+                            @tab.Description
+                        </p>
+                    </div>
+
+                    <div class="leave-nav-item__chevron flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                        </svg>
+                    </div>
+                </a>
             }
-        </div>
-    }
+        </nav>
 
-    @if (activeTab == "uneven-log-correction")
-    {
-    <section class="mb-4 rounded-xl border border-slate-200 bg-white p-4">
-        <h3 class="font-semibold text-slate-800">Uneven-log corrections</h3>
-        <p class="mb-3 text-sm text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
-        @if (unevenLogs.Count == 0)
-        {
-            <p class="text-sm text-slate-500">No uneven clock events in the current salary period.</p>
-        }
-        @foreach (var log in unevenLogs)
-        {
-            <div class="flex items-center justify-between gap-3 border-t border-slate-100 py-2">
-                <span class="text-sm">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
-                @if (CanRequestCorrection(log.AttendanceLogID))
+        <!-- RIGHT: Main Content Panel -->
+        <div class="leave-page-content min-w-0 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-5">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-3">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">@CurrentTabMetadata.Label</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">@CurrentTabMetadata.Description</p>
+                </div>
+                @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
                 {
-                    <button class="rounded-md bg-blue-50 px-3 py-2 text-sm text-blue-700" @onclick="() => OpenCorrection(log)">Request correction</button>
-                }
-                else
-                {
-                    <span class="max-w-md text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
+                    <button type="button" @onclick="OpenAddPanel" class="portal-action-btn portal-action-btn--primary">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Add Request</span>
+                    </button>
                 }
             </div>
-        }
-    </section>
-    }
 
-    @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
-    {
-    <div class="bg-white p-3 rounded-xl border border-slate-200 shadow-sm mb-6">
-        @if (isDataLoaded && requestsList.Count > 0 && selectedOrgId != 0)
-        {
-            <label class="block text-xs font-bold text-slate-500 uppercase mb-3">Summary of the Search</label>
-            <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-auto-fit gap-4 mb-6">
-            </div>
-            <hr class="border-slate-100 mb-6" />
-        }
-
-        <div class="grid grid-cols-12 gap-4 mb-4">
-
-            @if (activeTab != "uneven-log-correction")
+            @if (activeTab == "late-check-in")
             {
-            <div class="col-span-12 md:col-span-5 lg:col-span-5">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Organisation</label>
-                <select @bind="selectedOrgId" disabled class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
-                    <option value="0">-- All Organisations --</option>
-                    @foreach (var org in organisations)
-                    {
-                        <option value="@org.Id">@org.Name</option>
-                    }
-                </select>
-            </div>
-
+                <LateCheckInRequests @key="activeTab" />
             }
-            <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-8" : "md:col-span-3 lg:col-span-3")">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">Request Status</label>
-                <select @bind="selectedStatusId" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer">
-                    <option value="0">-- All Statuses --</option>
-                    @foreach (var state in requestStates)
-                    {
-                        <option value="@state.Id">@state.Name</option>
-                    }
-                </select>
-            </div>
-
-            <div class="col-span-6 md:col-span-2 lg:col-span-2">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">From</label>
-                <input type="date" @bind="startDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
-            </div>
-
-            <div class="col-span-6 md:col-span-2 lg:col-span-2">
-                <label class="block text-xs font-bold text-slate-500 uppercase mb-2">To</label>
-                <input type="date" @bind="endDate" class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all" />
-            </div>
-        </div>
-
-        <div class="flex justify-end gap-2 pt-4 border-t border-slate-100 mt-[-20px]">
-            <button @onclick="ResetFilters" class="bg-slate-100 hover:bg-slate-200 text-slate-600 px-6 py-2 rounded-md text-sm font-bold transition-colors border border-slate-200">
-                Reset
-            </button>
-            <button @onclick="ExecuteSearch" disabled="@isLoading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-6 py-2 rounded-md text-sm font-bold transition-colors shadow-sm flex items-center gap-2">
-                @if (isLoading)
-                {
-                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                    <span>Searching...</span>
-                }
-                else
-                {
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    <span>Search</span>
-                }
-            </button>
-        </div>
-    </div>
-
-    @if (isDataLoaded)
-    {
-        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden mb-6">
-            @if (VisibleRequests.Any())
+            @if (activeTab == "weekly-hours-exception")
             {
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm text-left text-slate-600">
-                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
-                            <tr>
-                                <th scope="col" class="px-6 py-3">Ref No</th>
-                                <th scope="col" class="px-6 py-3">Staff</th>
-                                <th scope="col" class="px-6 py-3">Date & Time</th>
-                                <th scope="col" class="px-6 py-3">Request / Mode</th>
-                                <th scope="col" class="px-6 py-3">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var req in VisibleRequests)
+                <HRM.Components.Shared.WeeklyHoursExceptions />
+            }
+            @if (activeTab == "early-check-out")
+            {
+                <LateCheckInRequests @key="activeTab" Kind="EarlyCheckOut" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(requestSuccess))
+            {
+                <div role="status" class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800">
+                    @requestSuccess
+                    @if (submittedLeaveChange)
+                    {
+                        <a class="ml-2 underline font-semibold" href="/online/leaves/leave-change-request">View leave change requests</a>
+                    }
+                </div>
+            }
+
+            @if (activeTab == "uneven-log-correction")
+            {
+                <section class="rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                    <h3 class="font-semibold text-slate-800">Uneven-log corrections</h3>
+                    <p class="mb-3 text-sm text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
+                    @if (unevenLogs.Count == 0)
+                    {
+                        <p class="text-sm text-slate-500">No uneven clock events in the current salary period.</p>
+                    }
+                    @foreach (var log in unevenLogs)
+                    {
+                        <div class="flex items-center justify-between gap-3 border-t border-slate-200/80 py-2.5">
+                            <span class="text-sm font-medium text-slate-700">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
+                            @if (CanRequestCorrection(log.AttendanceLogID))
                             {
-                                <tr class="bg-white border-b border-slate-100 hover:bg-slate-50 transition-colors">
-                                    <td class="px-6 py-4 font-medium text-slate-900">@req.ReferenceNo</td>
-                                    <td class="px-6 py-4">@req.StaffName</td>
-                                    <td class="px-6 py-4">
-                                        <div class="font-medium text-slate-700">@req.LogDate.ToString("dd MMM yyyy")</div>
-                                        <div class="text-xs text-slate-500">@req.LogTime</div>
-                                    </td>
-                                    <td class="px-6 py-4 font-medium"><div>@req.Kind</div><div class="text-xs text-slate-500">@req.Mode</div></td>
-                                    <td class="px-6 py-4">
-                                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(req.RequestState)">
-                                            @req.RequestState
-                                        </span>
-                                    </td>
-                                </tr>
+                                <button type="button" class="portal-action-btn portal-action-btn--compact" @onclick="() => OpenCorrection(log)">Request correction</button>
                             }
-                        </tbody>
-                    </table>
-                </div>
+                            else
+                            {
+                                <span class="max-w-md text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
+                            }
+                        </div>
+                    }
+                </section>
             }
-            else
+
+            @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
             {
-                <div class="p-10 text-center flex flex-col items-center justify-center">
-                    <svg class="w-12 h-12 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <h3 class="text-lg font-medium text-slate-900">No requests found</h3>
-                    <p class="text-sm text-slate-500 mt-1">Try adjusting your filters or date range.</p>
+                <!-- Filter Controls -->
+                <div class="bg-slate-50/70 p-4 rounded-xl border border-slate-200">
+                    <div class="grid grid-cols-12 gap-3 mb-3">
+                        @if (activeTab != "uneven-log-correction")
+                        {
+                            <div class="col-span-12 md:col-span-5 lg:col-span-5">
+                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Organisation</label>
+                                <select @bind="selectedOrgId" disabled class="w-full h-9 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
+                                    <option value="0">-- All Organisations --</option>
+                                    @foreach (var org in organisations)
+                                    {
+                                        <option value="@org.Id">@org.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-6" : "md:col-span-3 lg:col-span-3")">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">Request Status</label>
+                            <select @bind="selectedStatusId" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 cursor-pointer">
+                                <option value="0">-- All Statuses --</option>
+                                @foreach (var state in requestStates)
+                                {
+                                    <option value="@state.Id">@state.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-3" : "md:col-span-2 lg:col-span-2")">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">From</label>
+                            <input type="date" @bind="startDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                        </div>
+
+                        <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-3" : "md:col-span-2 lg:col-span-2")">
+                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1.5">To</label>
+                            <input type="date" @bind="endDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-200/80">
+                        <div class="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                            <span class="px-2.5 py-1 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
+                                Total: @VisibleRequests.Count()
+                            </span>
+                            @foreach (var stat in stateStatistics)
+                            {
+                                <span class="px-2.5 py-1 rounded-full font-semibold @GetStateColorClass(stat.Key)">
+                                    @stat.Key: @stat.Value
+                                </span>
+                            }
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button" @onclick="ResetFilters" class="portal-action-btn">
+                                Reset
+                            </button>
+                            <button type="button" @onclick="ExecuteSearch" disabled="@isLoading" class="portal-action-btn portal-action-btn--primary">
+                                @if (isLoading)
+                                {
+                                    <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                    <span>Searching...</span>
+                                }
+                                else
+                                {
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    <span>Search</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TWO-COLUMN GRID: Left = Request Detail & Chit, Right = Attendance Requests DataTable -->
+                <div class="master-detail-split">
+                    <!-- LEFT COLUMN: Selected Request Detail + Request Chit -->
+                    <div class="master-detail-left">
+                        @if (SelectedRequest == null)
+                        {
+                            <div class="detail-panel-card text-center py-12 text-slate-500">
+                                <p class="font-semibold text-slate-700 mb-1">No Attendance Request Selected</p>
+                                <p class="text-xs text-slate-500">Select a request from the datatable on the right (or click Search) to view its details and attendance request chit.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- 1. Attendance Request Detail Card -->
+                            <section class="detail-panel-card space-y-4" aria-label="Selected attendance request details">
+                                <div class="flex flex-wrap items-start justify-between gap-2 pb-3 border-b border-slate-100">
+                                    <div>
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Request Detail</span>
+                                        <h3 class="text-base font-bold text-slate-800 mt-0.5">@SelectedRequest.ReferenceNo · @SelectedRequest.Kind</h3>
+                                    </div>
+                                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(SelectedRequest.RequestState)">
+                                        @SelectedRequest.RequestState
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100 text-xs">
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Date</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.LogDate.ToString("dd MMM yyyy")</strong>
+                                    </div>
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Time</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.LogTime</strong>
+                                    </div>
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Mode</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.Mode</strong>
+                                    </div>
+                                </div>
+
+                                <dl class="leave-chit-grid">
+                                    <div>
+                                        <dt>Staff Member</dt>
+                                        <dd>@DisplayText(SelectedRequest.StaffName)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Organisation</dt>
+                                        <dd>@DisplayText(SelectedRequest.OrganisationName)</dd>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <dt>Reason / Comments</dt>
+                                        <dd class="whitespace-pre-wrap">@DisplayText(SelectedRequest.Comments)</dd>
+                                    </div>
+                                </dl>
+                            </section>
+
+                            <!-- 2. Attendance Request Chit Card -->
+                            <article class="leave-chit-card" aria-label="Attendance request chit">
+                                <div class="leave-chit-header">
+                                    <div>
+                                        <div class="text-xs font-bold uppercase tracking-wider text-blue-700">
+                                            @(string.IsNullOrWhiteSpace(SelectedRequest.OrganisationName) ? "Human Resources · Attendance Chit" : SelectedRequest.OrganisationName)
+                                        </div>
+                                        <h4 class="text-sm font-bold text-slate-900 mt-0.5">Attendance Modification Chit</h4>
+                                        <p class="text-xs text-slate-500">Ref: @SelectedRequest.ReferenceNo</p>
+                                    </div>
+                                    <span class="leave-chit-stamp @GetStateColorClass(SelectedRequest.RequestState)">
+                                        @SelectedRequest.RequestState
+                                    </span>
+                                </div>
+
+                                <dl class="leave-chit-grid">
+                                    <div>
+                                        <dt>Applicant</dt>
+                                        <dd>@DisplayText(SelectedRequest.StaffName)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Request Category</dt>
+                                        <dd>@DisplayText(SelectedRequest.Kind)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested Date</dt>
+                                        <dd>@SelectedRequest.LogDate.ToString("dd MMM yyyy")</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested Time & Mode</dt>
+                                        <dd>@SelectedRequest.LogTime · @SelectedRequest.Mode</dd>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <dt>Justification</dt>
+                                        <dd class="whitespace-pre-wrap">@DisplayText(SelectedRequest.Comments)</dd>
+                                    </div>
+                                </dl>
+
+                                <footer class="leave-chit-footer">
+                                    Attendance Request Chit · Reconciled into official attendance records once approved.
+                                </footer>
+                            </article>
+                        }
+                    </div>
+
+                    <!-- RIGHT COLUMN: Attendance Requests DataTable -->
+                    <div class="master-detail-right">
+                        <section class="datatable-panel-card" aria-label="Attendance requests datatable">
+                            <div class="datatable-toolbar">
+                                <input type="search"
+                                       value="@tableSearch"
+                                       @oninput="OnTableSearchInput"
+                                       placeholder="Filter datatable by reference, staff, mode, status…"
+                                       aria-label="Filter attendance requests datatable"
+                                       class="h-9 px-3 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 flex-1 min-w-[200px]" />
+
+                                <div class="flex items-center gap-2 text-xs text-slate-600">
+                                    <label class="flex items-center gap-1.5">
+                                        <span>Rows:</span>
+                                        <select value="@pageSize"
+                                                @onchange="OnPageSizeChanged"
+                                                class="h-8 px-2 text-xs bg-white border border-slate-200 rounded-md">
+                                            <option value="10">10</option>
+                                            <option value="25">25</option>
+                                            <option value="50">50</option>
+                                        </select>
+                                    </label>
+                                </div>
+                            </div>
+
+                            @if (FilteredRequests.Count > 0)
+                            {
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-slate-200 text-sm text-left text-slate-600">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                                            <tr>
+                                                <th scope="col" class="px-4 py-3">Ref No</th>
+                                                <th scope="col" class="px-4 py-3">Staff</th>
+                                                <th scope="col" class="px-4 py-3">Date & Time</th>
+                                                <th scope="col" class="px-4 py-3">Request / Mode</th>
+                                                <th scope="col" class="px-4 py-3 text-center">Status</th>
+                                                <th scope="col" class="px-4 py-3 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 bg-white">
+                                            @foreach (var req in PagedRequests)
+                                            {
+                                                var isSelected = SelectedRequest?.RequestId == req.RequestId && SelectedRequest?.ReferenceNo == req.ReferenceNo;
+                                                <tr @key="req.RequestId"
+                                                    @onclick="() => SelectRequest(req)"
+                                                    class="datatable-row @(isSelected ? "datatable-row--selected" : "")">
+                                                    <td class="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">@req.ReferenceNo</td>
+                                                    <td class="px-4 py-3">@req.StaffName</td>
+                                                    <td class="px-4 py-3 whitespace-nowrap">
+                                                        <div class="font-medium text-slate-700">@req.LogDate.ToString("dd MMM yyyy")</div>
+                                                        <div class="text-xs text-slate-500">@req.LogTime</div>
+                                                    </td>
+                                                    <td class="px-4 py-3 font-medium">
+                                                        <div>@req.Kind</div>
+                                                        <div class="text-xs text-slate-500">@req.Mode</div>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                                                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(req.RequestState)">
+                                                            @req.RequestState
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-right whitespace-nowrap" @onclick:stopPropagation="true">
+                                                        <button type="button"
+                                                                class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
+                                                                @onclick="() => SelectRequest(req)">
+                                                            Chit & Detail
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="datatable-footer">
+                                    <span>
+                                        Showing @(FilteredRequests.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredRequests.Count) of @FilteredRequests.Count request(s)
+                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button"
+                                                class="portal-action-btn portal-action-btn--compact"
+                                                disabled="@(currentPage <= 1)"
+                                                @onclick="PrevPage">
+                                            Previous
+                                        </button>
+                                        <span class="px-2 font-semibold text-slate-700">Page @currentPage of @TotalPages</span>
+                                        <button type="button"
+                                                class="portal-action-btn portal-action-btn--compact"
+                                                disabled="@(currentPage >= TotalPages)"
+                                                @onclick="NextPage">
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="p-10 text-center flex flex-col items-center justify-center">
+                                    <svg class="w-12 h-12 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <h3 class="text-base font-semibold text-slate-800">@(isDataLoaded ? "No requests found" : "Ready to search")</h3>
+                                    <p class="text-xs text-slate-500 mt-1">Adjust your date range or status filter and click Search.</p>
+                                </div>
+                            }
+                        </section>
+                    </div>
                 </div>
             }
         </div>
-    }
-
-    }
-</div> 
-
+    </div>
+</div>
 
 <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
-            @onclick="CloseAddPanel"></div>
+     @onclick="CloseAddPanel"></div>
 
 <div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddPanel ? "translate-x-0" : "translate-x-full")">
 
@@ -303,37 +515,37 @@
 
         @if (!isLeaveChange)
         {
-        <div>
-            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">In/Out Mode <span class="text-rose-500">*</span></label>
-            <select @bind="newRequest.InOutModeId" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                <option value="0">-- Select Mode --</option>
-                <option value="1">Clock In</option>
-                <option value="2">Clock Out</option>
-                <option value="3">Break Out</option>
-                <option value="4">Break In</option>
-            </select>
-        </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">In/Out Mode <span class="text-rose-500">*</span></label>
+                <select @bind="newRequest.InOutModeId" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                    <option value="0">-- Select Mode --</option>
+                    <option value="1">Clock In</option>
+                    <option value="2">Clock Out</option>
+                    <option value="3">Break Out</option>
+                    <option value="4">Break In</option>
+                </select>
+            </div>
 
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                @if (isCorrection)
-                {
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Clock event date</label>
-                    <p class="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
-                        @(newRequest.OriginalLogId.HasValue ? newRequest.Date.ToString("dd MMM yyyy") : "Select an uneven clock event above")
-                    </p>
-                }
-                else
-                {
-                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
-                    <input type="date" @bind="newRequest.Date" @bind:after="RefreshDateInfo" disabled="@isSubmitting" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
-                }
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    @if (isCorrection)
+                    {
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Clock event date</label>
+                        <p class="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                            @(newRequest.OriginalLogId.HasValue ? newRequest.Date.ToString("dd MMM yyyy") : "Select an uneven clock event above")
+                        </p>
+                    }
+                    else
+                    {
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
+                        <input type="date" @bind="newRequest.Date" @bind:after="RefreshDateInfo" disabled="@isSubmitting" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                    }
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Time <span class="text-rose-500">*</span></label>
+                    <input type="time" @bind="newRequest.Time" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Time <span class="text-rose-500">*</span></label>
-                <input type="time" @bind="newRequest.Time" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
-            </div>
-        </div>
         }
 
         <div>
@@ -352,10 +564,10 @@
     </div>
 
     <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-        <button @onclick="CloseAddPanel" class="px-4 py-2 bg-white border border-slate-300 rounded-md text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
+        <button @onclick="CloseAddPanel" class="portal-action-btn">
             Cancel
         </button>
-        <button @onclick="SubmitNewRequest" disabled="@(isSubmitting || (isLeaveChange ? loadingLeaves || LeavePreviewError != null : checkingDate || requestDateInfo?.CanSubmit != true || (isCorrection && !newRequest.OriginalLogId.HasValue)))" class="px-6 py-2 bg-blue-600 text-white rounded-md text-sm font-bold hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50">
+        <button @onclick="SubmitNewRequest" disabled="@(isSubmitting || (isLeaveChange ? loadingLeaves || LeavePreviewError != null : checkingDate || requestDateInfo?.CanSubmit != true || (isCorrection && !newRequest.OriginalLogId.HasValue)))" class="portal-action-btn portal-action-btn--primary disabled:opacity-50">
             @(isSubmitting ? "Submitting..." : isLeaveChange ? leaveChange.Kind == LeaveChangeKind.Extension ? "Request extension" : "Request early return" : requestDateInfo?.IsEarlyReturn == true ? "Request early return" : "Submit request")
         </button>
     </div>
@@ -364,14 +576,92 @@
 @code {
     [Parameter] public string? TabSection { get; set; }
     private string activeTab = "attendance";
-    private static readonly (string Key, string Label)[] RequestTabs =
-    [ ("attendance", "Attendance Requests"), ("weekly-hours-exception", "Weekly hours exception"), ("late-check-in", "Late check in request"), ("early-check-out", "Early check out request"), ("uneven-log-correction", "Uneven log correction request") ];
-    private IEnumerable<AttendanceRequestDto> VisibleRequests => requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
+    private bool isSidebarExpanded = true;
+
+    private void ToggleSidebar() => isSidebarExpanded = !isSidebarExpanded;
+
+    private sealed record RequestTabItem(string Key, string Label, string Icon, string Description);
+
+    private static readonly RequestTabItem[] RequestTabs =
+    [
+        new("attendance", "Attendance Requests", "🕒", "Review and submit missing attendance or leave-change requests."),
+        new("weekly-hours-exception", "Weekly hours exception", "📅", "Request approval to excuse a weekly working-hours shortfall."),
+        new("late-check-in", "Late check in request", "⏰", "Request a scheduled start-time adjustment before or after check-in."),
+        new("early-check-out", "Early check out request", "🏃", "Request an early departure with same-week make-up hours."),
+        new("uneven-log-correction", "Uneven log correction request", "🔧", "Correct an unmatched or uneven clock event from the salary period.")
+    ];
+
+    private RequestTabItem CurrentTabMetadata =>
+        RequestTabs.FirstOrDefault(t => t.Key == activeTab) ?? RequestTabs[0];
+
+    private IEnumerable<AttendanceRequestDto> VisibleRequests =>
+        requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
+
+    // DataTable & Selection state
+    private AttendanceRequestDto? selectedRequest;
+    private string tableSearch = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    private List<AttendanceRequestDto> FilteredRequests =>
+        VisibleRequests.Where(r =>
+            string.IsNullOrWhiteSpace(tableSearch) ||
+            r.ReferenceNo.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.StaffName.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Kind.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Mode.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.RequestState.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            (r.Comments?.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredRequests.Count / (double)pageSize));
+
+    private IEnumerable<AttendanceRequestDto> PagedRequests =>
+        FilteredRequests.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private AttendanceRequestDto? SelectedRequest =>
+        selectedRequest != null && FilteredRequests.Any(r => r.RequestId == selectedRequest.RequestId && r.ReferenceNo == selectedRequest.ReferenceNo)
+            ? selectedRequest
+            : FilteredRequests.FirstOrDefault();
+
+    private void SelectRequest(AttendanceRequestDto req) => selectedRequest = req;
+
+    private void OnTableSearchInput(ChangeEventArgs e)
+    {
+        tableSearch = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+            currentPage = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    private static string DisplayText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+
     protected override void OnParametersSet()
     {
         activeTab = RequestTabs.Any(t => t.Key == TabSection) ? TabSection! : "attendance";
         showAddPanel = false;
+        currentPage = 1;
+        selectedRequest = FilteredRequests.FirstOrDefault();
     }
+
     // Filter Bindings
     private int selectedOrgId = 0;
     private int selectedStatusId = 0;
@@ -565,6 +855,7 @@
 
         await SetDefaultOrganisationAsync();
         await RefreshUnevenLogs();
+        await ExecuteSearch();
     }
 
     private async Task RefreshUnevenLogs()
@@ -628,6 +919,8 @@
                 StaffName = r.StaffName, Mode = r.Mode, Comments = r.Comments, RequestState = r.Status
             }).ToList();
             stateStatistics = requestsList.GroupBy(r => r.RequestState).ToDictionary(g => g.Key, g => g.Count());
+            currentPage = 1;
+            selectedRequest = FilteredRequests.FirstOrDefault();
             isDataLoaded = true;
         }
         finally { isLoading = false; }
@@ -636,12 +929,11 @@
     private async Task ResetFilters()
     {
         selectedStatusId = 0;
+        tableSearch = "";
+        currentPage = 1;
         SetCurrentSalaryPeriod();
-        isDataLoaded = false;
-        requestsList.Clear();
-        stateStatistics.Clear();
-
         await SetDefaultOrganisationAsync();
+        await ExecuteSearch();
     }
 
     // --- DTO for Table Rows ---

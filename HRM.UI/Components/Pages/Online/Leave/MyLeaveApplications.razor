@@ -5,6 +5,7 @@
 @using HRM.Services.Interfaces.Leave
 @using HRM.Services.State
 @inject ILeaveChangeService Applications
+@inject ILeaveReceiptService Receipts
 @inject IGeographyService Geography
 @inject HRM.Services.ToastService Toast
 @inject ILogger<MyLeaveApplications> Logger
@@ -12,20 +13,55 @@
 <div class="space-y-5">
     @if (!EditorOnly)
     {
-    <div class="flex justify-between items-start gap-3">
-        <div><h2 class="text-xl font-semibold">My leave applications</h2><p class="text-sm text-slate-500">Review your requests and correct applications returned as Incomplete.</p></div>
-        <button type="button" class="border rounded px-3 py-2 text-sm" disabled="@busy" @onclick="RefreshAsync">Refresh</button>
-    </div>
+        <div class="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-slate-100">
+            <div>
+                <h2 class="text-xl font-bold text-slate-800">My Leave Applications</h2>
+                <p class="text-sm text-slate-500 mt-0.5">Select a leave application from the datatable on the right to inspect its details and leave chit on the left.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                    Total: @items.Count
+                </span>
+                <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                    Approved: @items.Count(x => IsApproved(x.Status))
+                </span>
+                <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                    Pending / Active: @items.Count(x => !IsApproved(x.Status) && !IsRejectedOrCancelled(x.Status))
+                </span>
+                <button type="button" class="portal-action-btn" disabled="@busy" @onclick="RefreshAsync">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    <span>Refresh</span>
+                </button>
+            </div>
+        </div>
     }
-    @if (message != null) { <p role="status" class="rounded border p-3 text-sm">@message</p> }
-    @if (EditorOnly && editor == null && !busy) { <button type="button" class="text-sm text-blue-700" @onclick="CloseEditor">Close correction</button> }
-    @if (busy && editor == null) { <p role="status">Loading applications…</p> }
+
+    @if (message != null)
+    {
+        <p role="status" class="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">@message</p>
+    }
+
+    @if (EditorOnly && editor == null && !busy)
+    {
+        <button type="button" class="portal-action-btn" @onclick="CloseEditor">Close correction</button>
+    }
+
+    @if (busy && editor == null && items.Count == 0)
+    {
+        <div class="py-10 text-center text-slate-500 text-sm" role="status">Loading applications…</div>
+    }
+
     @if (editor != null)
     {
-        <section class="border rounded-xl p-4 space-y-4">
-            <div class="flex justify-between gap-3">
-                <div><h3 class="font-semibold">Correct @editor.Reference</h3><p class="text-sm text-slate-500">@editor.LeaveType</p></div>
-                <button type="button" disabled="@busy" class="text-sm text-blue-700" @onclick="CloseEditor">Close</button>
+        <section class="detail-panel-card space-y-4">
+            <div class="flex justify-between items-start gap-3">
+                <div>
+                    <h3 class="font-bold text-slate-800">Correct @editor.Reference</h3>
+                    <p class="text-sm text-slate-500">@editor.LeaveType</p>
+                </div>
+                <button type="button" disabled="@busy" class="portal-action-btn portal-action-btn--compact" @onclick="CloseEditor">Close</button>
             </div>
             <div role="status" class="rounded-lg border border-amber-200 bg-amber-50 p-4">
                 <h4 class="font-semibold text-amber-900">Reason for return</h4>
@@ -36,61 +72,363 @@
                 <ValidationSummary />
                 <fieldset disabled="@busy" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <label class="block text-sm">From date<InputDate class="mt-1 w-full border rounded p-2" @bind-Value="editor.FromDate" /></label>
-                        <label class="block text-sm">To date<InputDate class="mt-1 w-full border rounded p-2" @bind-Value="editor.ToDate" /></label>
+                        <label class="block text-sm font-medium text-slate-700">From date<InputDate class="mt-1 w-full border border-slate-200 rounded-md p-2" @bind-Value="editor.FromDate" /></label>
+                        <label class="block text-sm font-medium text-slate-700">To date<InputDate class="mt-1 w-full border border-slate-200 rounded-md p-2" @bind-Value="editor.ToDate" /></label>
                     </div>
                     <p class="text-sm text-slate-500">@RevisedDays leave days. The reserved balance will be adjusted for the revised dates.</p>
-                    <label class="block text-sm">Leave reason
-                        <InputSelect class="mt-1 w-full border rounded p-2" @bind-Value="editor.ReasonId">
+                    <label class="block text-sm font-medium text-slate-700">Leave reason
+                        <InputSelect class="mt-1 w-full border border-slate-200 rounded-md p-2" @bind-Value="editor.ReasonId">
                             <option value="0">Select a reason</option>
                             @foreach (var reason in editor.Reasons) { <option value="@reason.Id">@reason.Name</option> }
                         </InputSelect>
                     </label>
-                    <label class="block text-sm">Explanation and additional details
-                        <InputTextArea class="mt-1 w-full border rounded p-2" rows="4" maxlength="250" @bind-Value="editor.Explanation" />
+                    <label class="block text-sm font-medium text-slate-700">Explanation and additional details
+                        <InputTextArea class="mt-1 w-full border border-slate-200 rounded-md p-2" rows="4" maxlength="250" @bind-Value="editor.Explanation" />
                     </label>
-                    <label class="block text-sm">Country
-                        <InputSelect class="mt-1 w-full border rounded p-2" @bind-Value="editor.CountryId">
+                    <label class="block text-sm font-medium text-slate-700">Country
+                        <InputSelect class="mt-1 w-full border border-slate-200 rounded-md p-2" @bind-Value="editor.CountryId">
                             <option value="">Select a country</option>
                             @foreach (var country in countries) { <option value="@country.CountryId">@country.NameEnglish</option> }
                         </InputSelect>
                     </label>
-                    <label class="block text-sm">Leave address<InputTextArea class="mt-1 w-full border rounded p-2" rows="2" maxlength="250" @bind-Value="editor.Address" /></label>
-                    <label class="block text-sm">Contact number<InputText class="mt-1 w-full border rounded p-2" maxlength="250" @bind-Value="editor.ContactNumber" /></label>
-                    <div class="space-y-2 rounded-lg border p-3">
-                        <h4 class="font-medium">Work handover</h4>
+                    <label class="block text-sm font-medium text-slate-700">Leave address<InputTextArea class="mt-1 w-full border border-slate-200 rounded-md p-2" rows="2" maxlength="250" @bind-Value="editor.Address" /></label>
+                    <label class="block text-sm font-medium text-slate-700">Contact number<InputText class="mt-1 w-full border border-slate-200 rounded-md p-2" maxlength="250" @bind-Value="editor.ContactNumber" /></label>
+                    <div class="space-y-2 rounded-lg border border-slate-200 p-3">
+                        <h4 class="font-semibold text-slate-800">Work handover</h4>
                         <p class="text-sm text-slate-500">Update assigned tasks if needed. Tasks are required when your revised leave exceeds the policy threshold. Handover approvals restart when you resubmit.</p>
                         <HandoverTaskEditor Tasks="editor.HandoverTasks" Recipients="editor.Recipients" />
                     </div>
                     <div class="flex flex-wrap gap-3">
-                        <button type="submit" class="rounded bg-blue-600 text-white px-4 py-2 disabled:opacity-50" disabled="@(busy || RevisedDays <= 0)">@(busy ? "Resubmitting…" : "Save changes and resubmit")</button>
-                        <button type="button" class="border rounded px-4 py-2" @onclick="CloseEditor">Cancel editing</button>
+                        <button type="submit" class="portal-action-btn portal-action-btn--primary" disabled="@(busy || RevisedDays <= 0)">@(busy ? "Resubmitting…" : "Save changes and resubmit")</button>
+                        <button type="button" class="portal-action-btn" @onclick="CloseEditor">Cancel editing</button>
                     </div>
                     <p class="text-xs text-slate-500">Resubmission restarts this application's configured approval flow.</p>
                 </fieldset>
             </EditForm>
         </section>
     }
+
     @if (!EditorOnly)
     {
-    @if (!busy && items.Count == 0) { <p class="text-sm text-slate-500">You have no leave applications.</p> }
-    <div class="space-y-3">
-        @foreach (var item in items)
-        {
-            <article @key="item.RequestId" class="rounded-lg border p-4 space-y-2">
-                <div class="flex flex-wrap justify-between gap-2"><strong>@item.Reference · @item.LeaveType</strong><span class="text-sm text-slate-600">@item.Status</span></div>
-                <p class="text-sm">@item.FromDate.ToString("dd MMM yyyy") – @item.ToDate.ToString("dd MMM yyyy") · @item.Duration days</p>
-                @if (item.HasHandover)
+        <div class="master-detail-split">
+            <!-- LEFT COLUMN: Selected Leave Application Detail + Leave Chit -->
+            <div class="master-detail-left">
+                @if (selectedItem == null)
                 {
-                    <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-block text-sm text-blue-700 underline" href="@($"/online/leave-handovers/{item.LeaveId}")">View work handover</a>
+                    <div class="detail-panel-card text-center py-12 text-slate-500">
+                        <p class="font-semibold text-slate-700 mb-1">No Leave Application Selected</p>
+                        <p class="text-xs text-slate-500">Select a row from the leave applications datatable on the right to view its details and leave chit.</p>
+                    </div>
                 }
-                @if (item.CanEdit)
+                else
                 {
-                    <button type="button" class="rounded bg-blue-600 text-white px-3 py-2 text-sm disabled:opacity-50" disabled="@busy" @onclick="() => EditAsync(item.RequestId)">Edit and resubmit</button>
+                    <!-- 1. Leave Application Details Card -->
+                    <section class="detail-panel-card space-y-4" aria-label="Selected leave application details">
+                        <div class="flex flex-wrap items-start justify-between gap-2 pb-3 border-b border-slate-100">
+                            <div>
+                                <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Application Detail</span>
+                                <h3 class="text-base font-bold text-slate-800 mt-0.5">@selectedItem.Reference · @selectedItem.LeaveType</h3>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold @GetStatusBadgeClass(selectedItem.Status)">
+                                @selectedItem.Status
+                            </span>
+                        </div>
+
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100 text-xs">
+                            <div>
+                                <span class="block text-slate-500 font-medium">From Date</span>
+                                <strong class="text-slate-800 text-sm">@selectedItem.FromDate.ToString("dd MMM yyyy")</strong>
+                            </div>
+                            <div>
+                                <span class="block text-slate-500 font-medium">To Date</span>
+                                <strong class="text-slate-800 text-sm">@selectedItem.ToDate.ToString("dd MMM yyyy")</strong>
+                            </div>
+                            <div>
+                                <span class="block text-slate-500 font-medium">Duration</span>
+                                <strong class="text-slate-800 text-sm">@selectedItem.Duration day(s)</strong>
+                            </div>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(selectedItem.ReturnReason) || selectedItem.CanEdit)
+                        {
+                            <div class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                                <h4 class="text-xs font-bold uppercase tracking-wide">Returned for Correction</h4>
+                                <p class="mt-1 whitespace-pre-wrap break-words text-xs">
+                                    @(string.IsNullOrWhiteSpace(selectedItem.ReturnReason) ? "Returned as Incomplete. Review and resubmit below." : selectedItem.ReturnReason)
+                                </p>
+                            </div>
+                        }
+
+                        <dl class="leave-chit-grid">
+                            <div>
+                                <dt>Leave Reason</dt>
+                                <dd>@DisplayValue(selectedItem.Reason)</dd>
+                            </div>
+                            <div>
+                                <dt>Contact Number</dt>
+                                <dd>@DisplayValue(selectedItem.ContactNumber)</dd>
+                            </div>
+                            <div class="col-span-2">
+                                <dt>Explanation</dt>
+                                <dd class="whitespace-pre-wrap">@DisplayValue(selectedItem.Explanation)</dd>
+                            </div>
+                            <div class="col-span-2">
+                                <dt>Leave Address</dt>
+                                <dd class="whitespace-pre-wrap">@DisplayValue(selectedItem.Address)</dd>
+                            </div>
+                        </dl>
+
+                        <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+                            @if (selectedItem.HasHandover)
+                            {
+                                <a class="portal-action-btn portal-action-btn--compact" href="@($"/online/leave-handovers/{selectedItem.LeaveId}")">
+                                    <span>View Work Handover</span>
+                                </a>
+                            }
+                            @if (selectedItem.CanEdit)
+                            {
+                                <button type="button" class="portal-action-btn portal-action-btn--primary portal-action-btn--compact"
+                                        disabled="@busy" @onclick="() => EditAsync(selectedItem.RequestId)">
+                                    <span>Edit and Resubmit</span>
+                                </button>
+                            }
+                            @if (IsApproved(selectedItem.Status))
+                            {
+                                <a class="portal-action-btn portal-action-btn--compact" href="@($"/online/leaves/{selectedItem.LeaveId}/receipt")">
+                                    <span>Printable Receipt</span>
+                                </a>
+                            }
+                        </div>
+                    </section>
+
+                    <!-- 2. Official Leave Chit Card (Displayed with Detail on Left) -->
+                    <article class="leave-chit-card" aria-label="Leave chit">
+                        <div class="leave-chit-header">
+                            <div>
+                                @if (!string.IsNullOrWhiteSpace(selectedReceipt?.OrganisationDhivehi))
+                                {
+                                    <p class="text-xs text-slate-500 mb-0.5" lang="dv" dir="rtl">@selectedReceipt.OrganisationDhivehi</p>
+                                }
+                                <div class="text-xs font-bold uppercase tracking-wider text-blue-700">
+                                    @(string.IsNullOrWhiteSpace(selectedReceipt?.Organisation) ? "Human Resources · Leave Chit" : selectedReceipt.Organisation)
+                                </div>
+                                <h4 class="text-sm font-bold text-slate-900 mt-0.5">
+                                    @(selectedReceipt != null ? "Leave Approval Chit" : "Leave Application Chit")
+                                </h4>
+                                <p class="text-xs text-slate-500">Ref: @(selectedReceipt?.Reference ?? selectedItem.Reference)</p>
+                            </div>
+                            <span class="leave-chit-stamp @GetStatusBadgeClass(selectedReceipt != null ? "Approved" : selectedItem.Status)">
+                                @(selectedReceipt != null ? "Approved" : selectedItem.Status)
+                            </span>
+                        </div>
+
+                        @if (loadingReceipt)
+                        {
+                            <p class="text-xs text-slate-500 py-3">Loading leave chit details…</p>
+                        }
+                        else
+                        {
+                            @if (selectedReceipt != null)
+                            {
+                                <p class="text-xs text-slate-600 mb-3">
+                                    Confirms approved leave for <strong>@selectedReceipt.StaffName</strong>@(string.IsNullOrWhiteSpace(selectedReceipt.StaffNumber) ? "." : $" (Staff no. {selectedReceipt.StaffNumber}).")
+                                </p>
+                            }
+
+                            <dl class="leave-chit-grid">
+                                <div>
+                                    <dt>Leave Type</dt>
+                                    <dd>@(selectedReceipt?.LeaveType ?? selectedItem.LeaveType)</dd>
+                                </div>
+                                <div>
+                                    <dt>Number of Days</dt>
+                                    <dd>@(selectedReceipt?.Days ?? selectedItem.Duration) day(s)</dd>
+                                </div>
+                                <div>
+                                    <dt>From Date</dt>
+                                    <dd>@((selectedReceipt?.FromDate ?? selectedItem.FromDate).ToString("dd MMM yyyy"))</dd>
+                                </div>
+                                <div>
+                                    <dt>To Date</dt>
+                                    <dd>@((selectedReceipt?.ToDate ?? selectedItem.ToDate).ToString("dd MMM yyyy"))</dd>
+                                </div>
+                                <div>
+                                    <dt>Calendar Return Date</dt>
+                                    <dd>@((selectedReceipt?.CalendarReturnDate ?? selectedItem.ToDate.Date.AddDays(1)).ToString("dd MMM yyyy"))</dd>
+                                </div>
+                                <div>
+                                    <dt>Reporting Date</dt>
+                                    <dd>@(selectedReceipt?.ReportingDate?.ToString("dd MMM yyyy") ?? (IsApproved(selectedItem.Status) ? "Confirm with HR" : "Upon approval"))</dd>
+                                </div>
+                                <div>
+                                    <dt>Current Leave Balance</dt>
+                                    <dd>@(selectedReceipt?.CurrentBalance.HasValue == true ? $"{selectedReceipt.CurrentBalance} days" : "Recorded upon approval")</dd>
+                                </div>
+                                <div>
+                                    <dt>Approved By / Date</dt>
+                                    <dd>
+                                        @if (selectedReceipt != null)
+                                        {
+                                            <span>@(selectedReceipt.ApprovedBy ?? "HR") · @(selectedReceipt.ApprovedAt?.ToString("dd MMM yyyy") ?? "Recorded")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@selectedItem.Status</span>
+                                        }
+                                    </dd>
+                                </div>
+                            </dl>
+
+                            <footer class="leave-chit-footer">
+                                @if (selectedReceipt != null)
+                                {
+                                    <span>Official Leave Approval Chit · Balance reflects current remaining entitlement.</span>
+                                }
+                                else
+                                {
+                                    <span>Application Chit Summary · Final balance and reporting date are issued once approved.</span>
+                                }
+                            </footer>
+                        }
+                    </article>
                 }
-            </article>
-        }
-    </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Leave Applications DataTable -->
+            <div class="master-detail-right">
+                <section class="datatable-panel-card" aria-label="Leave applications datatable">
+                    <div class="datatable-toolbar">
+                        <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[200px]">
+                            <input type="search"
+                                   value="@searchQuery"
+                                   @oninput="OnSearchInput"
+                                   placeholder="Search reference, leave type, status…"
+                                   aria-label="Search leave applications"
+                                   class="h-9 px-3 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 flex-1 min-w-[180px]" />
+
+                            <select value="@statusFilter"
+                                    @onchange="OnStatusFilterChanged"
+                                    aria-label="Filter by status"
+                                    class="h-9 px-2.5 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500">
+                                <option value="">All Statuses</option>
+                                @foreach (var st in AvailableStatuses)
+                                {
+                                    <option value="@st">@st</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="flex items-center gap-2 text-xs text-slate-600">
+                            <label class="flex items-center gap-1.5">
+                                <span>Rows:</span>
+                                <select value="@pageSize"
+                                        @onchange="OnPageSizeChanged"
+                                        class="h-8 px-2 text-xs bg-white border border-slate-200 rounded-md">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    @if (!busy && FilteredItems.Count == 0)
+                    {
+                        <div class="p-8 text-center text-sm text-slate-500">
+                            @(items.Count == 0 ? "You have no leave applications." : "No leave applications match your current search filters.")
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200 text-sm">
+                                <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                                    <tr>
+                                        <th scope="col" class="px-3 py-3 text-left">Reference</th>
+                                        <th scope="col" class="px-3 py-3 text-left">Leave Type</th>
+                                        <th scope="col" class="px-3 py-3 text-left">From – To</th>
+                                        <th scope="col" class="px-3 py-3 text-center">Days</th>
+                                        <th scope="col" class="px-3 py-3 text-center">Status</th>
+                                        <th scope="col" class="px-3 py-3 text-right">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 bg-white">
+                                    @foreach (var item in PagedItems)
+                                    {
+                                        var isSelected = selectedItem?.RequestId == item.RequestId;
+                                        <tr @key="item.RequestId"
+                                            @onclick="() => SelectApplicationAsync(item)"
+                                            class="datatable-row @(isSelected ? "datatable-row--selected" : "")">
+                                            <td class="whitespace-nowrap px-3 py-3 font-semibold text-slate-800">
+                                                @item.Reference
+                                            </td>
+                                            <td class="px-3 py-3 text-slate-700">
+                                                <div class="font-medium">@item.LeaveType</div>
+                                                @if (!string.IsNullOrWhiteSpace(item.Reason))
+                                                {
+                                                    <div class="text-xs text-slate-400 truncate max-w-[180px]">@item.Reason</div>
+                                                }
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-xs text-slate-600">
+                                                <div>@item.FromDate.ToString("dd MMM yyyy")</div>
+                                                <div class="text-slate-400">to @item.ToDate.ToString("dd MMM yyyy")</div>
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-center font-semibold text-slate-700">
+                                                @item.Duration
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-center">
+                                                <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold @GetStatusBadgeClass(item.Status)">
+                                                    @item.Status
+                                                </span>
+                                            </td>
+                                            <td class="whitespace-nowrap px-3 py-3 text-right" @onclick:stopPropagation="true">
+                                                <div class="inline-flex items-center justify-end gap-1.5">
+                                                    <button type="button"
+                                                            class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
+                                                            @onclick="() => SelectApplicationAsync(item)">
+                                                        Chit & Detail
+                                                    </button>
+                                                    @if (item.CanEdit)
+                                                    {
+                                                        <button type="button"
+                                                                class="portal-action-btn portal-action-btn--primary portal-action-btn--compact"
+                                                                disabled="@busy"
+                                                                @onclick="() => EditAsync(item.RequestId)">
+                                                            Edit & resubmit
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="datatable-footer">
+                            <span>
+                                Showing @(FilteredItems.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredItems.Count) of @FilteredItems.Count application(s)
+                            </span>
+                            <div class="flex items-center gap-1.5">
+                                <button type="button"
+                                        class="portal-action-btn portal-action-btn--compact"
+                                        disabled="@(currentPage <= 1)"
+                                        @onclick="PrevPage">
+                                    Previous
+                                </button>
+                                <span class="px-2 font-semibold text-slate-700">Page @currentPage of @TotalPages</span>
+                                <button type="button"
+                                        class="portal-action-btn portal-action-btn--compact"
+                                        disabled="@(currentPage >= TotalPages)"
+                                        @onclick="NextPage">
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </section>
+            </div>
+        </div>
     }
 </div>
 
@@ -100,18 +438,50 @@
     [Parameter] public int? EditRequestId { get; set; }
     [Parameter] public EventCallback OnSaved { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+
     private int? lastEditRequestId;
     private List<MyLeaveApplicationDto> items = [];
     private List<Country> countries = [];
     private ReturnedLeaveApplicationDto? editor;
+    private MyLeaveApplicationDto? selectedItem;
+    private LeaveReceiptDto? selectedReceipt;
+    private bool loadingReceipt;
     private bool busy;
     private string? message;
+
+    // DataTable state
+    private string searchQuery = "";
+    private string statusFilter = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    private IEnumerable<string> AvailableStatuses =>
+        items.Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(s => s);
+
+    private List<MyLeaveApplicationDto> FilteredItems =>
+        items.Where(x =>
+            (string.IsNullOrWhiteSpace(statusFilter) || x.Status.Equals(statusFilter, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(searchQuery) ||
+             x.Reference.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+             x.LeaveType.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+             x.Status.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+             x.Reason.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+             x.Explanation.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredItems.Count / (double)pageSize));
+
+    private IEnumerable<MyLeaveApplicationDto> PagedItems =>
+        FilteredItems.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
     private int RevisedDays => editor == null || editor.FromDate == default || editor.ToDate == default ||
         editor.ToDate.Date == DateTime.MaxValue.Date ? 0 : LeaveApplicationDates.Count(editor.FromDate, editor.ToDate, editor.IncludeHolidays);
+
     protected override async Task OnInitializedAsync()
     {
         if (!EditorOnly) await RefreshAsync();
     }
+
     protected override async Task OnParametersSetAsync()
     {
         if (EditRequestId.HasValue && EditRequestId != lastEditRequestId)
@@ -124,41 +494,186 @@
     private async Task RefreshAsync()
     {
         if (busy) return;
-        busy = true; message = null; editor = null;
-        try { items = await Applications.GetMyApplicationsAsync(); }
-        catch (Exception ex) { Logger.LogError(ex, "Could not load applicant leave requests."); message = "Your leave applications could not be loaded. Please refresh to try again."; }
-        finally { busy = false; }
+        busy = true;
+        message = null;
+        editor = null;
+        try
+        {
+            items = await Applications.GetMyApplicationsAsync();
+            currentPage = 1;
+            if (items.Count > 0)
+            {
+                var nextSelection = selectedItem != null
+                    ? items.FirstOrDefault(x => x.RequestId == selectedItem.RequestId) ?? items[0]
+                    : items[0];
+                await SelectApplicationAsync(nextSelection);
+            }
+            else
+            {
+                selectedItem = null;
+                selectedReceipt = null;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load applicant leave requests.");
+            message = "Your leave applications could not be loaded. Please refresh to try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
+
+    private async Task SelectApplicationAsync(MyLeaveApplicationDto item)
+    {
+        selectedItem = item;
+        selectedReceipt = null;
+        if (item.LeaveId <= 0 || !IsApproved(item.Status))
+            return;
+
+        loadingReceipt = true;
+        try
+        {
+            selectedReceipt = await Receipts.GetMyReceiptAsync(item.LeaveId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Receipt not available for leave {LeaveId}.", item.LeaveId);
+            selectedReceipt = null;
+        }
+        finally
+        {
+            loadingReceipt = false;
+        }
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchQuery = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnStatusFilterChanged(ChangeEventArgs e)
+    {
+        statusFilter = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+            currentPage = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    private static string DisplayValue(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+
+    private static bool IsApproved(string? status) =>
+        status != null && status.Contains("Approv", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsRejectedOrCancelled(string? status) =>
+        status != null && (status.Contains("Reject", StringComparison.OrdinalIgnoreCase) || status.Contains("Cancel", StringComparison.OrdinalIgnoreCase));
+
+    private static string GetStatusBadgeClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "bg-slate-100 text-slate-700";
+        var s = status.Trim().ToLowerInvariant();
+        if (s.Contains("approv")) return "bg-emerald-100 text-emerald-800";
+        if (s.Contains("reject") || s.Contains("decline")) return "bg-rose-100 text-rose-800";
+        if (s.Contains("incomplet") || s.Contains("return")) return "bg-amber-100 text-amber-800";
+        if (s.Contains("cancel")) return "bg-slate-100 text-slate-600";
+        return "bg-blue-100 text-blue-800";
+    }
+
     private async Task EditAsync(int requestId)
     {
         if (busy) return;
-        busy = true; message = null; editor = null;
+        busy = true;
+        message = null;
+        editor = null;
         try
         {
             var application = await Applications.GetReturnedApplicationAsync(requestId);
             if (countries.Count == 0) countries = await Geography.GetCountriesAsync();
             editor = application;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException) { message = ex.Message; }
-        catch (Exception ex) { Logger.LogError(ex, "Could not load returned leave request {RequestId}.", requestId); message = "The correction form could not be loaded. Please try again."; }
-        finally { busy = false; }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
+        {
+            message = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load returned leave request {RequestId}.", requestId);
+            message = "The correction form could not be loaded. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
-    private async Task CloseEditor() { if (!busy) { editor = null; message = null; await OnClose.InvokeAsync(); } }
+
+    private async Task CloseEditor()
+    {
+        if (!busy)
+        {
+            editor = null;
+            message = null;
+            await OnClose.InvokeAsync();
+        }
+    }
+
     private async Task ResubmitAsync()
     {
         if (busy || editor == null) return;
-        busy = true; message = null;
+        busy = true;
+        message = null;
         try
         {
             var result = await Applications.ResubmitApplicationAsync(editor);
             message = result.Message;
-            if (!result.Success) { Toast.Warning(result.Message); return; }
+            if (!result.Success)
+            {
+                Toast.Warning(result.Message);
+                return;
+            }
             editor = null;
             Toast.Success(result.Message);
-            if (EditorOnly) { await OnSaved.InvokeAsync(); return; }
+            if (EditorOnly)
+            {
+                await OnSaved.InvokeAsync();
+                return;
+            }
             items = await Applications.GetMyApplicationsAsync();
+            if (items.Count > 0)
+            {
+                var updated = selectedItem != null
+                    ? items.FirstOrDefault(x => x.RequestId == selectedItem.RequestId) ?? items[0]
+                    : items[0];
+                await SelectApplicationAsync(updated);
+            }
         }
-        catch (Exception ex) { Logger.LogError(ex, "Could not resubmit returned leave request."); message = "The correction could not be saved. Refresh to check the current request status before trying again."; }
-        finally { busy = false; }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not resubmit returned leave request.");
+            message = "The correction could not be saved. Refresh to check the current request status before trying again.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 }
