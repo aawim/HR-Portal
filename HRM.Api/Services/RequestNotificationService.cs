@@ -144,7 +144,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.NotificationKind == "ActionRequired" && n.IsAttendance ? HRM.Application.Presentation.AttendanceRequestNavigation.ReviewUrl(n.RequestId) :
             n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?requestId={n.RequestId}" :
             LeaveChangeRequestTypes.IsChange(n.RequestTypeId) ? "/online/leaves/leave-change-request" :
-            n.IsLeave ? "/online/leaves/all-requests" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online"),
+            n.IsLeave ? "/online/leaves" : n.IsAttendance ? "/online/attendance/attendance-request" : "/online"),
             n.NotificationKind switch {
                 "ActionRequired" => n.ActionStage ?? "Review request",
                 "HandoverTasks" => "Verify your work handover tasks",

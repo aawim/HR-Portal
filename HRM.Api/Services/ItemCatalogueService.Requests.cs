@@ -104,6 +104,8 @@ public sealed partial class ItemCatalogueService
         var person = model.Kind == "Issue" && actor.Manage ? model.IndividualId : actor.Person;
         if (model.Kind is not ("Issue" or "Requisition") || model.Kind == "Issue" && !actor.Manage)
             return ServiceResult.Fail("Only an administrator can submit a direct issue request.");
+        if (model.Kind == "Issue" && (model.IndividualId <= 0 || model.IndividualId == actor.Person))
+            return ServiceResult.Fail("Administrators can only issue items to other staff, not to themselves.");
         if (person <= 0 || model.Purpose is not ("Common" or "Job related") ||
             string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Trim().Length > 1000 ||
             model.Lines is null || model.Lines.Count is < 1 or > 30 ||
@@ -150,7 +152,12 @@ public sealed partial class ItemCatalogueService
             await tx.CommitAsync();
             return ServiceResult.Ok($"{model.Kind} submitted for approval.");
         }
-        catch (InvalidOperationException ex) { await tx.RollbackAsync(); return ServiceResult.Fail(ex.Message); }
+        catch (InvalidOperationException ex)
+        {
+            await tx.RollbackAsync();
+            if (ex is WorkflowConfigurationException configuration) await configuration.NotifyAsync(factory);
+            return ServiceResult.Fail(ex.Message);
+        }
     }
 
     public async Task<ServiceResult> ActStaffRequestAsync(int requestId, int expectedState, string action, string? comment)
