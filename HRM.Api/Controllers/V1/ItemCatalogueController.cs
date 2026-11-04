@@ -86,6 +86,10 @@ public sealed class ItemCatalogueController(global::HRM.Services.Contracts.ItemC
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ActStaffRequest([FromBody] ItemStaffActionRequest model)
         => Ok(await service.ActStaffRequestAsync(model.requestId, model.expectedState, model.action, model.comment));
 
+    [HttpGet("get-staff-clearance-report")]
+    public async Task<ActionResult<global::HRM.DTOs.Items.ItemStaffClearanceReportDto>> GetStaffClearanceReport([FromQuery] int individualId, [FromQuery] int? organisationId = null)
+        => Ok(await service.GetStaffClearanceReportAsync(individualId, organisationId));
+
     public sealed class ItemStaffActionRequest
     {
         public int requestId { get; set; }

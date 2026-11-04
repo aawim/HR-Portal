@@ -108,6 +108,64 @@ public sealed partial class ItemCatalogueService
         }).ToList();
     }
 
+    public async Task<ItemStaffClearanceReportDto> GetStaffClearanceReportAsync(int individualId, int? organisationId = null)
+    {
+        var actor = await RequestScopeAsync(organisationId);
+        if (individualId != actor.Person && !actor.Manage)
+            throw new UnauthorizedAccessException("You can only generate your own clearance report.");
+
+        await using var db = await factory.CreateDbContextAsync();
+
+        var individual = await db.Individuals.AsNoTracking().FirstOrDefaultAsync(i => i.BusinessEntityId == individualId)
+            ?? throw new KeyNotFoundException($"Staff member #{individualId} not found.");
+
+        var staffName = (individual.FirstNameEnglish + " " + (individual.LastNameEnglish ?? "")).Trim();
+
+        var job = await db.Jobs.AsNoTracking()
+            .Include(j => j.Staff)
+            .Include(j => j.JobPositions).ThenInclude(p => p.Position)
+            .Where(j => j.IndividualID == individualId && j.OrganisationID == actor.Org)
+            .OrderByDescending(j => j.JoinedDate)
+            .FirstOrDefaultAsync();
+
+        var positionName = job?.JobPositions.OrderByDescending(p => p.FromDate).Select(p => p.Position.Name).FirstOrDefault() ?? "Staff Member";
+        var staffNumber = job?.Staff?.EmployeeNumber ?? job?.Sapnumber ?? $"ID-{individualId}";
+        var orgName = await db.Organisations.Where(o => o.BusinessEntityID == actor.Org).Select(o => o.OrganisationName).FirstOrDefaultAsync() ?? "Organisation";
+
+        var allRequests = await LoadStaffRequestsAsync(actor.Org, individualId, false);
+
+        var activeAssets = allRequests
+            .Where(r => r.Purpose == JobRelated && r.Status is St.InUse or St.PendingAcceptance or St.ReturnRequested)
+            .ToList();
+
+        var returnedAssets = allRequests
+            .Where(r => r.Purpose == JobRelated && r.Status == St.Returned)
+            .ToList();
+
+        var consumables = allRequests
+            .Where(r => r.Purpose != JobRelated)
+            .ToList();
+
+        var fullHistory = allRequests
+            .SelectMany(r => r.History)
+            .OrderByDescending(h => h.CreatedAtUtc)
+            .ToList();
+
+        return new ItemStaffClearanceReportDto(
+            individualId,
+            staffName,
+            staffNumber,
+            positionName,
+            "General",
+            orgName,
+            DateTime.UtcNow,
+            activeAssets,
+            returnedAssets,
+            consumables,
+            fullHistory
+        );
+    }
+
     /// <summary>Pure state machine: which actions the actor may perform on a record.</summary>
     internal static List<string> AllowedActions(ItemStaffRequest r, int person, bool manage)
     {
@@ -129,7 +187,11 @@ public sealed partial class ItemCatalogueService
                     list.Add("RequestReturn");
                     list.AddRange(["RequestReplacement", "RequestUpgrade"]);
                 }
-                if (hr) list.Add("ConfirmReturn");
+                if (hr)
+                {
+                    list.Add("RequestReturn");
+                    list.Add("ConfirmReturn");
+                }
                 break;
             case St.ReturnRequested:
                 if (hr) list.Add("ConfirmReturn");
@@ -234,7 +296,12 @@ public sealed partial class ItemCatalogueService
                 : $"{model.Kind} submitted to HR.");
         }
         catch (InvalidOperationException ex) { await tx.RollbackAsync(); return ServiceResult.Fail(ex.Message); }
-        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("Stock or the record changed. Refresh and try again."); }
+        catch (DbUpdateException ex)
+        {
+            await tx.RollbackAsync();
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            return ServiceResult.Fail($"Database update failed: {inner}");
+        }
     }
 
     /// <param name="expectedState">Unused; kept for contract compatibility. Concurrency is guarded by the status check.</param>
@@ -325,7 +392,12 @@ public sealed partial class ItemCatalogueService
             return ServiceResult.Ok(message);
         }
         catch (InvalidOperationException ex) { await tx.RollbackAsync(); return ServiceResult.Fail(ex.Message); }
-        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("Stock or the record changed. Refresh and try again."); }
+        catch (DbUpdateException ex)
+        {
+            await tx.RollbackAsync();
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            return ServiceResult.Fail($"Database update failed: {inner}");
+        }
     }
 
     private static void AddEvent(ItemStaffRequest row, string action, string? from, string to,

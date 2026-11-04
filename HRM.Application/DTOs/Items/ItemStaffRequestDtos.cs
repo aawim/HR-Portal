@@ -56,6 +56,20 @@ public sealed record ItemStaffRequestEventDto(
 /// Approve, Reject, Cancel, Accept, Decline, RequestReturn, ConfirmReturn, RequestReplacement, RequestUpgrade.
 /// ConfirmReturn is sent as "ConfirmReturn:{Condition}" with damage notes in the comment.
 /// </summary>
+public sealed record ItemStaffClearanceReportDto(
+    int IndividualId,
+    string StaffName,
+    string? StaffNumber,
+    string? Position,
+    string? Department,
+    string OrganisationName,
+    DateTime GeneratedAtUtc,
+    List<ItemStaffRequestDto> ActiveAssets,
+    List<ItemStaffRequestDto> ReturnedAssets,
+    List<ItemStaffRequestDto> Consumables,
+    List<ItemStaffRequestEventDto> FullHistory
+);
+
 public sealed record ItemStaffRequestDto(
     int RequestId,
     int StateId,

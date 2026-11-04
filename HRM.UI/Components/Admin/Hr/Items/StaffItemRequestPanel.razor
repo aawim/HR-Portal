@@ -1,6 +1,7 @@
 @using HRM.DTOs.Items
 @inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Items
 @inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
 
 <section class="space-y-4">
     <!-- Header -->
@@ -9,7 +10,7 @@
             <div class="flex items-center gap-2">
                 <h2 class="text-lg font-bold text-slate-900">
                     @(InitialItemsMode ? "Initial Staff Equipment & Items" :
-                      PersonalItemsOnly ? "Personal Items & Staff Requisitions" :
+                      PersonalItemsOnly ? "Personal Items & Consumables" :
                       JobRelatedOnly ? "Job-Related Equipment & Assets" :
                       IndividualId > 0 ? "Staff Items & Assigned Equipment" :
                       "Item Requisitions & Custody")
@@ -25,7 +26,7 @@
             </div>
             <p class="text-xs text-slate-500 mt-0.5">
                 @(PersonalItemsOnly
-                    ? "Manage office supplies, consumables, and personal items requested or issued to this staff member."
+                    ? "Manage office supplies, consumables, and personal items requested or issued to staff."
                     : JobRelatedOnly
                     ? "Assign and track job-related physical items, hardware, and inventory assets issued to staff."
                     : IndividualId > 0
@@ -33,7 +34,42 @@
                     : "Submit item requisitions, track issued inventory assets, and review approval workflows.")
             </p>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Page Width Toggle Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Complete History & Clearance Report Note Button -->
+            @if (EffectiveIndividualId > 0)
+            {
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
+                        disabled="@busy"
+                        @onclick="OpenClearanceReport">
+                    <svg class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Release Note / History</span>
+                </button>
+            }
+
             <button class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
                     disabled="@busy"
                     @onclick="Load">
@@ -45,7 +81,7 @@
                     disabled="@busy"
                     @onclick="AddNew">
                 <span>+</span>
-                <span>@(!CanCreate ? "Back to Overview" : IsHrAssign ? "Assign New Items" : "New Request")</span>
+                <span>@(IsHrAssign ? "Assign New Items" : "New Request")</span>
             </button>
         </div>
     </header>
@@ -58,15 +94,28 @@
         </div>
     }
 
-    <!-- 2-Panel Layout: Left Panel Form/Details, Right Panel Request List with gap-4 and p-2 -->
-    <div class="grid grid-cols-1 gap-4 lg:grid-cols-12 items-start p-2">
-        
-        <!-- LEFT PANEL: Request Form (Default) or Selected Request Details -->
-        <div class="min-w-0 lg:col-span-7 xl:col-span-8 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
-            
+    <!-- Clearance Report Modal Overlay -->
+    @if (showClearanceModal && clearanceReport is not null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-xs">
+            <div class="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+                <StaffItemClearancePrintableView Report="clearanceReport" OnClose="() => showClearanceModal = false" />
+            </div>
+        </div>
+    }
+
+    <!-- 2-Panel Professional Layout:
+         LEFT: Operations, Workflow Actions & Request/Assignment Details
+         RIGHT: Item Inventory & Request List Overview
+    -->
+    <div class="grid grid-cols-1 gap-4 @(isFullWidth ? "xl:grid-cols-12" : "lg:grid-cols-12 max-w-7xl mx-auto") items-start p-1 transition-all duration-300">
+
+        <!-- LEFT PANEL: Operations & Form / Request Details -->
+        <div class="min-w-0 @(isFullWidth ? "xl:col-span-7" : "lg:col-span-7") rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
+
             @if (selectedRequestId.HasValue && SelectedRequest is { } row)
             {
-                <!-- Selected Request Detail View -->
+                <!-- Selected Request Detail & Operations View -->
                 <div class="flex flex-col gap-3 text-xs">
                     <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
                         <div class="flex items-center gap-2">
@@ -91,7 +140,7 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
                                     @onclick="AddNew">
-                                <span>@(CanCreate ? "+ New" : "← Back")</span>
+                                <span>+ New</span>
                             </button>
                         </div>
                     </div>
@@ -107,6 +156,10 @@
                                 @if (row.IssuedAtUtc.HasValue)
                                 {
                                     <div class="font-medium text-emerald-700">Issued: @row.IssuedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                                @if (row.AcceptedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-blue-700">Accepted: @row.AcceptedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
                                 }
                                 @if (row.ReturnedAtUtc.HasValue)
                                 {
@@ -124,7 +177,7 @@
                     <!-- Line Items Table -->
                     <div class="flex flex-col gap-1.5">
                         <div class="flex items-center justify-between">
-                            <h4 class="font-bold text-slate-900 text-sm">Issued & Requested Lines (@row.Lines.Count)</h4>
+                            <h4 class="font-bold text-slate-900 text-sm">Assigned & Requested Lines (@row.Lines.Count)</h4>
                             <span class="text-[11px] text-slate-500">Total units: @row.Lines.Sum(l => l.Quantity)</span>
                         </div>
 
@@ -136,10 +189,9 @@
                                         <th class="p-2.5">Qty</th>
                                         <th class="p-2.5">Inventory #</th>
                                         <th class="p-2.5">Serial #</th>
-                                        <th class="p-2.5">Condition</th>
-                                        <th class="p-2.5">Return Due</th>
-                                        <th class="p-2.5">Accessories & Remarks</th>
-                                        <th class="p-2.5">Line Status</th>
+                                        <th class="p-2.5">Item State</th>
+                                        <th class="p-2.5">Remarks / Accessories</th>
+                                        <th class="p-2.5">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody class="divide-y divide-slate-100">
@@ -171,7 +223,6 @@
                                                     <span class="text-slate-400">—</span>
                                                 }
                                             </td>
-                                            <td class="p-2.5 text-slate-600">@(line.ExpectedReturnDate?.ToString("dd MMM yyyy") ?? "—")</td>
                                             <td class="p-2.5 text-slate-600 max-w-xs truncate" title="@line.Remarks">@(line.Remarks ?? "—")</td>
                                             <td class="p-2.5">
                                                 @if (row.ReturnedAtUtc.HasValue)
@@ -188,7 +239,9 @@
                                                 }
                                                 else if (line.IssuedAtUtc.HasValue)
                                                 {
-                                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Issued</span>
+                                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">
+                                                        @(row.Purpose == "Job related" ? "In Use" : "Received")
+                                                    </span>
                                                 }
                                                 else
                                                 {
@@ -202,43 +255,65 @@
                         </div>
                     </div>
 
-                    <!-- Lifecycle Actions -->
+                    <!-- Lifecycle & Operations Action Controls -->
                     <div class="border-t border-slate-200 pt-3 flex flex-col gap-3">
                         @if (row.ReplacesRequestId.HasValue)
                         {
-                            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-800">
-                                @row.Kind of <button type="button" class="font-mono font-semibold underline" @onclick="() => ViewDetail(row.ReplacesRequestId.Value)">@row.ReplacesReference</button>
+                            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-800 flex items-center justify-between">
+                                <span>This request is an <strong>@row.Kind</strong> replacing prior asset:</span>
+                                <button type="button" class="font-mono font-semibold underline text-indigo-900" @onclick="() => ViewDetail(row.ReplacesRequestId.Value)">
+                                    @row.ReplacesReference
+                                </button>
                             </div>
                         }
+
                         @if (row.ReturnCondition != null)
                         {
-                            <div class="rounded-lg border p-2 @(row.ReturnCondition is "Good" or "Fair" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800")">
-                                <strong>Returned condition: @row.ReturnCondition</strong>
-                                @if (!string.IsNullOrWhiteSpace(row.ReturnNotes)) { <p class="mt-1">@row.ReturnNotes</p> }
+                            <div class="rounded-lg border p-2.5 @(row.ReturnCondition is "Good" or "Fair" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800")">
+                                <div class="font-bold">Inspection Result on Return: @row.ReturnCondition</div>
+                                @if (!string.IsNullOrWhiteSpace(row.ReturnNotes))
+                                {
+                                    <p class="mt-1 text-slate-700">Notes: @row.ReturnNotes</p>
+                                }
                             </div>
                         }
+
                         @if (row.Actions.Count > 0)
                         {
-                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5">
                                 <span class="font-bold text-slate-800">@ActionHeading(row)</span>
+
                                 @if (row.Actions.Contains("ConfirmReturn"))
                                 {
-                                    <div class="flex flex-wrap items-center gap-2">
-                                        <label class="font-medium text-slate-700">Condition on return</label>
-                                        <select class="rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="returnCondition">
-                                            <option value="Good">Good</option>
-                                            <option value="Fair">Fair / normal wear</option>
-                                            <option value="Damaged">Damaged (repairable)</option>
-                                            <option value="Unusable">Unusable</option>
-                                            <option value="Lost">Lost / not returned</option>
-                                        </select>
+                                    <div class="grid gap-2 sm:grid-cols-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                                        <div>
+                                            <label class="block font-medium text-slate-700 mb-1">Return Condition (Inspected by HR) *</label>
+                                            <select class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="returnCondition">
+                                                <option value="Good">Good (Ready for Reissue)</option>
+                                                <option value="Fair">Fair / Normal Wear</option>
+                                                <option value="Damaged">Damaged (Requires Repair)</option>
+                                                <option value="Unusable">Unusable / Broken</option>
+                                                <option value="Lost">Lost / Unreturned</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700 mb-1">Damage / Inspection Notes</label>
+                                            <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                                   maxlength="1000"
+                                                   placeholder="Specify damages or observations..."
+                                                   @bind="comments[row.RequestId]" />
+                                        </div>
                                     </div>
                                 }
-                                <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
-                                       maxlength="1000"
-                                       placeholder="@(row.Actions.Contains("ConfirmReturn") ? "Damage / inspection notes (required unless Good)" : "Comment (required to reject or decline)")"
-                                       @bind="comments[row.RequestId]" />
-                                <div class="flex flex-wrap items-center gap-2">
+                                else
+                                {
+                                    <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                           maxlength="1000"
+                                           placeholder="Action comment or reason (required for reject/decline)..."
+                                           @bind="comments[row.RequestId]" />
+                                }
+
+                                <div class="flex flex-wrap items-center gap-2 pt-1">
                                     @foreach (var a in row.Actions)
                                     {
                                         var code = a;
@@ -252,10 +327,10 @@
                             </div>
                         }
 
-                        <!-- History -->
-                        <div class="flex flex-col gap-1.5">
-                            <h4 class="font-bold text-slate-900 text-sm">History (@row.History.Count)</h4>
-                            <ol class="relative border-l border-slate-200 ml-2 space-y-2">
+                        <!-- History Timeline -->
+                        <div class="flex flex-col gap-1.5 pt-2">
+                            <h4 class="font-bold text-slate-900 text-sm">Custody Event History (@row.History.Count)</h4>
+                            <ol class="relative border-l border-slate-200 ml-2 space-y-2 mt-1">
                                 @foreach (var h in row.History)
                                 {
                                     <li class="ml-3">
@@ -263,10 +338,16 @@
                                         <div class="flex flex-wrap items-center gap-1.5">
                                             <strong class="text-slate-900">@h.Action</strong>
                                             <span class="text-slate-500">→ @StatusLabel(h.ToStatus)</span>
-                                            @if (h.Condition != null) { <span class="rounded bg-rose-50 px-1.5 text-rose-700">@h.Condition</span> }
+                                            @if (h.Condition != null)
+                                            {
+                                                <span class="rounded bg-rose-50 px-1.5 text-rose-700 font-medium">@h.Condition</span>
+                                            }
                                         </div>
                                         <div class="text-[11px] text-slate-500">@h.ActorName · @h.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
-                                        @if (!string.IsNullOrWhiteSpace(h.Comment)) { <p class="text-[11px] text-slate-700 italic">@h.Comment</p> }
+                                        @if (!string.IsNullOrWhiteSpace(h.Comment))
+                                        {
+                                            <p class="text-[11px] text-slate-700 italic bg-slate-50 p-1.5 rounded mt-0.5 border border-slate-100">@h.Comment</p>
+                                        }
                                     </li>
                                 }
                             </ol>
@@ -274,36 +355,29 @@
                     </div>
                 </div>
             }
-            else if (!CanCreate)
-            {
-                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-600">
-                    Personal items are requested by the staff member from their own item requests page.
-                    Select a record on the right to approve, reject or view its history.
-                </div>
-            }
             else
             {
-                <!-- Active Form (Default on Load) -->
+                <!-- Operations: Request / Direct Assignment Form -->
                 <fieldset disabled="@busy" class="flex flex-col gap-3 text-xs">
                     <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                         <div>
                             <legend class="text-sm font-bold text-slate-900">
-                                @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} of {replacingReference}" :
-                                  form.Kind == "Issue" ? "Assign Job-Related Items to Staff Member" :
+                                @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} for {replacingReference}" :
+                                  form.Kind == "Issue" ? "Direct Item / Asset Assignment (HR)" :
                                   PersonalItemsOnly ? "Request Personal / Consumable Items" :
                                   "New Item Request")
                             </legend>
                             <p class="text-[11px] text-slate-500 mt-0.5">
                                 @(form.Kind is "Replacement" or "Upgrade"
-                                    ? "HR reviews this request. When you accept the new item, the old one is sent back to HR for a condition check."
+                                    ? "HR will assign the replacement asset. Once accepted, the previous equipment will be returned to HR."
                                     : form.Kind == "Issue"
-                                    ? "Items are reserved immediately. The staff member must accept them before they are recorded as in use."
-                                    : "HR reviews and issues the items; you then accept them.")
+                                    ? "Assign serialized assets with Inventory and Serial numbers. Handover condition is not required at issuance."
+                                    : "Staff members request job equipment (like monitor) or personal consumables. HR will assign physical inventory.")
                             </p>
                         </div>
                         @if (form.Kind is "Replacement" or "Upgrade")
                         {
-                            <button type="button" class="text-xs font-semibold text-slate-600 hover:underline" @onclick="ResetForm">Cancel @form.Kind.ToLowerInvariant()</button>
+                            <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" @onclick="ResetForm">Cancel @form.Kind</button>
                         }
                     </div>
 
@@ -312,25 +386,26 @@
                         @if (!JobRelatedOnly && !PersonalItemsOnly && form.Kind == "Requisition")
                         {
                             <div>
-                                <label class="block font-medium text-slate-700">Request Type</label>
+                                <label class="block font-medium text-slate-700">Request Purpose *</label>
                                 <select class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs bg-white" @bind="form.Purpose">
-                                    <option value="Common">Personal items (notebook, diary, tissue…)</option>
-                                    <option value="Job related">Job-related equipment (monitor, laptop…)</option>
+                                    <option value="Common">Personal Use (Notebook, Diary, Tissues…)</option>
+                                    <option value="Job related">Job-Related Item / Asset (Monitor, Hardware…)</option>
                                 </select>
                             </div>
                         }
+
                         <div class="@(JobRelatedOnly || PersonalItemsOnly || form.Kind != "Requisition" ? "sm:col-span-2" : "")">
                             <label class="block font-medium text-slate-700">Item Catalogue Source</label>
                             <div class="mt-1 flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
                                 <button type="button"
                                         @onclick='() => itemSource = "catalogue"'
                                         class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "catalogue" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
-                                    Catalogue Items
+                                    From Catalogue
                                 </button>
                                 <button type="button"
                                         @onclick='() => itemSource = "custom"'
                                         class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "custom" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
-                                    Manual / Custom Item
+                                    Custom / Manual Entry
                                 </button>
                             </div>
                         </div>
@@ -340,7 +415,10 @@
                     <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
                         <div class="flex items-center justify-between">
                             <span class="font-bold text-slate-800">Add Line Item</span>
-                            <span class="text-[11px] text-slate-500">Inventory numbers are optional for assets</span>
+                            @if (IsHrAssign)
+                            {
+                                <span class="text-[11px] text-slate-500 font-mono">HR Direct Assignment</span>
+                            }
                         </div>
 
                         @if (itemSource == "catalogue")
@@ -354,7 +432,7 @@
                                         <option value="0">Choose from active catalogue...</option>
                                         @foreach (var catGroup in catalogueItems.GroupBy(i => i.Kind))
                                         {
-                                            <optgroup label="@(catGroup.Key == "Asset" ? "Assets / Equipment" : "Consumables")">
+                                            <optgroup label="@(catGroup.Key == "Asset" ? "Assets / Hardware" : "Consumables / Supplies")">
                                                 @foreach (var item in catGroup)
                                                 {
                                                     <option value="@item.ItemId">
@@ -365,18 +443,19 @@
                                         }
                                     </select>
                                 </div>
-                                @if (availableUnits.Count > 0)
+
+                                @if (IsHrAssign && availableUnits.Count > 0)
                                 {
                                     <div>
-                                        <label class="block font-medium text-slate-700">Registered Asset Units</label>
+                                        <label class="block font-medium text-slate-700">Registered Asset Unit</label>
                                         <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono"
                                                 value="@selectedItemUnitId"
                                                 @onchange="OnUnitChanged">
-                                            <option value="0">Select inventory unit (or enter manual number)...</option>
+                                            <option value="0">Choose registered inventory unit...</option>
                                             @foreach (var u in availableUnits)
                                             {
                                                 <option value="@u.ItemUnitId">
-                                                    [@u.InventoryNumber] @(u.SerialNumber != null ? $"S/N: {u.SerialNumber} · " : "")Condition: @u.Condition
+                                                    [@u.InventoryNumber] @(u.SerialNumber != null ? $"S/N: {u.SerialNumber} · " : "")@u.Condition
                                                 </option>
                                             }
                                         </select>
@@ -391,7 +470,7 @@
                                     <label class="block font-medium text-slate-700">Previously Requested Item</label>
                                     <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
                                             @bind="selectedName">
-                                        <option value="">Select previously used name...</option>
+                                        <option value="">Select previously used item name...</option>
                                         @foreach (var name in previousNames)
                                         {
                                             <option value="@name">@name</option>
@@ -403,54 +482,53 @@
                                     <input class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
                                            maxlength="200"
                                            @bind="newName"
-                                           placeholder="e.g. Dell Latitude 5420, Wireless Mouse, ID Badge" />
+                                           placeholder="e.g. Dell Latitude 5420, Wireless Mouse, Notebook" />
                                 </div>
                             </div>
                         }
 
-                        <!-- Item Specific Details: Inventory Number (Optional), Serial Number, Condition -->
-                        <div class="grid gap-2 sm:grid-cols-3">
-                            <div>
-                                <label class="block font-medium text-slate-700">
-                                    Inventory Number <span class="font-normal text-slate-500">(Optional)</span>
-                                </label>
-                                <input type="text"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
-                                       maxlength="100"
-                                       @bind="lineInventoryNumber"
-                                       placeholder="e.g. INV-2026-0042" />
+                        <!--
+                            IMPORTANT WORKFLOW RULE:
+                            - HR Assigning: Enters Inventory #, Serial #, and Item State (Brand New, Used, Fair).
+                            - Staff Requesting: Does NOT enter Inventory #, Serial #, or Condition.
+                        -->
+                        @if (IsHrAssign)
+                        {
+                            <div class="grid gap-2 sm:grid-cols-3">
+                                <div>
+                                    <label class="block font-medium text-slate-700">
+                                        Inventory Number <span class="font-normal text-slate-500">(Optional)</span>
+                                    </label>
+                                    <input type="text"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                           maxlength="100"
+                                           @bind="lineInventoryNumber"
+                                           placeholder="e.g. INV-2026-0042" />
+                                </div>
+                                <div>
+                                    <label class="block font-medium text-slate-700">
+                                        Serial Number <span class="font-normal text-slate-500">(Optional)</span>
+                                    </label>
+                                    <input type="text"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                           maxlength="120"
+                                           @bind="lineSerialNumber"
+                                           placeholder="e.g. SN-8849204A" />
+                                </div>
+                                <div>
+                                    <label class="block font-medium text-slate-700">Item State at Issue</label>
+                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="lineCondition">
+                                        <option value="Brand New">Brand New</option>
+                                        <option value="Good">Good / Like New</option>
+                                        <option value="Used">Used / Refurbished</option>
+                                        <option value="Fair">Fair</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div>
-                                <label class="block font-medium text-slate-700">
-                                    Serial Number <span class="font-normal text-slate-500">(Optional)</span>
-                                </label>
-                                <input type="text"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
-                                       maxlength="120"
-                                       @bind="lineSerialNumber"
-                                       placeholder="e.g. SN-8849204A" />
-                            </div>
-                            <div>
-                                <label class="block font-medium text-slate-700">Condition at Handover</label>
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="lineCondition">
-                                    <option value="New">Brand New</option>
-                                    <option value="Good">Good Condition</option>
-                                    <option value="Fair">Fair / Used</option>
-                                    <option value="Excellent">Excellent</option>
-                                </select>
-                            </div>
-                        </div>
+                        }
 
-                        <!-- Expected Return Date, Quantity, Accessories / Remarks -->
-                        <div class="grid gap-2 sm:grid-cols-3">
-                            <div>
-                                <label class="block font-medium text-slate-700">
-                                    Expected Return Date <span class="font-normal text-slate-500">(Optional)</span>
-                                </label>
-                                <input type="date"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
-                                       @bind="lineExpectedReturnDate" />
-                            </div>
+                        <!-- Quantity and Accessories / Remarks -->
+                        <div class="grid gap-2 sm:grid-cols-2">
                             <div>
                                 <label class="block font-medium text-slate-700">Quantity</label>
                                 <input type="number"
@@ -467,7 +545,7 @@
                                        class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
                                        maxlength="500"
                                        @bind="lineRemarks"
-                                       placeholder="e.g. 65W charger, laptop bag, HDMI adapter" />
+                                       placeholder="e.g. 65W charger, carry sleeve, special specs" />
                             </div>
                         </div>
 
@@ -485,7 +563,7 @@
                     {
                         <div class="flex flex-col gap-1.5">
                             <div class="flex items-center justify-between font-medium text-slate-700">
-                                <span>Items in this Requisition (@form.Lines.Count)</span>
+                                <span>Items in this @(form.Kind == "Issue" ? "Assignment" : "Requisition") (@form.Lines.Count)</span>
                                 <span class="text-[11px] text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
                             </div>
                             <div class="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
@@ -508,12 +586,9 @@
                                                         S/N: @line.SerialNumber
                                                     </span>
                                                 }
-                                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">@line.Condition</span>
-                                                @if (line.ExpectedReturnDate.HasValue)
+                                                @if (IsHrAssign && !string.IsNullOrWhiteSpace(line.Condition))
                                                 {
-                                                    <span class="rounded bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[10px]">
-                                                        Return: @line.ExpectedReturnDate.Value.ToString("dd MMM yyyy")
-                                                    </span>
+                                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">@line.Condition</span>
                                                 }
                                             </div>
                                             @if (!string.IsNullOrWhiteSpace(line.Remarks))
@@ -540,7 +615,7 @@
                         <textarea class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                   maxlength="1000"
                                   rows="2"
-                                  placeholder="Provide the purpose or justification for this requisition..."
+                                  placeholder="Provide the purpose or justification for this request..."
                                   @bind="form.Reason"></textarea>
                     </div>
 
@@ -562,14 +637,14 @@
             }
         </div>
 
-        <!-- RIGHT PANEL: Request List with style gap p-2 -->
-        <aside class="min-w-0 lg:col-span-5 xl:col-span-4 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2 flex flex-col gap-2" aria-label="Item requests">
-            
-            <!-- Header Card with p-2 -->
+        <!-- RIGHT PANEL: Items Overview, Filtering & Request History -->
+        <aside class="min-w-0 @(isFullWidth ? "xl:col-span-5" : "lg:col-span-5") rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2.5 flex flex-col gap-2.5" aria-label="Item requests">
+
+            <!-- Header Card -->
             <div class="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
                 <div>
                     <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
-                        @(PersonalItemsOnly ? "Personal Items" : JobRelatedOnly ? "Assigned Equipment" : "Item Requests")
+                        @(PersonalItemsOnly ? "Personal Items & Supplies" : JobRelatedOnly ? "Assigned Equipment & Assets" : "Item & Asset Registry")
                     </h3>
                     <span class="text-[11px] text-slate-500">@ListRows.Count record@(ListRows.Count == 1 ? "" : "s")</span>
                 </div>
@@ -584,15 +659,15 @@
                 </div>
             </div>
 
-            <!-- Search & Filters Container with p-2 and gap-2 -->
-            <div class="rounded-xl border border-slate-200/80 bg-white p-2 shadow-2xs flex flex-col gap-2">
+            <!-- Search & Filters Container -->
+            <div class="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs flex flex-col gap-2">
                 <input type="text"
                        class="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-2.5 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                        placeholder="Search reference, item, inv #..."
                        @bind="searchTerm"
                        @bind:event="oninput" />
 
-                <!-- Filter Status Pills with p-2 and gap-1 -->
+                <!-- Filter Status Pills -->
                 <div class="flex flex-wrap gap-1 text-[11px]">
                     <button type="button"
                             @onclick='() => filterStatus = "all"'
@@ -600,14 +675,14 @@
                         All
                     </button>
                     <button type="button"
+                            @onclick='() => filterStatus = "inuse"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "inuse" ? "bg-emerald-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        In Use / Received
+                    </button>
+                    <button type="button"
                             @onclick='() => filterStatus = "pending"'
                             class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
                         Pending
-                    </button>
-                    <button type="button"
-                            @onclick='() => filterStatus = "issued"'
-                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "issued" ? "bg-emerald-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
-                        Issued
                     </button>
                     <button type="button"
                             @onclick='() => filterStatus = "returned"'
@@ -617,14 +692,14 @@
                 </div>
             </div>
 
-            <!-- List of Request Cards with gap-2 and p-2 -->
+            <!-- List of Request Cards -->
             @if (!ListRows.Any())
             {
                 <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
-                    No matching item requests found.
+                    No matching item records found.
                 </div>
             }
-            <div class="flex flex-col gap-2 max-h-[38rem] overflow-y-auto pr-0.5">
+            <div class="flex flex-col gap-2 max-h-[42rem] overflow-y-auto pr-0.5">
                 @foreach (var r in ListRows)
                 {
                     <article class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(SelectedRequest?.RequestId == r.RequestId ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
@@ -637,7 +712,6 @@
                             </span>
                         </div>
 
-                        <!-- Staff Name if general view -->
                         @if (IndividualId == 0)
                         {
                             <div class="text-[11px] font-medium text-slate-700 truncate">Staff: @r.StaffName</div>
@@ -648,7 +722,7 @@
                             <span>·</span>
                             <span>@r.Kind</span>
                             <span>·</span>
-                            <span>@r.Lines.Count item@(r.Lines.Count == 1 ? "" : "s")</span>
+                            <span>@r.Lines.Count line@(r.Lines.Count == 1 ? "" : "s")</span>
                         </div>
 
                         <!-- Items Summary with Inventory Badges -->
@@ -675,7 +749,7 @@
                         <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
                             <span>@r.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</span>
                             <span class="text-blue-600 font-semibold hover:underline">
-                                @(SelectedRequest?.RequestId == r.RequestId ? "Selected" : "View →")
+                                @(SelectedRequest?.RequestId == r.RequestId ? "Selected" : "View Details →")
                             </span>
                         </div>
                     </article>
@@ -711,7 +785,7 @@
     private string newName = "";
     private string lineInventoryNumber = "";
     private string lineSerialNumber = "";
-    private string lineCondition = "Good";
+    private string lineCondition = "Brand New";
     private DateOnly? lineExpectedReturnDate;
     private string lineRemarks = "";
     private int lineQuantity = 1;
@@ -722,6 +796,16 @@
     private bool busy;
     private int? selectedRequestId;
     private int loadedIndividualId = -1;
+
+    // Full-page width toggle saved to browser localStorage user setting
+    private bool isFullWidth = false;
+    private const string FullWidthSettingKey = "hrm.item-management.full-width";
+
+    // Clearance and Release Note
+    private bool showClearanceModal = false;
+    private ItemStaffClearanceReportDto? clearanceReport;
+
+    private int EffectiveIndividualId => IndividualId > 0 ? IndividualId : (SelectedRequest?.IndividualId ?? 0);
 
     private IEnumerable<ItemStaffRequestDto> FilteredRows
     {
@@ -747,10 +831,10 @@
                         || (l.SerialNumber != null && l.SerialNumber.Contains(q, StringComparison.OrdinalIgnoreCase))));
             }
 
-            if (filterStatus == "pending")
-                combined = combined.Where(r => r.Status is "Submitted" or "PendingAcceptance" or "ReturnRequested");
-            else if (filterStatus == "issued")
+            if (filterStatus == "inuse")
                 combined = combined.Where(r => r.Status is "InUse" or "Received");
+            else if (filterStatus == "pending")
+                combined = combined.Where(r => r.Status is "Submitted" or "PendingAcceptance" or "ReturnRequested");
             else if (filterStatus == "returned")
                 combined = combined.Where(r => r.Status == "Returned");
 
@@ -758,14 +842,39 @@
         }
     }
 
-    // HR assigns job-related items from a staff workspace; personal items are only requested by the staff member.
-    private bool IsHrAssign => IndividualId > 0 && !PersonalItemsOnly;
-    private bool CanCreate => IndividualId == 0 || IsHrAssign || form.Kind is "Replacement" or "Upgrade";
+    private bool IsHrAssign => canManageStaffItems && IndividualId > 0 && !PersonalItemsOnly;
     private string returnCondition = "Good";
     private string? replacingReference;
 
     private List<ItemStaffRequestDto> ListRows => FilteredRows.ToList();
     private ItemStaffRequestDto? SelectedRequest => rows.Concat(approvalRows).FirstOrDefault(r => r.RequestId == selectedRequestId);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(saved, out var val))
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
@@ -815,7 +924,7 @@
         newName = "";
         lineInventoryNumber = "";
         lineSerialNumber = "";
-        lineCondition = "Good";
+        lineCondition = "Brand New";
         lineExpectedReturnDate = null;
         lineRemarks = "";
         lineQuantity = 1;
@@ -871,7 +980,7 @@
                 lineInventoryNumber = "";
                 lineSerialNumber = "";
                 availableUnits.Clear();
-                if (item.Kind == "Asset")
+                if (item.Kind == "Asset" && IsHrAssign)
                 {
                     try
                     {
@@ -928,13 +1037,15 @@
             return;
         }
 
-        var inv = string.IsNullOrWhiteSpace(lineInventoryNumber) ? null : lineInventoryNumber.Trim();
-        var sn = string.IsNullOrWhiteSpace(lineSerialNumber) ? null : lineSerialNumber.Trim();
+        var inv = IsHrAssign && !string.IsNullOrWhiteSpace(lineInventoryNumber) ? lineInventoryNumber.Trim() : null;
+        var sn = IsHrAssign && !string.IsNullOrWhiteSpace(lineSerialNumber) ? lineSerialNumber.Trim() : null;
+        var cond = IsHrAssign && !string.IsNullOrWhiteSpace(lineCondition) ? lineCondition.Trim() : null;
+
         if (form.Lines.Any(l => l.ItemName.Equals(name, StringComparison.OrdinalIgnoreCase)
             && (l.InventoryNumber ?? "").Equals(inv ?? "", StringComparison.OrdinalIgnoreCase)
             && (l.SerialNumber ?? "").Equals(sn ?? "", StringComparison.OrdinalIgnoreCase)))
         {
-            error = "This item and inventory number combination is already added to the list.";
+            error = "This item is already added to the list.";
             return;
         }
 
@@ -945,7 +1056,7 @@
             ItemName = name,
             InventoryNumber = inv,
             SerialNumber = sn,
-            Condition = string.IsNullOrWhiteSpace(lineCondition) ? "Good" : lineCondition.Trim(),
+            Condition = cond,
             ExpectedReturnDate = lineExpectedReturnDate,
             Remarks = string.IsNullOrWhiteSpace(lineRemarks) ? null : lineRemarks.Trim(),
             Quantity = Math.Max(1, lineQuantity)
@@ -994,7 +1105,6 @@
     {
         if (code is "RequestReplacement" or "RequestUpgrade")
         {
-            // Staff raise a new request linked to the in-use record; the old item is returned once the new one is accepted.
             var kind = code == "RequestReplacement" ? "Replacement" : "Upgrade";
             form = new ItemStaffRequestInput
             {
@@ -1008,7 +1118,6 @@
                     ItemId = l.ItemId,
                     ItemName = l.ItemName,
                     Quantity = l.Quantity,
-                    Condition = "Good",
                     Remarks = kind == "Replacement" ? $"Replaces #{l.InventoryNumber ?? l.ItemName}" : $"Upgrade of #{l.InventoryNumber ?? l.ItemName}"
                 }).ToList()
             };
@@ -1020,6 +1129,26 @@
         await Act(r, code == "ConfirmReturn" ? $"ConfirmReturn:{returnCondition}" : code);
     }
 
+    private async Task OpenClearanceReport()
+    {
+        var id = EffectiveIndividualId;
+        if (id <= 0) return;
+        busy = true;
+        try
+        {
+            clearanceReport = await Items.GetStaffClearanceReportAsync(id);
+            showClearanceModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private static string ActionLabel(string code) => code switch
     {
         "Approve" => "✓ Approve & Issue",
@@ -1027,9 +1156,9 @@
         "Cancel" => "Cancel Request",
         "Accept" => "✓ Accept Items",
         "Decline" => "✕ Decline",
-        "RequestReturn" => "↩ Return Items",
-        "ConfirmReturn" => "✓ Confirm Return",
-        "RequestReplacement" => "Request Replacement (damaged)",
+        "RequestReturn" => "↩ Return / Handover Items",
+        "ConfirmReturn" => "✓ Confirm Return & Check In",
+        "RequestReplacement" => "Request Replacement (Damaged)",
         "RequestUpgrade" => "Request Upgrade",
         _ => code
     };
@@ -1045,11 +1174,11 @@
 
     private static string ActionHeading(ItemStaffRequestDto r) => r.Status switch
     {
-        "Submitted" => "Waiting for HR decision",
-        "PendingAcceptance" => "Please confirm you received these items",
-        "InUse" => "Items in use",
-        "ReturnRequested" => "Return pending HR inspection",
-        _ => "Actions"
+        "Submitted" => "Action Required: Waiting for HR Decision",
+        "PendingAcceptance" => "Action Required: Please Confirm Receipt of Items",
+        "InUse" => "Active Custody Operations",
+        "ReturnRequested" => "Handover Pending: HR Inspection & Check In",
+        _ => "Operations & Lifecycle Actions"
     };
 
     private static string StatusLabel(string status) => status switch
@@ -1058,7 +1187,8 @@
         "PendingAcceptance" => "Awaiting Acceptance",
         "InUse" => "In Use",
         "Received" => "Received",
-        "ReturnRequested" => "Return Pending",
+        "ReturnRequested" => "Handover Pending",
+        "Returned" => "Returned & Checked",
         _ => status
     };
 

@@ -26,5 +26,6 @@ public abstract class ItemCatalogueServiceContracts
         Task<bool> CanManageStaffItemsAsync();
         Task<ServiceResult> SubmitStaffRequestAsync(ItemStaffRequestInput model);
         Task<ServiceResult> ActStaffRequestAsync(int requestId, int expectedState, string action, string? comment);
+        Task<ItemStaffClearanceReportDto> GetStaffClearanceReportAsync(int individualId, int? organisationId = null);
     }
 }
