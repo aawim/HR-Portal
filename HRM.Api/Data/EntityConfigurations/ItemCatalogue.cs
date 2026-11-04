@@ -2,7 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace HRM.Models;
 
-public sealed class ItemCatalogueMapping : IEntityTypeConfiguration<ItemCategory>, IEntityTypeConfiguration<Item>, IEntityTypeConfiguration<ItemUnit>, IEntityTypeConfiguration<ItemStaffRequest>, IEntityTypeConfiguration<ItemStaffRequestLine>
+public sealed class ItemCatalogueMapping : IEntityTypeConfiguration<ItemCategory>, IEntityTypeConfiguration<Item>, IEntityTypeConfiguration<ItemUnit>, IEntityTypeConfiguration<ItemStaffRequest>, IEntityTypeConfiguration<ItemStaffRequestLine>, IEntityTypeConfiguration<ItemStaffRequestEvent>
 {
     public void Configure(EntityTypeBuilder<ItemCategory> b)
     {
@@ -52,13 +52,18 @@ public sealed class ItemCatalogueMapping : IEntityTypeConfiguration<ItemCategory
     public void Configure(EntityTypeBuilder<ItemStaffRequest> b)
     {
         b.ToTable("IM_ItemStaffRequests", t => t.HasCheckConstraint("CK_IM_ItemStaffRequests_Values",
-            "[Quantity] > 0 AND [Purpose] IN ('Job related','Common') AND [Kind] IN ('Issue','Requisition')"));
+            "[Quantity] > 0 AND [Purpose] IN ('Job related','Common') AND [Kind] IN ('Issue','Requisition','Replacement','Upgrade')"));
         b.HasKey(x => x.RequestId);
         b.Property(x => x.RequestId).ValueGeneratedNever();
         b.Property(x => x.Purpose).HasMaxLength(20);
         b.Property(x => x.Kind).HasMaxLength(20);
         b.Property(x => x.Reason).HasMaxLength(1000);
+        b.Property(x => x.Status).HasMaxLength(30);
+        b.Property(x => x.ReturnCondition).HasMaxLength(20);
+        b.Property(x => x.ReturnNotes).HasMaxLength(1000);
         b.HasIndex(x => new { x.OrganisationId, x.IndividualId, x.CreatedAtUtc });
+        b.HasIndex(x => new { x.OrganisationId, x.Status });
+        b.HasOne(x => x.ReplacesRequest).WithMany().HasForeignKey(x => x.ReplacesRequestId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Request).WithOne().HasForeignKey<ItemStaffRequest>(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.ItemUnit).WithMany().HasForeignKey(x => x.ItemUnitId).OnDelete(DeleteBehavior.Restrict);
@@ -83,6 +88,19 @@ public sealed class ItemCatalogueMapping : IEntityTypeConfiguration<ItemCategory
         b.HasOne(x => x.Item).WithMany().HasForeignKey(x => x.ItemId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.ItemUnit).WithMany().HasForeignKey(x => x.ItemUnitId).OnDelete(DeleteBehavior.Restrict);
     }
+
+    public void Configure(EntityTypeBuilder<ItemStaffRequestEvent> b)
+    {
+        b.ToTable("IM_ItemStaffRequestEvents");
+        b.HasKey(x => x.ItemStaffRequestEventId);
+        b.Property(x => x.Action).HasMaxLength(40);
+        b.Property(x => x.FromStatus).HasMaxLength(30);
+        b.Property(x => x.ToStatus).HasMaxLength(30);
+        b.Property(x => x.Condition).HasMaxLength(20);
+        b.Property(x => x.Comment).HasMaxLength(1000);
+        b.HasIndex(x => new { x.RequestId, x.CreatedAtUtc });
+        b.HasOne(x => x.Request).WithMany(x => x.Events).HasForeignKey(x => x.RequestId).OnDelete(DeleteBehavior.Restrict);
+    }
 }
 
 public partial class HrmTeContext
@@ -92,4 +110,5 @@ public partial class HrmTeContext
     public DbSet<ItemUnit> ItemUnits => Set<ItemUnit>();
     public DbSet<ItemStaffRequest> ItemStaffRequests => Set<ItemStaffRequest>();
     public DbSet<ItemStaffRequestLine> ItemStaffRequestLines => Set<ItemStaffRequestLine>();
+    public DbSet<ItemStaffRequestEvent> ItemStaffRequestEvents => Set<ItemStaffRequestEvent>();
 }

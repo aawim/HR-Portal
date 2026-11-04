@@ -59,7 +59,12 @@ public sealed class ItemUnit
     public Item Item { get; set; } = null!;
 }
 
-/// <summary>An approved request issues stock or one asset unit to a staff member.</summary>
+/// <summary>
+/// Staff item custody record. Kind: Issue (HR assigns job-related items), Requisition (staff requests),
+/// Replacement/Upgrade (staff asks to swap an in-use job-related item). Status follows
+/// Submitted → PendingAcceptance → InUse (job related) / Received (personal) → ReturnRequested → Returned,
+/// with Rejected, Cancelled and Declined as terminal outcomes. Every transition is kept in <see cref="Events"/>.
+/// </summary>
 public sealed class ItemStaffRequest
 {
     public int RequestId { get; set; }
@@ -72,13 +77,38 @@ public sealed class ItemStaffRequest
     public string Purpose { get; set; } = "Common";
     public string Kind { get; set; } = "Requisition";
     public string Reason { get; set; } = "";
+    public string Status { get; set; } = "Submitted";
+    public int? ReplacesRequestId { get; set; }
     public DateTime CreatedAtUtc { get; set; }
     public DateTime? IssuedAtUtc { get; set; }
+    public DateTime? AcceptedAtUtc { get; set; }
+    public DateTime? ReturnRequestedAtUtc { get; set; }
     public DateTime? ReturnedAtUtc { get; set; }
+    // Condition recorded by HR when the item is checked back in: Good, Fair, Damaged, Unusable, Lost.
+    public string? ReturnCondition { get; set; }
+    public string? ReturnNotes { get; set; }
     public Request Request { get; set; } = null!;
     public Item? Item { get; set; }
     public ItemUnit? ItemUnit { get; set; }
+    public ItemStaffRequest? ReplacesRequest { get; set; }
     public ICollection<ItemStaffRequestLine> Lines { get; set; } = new List<ItemStaffRequestLine>();
+    public ICollection<ItemStaffRequestEvent> Events { get; set; } = new List<ItemStaffRequestEvent>();
+}
+
+/// <summary>Immutable history entry for a staff item record transition.</summary>
+public sealed class ItemStaffRequestEvent
+{
+    public int ItemStaffRequestEventId { get; set; }
+    public int RequestId { get; set; }
+    public string Action { get; set; } = "";
+    public string? FromStatus { get; set; }
+    public string ToStatus { get; set; } = "";
+    public int ActorUserId { get; set; }
+    public int ActorIndividualId { get; set; }
+    public string? Condition { get; set; }
+    public string? Comment { get; set; }
+    public DateTime CreatedAtUtc { get; set; }
+    public ItemStaffRequest Request { get; set; } = null!;
 }
 
 public sealed class ItemStaffRequestLine

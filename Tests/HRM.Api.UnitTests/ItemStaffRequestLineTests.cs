@@ -23,8 +23,8 @@ public sealed class ItemStaffRequestLineTests
         access.Actor = new UserContextDto
         {
             UserId = 1,
-            IndividualId = 100,
-            BusinessEntityId = 100,
+            IndividualId = 999,
+            BusinessEntityId = 999,
             Username = "admin_user",
             IsSuperAdministrator = true
         };
@@ -40,13 +40,19 @@ public sealed class ItemStaffRequestLineTests
         };
         db.Organisations.Add(org);
 
+        var adminIndividual = new Individual
+        {
+            BusinessEntityId = 999,
+            FirstNameEnglish = "Admin",
+            LastNameEnglish = "User"
+        };
         var individual = new Individual
         {
             BusinessEntityId = 100,
             FirstNameEnglish = "Jane",
             LastNameEnglish = "Doe"
         };
-        db.Individuals.Add(individual);
+        db.Individuals.AddRange(adminIndividual, individual);
 
         var job = new Job
         {
@@ -277,13 +283,15 @@ public sealed class ItemStaffRequestLineTests
 
         await using var db = factory.CreateDbContext();
         var req = await db.ItemStaffRequests.Include(r => r.Lines).FirstAsync();
+        req.Status = "InUse";
         req.IssuedAtUtc = DateTime.UtcNow;
+        req.AcceptedAtUtc = DateTime.UtcNow;
         var unit = await db.ItemUnits.SingleAsync(u => u.ItemUnitId == 301);
         unit.Status = "Issued";
         unit.IssuedToIndividualId = 100;
         await db.SaveChangesAsync();
 
-        var returnResult = await service.ActStaffRequestAsync(req.RequestId, 2, "MarkReturned", "Staff completed project, handed back equipment.");
+        var returnResult = await service.ActStaffRequestAsync(req.RequestId, 2, "ConfirmReturn:Good", "Staff completed project, handed back equipment.");
         Assert.True(returnResult.Success);
 
         await using var dbVerify = factory.CreateDbContext();
@@ -291,7 +299,8 @@ public sealed class ItemStaffRequestLineTests
         Assert.NotNull(verifiedReq.ReturnedAtUtc);
 
         var verifiedUnit = await dbVerify.ItemUnits.SingleAsync(u => u.ItemUnitId == 301);
-        Assert.Equal("Returned", verifiedUnit.Status);
+        Assert.Equal("Available", verifiedUnit.Status);
+        Assert.Equal("Good", verifiedUnit.Condition);
         Assert.Null(verifiedUnit.IssuedToIndividualId);
     }
 }

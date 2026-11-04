@@ -7,10 +7,22 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
+/// <summary>
+/// Staff item custody lifecycle. Deliberately independent of the configurable approval workflow:
+/// HR (Admin permission) issues/approves and checks returns, the staff member accepts and asks for returns,
+/// replacements or upgrades. Every transition is written to IM_ItemStaffRequestEvents.
+/// </summary>
 public sealed partial class ItemCatalogueService
 {
-    private WorkflowRequestProcessing ItemProcessing => new(approvers, contexts);
-    private static WorkflowRequestSubject Subject(ItemStaffRequest r) => new(r.Request, r.JobId, r.IndividualId, r.OrganisationId);
+    private const string JobRelated = "Job related";
+    private static readonly string[] ReturnConditions = ["Good", "Fair", "Damaged", "Unusable", "Lost"];
+
+    private static class St
+    {
+        public const string Submitted = "Submitted", PendingAcceptance = "PendingAcceptance", InUse = "InUse",
+            Received = "Received", ReturnRequested = "ReturnRequested", Returned = "Returned",
+            Rejected = "Rejected", Cancelled = "Cancelled", Declined = "Declined";
+    }
 
     private async Task<(int Org, int Person, int User, bool Manage)> RequestScopeAsync(int? selected = null)
     {
@@ -40,7 +52,7 @@ public sealed partial class ItemCatalogueService
         if (person != actor.Person && !actor.Manage) throw new UnauthorizedAccessException("You can view only your requested items.");
         await using var db = await factory.CreateDbContextAsync();
         return (await db.ItemStaffRequestLines.AsNoTracking().Where(l => l.Request.OrganisationId == actor.Org &&
-                l.Request.IndividualId == person && l.Request.Kind == "Requisition")
+                l.Request.IndividualId == person)
             .Select(l => l.ItemName).ToListAsync()).Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
     }
@@ -51,62 +63,107 @@ public sealed partial class ItemCatalogueService
     public Task<List<ItemStaffRequestDto>> GetPendingItemApprovalsAsync()
         => LoadStaffRequestsAsync(null, null, true);
 
-    private async Task<List<ItemStaffRequestDto>> LoadStaffRequestsAsync(int? organisationId, int? individualId, bool approvalsOnly)
+    private async Task<List<ItemStaffRequestDto>> LoadStaffRequestsAsync(int? organisationId, int? individualId, bool hrQueueOnly)
     {
         var actor = await RequestScopeAsync(organisationId);
-        var person = individualId.GetValueOrDefault(approvalsOnly || actor.Manage ? 0 : actor.Person);
+        if (hrQueueOnly && !actor.Manage) return [];
+        var person = individualId.GetValueOrDefault(hrQueueOnly || actor.Manage ? 0 : actor.Person);
         if (person > 0 && person != actor.Person && !actor.Manage)
-            throw new UnauthorizedAccessException("You can view only your item requests.");
+            throw new UnauthorizedAccessException("You can view only your item records.");
         await using var db = await factory.CreateDbContextAsync();
-        var rows = await db.ItemStaffRequests.AsNoTracking().Include(r => r.Request).ThenInclude(r => r.RequestState)
-            .Include(r => r.Lines)
+        var rows = await db.ItemStaffRequests.AsNoTracking().Include(r => r.Request).Include(r => r.Lines)
+            .Include(r => r.Events).Include(r => r.ReplacesRequest).ThenInclude(r => r!.Request)
             .Where(r => r.OrganisationId == actor.Org && (person == 0 || r.IndividualId == person) &&
-                (approvalsOnly
-                    ? db.WfRequestApprovals.Any(a => a.ApproverUserId == actor.User && a.Decision == "Pending" &&
-                        a.RequestStageInstance.WorkflowRequestInstance.RequestId == r.RequestId)
-                    : actor.Manage || r.IndividualId == actor.Person))
-            .OrderByDescending(r => r.CreatedAtUtc).Take(200).ToListAsync();
-        var result = new List<ItemStaffRequestDto>(rows.Count);
-        foreach (var row in rows)
+                (hrQueueOnly ? r.Status == St.Submitted || r.Status == St.ReturnRequested : actor.Manage || r.IndividualId == actor.Person))
+            .OrderByDescending(r => r.CreatedAtUtc).Take(300).ToListAsync();
+
+        var people = rows.Select(r => r.IndividualId).Concat(rows.SelectMany(r => r.Events).Select(e => e.ActorIndividualId)).Distinct().ToList();
+        var names = await db.Individuals.AsNoTracking().Where(i => people.Contains(i.BusinessEntityId))
+            .Select(i => new { i.BusinessEntityId, Name = i.FirstNameEnglish + " " + (i.LastNameEnglish ?? "") })
+            .ToDictionaryAsync(i => i.BusinessEntityId, i => i.Name.Trim());
+
+        return rows.Select(row =>
         {
-            var instance = await WorkflowRequestProcessing.Instance(db, row.RequestId);
-            var creator = await db.WfRequestActions.AsNoTracking().Where(a => a.WorkflowRequestInstance.RequestId == row.RequestId && a.ActionCode == "START")
-                .Select(a => (int?)a.PerformedByUserId).FirstOrDefaultAsync();
-            var name = await db.Individuals.Where(i => i.BusinessEntityId == row.IndividualId)
-                .Select(i => i.FirstNameEnglish + " " + (i.LastNameEnglish ?? "")).SingleAsync();
-            var canApprove = creator != actor.User && await ItemProcessing.CanApprove(db, Subject(row), instance, actor.User, actor.Person);
-            if (approvalsOnly && !canApprove) continue;
-            result.Add(new(row.RequestId, row.Request.RequestStateId, row.Request.ReferenceNumber ?? $"IM-{row.RequestId}",
-                row.IndividualId, name, row.Purpose, row.Kind,
-                row.Reason, row.Request.RequestState.StateName.Trim(), row.CreatedAtUtc, row.IssuedAtUtc, row.ReturnedAtUtc,
-                canApprove,
-                row.IndividualId == actor.Person && instance?.WorkflowStatus == "InProgress",
-                row.Lines.OrderBy(l => l.ItemStaffRequestLineId)
-                    .Select(l => new ItemStaffRequestLineDto(
-                        l.ItemStaffRequestLineId,
-                        l.ItemId,
-                        l.ItemUnitId,
-                        l.ItemName,
-                        l.InventoryNumber,
-                        l.SerialNumber,
-                        l.Condition,
-                        l.ExpectedReturnDate,
-                        l.Remarks,
-                        l.Quantity,
-                        l.IssuedAtUtc)).ToList()));
+            var actions = AllowedActions(row, actor.Person, actor.Manage);
+            return new ItemStaffRequestDto(row.RequestId, row.Request.RequestStateId, row.Request.ReferenceNumber ?? $"IM-{row.RequestId}",
+                row.IndividualId, names.GetValueOrDefault(row.IndividualId, $"Staff {row.IndividualId}"), row.Purpose, row.Kind,
+                row.Reason, row.Status, row.CreatedAtUtc, row.IssuedAtUtc, row.ReturnedAtUtc,
+                actions.Contains("Approve"), actions.Contains("Cancel"),
+                row.Lines.OrderBy(l => l.ItemStaffRequestLineId).Select(l => new ItemStaffRequestLineDto(l.ItemStaffRequestLineId,
+                    l.ItemId, l.ItemUnitId, l.ItemName, l.InventoryNumber, l.SerialNumber, l.Condition, l.ExpectedReturnDate,
+                    l.Remarks, l.Quantity, l.IssuedAtUtc)).ToList())
+            {
+                ReplacesRequestId = row.ReplacesRequestId,
+                ReplacesReference = row.ReplacesRequest == null ? null : row.ReplacesRequest.Request.ReferenceNumber ?? $"IM-{row.ReplacesRequestId}",
+                AcceptedAtUtc = row.AcceptedAtUtc,
+                ReturnRequestedAtUtc = row.ReturnRequestedAtUtc,
+                ReturnCondition = row.ReturnCondition,
+                ReturnNotes = row.ReturnNotes,
+                Actions = actions,
+                History = row.Events.OrderBy(e => e.CreatedAtUtc).ThenBy(e => e.ItemStaffRequestEventId)
+                    .Select(e => new ItemStaffRequestEventDto(e.Action, e.FromStatus, e.ToStatus,
+                        names.GetValueOrDefault(e.ActorIndividualId, e.ActorUserId == 0 ? "System" : $"User {e.ActorUserId}"),
+                        e.Condition, e.Comment, e.CreatedAtUtc)).ToList()
+            };
+        }).ToList();
+    }
+
+    /// <summary>Pure state machine: which actions the actor may perform on a record.</summary>
+    internal static List<string> AllowedActions(ItemStaffRequest r, int person, bool manage)
+    {
+        var owner = r.IndividualId == person;
+        var hr = manage && !owner; // HR never acts on their own record.
+        var list = new List<string>();
+        switch (r.Status)
+        {
+            case St.Submitted:
+                if (hr) list.AddRange(["Approve", "Reject"]);
+                if (owner) list.Add("Cancel");
+                break;
+            case St.PendingAcceptance:
+                if (owner) list.AddRange(["Accept", "Decline"]);
+                break;
+            case St.InUse:
+                if (owner)
+                {
+                    list.Add("RequestReturn");
+                    list.AddRange(["RequestReplacement", "RequestUpgrade"]);
+                }
+                if (hr) list.Add("ConfirmReturn");
+                break;
+            case St.ReturnRequested:
+                if (hr) list.Add("ConfirmReturn");
+                break;
         }
-        return result;
+        return list;
     }
 
     public async Task<ServiceResult> SubmitStaffRequestAsync(ItemStaffRequestInput model)
     {
         var actor = await RequestScopeAsync(model.OrganisationId > 0 ? model.OrganisationId : null);
-        var person = model.Kind == "Issue" && actor.Manage ? model.IndividualId : actor.Person;
-        if (model.Kind is not ("Issue" or "Requisition") || model.Kind == "Issue" && !actor.Manage)
-            return ServiceResult.Fail("Only an administrator can submit a direct issue request.");
-        if (model.Kind == "Issue" && (model.IndividualId <= 0 || model.IndividualId == actor.Person))
-            return ServiceResult.Fail("Administrators can only issue items to other staff, not to themselves.");
-        if (person <= 0 || model.Purpose is not ("Common" or "Job related") ||
+        if (model.Kind is not ("Issue" or "Requisition" or "Replacement" or "Upgrade"))
+            return ServiceResult.Fail("Unknown item request type.");
+
+        int person;
+        if (model.Kind == "Issue")
+        {
+            // HR assigns job-related items to another staff member; the staff member then accepts them.
+            if (!actor.Manage) return ServiceResult.Fail("Only HR can assign items to staff.");
+            if (model.IndividualId <= 0 || model.IndividualId == actor.Person)
+                return ServiceResult.Fail("HR can only assign items to other staff, not to themselves.");
+            person = model.IndividualId;
+            model.Purpose = JobRelated;
+        }
+        else
+        {
+            // Requisitions, replacements and upgrades are always raised by the staff member for themselves.
+            if (model.IndividualId > 0 && model.IndividualId != actor.Person)
+                return ServiceResult.Fail("Staff raise item requests for themselves. HR assigns job-related items from the staff workspace.");
+            person = actor.Person;
+            if (model.Kind is "Replacement" or "Upgrade") model.Purpose = JobRelated;
+        }
+
+        if (person <= 0 || model.Purpose is not ("Common" or JobRelated) ||
             string.IsNullOrWhiteSpace(model.Reason) || model.Reason.Trim().Length > 1000 ||
             model.Lines is null || model.Lines.Count is < 1 or > 30 ||
             model.Lines.Any(l => string.IsNullOrWhiteSpace(l.ItemName) || l.ItemName.Trim().Length > 200 || l.Quantity is < 1 or > 1000))
@@ -114,7 +171,7 @@ public sealed partial class ItemCatalogueService
         var lines = model.Lines.Select(l => new ItemStaffRequestLine
         {
             ItemId = l.ItemId,
-            ItemUnitId = l.ItemUnitId,
+            ItemUnitId = model.Kind == "Issue" ? l.ItemUnitId : null,
             ItemName = l.ItemName.Trim(),
             InventoryNumber = string.IsNullOrWhiteSpace(l.InventoryNumber) ? null : l.InventoryNumber.Trim(),
             SerialNumber = string.IsNullOrWhiteSpace(l.SerialNumber) ? null : l.SerialNumber.Trim(),
@@ -123,9 +180,9 @@ public sealed partial class ItemCatalogueService
             Remarks = string.IsNullOrWhiteSpace(l.Remarks) ? null : l.Remarks.Trim(),
             Quantity = l.Quantity
         }).ToList();
-        var duplicates = lines.GroupBy(l => (l.ItemName.ToLowerInvariant(), (l.InventoryNumber ?? "").ToLowerInvariant(), (l.SerialNumber ?? "").ToLowerInvariant()));
-        if (duplicates.Any(g => g.Count() > 1))
+        if (lines.GroupBy(l => (l.ItemName.ToLowerInvariant(), (l.InventoryNumber ?? "").ToLowerInvariant(), (l.SerialNumber ?? "").ToLowerInvariant())).Any(g => g.Count() > 1))
             return ServiceResult.Fail("Combine duplicate item lines into one line or specify distinct inventory/serial numbers.");
+
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
@@ -135,164 +192,242 @@ public sealed partial class ItemCatalogueService
                 j.JoinedDate <= today && (!j.TerminatedDate.HasValue || j.TerminatedDate > today))
                 .OrderByDescending(j => j.JoinedDate).FirstOrDefaultAsync()
                 ?? throw new InvalidOperationException("The staff member needs active approved employment in this organisation.");
+
+            if (model.Kind is "Replacement" or "Upgrade")
+            {
+                var original = await db.ItemStaffRequests.SingleOrDefaultAsync(r => r.RequestId == model.ReplacesRequestId &&
+                    r.OrganisationId == actor.Org && r.IndividualId == person)
+                    ?? throw new InvalidOperationException("Select the job-related item you want to replace or upgrade.");
+                if (original.Status != St.InUse || original.Purpose != JobRelated)
+                    throw new InvalidOperationException("Only accepted job-related items in use can be replaced or upgraded.");
+                if (await db.ItemStaffRequests.AnyAsync(r => r.ReplacesRequestId == original.RequestId &&
+                    (r.Status == St.Submitted || r.Status == St.PendingAcceptance)))
+                    throw new InvalidOperationException("A replacement or upgrade for this item is already in progress.");
+            }
+            else model.ReplacesRequestId = null;
+
             var typeName = model.Kind == "Issue" ? Contracts.ItemCatalogueServiceContracts.IssueTypeName : Contracts.ItemCatalogueServiceContracts.RequisitionTypeName;
             var type = await db.RequestTypes.SingleOrDefaultAsync(t => t.TypeName == typeName)
-                ?? throw new InvalidOperationException("Apply item request database setup and configure its approval flow.");
+                ?? throw new InvalidOperationException("Apply the item request database setup first.");
             var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE,
                 $"{model.Kind} {lines.Count} item lines for staff {person} in organisation {actor.Org}.");
             var request = await requests.CreateAsync(db, new CreateRequestDto { RequestTypeId = type.RequestTypeId,
                 ApplicantBusinessEntityId = person, OrganisationBusinessEntityId = actor.Org,
                 EffectiveDate = today, OperationLogId = audit.OperationLogId });
-            db.ItemStaffRequests.Add(new ItemStaffRequest { Request = request, RequestId = request.RequestId,
+            var row = new ItemStaffRequest { Request = request, RequestId = request.RequestId,
                 OrganisationId = actor.Org, IndividualId = person, JobId = job.JobId,
                 Quantity = lines.Sum(l => l.Quantity), Purpose = model.Purpose, Kind = model.Kind,
-                Reason = model.Reason.Trim(), CreatedAtUtc = DateTime.UtcNow, Lines = lines });
+                ReplacesRequestId = model.ReplacesRequestId,
+                Reason = model.Reason.Trim(), CreatedAtUtc = DateTime.UtcNow, Lines = lines, Status = St.Submitted };
+            db.ItemStaffRequests.Add(row);
+            AddEvent(row, model.Kind == "Issue" ? "Assigned" : "Submitted", null, St.Submitted, actor, null, model.Reason.Trim());
+            if (model.Kind == "Issue")
+            {
+                // HR assignment is pre-approved: stock is reserved now and the staff member must accept it.
+                await IssueStockAsync(db, row);
+                Move(row, "Issued", St.PendingAcceptance, actor, null, null);
+            }
             await db.SaveChangesAsync();
-            await workflow.StartAsync(db, request.RequestId, job.JobId);
             await tx.CommitAsync();
-            return ServiceResult.Ok($"{model.Kind} submitted for approval.");
+            return ServiceResult.Ok(model.Kind == "Issue"
+                ? "Items assigned. The staff member must accept them."
+                : $"{model.Kind} submitted to HR.");
         }
-        catch (InvalidOperationException ex)
-        {
-            await tx.RollbackAsync();
-            if (ex is WorkflowConfigurationException configuration) await configuration.NotifyAsync(factory);
-            return ServiceResult.Fail(ex.Message);
-        }
+        catch (InvalidOperationException ex) { await tx.RollbackAsync(); return ServiceResult.Fail(ex.Message); }
+        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("Stock or the record changed. Refresh and try again."); }
     }
 
+    /// <param name="expectedState">Unused; kept for contract compatibility. Concurrency is guarded by the status check.</param>
+    /// <param name="action">An action code from <see cref="ItemStaffRequestDto.Actions"/>. ConfirmReturn carries the condition: "ConfirmReturn:Damaged".</param>
     public async Task<ServiceResult> ActStaffRequestAsync(int requestId, int expectedState, string action, string? comment)
     {
         var actor = await RequestScopeAsync();
+        var parts = (action ?? "").Split(':', 2, StringSplitOptions.TrimEntries);
+        var code = parts[0] == "MarkReturned" || parts[0] == "Return" ? "ConfirmReturn" : parts[0];
+        var condition = parts.Length > 1 ? parts[1] : null;
+        comment = string.IsNullOrWhiteSpace(comment) ? null : comment.Trim();
+        if (comment?.Length > 1000) return ServiceResult.Fail("Comments are limited to 1,000 characters.");
+
         await using var db = await factory.CreateDbContextAsync();
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var row = await db.ItemStaffRequests.Include(r => r.Request).ThenInclude(r => r.RequestState)
-                .Include(r => r.Lines).SingleOrDefaultAsync(r => r.RequestId == requestId && r.OrganisationId == actor.Org)
-                ?? throw new UnauthorizedAccessException("Item request unavailable in this organisation.");
-            if (action is "Return" or "MarkReturned")
+            var row = await db.ItemStaffRequests.Include(r => r.Lines)
+                .SingleOrDefaultAsync(r => r.RequestId == requestId && r.OrganisationId == actor.Org)
+                ?? throw new UnauthorizedAccessException("Item record unavailable in this organisation.");
+            if (!AllowedActions(row, actor.Person, actor.Manage).Contains(code))
+                throw new InvalidOperationException($"'{code}' is not allowed while the record is {row.Status}. Refresh and try again.");
+
+            string message;
+            switch (code)
             {
-                if (!actor.Manage) throw new UnauthorizedAccessException("Only an administrator can record an item return.");
-                row.ReturnedAtUtc = DateTime.UtcNow;
-                foreach (var line in row.Lines)
-                {
-                    if (line.ItemUnitId.HasValue)
+                case "Approve":
+                    await ValidateEmploymentAsync(db, row);
+                    await IssueStockAsync(db, row);
+                    Move(row, "Approved", St.PendingAcceptance, actor, null, comment);
+                    message = "Approved and issued. Waiting for the staff member to accept.";
+                    break;
+                case "Reject":
+                    if (comment is null) throw new InvalidOperationException("Enter a reason for rejecting.");
+                    Move(row, "Rejected", St.Rejected, actor, null, comment);
+                    message = "Request rejected.";
+                    break;
+                case "Cancel":
+                    Move(row, "Cancelled", St.Cancelled, actor, null, comment);
+                    message = "Request cancelled.";
+                    break;
+                case "Accept":
+                    row.AcceptedAtUtc = DateTime.UtcNow;
+                    Move(row, "Accepted", row.Purpose == JobRelated ? St.InUse : St.Received, actor, null, comment);
+                    if (row.ReplacesRequestId.HasValue)
                     {
-                        var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == line.ItemUnitId.Value && u.OrganisationId == actor.Org);
-                        if (unit != null)
+                        // The replaced item must now be handed back and checked by HR.
+                        var old = await db.ItemStaffRequests.SingleAsync(r => r.RequestId == row.ReplacesRequestId.Value);
+                        if (old.Status == St.InUse)
                         {
-                            unit.Status = "Returned";
-                            unit.CollectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
-                            unit.IssuedToIndividualId = null;
-                            unit.Version++;
+                            old.ReturnRequestedAtUtc = DateTime.UtcNow;
+                            Move(old, "ReturnRequested", St.ReturnRequested, actor, null,
+                                $"{row.Kind} accepted under {row.RequestId}; old item to be returned.");
                         }
                     }
-                }
-                if (row.ItemUnitId.HasValue)
-                {
-                    var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == row.ItemUnitId.Value && u.OrganisationId == actor.Org);
-                    if (unit != null)
-                    {
-                        unit.Status = "Returned";
-                        unit.CollectedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
-                        unit.IssuedToIndividualId = null;
-                        unit.Version++;
-                    }
-                }
-                await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,
-                    $"Recorded item return for staff {row.IndividualId}; request {row.RequestId}.");
-                await db.SaveChangesAsync();
-                await tx.CommitAsync();
-                return ServiceResult.Ok("Items successfully marked as returned.");
+                    message = "Items accepted.";
+                    break;
+                case "Decline":
+                    if (comment is null) throw new InvalidOperationException("Enter a reason for declining.");
+                    await RestoreStockAsync(db, row, "Good");
+                    Move(row, "Declined", St.Declined, actor, null, comment);
+                    message = "Items declined and returned to stock.";
+                    break;
+                case "RequestReturn":
+                    row.ReturnRequestedAtUtc = DateTime.UtcNow;
+                    Move(row, "ReturnRequested", St.ReturnRequested, actor, null, comment);
+                    message = "Return submitted. HR will check the items.";
+                    break;
+                case "ConfirmReturn":
+                    if (condition is null || !ReturnConditions.Contains(condition))
+                        throw new InvalidOperationException("Select the condition of the returned items.");
+                    if (condition != "Good" && comment is null)
+                        throw new InvalidOperationException("Describe the damage or loss for the record.");
+                    await RestoreStockAsync(db, row, condition);
+                    row.ReturnedAtUtc = DateTime.UtcNow;
+                    row.ReturnCondition = condition;
+                    row.ReturnNotes = comment;
+                    Move(row, "ReturnConfirmed", St.Returned, actor, condition, comment);
+                    message = condition == "Good" ? "Return confirmed." : $"Return confirmed and recorded as {condition}.";
+                    break;
+                default:
+                    throw new InvalidOperationException("Use the request form to ask for a replacement or upgrade.");
             }
-            if (action is "Approve" or "Reject" && await db.WfRequestActions.AnyAsync(a =>
-                a.WorkflowRequestInstance.RequestId == requestId && a.ActionCode == "START" && a.PerformedByUserId == actor.User))
-                throw new UnauthorizedAccessException("You cannot decide an item request that you submitted.");
-            await ItemProcessing.ExecuteAsync(db, Subject(row), expectedState, action, comment, actor.User, actor.Person,
-                () => ValidateIssueAsync(db, row), async () =>
-                {
-                    await ValidateIssueAsync(db, row);
-                    // Preserve fulfilment for requests submitted before item lines replaced catalogue selection.
-                    if (row.ItemId.HasValue)
-                    {
-                        var item = await db.Items.SingleAsync(i => i.ItemId == row.ItemId.Value && i.OrganisationId == actor.Org);
-                        if (item.Kind == "Asset")
-                        {
-                            var unit = await db.ItemUnits.Where(u => u.ItemId == item.ItemId && u.Status == "Available")
-                                .OrderBy(u => u.ItemUnitId).FirstAsync();
-                            unit.Status = "Issued"; unit.IssuedToIndividualId = row.IndividualId;
-                            unit.IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5)); unit.Version++;
-                            row.ItemUnitId = unit.ItemUnitId;
-                        }
-                        else { item.QuantityOnHand -= row.Quantity; item.Version++; }
-                    }
-                    foreach (var line in row.Lines)
-                    {
-                        if (line.ItemUnitId.HasValue)
-                        {
-                            var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == line.ItemUnitId.Value && u.OrganisationId == actor.Org);
-                            if (unit != null)
-                            {
-                                unit.Status = "Issued";
-                                unit.IssuedToIndividualId = row.IndividualId;
-                                unit.IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
-                                unit.Version++;
-                            }
-                        }
-                        else if (line.ItemId.HasValue)
-                        {
-                            var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == line.ItemId.Value && i.OrganisationId == actor.Org);
-                            if (item != null)
-                            {
-                                if (item.Kind == "Asset")
-                                {
-                                    var unit = await db.ItemUnits.Where(u => u.ItemId == item.ItemId && u.Status == "Available")
-                                        .OrderBy(u => u.ItemUnitId).FirstOrDefaultAsync();
-                                    if (unit != null)
-                                    {
-                                        unit.Status = "Issued";
-                                        unit.IssuedToIndividualId = row.IndividualId;
-                                        unit.IssuedDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
-                                        unit.Version++;
-                                        line.ItemUnitId = unit.ItemUnitId;
-                                        if (string.IsNullOrWhiteSpace(line.InventoryNumber)) line.InventoryNumber = unit.InventoryNumber;
-                                        if (string.IsNullOrWhiteSpace(line.SerialNumber)) line.SerialNumber = unit.SerialNumber;
-                                    }
-                                }
-                                else
-                                {
-                                    item.QuantityOnHand = Math.Max(0, item.QuantityOnHand - line.Quantity);
-                                    item.Version++;
-                                }
-                            }
-                        }
-                    }
-                    row.IssuedAtUtc = DateTime.UtcNow;
-                    foreach (var line in row.Lines) line.IssuedAtUtc = row.IssuedAtUtc;
-                    await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,
-                        $"Approved and issued {row.Lines.Count} item lines to staff {row.IndividualId}; request {row.RequestId}.");
-                });
+            await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,
+                $"Item record {row.RequestId} for staff {row.IndividualId}: {code}{(condition is null ? "" : $" ({condition})")}.");
+            await db.SaveChangesAsync();
             await tx.CommitAsync();
-            return ServiceResult.Ok(row.IssuedAtUtc.HasValue ? "Approved and issued to staff." : "Item request action saved.");
+            return ServiceResult.Ok(message);
         }
         catch (InvalidOperationException ex) { await tx.RollbackAsync(); return ServiceResult.Fail(ex.Message); }
-        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("Stock or the request changed. Refresh and try again."); }
+        catch (DbUpdateException) { await tx.RollbackAsync(); return ServiceResult.Fail("Stock or the record changed. Refresh and try again."); }
     }
 
-    private static async Task ValidateIssueAsync(HrmTeContext db, ItemStaffRequest row)
+    private static void AddEvent(ItemStaffRequest row, string action, string? from, string to,
+        (int Org, int Person, int User, bool Manage) actor, string? condition, string? comment)
+        => row.Events.Add(new ItemStaffRequestEvent { Action = action, FromStatus = from, ToStatus = to,
+            ActorUserId = actor.User, ActorIndividualId = actor.Person, Condition = condition, Comment = comment,
+            CreatedAtUtc = DateTime.UtcNow });
+
+    private static void Move(ItemStaffRequest row, string action, string to,
+        (int Org, int Person, int User, bool Manage) actor, string? condition, string? comment)
     {
-        if (row.Lines.Count == 0) throw new InvalidOperationException("The request has no item lines.");
+        AddEvent(row, action, row.Status, to, actor, condition, comment);
+        row.Status = to;
+    }
+
+    private static async Task ValidateEmploymentAsync(HrmTeContext db, ItemStaffRequest row)
+    {
         var today = DateTime.UtcNow.AddHours(5).Date;
         if (!await db.Jobs.AnyAsync(j => j.JobId == row.JobId && j.OrganisationID == row.OrganisationId &&
             j.IndividualID == row.IndividualId && j.JobStateId == 4 && j.JoinedDate <= today &&
             (!j.TerminatedDate.HasValue || j.TerminatedDate > today)))
             throw new InvalidOperationException("The staff member no longer has active approved employment.");
-        if (row.ItemId.HasValue)
+    }
+
+    /// <summary>Takes catalogue stock / asset units for each line. Free-text lines are recorded without stock.</summary>
+    private static async Task IssueStockAsync(HrmTeContext db, ItemStaffRequest row)
+    {
+        if (row.Lines.Count == 0) throw new InvalidOperationException("The request has no item lines.");
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+        foreach (var line in row.Lines)
         {
-            var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == row.ItemId.Value && i.OrganisationId == row.OrganisationId);
-            if (item is null || !item.IsActive) throw new InvalidOperationException("The legacy catalogue item is no longer active.");
-            var available = item.Kind == "Asset" ? await db.ItemUnits.CountAsync(u => u.ItemId == item.ItemId && u.Status == "Available") : item.QuantityOnHand;
-            if (available < row.Quantity) throw new InvalidOperationException("Legacy request stock is no longer available.");
+            if (line.ItemUnitId.HasValue)
+            {
+                var unit = await db.ItemUnits.SingleOrDefaultAsync(u => u.ItemUnitId == line.ItemUnitId.Value && u.OrganisationId == row.OrganisationId)
+                    ?? throw new InvalidOperationException($"Asset unit for {line.ItemName} was not found.");
+                if (unit.Status != "Available") throw new InvalidOperationException($"{line.ItemName} #{unit.InventoryNumber} is no longer available.");
+                Take(unit, line, row.IndividualId, today);
+            }
+            else if (line.ItemId.HasValue)
+            {
+                var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == line.ItemId.Value && i.OrganisationId == row.OrganisationId)
+                    ?? throw new InvalidOperationException($"Catalogue item {line.ItemName} was not found.");
+                if (item.Kind == "Asset")
+                {
+                    // Assets are tracked per unit so each one can be accepted, returned and checked individually.
+                    if (line.Quantity != 1) throw new InvalidOperationException($"Add {item.Name} as one line per unit.");
+                    var unit = await db.ItemUnits.Where(u => u.ItemId == item.ItemId && u.Status == "Available")
+                        .OrderBy(u => u.ItemUnitId).FirstOrDefaultAsync()
+                        ?? throw new InvalidOperationException($"No available units of {item.Name}.");
+                    Take(unit, line, row.IndividualId, today);
+                }
+                else
+                {
+                    if (item.QuantityOnHand < line.Quantity) throw new InvalidOperationException($"Only {item.QuantityOnHand} {item.Name} in stock.");
+                    item.QuantityOnHand -= line.Quantity;
+                    item.Version++;
+                }
+            }
+            line.IssuedAtUtc = DateTime.UtcNow;
+        }
+        row.IssuedAtUtc = DateTime.UtcNow;
+    }
+
+    private static void Take(ItemUnit unit, ItemStaffRequestLine? line, int person, DateOnly today)
+    {
+        unit.Status = "Issued";
+        unit.IssuedToIndividualId = person;
+        unit.IssuedDate = today;
+        unit.CollectedDate = null;
+        unit.Version++;
+        if (line is null) return;
+        line.ItemUnitId = unit.ItemUnitId;
+        if (string.IsNullOrWhiteSpace(line.InventoryNumber)) line.InventoryNumber = unit.InventoryNumber;
+        if (string.IsNullOrWhiteSpace(line.SerialNumber)) line.SerialNumber = unit.SerialNumber;
+    }
+
+    /// <summary>Puts asset units back (or marks them damaged/lost); consumables return to stock only when in good order.</summary>
+    private static async Task RestoreStockAsync(HrmTeContext db, ItemStaffRequest row, string condition)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(5));
+        var unitIds = row.Lines.Where(l => l.ItemUnitId.HasValue).Select(l => l.ItemUnitId!.Value).ToList();
+        if (row.ItemUnitId.HasValue) unitIds.Add(row.ItemUnitId.Value);
+        var units = await db.ItemUnits.Where(u => u.OrganisationId == row.OrganisationId && u.IssuedToIndividualId == row.IndividualId &&
+            u.Status == "Issued" && unitIds.Contains(u.ItemUnitId)).ToListAsync();
+        foreach (var unit in units)
+        {
+            (unit.Status, unit.Condition) = condition switch
+            {
+                "Damaged" => ("Damaged", "Damaged"),
+                "Unusable" => ("Damaged", "Unusable"),
+                "Lost" => ("Lost", unit.Condition),
+                _ => ("Available", condition)
+            };
+            unit.IssuedToIndividualId = null;
+            unit.CollectedDate = today;
+            unit.Version++;
+        }
+        if (condition is not ("Good" or "Fair")) return;
+        foreach (var line in row.Lines.Where(l => l.ItemId.HasValue && !l.ItemUnitId.HasValue && l.IssuedAtUtc.HasValue))
+        {
+            var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == line.ItemId!.Value && i.OrganisationId == row.OrganisationId);
+            if (item is { Kind: "Consumable" }) { item.QuantityOnHand += line.Quantity; item.Version++; }
         }
     }
 }

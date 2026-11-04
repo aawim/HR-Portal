@@ -45,7 +45,7 @@
                     disabled="@busy"
                     @onclick="AddNew">
                 <span>+</span>
-                <span>@(PersonalItemsOnly ? "New Personal Requisition" : IndividualId > 0 ? "Assign New Items" : "New Requisition")</span>
+                <span>@(!CanCreate ? "Back to Overview" : IsHrAssign ? "Assign New Items" : "New Request")</span>
             </button>
         </div>
     </header>
@@ -79,8 +79,8 @@
                             <span class="font-mono text-sm font-bold text-slate-900">@row.Reference</span>
                         </div>
                         <div class="flex items-center gap-2">
-                            <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @StatusBadgeClass(row.Status, row.ReturnedAtUtc.HasValue)">
-                                @(row.ReturnedAtUtc.HasValue ? "Returned" : row.Status)
+                            <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @StatusBadgeClass(row.Status, false)">
+                                @StatusLabel(row.Status)
                             </span>
                             <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 font-medium text-[11px]">
                                 @row.Kind
@@ -91,7 +91,7 @@
                             <button type="button"
                                     class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
                                     @onclick="AddNew">
-                                <span>+ New @(PersonalItemsOnly ? "Requisition" : IndividualId > 0 ? "Assignment" : "Requisition")</span>
+                                <span>@(CanCreate ? "+ New" : "← Back")</span>
                             </button>
                         </div>
                     </div>
@@ -178,6 +178,14 @@
                                                 {
                                                     <span class="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700 border border-purple-200">Returned</span>
                                                 }
+                                                else if (line.IssuedAtUtc.HasValue && row.Status is "PendingAcceptance")
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 border border-sky-200">Awaiting acceptance</span>
+                                                }
+                                                else if (line.IssuedAtUtc.HasValue && row.Status is "Declined")
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 border border-rose-200">Declined</span>
+                                                }
                                                 else if (line.IssuedAtUtc.HasValue)
                                                 {
                                                     <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">Issued</span>
@@ -194,55 +202,83 @@
                         </div>
                     </div>
 
-                    <!-- Workflow Actions -->
-                    <div class="border-t border-slate-200 pt-3">
-                        @if (row.CanApprove || row.CanCancel || (row.IssuedAtUtc.HasValue && !row.ReturnedAtUtc.HasValue && canManageStaffItems))
+                    <!-- Lifecycle Actions -->
+                    <div class="border-t border-slate-200 pt-3 flex flex-col gap-3">
+                        @if (row.ReplacesRequestId.HasValue)
+                        {
+                            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-800">
+                                @row.Kind of <button type="button" class="font-mono font-semibold underline" @onclick="() => ViewDetail(row.ReplacesRequestId.Value)">@row.ReplacesReference</button>
+                            </div>
+                        }
+                        @if (row.ReturnCondition != null)
+                        {
+                            <div class="rounded-lg border p-2 @(row.ReturnCondition is "Good" or "Fair" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800")">
+                                <strong>Returned condition: @row.ReturnCondition</strong>
+                                @if (!string.IsNullOrWhiteSpace(row.ReturnNotes)) { <p class="mt-1">@row.ReturnNotes</p> }
+                            </div>
+                        }
+                        @if (row.Actions.Count > 0)
                         {
                             <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
-                                <span class="font-bold text-slate-800">Action Controls</span>
+                                <span class="font-bold text-slate-800">@ActionHeading(row)</span>
+                                @if (row.Actions.Contains("ConfirmReturn"))
+                                {
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="font-medium text-slate-700">Condition on return</label>
+                                        <select class="rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="returnCondition">
+                                            <option value="Good">Good</option>
+                                            <option value="Fair">Fair / normal wear</option>
+                                            <option value="Damaged">Damaged (repairable)</option>
+                                            <option value="Unusable">Unusable</option>
+                                            <option value="Lost">Lost / not returned</option>
+                                        </select>
+                                    </div>
+                                }
+                                <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                       maxlength="1000"
+                                       placeholder="@(row.Actions.Contains("ConfirmReturn") ? "Damage / inspection notes (required unless Good)" : "Comment (required to reject or decline)")"
+                                       @bind="comments[row.RequestId]" />
                                 <div class="flex flex-wrap items-center gap-2">
-                                    @if (row.CanApprove || row.CanCancel)
+                                    @foreach (var a in row.Actions)
                                     {
-                                        <input class="flex-1 min-w-[12rem] rounded-lg border border-slate-300 bg-white p-2 text-xs"
-                                               placeholder="Action comment or notes..."
-                                               @bind="comments[row.RequestId]" />
-                                    }
-                                    @if (row.CanApprove)
-                                    {
-                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-emerald-700 transition"
+                                        var code = a;
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold shadow-sm transition disabled:opacity-50 @ActionClass(code)"
                                                 disabled="@busy"
-                                                @onclick='() => Act(row, "Approve")'>
-                                            <span>✓</span>
-                                            <span>Approve & Issue</span>
-                                        </button>
-                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "Reject")'>
-                                            <span>✕</span>
-                                            <span>Reject</span>
-                                        </button>
-                                    }
-                                    @if (row.CanCancel)
-                                    {
-                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "Cancel")'>
-                                            Cancel Request
-                                        </button>
-                                    }
-                                    @if (row.IssuedAtUtc.HasValue && !row.ReturnedAtUtc.HasValue && canManageStaffItems)
-                                    {
-                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-purple-600 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-purple-700 transition"
-                                                disabled="@busy"
-                                                @onclick='() => Act(row, "MarkReturned")'>
-                                            <span>↩</span>
-                                            <span>Mark as Returned</span>
+                                                @onclick="() => OnAction(row, code)">
+                                            @ActionLabel(code)
                                         </button>
                                     }
                                 </div>
                             </div>
                         }
+
+                        <!-- History -->
+                        <div class="flex flex-col gap-1.5">
+                            <h4 class="font-bold text-slate-900 text-sm">History (@row.History.Count)</h4>
+                            <ol class="relative border-l border-slate-200 ml-2 space-y-2">
+                                @foreach (var h in row.History)
+                                {
+                                    <li class="ml-3">
+                                        <span class="absolute -left-1.5 mt-1 h-3 w-3 rounded-full border border-white @StatusBadgeClass(h.ToStatus, false)"></span>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <strong class="text-slate-900">@h.Action</strong>
+                                            <span class="text-slate-500">→ @StatusLabel(h.ToStatus)</span>
+                                            @if (h.Condition != null) { <span class="rounded bg-rose-50 px-1.5 text-rose-700">@h.Condition</span> }
+                                        </div>
+                                        <div class="text-[11px] text-slate-500">@h.ActorName · @h.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                        @if (!string.IsNullOrWhiteSpace(h.Comment)) { <p class="text-[11px] text-slate-700 italic">@h.Comment</p> }
+                                    </li>
+                                }
+                            </ol>
+                        </div>
                     </div>
+                </div>
+            }
+            else if (!CanCreate)
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-600">
+                    Personal items are requested by the staff member from their own item requests page.
+                    Select a record on the right to approve, reject or view its history.
                 </div>
             }
             else
@@ -252,33 +288,38 @@
                     <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                         <div>
                             <legend class="text-sm font-bold text-slate-900">
-                                @(PersonalItemsOnly ? "Request Personal / Consumable Items" :
-                                  IndividualId > 0 ? "Assign Items & Equipment to Staff Member" :
-                                  "New Item Requisition Request")
+                                @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} of {replacingReference}" :
+                                  form.Kind == "Issue" ? "Assign Job-Related Items to Staff Member" :
+                                  PersonalItemsOnly ? "Request Personal / Consumable Items" :
+                                  "New Item Request")
                             </legend>
                             <p class="text-[11px] text-slate-500 mt-0.5">
-                                @(PersonalItemsOnly
-                                    ? "Request personal office equipment, accessories, or consumables for this staff member."
-                                    : IndividualId > 0
-                                    ? "Add serialized items with inventory/serial numbers, specify handover condition, and submit for custody approval."
-                                    : "Draft required hardware or office supplies for administrative review and approval.")
+                                @(form.Kind is "Replacement" or "Upgrade"
+                                    ? "HR reviews this request. When you accept the new item, the old one is sent back to HR for a condition check."
+                                    : form.Kind == "Issue"
+                                    ? "Items are reserved immediately. The staff member must accept them before they are recorded as in use."
+                                    : "HR reviews and issues the items; you then accept them.")
                             </p>
                         </div>
+                        @if (form.Kind is "Replacement" or "Upgrade")
+                        {
+                            <button type="button" class="text-xs font-semibold text-slate-600 hover:underline" @onclick="ResetForm">Cancel @form.Kind.ToLowerInvariant()</button>
+                        }
                     </div>
 
                     <!-- Header Options: Purpose & Source -->
                     <div class="grid gap-3 sm:grid-cols-2">
-                        @if (!JobRelatedOnly && !PersonalItemsOnly)
+                        @if (!JobRelatedOnly && !PersonalItemsOnly && form.Kind == "Requisition")
                         {
                             <div>
-                                <label class="block font-medium text-slate-700">Requisition Purpose</label>
+                                <label class="block font-medium text-slate-700">Request Type</label>
                                 <select class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs bg-white" @bind="form.Purpose">
-                                    <option value="Common">Common Office Items</option>
-                                    <option value="Job related">Job Related Equipment</option>
+                                    <option value="Common">Personal items (notebook, diary, tissue…)</option>
+                                    <option value="Job related">Job-related equipment (monitor, laptop…)</option>
                                 </select>
                             </div>
                         }
-                        <div class="@(JobRelatedOnly || PersonalItemsOnly ? "sm:col-span-2" : "")">
+                        <div class="@(JobRelatedOnly || PersonalItemsOnly || form.Kind != "Requisition" ? "sm:col-span-2" : "")">
                             <label class="block font-medium text-slate-700">Item Catalogue Source</label>
                             <div class="mt-1 flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
                                 <button type="button"
@@ -509,7 +550,7 @@
                                 disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))"
                                 @onclick="Submit">
                             <span>✓</span>
-                            <span>@(PersonalItemsOnly ? "Submit Personal Requisition" : IndividualId > 0 ? "Submit Assignment for Approval" : "Submit Requisition")</span>
+                            <span>@(form.Kind == "Issue" ? "Assign to Staff" : form.Kind is "Replacement" or "Upgrade" ? $"Submit {form.Kind} Request" : "Submit to HR")</span>
                         </button>
                         <button type="button"
                                 class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
@@ -591,8 +632,8 @@
                              @onclick="() => ViewDetail(r.RequestId)">
                         <div class="flex items-center justify-between gap-1.5">
                             <span class="font-mono font-bold text-slate-900 text-xs truncate">@r.Reference</span>
-                            <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @StatusBadgeClass(r.Status, r.ReturnedAtUtc.HasValue)">
-                                @(r.ReturnedAtUtc.HasValue ? "Returned" : r.Status)
+                            <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @StatusBadgeClass(r.Status, false)">
+                                @StatusLabel(r.Status)
                             </span>
                         </div>
 
@@ -604,6 +645,8 @@
 
                         <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                             <span class="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">@r.Purpose</span>
+                            <span>·</span>
+                            <span>@r.Kind</span>
                             <span>·</span>
                             <span>@r.Lines.Count item@(r.Lines.Count == 1 ? "" : "s")</span>
                         </div>
@@ -687,7 +730,7 @@
             var baseRows = JobRelatedOnly
                 ? rows.Where(r => r.Purpose == "Job related")
                 : PersonalItemsOnly
-                ? rows.Where(r => r.Purpose != "Job related" || r.Kind == "Requisition")
+                ? rows.Where(r => r.Purpose != "Job related")
                 : rows;
 
             var combined = baseRows.Concat(IndividualId == 0 ? approvalRows : []).DistinctBy(r => r.RequestId);
@@ -705,15 +748,21 @@
             }
 
             if (filterStatus == "pending")
-                combined = combined.Where(r => !r.IssuedAtUtc.HasValue && r.Status != "Rejected" && r.Status != "Cancelled");
+                combined = combined.Where(r => r.Status is "Submitted" or "PendingAcceptance" or "ReturnRequested");
             else if (filterStatus == "issued")
-                combined = combined.Where(r => r.IssuedAtUtc.HasValue && !r.ReturnedAtUtc.HasValue);
+                combined = combined.Where(r => r.Status is "InUse" or "Received");
             else if (filterStatus == "returned")
-                combined = combined.Where(r => r.ReturnedAtUtc.HasValue);
+                combined = combined.Where(r => r.Status == "Returned");
 
-            return combined.OrderByDescending(r => r.CreatedAtUtc);
+            return combined.OrderByDescending(r => r.Actions.Count > 0).ThenByDescending(r => r.CreatedAtUtc);
         }
     }
+
+    // HR assigns job-related items from a staff workspace; personal items are only requested by the staff member.
+    private bool IsHrAssign => IndividualId > 0 && !PersonalItemsOnly;
+    private bool CanCreate => IndividualId == 0 || IsHrAssign || form.Kind is "Replacement" or "Upgrade";
+    private string returnCondition = "Good";
+    private string? replacingReference;
 
     private List<ItemStaffRequestDto> ListRows => FilteredRows.ToList();
     private ItemStaffRequestDto? SelectedRequest => rows.Concat(approvalRows).FirstOrDefault(r => r.RequestId == selectedRequestId);
@@ -750,9 +799,10 @@
         form = new ItemStaffRequestInput
         {
             IndividualId = IndividualId,
-            Kind = IndividualId > 0 ? "Issue" : "Requisition",
-            Purpose = JobRelatedOnly ? "Job related" : "Common"
+            Kind = IsHrAssign ? "Issue" : "Requisition",
+            Purpose = IsHrAssign || JobRelatedOnly ? "Job related" : "Common"
         };
+        replacingReference = null;
         ResetLineInputs();
         error = null;
     }
@@ -932,20 +982,95 @@
             var result = await Items.ActStaffRequestAsync(r.RequestId, r.StateId, action, comment);
             if (!result.Success) { error = result.Message; return; }
             Toasts.Success(result.Message);
+            comments[r.RequestId] = "";
+            returnCondition = "Good";
             await Load();
         }
         catch (Exception ex) { error = ex.Message; }
         finally { busy = false; }
     }
 
+    private async Task OnAction(ItemStaffRequestDto r, string code)
+    {
+        if (code is "RequestReplacement" or "RequestUpgrade")
+        {
+            // Staff raise a new request linked to the in-use record; the old item is returned once the new one is accepted.
+            var kind = code == "RequestReplacement" ? "Replacement" : "Upgrade";
+            form = new ItemStaffRequestInput
+            {
+                IndividualId = IndividualId,
+                Kind = kind,
+                Purpose = "Job related",
+                ReplacesRequestId = r.RequestId,
+                Reason = comments.GetValueOrDefault(r.RequestId) ?? "",
+                Lines = r.Lines.Select(l => new ItemStaffRequestLineInput
+                {
+                    ItemId = l.ItemId,
+                    ItemName = l.ItemName,
+                    Quantity = l.Quantity,
+                    Condition = "Good",
+                    Remarks = kind == "Replacement" ? $"Replaces #{l.InventoryNumber ?? l.ItemName}" : $"Upgrade of #{l.InventoryNumber ?? l.ItemName}"
+                }).ToList()
+            };
+            replacingReference = r.Reference;
+            selectedRequestId = null;
+            error = null;
+            return;
+        }
+        await Act(r, code == "ConfirmReturn" ? $"ConfirmReturn:{returnCondition}" : code);
+    }
+
+    private static string ActionLabel(string code) => code switch
+    {
+        "Approve" => "✓ Approve & Issue",
+        "Reject" => "✕ Reject",
+        "Cancel" => "Cancel Request",
+        "Accept" => "✓ Accept Items",
+        "Decline" => "✕ Decline",
+        "RequestReturn" => "↩ Return Items",
+        "ConfirmReturn" => "✓ Confirm Return",
+        "RequestReplacement" => "Request Replacement (damaged)",
+        "RequestUpgrade" => "Request Upgrade",
+        _ => code
+    };
+
+    private static string ActionClass(string code) => code switch
+    {
+        "Approve" or "Accept" or "ConfirmReturn" => "bg-emerald-600 text-white hover:bg-emerald-700",
+        "Reject" or "Decline" => "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50",
+        "RequestReturn" => "bg-purple-600 text-white hover:bg-purple-700",
+        "RequestReplacement" or "RequestUpgrade" => "border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50",
+        _ => "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+    };
+
+    private static string ActionHeading(ItemStaffRequestDto r) => r.Status switch
+    {
+        "Submitted" => "Waiting for HR decision",
+        "PendingAcceptance" => "Please confirm you received these items",
+        "InUse" => "Items in use",
+        "ReturnRequested" => "Return pending HR inspection",
+        _ => "Actions"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Submitted" => "Pending HR",
+        "PendingAcceptance" => "Awaiting Acceptance",
+        "InUse" => "In Use",
+        "Received" => "Received",
+        "ReturnRequested" => "Return Pending",
+        _ => status
+    };
+
     private static string StatusBadgeClass(string status, bool isReturned)
     {
         if (isReturned) return "bg-purple-100 text-purple-800";
         return status switch
         {
-            "Approved" or "Issued" => "bg-emerald-100 text-emerald-800",
-            "Rejected" or "Cancelled" => "bg-rose-100 text-rose-800",
-            "Pending" or "Draft" or "InProgress" => "bg-amber-100 text-amber-800",
+            "InUse" or "Received" or "Approved" or "Issued" => "bg-emerald-100 text-emerald-800",
+            "Rejected" or "Cancelled" or "Declined" => "bg-rose-100 text-rose-800",
+            "Submitted" or "PendingAcceptance" or "ReturnRequested" or "Pending" => "bg-amber-100 text-amber-800",
+            "Returned" => "bg-purple-100 text-purple-800",
             _ => "bg-slate-100 text-slate-700"
         };
     }

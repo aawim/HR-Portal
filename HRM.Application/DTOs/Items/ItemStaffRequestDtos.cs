@@ -9,6 +9,8 @@ public sealed class ItemStaffRequestInput
     public string Purpose { get; set; } = "Common";
     public string Kind { get; set; } = "Requisition";
     public string Reason { get; set; } = "";
+    /// <summary>For Replacement/Upgrade: the in-use job-related record being replaced.</summary>
+    public int? ReplacesRequestId { get; set; }
     public List<ItemStaffRequestLineInput> Lines { get; set; } = [];
 }
 
@@ -39,6 +41,21 @@ public sealed record ItemStaffRequestLineDto(
     DateTime? IssuedAtUtc
 );
 
+public sealed record ItemStaffRequestEventDto(
+    string Action,
+    string? FromStatus,
+    string ToStatus,
+    string ActorName,
+    string? Condition,
+    string? Comment,
+    DateTime CreatedAtUtc
+);
+
+/// <summary>
+/// Actions is the list of action codes the current user may perform:
+/// Approve, Reject, Cancel, Accept, Decline, RequestReturn, ConfirmReturn, RequestReplacement, RequestUpgrade.
+/// ConfirmReturn is sent as "ConfirmReturn:{Condition}" with damage notes in the comment.
+/// </summary>
 public sealed record ItemStaffRequestDto(
     int RequestId,
     int StateId,
@@ -55,4 +72,14 @@ public sealed record ItemStaffRequestDto(
     bool CanApprove,
     bool CanCancel,
     List<ItemStaffRequestLineDto> Lines
-);
+)
+{
+    public int? ReplacesRequestId { get; init; }
+    public string? ReplacesReference { get; init; }
+    public DateTime? AcceptedAtUtc { get; init; }
+    public DateTime? ReturnRequestedAtUtc { get; init; }
+    public string? ReturnCondition { get; init; }
+    public string? ReturnNotes { get; init; }
+    public List<string> Actions { get; init; } = [];
+    public List<ItemStaffRequestEventDto> History { get; init; } = [];
+}
