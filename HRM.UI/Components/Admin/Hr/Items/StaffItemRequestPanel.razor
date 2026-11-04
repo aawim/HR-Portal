@@ -3,17 +3,17 @@
 @inject HRM.Services.ToastService Toasts
 @inject IJSRuntime JS
 
-<section class="space-y-4">
-    <!-- Header -->
-    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-3">
+<section class="staff-items-page w-full min-w-0 space-y-4">
+
+    <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
         <div>
             <div class="flex items-center gap-2">
                 <h2 class="text-lg font-bold text-slate-900">
                     @(InitialItemsMode ? "Initial Staff Equipment & Items" :
-                      PersonalItemsOnly ? "Personal Items & Consumables" :
-                      JobRelatedOnly ? "Job-Related Equipment & Assets" :
-                      IndividualId > 0 ? "Staff Items & Assigned Equipment" :
-                      "Item Requisitions & Custody")
+                        PersonalItemsOnly ? "Personal Items & Consumables" :
+                        JobRelatedOnly ? "Job-Related Equipment & Assets" :
+                        IndividualId > 0 ? "Staff Items & Assigned Equipment" :
+                        "Item Requisitions & Custody")
                 </h2>
                 @if (PersonalItemsOnly)
                 {
@@ -85,6 +85,8 @@
             </button>
         </div>
     </header>
+    
+   
 
     @if (error != null)
     {
@@ -108,10 +110,13 @@
          LEFT: Operations, Workflow Actions & Request/Assignment Details
          RIGHT: Item Inventory & Request List Overview
     -->
-    <div class="grid grid-cols-1 gap-4 @(isFullWidth ? "xl:grid-cols-12" : "lg:grid-cols-12 max-w-7xl mx-auto") items-start p-1 transition-all duration-300">
+
+    <div class="staff-items-panels @(isFullWidth ? "staff-items-panels-full" : "staff-items-panels-standard")">
+
+
 
         <!-- LEFT PANEL: Operations & Form / Request Details -->
-        <div class="min-w-0 @(isFullWidth ? "xl:col-span-7" : "lg:col-span-7") rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
+        <div class="staff-items-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
 
             @if (selectedRequestId.HasValue && SelectedRequest is { } row)
             {
@@ -363,9 +368,9 @@
                         <div>
                             <legend class="text-sm font-bold text-slate-900">
                                 @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} for {replacingReference}" :
-                                  form.Kind == "Issue" ? "Direct Item / Asset Assignment (HR)" :
-                                  PersonalItemsOnly ? "Request Personal / Consumable Items" :
-                                  "New Item Request")
+                                    form.Kind == "Issue" ? "Direct Item / Asset Assignment (HR)" :
+                                    PersonalItemsOnly ? "Request Personal / Consumable Items" :
+                                    "New Item Request")
                             </legend>
                             <p class="text-[11px] text-slate-500 mt-0.5">
                                 @(form.Kind is "Replacement" or "Upgrade"
@@ -638,7 +643,7 @@
         </div>
 
         <!-- RIGHT PANEL: Items Overview, Filtering & Request History -->
-        <aside class="min-w-0 @(isFullWidth ? "xl:col-span-5" : "lg:col-span-5") rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2.5 flex flex-col gap-2.5" aria-label="Item requests">
+        <aside class="staff-items-right min-w-0 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2.5 flex flex-col gap-2.5" aria-label="Item requests">
 
             <!-- Header Card -->
             <div class="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
@@ -758,6 +763,55 @@
         </aside>
     </div>
 </section>
+
+
+<style>
+    /* Header is full-width and independent of the Full Width toggle. */
+    .staff-items-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .staff-items-header {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Explicit layout rules avoid reliance on generated Tailwind col-span utilities. */
+    .staff-items-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .staff-items-panels-standard {
+        max-width: 80rem;
+    }
+
+    .staff-items-panels-full {
+        max-width: none;
+    }
+
+    .staff-items-left, .staff-items-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .staff-items-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
 
 @code {
     [Parameter] public int IndividualId { get; set; }
@@ -906,11 +960,11 @@
     private void ResetForm()
     {
         form = new ItemStaffRequestInput
-        {
-            IndividualId = IndividualId,
-            Kind = IsHrAssign ? "Issue" : "Requisition",
-            Purpose = IsHrAssign || JobRelatedOnly ? "Job related" : "Common"
-        };
+            {
+                IndividualId = IndividualId,
+                Kind = IsHrAssign ? "Issue" : "Requisition",
+                Purpose = IsHrAssign || JobRelatedOnly ? "Job related" : "Common"
+            };
         replacingReference = null;
         ResetLineInputs();
         error = null;
@@ -1050,17 +1104,17 @@
         }
 
         form.Lines.Add(new ItemStaffRequestLineInput
-        {
-            ItemId = selectedCatalogueItemId > 0 ? selectedCatalogueItemId : null,
-            ItemUnitId = selectedItemUnitId > 0 ? selectedItemUnitId : null,
-            ItemName = name,
-            InventoryNumber = inv,
-            SerialNumber = sn,
-            Condition = cond,
-            ExpectedReturnDate = lineExpectedReturnDate,
-            Remarks = string.IsNullOrWhiteSpace(lineRemarks) ? null : lineRemarks.Trim(),
-            Quantity = Math.Max(1, lineQuantity)
-        });
+            {
+                ItemId = selectedCatalogueItemId > 0 ? selectedCatalogueItemId : null,
+                ItemUnitId = selectedItemUnitId > 0 ? selectedItemUnitId : null,
+                ItemName = name,
+                InventoryNumber = inv,
+                SerialNumber = sn,
+                Condition = cond,
+                ExpectedReturnDate = lineExpectedReturnDate,
+                Remarks = string.IsNullOrWhiteSpace(lineRemarks) ? null : lineRemarks.Trim(),
+                Quantity = Math.Max(1, lineQuantity)
+            });
 
         ResetLineInputs();
         error = null;
@@ -1107,20 +1161,20 @@
         {
             var kind = code == "RequestReplacement" ? "Replacement" : "Upgrade";
             form = new ItemStaffRequestInput
-            {
-                IndividualId = IndividualId,
-                Kind = kind,
-                Purpose = "Job related",
-                ReplacesRequestId = r.RequestId,
-                Reason = comments.GetValueOrDefault(r.RequestId) ?? "",
-                Lines = r.Lines.Select(l => new ItemStaffRequestLineInput
                 {
-                    ItemId = l.ItemId,
-                    ItemName = l.ItemName,
-                    Quantity = l.Quantity,
-                    Remarks = kind == "Replacement" ? $"Replaces #{l.InventoryNumber ?? l.ItemName}" : $"Upgrade of #{l.InventoryNumber ?? l.ItemName}"
-                }).ToList()
-            };
+                    IndividualId = IndividualId,
+                    Kind = kind,
+                    Purpose = "Job related",
+                    ReplacesRequestId = r.RequestId,
+                    Reason = comments.GetValueOrDefault(r.RequestId) ?? "",
+                    Lines = r.Lines.Select(l => new ItemStaffRequestLineInput
+                    {
+                        ItemId = l.ItemId,
+                        ItemName = l.ItemName,
+                        Quantity = l.Quantity,
+                        Remarks = kind == "Replacement" ? $"Replaces #{l.InventoryNumber ?? l.ItemName}" : $"Upgrade of #{l.InventoryNumber ?? l.ItemName}"
+                    }).ToList()
+                };
             replacingReference = r.Reference;
             selectedRequestId = null;
             error = null;

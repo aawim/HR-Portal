@@ -1,7 +1,9 @@
 using System.Data;
 using HRM.Components.Shared;
 using HRM.DTOs;
+using HRM.DTOs.Assets;
 using HRM.DTOs.Items;
+using HRM.Enums;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -289,6 +291,7 @@ public sealed partial class ItemCatalogueService
                 await IssueStockAsync(db, row);
                 Move(row, "Issued", St.PendingAcceptance, actor, null, null);
             }
+            await SyncJobRelatedItemToAssetSystemAsync(db, row, actor.User);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return ServiceResult.Ok(model.Kind == "Issue"
@@ -387,6 +390,7 @@ public sealed partial class ItemCatalogueService
             }
             await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_UPDATE,
                 $"Item record {row.RequestId} for staff {row.IndividualId}: {code}{(condition is null ? "" : $" ({condition})")}.");
+            await SyncJobRelatedItemToAssetSystemAsync(db, row, actor.User);
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return ServiceResult.Ok(message);
@@ -501,5 +505,254 @@ public sealed partial class ItemCatalogueService
             var item = await db.Items.SingleOrDefaultAsync(i => i.ItemId == line.ItemId!.Value && i.OrganisationId == row.OrganisationId);
             if (item is { Kind: "Consumable" }) { item.QuantityOnHand += line.Quantity; item.Version++; }
         }
+    }
+
+    /// <summary>
+    /// Synchronizes Job-Related items from IM_ItemStaffRequests into the AM_ serialized asset management tables
+    /// (AM_AssetItems, AM_AssetIssuances, AM_AssetIssuanceItems, AM_AssetCustodies, AM_AssetDocuments, AM_AssetReturns).
+    /// This ensures seamless interoperability with the /online/my-assets portal.
+    /// </summary>
+    private static async Task SyncJobRelatedItemToAssetSystemAsync(HrmTeContext db, ItemStaffRequest row, int userId)
+    {
+        if (row.Purpose != JobRelated) return;
+
+        var nowUtc = DateTime.UtcNow;
+        var todayDate = nowUtc.AddHours(5).Date;
+
+        // Find or create AM_AssetIssuance
+        var issuance = await db.AssetIssuances
+            .Include(i => i.Lines)
+            .FirstOrDefaultAsync(i => i.RequestId == row.RequestId);
+
+        if (issuance == null)
+        {
+            var ind = await db.Individuals.AsNoTracking().FirstOrDefaultAsync(i => i.BusinessEntityId == row.IndividualId);
+            var activeJob = await db.Jobs.AsNoTracking()
+                .Include(j => j.Organisation)
+                .Include(j => j.OrganisationStructure)
+                .Include(j => j.JobPositions.Where(p => p.JobPositionStateId == 4 && (p.ToDate == null || p.ToDate >= todayDate)))
+                    .ThenInclude(p => p.Position)
+                .FirstOrDefaultAsync(j => j.JobId == row.JobId);
+
+            var fullName = ind != null ? string.Join(" ", new[] { ind.FirstNameEnglish, ind.MiddleNameEnglish, ind.LastNameEnglish }.Where(x => !string.IsNullOrWhiteSpace(x))) : "Staff";
+            var staffNumber = activeJob?.Sapnumber ?? activeJob?.JobId.ToString() ?? row.IndividualId.ToString();
+            var positionTitle = activeJob?.JobPositions.FirstOrDefault()?.Position.Name ?? "Staff";
+            var deptName = activeJob?.OrganisationStructure?.Name ?? "";
+            var orgName = activeJob?.Organisation.OrganisationName ?? "Organisation";
+
+            issuance = new AssetIssuance
+            {
+                RequestId = row.RequestId,
+                ReferenceNumber = $"ISS-JOB-{row.RequestId}",
+                IndividualId = row.IndividualId,
+                JobId = row.JobId,
+                OrganisationId = row.OrganisationId,
+                StructureId = activeJob?.OrganisationStructureId,
+                Reason = string.IsNullOrWhiteSpace(row.Reason) ? "Job related" : row.Reason.Trim(),
+                Status = AssetIssuanceStatuses.Draft,
+                CreatedByUserId = userId > 0 ? userId : 1,
+                IssueDate = todayDate,
+                EmployeeNameSnapshot = fullName,
+                StaffNumberSnapshot = staffNumber,
+                PositionTitleSnapshot = positionTitle,
+                DepartmentNameSnapshot = deptName,
+                OrganisationNameSnapshot = orgName,
+                CreatedAtUtc = nowUtc,
+                UpdatedAtUtc = nowUtc
+            };
+            db.AssetIssuances.Add(issuance);
+            await db.SaveChangesAsync();
+        }
+
+        // Default category & condition
+        var laptopCategory = await db.AssetCategories.FirstOrDefaultAsync(c => c.Code == "LAPTOP");
+        var defaultCategoryId = laptopCategory?.AssetCategoryId ?? (await db.AssetCategories.Select(c => c.AssetCategoryId).FirstOrDefaultAsync());
+        if (defaultCategoryId <= 0) defaultCategoryId = 1;
+
+        var goodCondition = await db.AssetConditions.FirstOrDefaultAsync(c => c.Code == "GOOD");
+        var newCondition = await db.AssetConditions.FirstOrDefaultAsync(c => c.Code == "NEW");
+        var defaultConditionId = goodCondition?.AssetConditionId ?? 2;
+
+        foreach (var line in row.Lines)
+        {
+            var invCode = !string.IsNullOrWhiteSpace(line.InventoryNumber) ? line.InventoryNumber.Trim() : $"JOB-{row.RequestId}-L{line.ItemStaffRequestLineId}";
+            var serial = !string.IsNullOrWhiteSpace(line.SerialNumber) ? line.SerialNumber.Trim() : null;
+
+            var asset = await db.AssetItems.FirstOrDefaultAsync(a => a.AssetCode == invCode && a.OwnerOrganisationId == row.OrganisationId);
+            if (asset == null)
+            {
+                var condId = (line.Condition != null && line.Condition.Contains("New", StringComparison.OrdinalIgnoreCase))
+                    ? (newCondition?.AssetConditionId ?? 1)
+                    : defaultConditionId;
+
+                asset = new AssetItem
+                {
+                    CategoryId = defaultCategoryId,
+                    AssetCode = invCode,
+                    SerialNumber = serial,
+                    Name = line.ItemName.Trim(),
+                    Brand = "Standard",
+                    Model = "Equipment",
+                    OwnerOrganisationId = row.OrganisationId,
+                    OwnerStructureId = issuance.StructureId,
+                    Status = AssetInventoryStatuses.Available,
+                    CurrentConditionId = condId,
+                    IsActive = true,
+                    CreatedAtUtc = nowUtc,
+                    UpdatedAtUtc = nowUtc
+                };
+                db.AssetItems.Add(asset);
+                await db.SaveChangesAsync();
+            }
+
+            var issuanceItem = issuance.Lines.FirstOrDefault(l => l.AssetItemId == asset.AssetItemId);
+            if (issuanceItem == null)
+            {
+                issuanceItem = new AssetIssuanceItem
+                {
+                    IssuanceId = issuance.AssetIssuanceId,
+                    AssetItemId = asset.AssetItemId,
+                    ConditionAtIssueId = asset.CurrentConditionId,
+                    HandedOverAtUtc = nowUtc,
+                    HandedOverByUserId = userId > 0 ? userId : 1,
+                    Status = AssetIssuanceLineStatuses.Proposed,
+                    IsActiveReservation = true,
+                    Version = 1,
+                    ExpectedReturnDate = line.ExpectedReturnDate.HasValue ? line.ExpectedReturnDate.Value.ToDateTime(TimeOnly.MinValue) : null,
+                    AssetCodeSnapshot = asset.AssetCode,
+                    SerialNumberSnapshot = asset.SerialNumber,
+                    CategoryNameSnapshot = laptopCategory?.Name ?? "General Assets",
+                    ItemNameSnapshot = asset.Name,
+                    BrandSnapshot = asset.Brand,
+                    ModelSnapshot = asset.Model,
+                    ConditionNameSnapshot = "Good",
+                    IsSecurityItemSnapshot = false
+                };
+                issuance.Lines.Add(issuanceItem);
+                db.AssetIssuanceItems.Add(issuanceItem);
+                await db.SaveChangesAsync();
+            }
+
+            // Sync state based on row.Status
+            if (row.Status == St.PendingAcceptance)
+            {
+                issuance.Status = AssetIssuanceStatuses.PendingStaffAcknowledgement;
+                issuanceItem.Status = AssetIssuanceLineStatuses.HandedOver;
+                asset.Status = AssetInventoryStatuses.PendingHandover;
+            }
+            else if (row.Status == St.InUse)
+            {
+                issuance.Status = AssetIssuanceStatuses.Completed;
+                issuanceItem.Status = AssetIssuanceLineStatuses.HRApproved;
+                issuanceItem.IsActiveReservation = false;
+                asset.Status = AssetInventoryStatuses.Assigned;
+
+                // Ensure active custody exists
+                var custody = await db.AssetCustodies.FirstOrDefaultAsync(c => c.IssuanceItemId == issuanceItem.AssetIssuanceItemId);
+                if (custody == null)
+                {
+                    custody = new AssetCustody
+                    {
+                        AssetItemId = asset.AssetItemId,
+                        IndividualId = row.IndividualId,
+                        JobId = row.JobId,
+                        OrganisationId = row.OrganisationId,
+                        StructureId = issuance.StructureId,
+                        IssuanceItemId = issuanceItem.AssetIssuanceItemId,
+                        CustodyFromUtc = row.AcceptedAtUtc ?? nowUtc,
+                        CustodyToUtc = null,
+                        ExpectedReturnDate = line.ExpectedReturnDate.HasValue ? line.ExpectedReturnDate.Value.ToDateTime(TimeOnly.MinValue) : null,
+                        Status = AssetCustodyStatuses.Active,
+                        IdempotencyKey = $"CUST-SYNC-{row.RequestId}-{issuanceItem.AssetIssuanceItemId}"
+                    };
+                    db.AssetCustodies.Add(custody);
+                }
+                else if (custody.Status != AssetCustodyStatuses.Active)
+                {
+                    custody.Status = AssetCustodyStatuses.Active;
+                    custody.CustodyToUtc = null;
+                }
+
+                // Ensure handover document exists
+                var hasDoc = await db.AssetDocuments.AnyAsync(d => d.AssetIssuanceId == issuance.AssetIssuanceId && d.DocumentVariant == AssetDocumentVariants.StandardHandoverRecord);
+                if (!hasDoc)
+                {
+                    var doc = new AssetDocument
+                    {
+                        AssetIssuanceId = issuance.AssetIssuanceId,
+                        DocumentNumber = $"DOC-{issuance.ReferenceNumber}-V1",
+                        DocumentVariant = AssetDocumentVariants.StandardHandoverRecord,
+                        DocumentVersion = 1,
+                        SnapshotJson = "{}",
+                        Sha256Hash = "SYNCED",
+                        ContentType = "application/pdf",
+                        GeneratedByUserId = userId > 0 ? userId : 1,
+                        GeneratedAtUtc = nowUtc
+                    };
+                    db.AssetDocuments.Add(doc);
+                }
+            }
+            else if (row.Status == St.ReturnRequested)
+            {
+                var custody = await db.AssetCustodies.FirstOrDefaultAsync(c => c.IssuanceItemId == issuanceItem.AssetIssuanceItemId && c.Status == AssetCustodyStatuses.Active);
+                if (custody != null)
+                {
+                    custody.Status = AssetCustodyStatuses.ReturnPending;
+                    asset.Status = AssetInventoryStatuses.ReturnPending;
+
+                    var ret = await db.AssetReturns.FirstOrDefaultAsync(r => r.ReferenceNumber == $"RET-{row.RequestId}");
+                    if (ret == null)
+                    {
+                        ret = new AssetReturn
+                        {
+                            ReferenceNumber = $"RET-{row.RequestId}",
+                            OrganisationId = row.OrganisationId,
+                            IndividualId = row.IndividualId,
+                            JobId = row.JobId,
+                            ReturnType = AssetReturnTypes.StandardReturn,
+                            RequestedByUserId = userId > 0 ? userId : 1,
+                            ReturnDate = nowUtc,
+                            Status = AssetReturnStatuses.ReturnPending,
+                            Notes = row.ReturnNotes
+                        };
+                        db.AssetReturns.Add(ret);
+                        await db.SaveChangesAsync();
+
+                        var retItem = new AssetReturnItem
+                        {
+                            AssetReturnId = ret.AssetReturnId,
+                            AssetCustodyId = custody.AssetCustodyId,
+                            AssetItemId = asset.AssetItemId,
+                            Status = AssetReturnStatuses.ReturnPending,
+                            InspectionResult = AssetInspectionResults.Pending
+                        };
+                        db.AssetReturnItems.Add(retItem);
+                    }
+                }
+            }
+            else if (row.Status == St.Returned)
+            {
+                var custody = await db.AssetCustodies.FirstOrDefaultAsync(c => c.IssuanceItemId == issuanceItem.AssetIssuanceItemId);
+                if (custody != null)
+                {
+                    custody.Status = AssetCustodyStatuses.Returned;
+                    custody.CustodyToUtc = row.ReturnedAtUtc ?? nowUtc;
+                    custody.ClosedReason = $"Returned via Request #{row.RequestId} (Condition: {row.ReturnCondition ?? "Good"})";
+                    custody.ClosedByUserId = userId > 0 ? userId : 1;
+                }
+                asset.Status = AssetInventoryStatuses.Available;
+            }
+            else if (row.Status is St.Declined or St.Cancelled or St.Rejected)
+            {
+                issuance.Status = AssetIssuanceStatuses.Cancelled;
+                issuanceItem.Status = AssetIssuanceLineStatuses.Closed;
+                issuanceItem.IsActiveReservation = false;
+                asset.Status = AssetInventoryStatuses.Available;
+            }
+
+            asset.UpdatedAtUtc = nowUtc;
+        }
+
+        issuance.UpdatedAtUtc = nowUtc;
     }
 }
