@@ -48,6 +48,24 @@ public static class StaffTransferValidator
         if (string.IsNullOrWhiteSpace(input.Job.TransferReason) || input.Job.TransferReason.Trim().Length > 1000)
             throw new InvalidOperationException("Enter a transfer reason and justification of up to 1,000 characters.");
 
+        if (input.Job.TransferTypeId == (int)StaffTransferType.ExternalOrganizationTransfer || input.Job.IsExternalTransfer)
+        {
+            if (input.Job.DestinationOrganisationId <= 0)
+                throw new InvalidOperationException("External transfers require specifying a distinct destination organisation/employer.");
+
+            if (input.Job.IsLegalEmployerChanged && input.Job.TransferAppointmentMode != TransferAppointmentModes.NewEmploymentAppointment)
+                throw new InvalidOperationException("Transfers with legal employer change require NewEmploymentAppointment mode.");
+
+            if (string.IsNullOrWhiteSpace(input.Job.AppointingAuthorityRef))
+                throw new InvalidOperationException("Enter the Appointing Authority / Statutory authorization reference for external transfer.");
+        }
+
+        if (input.Job.TransferTypeId == (int)StaffTransferType.TemporaryAssignmentOrSecondment)
+        {
+            if (!input.Job.SecondmentEndDate.HasValue || input.Job.SecondmentEndDate.Value.Date <= input.Job.EffectiveDate.Date)
+                throw new InvalidOperationException("Temporary secondments require a valid Secondment End Date after the Effective Date.");
+        }
+
         var effectiveDate = input.Job.EffectiveDate.Date;
         if (effectiveDate.Year is < 1900 or > 2200)
             throw new InvalidOperationException("Select a valid transfer effective date.");

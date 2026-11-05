@@ -366,12 +366,54 @@
                                 <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
                                         value="@editInput.Job.TransferTypeId"
                                         @onchange="OnTransferTypeChanged">
-                                    @foreach (var tt in Enum.GetValues<StaffTransferType>())
-                                    {
-                                        <option value="@((int)tt)">@tt</option>
-                                    }
+                                    <option value="@((int)StaffTransferType.InternalDepartmental)">Internal Departmental Transfer</option>
+                                    <option value="@((int)StaffTransferType.CrossStructureReassignment)">Cross-Structure Reassignment</option>
+                                    <option value="@((int)StaffTransferType.SameJobPositionTransfer)">Position Transfer (Same Job)</option>
+                                    <option value="@((int)StaffTransferType.NewAppointmentTransfer)">New Employment Appointment (Internal)</option>
+                                    <option value="@((int)StaffTransferType.CrossOrganisationTransfer)">Cross-Organisation Transfer</option>
+                                    <option value="@((int)StaffTransferType.ExternalOrganizationTransfer)">External Organization Transfer (Separate Employer)</option>
+                                    <option value="@((int)StaffTransferType.TemporaryAssignmentOrSecondment)">Temporary Assignment / Secondment</option>
                                 </select>
                             </div>
+
+                            @if (editInput.Job.TransferTypeId == (int)StaffTransferType.ExternalOrganizationTransfer || editInput.Job.IsExternalTransfer)
+                            {
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700">Appointing Authority / Authorization Ref *</label>
+                                    <input type="text"
+                                           @bind="editInput.Job.AppointingAuthorityRef"
+                                           placeholder="e.g. Gazette #44/2026, Board Resolution #08"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700">Service Continuity Treatment *</label>
+                                    <select @bind="editInput.Job.ServiceContinuityTreatment" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                        <option value="@ServiceContinuityTreatments.RecognizedContinuous">Recognized Continuous Service</option>
+                                        <option value="@ServiceContinuityTreatments.SeverancePaidReset">Severance Paid / Service Reset</option>
+                                        <option value="@ServiceContinuityTreatments.FrozenRetained">Frozen / Retained at Source</option>
+                                    </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700">Leave Balance Treatment *</label>
+                                    <select @bind="editInput.Job.LeaveBalanceTreatment" class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs">
+                                        <option value="@LeaveBalanceTreatments.TransferFull">Transfer Full Balance to Destination</option>
+                                        <option value="@LeaveBalanceTreatments.EncashAtSource">Encash Balance at Source</option>
+                                        <option value="@LeaveBalanceTreatments.ForfeitLapse">Forfeit / Lapse on Transfer</option>
+                                    </select>
+                                </div>
+                            }
+
+                            @if (editInput.Job.TransferTypeId == (int)StaffTransferType.TemporaryAssignmentOrSecondment)
+                            {
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700">Secondment End Date (Return to Source) *</label>
+                                    <input type="date"
+                                           @bind="editInput.Job.SecondmentEndDate"
+                                           class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs" />
+                                </div>
+                            }
 
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Job Appointment Mode *</label>
@@ -1706,6 +1748,10 @@
         if (int.TryParse(e.Value?.ToString(), out var ttId))
         {
             editInput.Job.TransferTypeId = ttId;
+            var transferType = (StaffTransferType)ttId;
+            editInput.Job.IsExternalTransfer = transferType is StaffTransferType.ExternalOrganizationTransfer or StaffTransferType.TemporaryAssignmentOrSecondment;
+            editInput.Job.IsLegalEmployerChanged = transferType == StaffTransferType.ExternalOrganizationTransfer;
+
             if (ttId == (int)StaffTransferType.InternalDepartmental)
             {
                 // Lock to current position settings on Internal Transfer
@@ -1713,6 +1759,15 @@
                 editInput.Job.DestinationPositionId = activeDetail.Job.ExistingPositionId;
                 editInput.Job.DestinationPositionTitle = activeDetail.Job.ExistingPositionTitle;
                 editInput.Job.DestinationPositionMatrixId = activeDetail.Job.ExistingPositionMatrixId;
+            }
+            else if (transferType == StaffTransferType.ExternalOrganizationTransfer)
+            {
+                editInput.Job.TransferAppointmentMode = TransferAppointmentModes.NewEmploymentAppointment;
+            }
+            else if (transferType == StaffTransferType.TemporaryAssignmentOrSecondment)
+            {
+                editInput.Job.TransferAppointmentMode = TransferAppointmentModes.OrganisationalReassignment;
+                editInput.Job.SecondmentEndDate ??= editInput.Job.EffectiveDate.AddMonths(6);
             }
         }
     }

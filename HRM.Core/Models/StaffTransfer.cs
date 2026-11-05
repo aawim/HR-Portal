@@ -19,6 +19,17 @@ public sealed class StaffTransfer
     public int ToOrganisationId { get; set; }
     public int ToOrganisationStructureId { get; set; }
     public int TransferTypeId { get; set; } = (int)StaffTransferType.InternalDepartmental;
+    public bool IsExternalTransfer { get; set; }
+    public bool IsLegalEmployerChanged { get; set; }
+    public int? SourceEmployerId { get; set; }
+    public int? DestinationEmployerId { get; set; }
+    public DateTime? SecondmentEndDate { get; set; }
+    public string ServiceContinuityTreatment { get; set; } = ServiceContinuityTreatments.RecognizedContinuous;
+    public string LeaveBalanceTreatment { get; set; } = LeaveBalanceTreatments.TransferFull;
+    public int? SourceHrReleaseUserId { get; set; }
+    public DateTime? SourceHrReleasedAt { get; set; }
+    public string? AppointingAuthorityRef { get; set; }
+
     public string TransferReason { get; set; } = "";
     public int RequestedByUserId { get; set; }
     public DateTime RequestedDate { get; set; }
@@ -67,9 +78,17 @@ public sealed class StaffTransfer
     public Individual? CurrentHodIndividual { get; set; }
     public OperationLog? OperationLog { get; set; }
 
+    public Organisation? SourceEmployer { get; set; }
+    public Organisation? DestinationEmployer { get; set; }
+    public User? SourceHrReleaseUser { get; set; }
+
     public StaffTransferJobDetail? JobDetail { get; set; }
     public StaffTransferWorkDetail? WorkDetail { get; set; }
     public StaffTransferReportingDetail? ReportingDetail { get; set; }
+    public StaffTransferFinanceSettlement? FinanceSettlement { get; set; }
+    public ICollection<StaffTransferClearanceTask> ClearanceTasks { get; set; } = new List<StaffTransferClearanceTask>();
+    public ICollection<StaffTransferAssetDecision> AssetDecisions { get; set; } = new List<StaffTransferAssetDecision>();
+    public ICollection<StaffTransferEmploymentExecution> EmploymentExecutions { get; set; } = new List<StaffTransferEmploymentExecution>();
     public ICollection<StaffTransferAccessChange> AccessChanges { get; set; } = new List<StaffTransferAccessChange>();
     public ICollection<StaffTransferDoorAccess> DoorAccessChanges { get; set; } = new List<StaffTransferDoorAccess>();
     public ICollection<StaffTransferComment> Comments { get; set; } = new List<StaffTransferComment>();
@@ -377,4 +396,105 @@ public sealed class JobOrganisationHistory
     public OrganisationStructure OrganisationStructure { get; set; } = null!;
     public StaffTransfer? StaffTransfer { get; set; }
     public OperationLog? OperationLog { get; set; }
+}
+
+/// <summary>
+/// Tracks multi-domain clearance tasks (work handover, asset custody, finance, IT access, door access)
+/// required for external and internal transfers. Mapped to dbo.ST_StaffTransferClearanceTasks.
+/// </summary>
+public sealed class StaffTransferClearanceTask
+{
+    public int ClearanceTaskId { get; set; }
+    public int StaffTransferId { get; set; }
+    public string ClearanceDomain { get; set; } = StaffTransferClearanceDomains.WorkHandover;
+    public string TaskTitle { get; set; } = "";
+    public string? TaskDescription { get; set; }
+    public int? AssignedToUserId { get; set; }
+    public int? AssignedToOrganisationStructureId { get; set; }
+    public string Status { get; set; } = "Pending";
+    public bool IsMandatoryForFinalApproval { get; set; }
+    public bool IsMandatoryForActivation { get; set; } = true;
+    public int? ClearedByUserId { get; set; }
+    public DateTime? ClearedAtUtc { get; set; }
+    public string? WaiverReason { get; set; }
+    public string? Remarks { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public StaffTransfer StaffTransfer { get; set; } = null!;
+    public User? AssignedToUser { get; set; }
+    public OrganisationStructure? AssignedToOrganisationStructure { get; set; }
+    public User? ClearedByUser { get; set; }
+}
+
+/// <summary>
+/// Tracks item-level asset disposition (return, retain, transfer ownership, maintenance, replace)
+/// integrated with AM_AssetCustodies. Mapped to dbo.ST_StaffTransferAssetDecisions.
+/// </summary>
+public sealed class StaffTransferAssetDecision
+{
+    public int TransferAssetDecisionId { get; set; }
+    public int StaffTransferId { get; set; }
+    public int AssetCustodyId { get; set; }
+    public int AssetItemId { get; set; }
+    public string AssetDecision { get; set; } = StaffTransferAssetDecisions.ReturnToSource;
+    public bool DestinationAccepted { get; set; }
+    public int? HandoverConditionId { get; set; }
+    public int? ReturnServiceRequestId { get; set; }
+    public int? VerifiedByUserId { get; set; }
+    public DateTime? VerifiedAtUtc { get; set; }
+    public string? Notes { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public StaffTransfer StaffTransfer { get; set; } = null!;
+    public User? VerifiedByUser { get; set; }
+}
+
+/// <summary>
+/// Financial settlement between source and destination employers (advances, leave encashment, gratuity).
+/// Mapped to dbo.ST_StaffTransferFinanceSettlements.
+/// </summary>
+public sealed class StaffTransferFinanceSettlement
+{
+    public int FinanceSettlementId { get; set; }
+    public int StaffTransferId { get; set; }
+    public DateTime LastWorkingDateAtSource { get; set; }
+    public DateTime LastPayrollCutoffDate { get; set; }
+    public decimal OutstandingAdvanceDeduction { get; set; }
+    public decimal UnencashedLeaveDays { get; set; }
+    public decimal LeaveEncashmentAmount { get; set; }
+    public decimal GratuitySeveranceAmount { get; set; }
+    public string SettlementMode { get; set; } = "InterCompanyTransfer";
+    public int? FinanceOfficerUserId { get; set; }
+    public bool IsCleared { get; set; }
+    public DateTime? ClearedAtUtc { get; set; }
+    public string? Remarks { get; set; }
+    public byte[] RowVersion { get; set; } = [];
+
+    public StaffTransfer StaffTransfer { get; set; } = null!;
+    public User? FinanceOfficerUser { get; set; }
+}
+
+/// <summary>
+/// Audit trail for destination Job and JobPosition creation on effective-date activation.
+/// Mapped to dbo.ST_StaffTransferEmploymentExecutions.
+/// </summary>
+public sealed class StaffTransferEmploymentExecution
+{
+    public long ExecutionId { get; set; }
+    public int StaffTransferId { get; set; }
+    public int SourceJobId { get; set; }
+    public int? DestinationJobId { get; set; }
+    public int? DestinationJobPositionId { get; set; }
+    public DateTime EffectiveDate { get; set; }
+    public bool IsNewContractCreated { get; set; }
+    public string IdempotencyKey { get; set; } = "";
+    public DateTime ExecutedAtUtc { get; set; }
+    public string? ExecutionDetailsJson { get; set; }
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+
+    public StaffTransfer StaffTransfer { get; set; } = null!;
+    public Job SourceJob { get; set; } = null!;
+    public Job? DestinationJob { get; set; }
+    public JobPosition? DestinationJobPosition { get; set; }
 }

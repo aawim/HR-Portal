@@ -55,7 +55,9 @@ public sealed class StaffTransferService(
         StaffTransferType.SameJobPositionTransfer => "Position Transfer (Same Job)",
         StaffTransferType.NewAppointmentTransfer => "New Employment Appointment Transfer",
         StaffTransferType.CrossOrganisationTransfer => "Cross-Organisation Transfer",
-        _ => "Internal Transfer"
+        StaffTransferType.ExternalOrganizationTransfer => "External Organization Transfer",
+        StaffTransferType.TemporaryAssignmentOrSecondment => "Temporary Assignment / Secondment",
+        _ => "Staff Transfer"
     };
 
     public async Task<StaffTransferDashboardData> LoadDashboardAsync(int? organisationId = null, string? statusFilter = null)
@@ -189,6 +191,9 @@ public sealed class StaffTransferService(
             r.TransferTypeId,
             TransferTypeLabel(r.TransferTypeId),
             r.AppointmentMode,
+            (StaffTransferType)r.TransferTypeId is StaffTransferType.ExternalOrganizationTransfer or StaffTransferType.TemporaryAssignmentOrSecondment,
+            (StaffTransferType)r.TransferTypeId == StaffTransferType.ExternalOrganizationTransfer,
+            null,
             r.RequestedDate,
             r.EffectiveDate,
             r.ReportingDate,
@@ -282,7 +287,6 @@ public sealed class StaffTransferService(
             .ToListAsync();
 
         lookup.Organisations = await db.Organisations.AsNoTracking()
-            .Where(o => actor.IsSuperAdministrator || o.BusinessEntityID == org || o.BusinessEntityID == destOrg)
             .OrderBy(o => o.OrganisationName)
             .Select(o => new StaffTransferLookupOption(o.BusinessEntityID, o.OrganisationName, null))
             .ToListAsync();
@@ -638,6 +642,14 @@ public sealed class StaffTransferService(
                 DestinationJobMatrixStepId = job.DestinationJobMatrixStepId,
                 DestinationGradeLevel = job.DestinationGradeLevelSnapshot,
                 TransferTypeId = t.TransferTypeId,
+                IsExternalTransfer = t.IsExternalTransfer,
+                IsLegalEmployerChanged = t.IsLegalEmployerChanged,
+                SourceEmployerId = t.SourceEmployerId,
+                DestinationEmployerId = t.DestinationEmployerId,
+                SecondmentEndDate = t.SecondmentEndDate,
+                ServiceContinuityTreatment = t.ServiceContinuityTreatment,
+                LeaveBalanceTreatment = t.LeaveBalanceTreatment,
+                AppointingAuthorityRef = t.AppointingAuthorityRef,
                 TransferAppointmentMode = job.TransferAppointmentMode,
                 HasSalaryBenefitChange = job.HasSalaryBenefitChange,
                 ProposedBasicSalary = canSeeSalary ? job.ProposedBasicSalary : null,
@@ -1397,6 +1409,14 @@ public sealed class StaffTransferService(
                     ToOrganisationId = input.Job.DestinationOrganisationId,
                     ToOrganisationStructureId = input.Job.DestinationOrganisationStructureId,
                     TransferTypeId = input.Job.TransferTypeId,
+                    IsExternalTransfer = input.Job.IsExternalTransfer,
+                    IsLegalEmployerChanged = input.Job.IsLegalEmployerChanged,
+                    SourceEmployerId = input.Job.SourceEmployerId ?? sourceJob.OrganisationID,
+                    DestinationEmployerId = input.Job.DestinationEmployerId ?? input.Job.DestinationOrganisationId,
+                    SecondmentEndDate = input.Job.SecondmentEndDate,
+                    ServiceContinuityTreatment = input.Job.ServiceContinuityTreatment,
+                    LeaveBalanceTreatment = input.Job.LeaveBalanceTreatment,
+                    AppointingAuthorityRef = input.Job.AppointingAuthorityRef,
                     TransferReason = input.Job.TransferReason.Trim(),
                     RequestedByUserId = actor.UserId,
                     RequestedDate = DateTime.UtcNow,
@@ -1471,6 +1491,14 @@ public sealed class StaffTransferService(
                 transfer.ToOrganisationId = input.Job.DestinationOrganisationId;
                 transfer.ToOrganisationStructureId = input.Job.DestinationOrganisationStructureId;
                 transfer.TransferTypeId = input.Job.TransferTypeId;
+                transfer.IsExternalTransfer = input.Job.IsExternalTransfer;
+                transfer.IsLegalEmployerChanged = input.Job.IsLegalEmployerChanged;
+                transfer.SourceEmployerId = input.Job.SourceEmployerId ?? transfer.FromOrganisationId;
+                transfer.DestinationEmployerId = input.Job.DestinationEmployerId ?? input.Job.DestinationOrganisationId;
+                transfer.SecondmentEndDate = input.Job.SecondmentEndDate;
+                transfer.ServiceContinuityTreatment = input.Job.ServiceContinuityTreatment;
+                transfer.LeaveBalanceTreatment = input.Job.LeaveBalanceTreatment;
+                transfer.AppointingAuthorityRef = input.Job.AppointingAuthorityRef;
                 transfer.TransferReason = input.Job.TransferReason.Trim();
                 transfer.EffectiveDate = input.Job.EffectiveDate.Date;
                 transfer.ReportingDate = input.Reporting.ReportingDate.Date;

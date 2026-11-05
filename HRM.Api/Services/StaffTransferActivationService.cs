@@ -153,7 +153,9 @@ public sealed class StaffTransferActivationService(
                 if (jobDetail.TransferAppointmentMode == TransferAppointmentModes.NewEmploymentAppointment)
                 {
                     sourceJob.TerminatedDate = priorDay;
-                    sourceJob.JobStateId = SharedConfig.JobStates.TERMINATED_DUE_TO_PROMOTION;
+                    sourceJob.JobStateId = transfer.IsLegalEmployerChanged
+                        ? SharedConfig.JobStates.TERMINATED_DUE_TO_TRANSFER
+                        : SharedConfig.JobStates.TERMINATED_DUE_TO_PROMOTION;
                     sourceJob.OperationLogId = auditLog.OperationLogId;
 
                     var newJob = new Job
@@ -495,7 +497,32 @@ public sealed class StaffTransferActivationService(
                     doorStepKey, new { dispatchedDoorTasks });
             }
 
-            // Step 8: Mark Transfer Active & Notify Stakeholders
+            // Step 8: Record Employment Execution Log & Mark Transfer Active
+            var executionKey = $"Transfer:{transfer.StaffTransferId}:V{transfer.CurrentVersion}:EmploymentExecution";
+            if (!await db.StaffTransferEmploymentExecutions.AnyAsync(e => e.IdempotencyKey == executionKey, cancellationToken))
+            {
+                db.StaffTransferEmploymentExecutions.Add(new StaffTransferEmploymentExecution
+                {
+                    StaffTransferId = transfer.StaffTransferId,
+                    SourceJobId = sourceJob.JobId,
+                    DestinationJobId = targetJobId,
+                    DestinationJobPositionId = jobDetail.ResultingJobPositionId,
+                    EffectiveDate = effectiveDate,
+                    IsNewContractCreated = jobDetail.TransferAppointmentMode == TransferAppointmentModes.NewEmploymentAppointment,
+                    IdempotencyKey = executionKey,
+                    ExecutedAtUtc = DateTime.UtcNow,
+                    ExecutionDetailsJson = JsonSerializer.Serialize(new
+                    {
+                        transfer.TransferTypeId,
+                        transfer.IsExternalTransfer,
+                        transfer.IsLegalEmployerChanged,
+                        targetJobId,
+                        jobDetail.ResultingJobPositionId
+                    }),
+                    Success = true
+                });
+            }
+
             transfer.Status = StaffTransferStatuses.Active;
             transfer.IsOpen = false;
             transfer.ActivatedAt = DateTime.UtcNow;

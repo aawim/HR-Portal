@@ -54,6 +54,7 @@ public static class StaffTransferStatuses
 
 /// <summary>
 /// Business classification of the transfer request.
+/// Supports both internal departmental movements and external cross-employer/secondment transfers.
 /// </summary>
 public enum StaffTransferType
 {
@@ -61,7 +62,87 @@ public enum StaffTransferType
     CrossStructureReassignment = 2,
     SameJobPositionTransfer = 3,
     NewAppointmentTransfer = 4,
-    CrossOrganisationTransfer = 5
+    CrossOrganisationTransfer = 5,
+    ExternalOrganizationTransfer = 6,
+    TemporaryAssignmentOrSecondment = 7
+}
+
+/// <summary>
+/// Treatment of accumulated years of service / pension continuity when transferring.
+/// </summary>
+public static class ServiceContinuityTreatments
+{
+    public const string RecognizedContinuous = "RecognizedContinuous";
+    public const string SeverancePaidReset = "SeverancePaidReset";
+    public const string FrozenRetained = "FrozenRetained";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        RecognizedContinuous,
+        SeverancePaidReset,
+        FrozenRetained
+    ];
+}
+
+/// <summary>
+/// Treatment of accrued annual, casual, and other leave balances upon transfer.
+/// </summary>
+public static class LeaveBalanceTreatments
+{
+    public const string TransferFull = "TransferFull";
+    public const string EncashAtSource = "EncashAtSource";
+    public const string ForfeitLapse = "ForfeitLapse";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        TransferFull,
+        EncashAtSource,
+        ForfeitLapse
+    ];
+}
+
+/// <summary>
+/// Clearance domains for multi-stage external & internal transfer verification.
+/// </summary>
+public static class StaffTransferClearanceDomains
+{
+    public const string WorkHandover = "WorkHandover";
+    public const string AssetCustody = "AssetCustody";
+    public const string FinancialSettlement = "FinancialSettlement";
+    public const string ItAccess = "ItAccess";
+    public const string PhysicalSecurity = "PhysicalSecurity";
+    public const string StatutoryFiling = "StatutoryFiling";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        WorkHandover,
+        AssetCustody,
+        FinancialSettlement,
+        ItAccess,
+        PhysicalSecurity,
+        StatutoryFiling
+    ];
+}
+
+/// <summary>
+/// Asset decisions for staff items in custody when transferring between departments/organizations.
+/// </summary>
+public static class StaffTransferAssetDecisions
+{
+    public const string ReturnToSource = "ReturnToSource";
+    public const string RetainWithEmployee = "RetainWithEmployee";
+    public const string TransferOwnershipToDestination = "TransferOwnershipToDestination";
+    public const string SendForMaintenance = "SendForMaintenance";
+    public const string ReplaceAsset = "ReplaceAsset";
+
+    public static readonly IReadOnlyList<string> All =
+    [
+        ReturnToSource,
+        RetainWithEmployee,
+        TransferOwnershipToDestination,
+        SendForMaintenance,
+        ReplaceAsset
+    ];
 }
 
 /// <summary>

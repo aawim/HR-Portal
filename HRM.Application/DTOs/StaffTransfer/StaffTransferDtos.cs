@@ -50,6 +50,9 @@ public sealed record StaffTransferRowDto(
     int TransferTypeId,
     string TransferTypeName,
     string TransferAppointmentMode,
+    bool IsExternalTransfer,
+    bool IsLegalEmployerChanged,
+    string? AppointingAuthorityRef,
     DateTime RequestedDate,
     DateTime EffectiveDate,
     DateTime ReportingDate,
@@ -123,6 +126,16 @@ public sealed class StaffTransferJobTabDto
     public string? DestinationGradeLevel { get; set; }
 
     public int TransferTypeId { get; set; } = (int)StaffTransferType.InternalDepartmental;
+    public bool IsExternalTransfer { get; set; }
+    public bool IsLegalEmployerChanged { get; set; }
+    public int? SourceEmployerId { get; set; }
+    public string? SourceEmployerName { get; set; }
+    public int? DestinationEmployerId { get; set; }
+    public string? DestinationEmployerName { get; set; }
+    public DateTime? SecondmentEndDate { get; set; }
+    public string ServiceContinuityTreatment { get; set; } = ServiceContinuityTreatments.RecognizedContinuous;
+    public string LeaveBalanceTreatment { get; set; } = LeaveBalanceTreatments.TransferFull;
+    public string? AppointingAuthorityRef { get; set; }
     public string TransferAppointmentMode { get; set; } = TransferAppointmentModes.OrganisationalReassignment;
     public bool HasSalaryBenefitChange { get; set; }
     public decimal? ProposedBasicSalary { get; set; }
@@ -530,4 +543,78 @@ public sealed class StaffTransferPrintableDocumentDto
     public string? FinalApprovedByName { get; set; }
     public DateTime? FinalApprovedAtUtc { get; set; }
     public string? FinalDecisionRemarks { get; set; }
+
+    public string? SourceHrReleaseByName { get; set; }
+    public DateTime? SourceHrReleasedAtUtc { get; set; }
+    public List<StaffTransferClearanceTaskDto> ClearanceTasks { get; set; } = [];
+    public List<StaffTransferAssetDecisionDto> AssetDecisions { get; set; } = [];
+    public StaffTransferFinanceSettlementDto? FinanceSettlement { get; set; }
+}
+
+/// <summary>
+/// DTO representing a multi-domain clearance task.
+/// </summary>
+public sealed class StaffTransferClearanceTaskDto
+{
+    public int ClearanceTaskId { get; set; }
+    public int StaffTransferId { get; set; }
+    public string ClearanceDomain { get; set; } = "";
+    public string TaskTitle { get; set; } = "";
+    public string? TaskDescription { get; set; }
+    public int? AssignedToUserId { get; set; }
+    public string? AssignedToUserName { get; set; }
+    public int? AssignedToOrganisationStructureId { get; set; }
+    public string? AssignedToDepartmentName { get; set; }
+    public string Status { get; set; } = "Pending";
+    public bool IsMandatoryForFinalApproval { get; set; }
+    public bool IsMandatoryForActivation { get; set; }
+    public int? ClearedByUserId { get; set; }
+    public string? ClearedByUserName { get; set; }
+    public DateTime? ClearedAtUtc { get; set; }
+    public string? WaiverReason { get; set; }
+    public string? Remarks { get; set; }
+}
+
+/// <summary>
+/// DTO representing an itemized asset custody disposition decision.
+/// </summary>
+public sealed class StaffTransferAssetDecisionDto
+{
+    public int TransferAssetDecisionId { get; set; }
+    public int StaffTransferId { get; set; }
+    public int AssetCustodyId { get; set; }
+    public int AssetItemId { get; set; }
+    public string AssetCode { get; set; } = "";
+    public string AssetName { get; set; } = "";
+    public string? SerialNumber { get; set; }
+    public string AssetDecision { get; set; } = StaffTransferAssetDecisions.ReturnToSource;
+    public bool DestinationAccepted { get; set; }
+    public int? HandoverConditionId { get; set; }
+    public string? HandoverConditionName { get; set; }
+    public int? ReturnServiceRequestId { get; set; }
+    public int? VerifiedByUserId { get; set; }
+    public string? VerifiedByUserName { get; set; }
+    public DateTime? VerifiedAtUtc { get; set; }
+    public string? Notes { get; set; }
+}
+
+/// <summary>
+/// DTO representing financial clearance and separation settlement.
+/// </summary>
+public sealed class StaffTransferFinanceSettlementDto
+{
+    public int FinanceSettlementId { get; set; }
+    public int StaffTransferId { get; set; }
+    public DateTime LastWorkingDateAtSource { get; set; }
+    public DateTime LastPayrollCutoffDate { get; set; }
+    public decimal OutstandingAdvanceDeduction { get; set; }
+    public decimal UnencashedLeaveDays { get; set; }
+    public decimal LeaveEncashmentAmount { get; set; }
+    public decimal GratuitySeveranceAmount { get; set; }
+    public string SettlementMode { get; set; } = "InterCompanyTransfer";
+    public int? FinanceOfficerUserId { get; set; }
+    public string? FinanceOfficerUserName { get; set; }
+    public bool IsCleared { get; set; }
+    public DateTime? ClearedAtUtc { get; set; }
+    public string? Remarks { get; set; }
 }

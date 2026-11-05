@@ -14,7 +14,11 @@ public sealed class StaffTransferMapping :
     IEntityTypeConfiguration<StaffTransferConfirmation>,
     IEntityTypeConfiguration<StaffTransferActivationLog>,
     IEntityTypeConfiguration<StaffTransferDocument>,
-    IEntityTypeConfiguration<JobOrganisationHistory>
+    IEntityTypeConfiguration<JobOrganisationHistory>,
+    IEntityTypeConfiguration<StaffTransferClearanceTask>,
+    IEntityTypeConfiguration<StaffTransferAssetDecision>,
+    IEntityTypeConfiguration<StaffTransferFinanceSettlement>,
+    IEntityTypeConfiguration<StaffTransferEmploymentExecution>
 {
     public void Configure(EntityTypeBuilder<StaffTransfer> b)
     {
@@ -25,7 +29,7 @@ public sealed class StaffTransferMapping :
             t.HasCheckConstraint("CK_ST_StaffTransfers_Versions",
                 "[CurrentVersion] >= 1 AND ([ConfirmedVersion] IS NULL OR ([ConfirmedVersion] >= 1 AND [ConfirmedVersion] <= [CurrentVersion]))");
             t.HasCheckConstraint("CK_ST_StaffTransfers_TransferType",
-                "[TransferTypeId] BETWEEN 1 AND 5");
+                "[TransferTypeId] BETWEEN 1 AND 7");
         });
 
         b.HasKey(x => x.StaffTransferId);
@@ -33,6 +37,11 @@ public sealed class StaffTransferMapping :
         b.Property(x => x.RequestedDate).HasColumnType("datetime2");
         b.Property(x => x.EffectiveDate).HasColumnType("date");
         b.Property(x => x.ReportingDate).HasColumnType("date");
+        b.Property(x => x.SecondmentEndDate).HasColumnType("date");
+        b.Property(x => x.ServiceContinuityTreatment).HasMaxLength(50);
+        b.Property(x => x.LeaveBalanceTreatment).HasMaxLength(50);
+        b.Property(x => x.AppointingAuthorityRef).HasMaxLength(100);
+        b.Property(x => x.SourceHrReleasedAt).HasColumnType("datetime2");
         b.Property(x => x.Status).HasMaxLength(40);
         b.Property(x => x.MaterialStateFingerprint).HasMaxLength(64);
         b.Property(x => x.FullNameSnapshot).HasMaxLength(250);
@@ -64,6 +73,9 @@ public sealed class StaffTransferMapping :
         b.HasOne(x => x.FromOrganisationStructure).WithMany().HasForeignKey(x => x.FromOrganisationStructureId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.ToOrganisation).WithMany().HasForeignKey(x => x.ToOrganisationId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.ToOrganisationStructure).WithMany().HasForeignKey(x => x.ToOrganisationStructureId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.SourceEmployer).WithMany().HasForeignKey(x => x.SourceEmployerId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.DestinationEmployer).WithMany().HasForeignKey(x => x.DestinationEmployerId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.SourceHrReleaseUser).WithMany().HasForeignKey(x => x.SourceHrReleaseUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.RequestedByUser).WithMany().HasForeignKey(x => x.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.FinalApprovedByUser).WithMany().HasForeignKey(x => x.FinalApprovedByUserId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.CurrentSupervisorIndividual).WithMany().HasForeignKey(x => x.CurrentSupervisorIndividualId).OnDelete(DeleteBehavior.Restrict);
@@ -321,6 +333,80 @@ public sealed class StaffTransferMapping :
         b.HasOne(x => x.StaffTransfer).WithMany().HasForeignKey(x => x.StaffTransferId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.OperationLog).WithMany().HasForeignKey(x => x.OperationLogId).OnDelete(DeleteBehavior.Restrict);
     }
+
+    public void Configure(EntityTypeBuilder<StaffTransferClearanceTask> b)
+    {
+        b.ToTable("ST_StaffTransferClearanceTasks");
+        b.HasKey(x => x.ClearanceTaskId);
+        b.Property(x => x.ClearanceDomain).HasMaxLength(50);
+        b.Property(x => x.TaskTitle).HasMaxLength(250);
+        b.Property(x => x.TaskDescription).HasMaxLength(1000);
+        b.Property(x => x.Status).HasMaxLength(40);
+        b.Property(x => x.WaiverReason).HasMaxLength(1000);
+        b.Property(x => x.Remarks).HasMaxLength(1000);
+        b.Property(x => x.ClearedAtUtc).HasColumnType("datetime2");
+        b.Property(x => x.RowVersion).IsRowVersion();
+
+        b.HasIndex(x => new { x.StaffTransferId, x.ClearanceDomain, x.Status });
+
+        b.HasOne(x => x.StaffTransfer).WithMany(x => x.ClearanceTasks).HasForeignKey(x => x.StaffTransferId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.AssignedToUser).WithMany().HasForeignKey(x => x.AssignedToUserId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.AssignedToOrganisationStructure).WithMany().HasForeignKey(x => x.AssignedToOrganisationStructureId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.ClearedByUser).WithMany().HasForeignKey(x => x.ClearedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    public void Configure(EntityTypeBuilder<StaffTransferAssetDecision> b)
+    {
+        b.ToTable("ST_StaffTransferAssetDecisions");
+        b.HasKey(x => x.TransferAssetDecisionId);
+        b.Property(x => x.AssetDecision).HasMaxLength(50);
+        b.Property(x => x.Notes).HasMaxLength(1000);
+        b.Property(x => x.VerifiedAtUtc).HasColumnType("datetime2");
+        b.Property(x => x.RowVersion).IsRowVersion();
+
+        b.HasIndex(x => new { x.StaffTransferId, x.AssetCustodyId });
+
+        b.HasOne(x => x.StaffTransfer).WithMany(x => x.AssetDecisions).HasForeignKey(x => x.StaffTransferId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.VerifiedByUser).WithMany().HasForeignKey(x => x.VerifiedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    public void Configure(EntityTypeBuilder<StaffTransferFinanceSettlement> b)
+    {
+        b.ToTable("ST_StaffTransferFinanceSettlements");
+        b.HasKey(x => x.FinanceSettlementId);
+        b.Property(x => x.LastWorkingDateAtSource).HasColumnType("date");
+        b.Property(x => x.LastPayrollCutoffDate).HasColumnType("date");
+        b.Property(x => x.OutstandingAdvanceDeduction).HasPrecision(18, 2);
+        b.Property(x => x.UnencashedLeaveDays).HasPrecision(9, 2);
+        b.Property(x => x.LeaveEncashmentAmount).HasPrecision(18, 2);
+        b.Property(x => x.GratuitySeveranceAmount).HasPrecision(18, 2);
+        b.Property(x => x.SettlementMode).HasMaxLength(50);
+        b.Property(x => x.ClearedAtUtc).HasColumnType("datetime2");
+        b.Property(x => x.Remarks).HasMaxLength(1000);
+        b.Property(x => x.RowVersion).IsRowVersion();
+
+        b.HasIndex(x => x.StaffTransferId).IsUnique();
+
+        b.HasOne(x => x.StaffTransfer).WithOne(x => x.FinanceSettlement).HasForeignKey<StaffTransferFinanceSettlement>(x => x.StaffTransferId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.FinanceOfficerUser).WithMany().HasForeignKey(x => x.FinanceOfficerUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+
+    public void Configure(EntityTypeBuilder<StaffTransferEmploymentExecution> b)
+    {
+        b.ToTable("ST_StaffTransferEmploymentExecutions");
+        b.HasKey(x => x.ExecutionId);
+        b.Property(x => x.EffectiveDate).HasColumnType("date");
+        b.Property(x => x.IdempotencyKey).HasMaxLength(120);
+        b.Property(x => x.ExecutedAtUtc).HasColumnType("datetime2");
+
+        b.HasIndex(x => x.IdempotencyKey).IsUnique();
+        b.HasIndex(x => new { x.StaffTransferId, x.ExecutedAtUtc });
+
+        b.HasOne(x => x.StaffTransfer).WithMany(x => x.EmploymentExecutions).HasForeignKey(x => x.StaffTransferId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.SourceJob).WithMany().HasForeignKey(x => x.SourceJobId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.DestinationJob).WithMany().HasForeignKey(x => x.DestinationJobId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.DestinationJobPosition).WithMany().HasForeignKey(x => x.DestinationJobPositionId).OnDelete(DeleteBehavior.Restrict);
+    }
 }
 
 public partial class HrmTeContext
@@ -336,4 +422,8 @@ public partial class HrmTeContext
     public DbSet<StaffTransferActivationLog> StaffTransferActivationLogs => Set<StaffTransferActivationLog>();
     public DbSet<StaffTransferDocument> StaffTransferDocuments => Set<StaffTransferDocument>();
     public DbSet<JobOrganisationHistory> JobOrganisationHistories => Set<JobOrganisationHistory>();
+    public DbSet<StaffTransferClearanceTask> StaffTransferClearanceTasks => Set<StaffTransferClearanceTask>();
+    public DbSet<StaffTransferAssetDecision> StaffTransferAssetDecisions => Set<StaffTransferAssetDecision>();
+    public DbSet<StaffTransferFinanceSettlement> StaffTransferFinanceSettlements => Set<StaffTransferFinanceSettlement>();
+    public DbSet<StaffTransferEmploymentExecution> StaffTransferEmploymentExecutions => Set<StaffTransferEmploymentExecution>();
 }
