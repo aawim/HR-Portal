@@ -34,6 +34,8 @@ public sealed class StaffOnboardingRow
     public string Department { get; set; } = "";
     public string JobType { get; set; } = "";
     public string Position { get; set; } = "Assign later";
+    public int? PositionId { get; set; }
+    public int? JobMatrixStepId { get; set; }
     public DateTime JoinedDate { get; set; }
     public string Status { get; set; } = "";
     public string Remarks { get; set; } = "";

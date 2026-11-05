@@ -47,7 +47,8 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
             await ValidatePersonAsync(db, individualId.Value, org, actor.IsSuperAdministrator);
             result.Individual = Name(await db.Individuals.SingleAsync(x => x.BusinessEntityId == individualId));
         }
-        if (canSubmit)
+        var canApproveAny = await db.WfRequestApprovals.AnyAsync(a => a.ApproverUserId == actor.UserId && a.Decision == "Pending");
+        if (canSubmit || canApproveAny)
         {
             var approvedStructures = db.OrganisationStructures.Where(x => x.OrganisationBusinessEntityID == org &&
                 x.OrganisationStructureStateId == 3 && db.OrganisationStructureTypes.Any(t => t.OrganisationStructureTypeId == x.OrganisationStructureTypeId));
@@ -252,6 +253,8 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
                 Individual = Name(r.Individual), Department = await db.OrganisationStructures.Where(x => x.OrganisationStructureId == r.OrganisationStructureId).Select(x => x.Name).SingleAsync(),
                 JobType = await db.JobTypes.Where(x => x.JobTypeId == r.JobTypeId).Select(x => x.TypeName).SingleAsync(),
                 Position = r.PositionId.HasValue ? (await db.Positions.Where(x => x.PositionId == r.PositionId).Select(x => x.Name).SingleAsync())+(r.JobMatrixStepId.HasValue?" · Job pay step "+await db.FrameworkJobMatrixSteps.Where(x=>x.JobMatrixStepId==r.JobMatrixStepId).Select(x=>x.StepNumber).SingleAsync():"") : "Assign later",
+                PositionId = r.PositionId,
+                JobMatrixStepId = r.JobMatrixStepId,
                 JoinedDate = r.JoinedDate, Remarks = r.Remarks, StateId = r.Request.RequestStateId,
                 Status = r.Request.RequestState.IsFinalState ? r.Request.RequestState.StateName.Trim() : $"Processing · {r.Request.RequestState.StateName.Trim()}",
                 Stage = instance?.CurrentStage?.WorkflowStage.StageName, IsOpen = r.IsOpen,
@@ -362,6 +365,67 @@ public sealed class StaffOnboardingService(IDbContextFactory<HrmTeContext> facto
         {
             await tx.RollbackAsync();
             logger?.LogError(ex, "Onboarding action {Action} failed for request {RequestId} in organisation {OrganisationId}", action, requestId, org);
+            return ServiceResult.Fail(DatabaseMessage(ex));
+        }
+    }
+
+    public async Task<ServiceResult> UpdatePositionAsync(int requestId, int? positionId, int? jobMatrixStepId)
+    {
+        var (actor, org) = await ScopeAsync();
+        var hr = await CanSubmitAsync(actor);
+        await using var db = await factory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
+        try
+        {
+            var query = db.Database.IsSqlServer()
+                ? db.StaffOnboardingRequests.FromSqlInterpolated($"SELECT * FROM dbo.SO_StaffOnboardingRequests WITH (UPDLOCK,HOLDLOCK) WHERE RequestId={requestId}")
+                : db.StaffOnboardingRequests.Where(x => x.RequestId == requestId);
+            var r = await query.Include(x => x.Request).SingleOrDefaultAsync(x => x.OrganisationId == org)
+                ?? throw new UnauthorizedAccessException("This onboarding request is not available in the selected organisation.");
+            if (!r.IsOpen) throw new InvalidOperationException("This onboarding request is already closed.");
+
+            var instance = await InstanceAsync(db, requestId);
+            var canApprove = await CanApproveAsync(db, r, instance?.CurrentStage, actor.UserId);
+            if (!hr && !canApprove && r.CreatedByUserId != actor.UserId)
+                throw new UnauthorizedAccessException("You are not authorized to update the position for this onboarding request.");
+
+            if (positionId.HasValue && positionId.Value > 0)
+            {
+                if (!await db.Positions.AnyAsync(x => x.PositionId == positionId.Value && x.IsActive != false && (x.IsGlobal || x.OrganisationId == org)))
+                    throw new InvalidOperationException("Select an active position available to this organisation, or choose 'Assign later'.");
+
+                await PositionVacancy.RequireAsync(db, positionId.Value, r.JoinedDate, null);
+
+                var info = await PositionMatrixAssignments.SummaryAsync(db, positionId.Value, jobMatrixStepId);
+                if (info != null && (!jobMatrixStepId.HasValue || !info.Steps.Any(x => x.Id == jobMatrixStepId)))
+                    throw new InvalidOperationException("Select the employee job pay step for this position matrix.");
+                if (info == null && jobMatrixStepId.HasValue)
+                    throw new InvalidOperationException("This position has no Job Matrix pay step.");
+
+                r.PositionId = positionId.Value;
+                r.JobMatrixStepId = jobMatrixStepId;
+            }
+            else
+            {
+                r.PositionId = null;
+                r.JobMatrixStepId = null;
+            }
+
+            r.Request.LastStateChangedDate = DateTime.UtcNow;
+            r.Request.LastStateChangedByUserId = actor.UserId;
+            await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.JOB_POSITION_REQUEST_UPDATE, $"Updated onboarding position for Request {r.RequestId} to Position {r.PositionId}.");
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+
+            var posName = r.PositionId.HasValue
+                ? await db.Positions.Where(x => x.PositionId == r.PositionId).Select(x => x.Name).SingleOrDefaultAsync() ?? $"Position #{r.PositionId}"
+                : "Assign later";
+            return ServiceResult.Ok($"Position updated to '{posName}'. You can now approve the onboarding stage.");
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException or DbUpdateException)
+        {
+            await tx.RollbackAsync();
+            logger?.LogError(ex, "Updating position failed for onboarding request {RequestId} in organisation {OrganisationId}", requestId, org);
             return ServiceResult.Fail(DatabaseMessage(ex));
         }
     }

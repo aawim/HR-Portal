@@ -45,4 +45,17 @@ public sealed class StaffOnboardingController(global::HRM.Services.Contracts.Sta
         public global::System.String? comment { get; set; }
     }
 
+    [HttpPost("update-position")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdatePosition([FromBody] StaffOnboardingUpdatePositionRequest request)
+    {
+        return Ok(await service.UpdatePositionAsync(request.requestId, request.positionId, request.jobMatrixStepId));
+    }
+
+    public sealed class StaffOnboardingUpdatePositionRequest
+    {
+        public global::System.Int32 requestId { get; set; }
+        public global::System.Int32? positionId { get; set; }
+        public global::System.Int32? jobMatrixStepId { get; set; }
+    }
+
 }

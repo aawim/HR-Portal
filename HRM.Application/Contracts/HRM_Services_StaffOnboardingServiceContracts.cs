@@ -22,5 +22,7 @@ Task<List<StaffOnboardingRow>> GetRequestsAsync(int? requestId = null, bool pend
 ;
 Task<ServiceResult> ActAsync(int requestId, int expectedState, string action, string? comment)
 ;
+Task<ServiceResult> UpdatePositionAsync(int requestId, int? positionId, int? jobMatrixStepId)
+;
 }
 }

@@ -1,0 +1,1113 @@
+@page "/admin/my/workspace/hub"
+@page "/admin/my/workspace/team-hub"
+@page "/admin/my/workspace/hub/{ActiveSection}"
+@using HRM.DTOs
+@using HRM.DTOs.Leave
+@using HRM.DTOs.WorkPlanning
+@using HRM.Enum
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.Leave
+@using HRM.Components.Admin.My.Workspace.Cards
+@using HRM.Components.Admin.My.Workspace.Staff
+@using HRM.Components.Admin.My.Workspace.Staff.Tabs
+@inject ITeam TeamService
+@inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject ILeaveChangeService Leaves
+@inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+@inject ILogger<StaffHubWorkspace> Logger
+@inject HRM.Services.ToastService ToastService
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Staff &amp; Team Workspace Hub - HR Portal</PageTitle>
+
+<section class="staff-hub-page w-full min-w-0 p-2 space-y-4 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+    <!-- Sticky Header complying with UI_DESIGN_STANDARD.md -->
+    <header class="sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-2xl">
+        <div class="flex items-center gap-3">
+            <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400 shadow-xs">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                </svg>
+            </div>
+            <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <h1 class="text-lg font-bold text-slate-900 dark:text-slate-100">Staff &amp; Team Workspace Hub</h1>
+                    @if (selectedTeamId.HasValue && selectedTeam != null)
+                    {
+                        <span class="rounded-full bg-blue-100 dark:bg-blue-900/40 px-2.5 py-0.5 text-xs font-semibold text-blue-800 dark:text-blue-300">
+                            @selectedTeam.Name
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="rounded-full bg-indigo-100 dark:bg-indigo-900/40 px-2.5 py-0.5 text-xs font-semibold text-indigo-800 dark:text-indigo-300">
+                            All Teams (@myTeams.Count)
+                        </span>
+                    }
+                    <span class="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40 flex items-center gap-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Live Active
+                    </span>
+                </div>
+                <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Unified management center for supervised teams, live workforce attendance, employee 360°, and approval queues.</p>
+            </div>
+        </div>
+
+        <!-- Header Actions -->
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                    title="@(isFullWidth ? "Shrink view to standard container" : "Expand to full viewport width")"
+                    @onclick="ToggleFullWidthAsync">
+                @if (isFullWidth)
+                {
+                    <svg class="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 9L4 4m0 0l5 0m-5 0l0 5M15 9l5-5m0 0l-5 0m5 0l0 5M9 15l-5 5m0 0l5 0m-5 0l0-5M15 15l5 5m0 0l-5 0m5 0l0-5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-3.5 w-3.5 text-slate-600 dark:text-slate-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                    disabled="@loading"
+                    @onclick="RefreshAllAsync">
+                <span class="@(loading ? "animate-spin" : "")">↻</span>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Quick Action: Onboarding -->
+            <a href="/admin/my/workspace/onboarding"
+               class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 dark:bg-blue-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors">
+                <span>+</span>
+                <span>Staff Onboarding</span>
+            </a>
+
+            <!-- Traditional Workspace Link -->
+            <a href="/admin/my/workspace"
+               class="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
+               title="Open Classic Workspace">
+                <span>Classic View ↗</span>
+            </a>
+        </div>
+    </header>
+
+    @if (errorMessage != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 dark:border-rose-900/50 bg-rose-50 dark:bg-rose-950/40 p-3.5 text-xs text-rose-800 dark:text-rose-300 shadow-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-base">⚠️</span>
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" @onclick="() => errorMessage = null" class="font-bold text-rose-600 dark:text-rose-400 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    <!-- KPI Metric Summary Ribbon -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <!-- Metric 1: My Teams -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span class="text-xs font-medium">Supervised Teams</span>
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs font-bold">
+                    👥
+                </span>
+            </div>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-black text-slate-900 dark:text-slate-100">@myTeams.Count</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">teams · @TotalStaffCount staff</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+                <span class="text-slate-500 dark:text-slate-400">Supervisors: @TotalSupervisorsCount</span>
+                <span class="text-blue-600 dark:text-blue-400 font-medium cursor-pointer hover:underline" @onclick='() => FilterTeam(null)'>View all</span>
+            </div>
+        </div>
+
+        <!-- Metric 2: Today's Team Presence -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span class="text-xs font-medium">Present Today</span>
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
+                    ✓
+                </span>
+            </div>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-black text-emerald-600 dark:text-emerald-400">@PresentCount</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">/ @todayAttendance.Count active punches</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center gap-2 text-[11px]">
+                <span class="text-amber-600 dark:text-amber-400 font-semibold cursor-pointer" @onclick="() => FilterAttendanceStatus(AttendanceStatus.Late)">@LateCount Late</span>
+                <span class="text-slate-300 dark:text-slate-700">·</span>
+                <span class="text-rose-600 dark:text-rose-400 font-semibold cursor-pointer" @onclick="() => FilterAttendanceStatus(AttendanceStatus.Absent)">@AbsentCount Absent</span>
+                <span class="text-slate-300 dark:text-slate-700">·</span>
+                <span class="text-indigo-600 dark:text-indigo-400 font-semibold cursor-pointer" @onclick="() => FilterAttendanceStatus(AttendanceStatus.Leave)">@LeaveCount Leave</span>
+            </div>
+        </div>
+
+        <!-- Metric 3: Pending Team Requests -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span class="text-xs font-medium">Pending Approvals</span>
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 text-xs font-bold">
+                    ⏳
+                </span>
+            </div>
+            <div class="mt-2 flex items-baseline gap-2">
+                <span class="text-2xl font-black text-amber-600 dark:text-amber-400">@TotalPendingRequestsCount</span>
+                <span class="text-xs text-slate-500 dark:text-slate-400 font-medium">require supervisor action</span>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+                <span class="text-slate-500 dark:text-slate-400">@pendingLeaves.Count Leaves · @pendingDutyRequests.Count Duties</span>
+                <span class="text-amber-700 dark:text-amber-400 font-medium cursor-pointer hover:underline" @onclick='() => activeRequestTab = "leave"'>Review Queue</span>
+            </div>
+        </div>
+
+        <!-- Metric 4: Quick Launch Shortcuts -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex flex-col justify-between">
+            <div class="flex items-center justify-between text-slate-500 dark:text-slate-400">
+                <span class="text-xs font-medium">Quick Operations</span>
+                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-purple-50 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400 text-xs font-bold">
+                    ⚡
+                </span>
+            </div>
+            <div class="mt-2 flex flex-wrap gap-1.5">
+                <a href="/online/duty-roster" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                    📅 Shift Roster
+                </a>
+                <a href="/admin/settings/organisations/teams" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                    ⚙️ Teams Config
+                </a>
+                <a href="/admin/my/workspace/onboarding?tab=requests" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                    📝 Intakes
+                </a>
+            </div>
+            <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-400 dark:text-slate-500">
+                Direct administrative workflows
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Search Toolbar -->
+    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <!-- Team Selector Pills -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+            <span class="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1">Team:</span>
+            <button type="button"
+                    class="rounded-lg px-3 py-1 text-xs font-semibold transition-colors @(selectedTeamId == null ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
+                    @onclick="() => FilterTeam(null)">
+                All Teams (@TotalStaffCount)
+            </button>
+            @foreach (var team in myTeams)
+            {
+                <button type="button"
+                        @key="team.TeamId"
+                        class="rounded-lg px-3 py-1 text-xs font-semibold transition-colors @(selectedTeamId == team.TeamId ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700")"
+                        @onclick="() => FilterTeam(team.TeamId)">
+                    @team.Name (@team.Staffs.Count)
+                </button>
+            }
+        </div>
+
+        <!-- Search Bar -->
+        <div class="relative w-full sm:w-72">
+            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+            </span>
+            <input type="text"
+                   class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                   placeholder="Search staff name or ID..."
+                   @bind="searchTerm"
+                   @bind:event="oninput" />
+            @if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                <button type="button"
+                        class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        @onclick="() => searchTerm = string.Empty">
+                    ✕
+                </button>
+            }
+        </div>
+    </div>
+
+    <!-- Main Two-Panel Content Grid conforming to UI_DESIGN_STANDARD.md -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+        
+        <!-- ========================================== -->
+        <!-- LEFT PANEL: Staff & Team Management (7fr)  -->
+        <!-- ========================================== -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-4">
+            
+            <!-- Left Panel Navigation Header -->
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <!-- Tab Switcher -->
+                    <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800/80 text-xs">
+                        <button type="button"
+                                class="rounded-md px-3 py-1 font-semibold transition @(activeMainTab == "roster" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
+                                @onclick='() => SwitchMainTab("roster")'>
+                            👥 Team Roster (@FilteredStaffList.Count)
+                        </button>
+                        <button type="button"
+                                class="rounded-md px-3 py-1 font-semibold transition @(activeMainTab == "attendance" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
+                                @onclick='() => SwitchMainTab("attendance")'>
+                            ⏱️ Today's Attendance
+                        </button>
+                        @if (inspectedStaffId.HasValue)
+                        {
+                            <button type="button"
+                                    class="rounded-md px-3 py-1 font-semibold transition @(activeMainTab == "staff-360" ? "bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
+                                    @onclick='() => SwitchMainTab("staff-360")'>
+                                👤 Staff 360° (#@inspectedStaffId)
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- View Layout Toggle (Grid vs Compact List) -->
+                @if (activeMainTab == "roster")
+                {
+                    <div class="flex items-center gap-1.5 text-xs text-slate-500">
+                        <!-- Status Filter Dropdown -->
+                        <select class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 py-1 px-2 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+                                @bind="selectedAttendanceFilter">
+                            <option value="">All Attendance Statuses</option>
+                            <option value="Present">Present</option>
+                            <option value="Late">Late</option>
+                            <option value="Absent">Absent</option>
+                            <option value="Leave">On Leave</option>
+                            <option value="MissingCheckout">Missing Checkout</option>
+                        </select>
+
+                        <button type="button"
+                                class="p-1 rounded-md border border-slate-200 dark:border-slate-700 @(isRosterGridView ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400")"
+                                title="Grid View"
+                                @onclick="() => isRosterGridView = true">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+                            </svg>
+                        </button>
+                        <button type="button"
+                                class="p-1 rounded-md border border-slate-200 dark:border-slate-700 @(!isRosterGridView ? "bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400" : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400")"
+                                title="List View"
+                                @onclick="() => isRosterGridView = false">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        </button>
+                    </div>
+                }
+            </div>
+
+            <!-- Tab Content 1: Team Staff Roster -->
+            @if (activeMainTab == "roster")
+            {
+                @if (loading)
+                {
+                    <div class="flex items-center justify-center py-12">
+                        <div class="text-center">
+                            <div class="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                            <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">Loading team members…</p>
+                        </div>
+                    </div>
+                }
+                else if (FilteredStaffList.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/50 p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                        <p class="text-base mb-1">🔍</p>
+                        <p class="font-medium text-slate-700 dark:text-slate-300">No staff members match the selected criteria.</p>
+                        <p class="mt-1 text-slate-400">Try adjusting your search query, team filter, or attendance status.</p>
+                    </div>
+                }
+                else if (isRosterGridView)
+                {
+                    <!-- Grid View of Staff Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        @foreach (var staff in FilteredStaffList)
+                        {
+                            var att = GetTodayAttendance(staff.StaffId);
+                            <div @key="staff.StaffId"
+                                 class="group relative rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-800/70 p-3 shadow-xs hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md transition-all flex flex-col justify-between gap-2.5">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2.5">
+                                        <!-- Avatar with status ring -->
+                                        <div class="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-full font-bold text-xs @GetAvatarColor(staff.StaffId)">
+                                            @GetInitials(staff.FullName)
+                                            <span class="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white dark:border-slate-800 @GetStatusDot(att?.Status)"></span>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <h4 class="truncate text-xs font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                                                @staff.FullName
+                                            </h4>
+                                            <p class="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                                                ID: @staff.StaffId · @staff.TeamName
+                                            </p>
+                                        </div>
+                                    </div>
+                                    @if (staff.IsSuperVisor)
+                                    {
+                                        <span class="rounded bg-indigo-50 dark:bg-indigo-950/60 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/40 shrink-0">
+                                            Supervisor
+                                        </span>
+                                    }
+                                </div>
+
+                                <!-- Today Attendance Snippet -->
+                                <div class="rounded-lg bg-slate-50 dark:bg-slate-800/90 p-2 text-[11px] flex items-center justify-between border border-slate-100 dark:border-slate-700/60">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="text-xs">@GetStatusEmoji(att?.Status)</span>
+                                        <span class="font-medium text-slate-700 dark:text-slate-300">
+                                            @(att?.Status != null ? att.Status.ToString() : "Not Punched")
+                                        </span>
+                                    </div>
+                                    <div class="text-[10px] text-slate-500 dark:text-slate-400">
+                                        @if (att?.CheckIn != null)
+                                        {
+                                            <span>In: @att.CheckIn.Value.ToString("HH:mm")</span>
+                                        }
+                                        else
+                                        {
+                                            <span>No Clock-in</span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <!-- Action Buttons -->
+                                <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
+                                            @onclick="() => InspectStaff(staff.StaffId)">
+                                        <span>👤 360° View</span>
+                                    </button>
+                                    <div class="flex items-center gap-1">
+                                        <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/staff-transfer")"
+                                           class="rounded px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 text-[10px] font-medium transition"
+                                           title="Manage Transfer">
+                                            Transfer
+                                        </a>
+                                        <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/leave")"
+                                           class="rounded px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 text-[10px] font-medium transition"
+                                           title="Leave History">
+                                            Leave
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <!-- Table View of Staff -->
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="p-2.5">Staff Member</th>
+                                    <th class="p-2.5">Team &amp; Role</th>
+                                    <th class="p-2.5">Today Status</th>
+                                    <th class="p-2.5">Punch Timeline</th>
+                                    <th class="p-2.5 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                @foreach (var staff in FilteredStaffList)
+                                {
+                                    var att = GetTodayAttendance(staff.StaffId);
+                                    <tr @key="staff.StaffId" class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40 transition-colors">
+                                        <td class="p-2.5">
+                                            <div class="flex items-center gap-2">
+                                                <div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold @GetAvatarColor(staff.StaffId)">
+                                                    @GetInitials(staff.FullName)
+                                                </div>
+                                                <div>
+                                                    <span class="font-bold text-slate-900 dark:text-slate-100 block">@staff.FullName</span>
+                                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">ID: #@staff.StaffId</span>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="p-2.5">
+                                            <span class="block text-slate-800 dark:text-slate-200 font-medium">@staff.TeamName</span>
+                                            <span class="text-[11px] text-slate-500 dark:text-slate-400">
+                                                @(staff.IsSuperVisor ? "Supervisor" : "Member")
+                                            </span>
+                                        </td>
+                                        <td class="p-2.5">
+                                            <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(att?.Status)">
+                                                @(att?.Status != null ? att.Status.ToString() : "Not Punched")
+                                            </span>
+                                        </td>
+                                        <td class="p-2.5 text-[11px] text-slate-600 dark:text-slate-300">
+                                            @if (att?.CheckIn != null)
+                                            {
+                                                <span>In: @att.CheckIn.Value.ToString("HH:mm")</span>
+                                                @if (att?.CheckOut != null)
+                                                {
+                                                    <span> · Out: @att.CheckOut.Value.ToString("HH:mm")</span>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400 dark:text-slate-500">—</span>
+                                            }
+                                        </td>
+                                        <td class="p-2.5 text-right">
+                                            <div class="inline-flex items-center gap-1.5">
+                                                <button type="button"
+                                                        class="rounded px-2 py-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 text-[11px] font-semibold transition"
+                                                        @onclick="() => InspectStaff(staff.StaffId)">
+                                                    360° Profile
+                                                </button>
+                                                <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/staff-transfer")"
+                                                   class="rounded px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-[11px] font-medium transition">
+                                                    Transfer
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+
+            <!-- Tab Content 2: Today's Team Attendance Timeline & Metrics -->
+            @if (activeMainTab == "attendance")
+            {
+                <div class="space-y-4">
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 text-xs flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2">
+                            <span class="font-bold text-slate-800 dark:text-slate-200">Daily Attendance Roll:</span>
+                            <span class="text-slate-500 dark:text-slate-400">@DateTime.Today.ToString("dddd, dd MMMM yyyy")</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 font-semibold text-[11px]">@PresentCount Present</span>
+                            <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 font-semibold text-[11px]">@LateCount Late</span>
+                            <span class="rounded-full bg-rose-100 text-rose-800 px-2 py-0.5 font-semibold text-[11px]">@AbsentCount Absent</span>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="p-2.5">Staff Name</th>
+                                    <th class="p-2.5">Team</th>
+                                    <th class="p-2.5">First Check-In</th>
+                                    <th class="p-2.5">Latest Check-Out</th>
+                                    <th class="p-2.5">Status</th>
+                                    <th class="p-2.5">Note</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                @if (todayAttendance.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="6" class="p-6 text-center text-slate-500 dark:text-slate-400">
+                                            No attendance records recorded for today yet.
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var record in todayAttendance.Where(a => selectedTeamId == null || a.TeamID == selectedTeamId))
+                                    {
+                                        <tr @key="record.StaffID" class="hover:bg-slate-50/60 dark:hover:bg-slate-800/40">
+                                            <td class="p-2.5 font-semibold text-slate-900 dark:text-slate-100">
+                                                @record.Name
+                                            </td>
+                                            <td class="p-2.5 text-slate-600 dark:text-slate-400">
+                                                @record.TeamName
+                                            </td>
+                                            <td class="p-2.5 text-slate-700 dark:text-slate-300">
+                                                @(record.CheckIn?.ToString("HH:mm:ss") ?? "—")
+                                            </td>
+                                            <td class="p-2.5 text-slate-700 dark:text-slate-300">
+                                                @(record.CheckOut?.ToString("HH:mm:ss") ?? "—")
+                                            </td>
+                                            <td class="p-2.5">
+                                                <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @GetAttendanceBadgeClass(record.Status)">
+                                                    @record.Status
+                                                </span>
+                                            </td>
+                                            <td class="p-2.5 text-[11px] text-slate-500 dark:text-slate-400">
+                                                @(record.StatusMessage ?? "—")
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+
+            <!-- Tab Content 3: Staff 360° Embedded Management Detail -->
+            @if (activeMainTab == "staff-360" && inspectedStaffId.HasValue)
+            {
+                <div class="rounded-xl border border-blue-200 dark:border-blue-900/50 bg-blue-50/20 dark:bg-blue-950/20 p-4 space-y-4">
+                    <div class="flex items-center justify-between border-b border-blue-100 dark:border-blue-900/40 pb-3 flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50"
+                                    @onclick='() => SwitchMainTab("roster")'>
+                                ← Back to Roster
+                            </button>
+                            <span class="font-bold text-slate-900 dark:text-slate-100 text-sm">Staff Management 360°</span>
+                            <span class="rounded-md bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 font-mono text-xs font-bold text-blue-800 dark:text-blue-200">
+                                ID: #@inspectedStaffId
+                            </span>
+                        </div>
+
+                        <!-- Embedded Staff Tab Bar -->
+                        <div class="flex items-center gap-1 flex-wrap text-xs">
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.Overview ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.Overview">
+                                Overview
+                            </button>
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.Leave">
+                                Leave Balances
+                            </button>
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.Attendance">
+                                Attendance Log
+                            </button>
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.Position ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.Position">
+                                Positions &amp; Job
+                            </button>
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.StaffTransfer ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.StaffTransfer">
+                                Transfer
+                            </button>
+                            <button type="button"
+                                    class="rounded-md px-2.5 py-1 font-semibold transition @(inspectedStaffTab == WorkspaceTab.Finance ? "bg-blue-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700")"
+                                    @onclick="() => inspectedStaffTab = WorkspaceTab.Finance">
+                                Finance
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Host the actual Staff Workspace components cleanly -->
+                    <div class="bg-white dark:bg-slate-900 rounded-xl p-3 border border-slate-200 dark:border-slate-800 shadow-xs">
+                        <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" />
+                    </div>
+                </div>
+            }
+
+        </div>
+
+        <!-- ========================================== -->
+        <!-- RIGHT PANEL: Team Requests & Inbox (5fr)   -->
+        <!-- ========================================== -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-4">
+            
+            <!-- Right Panel Header -->
+            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Team Requests &amp; Approvals</h3>
+                        <span class="rounded-full bg-amber-100 dark:bg-amber-950/60 px-2 py-0.5 text-[11px] font-bold text-amber-800 dark:text-amber-300">
+                            @TotalPendingRequestsCount Action Needed
+                        </span>
+                    </div>
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Supervisor review queue for leave, roster duties, overtime, and transfers.</p>
+                </div>
+                <button type="button"
+                        class="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                        @onclick="RefreshRequestsAsync">
+                    Refresh Queue
+                </button>
+            </div>
+
+            <!-- Request Categories Sub-Navigation -->
+            <div class="flex flex-wrap gap-1 border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "leave" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "leave"'>
+                    Leave (@pendingLeaves.Count)
+                </button>
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "duty" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "duty"'>
+                    Duty &amp; Roster (@pendingDutyRequests.Count)
+                </button>
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "overtime" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "overtime"'>
+                    Overtime
+                </button>
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "late" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "late"'>
+                    Late Check-In
+                </button>
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "position" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "position"'>
+                    Positions
+                </button>
+                <button type="button"
+                        class="rounded-lg px-2.5 py-1 font-semibold transition @(activeRequestTab == "onboarding" ? "bg-blue-600 text-white shadow-xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                        @onclick='() => activeRequestTab = "onboarding"'>
+                    Onboarding
+                </button>
+            </div>
+
+            <!-- Queue View: Leave Requests -->
+            @if (activeRequestTab == "leave")
+            {
+                @if (selectedLeave != null)
+                {
+                    <div class="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-slate-800 p-3 space-y-3">
+                        <div class="flex items-center justify-between border-b border-blue-100 dark:border-slate-700 pb-2">
+                            <span class="text-xs font-bold text-slate-900 dark:text-slate-100">Reviewing Request #@selectedLeave.RequestId</span>
+                            <button type="button"
+                                    class="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+                                    @onclick="() => selectedLeave = null">
+                                ✕ Close
+                            </button>
+                        </div>
+                        <LeaveRequestDetails @key="selectedLeave.RequestId"
+                                             Item="selectedLeave"
+                                             Busy="@(loading || executingAction)"
+                                             Message="@leaveActionMessage"
+                                             OnClose="() => selectedLeave = null"
+                                             OnExecute="ExecuteLeaveActionAsync"
+                                             OnChanged="RefreshRequestsAsync" />
+                    </div>
+                }
+                else if (pendingLeaves.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                        <p class="text-lg mb-1">🎉</p>
+                        <p class="font-medium text-slate-700 dark:text-slate-300">All caught up!</p>
+                        <p class="mt-0.5">No pending leave requests from your team members.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-[38rem] overflow-y-auto pr-1">
+                        @foreach (var req in pendingLeaves)
+                        {
+                            <div @key="req.RequestId"
+                                 class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 p-3 text-xs shadow-xs hover:border-blue-400 dark:hover:border-blue-500 transition cursor-pointer flex flex-col gap-1.5"
+                                 @onclick="() => selectedLeave = req">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-bold text-slate-900 dark:text-slate-100">@req.Applicant</span>
+                                    <span class="rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 px-2 py-0.5 text-[10px] font-semibold">
+                                        @(req.IsProcessing ? "Processing" : req.Status)
+                                    </span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 dark:text-slate-300">
+                                    <span class="font-semibold text-blue-600 dark:text-blue-400">@req.LeaveType</span> · @req.Duration days
+                                </div>
+                                <div class="text-[11px] text-slate-500 dark:text-slate-400">
+                                    @req.FromDate.ToString("dd MMM yyyy") – @req.ToDate.ToString("dd MMM yyyy")
+                                </div>
+                                <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[10px] text-slate-400">
+                                    <span class="font-mono">@req.Reference</span>
+                                    <span class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">Review &amp; Decide →</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <!-- Queue View: Duty & Roster Requests -->
+            @if (activeRequestTab == "duty")
+            {
+                @if (pendingDutyRequests.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                        <p class="text-lg mb-1">📅</p>
+                        <p class="font-medium text-slate-700 dark:text-slate-300">No duty swaps or coverage requests pending.</p>
+                        <a href="/online/duty-roster" class="mt-2 inline-block text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                            Open Duty Roster Schedule →
+                        </a>
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-[38rem] overflow-y-auto pr-1">
+                        @foreach (var row in pendingDutyRequests)
+                        {
+                            <div @key="row.Reference"
+                                 class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/80 p-3 text-xs shadow-xs flex flex-col gap-1.5">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-bold text-slate-900 dark:text-slate-100">@row.Kind</span>
+                                    <span class="rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 px-2 py-0.5 text-[10px] font-semibold">
+                                        @row.Status
+                                    </span>
+                                </div>
+                                <div class="text-[11px] text-slate-600 dark:text-slate-300">
+                                    @row.Source → @row.Target
+                                </div>
+                                <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[10px]">
+                                    <span class="font-mono text-slate-400">@row.Reference</span>
+                                    <a href="/online/duty-roster#requests" class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                                        Action in Roster →
+                                    </a>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+
+            <!-- Queue View: Overtime Requests -->
+            @if (activeRequestTab == "overtime")
+            {
+                <div class="text-xs">
+                    <HRM.Components.Shared.OvertimeRequests PendingOnly="true" />
+                </div>
+            }
+
+            <!-- Queue View: Late Check-In Requests -->
+            @if (activeRequestTab == "late")
+            {
+                <div class="text-xs">
+                    <HRM.Components.Shared.LateCheckInRequests PendingOnly="true" />
+                </div>
+            }
+
+            <!-- Queue View: Staff Position Requests -->
+            @if (activeRequestTab == "position")
+            {
+                <div class="text-xs">
+                    <HRM.Components.Shared.StaffPositionRequests PendingOnly="true" />
+                </div>
+            }
+
+            <!-- Queue View: Staff Onboarding Queue -->
+            @if (activeRequestTab == "onboarding")
+            {
+                <div class="text-xs">
+                    <PendingOnboardingCard />
+                </div>
+            }
+
+        </aside>
+
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? ActiveSection { get; set; }
+
+    // Teams & Members
+    private List<TeamDto> myTeams = new();
+    private int? selectedTeamId;
+    private TeamDto? selectedTeam => myTeams.FirstOrDefault(t => t.TeamId == selectedTeamId);
+
+    // Attendance
+    private List<TeamAttendanceDto> todayAttendance = new();
+    private string selectedAttendanceFilter = "";
+
+    // Requests
+    private List<PendingLeaveRequestDto> pendingLeaves = new();
+    private PendingLeaveRequestDto? selectedLeave;
+    private List<DutyRequestRow> pendingDutyRequests = new();
+    private string activeRequestTab = "leave";
+    private string? leaveActionMessage;
+    private bool executingAction;
+
+    // View States
+    private bool loading = true;
+    private string? errorMessage;
+    private string searchTerm = "";
+    private string activeMainTab = "roster"; // roster, attendance, staff-360
+    private bool isRosterGridView = true;
+    private bool isFullWidth;
+    private int? inspectedStaffId;
+    private WorkspaceTab inspectedStaffTab = WorkspaceTab.Overview;
+
+    // Flattened Staff representation for filtering
+    public sealed record TeamStaffFlattened(int StaffId, string FullName, bool IsSuperVisor, int TeamId, string TeamName);
+
+    private List<TeamStaffFlattened> allTeamStaff = new();
+
+    private List<TeamStaffFlattened> FilteredStaffList
+    {
+        get
+        {
+            var query = allTeamStaff.AsEnumerable();
+
+            if (selectedTeamId.HasValue)
+            {
+                query = query.Where(s => s.TeamId == selectedTeamId.Value);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim();
+                query = query.Where(s =>
+                    s.FullName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                    s.StaffId.ToString().Contains(term));
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedAttendanceFilter))
+            {
+                query = query.Where(s =>
+                {
+                    var att = GetTodayAttendance(s.StaffId);
+                    return att != null && att.Status.ToString().Equals(selectedAttendanceFilter, StringComparison.OrdinalIgnoreCase);
+                });
+            }
+
+            return query.OrderBy(s => !s.IsSuperVisor).ThenBy(s => s.FullName).ToList();
+        }
+    }
+
+    // Counts & KPIs
+    private int TotalStaffCount => allTeamStaff.Select(s => s.StaffId).Distinct().Count();
+    private int TotalSupervisorsCount => allTeamStaff.Where(s => s.IsSuperVisor).Select(s => s.StaffId).Distinct().Count();
+
+    private int PresentCount => todayAttendance.Count(a => a.Status == AttendanceStatus.Present);
+    private int LateCount => todayAttendance.Count(a => a.Status == AttendanceStatus.Late);
+    private int AbsentCount => todayAttendance.Count(a => a.Status == AttendanceStatus.Absent);
+    private int LeaveCount => todayAttendance.Count(a => a.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave);
+
+    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAllDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.staff-hub.full-width");
+                if (bool.TryParse(saved, out var val) && val != isFullWidth)
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch
+            {
+                // Storage may be disabled or restricted in certain browsing contexts
+            }
+        }
+    }
+
+    private async Task ToggleFullWidthAsync()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", "hrm.staff-hub.full-width", isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
+    }
+
+    private async Task LoadAllDataAsync()
+    {
+        loading = true;
+        errorMessage = null;
+        try
+        {
+            // 1. Load Teams
+            myTeams = await TeamService.GetMyTeamsAsync() ?? new();
+
+            // Flatten staff entries
+            allTeamStaff = myTeams
+                .SelectMany(t => t.Staffs.Select(s => new TeamStaffFlattened(s.StaffId, s.FullName, s.IsSuperVisor, t.TeamId, t.Name)))
+                .GroupBy(s => s.StaffId)
+                .Select(g => g.First())
+                .ToList();
+
+            // 2. Load Today's Attendance
+            try
+            {
+                todayAttendance = await AttendanceLogService.GetMyTeamAttendanceTodayAsync() ?? new();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load team attendance for staff hub.");
+            }
+
+            // 3. Load Pending Leave Requests
+            await RefreshRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load staff hub workspace data.");
+            errorMessage = "Failed to load complete workspace data. Please refresh.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        await LoadAllDataAsync();
+        ToastService.Success("Workspace hub refreshed.");
+    }
+
+    private async Task RefreshRequestsAsync()
+    {
+        try
+        {
+            pendingLeaves = await Leaves.GetPendingLeaveRequestsAsync() ?? new();
+            if (selectedLeave != null)
+            {
+                selectedLeave = pendingLeaves.FirstOrDefault(r => r.RequestId == selectedLeave.RequestId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load pending leaves for hub.");
+        }
+
+        try
+        {
+            var dutyRows = await Duties.GetRequestsAsync() ?? new();
+            pendingDutyRequests = dutyRows.Where(r => r.CanAccept || r.CanApprove).ToList();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load duty requests for hub.");
+        }
+    }
+
+    private async Task ExecuteLeaveActionAsync(RequestActionSubmissionDto action)
+    {
+        if (selectedLeave == null || executingAction) return;
+        executingAction = true;
+        leaveActionMessage = null;
+        var reqId = selectedLeave.RequestId;
+        try
+        {
+            var result = await Leaves.ExecuteLeaveActionAsync(reqId, action);
+            leaveActionMessage = result.Message;
+            if (result.Success)
+            {
+                ToastService.Success(result.Message);
+                selectedLeave = null;
+                await RefreshRequestsAsync();
+            }
+            else
+            {
+                ToastService.Error(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to execute action on leave request {RequestId}", reqId);
+            leaveActionMessage = "Action execution failed. Check server logs.";
+            ToastService.Error(leaveActionMessage);
+        }
+        finally
+        {
+            executingAction = false;
+        }
+    }
+
+    private void FilterTeam(int? teamId)
+    {
+        selectedTeamId = teamId;
+    }
+
+    private void FilterAttendanceStatus(AttendanceStatus status)
+    {
+        selectedAttendanceFilter = status.ToString();
+        activeMainTab = "roster";
+    }
+
+    private void SwitchMainTab(string tab)
+    {
+        activeMainTab = tab;
+    }
+
+    private void InspectStaff(int staffId)
+    {
+        inspectedStaffId = staffId;
+        inspectedStaffTab = WorkspaceTab.Overview;
+        activeMainTab = "staff-360";
+    }
+
+    private TeamAttendanceDto? GetTodayAttendance(int staffId)
+    {
+        return todayAttendance.FirstOrDefault(a => a.StaffID == staffId);
+    }
+
+    private static string GetInitials(string fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "S";
+        var parts = fullName.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private static string GetAvatarColor(int id)
+    {
+        var palettes = new[]
+        {
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/60 dark:text-blue-300",
+            "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/60 dark:text-emerald-300",
+            "bg-purple-100 text-purple-700 dark:bg-purple-900/60 dark:text-purple-300",
+            "bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-300",
+            "bg-rose-100 text-rose-700 dark:bg-rose-900/60 dark:text-rose-300",
+            "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/60 dark:text-cyan-300",
+        };
+        return palettes[Math.Abs(id) % palettes.Length];
+    }
+
+    private static string GetStatusDot(AttendanceStatus? status) => status switch
+    {
+        AttendanceStatus.Present => "bg-emerald-500",
+        AttendanceStatus.Late => "bg-amber-500",
+        AttendanceStatus.Absent => "bg-rose-500",
+        AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave => "bg-indigo-500",
+        AttendanceStatus.MissingCheckout => "bg-sky-500",
+        _ => "bg-slate-300 dark:bg-slate-600"
+    };
+
+    private static string GetStatusEmoji(AttendanceStatus? status) => status switch
+    {
+        AttendanceStatus.Present => "🟢",
+        AttendanceStatus.Late => "🟡",
+        AttendanceStatus.Absent => "🔴",
+        AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave => "🟣",
+        AttendanceStatus.MissingCheckout => "🔵",
+        _ => "⚪"
+    };
+
+    private static string GetAttendanceBadgeClass(AttendanceStatus? status) => status switch
+    {
+        AttendanceStatus.Present => "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40",
+        AttendanceStatus.Late => "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/40",
+        AttendanceStatus.Absent => "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800/40",
+        AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave => "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40",
+        AttendanceStatus.MissingCheckout => "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/40",
+        _ => "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    };
+}
