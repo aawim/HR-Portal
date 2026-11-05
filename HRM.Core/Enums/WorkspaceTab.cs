@@ -53,9 +53,8 @@ namespace HRM.Enum
         Permissions,
         WorkTypes,
         Finance,
+        [Display(Name = "Staff Transfer")]
+        StaffTransfer,
         Onboarding
     }
 }
-
-
-

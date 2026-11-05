@@ -14,129 +14,132 @@
 <PageTitle>Internal Staff Transfers - HR Portal</PageTitle>
 
 <div class="mx-auto max-w-7xl space-y-5 px-2 py-4">
-    <!-- Header -->
-    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
-        <div>
-            <div class="flex items-center gap-2">
-                <span class="rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
-                    Internal Staff Transfer Management
-                </span>
-                <span class="text-xs text-slate-400">Workflow &amp; Effective-Date Activation</span>
-            </div>
-            <h1 class="mt-1 text-2xl font-bold text-slate-900">Internal Staff Transfers</h1>
-            <p class="text-sm text-slate-500">
-                Manage inter- and intra-department staff movements, work schedules, access reviews, mandatory staff confirmation, and receiving department approval.
-            </p>
-        </div>
-
-        <div class="flex flex-wrap items-center gap-2">
-            <a href="/online/staff-transfers"
-               class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
-                <span>👤</span>
-                <span>My Transfer Confirmations</span>
-            </a>
-            <button type="button"
-                    @onclick="StartNewTransferAsync"
-                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
-                <span>＋</span>
-                <span>New Transfer Request</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- Clean Status Summary Boxes -->
-    @if (dashboard is not null)
+    @if (StaffId <= 0)
     {
-        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7">
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Draft)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Draft ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Drafts</span>
-                    <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+        <!-- Header -->
+        <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="rounded-md bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">
+                        Internal Staff Transfer Management
+                    </span>
+                    <span class="text-xs text-slate-400">Workflow &amp; Effective-Date Activation</span>
                 </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.DraftCount</span>
-                    <span class="text-[11px] text-slate-400">Open</span>
-                </div>
-            </button>
+                <h1 class="mt-1 text-2xl font-bold text-slate-900">Internal Staff Transfers</h1>
+                <p class="text-sm text-slate-500">
+                    Manage inter- and intra-department staff movements, work schedules, access reviews, mandatory staff confirmation, and receiving department approval.
+                </p>
+            </div>
 
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.PendingStaffConfirmation)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.PendingStaffConfirmation ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Staff Confirm</span>
-                    <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.PendingConfirmationCount</span>
-                    <span class="text-[11px] text-amber-700">Awaiting</span>
-                </div>
-            </button>
-
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.PendingReceivingApproval)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.PendingReceivingApproval ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Dept Approval</span>
-                    <span class="h-2 w-2 rounded-full bg-blue-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.PendingApprovalCount</span>
-                    <span class="text-[11px] text-blue-700">Receiving</span>
-                </div>
-            </button>
-
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Scheduled)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Scheduled ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Scheduled</span>
-                    <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.ApprovedScheduledCount</span>
-                    <span class="text-[11px] text-indigo-700">Approved</span>
-                </div>
-            </button>
-
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Active)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Active ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Activated</span>
-                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.ActiveCount</span>
-                    <span class="text-[11px] text-emerald-700">Completed</span>
-                </div>
-            </button>
-
-            <button type="button"
-                    @onclick="() => FilterByStatusAsync(StaffTransferStatuses.ActivationFailed)"
-                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.ActivationFailed ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Attention</span>
-                    <span class="h-2 w-2 rounded-full bg-rose-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@(dashboard.OverdueConfirmationCount + dashboard.FailedActivationCount)</span>
-                    <span class="text-[11px] text-rose-600">@dashboard.OverdueConfirmationCount overdue · @dashboard.FailedActivationCount failed</span>
-                </div>
-            </button>
-
-            <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
-                <div class="flex items-center justify-between gap-2">
-                    <span class="text-xs font-medium text-slate-500">Door Access</span>
-                    <span class="h-2 w-2 rounded-full bg-slate-500"></span>
-                </div>
-                <div class="mt-2 flex items-baseline justify-between">
-                    <span class="text-xl font-bold text-slate-900">@dashboard.PendingDoorProvisioningCount</span>
-                    <span class="text-[11px] text-slate-500">Pending tasks</span>
-                </div>
+            <div class="flex flex-wrap items-center gap-2">
+                <a href="/online/staff-transfers"
+                   class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50">
+                    <span>👤</span>
+                    <span>My Transfer Confirmations</span>
+                </a>
+                <button type="button"
+                        @onclick="StartNewTransferAsync"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+                    <span>＋</span>
+                    <span>New Transfer Request</span>
+                </button>
             </div>
         </div>
+
+        <!-- Clean Status Summary Boxes -->
+        @if (dashboard is not null)
+        {
+            <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7">
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Draft)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Draft ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Drafts</span>
+                        <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.DraftCount</span>
+                        <span class="text-[11px] text-slate-400">Open</span>
+                    </div>
+                </button>
+
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.PendingStaffConfirmation)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.PendingStaffConfirmation ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Staff Confirm</span>
+                        <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.PendingConfirmationCount</span>
+                        <span class="text-[11px] text-amber-700">Awaiting</span>
+                    </div>
+                </button>
+
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.PendingReceivingApproval)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.PendingReceivingApproval ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Dept Approval</span>
+                        <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.PendingApprovalCount</span>
+                        <span class="text-[11px] text-blue-700">Receiving</span>
+                    </div>
+                </button>
+
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Scheduled)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Scheduled ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Scheduled</span>
+                        <span class="h-2 w-2 rounded-full bg-indigo-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.ApprovedScheduledCount</span>
+                        <span class="text-[11px] text-indigo-700">Approved</span>
+                    </div>
+                </button>
+
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.Active)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.Active ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Activated</span>
+                        <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.ActiveCount</span>
+                        <span class="text-[11px] text-emerald-700">Completed</span>
+                    </div>
+                </button>
+
+                <button type="button"
+                        @onclick="() => FilterByStatusAsync(StaffTransferStatuses.ActivationFailed)"
+                        class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-sm transition-all @(selectedStatusFilter == StaffTransferStatuses.ActivationFailed ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Attention</span>
+                        <span class="h-2 w-2 rounded-full bg-rose-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@(dashboard.OverdueConfirmationCount + dashboard.FailedActivationCount)</span>
+                        <span class="text-[11px] text-rose-600">@dashboard.OverdueConfirmationCount overdue · @dashboard.FailedActivationCount failed</span>
+                    </div>
+                </button>
+
+                <div class="flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-xs font-medium text-slate-500">Door Access</span>
+                        <span class="h-2 w-2 rounded-full bg-slate-500"></span>
+                    </div>
+                    <div class="mt-2 flex items-baseline justify-between">
+                        <span class="text-xl font-bold text-slate-900">@dashboard.PendingDoorProvisioningCount</span>
+                        <span class="text-[11px] text-slate-500">Pending tasks</span>
+                    </div>
+                </div>
+            </div>
+        }
     }
 
     <!-- Printable Document Modal -->
@@ -234,7 +237,7 @@
                                 Filter by structure type and structure to select the staff member. Current profile details are automatically snapshotted from the HRM database.
                             </p>
 
-                            @if (activeDetail.StaffTransferId == 0 && lookups is not null)
+                            @if (StaffId <= 0 && activeDetail.StaffTransferId == 0 && lookups is not null)
                             {
                                 <div class="mt-3 grid grid-cols-1 gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 md:grid-cols-3">
                                     <div>
@@ -322,13 +325,28 @@
                     <!-- TAB 02: JOB INFORMATION -->
                     <div class="space-y-4">
                         <div>
-                            <h2 class="text-sm font-bold text-slate-900">Tab 02 — Job, Position &amp; Destination Department</h2>
+                            <h2 class="text-sm font-bold text-slate-900">Tab 02 — Transfer Type, Destination Organisation &amp; Position</h2>
                             <p class="text-xs text-slate-500">
-                                Select the receiving department/structure and supervisor. For internal transfers, appointment mode, position, and matrix remain locked to current position settings.
+                                Select the transfer classification, destination organisation, and receiving department. For internal transfers, appointment mode and positions remain aligned.
                             </p>
                         </div>
 
                         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700">Transfer Type *</label>
+                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
+                                        value="@editInput.Job.TransferTypeId"
+                                        @onchange="OnTransferTypeChanged">
+                                    <option value="@((int)StaffTransferType.InternalDepartmental)">Internal Departmental Transfer</option>
+                                    <option value="@((int)StaffTransferType.CrossStructureReassignment)">Cross-Structure Reassignment</option>
+                                    <option value="@((int)StaffTransferType.SameJobPositionTransfer)">Position Transfer (Same Job)</option>
+                                    <option value="@((int)StaffTransferType.NewAppointmentTransfer)">New Employment Appointment (Internal)</option>
+                                    <option value="@((int)StaffTransferType.CrossOrganisationTransfer)">Cross-Organisation Transfer</option>
+                                    <option value="@((int)StaffTransferType.ExternalOrganizationTransfer)">External Organization Transfer (Separate Employer)</option>
+                                    <option value="@((int)StaffTransferType.TemporaryAssignmentOrSecondment)">Temporary Assignment / Secondment</option>
+                                </select>
+                            </div>
+
                             <div>
                                 <label class="block text-xs font-semibold text-slate-700">Destination Organization *</label>
                                 <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
@@ -358,21 +376,6 @@
                                             <option value="@dept.Id">@dept.Name</option>
                                         }
                                     }
-                                </select>
-                            </div>
-
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-700">Transfer Type *</label>
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs"
-                                        value="@editInput.Job.TransferTypeId"
-                                        @onchange="OnTransferTypeChanged">
-                                    <option value="@((int)StaffTransferType.InternalDepartmental)">Internal Departmental Transfer</option>
-                                    <option value="@((int)StaffTransferType.CrossStructureReassignment)">Cross-Structure Reassignment</option>
-                                    <option value="@((int)StaffTransferType.SameJobPositionTransfer)">Position Transfer (Same Job)</option>
-                                    <option value="@((int)StaffTransferType.NewAppointmentTransfer)">New Employment Appointment (Internal)</option>
-                                    <option value="@((int)StaffTransferType.CrossOrganisationTransfer)">Cross-Organisation Transfer</option>
-                                    <option value="@((int)StaffTransferType.ExternalOrganizationTransfer)">External Organization Transfer (Separate Employer)</option>
-                                    <option value="@((int)StaffTransferType.TemporaryAssignmentOrSecondment)">Temporary Assignment / Secondment</option>
                                 </select>
                             </div>
 
@@ -1423,6 +1426,7 @@
     <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
         <div class="flex flex-wrap items-center justify-between gap-3 pb-4">
             <div class="flex flex-wrap items-center gap-1.5">
+                <span class="text-xs font-bold text-slate-700 mr-2">@(StaffId > 0 ? "Staff Transfer History" : "Transfer Directory"):</span>
                 <button type="button"
                         @onclick="() => FilterByStatusAsync(null)"
                         class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition @(selectedStatusFilter is null ? "border-blue-600 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50")">
@@ -1446,11 +1450,22 @@
                 }
             </div>
 
-            <button type="button"
-                    @onclick="ReloadDashboardAsync"
-                    class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
-                ↻ Refresh
-            </button>
+            <div class="flex items-center gap-2">
+                @if (StaffId > 0 && activeDetail is null)
+                {
+                    <button type="button"
+                            @onclick="() => LoadForStaffAsync(StaffId)"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-blue-700">
+                        <span>＋</span>
+                        <span>Initiate Transfer</span>
+                    </button>
+                }
+                <button type="button"
+                        @onclick="ReloadDashboardAsync"
+                        class="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                    ↻ Refresh
+                </button>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
@@ -1625,16 +1640,60 @@
         }
     }
 
+    [Parameter]
+    public int StaffId { get; set; }
+
     protected override async Task OnInitializedAsync()
     {
-        await ReloadDashboardAsync();
+        if (StaffId <= 0)
+        {
+            await ReloadDashboardAsync();
+        }
+    }
+
+    private int? loadedStaffIdParam;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId > 0 && loadedStaffIdParam != StaffId)
+        {
+            loadedStaffIdParam = StaffId;
+            await LoadForStaffAsync(StaffId);
+        }
+    }
+
+    private async Task LoadForStaffAsync(int individualId)
+    {
+        try
+        {
+            dashboard = await Transfers.LoadDashboardAsync(individualId, selectedStatusFilter);
+            activeDetail = await Transfers.LoadDetailAsync(staffTransferId: null, individualId: individualId, jobId: null);
+            if (activeDetail is not null)
+            {
+                var currentOrgId = activeDetail.Staff.CurrentOrganisationId;
+                lookups = await Transfers.LoadFormLookupsAsync(currentOrgId, individualId, currentOrgId);
+                BindEditInputFromDetail(activeDetail);
+                // Default destination organisation to current organisation if not specified
+                if (editInput is not null && editInput.Job.DestinationOrganisationId <= 0)
+                {
+                    editInput.Job.DestinationOrganisationId = currentOrgId;
+                }
+                activeTab = 2; // Jump straight to Tab 02 (Transfer Type & Destination Details)
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load staff transfer workspace for staff {StaffId}.", individualId);
+            Toasts.Show("Failed to load staff transfer information.", ToastType.Error);
+        }
     }
 
     private async Task ReloadDashboardAsync()
     {
         try
         {
-            dashboard = await Transfers.LoadDashboardAsync(null, selectedStatusFilter);
+            var filterStaffId = StaffId > 0 ? (int?)StaffId : null;
+            dashboard = await Transfers.LoadDashboardAsync(filterStaffId, selectedStatusFilter);
         }
         catch (Exception ex)
         {

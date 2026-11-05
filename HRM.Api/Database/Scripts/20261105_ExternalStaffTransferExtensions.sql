@@ -1,5 +1,7 @@
 -- External Staff Transfer & Clearance Integration Migration Script
 -- Idempotent deployment extending ST_StaffTransfers and introducing Clearance & Asset Decision tables.
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
 SET XACT_ABORT ON;
 BEGIN TRANSACTION;
 
