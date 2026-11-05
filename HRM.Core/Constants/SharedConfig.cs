@@ -528,6 +528,7 @@ namespace HRM.Components.Shared
             public const int TERMINATED_DUE_TO_CONTRACT_EXPIRATION = 17;
             public const int TERMINATED_DURING_PROBATION = 18;
             public const int TERMINATED_OTHER = 19;
+            public const int TERMINATED_DUE_TO_TRANSFER = 20;
         }
 
         #endregion Job States

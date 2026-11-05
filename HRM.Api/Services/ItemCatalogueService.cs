@@ -9,13 +9,18 @@ using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 
 public sealed partial class ItemCatalogueService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs,
-    IRequestService requests, HRM.Services.Interfaces.AppovalWF.IWorkflowEngine workflow,
-    HRM.Services.Interfaces.AppovalWF.IWorkflowApproverResolver approvers,
-    HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver contexts)
+    IRequestService requests, HRM.Services.Interfaces.AppovalWF.IWorkflowEngine? workflow = null,
+    HRM.Services.Interfaces.AppovalWF.IWorkflowApproverResolver? approvers = null,
+    HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver? contexts = null)
 : global::HRM.Services.Contracts.ItemCatalogueServiceContracts, global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations
 {
     private static readonly string[] UnitStatuses = ["Available", "Issued", "Returned", "Damaged", "Lost", "Retired"];
     private static readonly string[] UnitConditions = ["Good", "Fair", "Damaged", "Unusable"];
+
+    // Retained for potential future workflow orchestration integration
+    private readonly HRM.Services.Interfaces.AppovalWF.IWorkflowEngine? _workflow = workflow;
+    private readonly HRM.Services.Interfaces.AppovalWF.IWorkflowApproverResolver? _approvers = approvers;
+    private readonly HRM.Services.Interfaces.AppovalWF.IWorkflowRequestContextResolver? _contexts = contexts;
 
     private async Task<(int Org, bool Super, bool Edit)> ScopeAsync(int? selected)
     {
