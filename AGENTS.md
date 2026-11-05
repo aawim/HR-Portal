@@ -113,3 +113,8 @@ Ask before undertaking a broad architectural review not required by the task.
 - Related tables share their feature prefix. Use the established prefixes documented in `Database/Scripts/TableNaming.md` and `WF_` for workflow tables.
 - Keep EF mappings, raw SQL, migrations, deployment scripts and documentation consistent with the physical table name.
 - Preserve already-applied migrations; introduce a data-preserving rename migration for existing tables. Do not create replacement tables or discard existing records to change a name.
+
+## UI Design Reference Directive
+
+For every future UI creation, redesign, or modification within `HRM.UI`, consult `HRM.UI/docs/UI_DESIGN_STANDARD.md` first. Use `/online/item-requests` as the primary visual and interaction reference. Maintain consistent header, buttons, forms, panels, tables, and Full Width / Shrink View behavior. Do not introduce conflicting design styles. Work only within `HRM.UI` unless explicit permission is obtained.
+

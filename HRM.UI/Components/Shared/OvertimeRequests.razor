@@ -5,27 +5,36 @@
 @inject HRM.Services.ToastService Toasts
 @inject ILogger<OvertimeRequests> Logger
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
-
-
-<section class="space-y-3 rounded-xl border p-4">
-
-
-
-    <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
+<section class="ot-page w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header matching Item Requests Design -->
+    <header class="ot-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-3 py-3 shadow-xs backdrop-blur-xs">
         <div>
             <div class="flex items-center gap-2">
-                 <h1 class="font-semibold">@(PendingOnly ? "Pending overtime requests" : "Overtime requests")</h1>
+                <h1 class="text-lg font-bold text-slate-900">
+                    @(PendingOnly ? "Pending Overtime Requests & Approvals" : "Overtime Requests & Claims")
+                </h1>
+                @if (PendingOnly)
+                {
+                    <span class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Pending Review</span>
+                }
+                else if (CanReview)
+                {
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Admin Mode</span>
+                }
             </div>
-
+            <p class="text-xs text-slate-500 mt-0.5">
+                @(PendingOnly
+                    ? "Review and act on pending overtime preapprovals, clock events, and claims awaiting managerial action."
+                    : "Submit overtime preapproval requests, claim worked overtime hours, and review approval workflows.")
+            </p>
         </div>
+
         <div class="flex flex-wrap items-center gap-2">
-
-            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Refresh</button>
-
             <!-- Full Page Width Toggle Button -->
-  @*           <button type="button"
-                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
                     title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
                     @onclick="ToggleFullWidth">
                 @if (isFullWidth)
@@ -42,214 +51,889 @@
                     </svg>
                     <span>Full Width</span>
                 }
-            </button> *@
+            </button>
 
+            @if (PendingOnly)
+            {
+                <a href="/admin/attendance/manage-overtimes"
+                   class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors">
+                    <span>Overtime & Payroll →</span>
+                </a>
+            }
+
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="LoadAsync">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+
+            @if (!PendingOnly && selectedRequestId.HasValue)
+            {
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@busy"
+                        @onclick="ClearRequest">
+                    <span>+</span>
+                    <span>New Request</span>
+                </button>
+            }
         </div>
     </header>
-    
-    
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-@if(PendingOnly){<a class="text-sm underline" href="/admin/attendance/manage-overtimes">Overtime and payroll</a>}
-    <div class="@(PendingOnly ? "" : "grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]")">
-    <div class="min-w-0 space-y-3">
-    @if(!PendingOnly)
+    @if (error != null)
     {
-        <nav class="flex flex-wrap gap-2" aria-label="Overtime request types">
-            @foreach(var option in tabs.Where(t => CanReview || t.Key != "Payroll"))
-            { <button type="button" class="@(tab==option.Key ? "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" : "inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" disabled="@busy" @onclick="()=>ChangeTab(option.Key)">@option.Value</button> }
-        </nav>
-        @if(tab=="Payroll")
-        {
-            <OvertimePayroll Rows="rows" OnProcessed="LoadAsync" />
-        }
-        else
-        {
-        <fieldset disabled="@busy" class="grid min-w-0 gap-4">
-        <div class="min-w-0 space-y-3">
-        @if(tab=="Preapproval")
-        {
-            <div class="flex flex-wrap gap-3"><label>From date<input type="date" @bind="from" class="mt-1 block rounded border bg-transparent p-2" /></label><label>To date<input type="date" @bind="to" class="mt-1 block rounded border bg-transparent p-2" /></label></div>
-            <label class="block">Tasks to perform<textarea @bind="taskText" maxlength="15000" rows="3" placeholder="One task per line" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
-        }
-        else if(tab=="ClockEvents")
-        {
-            <p class="text-sm text-slate-500">Request missing OT punches. They become saved clock events only after approval.</p>
-            <div class="flex flex-wrap gap-3"><label>Start date<input type="date" @bind="from" class="mt-1 block rounded border bg-transparent p-2" /></label><label>Start time<input type="time" @bind="startTime" class="mt-1 block rounded border bg-transparent p-2" /></label><label>End date<input type="date" @bind="to" class="mt-1 block rounded border bg-transparent p-2" /></label><label>End time<input type="time" @bind="endTime" class="mt-1 block rounded border bg-transparent p-2" /></label></div>
-        }
-        else
-        {
-            @if(tab=="Planned")
-            {
-                @if(tasks.Count==0)
-                {
-                    <div class="space-y-2 rounded-lg border p-3 text-sm" role="status">
-                        <p>No approved OT preapproval with tasks is available for your account. Planned OT needs an approved request first.</p>
-                        <div class="flex flex-wrap gap-2"><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick='()=>ChangeTab("Preapproval")'>Request OT preapproval</button><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick='()=>ChangeTab("Unplanned")'>Claim unplanned OT</button></div>
-                    </div>
-                }
-                <div class="grid gap-3 sm:grid-cols-2"><label>Approved OT request<select class="mt-1 block w-full rounded border bg-transparent p-2" value="@preapprovalId" @onchange="SelectPreapproval"><option value="0">Select request</option>@foreach(var group in tasks.GroupBy(t=>t.RequestId)){var first=group.First();<option value="@group.Key">@first.Reference · @first.From.ToString("dd MMM")–@first.To.ToString("dd MMM yyyy")</option>}</select></label>
-                <label>Task<select disabled="@(preapprovalId==0)" class="mt-1 block w-full rounded border bg-transparent p-2" @bind="taskId"><option value="0">Select task</option>@foreach(var task in tasks.Where(t=>t.RequestId==preapprovalId)){<option value="@task.Id">@task.Task</option>}</select></label></div>
-            }
-            <div class="flex flex-wrap items-end gap-3"><label>Work date<input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="DateChanged" class="mt-1 block rounded border bg-transparent p-2" /></label><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="LoadEvents">Refresh clock events</button></div>
-            @if(SelectedStart!=null)
-            {
-                <div class="flex flex-wrap gap-x-5 gap-y-1 text-sm" aria-live="polite">
-                    <span>Start: <strong>@SelectedStart.Time.ToString("dd MMM HH:mm:ss")</strong></span>
-                    <span>End: <strong>@(SelectedEnd?.Time.ToString("dd MMM HH:mm:ss")??"Select an event")</strong></span>
-                    @if(SelectedEnd!=null){<span>Duration: <strong>@((SelectedEnd.Time-SelectedStart.Time).TotalHours.ToString("0.##")) hours</strong></span>}
-                </div>
-            }
-            <p class="text-xs text-slate-500">Only unused saved events outside official time are listed. Cancel a claim to release its events.</p>
-        }
-        <label class="block">@(tab=="Preapproval" ? "Purpose" : "Work performed / reason")<textarea @bind="reason" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
-        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(tab=="Planned"&&taskId==0)" @onclick="SubmitAsync">Submit for approval</button>
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
         </div>
-        @if(tab is "Planned" or "Unplanned")
-        {
-            <aside class="min-w-0 self-start overflow-hidden rounded-lg border" aria-labelledby="ot-clock-events-heading" aria-busy="@loadingEvents">
-                <h2 id="ot-clock-events-heading" class="border-b px-3 py-2 text-sm font-semibold">Clock events outside official hours</h2>
-                @if(loadingEvents){<p class="px-3 py-3 text-sm text-slate-500">Loading clock events…</p>}
-                else if(clocks.Count==0){<p class="px-3 py-3 text-sm text-slate-500">No unused clock events outside official hours for this date. Events used in pending or approved claims are unavailable.</p>}
-                else
-                {
-                    @foreach(var clock in clocks)
+    }
+
+    <!-- 2-Panel Professional Layout matching Item Requests:
+         LEFT: Operations, Workflow Actions & Request / Submission Form
+         RIGHT: Overtime Table Overview & Selected Details
+    -->
+    <div class="ot-panels @(isFullWidth ? "ot-panels-full" : "ot-panels-standard")">
+
+        <!-- LEFT PANEL: Operations & Form / Action Details -->
+        <div class="ot-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            @if (selectedRequestId.HasValue && (SelectedWorkRequest is { } swr || SelectedClaim is { } scr))
+            {
+                <!-- Selected Request Detail & Operations View -->
+                <div class="flex flex-col gap-3 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                                    @onclick="ClearRequest">
+                                <span>← Back to Form</span>
+                            </button>
+                            <span class="text-slate-400">|</span>
+                            <span class="font-mono text-sm font-bold text-slate-900">
+                                @(SelectedWorkRequest?.Reference ?? SelectedClaim?.Reference)
+                            </span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @GetStatusBadge(SelectedWorkRequest?.Status ?? SelectedClaim?.Status ?? "")">
+                                @(SelectedWorkRequest?.Status ?? SelectedClaim?.Status)
+                            </span>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 font-medium text-[11px]">
+                                @(SelectedWorkRequest is not null ? (SelectedWorkRequest.Kind == "Preapproval" ? "OT Preapproval" : "OT Clock Events") : (SelectedClaim?.Source ?? "OT Claim"))
+                            </span>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-xs transition"
+                                    @onclick="ClearRequest">
+                                <span>+ New</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (SelectedWorkRequest is { } work)
                     {
-                        <div @key="clock.Id" class="flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 last:border-b-0">
-                            <time datetime="@clock.Time.ToString("yyyy-MM-ddTHH:mm:ss")" class="text-sm font-medium">@clock.Time.ToString("dd MMM yyyy · HH:mm:ss")</time>
-                            <div class="flex flex-wrap gap-2">
-                                <button type="button" class="@(startId==clock.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" aria-pressed="@(startId==clock.Id)" @onclick="()=>SelectStart(clock.Id)">@(startId==clock.Id?"Start selected":"Use as start")</button>
-                                <button type="button" class="@(endId==clock.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" aria-pressed="@(endId==clock.Id)" disabled="@(SelectedStart==null||clock.Time<=SelectedStart.Time)" @onclick="()=>endId=clock.Id">@(endId==clock.Id?"End selected":"Use as end")</button>
+                        <!-- Metadata Card for Work Request -->
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <p class="text-xs text-slate-600 font-medium">Requested by: <strong class="text-slate-900 text-sm">@work.Staff</strong></p>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">
+                                        Period: @work.From.ToString("dd MMM yyyy") – @work.To.ToString("dd MMM yyyy")
+                                    </div>
+                                </div>
+                                <div class="text-right text-[11px] text-slate-500">
+                                    @if(work.Start.HasValue)
+                                    {
+                                        <div class="font-medium text-blue-700">Time: @work.Start.Value.ToString("dd MMM HH:mm") – @work.End?.ToString("dd MMM HH:mm")</div>
+                                    }
+                                </div>
                             </div>
+
+                            @if (!string.IsNullOrWhiteSpace(work.Reason))
+                            {
+                                <div>
+                                    <span class="font-medium text-slate-700">Purpose / Reason:</span>
+                                    <p class="mt-1 text-slate-800 bg-white rounded-lg p-2.5 border border-slate-200">@work.Reason</p>
+                                </div>
+                            }
+
+                            @if(work.Tasks.Count > 0)
+                            {
+                                <div>
+                                    <span class="font-medium text-slate-700">Tasks to Perform (@work.Tasks.Count):</span>
+                                    <ul class="mt-1 space-y-1 bg-white rounded-lg p-2.5 border border-slate-200 list-disc pl-5 text-slate-800">
+                                        @foreach(var t in work.Tasks)
+                                        {
+                                            <li>@t</li>
+                                        }
+                                    </ul>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Workflow Actions -->
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+                            <h4 class="font-bold text-slate-800">Review & Workflow Actions</h4>
+                            @if(!CanReview && work.CanApprove)
+                            {
+                                <a class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(work.Id)">
+                                    Review in Admin portal →
+                                </a>
+                            }
+                            @if(CanReview && work.CanApprove || work.CanCancel)
+                            {
+                                <div>
+                                    <label class="block font-medium text-slate-700">Action Comment</label>
+                                    <textarea @bind="comments[work.Id]" maxlength="2000" rows="2" placeholder="Optional comments..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                                </div>
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    @if(CanReview && work.CanApprove)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>ActWork(work,"Approve")'>✓ Approve Stage</button>
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>ActWork(work,"Reject")'>✕ Reject</button>
+                                    }
+                                    @if(work.CanCancel)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>ActWork(work,"Cancel")'>Cancel Request</button>
+                                    }
+                                </div>
+                            }
                         </div>
                     }
-                }
-            </aside>
-        }
-        </fieldset>
-        }
-    }
-    @if(error!=null){<p role="alert" class="text-sm">@error</p>}
-    </div>
-    <aside class="min-w-0 space-y-3" aria-label="Overtime request history">
-    @if(!PendingOnly)
-    {
-        <OvertimeRequestTable Claims="rows" WorkRequests="workRows" Busy="busy" SelectedId="selectedRequestId" OnSelected="SelectRequest" OnFiltersChanged="ClearRequest" />
-        @if(selectedRequestId.HasValue){<div class="flex items-center justify-between gap-2"><h2 class="text-sm font-semibold">Request details</h2><button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="ClearRequest">Close details</button></div>}
-    }
-    @foreach(var work in workRows.Where(w=>PendingOnly||w.Id==selectedRequestId))
-    {
-        <article class="space-y-2 border-t pt-3 text-sm" @key="work">
-            <p class="font-semibold">@work.Reference · @work.Staff · @(work.Kind=="Preapproval" ? "OT preapproval" : "OT clock events")</p>
-            <p>@work.From.ToString("dd MMM yyyy") – @work.To.ToString("dd MMM yyyy") · @work.Status</p>
-            @if(work.Start.HasValue){<p>@work.Start.Value.ToString("dd MMM HH:mm") – @work.End?.ToString("dd MMM HH:mm")</p>}
-            <p>@work.Reason</p>
-            @if(work.Tasks.Count>0){<ul class="list-disc pl-5">@foreach(var task in work.Tasks){<li>@task</li>}</ul>}
-            @if(!CanReview && work.CanApprove){<a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(work.Id)">Review in Admin portal</a>}
-            @if(CanReview && work.CanApprove||work.CanCancel)
-            {
-                <label class="block">Action comment<textarea @bind="comments[work.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label>
-                <div class="flex flex-wrap gap-2">@if(CanReview && work.CanApprove){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>ActWork(work,"Approve")'>Approve stage</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>ActWork(work,"Reject")'>Reject</button>}@if(work.CanCancel){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>ActWork(work,"Cancel")'>Cancel</button>}</div>
-            }
-        </article>
-    }
-    @foreach(var row in rows.Where(r=>PendingOnly||r.Id==selectedRequestId))
-    {
-        <article class="space-y-2 border-t pt-3 text-sm" @key="row.Id"><p class="font-semibold">@row.Reference · @row.Staff</p><p>@row.Date.ToString("dd MMM yyyy") · @((row.Minutes/60m).ToString("0.##")) hours · @row.Status</p><p>@row.Source · @row.Start?.ToString("dd MMM HH:mm:ss") – @row.End?.ToString("dd MMM HH:mm:ss")</p>@if(row.Task!=null){<p>Task: @row.Task</p>}<p>@row.Reason</p>
-        @if(row.StateId==4){<p>Payroll: @(row.PayrollProcessed ? "Processed" : "Awaiting payroll") @row.PayrollMonth?.ToString("MMMM yyyy") @row.PayrollReference</p>}
-        @if(row.CanResubmit){<label class="block">Work performed / reason<textarea @bind="reasons[row.Id]" maxlength="1000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>Resubmit(row.Id)">Resubmit for approval</button>}
-        @if(row.PaymentReference!=null){<p>Payroll/payment reference: @row.PaymentReference</p>}
-        @if(!CanReview && (row.CanApprove||row.CanReviseApproved)){<a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(row.Id)">Review in Admin portal</a>}
-        @if(CanReview && (row.CanApprove||row.CanReviseApproved)||CanCancelInPortal(row)){<label class="block">Action comment<textarea @bind="comments[row.Id]" maxlength="2000" rows="2" class="mt-1 block w-full rounded border bg-transparent p-2"></textarea></label><div class="flex flex-wrap gap-2">@if(CanReview && row.CanApprove){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Approve")'>Approve stage</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button>}@if(CanReview && row.CanReviseApproved){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Reject")'>Reject</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Incomplete")'>Return as Incomplete</button>}@if(CanCancelInPortal(row)){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick='()=>Act(row,"Cancel")'>Cancel</button>}</div>}
+                    else if (SelectedClaim is { } claim)
+                    {
+                        <!-- Metadata Card for Overtime Claim -->
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                            <div class="flex flex-wrap items-start justify-between gap-2">
+                                <div>
+                                    <p class="text-xs text-slate-600 font-medium">Claimant: <strong class="text-slate-900 text-sm">@claim.Staff</strong></p>
+                                    <div class="text-[11px] text-slate-500 mt-0.5">
+                                        Date: @claim.Date.ToString("dd MMM yyyy") · Duration: <strong class="text-slate-800">@((claim.Minutes/60m).ToString("0.##")) hrs</strong>
+                                    </div>
+                                </div>
+                                <div class="text-right text-[11px] text-slate-500">
+                                    @if(claim.Start.HasValue)
+                                    {
+                                        <div class="font-medium text-blue-700">Punch: @claim.Start.Value.ToString("dd MMM HH:mm:ss") – @claim.End?.ToString("dd MMM HH:mm:ss")</div>
+                                    }
+                                    @if(claim.StateId == 4)
+                                    {
+                                        <div class="mt-1 font-medium @(claim.PayrollProcessed ? "text-emerald-700" : "text-amber-700")">
+                                            Payroll: @(claim.PayrollProcessed ? "Processed" : "Awaiting payroll") @claim.PayrollMonth?.ToString("MMMM yyyy")
+                                        </div>
+                                    }
+                                </div>
+                            </div>
 
-        </article>
-    }
-    @if(PendingOnly&&!busy&&rows.Count==0&&workRows.Count==0&&error==null){<p class="text-sm text-slate-500">No overtime claims found.</p>}
-    </aside>
+                            @if (!string.IsNullOrWhiteSpace(claim.Task))
+                            {
+                                <div>
+                                    <span class="font-medium text-slate-700">Associated Task:</span>
+                                    <p class="mt-0.5 text-slate-800 bg-white rounded-lg p-2 border border-slate-200 font-medium">@claim.Task</p>
+                                </div>
+                            }
+
+                            <div>
+                                <span class="font-medium text-slate-700">Work Performed / Reason:</span>
+                                <p class="mt-1 text-slate-800 bg-white rounded-lg p-2.5 border border-slate-200">@claim.Reason</p>
+                            </div>
+
+                            @if(claim.PaymentReference != null)
+                            {
+                                <div class="text-[11px] text-slate-600">
+                                    Payroll Reference: <span class="font-mono font-semibold text-slate-800">@claim.PaymentReference</span>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Workflow Actions -->
+                        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+                            <h4 class="font-bold text-slate-800">Review & Workflow Actions</h4>
+                            @if(claim.CanResubmit)
+                            {
+                                <div>
+                                    <label class="block font-medium text-slate-700">Update Work Performed / Reason</label>
+                                    <textarea @bind="reasons[claim.Id]" maxlength="1000" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                                </div>
+                                <button class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition" disabled="@busy" @onclick="()=>Resubmit(claim.Id)">
+                                    Resubmit for Approval
+                                </button>
+                            }
+
+                            @if(!CanReview && (claim.CanApprove || claim.CanReviseApproved))
+                            {
+                                <a class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition" href="@HRM.Application.Presentation.OvertimeNavigation.ReviewUrl(claim.Id)">
+                                    Review in Admin portal →
+                                </a>
+                            }
+
+                            @if(CanReview && (claim.CanApprove || claim.CanReviseApproved) || CanCancelInPortal(claim))
+                            {
+                                <div>
+                                    <label class="block font-medium text-slate-700">Action Comment</label>
+                                    <textarea @bind="comments[claim.Id]" maxlength="2000" rows="2" placeholder="Optional comments..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                                </div>
+                                <div class="flex flex-wrap gap-2 pt-1">
+                                    @if(CanReview && claim.CanApprove)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>Act(claim,"Approve")'>✓ Approve Stage</button>
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>Act(claim,"Reject")'>✕ Reject</button>
+                                    }
+                                    @if(CanReview && claim.CanReviseApproved)
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>Act(claim,"Reject")'>✕ Reject</button>
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-700 shadow-xs hover:bg-amber-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>Act(claim,"Incomplete")'>Return as Incomplete</button>
+                                    }
+                                    @if(CanCancelInPortal(claim))
+                                    {
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition" disabled="@busy" @onclick='()=>Act(claim,"Cancel")'>Cancel Request</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            else if (!PendingOnly)
+            {
+                <!-- Form View with Tabs -->
+                <div class="flex flex-col gap-3 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Overtime Operations & Submission</h2>
+                            <p class="text-[11px] text-slate-500">Request preapproval, record missing punches, or submit overtime hours.</p>
+                        </div>
+                    </div>
+
+                    <!-- Category Tab Bar -->
+                    <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50" aria-label="Overtime request types">
+                        @foreach(var option in tabs.Where(t => CanReview || t.Key != "Payroll"))
+                        {
+                            <button type="button"
+                                    class="flex-1 min-w-[7rem] rounded-md py-1.5 px-2 text-xs font-semibold transition @(tab == option.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                                    disabled="@busy"
+                                    @onclick="() => ChangeTab(option.Key)">
+                                @option.Value
+                            </button>
+                        }
+                    </div>
+
+                    @if(tab == "Payroll")
+                    {
+                        <OvertimePayroll Rows="rows" OnProcessed="LoadAsync" />
+                    }
+                    else
+                    {
+                        <fieldset disabled="@busy" class="flex flex-col gap-3">
+                            @if(tab == "Preapproval")
+                            {
+                                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+                                    <span class="font-bold text-slate-800">Preapproval Dates & Requirements</span>
+                                    <div class="grid gap-2.5 sm:grid-cols-2">
+                                        <div>
+                                            <label class="block font-medium text-slate-700">From date *</label>
+                                            <input type="date" @bind="from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700">To date *</label>
+                                            <input type="date" @bind="to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium text-slate-700">Tasks to perform</label>
+                                        <textarea @bind="taskText" maxlength="15000" rows="3" placeholder="One task per line" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                                    </div>
+                                </div>
+                            }
+                            else if(tab == "ClockEvents")
+                            {
+                                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-bold text-slate-800">Missing OT Punches</span>
+                                        <span class="text-[11px] text-slate-500">Requires manager approval</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600">Request missing OT punches. They become saved clock events only after approval.</p>
+                                    <div class="grid gap-2.5 sm:grid-cols-2">
+                                        <div>
+                                            <label class="block font-medium text-slate-700">Start date *</label>
+                                            <input type="date" @bind="from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700">Start time *</label>
+                                            <input type="time" @bind="startTime" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700">End date *</label>
+                                            <input type="date" @bind="to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700">End time *</label>
+                                            <input type="time" @bind="endTime" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                @if(tab == "Planned")
+                                {
+                                    @if(tasks.Count == 0)
+                                    {
+                                        <div class="flex flex-col gap-2 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900" role="status">
+                                            <p class="font-medium">No approved OT preapproval with tasks is available for your account. Planned OT requires an approved preapproval first.</p>
+                                            <div class="flex flex-wrap gap-2 pt-1">
+                                                <button type="button" class="inline-flex items-center rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 transition" @onclick='() => ChangeTab("Preapproval")'>
+                                                    Request OT preapproval
+                                                </button>
+                                                <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition" @onclick='() => ChangeTab("Unplanned")'>
+                                                    Claim unplanned OT
+                                                </button>
+                                            </div>
+                                        </div>
+                                    }
+                                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 grid gap-2.5 sm:grid-cols-2">
+                                        <div>
+                                            <label class="block font-medium text-slate-700">Approved OT request *</label>
+                                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" value="@preapprovalId" @onchange="SelectPreapproval">
+                                                <option value="0">Select request...</option>
+                                                @foreach(var group in tasks.GroupBy(t => t.RequestId))
+                                                {
+                                                    var first = group.First();
+                                                    <option value="@group.Key">@first.Reference · @first.From.ToString("dd MMM")–@first.To.ToString("dd MMM yyyy")</option>
+                                                }
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700">Task *</label>
+                                            <select disabled="@(preapprovalId == 0)" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 disabled:opacity-50 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" @bind="taskId">
+                                                <option value="0">Select task...</option>
+                                                @foreach(var task in tasks.Where(t => t.RequestId == preapprovalId))
+                                                {
+                                                    <option value="@task.Id">@task.Task</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    </div>
+                                }
+
+                                <!-- Date & Saved Clock Events Selector -->
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+                                    <div class="flex flex-wrap items-end justify-between gap-2">
+                                        <div class="flex-1 min-w-[12rem]">
+                                            <label class="block font-medium text-slate-700">Work date</label>
+                                            <input type="date" value="@date.ToString("yyyy-MM-dd")" @onchange="DateChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                                        </div>
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition"
+                                                @onclick="LoadEvents">
+                                            <span>↻ Refresh punches</span>
+                                        </button>
+                                    </div>
+
+                                    @if(SelectedStart != null)
+                                    {
+                                        <div class="flex flex-wrap items-center gap-3 rounded-lg border border-blue-200 bg-blue-50/80 p-2.5 text-xs" aria-live="polite">
+                                            <span>Start: <strong class="font-mono text-blue-900">@SelectedStart.Time.ToString("dd MMM HH:mm:ss")</strong></span>
+                                            <span class="text-slate-400">|</span>
+                                            <span>End: <strong class="font-mono text-blue-900">@(SelectedEnd?.Time.ToString("dd MMM HH:mm:ss") ?? "Select end punch")</strong></span>
+                                            @if(SelectedEnd != null)
+                                            {
+                                                <span class="text-slate-400">|</span>
+                                                <span class="rounded bg-blue-600 px-2 py-0.5 font-bold text-white">
+                                                    @((SelectedEnd.Time - SelectedStart.Time).TotalHours.ToString("0.##")) hours
+                                                </span>
+                                            }
+                                        </div>
+                                    }
+
+                                    <!-- Available Clocks List -->
+                                    <div class="overflow-hidden rounded-xl border border-slate-200 bg-white" aria-busy="@loadingEvents">
+                                        <div class="border-b border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700 flex items-center justify-between">
+                                            <span>Clock events outside official hours</span>
+                                            <span class="text-[11px] font-normal text-slate-500">@clocks.Count available</span>
+                                        </div>
+                                        @if(loadingEvents)
+                                        {
+                                            <div class="p-3 text-center text-xs text-slate-500">Loading clock events…</div>
+                                        }
+                                        else if(clocks.Count == 0)
+                                        {
+                                            <div class="p-3 text-center text-xs text-slate-500">
+                                                No unused clock events outside official hours for this date.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="divide-y divide-slate-100 max-h-48 overflow-y-auto">
+                                                @foreach(var clock in clocks)
+                                                {
+                                                    <div @key="clock.Id" class="flex flex-wrap items-center justify-between gap-2 p-2 hover:bg-slate-50/60 transition">
+                                                        <time datetime="@clock.Time.ToString("yyyy-MM-ddTHH:mm:ss")" class="font-mono text-xs font-medium text-slate-800">
+                                                            @clock.Time.ToString("dd MMM yyyy · HH:mm:ss")
+                                                        </time>
+                                                        <div class="flex items-center gap-1.5">
+                                                            <button type="button"
+                                                                    class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold transition @(startId == clock.Id ? "bg-blue-600 text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50")"
+                                                                    aria-pressed="@(startId == clock.Id)"
+                                                                    @onclick="() => SelectStart(clock.Id)">
+                                                                @(startId == clock.Id ? "✓ Start Selected" : "Use as Start")
+                                                            </button>
+                                                            <button type="button"
+                                                                    class="inline-flex items-center rounded-lg px-2.5 py-1 text-xs font-semibold transition @(endId == clock.Id ? "bg-blue-600 text-white shadow-xs" : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50")"
+                                                                    aria-pressed="@(endId == clock.Id)"
+                                                                    disabled="@(SelectedStart == null || clock.Time <= SelectedStart.Time)"
+                                                                    @onclick="() => endId = clock.Id">
+                                                                @(endId == clock.Id ? "✓ End Selected" : "Use as End")
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                    <p class="text-[11px] text-slate-500">Only unused saved events outside official time are listed. Cancel a claim to release its events.</p>
+                                </div>
+                            }
+
+                            <div>
+                                <label class="block font-medium text-slate-700">@(tab == "Preapproval" ? "Purpose / Justification *" : "Work performed / reason *")</label>
+                                <textarea @bind="reason" maxlength="1000" rows="2" placeholder="Explain the business need or tasks completed..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                            </div>
+
+                            <div class="flex items-center gap-2 pt-1">
+                                <button type="button"
+                                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                        disabled="@(tab == "Planned" && taskId == 0)"
+                                        @onclick="SubmitAsync">
+                                    <span>Submit for Approval</span>
+                                </button>
+                            </div>
+                        </fieldset>
+                    }
+                </div>
+            }
+            else
+            {
+                <!-- Pending Only Empty / Helper State when nothing selected -->
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                    Select a pending overtime request from the right panel to review and approve.
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Overtime History & Request Table -->
+        <aside class="ot-right min-w-0 space-y-3" aria-label="Overtime request history">
+            @if (!PendingOnly)
+            {
+                <OvertimeRequestTable Claims="rows"
+                                      WorkRequests="workRows"
+                                      Busy="busy"
+                                      SelectedId="selectedRequestId"
+                                      OnSelected="SelectRequest"
+                                      OnFiltersChanged="ClearRequest" />
+            }
+            else
+            {
+                <!-- Pending Requests Summary List -->
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2.5">
+                        <h3 class="text-sm font-bold text-slate-900">Pending Requests for Action</h3>
+                        <span class="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                            @(workRows.Count + rows.Count) pending
+                        </span>
+                    </div>
+
+                    @if (!busy && rows.Count == 0 && workRows.Count == 0 && error == null)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                            No pending overtime claims or preapprovals found.
+                        </div>
+                    }
+
+                    <div class="flex flex-col gap-2 max-h-[42rem] overflow-y-auto pr-0.5">
+                        @foreach(var work in workRows)
+                        {
+                            <article class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(selectedRequestId == work.Id ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                     @key="work.Id"
+                                     @onclick="() => SelectRequest(work.Id)">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <span class="font-mono font-bold text-slate-900 text-xs">@work.Reference</span>
+                                    <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @GetStatusBadge(work.Status)">
+                                        @work.Status
+                                    </span>
+                                </div>
+                                <div class="text-[11px] font-medium text-slate-700">Staff: @work.Staff</div>
+                                <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">@(work.Kind == "Preapproval" ? "OT preapproval" : "OT clock events")</span>
+                                    <span>·</span>
+                                    <span>@work.From.ToString("dd MMM yyyy") – @work.To.ToString("dd MMM yyyy")</span>
+                                </div>
+                                @if(!string.IsNullOrWhiteSpace(work.Reason))
+                                {
+                                    <p class="text-[11px] text-slate-600 truncate" title="@work.Reason">@work.Reason</p>
+                                }
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
+                                    <span>@work.Tasks.Count task@(work.Tasks.Count == 1 ? "" : "s")</span>
+                                    <span class="text-blue-600 font-semibold hover:underline">
+                                        @(selectedRequestId == work.Id ? "Selected" : "Review Details →")
+                                    </span>
+                                </div>
+                            </article>
+                        }
+
+                        @foreach(var row in rows)
+                        {
+                            <article class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(selectedRequestId == row.Id ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                     @key="row.Id"
+                                     @onclick="() => SelectRequest(row.Id)">
+                                <div class="flex items-center justify-between gap-1.5">
+                                    <span class="font-mono font-bold text-slate-900 text-xs">@row.Reference</span>
+                                    <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @GetStatusBadge(row.Status)">
+                                        @row.Status
+                                    </span>
+                                </div>
+                                <div class="text-[11px] font-medium text-slate-700">Staff: @row.Staff</div>
+                                <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">@row.Source</span>
+                                    <span>·</span>
+                                    <span>@row.Date.ToString("dd MMM yyyy")</span>
+                                    <span>·</span>
+                                    <span class="font-semibold text-slate-700">@((row.Minutes/60m).ToString("0.##")) hrs</span>
+                                </div>
+                                @if(!string.IsNullOrWhiteSpace(row.Reason))
+                                {
+                                    <p class="text-[11px] text-slate-600 truncate" title="@row.Reason">@row.Reason</p>
+                                }
+                                <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
+                                    <span>@row.Date.ToString("dd MMM yyyy")</span>
+                                    <span class="text-blue-600 font-semibold hover:underline">
+                                        @(selectedRequestId == row.Id ? "Selected" : "Review Details →")
+                                    </span>
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </div>
+            }
+        </aside>
     </div>
 </section>
+
+<style>
+    /* Header is full-width and independent of the Full Width toggle. */
+    .ot-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .ot-header {
+        width: 100%;
+        padding: 0.75rem;
+        margin: 0;
+    }
+
+    /* Explicit layout rules matching StaffItemRequestPanel reference. */
+    .ot-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .ot-panels-standard {
+        max-width: 80rem; /* max-w-7xl */
+    }
+
+    .ot-panels-full {
+        max-width: none;
+    }
+
+    .ot-left, .ot-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .ot-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
 @code {
     private bool CanCancelInPortal(HRM.Services.OvertimeRow row) => row.CanCancel && (CanReview || !row.CanReviseApproved);
     private bool CanReview => new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/", StringComparison.OrdinalIgnoreCase);
-    [SupplyParameterFromQuery(Name = "requestId")] public int? RequestId { get; set; }
-    protected override void OnParametersSet() { if(RequestId is > 0) selectedRequestId = RequestId; }
-    [Parameter] public bool PendingOnly {get;set;}
-    private List<HRM.Services.OvertimeRow> rows=[];private Dictionary<int,string?> comments=[];private Dictionary<int,string> reasons=[];
-    private DateTime date=DateTime.UtcNow.AddHours(5).Date;private string reason="";private bool busy;private string? error;
+
+    [SupplyParameterFromQuery(Name = "requestId")]
+    public int? RequestId { get; set; }
+
+    [Parameter]
+    public bool PendingOnly { get; set; }
+
+    // Full-page width toggle saved to browser localStorage user setting
+    private bool isFullWidth = false;
+    private const string FullWidthSettingKey = "hrm.ot.full-width";
+
+    private List<HRM.Services.OvertimeRow> rows = [];
+    private Dictionary<int, string?> comments = [];
+    private Dictionary<int, string> reasons = [];
+    private DateTime date = DateTime.UtcNow.AddHours(5).Date;
+    private string reason = "";
+    private bool busy;
+    private string? error;
     private int? selectedRequestId;
-    private void SelectRequest(int id){selectedRequestId=id;}
-    private void ClearRequest(){selectedRequestId=null;}
-    private string tab="Preapproval",taskText="";
-    private TimeOnly? startTime,endTime;
-    private DateTime from=DateTime.UtcNow.AddHours(5).Date,to=DateTime.UtcNow.AddHours(5).Date;
-    private int startId,endId,taskId,preapprovalId;
+
+    private HRM.Services.OvertimeWorkRow? SelectedWorkRequest =>
+        selectedRequestId.HasValue ? workRows.FirstOrDefault(w => w.Id == selectedRequestId.Value) : null;
+
+    private HRM.Services.OvertimeRow? SelectedClaim =>
+        selectedRequestId.HasValue ? rows.FirstOrDefault(r => r.Id == selectedRequestId.Value) : null;
+
+    private void SelectRequest(int id) { selectedRequestId = id; }
+    private void ClearRequest() { selectedRequestId = null; }
+
+    private string tab = "Preapproval", taskText = "";
+    private TimeOnly? startTime, endTime;
+    private DateTime from = DateTime.UtcNow.AddHours(5).Date, to = DateTime.UtcNow.AddHours(5).Date;
+    private int startId, endId, taskId, preapprovalId;
     private bool loadingEvents;
     private int eventLoadVersion;
-    private HRM.Services.OvertimeClockOption? SelectedStart=>clocks.FirstOrDefault(c=>c.Id==startId);
-    private HRM.Services.OvertimeClockOption? SelectedEnd=>clocks.FirstOrDefault(c=>c.Id==endId);
-    private void SelectStart(int id){startId=id;if(SelectedEnd!=null&&SelectedEnd.Time<=SelectedStart!.Time)endId=0;}
-    private List<HRM.Services.OvertimeWorkRow> workRows=[];
-    private List<HRM.Services.OvertimeTaskOption> tasks=[];
-    private List<HRM.Services.OvertimeClockOption> clocks=[];
-    private readonly Dictionary<string,string> tabs=new(){{"Preapproval","OT preapproval"},{"Planned","Planned OT claim"},{"Unplanned","Unplanned OT claim"},{"ClockEvents","OT clock events"},{"Payroll","Approved & payroll"}};
+
+    private HRM.Services.OvertimeClockOption? SelectedStart => clocks.FirstOrDefault(c => c.Id == startId);
+    private HRM.Services.OvertimeClockOption? SelectedEnd => clocks.FirstOrDefault(c => c.Id == endId);
+
+    private void SelectStart(int id)
+    {
+        startId = id;
+        if (SelectedEnd != null && SelectedEnd.Time <= SelectedStart!.Time) endId = 0;
+    }
+
+    private List<HRM.Services.OvertimeWorkRow> workRows = [];
+    private List<HRM.Services.OvertimeTaskOption> tasks = [];
+    private List<HRM.Services.OvertimeClockOption> clocks = [];
+
+    private readonly Dictionary<string, string> tabs = new()
+    {
+        { "Preapproval", "OT Preapproval" },
+        { "Planned", "Planned Claim" },
+        { "Unplanned", "Unplanned Claim" },
+        { "ClockEvents", "Missing Punches" },
+        { "Payroll", "Approved & Payroll" }
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (RequestId is > 0) selectedRequestId = RequestId;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(saved, out var val))
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
+
     private async Task ChangeTab(string value)
     {
-        tab=value;error=null;startId=endId=0;
-        if(value=="Planned")
+        tab = value;
+        error = null;
+        startId = endId = 0;
+        if (value == "Planned")
         {
-            try{tasks=await Requests.LoadApprovedTasksAsync();if(!tasks.Any(t=>t.Id==taskId&&t.RequestId==preapprovalId))taskId=0;}
-            catch(Exception ex){tasks=[];taskId=preapprovalId=0;Fail(ex);return;}
+            try
+            {
+                tasks = await Requests.LoadApprovedTasksAsync();
+                if (!tasks.Any(t => t.Id == taskId && t.RequestId == preapprovalId)) taskId = 0;
+            }
+            catch (Exception ex)
+            {
+                tasks = [];
+                taskId = preapprovalId = 0;
+                Fail(ex);
+                return;
+            }
         }
-        if(value is "Planned" or "Unplanned")await LoadEvents();
+        if (value is "Planned" or "Unplanned") await LoadEvents();
     }
+
     private void SelectPreapproval(ChangeEventArgs e)
     {
-        preapprovalId=int.TryParse(e.Value?.ToString(),out var id)?id:0;
-        var choices=tasks.Where(t=>t.RequestId==preapprovalId).ToList();
-        taskId=choices.Count==1?choices[0].Id:0;error=null;
+        preapprovalId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        var choices = tasks.Where(t => t.RequestId == preapprovalId).ToList();
+        taskId = choices.Count == 1 ? choices[0].Id : 0;
+        error = null;
     }
-    private async Task DateChanged(ChangeEventArgs e){if(DateTime.TryParse(e.Value?.ToString(),out var value)){date=value.Date;await LoadEvents();}}
+
+    private async Task DateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var value))
+        {
+            date = value.Date;
+            await LoadEvents();
+        }
+    }
+
     private async Task LoadEvents()
     {
-        var version=++eventLoadVersion;var selectedDate=date;
-        startId=endId=0;clocks=[];loadingEvents=true;error=null;
-        try{var result=await Requests.LoadClockEventsAsync(selectedDate);if(version==eventLoadVersion)clocks=result;}
-        catch(Exception ex){if(version==eventLoadVersion)Fail(ex);}
-        finally{if(version==eventLoadVersion)loadingEvents=false;}
+        var version = ++eventLoadVersion;
+        var selectedDate = date;
+        startId = endId = 0;
+        clocks = [];
+        loadingEvents = true;
+        error = null;
+        try
+        {
+            var result = await Requests.LoadClockEventsAsync(selectedDate);
+            if (version == eventLoadVersion) clocks = result;
+        }
+        catch (Exception ex)
+        {
+            if (version == eventLoadVersion) Fail(ex);
+        }
+        finally
+        {
+            if (version == eventLoadVersion) loadingEvents = false;
+        }
     }
-    protected override Task OnInitializedAsync()=>LoadAsync();
-    private async Task LoadAsync(){busy=true;error=null;try{rows=await Requests.LoadAsync(PendingOnly);workRows=await Requests.LoadWorkAsync(PendingOnly);if(!PendingOnly)tasks=await Requests.LoadApprovedTasksAsync();foreach(var work in workRows)comments.TryAdd(work.Id,null);foreach(var row in rows){comments.TryAdd(row.Id,null);reasons[row.Id]=row.Reason;}if(!PendingOnly&&tab is "Planned" or "Unplanned")await LoadEvents();}catch(Exception ex){Fail(ex);}finally{busy=false;}}
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            rows = await Requests.LoadAsync(PendingOnly);
+            workRows = await Requests.LoadWorkAsync(PendingOnly);
+            if (!PendingOnly) tasks = await Requests.LoadApprovedTasksAsync();
+
+            foreach (var work in workRows) comments.TryAdd(work.Id, null);
+            foreach (var row in rows)
+            {
+                comments.TryAdd(row.Id, null);
+                reasons[row.Id] = row.Reason;
+            }
+
+            if (!PendingOnly && tab is "Planned" or "Unplanned") await LoadEvents();
+        }
+        catch (Exception ex)
+        {
+            Fail(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
     private Task SubmitAsync()
     {
-        if(tab=="Preapproval")return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,taskText.Split('\n').ToList()));
-        if(tab=="ClockEvents")
+        if (tab == "Preapproval")
+            return Execute(() => Requests.SubmitWorkAsync(tab, from, to, reason, taskText.Split('\n').ToList()));
+
+        if (tab == "ClockEvents")
         {
-            if(startTime is not { } start || endTime is not { } finish){error="Select the missing start and end times.";return Task.CompletedTask;}
-            return Execute(()=>Requests.SubmitWorkAsync(tab,from,to,reason,[],from.Date.Add(start.ToTimeSpan()),to.Date.Add(finish.ToTimeSpan())));
+            if (startTime is not { } start || endTime is not { } finish)
+            {
+                error = "Select the missing start and end times.";
+                return Task.CompletedTask;
+            }
+            return Execute(() => Requests.SubmitWorkAsync(tab, from, to, reason, [], from.Date.Add(start.ToTimeSpan()), to.Date.Add(finish.ToTimeSpan())));
         }
-        if(loadingEvents||SelectedStart==null||SelectedEnd==null){error="Select a saved clock event as the start and a later event as the end.";return Task.CompletedTask;}
-        if(tab=="Planned"&&taskId==0){error="Select an approved request and task.";return Task.CompletedTask;}
-        return Execute(()=>Requests.SubmitClaimAsync(startId,endId,reason,tab=="Planned"?taskId:null));
+
+        if (loadingEvents || SelectedStart == null || SelectedEnd == null)
+        {
+            error = "Select a saved clock event as the start and a later event as the end.";
+            return Task.CompletedTask;
+        }
+
+        if (tab == "Planned" && taskId == 0)
+        {
+            error = "Select an approved request and task.";
+            return Task.CompletedTask;
+        }
+
+        return Execute(() => Requests.SubmitClaimAsync(startId, endId, reason, tab == "Planned" ? taskId : null));
     }
-    private Task ActWork(HRM.Services.OvertimeWorkRow row,string action)=>!CanReview && action != "Cancel" ? Task.CompletedTask : Execute(()=>Requests.ActWorkAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
-    private Task Act(HRM.Services.OvertimeRow row,string action)=>!CanReview && (action != "Cancel" || !CanCancelInPortal(row)) ? Task.CompletedTask : Execute(()=>Requests.ActAsync(row.Id,row.StateId,action,comments.GetValueOrDefault(row.Id)));
-    private Task Resubmit(int id)=>Execute(()=>Requests.ResubmitClaimAsync(id,reasons.GetValueOrDefault(id,"")));
-    private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception ex){Fail(ex);}finally{busy=false;}if(saved)await LoadAsync();}
-    private void Fail(Exception ex){Logger.LogError(ex,"Overtime claim processing");error=ex is InvalidOperationException or UnauthorizedAccessException?ex.Message:"Overtime claims could not be loaded or saved. Please refresh or contact HR.";}
+
+    private Task ActWork(HRM.Services.OvertimeWorkRow row, string action) =>
+        !CanReview && action != "Cancel"
+            ? Task.CompletedTask
+            : Execute(() => Requests.ActWorkAsync(row.Id, row.StateId, action, comments.GetValueOrDefault(row.Id)));
+
+    private Task Act(HRM.Services.OvertimeRow row, string action) =>
+        !CanReview && (action != "Cancel" || !CanCancelInPortal(row))
+            ? Task.CompletedTask
+            : Execute(() => Requests.ActAsync(row.Id, row.StateId, action, comments.GetValueOrDefault(row.Id)));
+
+    private Task Resubmit(int id) =>
+        Execute(() => Requests.ResubmitClaimAsync(id, reasons.GetValueOrDefault(id, "")));
+
+    private async Task Execute(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        var saved = false;
+        try
+        {
+            var result = await action();
+            saved = result.Success;
+            if (saved) Toasts.Success(result.Message);
+            else error = result.Message;
+        }
+        catch (Exception ex)
+        {
+            Fail(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+        if (saved) await LoadAsync();
+    }
+
+    private void Fail(Exception ex)
+    {
+        Logger.LogError(ex, "Overtime claim processing");
+        error = ex is InvalidOperationException or UnauthorizedAccessException
+            ? ex.Message
+            : "Overtime claims could not be loaded or saved. Please refresh or contact HR.";
+    }
+
+    private static string GetStatusBadge(string status)
+    {
+        var s = status.ToLowerInvariant();
+        if (s.Contains("approved") || s.Contains("complete")) return "bg-emerald-100 text-emerald-800";
+        if (s.Contains("reject") || s.Contains("cancel") || s.Contains("decline")) return "bg-rose-100 text-rose-800";
+        if (s.Contains("pending") || s.Contains("processing") || s.Contains("review") || s.Contains("submitted")) return "bg-amber-100 text-amber-800";
+        return "bg-slate-100 text-slate-700";
+    }
 }
