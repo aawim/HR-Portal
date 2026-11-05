@@ -10,10 +10,12 @@
 @using HRM.Components.Admin.My.Workspace.Cards
 @using HRM.Components.Admin.My.Workspace.Staff
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
+@using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
 @inject ITeam TeamService
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 @inject ILeaveChangeService Leaves
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
+@inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations PositionService
 @inject NavigationManager Navigation
 @inject IJSRuntime JS
 @inject ILogger<StaffHubWorkspace> Logger
@@ -183,7 +185,7 @@
                 </span>
             </div>
             <div class="mt-2 flex flex-wrap gap-1.5">
-                <a href="/online/duty-roster" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                <a href="/admin/hr/work-planning/duty-roster" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
                     📅 Shift Roster
                 </a>
                 <a href="/admin/settings/organisations/teams" class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
@@ -194,7 +196,7 @@
                 </a>
             </div>
             <div class="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/80 text-[11px] text-slate-400 dark:text-slate-500">
-                Direct administrative workflows
+                Admin workflows &amp; scheduling
             </div>
         </div>
     </div>
@@ -386,13 +388,19 @@
                                 </div>
 
                                 <!-- Action Buttons -->
-                                <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px]">
+                                <div class="flex items-center justify-between gap-1.5 pt-1 border-t border-slate-100 dark:border-slate-800 text-[11px] flex-wrap">
                                     <button type="button"
                                             class="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 font-semibold hover:underline"
                                             @onclick="() => InspectStaff(staff.StaffId)">
                                         <span>👤 360° View</span>
                                     </button>
                                     <div class="flex items-center gap-1">
+                                        <button type="button"
+                                                class="rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 text-[10px] font-semibold border border-amber-200 dark:border-amber-800/40 transition"
+                                                title="Change Position (Approval Flow)"
+                                                @onclick="() => OpenPositionChangeModal(staff.StaffId, staff.FullName)">
+                                            Change Position
+                                        </button>
                                         <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/staff-transfer")"
                                            class="rounded px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600 text-[10px] font-medium transition"
                                            title="Manage Transfer">
@@ -466,6 +474,11 @@
                                         </td>
                                         <td class="p-2.5 text-right">
                                             <div class="inline-flex items-center gap-1.5">
+                                                <button type="button"
+                                                        class="rounded px-2 py-1 bg-amber-50 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 hover:bg-amber-100 text-[11px] font-semibold border border-amber-200 dark:border-amber-800/40 transition"
+                                                        @onclick="() => OpenPositionChangeModal(staff.StaffId, staff.FullName)">
+                                                    Change Position
+                                                </button>
                                                 <button type="button"
                                                         class="rounded px-2 py-1 bg-blue-50 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 text-[11px] font-semibold transition"
                                                         @onclick="() => InspectStaff(staff.StaffId)">
@@ -571,6 +584,11 @@
                             <span class="rounded-md bg-blue-100 dark:bg-blue-900/60 px-2 py-0.5 font-mono text-xs font-bold text-blue-800 dark:text-blue-200">
                                 ID: #@inspectedStaffId
                             </span>
+                            <button type="button"
+                                    class="rounded-lg bg-amber-600 hover:bg-amber-700 px-2.5 py-1 text-xs font-bold text-white shadow-xs transition"
+                                    @onclick="RequestPositionChangeForInspectedStaff">
+                                ⚡ Request Position Change
+                            </button>
                         </div>
 
                         <!-- Embedded Staff Tab Bar -->
@@ -743,7 +761,7 @@
                     <div class="rounded-xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800/40 p-6 text-center text-xs text-slate-500 dark:text-slate-400">
                         <p class="text-lg mb-1">📅</p>
                         <p class="font-medium text-slate-700 dark:text-slate-300">No duty swaps or coverage requests pending.</p>
-                        <a href="/online/duty-roster" class="mt-2 inline-block text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                        <a href="/admin/hr/work-planning/duty-roster" class="mt-2 inline-block text-blue-600 dark:text-blue-400 font-semibold hover:underline">
                             Open Duty Roster Schedule →
                         </a>
                     </div>
@@ -766,7 +784,7 @@
                                 </div>
                                 <div class="flex items-center justify-between pt-1 border-t border-slate-100 dark:border-slate-700/60 text-[10px]">
                                     <span class="font-mono text-slate-400">@row.Reference</span>
-                                    <a href="/online/duty-roster#requests" class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
+                                    <a href="/admin/hr/work-planning/duty-roster?tab=requests" class="text-blue-600 dark:text-blue-400 font-semibold hover:underline">
                                         Action in Roster →
                                     </a>
                                 </div>
@@ -811,6 +829,157 @@
         </aside>
 
     </div>
+
+    <!-- Position Change Modal (Strictly Through Approval Flow) -->
+    @if (showPositionChangeModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4">
+            <div class="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Request Position Change</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">@posModalStaffName (ID: #@posModalStaffId)</p>
+                    </div>
+                    <button type="button"
+                            class="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                            @onclick="ClosePositionChangeModal">
+                        ✕
+                    </button>
+                </div>
+
+                @if (posModalError != null)
+                {
+                    <div class="rounded-lg border border-rose-200 bg-rose-50 dark:bg-rose-950/40 p-2.5 text-xs text-rose-800 dark:text-rose-300">
+                        @posModalError
+                    </div>
+                }
+
+                @if (loadingPositionData)
+                {
+                    <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                        <div class="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                        Loading staff position and framework details…
+                    </div>
+                }
+                else if (posData != null)
+                {
+                    <div class="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2">
+                        <span class="text-base">ℹ️</span>
+                        <div>
+                            <span class="font-bold">Approval Flow Required:</span>
+                            This action initiates a formal <strong>Job Position Request</strong>. It must be reviewed and approved through the organizational approval flow before taking effect.
+                        </div>
+                    </div>
+
+                    @if (posCurrentAssignment != null)
+                    {
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-2.5 text-xs">
+                            <span class="font-semibold text-slate-700 dark:text-slate-300">Current Position:</span>
+                            <span class="font-bold text-slate-900 dark:text-slate-100 ml-1">@posCurrentAssignment.Name</span>
+                            <span class="text-slate-500 dark:text-slate-400 ml-1">(Job #@posCurrentAssignment.JobId · From @posCurrentAssignment.From.ToString("dd MMM yyyy"))</span>
+                        </div>
+                    }
+
+                    <form @onsubmit="SubmitPositionChangeAsync" @onsubmit:preventDefault class="space-y-3 text-xs">
+                        <div>
+                            <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Employment</label>
+                            <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                    @bind="posJobId" required>
+                                <option value="0">Select employment contract</option>
+                                @foreach (var job in posData.Jobs)
+                                {
+                                    <option value="@job.Id">@job.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Framework</label>
+                                <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                        @bind="posSelectedFrameworkId" @bind:after="OnPosFrameworkChanged" required>
+                                    <option value="0">Select framework</option>
+                                    @foreach (var fw in posData.Frameworks)
+                                    {
+                                        <option value="@fw.Id">@fw.Name</option>
+                                    }
+                                </select>
+                            </div>
+
+                            <div>
+                                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Position Matrix</label>
+                                <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                        @bind="posSelectedMatrixId" @bind:after="OnPosMatrixChanged" disabled="@(posSelectedFrameworkId == 0)" required>
+                                    <option value="0">Select position matrix</option>
+                                    @foreach (var matrix in posData.PositionMatrices.Where(x => x.FrameworkId == posSelectedFrameworkId))
+                                    {
+                                        <option value="@matrix.Id" disabled="@(matrix.AvailableSlots == 0)">
+                                            @matrix.Name (@matrix.AvailableSlots/@matrix.ApprovedSlots slots available)
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Vacant Position Slot</label>
+                            <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                    @bind="posSelectedPositionId" disabled="@(posSelectedMatrixId == 0)" required>
+                                <option value="0">Select vacant position</option>
+                                @foreach (var pos in posData.Positions.Where(p => p.FrameworkId == posSelectedFrameworkId && p.MatrixId == posSelectedMatrixId))
+                                {
+                                    <option value="@pos.Id">@pos.Name · #@pos.Id</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (posData.Positions.FirstOrDefault(x => x.Id == posSelectedPositionId)?.Pay is {} payDef && payDef.Steps.Count > 0)
+                        {
+                            <div>
+                                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Job Pay Step</label>
+                                <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                        @bind="posSelectedJobMatrixStepId">
+                                    <option value="">Select pay step</option>
+                                    @foreach (var s in payDef.Steps)
+                                    {
+                                        <option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDef.Currency</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+
+                        <div>
+                            <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Effective Date (From)</label>
+                            <input type="date"
+                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                   @bind="posFromDate" required />
+                        </div>
+
+                        <div>
+                            <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Reason / Justification</label>
+                            <textarea class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100"
+                                      rows="2" maxlength="500" placeholder="State the reason for this position change..."
+                                      @bind="posReason" required></textarea>
+                        </div>
+
+                        <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                            <button type="button"
+                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                                    @onclick="ClosePositionChangeModal"
+                                    disabled="@submittingPosChange">
+                                Cancel
+                            </button>
+                            <button type="submit"
+                                    class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
+                                    disabled="@submittingPosChange">
+                                @(submittingPosChange ? "Submitting for Approval…" : "Submit for Approval →")
+                            </button>
+                        </div>
+                    </form>
+                }
+            </div>
+        </div>
+    }
 </section>
 
 @code {
@@ -842,6 +1011,23 @@
     private bool isFullWidth;
     private int? inspectedStaffId;
     private WorkspaceTab inspectedStaffTab = WorkspaceTab.Overview;
+
+    // Position Change Modal State (Through Approval Flow)
+    private bool showPositionChangeModal;
+    private bool loadingPositionData;
+    private bool submittingPosChange;
+    private int? posModalStaffId;
+    private string posModalStaffName = "";
+    private string? posModalError;
+    private Data? posData;
+    private Assignment? posCurrentAssignment;
+    private int posJobId;
+    private int posSelectedFrameworkId;
+    private int posSelectedMatrixId;
+    private int posSelectedPositionId;
+    private int? posSelectedJobMatrixStepId;
+    private DateTime posFromDate = DateTime.Today.AddDays(1);
+    private string posReason = "";
 
     // Flattened Staff representation for filtering
     public sealed record TeamStaffFlattened(int StaffId, string FullName, bool IsSuperVisor, int TeamId, string TeamName);
@@ -1028,6 +1214,124 @@
         finally
         {
             executingAction = false;
+        }
+    }
+
+    private void RequestPositionChangeForInspectedStaff()
+    {
+        if (!inspectedStaffId.HasValue) return;
+        var name = allTeamStaff.FirstOrDefault(s => s.StaffId == inspectedStaffId)?.FullName ?? $"Staff #{inspectedStaffId}";
+        _ = OpenPositionChangeModal(inspectedStaffId.Value, name);
+    }
+
+    private async Task OpenPositionChangeModal(int staffId, string staffName)
+    {
+        posModalStaffId = staffId;
+        posModalStaffName = staffName;
+        posModalError = null;
+        loadingPositionData = true;
+        showPositionChangeModal = true;
+        posJobId = 0;
+        posSelectedFrameworkId = 0;
+        posSelectedMatrixId = 0;
+        posSelectedPositionId = 0;
+        posSelectedJobMatrixStepId = null;
+        posFromDate = DateTime.Today.AddDays(1);
+        posReason = "";
+
+        try
+        {
+            posData = await PositionService.LoadAsync(staffId);
+            posCurrentAssignment = posData.Assignments.FirstOrDefault(a => a.StateId == 4 && (!a.To.HasValue || a.To.Value.Date >= DateTime.Today));
+            posJobId = posCurrentAssignment?.JobId ?? posData.Jobs.FirstOrDefault()?.Id ?? 0;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load positions for modal {StaffId}", staffId);
+            posModalError = "Unable to load position options for this staff member. Please retry.";
+        }
+        finally
+        {
+            loadingPositionData = false;
+        }
+    }
+
+    private void ClosePositionChangeModal()
+    {
+        showPositionChangeModal = false;
+        posData = null;
+        posCurrentAssignment = null;
+    }
+
+    private void OnPosFrameworkChanged()
+    {
+        posSelectedMatrixId = 0;
+        posSelectedPositionId = 0;
+        posSelectedJobMatrixStepId = null;
+    }
+
+    private void OnPosMatrixChanged()
+    {
+        posSelectedPositionId = 0;
+        posSelectedJobMatrixStepId = null;
+    }
+
+    private async Task SubmitPositionChangeAsync()
+    {
+        if (submittingPosChange || !posModalStaffId.HasValue || posData == null) return;
+
+        if (posJobId == 0)
+        {
+            posModalError = "Please select an employment contract.";
+            return;
+        }
+
+        if (posSelectedFrameworkId == 0 || posSelectedMatrixId == 0 || posSelectedPositionId == 0)
+        {
+            posModalError = "Please select a framework, matrix, and vacant position slot.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(posReason))
+        {
+            posModalError = "Please provide a reason / justification for this position change.";
+            return;
+        }
+
+        submittingPosChange = true;
+        posModalError = null;
+
+        try
+        {
+            await PositionService.SaveAsync(
+                posModalStaffId.Value,
+                posJobId,
+                posSelectedPositionId,
+                posFromDate,
+                null,
+                posReason,
+                posCurrentAssignment,
+                change: true,
+                remove: false,
+                posSelectedJobMatrixStepId,
+                terminationRequestTypeId: null
+            );
+
+            ToastService.Success("Position change request submitted for approval.");
+            ClosePositionChangeModal();
+
+            // Refresh requests and show position tab so approver/supervisor sees it immediately
+            activeRequestTab = "position";
+            await RefreshRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to submit position change for staff {StaffId}", posModalStaffId);
+            posModalError = ex.Message;
+        }
+        finally
+        {
+            submittingPosChange = false;
         }
     }
 
