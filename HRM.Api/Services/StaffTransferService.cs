@@ -813,9 +813,56 @@ public sealed class StaffTransferService(
     {
         var userAccount = await db.Users.AsNoTracking()
             .Where(u => u.BusinessEntityID == individualId && u.IsActive)
-            .Select(u => new { u.AdminPortalAccessEnabled })
+            .Select(u => new { u.UserId, u.AdminPortalAccessEnabled })
             .FirstOrDefaultAsync();
         dto.PortalAccessContext = userAccount?.AdminPortalAccessEnabled == true ? "AdminAndOnline" : "Online";
+
+        // Query user's admin access grant requests to populate AdminAccessInfo
+        var adminAccessInfo = new StaffTransferAdminAccessInfoDto
+        {
+            CurrentPortalAccess = userAccount?.AdminPortalAccessEnabled == true ? "Admin & Online Portal Context" : "Online Portal Context Only (Standard Staff)",
+            IsAdminEnabled = userAccount?.AdminPortalAccessEnabled == true
+        };
+
+        if (userAccount is not null)
+        {
+            var grantRequest = await db.AdminAccessGrantRequests.AsNoTracking()
+                .Include(r => r.Request).ThenInclude(req => req.RequestState)
+                .Where(r => r.UserId == userAccount.UserId && r.OrganisationId == org)
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .FirstOrDefaultAsync();
+
+            if (grantRequest is not null)
+            {
+                var wfInstance = await db.WfRequestInstances.AsNoTracking()
+                    .Include(w => w.CurrentStage).ThenInclude(s => s!.WorkflowStage)
+                    .FirstOrDefaultAsync(w => w.RequestId == grantRequest.RequestId);
+
+                adminAccessInfo.RequestId = grantRequest.RequestId;
+                adminAccessInfo.ReferenceNumber = grantRequest.Request?.ReferenceNumber ?? $"AAG-{grantRequest.RequestId}";
+                adminAccessInfo.HasPendingRequest = grantRequest.IsOpen;
+                adminAccessInfo.Reason = grantRequest.Reason;
+                adminAccessInfo.RequestedAtUtc = grantRequest.CreatedAtUtc;
+                adminAccessInfo.StageName = wfInstance?.CurrentStage?.WorkflowStage?.StageName ?? "";
+
+                if (grantRequest.IsOpen)
+                {
+                    adminAccessInfo.RequestedAccess = "Admin & Online Portal Context Grant (Pending Approval)";
+                    adminAccessInfo.RequestStatus = string.IsNullOrWhiteSpace(adminAccessInfo.StageName)
+                        ? (grantRequest.Request?.RequestState?.StateName?.Trim() ?? "Pending Approval")
+                        : $"Pending: {adminAccessInfo.StageName}";
+                    adminAccessInfo.IsApprovalComplete = false;
+                }
+                else
+                {
+                    var isSuccess = wfInstance?.WorkflowStatus == "Approved" || grantRequest.Request?.RequestStateId == 4;
+                    adminAccessInfo.RequestedAccess = isSuccess ? "Admin & Online Portal Context" : "Access Request Closed";
+                    adminAccessInfo.RequestStatus = isSuccess ? "Approved & Granted" : (grantRequest.Request?.RequestState?.StateName?.Trim() ?? "Closed");
+                    adminAccessInfo.IsApprovalComplete = true;
+                }
+            }
+        }
+        dto.AdminAccessInfo = adminAccessInfo;
 
         // 1. Work Handover requests from LeaveRequests / LeaveWorkHandOvers / LeaveHandoverReviews (exclude Cancelled)
         var handoverLeaves = await db.LeaveRequests.AsNoTracking()
@@ -1650,6 +1697,37 @@ public sealed class StaffTransferService(
 
             if (input.SubmitImmediately)
             {
+                // Gate 1: Check Admin Portal Access Grant status if a grant request exists
+                var staffUser = await db.Users.AsNoTracking()
+                    .Where(u => u.BusinessEntityID == transfer.IndividualId && u.IsActive)
+                    .Select(u => new { u.UserId, u.AdminPortalAccessEnabled })
+                    .FirstOrDefaultAsync();
+
+                if (staffUser is not null)
+                {
+                    var hasPendingAdminGrant = await db.AdminAccessGrantRequests.AsNoTracking()
+                        .AnyAsync(r => r.UserId == staffUser.UserId && r.OrganisationId == transfer.FromOrganisationId && r.IsOpen);
+
+                    if (hasPendingAdminGrant)
+                    {
+                        throw new InvalidOperationException("The employee has a pending Admin Portal Access Grant request that must be approved before submitting the transfer for employee confirmation.");
+                    }
+                }
+
+                // Gate 2: Check Door Access changes - any modified door access must be provisioned
+                var unprovisionedDoors = await db.StaffTransferDoorAccesses.AsNoTracking()
+                    .Where(d => d.StaffTransferId == transfer.StaffTransferId &&
+                                d.TransitionAction != StaffTransferDoorAccessStates.ActionRetainCommon &&
+                                d.ProvisioningState != StaffTransferDoorAccessStates.StateProvisioned &&
+                                d.ProvisioningState != StaffTransferDoorAccessStates.StateVerified &&
+                                d.ProvisioningState != StaffTransferDoorAccessStates.StateRevoked)
+                    .ToListAsync();
+
+                if (unprovisionedDoors.Count > 0)
+                {
+                    throw new InvalidOperationException("Physical door access changes must be confirmed or provisioned before submitting the transfer for employee confirmation.");
+                }
+
                 if (!transfer.RequestId.HasValue)
                 {
                     var reqType = await db.RequestTypes.SingleOrDefaultAsync(t => t.TypeName == RequestTypeName)

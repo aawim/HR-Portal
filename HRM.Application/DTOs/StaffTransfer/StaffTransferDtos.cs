@@ -334,6 +334,7 @@ public sealed class StaffTransferDetailDto
     public bool CanActivate { get; set; }
     public bool CanExportRestrictedPdf { get; set; }
     public string PortalAccessContext { get; set; } = "Online";
+    public StaffTransferAdminAccessInfoDto AdminAccessInfo { get; set; } = new();
 
     public StaffTransferStaffTabDto Staff { get; set; } = new();
     public StaffTransferJobTabDto Job { get; set; } = new();
@@ -366,6 +367,24 @@ public sealed record StaffTransferDocumentSummaryDto(
     int? ConfirmedVersion,
     string Sha256Hash,
     DateTime GeneratedAtUtc);
+
+/// <summary>
+/// Status of staff member's Admin Portal Access and pending grant approval request.
+/// </summary>
+public sealed class StaffTransferAdminAccessInfoDto
+{
+    public string CurrentPortalAccess { get; set; } = "Online Portal Only";
+    public bool IsAdminEnabled { get; set; }
+    public string RequestedAccess { get; set; } = "No Pending Access Request";
+    public string RequestStatus { get; set; } = "None";
+    public string StageName { get; set; } = "";
+    public int? RequestId { get; set; }
+    public string? ReferenceNumber { get; set; }
+    public bool HasPendingRequest { get; set; }
+    public bool IsApprovalComplete { get; set; } = true;
+    public string? Reason { get; set; }
+    public DateTime? RequestedAtUtc { get; set; }
+}
 
 /// <summary>
 /// Input payload for saving a draft or submitting a transfer request across Tabs 1–6.
