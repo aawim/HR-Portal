@@ -286,14 +286,14 @@
                         @if (row.Actions.Count > 0)
                         {
                             <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5">
-                                <span class="font-bold text-slate-800">@ActionHeading(row)</span>
+                                <span class="font-bold text-slate-800 px-1 py-0.5">@ActionHeading(row)</span>
 
                                 @if (row.Actions.Contains("ConfirmReturn"))
                                 {
                                     <div class="grid gap-2 sm:grid-cols-2 bg-white p-2.5 rounded-lg border border-slate-200">
                                         <div>
-                                            <label class="block font-medium text-slate-700 mb-1">Return Condition (Inspected by HR) *</label>
-                                            <select class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="returnCondition">
+                                            <label class="block font-medium text-slate-700 p-1 mb-1">Return Condition (Inspected by HR) *</label>
+                                            <select class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="returnCondition">
                                                 <option value="Good">Good (Ready for Reissue)</option>
                                                 <option value="Fair">Fair / Normal Wear</option>
                                                 <option value="Damaged">Damaged (Requires Repair)</option>
@@ -302,8 +302,8 @@
                                             </select>
                                         </div>
                                         <div>
-                                            <label class="block font-medium text-slate-700 mb-1">Damage / Inspection Notes</label>
-                                            <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                            <label class="block font-medium text-slate-700 p-1 mb-1">Damage / Inspection Notes</label>
+                                            <input class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs"
                                                    maxlength="1000"
                                                    placeholder="Specify damages or observations..."
                                                    @bind="comments[row.RequestId]" />
@@ -312,7 +312,7 @@
                                 }
                                 else
                                 {
-                                    <input class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                    <input class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs"
                                            maxlength="1000"
                                            placeholder="Action comment or reason (required for reject/decline)..."
                                            @bind="comments[row.RequestId]" />
@@ -366,13 +366,13 @@
                 <fieldset disabled="@busy" class="flex flex-col gap-3 text-xs">
                     <div class="flex items-center justify-between border-b border-slate-200 pb-2">
                         <div>
-                            <legend class="text-sm font-bold text-slate-900">
+                            <legend class="text-sm font-bold text-slate-800">
                                 @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} for {replacingReference}" :
                                     form.Kind == "Issue" ? "Direct Item / Asset Assignment (HR)" :
                                     PersonalItemsOnly ? "Request Personal / Consumable Items" :
                                     "New Item Request")
                             </legend>
-                            <p class="text-[11px] text-slate-500 mt-0.5">
+                            <p class="text-[11px] text-slate-500">
                                 @(form.Kind is "Replacement" or "Upgrade"
                                     ? "HR will assign the replacement asset. Once accepted, the previous equipment will be returned to HR."
                                     : form.Kind == "Issue"
@@ -387,12 +387,12 @@
                     </div>
 
                     <!-- Header Options: Purpose & Source -->
-                    <div class="grid gap-3 sm:grid-cols-2">
+                    <div class="grid gap-2.5 sm:grid-cols-2">
                         @if (!JobRelatedOnly && !PersonalItemsOnly && form.Kind == "Requisition")
                         {
                             <div>
-                                <label class="block font-medium text-slate-700">Request Purpose *</label>
-                                <select class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs bg-white" @bind="form.Purpose">
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Request Purpose *</label>
+                                <select class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs bg-white text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @bind="form.Purpose">
                                     <option value="Common">Personal Use (Notebook, Diary, Tissues…)</option>
                                     <option value="Job related">Job-Related Item / Asset (Monitor, Hardware…)</option>
                                 </select>
@@ -400,38 +400,38 @@
                         }
 
                         <div class="@(JobRelatedOnly || PersonalItemsOnly || form.Kind != "Requisition" ? "sm:col-span-2" : "")">
-                            <label class="block font-medium text-slate-700">Item Catalogue Source</label>
-                            <div class="mt-1 flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Item Catalogue Source</label>
+                            <div class="flex rounded-md border border-slate-300 p-0.5 bg-slate-50">
                                 <button type="button"
                                         @onclick='() => itemSource = "catalogue"'
-                                        class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "catalogue" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                                        class="flex-1 rounded py-1 text-xs font-semibold transition @(itemSource == "catalogue" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")">
                                     From Catalogue
                                 </button>
                                 <button type="button"
                                         @onclick='() => itemSource = "custom"'
-                                        class="flex-1 rounded-md py-1 text-xs font-semibold transition @(itemSource == "custom" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900")">
+                                        class="flex-1 rounded py-1 text-xs font-semibold transition @(itemSource == "custom" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")">
                                     Custom / Manual Entry
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Add Line Item Card -->
-                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
-                        <div class="flex items-center justify-between">
-                            <span class="font-bold text-slate-800">Add Line Item</span>
+                    <!-- Add Line Item Fields sitting flat on main card -->
+                    <div class="space-y-2.5 pt-0.5">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Add Line Item</span>
                             @if (IsHrAssign)
                             {
-                                <span class="text-[11px] text-slate-500 font-mono">HR Direct Assignment</span>
+                                <span class="text-[11px] text-blue-600 font-mono font-medium">HR Direct Assignment</span>
                             }
                         </div>
 
                         @if (itemSource == "catalogue")
                         {
-                            <div class="grid gap-2 sm:grid-cols-2">
+                            <div class="grid gap-2.5 sm:grid-cols-2">
                                 <div>
-                                    <label class="block font-medium text-slate-700">Select Item *</label>
-                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Select Item *</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             value="@selectedCatalogueItemId"
                                             @onchange="OnCatalogueItemChanged">
                                         <option value="0">Choose from active catalogue...</option>
@@ -452,8 +452,8 @@
                                 @if (IsHrAssign && availableUnits.Count > 0)
                                 {
                                     <div>
-                                        <label class="block font-medium text-slate-700">Registered Asset Unit</label>
-                                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono"
+                                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Registered Asset Unit</label>
+                                        <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                                 value="@selectedItemUnitId"
                                                 @onchange="OnUnitChanged">
                                             <option value="0">Choose registered inventory unit...</option>
@@ -470,10 +470,10 @@
                         }
                         else
                         {
-                            <div class="grid gap-2 sm:grid-cols-2">
+                            <div class="grid gap-2.5 sm:grid-cols-2">
                                 <div>
-                                    <label class="block font-medium text-slate-700">Previously Requested Item</label>
-                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs"
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Previously Requested Item</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                             @bind="selectedName">
                                         <option value="">Select previously used item name...</option>
                                         @foreach (var name in previousNames)
@@ -483,8 +483,8 @@
                                     </select>
                                 </div>
                                 <div>
-                                    <label class="block font-medium text-slate-700">New Item Name *</label>
-                                    <input class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">New Item Name *</label>
+                                    <input class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                            maxlength="200"
                                            @bind="newName"
                                            placeholder="e.g. Dell Latitude 5420, Wireless Mouse, Notebook" />
@@ -492,37 +492,32 @@
                             </div>
                         }
 
-                        <!--
-                            IMPORTANT WORKFLOW RULE:
-                            - HR Assigning: Enters Inventory #, Serial #, and Item State (Brand New, Used, Fair).
-                            - Staff Requesting: Does NOT enter Inventory #, Serial #, or Condition.
-                        -->
                         @if (IsHrAssign)
                         {
-                            <div class="grid gap-2 sm:grid-cols-3">
+                            <div class="grid gap-2.5 sm:grid-cols-3">
                                 <div>
-                                    <label class="block font-medium text-slate-700">
-                                        Inventory Number <span class="font-normal text-slate-500">(Optional)</span>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                        Inventory Number <span class="font-normal text-slate-400 lowercase">(optional)</span>
                                     </label>
                                     <input type="text"
-                                           class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                           class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                            maxlength="100"
                                            @bind="lineInventoryNumber"
                                            placeholder="e.g. INV-2026-0042" />
                                 </div>
                                 <div>
-                                    <label class="block font-medium text-slate-700">
-                                        Serial Number <span class="font-normal text-slate-500">(Optional)</span>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                        Serial Number <span class="font-normal text-slate-400 lowercase">(optional)</span>
                                     </label>
                                     <input type="text"
-                                           class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs font-mono"
+                                           class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                            maxlength="120"
                                            @bind="lineSerialNumber"
                                            placeholder="e.g. SN-8849204A" />
                                 </div>
                                 <div>
-                                    <label class="block font-medium text-slate-700">Item State at Issue</label>
-                                    <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs" @bind="lineCondition">
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Item State at Issue</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @bind="lineCondition">
                                         <option value="Brand New">Brand New</option>
                                         <option value="Good">Good / Like New</option>
                                         <option value="Used">Used / Refurbished</option>
@@ -533,30 +528,30 @@
                         }
 
                         <!-- Quantity and Accessories / Remarks -->
-                        <div class="grid gap-2 sm:grid-cols-2">
+                        <div class="grid gap-2.5 sm:grid-cols-2">
                             <div>
-                                <label class="block font-medium text-slate-700">Quantity</label>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Quantity</label>
                                 <input type="number"
                                        min="1"
                                        max="1000"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                       class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                        @bind="lineQuantity" />
                             </div>
                             <div>
-                                <label class="block font-medium text-slate-700">
-                                    Accessories / Remarks <span class="font-normal text-slate-500">(Optional)</span>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                    Accessories / Remarks <span class="font-normal text-slate-400 lowercase">(optional)</span>
                                 </label>
                                 <input type="text"
-                                       class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"
+                                       class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                        maxlength="500"
                                        @bind="lineRemarks"
                                        placeholder="e.g. 65W charger, carry sleeve, special specs" />
                             </div>
                         </div>
 
-                        <div class="flex justify-end pt-1">
+                        <div class="flex justify-end pt-0.5">
                             <button type="button"
-                                    class="inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors shadow-sm"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 transition shadow-xs"
                                     @onclick="AddLine">
                                 <span>+ Add Item</span>
                             </button>
@@ -566,76 +561,81 @@
                     <!-- Drafted Lines Review -->
                     @if (form.Lines.Count > 0)
                     {
-                        <div class="flex flex-col gap-1.5">
-                            <div class="flex items-center justify-between font-medium text-slate-700">
+                        <div class="space-y-1.5 pt-1.5 border-t border-slate-100">
+                            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                                 <span>Items in this @(form.Kind == "Issue" ? "Assignment" : "Requisition") (@form.Lines.Count)</span>
-                                <span class="text-[11px] text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
+                                <span class="text-[11px] font-normal normal-case text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
                             </div>
-                            <div class="flex flex-col gap-1.5 max-h-60 overflow-y-auto">
-                                @foreach (var line in form.Lines.ToList())
-                                {
-                                    <div class="rounded-xl border border-slate-200 bg-white p-2.5 flex flex-wrap items-center justify-between gap-2 shadow-2xs" @key="line">
-                                        <div class="space-y-1 min-w-0 flex-1">
-                                            <div class="flex flex-wrap items-center gap-1.5">
-                                                <strong class="text-slate-900">@line.ItemName</strong>
-                                                <span class="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700 text-[10px]">Qty: @line.Quantity</span>
-                                                @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
-                                                {
-                                                    <span class="rounded-md bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
-                                                        #@line.InventoryNumber
-                                                    </span>
-                                                }
-                                                @if (!string.IsNullOrWhiteSpace(line.SerialNumber))
-                                                {
-                                                    <span class="rounded-md bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 font-mono text-[10px] text-indigo-700">
-                                                        S/N: @line.SerialNumber
-                                                    </span>
-                                                }
-                                                @if (IsHrAssign && !string.IsNullOrWhiteSpace(line.Condition))
-                                                {
-                                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">@line.Condition</span>
-                                                }
-                                            </div>
-                                            @if (!string.IsNullOrWhiteSpace(line.Remarks))
-                                            {
-                                                <p class="text-[11px] text-slate-500 italic">Remarks: @line.Remarks</p>
-                                            }
-                                        </div>
-                                        <button type="button"
-                                                class="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 text-xs font-semibold transition"
-                                                @onclick="() => RemoveLine(line)">
-                                            ✕ Remove
-                                        </button>
-                                    </div>
-                                }
+                            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                                        <tr>
+                                            <th class="py-1.5 px-2.5">Item</th>
+                                            <th class="py-1.5 px-2 text-center">Qty</th>
+                                            <th class="py-1.5 px-2.5">Allocation / State</th>
+                                            <th class="py-1.5 px-2.5">Remarks</th>
+                                            <th class="py-1.5 px-2.5 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var line in form.Lines.ToList())
+                                        {
+                                            <tr class="hover:bg-slate-50/50" @key="line">
+                                                <td class="py-1.5 px-2.5 font-semibold text-slate-800">@line.ItemName</td>
+                                                <td class="py-1.5 px-2 text-center font-medium">@line.Quantity</td>
+                                                <td class="py-1.5 px-2.5">
+                                                    @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
+                                                    {
+                                                        <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
+                                                            #@line.InventoryNumber
+                                                        </span>
+                                                    }
+                                                    @if (IsHrAssign && !string.IsNullOrWhiteSpace(line.Condition))
+                                                    {
+                                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 ml-1">@line.Condition</span>
+                                                    }
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-slate-600 truncate max-w-xs">@(line.Remarks ?? "—")</td>
+                                                <td class="py-1.5 px-2.5 text-right">
+                                                    <button type="button"
+                                                            class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]"
+                                                            @onclick="() => RemoveLine(line)">
+                                                        ✕ Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
                             </div>
                         </div>
                     }
 
                     <!-- Reason / Justification -->
                     <div>
-                        <label class="block font-medium text-slate-700">
-                            Reason / Justification *
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Business Justification / Reason *
                         </label>
-                        <textarea class="mt-1 w-full rounded-lg border border-slate-300 p-2.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        <textarea class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                   maxlength="1000"
                                   rows="2"
                                   placeholder="Provide the purpose or justification for this request..."
                                   @bind="form.Reason"></textarea>
                     </div>
 
-                    <!-- Form Actions -->
-                    <div class="flex items-center gap-2 pt-2 border-t border-slate-200">
-                        <button class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                    <!-- Action Row (Footer Strip) -->
+                    <div class="flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-200 bg-slate-50 px-4 py-2.5 -mx-4 -mb-4 rounded-b-2xl">
+                        <button type="button"
+                                class="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                @onclick="ResetForm">
+                            Reset Form
+                        </button>
+                        <button type="button"
+                                class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition"
                                 disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))"
                                 @onclick="Submit">
                             <span>✓</span>
                             <span>@(form.Kind == "Issue" ? "Assign to Staff" : form.Kind is "Replacement" or "Upgrade" ? $"Submit {form.Kind} Request" : "Submit to HR")</span>
-                        </button>
-                        <button type="button"
-                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                                @onclick="ResetForm">
-                            Reset Form
                         </button>
                     </div>
                 </fieldset>
@@ -667,7 +667,7 @@
             <!-- Search & Filters Container -->
             <div class="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs flex flex-col gap-2">
                 <input type="text"
-                       class="w-full rounded-lg border border-slate-300 bg-slate-50/50 px-2.5 py-1.5 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                       class="w-full rounded-lg border border-slate-300 bg-slate-50/50 p-1 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
                        placeholder="Search reference, item, inv #..."
                        @bind="searchTerm"
                        @bind:event="oninput" />

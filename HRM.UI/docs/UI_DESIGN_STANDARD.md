@@ -134,9 +134,11 @@ The standard multi-panel layout uses CSS Grid with explicit minimum sizing to av
   - Inactive: `text-slate-600 hover:text-slate-900`
 
 ### Forms & Input Controls
-- **Labels**: `block text-xs font-medium text-slate-700` (or `font-semibold text-slate-800`).
+- **Labels & Sub-headings**:
+  - Field Labels: `block text-xs font-medium text-slate-700 p-1` (or `font-semibold text-slate-800 p-1`). Standardize on `p-1` for labels and subheadings to prevent `p-0` tightness above input controls.
+  - Sub-card Headings: `font-bold text-slate-800 p-1`
 - **Input / Select / Textarea**:
-  - Base: `mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`
+  - Base: `mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500`
 - **Validation & Error Banners**:
   - Alert: `flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800`
 - **Sub-cards / Fieldsets within Forms**:
