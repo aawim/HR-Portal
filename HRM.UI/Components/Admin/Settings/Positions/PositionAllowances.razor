@@ -1,30 +1,257 @@
 @using HRM.Application.Contracts.Pages
 @inject IStaffFinance Finance
 @inject HRM.Services.ToastService Toasts
-<section class="space-y-3 text-sm position-allowances">
-    <h2 class="text-xl font-semibold">Required position allowances</h2>
-    @if(error!=null){<p role="alert">@error</p>}
-    @if(config?.CanConfigure==true)
+
+<section class="space-y-4 w-full min-w-0 p-2 position-allowances">
+    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">Position Allowances</h2>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                    Required Rules
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Configure mandatory allowances assigned by position.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+            <a href="/admin/settings/positions/manage-positions"
+               class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
+                <span>💼</span>
+                <span>Manage Positions</span>
+            </a>
+        </div>
+    </header>
+
+    @if (error != null)
     {
-        <fieldset disabled="@busy" class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 rounded-xl border p-3">
-            <label>Position<select @bind="position"><option value="0">Select</option>@foreach(var p in config.Positions){<option value="@p.Id">@p.Name</option>}</select></label>
-            <label>Allowance<select @bind="type"><option value="0">Select</option>@foreach(var t in config.AllowanceTypes){<option value="@t.Id">@t.Name</option>}</select></label>
-            <label>Currency<select @bind="currency"><option value="0">Select</option>@foreach(var c in config.Currencies){<option value="@c.Id">@c.Name</option>}</select></label>
-            <label>Amount<InputNumber @bind-Value="amount" step="0.01" min="0.01" /></label>
-            <label>Frequency<select @bind="frequency"><option value="1">Monthly</option><option value="6">Six-monthly</option><option value="12">Annually</option></select></label>
-            <label>Multiple positions<select @bind="multiple"><option value="Once">Once per person</option><option value="Highest">Highest entitlement</option><option value="Stack">Each position</option></select></label>
-            <label>From<InputDate @bind-Value="from" /></label><label>Through (optional)<InputDate @bind-Value="to" /></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end" @onclick="SaveRule">Add required allowance</button>
-        </fieldset>
-        <div class="overflow-auto"><table class="w-full"><thead><tr><th>Position / allowance</th><th>Amount</th><th>Effective period</th><th>End rule</th></tr></thead><tbody>@foreach(var r in config.Rules){var endDate=endDates[r.Id];<tr @key="r.Id"><td>@r.Position · @r.Allowance</td><td>@r.Rule.Amount.ToString("N2")</td><td>@r.Rule.FromDate.ToString("dd MMM yyyy") – @(r.Rule.ToDate?.ToString("dd MMM yyyy")??"Ongoing")</td><td><InputDate @bind-Value="endDate.Value" /><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="()=>EndRule(r.Id)">End</button></td></tr>}</tbody></table></div>
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
     }
-    else if(!busy){<p>Finance configuration permission is required to configure position allowances.</p>}
+
+    @if (config?.CanConfigure == true)
+    {
+        <fieldset disabled="@busy" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+            <div class="border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">Add Required Position Allowance</h3>
+                <p class="text-xs text-slate-500">Define allowance rules that automatically apply to staff assigned to this position.</p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Position <span class="text-rose-500">*</span></label>
+                    <select @bind="position" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0">Select Position</option>
+                        @foreach (var p in config.Positions)
+                        {
+                            <option value="@p.Id">@p.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Allowance Type <span class="text-rose-500">*</span></label>
+                    <select @bind="type" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0">Select Allowance</option>
+                        @foreach (var t in config.AllowanceTypes)
+                        {
+                            <option value="@t.Id">@t.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Currency</label>
+                    <select @bind="currency" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0">Select Currency</option>
+                        @foreach (var c in config.Currencies)
+                        {
+                            <option value="@c.Id">@c.Name</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Amount <span class="text-rose-500">*</span></label>
+                    <InputNumber @bind-Value="amount" step="0.01" min="0.01" placeholder="0.00" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Frequency</label>
+                    <select @bind="frequency" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="1">Monthly</option>
+                        <option value="6">Six-monthly</option>
+                        <option value="12">Annually</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Multiple Positions Rule</label>
+                    <select @bind="multiple" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="Once">Once per person</option>
+                        <option value="Highest">Highest entitlement</option>
+                        <option value="Stack">Each position</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Effective From <span class="text-rose-500">*</span></label>
+                    <InputDate @bind-Value="from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Through (Optional)</label>
+                    <InputDate @bind-Value="to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+
+                <div class="flex items-end">
+                    <button type="button"
+                            class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(position == 0 || type == 0 || amount <= 0 || busy)"
+                            @onclick="SaveRule">
+                        <span>＋</span>
+                        <span>Add Required Allowance</span>
+                    </button>
+                </div>
+            </div>
+        </fieldset>
+
+        <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div class="border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">Configured Position Allowance Rules (@config.Rules.Count)</h3>
+                <p class="text-xs text-slate-500">Active and ongoing position allowance mappings.</p>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left text-xs">
+                    <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                        <tr>
+                            <th class="px-3 py-2.5">Position / Allowance</th>
+                            <th class="px-3 py-2.5">Amount</th>
+                            <th class="px-3 py-2.5">Effective Period</th>
+                            <th class="px-3 py-2.5 text-right">End Rule</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @if (config.Rules.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="4" class="px-4 py-8 text-center text-xs text-slate-400">
+                                    No position allowance rules configured yet.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var r in config.Rules)
+                            {
+                                var endDate = endDates[r.Id];
+                                <tr @key="r.Id" class="hover:bg-slate-50/50 transition">
+                                    <td class="px-3 py-2.5">
+                                        <div class="font-bold text-slate-900">@r.Position</div>
+                                        <div class="text-[11px] text-slate-500">@r.Allowance</div>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="font-mono font-bold text-slate-900">@r.Rule.Amount.ToString("N2")</span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-slate-600">
+                                        <span class="text-xs font-mono">
+                                            @r.Rule.FromDate.ToString("dd MMM yyyy") – @(r.Rule.ToDate?.ToString("dd MMM yyyy") ?? "Ongoing")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-right">
+                                        <div class="inline-flex items-center gap-1.5 justify-end">
+                                            <InputDate @bind-Value="endDate.Value" class="rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none" />
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50 transition"
+                                                    disabled="@busy"
+                                                    @onclick="() => EndRule(r.Id)">
+                                                End
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+    else if (!busy)
+    {
+        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+            Finance configuration permission is required to configure position allowances.
+        </div>
+    }
 </section>
-@code{
-    private FinanceConfiguration? config;private bool busy;private string? error;private long type;private int position,currency,frequency=1;private decimal amount;private string multiple="Once";private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;private Dictionary<long,EndDateModel> endDates=[];
+
+@code {
+    private FinanceConfiguration? config;
+    private bool busy;
+    private string? error;
+    private long type;
+    private int position, currency, frequency = 1;
+    private decimal amount;
+    private string multiple = "Once";
+    private DateTime from = DateTime.UtcNow.AddHours(5).Date;
+    private DateTime? to;
+    private Dictionary<long, EndDateModel> endDates = [];
+
     private sealed class EndDateModel { public DateTime Value { get; set; } }
-    protected override async Task OnInitializedAsync()=>await Load();
-    private async Task Load(){busy=true;try{config=await Finance.GetConfigurationAsync();foreach(var r in config.Rules)endDates.TryAdd(r.Id,new EndDateModel { Value=r.Rule.ToDate??DateTime.UtcNow.AddHours(5).Date });}catch(Exception){error="Position allowances could not be loaded.";}finally{busy=false;}}
-    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action){if(busy)return;busy=true;error=null;var saved=false;try{var result=await action();saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception){error="Position allowance could not be saved.";}finally{busy=false;}if(saved)await Load();}
-    private Task SaveRule()=>Run(()=>Finance.AddPositionRuleAsync(new(position,type,currency,amount,frequency,from,to,multiple)));
-    private Task EndRule(long id)=>Run(()=>Finance.EndPositionRuleAsync(id,endDates[id].Value));
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        busy = true;
+        try
+        {
+            config = await Finance.GetConfigurationAsync();
+            foreach (var r in config.Rules)
+                endDates.TryAdd(r.Id, new EndDateModel { Value = r.Rule.ToDate ?? DateTime.UtcNow.AddHours(5).Date });
+        }
+        catch (Exception)
+        {
+            error = "Position allowances could not be loaded.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true; error = null;
+        var saved = false;
+        try
+        {
+            var result = await action();
+            saved = result.Success;
+            if (saved) Toasts.Success(result.Message);
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "Position allowance could not be saved.";
+        }
+        finally
+        {
+            busy = false;
+        }
+        if (saved) await Load();
+    }
+
+    private Task SaveRule() => Run(() => Finance.AddPositionRuleAsync(new(position, type, currency, amount, frequency, from, to, multiple)));
+    private Task EndRule(long id) => Run(() => Finance.EndPositionRuleAsync(id, endDates[id].Value));
 }

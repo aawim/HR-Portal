@@ -1,69 +1,464 @@
 @using HRM.Application.Contracts.Pages
 @inject IPositionManagement Positions
 @inject HRM.Services.ToastService Toasts
-<section class="space-y-3 position-management">
-    <div class="flex justify-between gap-2"><h2 class="text-xl font-semibold">Positions</h2><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="Load">Refresh</button></div>
-    @if(error!=null){<p role="alert" class="rounded border p-3">@error</p>}
-    @if(data!=null)
-    {
-        @if(data.CanManage)
-        {
-            <div class="flex flex-wrap gap-2" role="group" aria-label="Position framework">
-                @foreach(var f in data.Frameworks)
+
+<section class="space-y-4 w-full min-w-0 p-2 position-management">
+    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">Positions</h2>
+                @if (data != null && framework > 0)
                 {
-                    <button type="button" class="@(framework==f.Id?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" aria-pressed="@(framework==f.Id?"true":"false")" disabled="@(!f.Active||busy)" @onclick="()=>SelectFramework(f.Id)">@f.Name@(!f.Active?" (inactive)":"")</button>
+                    var curF = data.Frameworks.FirstOrDefault(x => x.Id == framework);
+                    if (curF != null)
+                    {
+                        <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                            @curF.Name
+                        </span>
+                    }
                 }
             </div>
-            @if(id==0&&CanCreateDirect&&HasJobMatrices)
+            <p class="text-xs text-slate-500 mt-0.5">Manage custom positions and government Job Matrix position links.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+            @if (id > 0)
             {
-                <div class="flex flex-wrap gap-2"><button class="@(matrixCreation?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>matrixCreation=false">Direct position</button><button class="@(matrixCreation?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>matrixCreation=true">From job matrix</button></div>
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                        @onclick="Reset">
+                    <span>＋</span>
+                    <span>New Position</span>
+                </button>
             }
-            @if(id==0&&(!CanCreateDirect||matrixCreation))
+        </div>
+    </header>
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    @if (data != null)
+    {
+        @if (data.CanManage)
+        {
+            <div class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs">
+                <div class="flex flex-wrap items-center gap-1.5" role="group" aria-label="Position framework">
+                    <span class="text-xs font-bold text-slate-700 mr-1.5">Framework:</span>
+                    @foreach (var f in data.Frameworks)
+                    {
+                        <button type="button"
+                                class="rounded-lg py-1.5 px-3 text-xs font-semibold transition shadow-xs @(framework == f.Id ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-0")"
+                                aria-pressed="@(framework == f.Id ? "true" : "false")"
+                                disabled="@(!f.Active || busy)"
+                                @onclick="() => SelectFramework(f.Id)">
+                            @f.Name@(!f.Active ? " (inactive)" : "")
+                        </button>
+                    }
+                </div>
+
+                @if (id == 0 && CanCreateDirect && HasJobMatrices)
+                {
+                    <div class="flex items-center gap-1.5 rounded-lg bg-slate-100 p-1 border border-slate-200">
+                        <button type="button"
+                                class="rounded-md py-1 px-3 text-xs font-semibold transition @(!matrixCreation ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => matrixCreation = false">
+                            Direct position
+                        </button>
+                        <button type="button"
+                                class="rounded-md py-1 px-3 text-xs font-semibold transition @(matrixCreation ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                                @onclick="() => matrixCreation = true">
+                            From job matrix
+                        </button>
+                    </div>
+                }
+            </div>
+
+            @if (id == 0 && (!CanCreateDirect || matrixCreation))
             {
                 <PositionMatrixEditor FrameworkId="framework" Data="payData" OnCreated="Load" />
             }
             else
             {
-            <fieldset disabled="@busy" class="rounded-xl border p-3 space-y-3">
-                <h3 class="font-semibold">@(id==0?"New position":"Edit position")</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    @if(matrix>0){<p>Position matrix #@matrix · Position #@id</p>}
-                    <label>Name<input @bind="name" maxlength="250" /></label><label>Dhivehi name<input @bind="dhivehi" maxlength="250" /></label>
-                    <label>Position type<select @bind="typeId"><option value="">Select</option>@foreach(var t in data.Types){<option value="@t.Id">@t.Name</option>}</select></label>
-                    @if(IsCsc)
+                <fieldset disabled="@busy" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">@(id == 0 ? "New Position" : "Edit Position")</h3>
+                            @if (matrix > 0)
+                            {
+                                <p class="text-xs text-slate-500">Position matrix #@matrix · Position #@id</p>
+                            }
+                        </div>
+                        @if (id > 0)
+                        {
+                            <span class="rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                                Editing #@id
+                            </span>
+                        }
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Position Name <span class="text-rose-500">*</span></label>
+                            <input @bind="name" maxlength="250" placeholder="e.g. Senior Administrative Officer" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Dhivehi Name</label>
+                            <input @bind="dhivehi" maxlength="250" dir="rtl" placeholder="ދިވެހި ނަން" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-dhivehi" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Position Type</label>
+                            <select @bind="typeId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">Select Type</option>
+                                @foreach (var t in data.Types)
+                                {
+                                    <option value="@t.Id">@t.Name</option>
+                                }
+                            </select>
+                        </div>
+                        @if (IsCsc)
+                        {
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 p-1">Rank</label>
+                                <select @bind="rankId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    <option value="">Select Rank</option>
+                                    @foreach (var r in data.Ranks)
+                                    {
+                                        <option value="@r.Id">@r.Name</option>
+                                    }
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 p-1">Classification</label>
+                                <select @bind="classificationId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                    <option value="">Select Classification</option>
+                                    @foreach (var c in data.Classifications)
+                                    {
+                                        <option value="@c.Id">@c.Name</option>
+                                    }
+                                </select>
+                            </div>
+                        }
+                        @if (!IsGovernment && matrix == 0)
+                        {
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 p-1">New Basic Salary</label>
+                                <input type="number" min="0" step="0.01" @bind="salary" placeholder="0.00" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 p-1">Salary Effective Date</label>
+                                <input type="date" @bind="salaryDate" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            </div>
+                        }
+                        <div class="flex items-center gap-4 pt-2">
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" @bind="active" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                <span>Active</span>
+                            </label>
+                            @if (data.IsSuperAdministrator && !IsGovernment && matrix == 0)
+                            {
+                                <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                                    <input type="checkbox" @bind="global" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                    <span>Global — available to all organisations</span>
+                                </label>
+                            }
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Description</label>
+                        <textarea @bind="description" maxlength="4000" rows="2" placeholder="Position responsibilities and scope…" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                    </div>
+
+                    @if (salaryHistory.Count > 0)
                     {
-                        <label>Rank<select @bind="rankId"><option value="">Select</option>@foreach(var r in data.Ranks){<option value="@r.Id">@r.Name</option>}</select></label>
-                        <label>Classification<select @bind="classificationId"><option value="">Select</option>@foreach(var c in data.Classifications){<option value="@c.Id">@c.Name</option>}</select></label>
+                        <details class="rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-xs">
+                            <summary class="font-bold text-slate-800 cursor-pointer">Basic salary history (@salaryHistory.Count)</summary>
+                            <div class="mt-2 overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                                        <tr>
+                                            <th class="px-3 py-2">Effective from</th>
+                                            <th class="px-3 py-2">Basic salary</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var s in salaryHistory)
+                                        {
+                                            <tr>
+                                                <td class="px-3 py-2">@s.EffectiveDate.ToString("dd MMM yyyy")</td>
+                                                <td class="px-3 py-2 font-mono">@s.Amount.ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </details>
                     }
-                    @if(!IsGovernment&&matrix==0)
-                    {
-                        <label>New basic salary<input type="number" min="0" step="0.01" @bind="salary" /></label>
-                        <label>Salary effective date<input type="date" @bind="salaryDate" /></label>
-                    }
-                    <label><input type="checkbox" @bind="active" /> Active</label>@if(data.IsSuperAdministrator&&!IsGovernment&&matrix==0){<label><input type="checkbox" @bind="global" /> Global — available to all organisations</label>}
-                </div>
-                <label class="block">Description<textarea @bind="description" maxlength="4000" rows="2"></textarea></label>
-                @if(salaryHistory.Count>0){<details><summary>Basic salary history</summary><div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Effective from</th><th>Basic salary</th></tr></thead><tbody>@foreach(var s in salaryHistory){<tr><td>@s.EffectiveDate.ToString("dd MMM yyyy")</td><td>@s.Amount.ToString("N2")</td></tr>}</tbody></table></div></details>}
-                <div class="flex gap-2"><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(id==0&&IsGovernment)" @onclick="Save">Save position</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="Reset">New / clear</button></div>
-            </fieldset>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                disabled="@(id == 0 && IsGovernment)"
+                                @onclick="Save">
+                            <span>💾</span>
+                            <span>@(id == 0 ? "Create Position" : "Save Changes")</span>
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                @onclick="Reset">
+                            <span>✕</span>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+                </fieldset>
             }
         }
-        <div class="flex flex-wrap items-end gap-3"><label class="flex-1">Search<input type="search" @bind="search" @bind:event="oninput" placeholder="Position name" /></label><label>Framework<select @bind="filter"><option value="0">All</option>@foreach(var f in data.Frameworks){<option value="@f.Id">@f.Name</option>}</select></label><label>Status<select @bind="state"><option value="active">Active</option><option value="all">All</option><option value="inactive">Inactive</option></select></label></div>
-        <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr><th>Position</th><th>Framework</th><th>Scope</th><th>Matrix</th><th>Staff</th><th>Status</th><th></th></tr></thead><tbody>@foreach(var p in data.Positions.Where(x=>(filter==0||x.FrameworkId==filter)&&(state=="all"||x.Active==(state=="active"))&&x.Name.Contains(search,StringComparison.OrdinalIgnoreCase))){<tr><td>@p.Name · #@p.Id</td><td>@p.Framework</td><td>@(p.Global?"Global":"Organisation")</td><td>@(p.MatrixId?.ToString()??"Custom")</td><td>@p.CurrentStaff</td><td>@(p.Active?"Active":"Inactive")</td><td>@if(p.CanEdit){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>Edit(p)">Edit</button>}</td></tr>}</tbody></table></div>
+
+        <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div class="flex flex-wrap items-center gap-2 flex-1 min-w-[280px]">
+                    <input type="search"
+                           @bind="search"
+                           @bind:event="oninput"
+                           placeholder="Search position name…"
+                           class="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <select @bind="filter" class="rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="0">All Frameworks</option>
+                        @foreach (var f in data.Frameworks)
+                        {
+                            <option value="@f.Id">@f.Name</option>
+                        }
+                    </select>
+                    <select @bind="state" class="rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                        <option value="active">Active Only</option>
+                        <option value="all">All Statuses</option>
+                        <option value="inactive">Inactive Only</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                <table class="w-full text-left text-xs">
+                    <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                        <tr>
+                            <th class="px-3 py-2.5">Position</th>
+                            <th class="px-3 py-2.5">Framework</th>
+                            <th class="px-3 py-2.5">Scope</th>
+                            <th class="px-3 py-2.5">Matrix</th>
+                            <th class="px-3 py-2.5">Staff</th>
+                            <th class="px-3 py-2.5">Status</th>
+                            <th class="px-3 py-2.5 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @{
+                            var filteredList = data.Positions.Where(x => (filter == 0 || x.FrameworkId == filter) &&
+                                                                       (state == "all" || x.Active == (state == "active")) &&
+                                                                       x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+                        }
+                        @if (!filteredList.Any())
+                        {
+                            <tr>
+                                <td colspan="7" class="px-4 py-8 text-center text-xs text-slate-400">
+                                    No positions found matching the filter criteria.
+                                </td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var p in filteredList)
+                            {
+                                <tr class="hover:bg-slate-50/50 transition">
+                                    <td class="px-3 py-2.5 font-medium text-slate-900">
+                                        <div>@p.Name</div>
+                                        <div class="text-[11px] text-slate-400 font-mono">#@p.Id</div>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-slate-600">@p.Framework</td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="rounded px-2 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700">
+                                            @(p.Global ? "Global" : "Organisation")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        @if (p.MatrixId.HasValue)
+                                        {
+                                            <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                                Matrix #@p.MatrixId
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-slate-400 text-[11px]">Custom</span>
+                                        }
+                                    </td>
+                                    <td class="px-3 py-2.5 font-medium text-slate-700">
+                                        <span class="inline-flex items-center gap-1 rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                            @p.CurrentStaff staff
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @(p.Active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                            @(p.Active ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-right">
+                                        @if (p.CanEdit)
+                                        {
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                                                    @onclick="() => Edit(p)">
+                                                Edit
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
     }
 </section>
-@code{
-    private PositionManagementData? data;private PayFrameworkData? payData;private bool busy,active=true,global,matrixCreation;private int id,framework,matrix,filter;private string name="",dhivehi="",description="",search="",state="active";private string? error;
-    private int? typeId,rankId,classificationId;private decimal? salary;private DateOnly? salaryDate;private List<PositionSalaryRow> salaryHistory=[];
-    private bool IsGovernment=>data?.Frameworks.FirstOrDefault(x=>x.Id==framework)?.Code=="NEW_PAY";
-    private bool IsCsc=>data?.Frameworks.FirstOrDefault(x=>x.Id==framework)?.Code=="LEGACY";
-    private bool CanCreateDirect=>data?.Frameworks.FirstOrDefault(x=>x.Id==framework)?.Code is "LEGACY" or "CUSTOM";
-    private bool HasJobMatrices=>payData?.Matrices.Any(x=>x.FrameworkId==framework)==true;
-    protected override async Task OnInitializedAsync()=>await Load();
-    private async Task Load(){busy=true;error=null;try{var positionsTask=Positions.LoadAsync();var payTask=Positions.LoadPayFrameworksAsync();await Task.WhenAll(positionsTask,payTask);data=await positionsTask;payData=await payTask;if(framework==0)framework=data.Frameworks.FirstOrDefault(x=>x.Active)?.Id??0;}catch(Exception){error="Positions could not be loaded. Please check your current organisation and permissions.";}finally{busy=false;}}
-    private void SelectFramework(int value){Reset();framework=value;matrixCreation=false;ChangeFramework();}
-    private void ChangeFramework(){matrix=0;typeId=null;rankId=null;classificationId=null;salary=null;salaryDate=null;if(IsGovernment)global=false;}
-    private void Reset(){id=0;name="";dhivehi="";description="";active=true;global=false;matrix=0;typeId=null;rankId=null;classificationId=null;salary=null;salaryDate=null;salaryHistory=[];}
-    private void Edit(ManagedPosition p){id=p.Id;name=p.Name;dhivehi=p.DhivehiName??"";description=p.Description??"";active=p.Active;global=p.Global;framework=p.FrameworkId??0;matrix=p.MatrixId??0;typeId=p.TypeId;rankId=p.RankId;classificationId=p.ClassificationId;salary=null;salaryDate=null;salaryHistory=p.Salaries;}
-    private async Task Save(){if(busy)return;busy=true;error=null;var saved=false;try{var result=await Positions.SaveAsync(new(id,name,dhivehi,description,active,global,framework,matrix>0?matrix:null){TypeId=typeId,RankId=rankId,ClassificationId=classificationId,BasicSalary=salary,SalaryEffectiveDate=salaryDate});saved=result.Success;if(saved)Toasts.Success(result.Message);else error=result.Message;}catch(Exception){error="Position could not be saved. Check the framework and matrix selection.";}finally{busy=false;}if(saved){Reset();await Load();}}
+
+@code {
+    private PositionManagementData? data;
+    private PayFrameworkData? payData;
+    private bool busy, active = true, global, matrixCreation;
+    private int id, framework, matrix, filter;
+    private string name = "", dhivehi = "", description = "", search = "", state = "active";
+    private string? error;
+    private int? typeId, rankId, classificationId;
+    private decimal? salary;
+    private DateOnly? salaryDate;
+    private List<PositionSalaryRow> salaryHistory = [];
+
+    private bool IsGovernment => data?.Frameworks.FirstOrDefault(x => x.Id == framework)?.Code == "NEW_PAY";
+    private bool IsCsc => data?.Frameworks.FirstOrDefault(x => x.Id == framework)?.Code == "LEGACY";
+    private bool CanCreateDirect => data?.Frameworks.FirstOrDefault(x => x.Id == framework)?.Code is "LEGACY" or "CUSTOM";
+    private bool HasJobMatrices => payData?.Matrices.Any(x => x.FrameworkId == framework) == true;
+
+    protected override async Task OnInitializedAsync() => await Load();
+
+    private async Task Load()
+    {
+        busy = true; error = null;
+        try
+        {
+            var positionsTask = Positions.LoadAsync();
+            var payTask = Positions.LoadPayFrameworksAsync();
+            await Task.WhenAll(positionsTask, payTask);
+            data = await positionsTask;
+            payData = await payTask;
+            if (framework == 0)
+                framework = data.Frameworks.FirstOrDefault(x => x.Active)?.Id ?? 0;
+        }
+        catch (Exception)
+        {
+            error = "Positions could not be loaded. Please check your current organisation and permissions.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void SelectFramework(int value)
+    {
+        Reset();
+        framework = value;
+        matrixCreation = false;
+        ChangeFramework();
+    }
+
+    private void ChangeFramework()
+    {
+        matrix = 0;
+        typeId = null;
+        rankId = null;
+        classificationId = null;
+        salary = null;
+        salaryDate = null;
+        if (IsGovernment) global = false;
+    }
+
+    private void Reset()
+    {
+        id = 0;
+        name = "";
+        dhivehi = "";
+        description = "";
+        active = true;
+        global = false;
+        matrix = 0;
+        typeId = null;
+        rankId = null;
+        classificationId = null;
+        salary = null;
+        salaryDate = null;
+        salaryHistory = [];
+    }
+
+    private void Edit(ManagedPosition p)
+    {
+        id = p.Id;
+        name = p.Name;
+        dhivehi = p.DhivehiName ?? "";
+        description = p.Description ?? "";
+        active = p.Active;
+        global = p.Global;
+        framework = p.FrameworkId ?? 0;
+        matrix = p.MatrixId ?? 0;
+        typeId = p.TypeId;
+        rankId = p.RankId;
+        classificationId = p.ClassificationId;
+        salary = null;
+        salaryDate = null;
+        salaryHistory = p.Salaries;
+    }
+
+    private async Task Save()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        var saved = false;
+        try
+        {
+            var result = await Positions.SaveAsync(new(id, name, dhivehi, description, active, global, framework, matrix > 0 ? matrix : null)
+            {
+                TypeId = typeId,
+                RankId = rankId,
+                ClassificationId = classificationId,
+                BasicSalary = salary,
+                SalaryEffectiveDate = salaryDate
+            });
+            saved = result.Success;
+            if (saved) Toasts.Success(result.Message);
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "Position could not be saved. Check the framework and matrix selection.";
+        }
+        finally
+        {
+            busy = false;
+        }
+        if (saved)
+        {
+            Reset();
+            await Load();
+        }
+    }
 }

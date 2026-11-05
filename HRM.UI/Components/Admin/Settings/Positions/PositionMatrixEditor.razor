@@ -1,33 +1,187 @@
 @using HRM.Application.Contracts.Pages
 @inject IPositionManagement Service
 @inject HRM.Services.ToastService Toasts
-<section class="border rounded-lg p-3 text-sm">
-    <h3 class="font-semibold">Create position matrix</h3>
-    @if(error!=null){<p role="alert">@error</p>}
-    @if(data?.CanManagePositions==true)
+
+<section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+    <div class="border-b border-slate-100 pb-3">
+        <h3 class="text-sm font-bold text-slate-900">Create Position From Job Matrix</h3>
+        <p class="text-xs text-slate-500">Link positions to a Government Job Matrix and configure staffing slots.</p>
+    </div>
+
+    @if (error != null)
     {
-        <fieldset disabled="@busy" class="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-            <label>Job matrix<select @bind="matrixId" @bind:after="ChangeMatrix"><option value="0">Select</option>@foreach(var m in data.Matrices.Where(x=>x.FrameworkId==FrameworkId).OrderBy(x=>x.Name).ThenBy(x=>x.Profile.PublicServiceRank).ThenBy(x=>x.Code)){<option value="@m.Id" disabled="@(!m.Active)">@m.Code · @m.Name@(string.IsNullOrWhiteSpace(m.Profile.PublicServiceRank)?"":$" · Rank {m.Profile.PublicServiceRank}")@(!m.Active?" · Inactive":"")</option>}</select></label>
-            <label>Title<select @bind="titleId"><option value="0">Select</option>@if(Selected!=null){@foreach(var t in Selected.Titles){<option value="@t.Id">@t.Name</option>}}</select></label>
-            <label>Approved staffing slots<input type="number" min="1" max="100000" @bind="slots" /></label>
-            <label>Effective from<input type="date" @bind="from" /></label><label>Effective through<input type="date" @bind="to" /></label>
-            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors self-end" disabled="@(Selected?.Active!=true||titleId==0)" @onclick="Save">Create @slots position(s)</button>
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    @if (data?.CanManagePositions == true)
+    {
+        <fieldset disabled="@busy" class="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div class="md:col-span-2">
+                <label class="block text-xs font-medium text-slate-700 p-1">Job Matrix <span class="text-rose-500">*</span></label>
+                <select @bind="matrixId" @bind:after="ChangeMatrix" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="0">Select Job Matrix</option>
+                    @foreach (var m in data.Matrices.Where(x => x.FrameworkId == FrameworkId).OrderBy(x => x.Name).ThenBy(x => x.Profile.PublicServiceRank).ThenBy(x => x.Code))
+                    {
+                        <option value="@m.Id" disabled="@(!m.Active)">
+                            @m.Code · @m.Name@(string.IsNullOrWhiteSpace(m.Profile.PublicServiceRank) ? "" : $" · Rank {m.Profile.PublicServiceRank}")@(!m.Active ? " · Inactive" : "")
+                        </option>
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-700 p-1">Allowed Title <span class="text-rose-500">*</span></label>
+                <select @bind="titleId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="0">Select Title</option>
+                    @if (Selected != null)
+                    {
+                        @foreach (var t in Selected.Titles)
+                        {
+                            <option value="@t.Id">@t.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-700 p-1">Approved Staffing Slots <span class="text-rose-500">*</span></label>
+                <input type="number" min="1" max="100000" @bind="slots" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-700 p-1">Effective From <span class="text-rose-500">*</span></label>
+                <input type="date" @bind="from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-700 p-1">Effective Through (Optional)</label>
+                <input type="date" @bind="to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+
+            <div class="md:col-span-3 flex justify-end pt-2 border-t border-slate-100">
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@(Selected?.Active != true || titleId == 0 || busy)"
+                        @onclick="Save">
+                    <span>＋</span>
+                    <span>Create @slots Position(s)</span>
+                </button>
+            </div>
         </fieldset>
-        @if(!data.Matrices.Any(x=>x.FrameworkId==FrameworkId)){<p role="status">No Job Matrices are configured for this framework.</p>}
-        @if(Selected!=null)
+
+        @if (!data.Matrices.Any(x => x.FrameworkId == FrameworkId))
         {
-            <details class="mt-3"><summary>Job Matrix requirements</summary><JobMatrixProfileView Profile="Selected.Profile" /></details>
-            <div class="mt-3 space-y-1"><p>Basic salary: @Selected.BasicSalary.ToString("N2") · @data.Currencies.FirstOrDefault(x=>x.Id==Selected.CurrencyId)?.Name</p><p>Pay step is selected for the employee's Job at assignment.</p>@foreach(var b in Selected.Benefits){<p>@b.Name · @(b.Amount?.ToString("N2")??"Non-cash") · @b.Frequency</p>}</div>
+            <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                No Job Matrices are configured for this framework.
+            </div>
+        }
+
+        @if (Selected != null)
+        {
+            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                <div class="flex items-center justify-between border-b border-blue-200/60 pb-2">
+                    <span class="text-xs font-bold text-blue-900">Selected Matrix Information</span>
+                    <span class="rounded bg-blue-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-800">
+                        Basic Salary: @Selected.BasicSalary.ToString("N2") @data.Currencies.FirstOrDefault(x => x.Id == Selected.CurrencyId)?.Name
+                    </span>
+                </div>
+
+                <details class="text-xs text-slate-700">
+                    <summary class="font-semibold text-blue-700 cursor-pointer hover:underline">View Job Matrix requirements profile</summary>
+                    <div class="mt-2 rounded-lg border border-blue-100 bg-white p-3">
+                        <JobMatrixProfileView Profile="Selected.Profile" />
+                    </div>
+                </details>
+
+                @if (Selected.Benefits.Any())
+                {
+                    <div class="text-xs text-slate-600">
+                        <span class="font-semibold text-slate-800">Matrix Benefits:</span>
+                        <div class="mt-1 flex flex-wrap gap-2">
+                            @foreach (var b in Selected.Benefits)
+                            {
+                                <span class="rounded-md border border-blue-200 bg-white px-2 py-1 text-[11px] text-slate-700 shadow-xs">
+                                    <strong>@b.Name</strong>: @(b.Amount?.ToString("N2") ?? "Non-cash") · @b.Frequency
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
         }
     }
 </section>
-@code{
-    [Parameter]public EventCallback OnCreated{get;set;}
-    [Parameter]public int FrameworkId{get;set;}
-    [Parameter]public PayFrameworkData? Data{get;set;}
-    private PayFrameworkData? data;private bool busy;private string? error;private int previousFramework=-1,matrixId,titleId,slots=1;private DateTime from=DateTime.UtcNow.AddHours(5).Date;private DateTime? to;
-    private JobMatrixRow? Selected=>data?.Matrices.FirstOrDefault(x=>x.Id==matrixId);
-    protected override async Task OnParametersSetAsync(){try{data=Data??await Service.LoadPayFrameworksAsync();if(previousFramework!=FrameworkId){matrixId=0;titleId=0;error=null;previousFramework=FrameworkId;}}catch(Exception){error="Job matrix information could not be loaded.";}}
-    private void ChangeMatrix(){titleId=0;if(Selected!=null){from=Selected.From>DateTime.UtcNow.AddHours(5).Date?Selected.From:DateTime.UtcNow.AddHours(5).Date;to=Selected.To;}}
-    private async Task Save(){if(busy)return;busy=true;error=null;try{var result=await Service.CreatePositionMatrixAsync(new(matrixId,titleId,slots,from,to));if(result.Success){Toasts.Success(result.Message);matrixId=0;titleId=0;slots=1;await OnCreated.InvokeAsync();}else error=result.Message;}catch(Exception){error="The position matrix could not be created. Please try again.";}finally{busy=false;}}
+
+@code {
+    [Parameter] public EventCallback OnCreated { get; set; }
+    [Parameter] public int FrameworkId { get; set; }
+    [Parameter] public PayFrameworkData? Data { get; set; }
+
+    private PayFrameworkData? data;
+    private bool busy;
+    private string? error;
+    private int previousFramework = -1, matrixId, titleId, slots = 1;
+    private DateTime from = DateTime.UtcNow.AddHours(5).Date;
+    private DateTime? to;
+
+    private JobMatrixRow? Selected => data?.Matrices.FirstOrDefault(x => x.Id == matrixId);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        try
+        {
+            data = Data ?? await Service.LoadPayFrameworksAsync();
+            if (previousFramework != FrameworkId)
+            {
+                matrixId = 0;
+                titleId = 0;
+                error = null;
+                previousFramework = FrameworkId;
+            }
+        }
+        catch (Exception)
+        {
+            error = "Job matrix information could not be loaded.";
+        }
+    }
+
+    private void ChangeMatrix()
+    {
+        titleId = 0;
+        if (Selected != null)
+        {
+            from = Selected.From > DateTime.UtcNow.AddHours(5).Date ? Selected.From : DateTime.UtcNow.AddHours(5).Date;
+            to = Selected.To;
+        }
+    }
+
+    private async Task Save()
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await Service.CreatePositionMatrixAsync(new(matrixId, titleId, slots, from, to));
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                matrixId = 0;
+                titleId = 0;
+                slots = 1;
+                await OnCreated.InvokeAsync();
+            }
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "The position matrix could not be created. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 }
