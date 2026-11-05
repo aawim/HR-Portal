@@ -48,6 +48,59 @@ public sealed class StaffTransferService(
             .Where(x => !string.IsNullOrWhiteSpace(x))
             .Select(x => x!.Trim()));
 
+    private static async Task<DateTime> CalculateOrganisationScheduleEndTimeAsync(
+        HrmTeContext db,
+        int organisationId,
+        DateTime date)
+    {
+        var targetDate = date.Date;
+        var dayOfWeek = targetDate.DayOfWeek;
+        int dayMask = dayOfWeek switch
+        {
+            DayOfWeek.Sunday => 1,
+            DayOfWeek.Monday => 2,
+            DayOfWeek.Tuesday => 4,
+            DayOfWeek.Wednesday => 8,
+            DayOfWeek.Thursday => 16,
+            DayOfWeek.Friday => 32,
+            DayOfWeek.Saturday => 64,
+            _ => 0
+        };
+
+        // Check for official scope schedule assignment for the organisation
+        var scopeAssignment = await db.ScopeScheduleAssignments.AsNoTracking()
+            .Include(s => s.WorkTemplate)
+            .Where(s => s.OrganisationId == organisationId &&
+                        s.IsActive &&
+                        s.SchedulePurpose == "Official" &&
+                        s.EffectiveFrom <= targetDate &&
+                        (!s.EffectiveTo.HasValue || s.EffectiveTo.Value >= targetDate) &&
+                        (s.WorkingDaysMask & dayMask) != 0)
+            .OrderByDescending(s => s.Priority)
+            .FirstOrDefaultAsync();
+
+        if (scopeAssignment?.WorkTemplate?.DefaultEndTime is TimeOnly scopeEnd)
+        {
+            return targetDate.Add(scopeEnd.ToTimeSpan());
+        }
+
+        // Fallback: Check organisation work template directly
+        var orgTemplate = await db.WorkTemplates.AsNoTracking()
+            .Where(w => w.IsActive &&
+                        (w.OrganisationBusinessEntityId == organisationId || w.IsGlobal) &&
+                        w.DefaultEndTime.HasValue)
+            .OrderByDescending(w => w.OrganisationBusinessEntityId == organisationId)
+            .FirstOrDefaultAsync();
+
+        if (orgTemplate?.DefaultEndTime is TimeOnly tEnd)
+        {
+            return targetDate.Add(tEnd.ToTimeSpan());
+        }
+
+        // Standard default organisation end time is 16:00 (4:00 PM)
+        return targetDate.AddHours(16);
+    }
+
     private static string TransferTypeLabel(int transferTypeId) => (StaffTransferType)transferTypeId switch
     {
         StaffTransferType.InternalDepartmental => "Internal Departmental Transfer",
@@ -62,8 +115,20 @@ public sealed class StaffTransferService(
 
     public async Task<StaffTransferDashboardData> LoadDashboardAsync(int? organisationId = null, string? statusFilter = null)
     {
-        var (actor, org, isHrOrAdmin) = await ScopeAsync(organisationId);
         await using var db = await factory.CreateDbContextAsync();
+
+        // Check if organisationId is actually an IndividualId (when invoked from staff workspace)
+        int? staffIndividualId = null;
+        if (organisationId is > 0 && !await db.Organisations.AnyAsync(o => o.BusinessEntityID == organisationId.Value))
+        {
+            if (await db.Individuals.AnyAsync(i => i.BusinessEntityId == organisationId.Value))
+            {
+                staffIndividualId = organisationId;
+                organisationId = null; // Let ScopeAsync use the caller's active organisation
+            }
+        }
+
+        var (actor, org, isHrOrAdmin) = await ScopeAsync(organisationId);
 
         var orgName = await db.Organisations.AsNoTracking()
             .Where(o => o.BusinessEntityID == org)
@@ -75,16 +140,23 @@ public sealed class StaffTransferService(
         var canActivate = isHrOrAdmin || await access.HasPermissionAsync(Permissions.StaffTransferActivate);
         var canProvision = isHrOrAdmin || await access.HasPermissionAsync(Permissions.StaffTransferProvisionAccess);
 
-        var baseQuery = db.StaffTransfers.AsNoTracking()
-            .Where(t => t.FromOrganisationId == org || t.ToOrganisationId == org || t.IndividualId == actor.IndividualId);
-
-        if (!isHrOrAdmin && !canInitiate && !canApproveReceiving)
+        var baseQuery = db.StaffTransfers.AsNoTracking();
+        if (staffIndividualId.HasValue)
         {
-            baseQuery = baseQuery.Where(t =>
-                t.IndividualId == actor.IndividualId ||
-                t.CurrentSupervisorIndividualId == actor.IndividualId ||
-                t.CurrentHodIndividualId == actor.IndividualId ||
-                t.RequestedByUserId == actor.UserId);
+            baseQuery = baseQuery.Where(t => t.IndividualId == staffIndividualId.Value);
+        }
+        else
+        {
+            baseQuery = baseQuery.Where(t => t.FromOrganisationId == org || t.ToOrganisationId == org || t.IndividualId == actor.IndividualId);
+
+            if (!isHrOrAdmin && !canInitiate && !canApproveReceiving)
+            {
+                baseQuery = baseQuery.Where(t =>
+                    t.IndividualId == actor.IndividualId ||
+                    t.CurrentSupervisorIndividualId == actor.IndividualId ||
+                    t.CurrentHodIndividualId == actor.IndividualId ||
+                    t.RequestedByUserId == actor.UserId);
+            }
         }
 
         var allStatuses = await baseQuery
@@ -509,6 +581,17 @@ public sealed class StaffTransferService(
             return await LoadExistingTransferDetailAsync(db, staffTransferId.Value, actor, org, isHrOrAdmin);
 
         var targetIndividualId = individualId ?? actor.IndividualId;
+
+        // If no explicit staffTransferId was provided, look for an active open transfer/draft for this employee
+        var openTransfer = await db.StaffTransfers
+            .Where(t => t.IndividualId == targetIndividualId && t.IsOpen)
+            .OrderByDescending(t => t.StaffTransferId)
+            .Select(t => (int?)t.StaffTransferId)
+            .FirstOrDefaultAsync();
+
+        if (openTransfer.HasValue)
+            return await LoadExistingTransferDetailAsync(db, openTransfer.Value, actor, org, isHrOrAdmin);
+
         return await BuildNewDraftFromDatabaseAsync(db, targetIndividualId, jobId, actor, org, isHrOrAdmin);
     }
 
@@ -1282,10 +1365,10 @@ public sealed class StaffTransferService(
                     DepartmentOfficeArea = job.OrganisationStructure.Name,
                     ExistingAccessGroups = $"{job.OrganisationStructure.Name} — Standard Staff Door Access",
                     ProposedAccessGroups = $"{job.OrganisationStructure.Name} — Standard Staff Door Access",
-                    TransitionAction = StaffTransferDoorAccessStates.ActionReplace,
+                    TransitionAction = StaffTransferDoorAccessStates.ActionRetainCommon,
                     AccessStartDate = defaultEffective,
                     PreviousAccessExpiryDate = defaultEffective.AddDays(-1),
-                    ProvisioningState = StaffTransferDoorAccessStates.StatePending
+                    ProvisioningState = StaffTransferDoorAccessStates.StateProvisioned
                 }
             ],
             Reporting = new StaffTransferReportingTabDto
@@ -1640,12 +1723,31 @@ public sealed class StaffTransferService(
                 });
             }
 
+            // Cutoff timestamp for access removal: day before reporting date at organisation schedule end time
+            var cutoffTimestamp = await CalculateOrganisationScheduleEndTimeAsync(
+                db,
+                transfer.FromOrganisationId,
+                transfer.ReportingDate.AddDays(-1));
+
             // Replace Tab 5 Door Access Items
             if (transfer.DoorAccessChanges.Count > 0)
                 db.StaffTransferDoorAccesses.RemoveRange(transfer.DoorAccessChanges);
             foreach (var door in input.DoorAccessChanges)
             {
                 if (string.IsNullOrWhiteSpace(door.BuildingName)) continue;
+
+                // When door access is retained / untouched, mark provisioned so it does not block processing
+                var isUnchangedCommon = door.TransitionAction == StaffTransferDoorAccessStates.ActionRetainCommon ||
+                                       (door.TransitionAction == StaffTransferDoorAccessStates.ActionReplace &&
+                                        !string.IsNullOrWhiteSpace(door.ExistingAccessGroups) &&
+                                        door.ExistingAccessGroups == door.ProposedAccessGroups);
+
+                var doorProvisioningState = isUnchangedCommon
+                    ? StaffTransferDoorAccessStates.StateProvisioned
+                    : (string.IsNullOrWhiteSpace(door.ProvisioningState) ? StaffTransferDoorAccessStates.StatePending : door.ProvisioningState);
+
+                var expiryDate = door.PreviousAccessExpiryDate ?? cutoffTimestamp;
+
                 db.StaffTransferDoorAccesses.Add(new StaffTransferDoorAccess
                 {
                     StaffTransferId = transfer.StaffTransferId,
@@ -1661,10 +1763,10 @@ public sealed class StaffTransferService(
                     ProposedAccessGroups = door.ProposedAccessGroups,
                     TransitionAction = string.IsNullOrWhiteSpace(door.TransitionAction) ? StaffTransferDoorAccessStates.ActionReplace : door.TransitionAction,
                     AccessStartDate = (door.AccessStartDate == default ? input.Job.EffectiveDate : door.AccessStartDate).Date,
-                    PreviousAccessExpiryDate = door.PreviousAccessExpiryDate?.Date,
+                    PreviousAccessExpiryDate = expiryDate,
                     SecurityOfficerUserId = door.SecurityOfficerUserId,
                     ConnectorReference = door.ConnectorReference,
-                    ProvisioningState = StaffTransferDoorAccessStates.StatePending,
+                    ProvisioningState = doorProvisioningState,
                     ProvisioningNotes = door.ProvisioningNotes
                 });
             }
@@ -1714,10 +1816,13 @@ public sealed class StaffTransferService(
                     }
                 }
 
-                // Gate 2: Check Door Access changes - any modified door access must be provisioned
+                // Gate 2: Check Door Access changes - only if changed, unprovisioned door changes must be provisioned
                 var unprovisionedDoors = await db.StaffTransferDoorAccesses.AsNoTracking()
                     .Where(d => d.StaffTransferId == transfer.StaffTransferId &&
                                 d.TransitionAction != StaffTransferDoorAccessStates.ActionRetainCommon &&
+                                !(d.TransitionAction == StaffTransferDoorAccessStates.ActionReplace &&
+                                  d.ExistingAccessGroups != null &&
+                                  d.ExistingAccessGroups == d.ProposedAccessGroups) &&
                                 d.ProvisioningState != StaffTransferDoorAccessStates.StateProvisioned &&
                                 d.ProvisioningState != StaffTransferDoorAccessStates.StateVerified &&
                                 d.ProvisioningState != StaffTransferDoorAccessStates.StateRevoked)
@@ -2037,6 +2142,46 @@ public sealed class StaffTransferService(
                     transfer.Request.LastStateChangedByUserId = actor.UserId;
                     transfer.Request.LastStateChangedDate = DateTime.UtcNow;
                     transfer.Request.StateChangeRemarks = input.Remarks?.Trim();
+                }
+
+                // If Admin Access or Door Access was removed/revoked as part of this transfer,
+                // apply the schedule cutoff effective from the day before reporting date at organisation schedule end time.
+                var scheduleCutoff = await CalculateOrganisationScheduleEndTimeAsync(
+                    db,
+                    transfer.FromOrganisationId,
+                    transfer.ReportingDate.AddDays(-1));
+
+                // 1. Update door access revocations / removals to this exact cutoff
+                var doorRemovals = await db.StaffTransferDoorAccesses
+                    .Where(d => d.StaffTransferId == transfer.StaffTransferId &&
+                                (d.TransitionAction == StaffTransferDoorAccessStates.ActionRevokeOld ||
+                                 d.TransitionAction == StaffTransferDoorAccessStates.ActionReplace))
+                    .ToListAsync();
+
+                foreach (var d in doorRemovals)
+                {
+                    d.PreviousAccessExpiryDate = scheduleCutoff;
+                }
+
+                // 2. If transfer removes admin access (or moves employee to an organisation without admin grant),
+                // ensure the user's admin access revocation is scheduled or logged with effective cutoff.
+                var targetUser = await db.Users.FirstOrDefaultAsync(u => u.BusinessEntityID == transfer.IndividualId && u.IsActive);
+                if (targetUser != null && targetUser.AdminPortalAccessEnabled)
+                {
+                    var hasAccessRevocation = await db.StaffTransferAccessChanges
+                        .AnyAsync(a => a.StaffTransferId == transfer.StaffTransferId &&
+                                       (a.TransitionAction == StaffTransferAccessActions.Revoke ||
+                                        a.TransitionAction == StaffTransferAccessActions.RevokeOldGrantNew));
+
+                    // If transfer is between different organisations and legal employer/org changes without receiving admin grant
+                    if (hasAccessRevocation || transfer.FromOrganisationId != transfer.ToOrganisationId)
+                    {
+                        var auditRevoke = await logs.CreateAsync(
+                            db,
+                            SharedConfig.OperationLogActionTypes.USER_ROLE_UPDATE,
+                            $"Admin portal access scheduled for revocation effective {scheduleCutoff:yyyy-MM-dd HH:mm} by approved Staff Transfer #{transfer.StaffTransferId}.");
+                        targetUser.OperationLogId = auditRevoke.OperationLogId;
+                    }
                 }
 
                 await db.SaveChangesAsync();

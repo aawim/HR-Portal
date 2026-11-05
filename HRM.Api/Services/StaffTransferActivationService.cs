@@ -22,6 +22,57 @@ public sealed class StaffTransferActivationService(
 {
     public static DateTime TodayMaldives => DateTime.UtcNow.AddHours(5).Date;
 
+    private static async Task<DateTime> CalculateOrganisationScheduleEndTimeAsync(
+        HrmTeContext db,
+        int organisationId,
+        DateTime date,
+        CancellationToken cancellationToken = default)
+    {
+        var targetDate = date.Date;
+        var dayOfWeek = targetDate.DayOfWeek;
+        int dayMask = dayOfWeek switch
+        {
+            DayOfWeek.Sunday => 1,
+            DayOfWeek.Monday => 2,
+            DayOfWeek.Tuesday => 4,
+            DayOfWeek.Wednesday => 8,
+            DayOfWeek.Thursday => 16,
+            DayOfWeek.Friday => 32,
+            DayOfWeek.Saturday => 64,
+            _ => 0
+        };
+
+        var scopeAssignment = await db.ScopeScheduleAssignments.AsNoTracking()
+            .Include(s => s.WorkTemplate)
+            .Where(s => s.OrganisationId == organisationId &&
+                        s.IsActive &&
+                        s.SchedulePurpose == "Official" &&
+                        s.EffectiveFrom <= targetDate &&
+                        (!s.EffectiveTo.HasValue || s.EffectiveTo.Value >= targetDate) &&
+                        (s.WorkingDaysMask & dayMask) != 0)
+            .OrderByDescending(s => s.Priority)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (scopeAssignment?.WorkTemplate?.DefaultEndTime is TimeOnly scopeEnd)
+        {
+            return targetDate.Add(scopeEnd.ToTimeSpan());
+        }
+
+        var orgTemplate = await db.WorkTemplates.AsNoTracking()
+            .Where(w => w.IsActive &&
+                        (w.OrganisationBusinessEntityId == organisationId || w.IsGlobal) &&
+                        w.DefaultEndTime.HasValue)
+            .OrderByDescending(w => w.OrganisationBusinessEntityId == organisationId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (orgTemplate?.DefaultEndTime is TimeOnly tEnd)
+        {
+            return targetDate.Add(tEnd.ToTimeSpan());
+        }
+
+        return targetDate.AddHours(16);
+    }
+
     public async Task<TransferActivationResult> ActivateAsync(
         int staffTransferId,
         CancellationToken cancellationToken = default)
@@ -441,6 +492,12 @@ public sealed class StaffTransferActivationService(
             var accessStepKey = $"Transfer:{transfer.StaffTransferId}:V{transfer.CurrentVersion}:OrgAccess";
             if (!HasSucceededStep(transfer, StaffTransferActivationSteps.OrganisationalAccessProvisioning, accessStepKey))
             {
+                var cutoffTime = await CalculateOrganisationScheduleEndTimeAsync(
+                    db,
+                    transfer.FromOrganisationId,
+                    transfer.ReportingDate.AddDays(-1),
+                    cancellationToken);
+
                 foreach (var change in transfer.AccessChanges)
                 {
                     if (change.RequiresSeparateSecurityAuth)
@@ -450,7 +507,7 @@ public sealed class StaffTransferActivationService(
                     else if (change.TransitionAction is StaffTransferAccessActions.Revoke or StaffTransferAccessActions.RevokeOldGrantNew)
                     {
                         change.ProvisioningStatus = change.TransitionAction == StaffTransferAccessActions.Revoke ? "Revoked" : "Applied";
-                        change.AppliedAtUtc = DateTime.UtcNow;
+                        change.AppliedAtUtc = cutoffTime;
                         change.AppliedByUserId = transfer.FinalApprovedByUserId;
                     }
                     else
@@ -459,6 +516,18 @@ public sealed class StaffTransferActivationService(
                         change.AppliedAtUtc = DateTime.UtcNow;
                         change.AppliedByUserId = transfer.FinalApprovedByUserId;
                     }
+                }
+
+                // If user's admin access was explicitly revoked or transfer changes legal employer / organisation
+                var targetUser = await db.Users.FirstOrDefaultAsync(u => u.BusinessEntityID == transfer.IndividualId && u.IsActive, cancellationToken);
+                var hasAdminRevoke = transfer.AccessChanges.Any(a =>
+                    a.TransitionAction is StaffTransferAccessActions.Revoke or StaffTransferAccessActions.RevokeOldGrantNew);
+
+                if (targetUser != null && targetUser.AdminPortalAccessEnabled && (hasAdminRevoke || transfer.FromOrganisationId != transfer.ToOrganisationId))
+                {
+                    targetUser.AdminPortalAccessEnabled = false;
+                    targetUser.AdminPortalAccessOrganisationId = null;
+                    targetUser.LastUpdatedDate = cutoffTime;
                 }
 
                 RecordStepIfNotSucceeded(db, transfer, attempt, StaffTransferActivationSteps.OrganisationalAccessProvisioning,
