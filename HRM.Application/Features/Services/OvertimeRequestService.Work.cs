@@ -10,4 +10,4 @@ public sealed record OvertimeTaskOption(int Id, int RequestId, string Reference,
 
 public sealed record OvertimeWorkRow(int Id, int StateId, string Reference, string Staff, string Kind,
     DateTime From, DateTime To, string Reason, List<string> Tasks, string Status, bool CanApprove, bool CanCancel,
-    DateTime? Start, DateTime? End);
+    DateTime? Start, DateTime? End) { public int? StaffId { get; init; } }

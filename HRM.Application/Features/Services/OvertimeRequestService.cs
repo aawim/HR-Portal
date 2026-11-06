@@ -10,4 +10,5 @@ public sealed record OvertimeRow(int Id,int StateId,string Reference,string Staf
 { public string Source { get; init; } = "Legacy"; public DateTime? Start { get; init; } public DateTime? End { get; init; } public string? Task { get; init; }
     public bool CanReviseApproved {get;init;} public bool CanResubmit {get;init;}
     public bool PayrollProcessed {get;init;} public DateTime? PayrollMonth {get;init;} public string? PayrollReference {get;init;}
+    public int? StaffId {get;init;}
 }

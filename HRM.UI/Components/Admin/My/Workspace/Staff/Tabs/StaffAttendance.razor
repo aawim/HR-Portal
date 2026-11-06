@@ -2,22 +2,36 @@
 @using HRM.Components.Pages.Online.Dashboard
 @inject HRM.Services.Interfaces.IAttendanceService Attendance
 
-<section class="space-y-4 pt-4" aria-label="Selected employee attendance">
+<section class="space-y-4" aria-label="Selected employee attendance">
     @if(!ReadOnly){<HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />}
-    <div class="flex flex-wrap items-center justify-between gap-3">
-        <div><h3 class="text-lg font-semibold">Attendance</h3><p class="text-sm text-slate-500">Attendance records for the selected employee.</p></div>
-        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@loading" @onclick="LoadAsync">Refresh</button>
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div>
+            <h3 class="text-base font-bold text-slate-800">Attendance Records</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Attendance records, daily hours, shift duty, and raw clock events.</p>
+        </div>
+        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors" disabled="@loading" @onclick="LoadAsync">
+            <span class="@(loading ? "animate-spin" : "")">↻</span>
+            <span>Refresh</span>
+        </button>
     </div>
     @if (!ExternalDateFilters)
     {
-    <div class="flex flex-wrap items-end gap-3 rounded-lg border p-3">
-        <label class="text-sm">From <InputDate @bind-Value="from" class="block rounded border bg-transparent p-2" /></label>
-        <label class="text-sm">To <InputDate @bind-Value="to" class="block rounded border bg-transparent p-2" /></label>
-        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@loading" @onclick="ApplyAsync">Show records</button>
+    <div class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 shadow-2xs">
+        <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">From</label>
+            <InputDate @bind-Value="from" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">To</label>
+            <InputDate @bind-Value="to" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+        </div>
+        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition-colors" disabled="@loading" @onclick="ApplyAsync">
+            Show records
+        </button>
     </div>
     }
-    @if(error != null) { <p role="alert" class="rounded-lg border p-3">@error</p> }
-    @if(loading) { <p role="status">Loading attendance...</p> }
+    @if(error != null) { <p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 shadow-2xs">@error</p> }
+    @if(loading) { <p role="status" class="text-xs text-slate-500">Loading attendance...</p> }
     @if (ShowOverview)
     {
         <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
@@ -27,44 +41,46 @@
         <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
         @if (ShowDutyAttendance)
         {
-            <div class="overflow-x-auto rounded-lg border">
-                <table class="w-full whitespace-nowrap text-left text-sm">
-                    <caption class="p-3 text-left font-semibold">Required shift/duty attendance</caption>
-                    <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Schedule</th><th class="p-3">Scheduled time</th><th class="p-3">Status</th><th class="p-3">Check in</th><th class="p-3">Check out</th><th class="p-3">Credited / Planned</th></tr></thead>
+            <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                <div class="p-3 border-b border-slate-100 font-semibold text-xs text-slate-800">Required shift/duty attendance</div>
+                <table class="w-full whitespace-nowrap text-left text-xs">
+                    <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3.5 py-2.5">Date</th><th class="px-3.5 py-2.5">Schedule</th><th class="px-3.5 py-2.5">Scheduled time</th><th class="px-3.5 py-2.5">Status</th><th class="px-3.5 py-2.5">Check in</th><th class="px-3.5 py-2.5">Check out</th><th class="px-3.5 py-2.5">Credited / Planned</th></tr></thead>
                     <tbody>@foreach (var duty in dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance))
                     {
-                        <tr class="border-b"><td class="p-3">@duty.Date.ToString("dd MMM yyyy")</td><td class="p-3">@duty.Purpose · @duty.Name</td>
-                            <td class="p-3">@duty.ScheduledStart.ToString("dd MMM HH:mm") – @duty.ScheduledEnd.ToString("dd MMM HH:mm")</td>
-                            <td class="p-3">@DutyStatus(duty)</td>
-                            <td class="p-3">@(duty.CheckIn?.ToString("HH:mm") ?? "—") @(duty.SharesCheckInWithOfficial ? "(Shared)" : "")</td>
-                            <td class="p-3">@(duty.CheckOut?.ToString("HH:mm") ?? "—") @(duty.SharesCheckOutWithOfficial ? "(Shared)" : "")</td>
-                            <td class="p-3">@duty.CreditedMinutes min / @duty.PlannedMinutes min</td></tr>
+                        <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors"><td class="px-3.5 py-2.5 font-medium text-slate-800">@duty.Date.ToString("dd MMM yyyy")</td><td class="px-3.5 py-2.5">@duty.Purpose · @duty.Name</td>
+                            <td class="px-3.5 py-2.5">@duty.ScheduledStart.ToString("dd MMM HH:mm") – @duty.ScheduledEnd.ToString("dd MMM HH:mm")</td>
+                            <td class="px-3.5 py-2.5">@DutyStatus(duty)</td>
+                            <td class="px-3.5 py-2.5">@(duty.CheckIn?.ToString("HH:mm") ?? "—") @(duty.SharesCheckInWithOfficial ? "(Shared)" : "")</td>
+                            <td class="px-3.5 py-2.5">@(duty.CheckOut?.ToString("HH:mm") ?? "—") @(duty.SharesCheckOutWithOfficial ? "(Shared)" : "")</td>
+                            <td class="px-3.5 py-2.5">@duty.CreditedMinutes min / @duty.PlannedMinutes min</td></tr>
                     }</tbody>
                 </table>
-                @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-sm">No required shift/duty assignments were found for this period.</p> }
+                @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-xs text-slate-500">No required shift/duty assignments were found for this period.</p> }
             </div>
         }
         <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            @foreach(var stat in Stats) { <div class="rounded-lg border p-3"><p class="text-xs text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-semibold">@stat.Value</p></div> }
+            @foreach(var stat in Stats) { <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs"><p class="text-[11px] font-medium text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-bold text-slate-800">@stat.Value</p></div> }
         </div>
-        <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</caption>
-                <thead><tr class="border-b"><th class="p-3">Date</th><th class="p-3">Status</th><th class="p-3">First check in</th><th class="p-3">Last check out</th><th class="p-3">Worked hours</th><th class="p-3">Duty hours</th><th class="p-3">Clock events</th></tr></thead>
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+            <div class="p-3 border-b border-slate-100 font-semibold text-xs text-slate-800">Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</div>
+            <table class="w-full text-left text-xs">
+                <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3.5 py-2.5">Date</th><th class="px-3.5 py-2.5">Status</th><th class="px-3.5 py-2.5">First check in</th><th class="px-3.5 py-2.5">Last check out</th><th class="px-3.5 py-2.5">Worked hours</th><th class="px-3.5 py-2.5">Duty hours</th><th class="px-3.5 py-2.5">Clock events</th></tr></thead>
                 <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
-                    <tr class="border-b"><td class="whitespace-nowrap p-3">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="p-3 @(day.IsOnLeave ? "text-blue-600" : day.IsLate ? "text-amber-700" : "")">@Status(day)</td>
-                        <td class="p-3">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="p-3">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="p-3">@day.WorkedHours.ToString("0.##")</td><td class="p-3">@day.DutyWorkedHours.ToString("0.##")</td>
-                        <td class="p-3">@day.ClockEventCount @(day.SharedEventCount > 0 ? $"({day.SharedEventCount} shared)" : "")</td></tr>
+                    <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors"><td class="whitespace-nowrap px-3.5 py-2.5 font-medium text-slate-800">@day.Date.ToString("dd MMM yyyy · ddd")</td><td class="px-3.5 py-2.5 @(day.IsOnLeave ? "text-emerald-700 font-medium" : day.IsLate ? "text-amber-700 font-medium" : "")">@Status(day)</td>
+                        <td class="px-3.5 py-2.5">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td><td class="px-3.5 py-2.5">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td><td class="px-3.5 py-2.5 font-semibold">@day.WorkedHours.ToString("0.##")</td><td class="px-3.5 py-2.5">@day.DutyWorkedHours.ToString("0.##")</td>
+                        <td class="px-3.5 py-2.5">@day.ClockEventCount @(day.SharedEventCount > 0 ? $"({day.SharedEventCount} shared)" : "")</td></tr>
                 }</tbody>
             </table>
-            @if(!PeriodDays.Any()) { <p class="p-3 text-sm">No attendance days in this employment period.</p> }
+            @if(!PeriodDays.Any()) { <p class="p-3 text-xs text-slate-500">No attendance days in this employment period.</p> }
         </div>
-        <div class="overflow-x-auto rounded-lg border">
-            <table class="w-full text-left text-sm"><caption class="p-3 text-left font-semibold">Clock events</caption>
-                <thead><tr class="border-b"><th class="p-3">Date and time</th><th class="p-3">Event</th><th class="p-3">Schedule</th><th class="p-3">Reconciliation details</th></tr></thead>
-                <tbody>@foreach(var entry in events) { <tr class="border-b"><td class="whitespace-nowrap p-3">@entry.Time.ToString("dd MMM yyyy HH:mm:ss")</td><td class="p-3">@entry.Event @(entry.IsSharedAcrossSchedules ? "· Shared" : "")</td><td class="p-3">@(entry.SharedScheduleSummary ?? entry.Schedule)</td><td class="p-3 text-xs text-slate-500">@(entry.MatchReason ?? entry.MatchMethod ?? "—")</td></tr> }</tbody>
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+            <div class="p-3 border-b border-slate-100 font-semibold text-xs text-slate-800">Clock events</div>
+            <table class="w-full text-left text-xs">
+                <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3.5 py-2.5">Date and time</th><th class="px-3.5 py-2.5">Event</th><th class="px-3.5 py-2.5">Schedule</th><th class="px-3.5 py-2.5">Reconciliation details</th></tr></thead>
+                <tbody>@foreach(var entry in events) { <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors"><td class="whitespace-nowrap px-3.5 py-2.5 font-mono text-slate-800">@entry.Time.ToString("dd MMM yyyy HH:mm:ss")</td><td class="px-3.5 py-2.5">@entry.Event @(entry.IsSharedAcrossSchedules ? "· Shared" : "")</td><td class="px-3.5 py-2.5">@(entry.SharedScheduleSummary ?? entry.Schedule)</td><td class="px-3.5 py-2.5 text-xs text-slate-500">@(entry.MatchReason ?? entry.MatchMethod ?? "—")</td></tr> }</tbody>
             </table>
-            @if(events.Count == 0) { <p class="p-3 text-sm">No clock events for this date range.</p> }
-            @if(events.Count == 1000) { <p class="p-3 text-sm">Showing the latest 1,000 events. Narrow the date range to see other events.</p> }
+            @if(events.Count == 0) { <p class="p-3 text-xs text-slate-500">No clock events for this date range.</p> }
+            @if(events.Count == 1000) { <p class="p-3 text-xs text-slate-500">Showing the latest 1,000 events. Narrow the date range to see other events.</p> }
         </div>
     }
 </section>

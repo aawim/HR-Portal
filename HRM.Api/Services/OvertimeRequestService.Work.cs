@@ -216,7 +216,7 @@ public sealed partial class OvertimeRequestService
                 w.FromDate, w.ToDate, w.Reason, w.Tasks.OrderBy(t => t.Id).Select(t => t.Description).ToList(),
                 (w.Request.RequestState.IsFinalState ? "" : "Processing · ") + w.Request.RequestState.StateName,
                 await Processing.CanApprove(db, subject, instance, actor.User, actor.Person), w.IndividualId == actor.Person &&
-                !w.Request.RequestState.IsFinalState && instance?.WorkflowStatus == "InProgress", w.ProposedStart, w.ProposedEnd));
+                !w.Request.RequestState.IsFinalState && instance?.WorkflowStatus == "InProgress", w.ProposedStart, w.ProposedEnd) { StaffId = w.IndividualId });
         }
         return result;
     }

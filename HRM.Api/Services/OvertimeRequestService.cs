@@ -69,7 +69,7 @@ public sealed partial class OvertimeRequestService(IDbContextFactory<HrmTeContex
                 Task=row.PreapprovalTaskId.HasValue?await db.OvertimeWorkTasks.Where(t=>t.Id==row.PreapprovalTaskId).Select(t=>t.Description).SingleOrDefaultAsync():null,
                 CanReviseApproved=!locked&&row.Request.RequestStateId==4&&supervisor,
                 CanResubmit=!locked&&row.IndividualId==actor.Person&&row.Request.RequestStateId==1&&instance?.WorkflowStatus=="Returned",
-                PayrollProcessed=locked,PayrollMonth=item?.Batch.PayrollMonth,PayrollReference=item?.Batch.Reference
+                PayrollProcessed=locked,PayrollMonth=item?.Batch.PayrollMonth,PayrollReference=item?.Batch.Reference,StaffId=row.IndividualId
             });
         }
         return result;

@@ -18,7 +18,7 @@
 @inject ToastService ToastService
 
 <div class="leave-application">
-<div class="border-b px-1 pb-3">
+<div class="border-b px-1 pb-3 @(HideHeader ? "hidden" : "")">
     <h2 class="text-2xl font-bold text-slate-800">Leave Application</h2>
     <p class="text-sm text-slate-500">@(LeaveState.ApplicantJobId.HasValue ? "HR application on behalf of the selected staff member. The normal approval flow applies." : "Apply for leave and manage details")</p>
 
@@ -94,6 +94,7 @@
 @code {
     [Parameter] 
     public LeaveApplicationState LeaveState { get; set; } = default!;
+    [Parameter] public bool HideHeader { get; set; }
 
      // ===== TAB CONTROL =====
     private int calendarRefresh;
