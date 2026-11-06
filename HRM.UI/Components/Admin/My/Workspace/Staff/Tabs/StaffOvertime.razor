@@ -4,11 +4,11 @@
 @inject ToastService Toasts
 @inject ILogger<StaffOvertime> Logger
 
-<section class="space-y-4" aria-label="Staff Overtime">
+<section class="w-full p-2 flex flex-col gap-2" aria-label="Staff Overtime">
     <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
         <div>
-            <h3 class="text-base font-bold text-slate-800">Staff Overtime & Claims</h3>
+            <h3 class="text-base font-bold text-slate-800">Staff Overtime &amp; Claims</h3>
             <p class="text-xs text-slate-500 mt-0.5">Overtime preapproval requests, clock claim submissions, worked hours, and approval history.</p>
         </div>
         <div class="flex flex-wrap items-center gap-2">
@@ -55,196 +55,188 @@
         </div>
     </div>
 
-    <!-- View Switcher Pills -->
-    <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
-        <div class="flex flex-wrap gap-2">
-            <button type="button"
-                    class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all @(activeSubTab == "claims" ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-2xs" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")"
-                    @onclick='() => activeSubTab = "claims"'>
-                Overtime Claims (@StaffClaims.Count())
-            </button>
-            <button type="button"
-                    class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all @(activeSubTab == "work" ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-2xs" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50")"
-                    @onclick='() => activeSubTab = "work"'>
-                Preapproval &amp; Work Requests (@StaffWorkRequests.Count())
-            </button>
-        </div>
-
-        @if (activeSubTab == "claims")
-        {
-            <div class="flex items-center gap-1.5 text-xs">
-                <span class="text-slate-500">Status:</span>
-                <select class="rounded-lg border border-slate-200 bg-white p-1 text-xs text-slate-700" @bind="claimFilter">
-                    <option value="all">All statuses</option>
-                    <option value="approved">Approved only</option>
-                    <option value="pending">Pending review</option>
-                </select>
-            </div>
-        }
-    </div>
-
     @if (loading)
     {
         <div class="rounded-xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500 shadow-2xs">
             Loading overtime records…
         </div>
     }
-    else if (activeSubTab == "claims")
-    {
-        <!-- Overtime Claims Table -->
-        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-            <table class="w-full text-left text-xs">
-                <thead>
-                    <tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
-                        <th class="px-3.5 py-2.5">Date</th>
-                        <th class="px-3.5 py-2.5">Reference</th>
-                        <th class="px-3.5 py-2.5">Duration</th>
-                        <th class="px-3.5 py-2.5">Time Logged</th>
-                        <th class="px-3.5 py-2.5">Task / Source</th>
-                        <th class="px-3.5 py-2.5">Reason</th>
-                        <th class="px-3.5 py-2.5">Status</th>
-                        <th class="px-3.5 py-2.5">Payroll / Payment</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (FilteredClaims.Any())
-                    {
-                        @foreach (var claim in FilteredClaims)
-                        {
-                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                                <td class="whitespace-nowrap px-3.5 py-2.5 font-medium text-slate-800">
-                                    @claim.Date.ToString("dd MMM yyyy")
-                                </td>
-                                <td class="px-3.5 py-2.5 font-mono text-[11px] font-semibold text-slate-700">
-                                    @claim.Reference
-                                </td>
-                                <td class="px-3.5 py-2.5 font-semibold text-slate-900">
-                                    @FormatMinutes(claim.Minutes)
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-600 text-[11px]">
-                                    @if (claim.Start.HasValue && claim.End.HasValue)
-                                    {
-                                        <span>@claim.Start.Value.ToString("HH:mm") – @claim.End.Value.ToString("HH:mm")</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-slate-400">—</span>
-                                    }
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-700 max-w-xs truncate" title="@claim.Task">
-                                    @(claim.Task ?? claim.Source)
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-600 max-w-xs truncate" title="@claim.Reason">
-                                    @claim.Reason
-                                </td>
-                                <td class="px-3.5 py-2.5">
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(claim.StateId)">
-                                        @claim.Status
-                                    </span>
-                                </td>
-                                <td class="px-3.5 py-2.5 text-[11px]">
-                                    @if (claim.PayrollProcessed)
-                                    {
-                                        <span class="text-emerald-700 font-medium">✓ Processed @(claim.PayrollReference != null ? $"({claim.PayrollReference})" : "")</span>
-                                    }
-                                    else if (!string.IsNullOrEmpty(claim.PaymentReference))
-                                    {
-                                        <span class="text-emerald-600 font-medium">@claim.PaymentReference</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-slate-400">Unprocessed</span>
-                                    }
-                                </td>
-                            </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="8" class="p-8 text-center text-xs text-slate-500">
-                                No overtime claims found for this staff member.
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
     else
     {
-        <!-- Preapproval & Work Requests Table -->
-        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
-            <table class="w-full text-left text-xs">
-                <thead>
-                    <tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
-                        <th class="px-3.5 py-2.5">Reference</th>
-                        <th class="px-3.5 py-2.5">Type</th>
-                        <th class="px-3.5 py-2.5">Period</th>
-                        <th class="px-3.5 py-2.5">Proposed Timing</th>
-                        <th class="px-3.5 py-2.5">Tasks</th>
-                        <th class="px-3.5 py-2.5">Reason</th>
-                        <th class="px-3.5 py-2.5">Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (StaffWorkRequests.Any())
-                    {
-                        @foreach (var work in StaffWorkRequests)
-                        {
-                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                                <td class="whitespace-nowrap px-3.5 py-2.5 font-mono text-[11px] font-semibold text-slate-700">
-                                    @work.Reference
-                                </td>
-                                <td class="px-3.5 py-2.5">
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                                        @work.Kind
-                                    </span>
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-700">
-                                    @work.From.ToString("dd MMM yyyy") – @work.To.ToString("dd MMM yyyy")
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-600 text-[11px]">
-                                    @if (work.Start.HasValue && work.End.HasValue)
-                                    {
-                                        <span>@work.Start.Value.ToString("HH:mm") – @work.End.Value.ToString("HH:mm")</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-slate-400">—</span>
-                                    }
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-700">
-                                    @if (work.Tasks.Count > 0)
-                                    {
-                                        <span class="text-xs">@string.Join(", ", work.Tasks)</span>
-                                    }
-                                    else
-                                    {
-                                        <span class="text-slate-400">—</span>
-                                    }
-                                </td>
-                                <td class="px-3.5 py-2.5 text-slate-600 max-w-xs truncate" title="@work.Reason">
-                                    @work.Reason
-                                </td>
-                                <td class="px-3.5 py-2.5">
-                                    <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(work.StateId)">
-                                        @work.Status
-                                    </span>
-                                </td>
+        <!-- Two-Column Grid: Claims (Left 7) and Preapprovals & Info (Right 5) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            
+            <!-- Left Column: Overtime Claims (7 cols) -->
+            <div class="lg:col-span-7 min-w-0 space-y-4">
+                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    <div class="p-3 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <h4 class="font-bold text-xs text-slate-800">Overtime Claims &amp; Logs</h4>
+                            <p class="text-[11px] text-slate-400">Submitted claims and verified clock durations</p>
+                        </div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <span class="text-slate-500 text-[11px]">Filter:</span>
+                            <select class="rounded-lg border border-slate-200 bg-white p-1 text-xs text-slate-700" @bind="claimFilter">
+                                <option value="all">All statuses (@StaffClaims.Count())</option>
+                                <option value="approved">Approved only (@StaffClaims.Count(c => c.StateId == 4))</option>
+                                <option value="pending">Pending review (@StaffClaims.Count(c => c.StateId != 4 && c.StateId != 5 && c.StateId != 6))</option>
+                            </select>
+                        </div>
+                    </div>
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                                <th class="px-3.5 py-2.5">Date</th>
+                                <th class="px-3.5 py-2.5">Reference</th>
+                                <th class="px-3.5 py-2.5">Duration</th>
+                                <th class="px-3.5 py-2.5">Time Logged</th>
+                                <th class="px-3.5 py-2.5">Reason / Task</th>
+                                <th class="px-3.5 py-2.5">Status</th>
+                                <th class="px-3.5 py-2.5">Payroll</th>
                             </tr>
-                        }
-                    }
-                    else
-                    {
-                        <tr>
-                            <td colspan="7" class="p-8 text-center text-xs text-slate-500">
-                                No preapproval or work requests found for this staff member.
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+                        </thead>
+                        <tbody>
+                            @if (FilteredClaims.Any())
+                            {
+                                @foreach (var claim in FilteredClaims)
+                                {
+                                    <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                        <td class="whitespace-nowrap px-3.5 py-2.5 font-medium text-slate-800">
+                                            @claim.Date.ToString("dd MMM yyyy")
+                                        </td>
+                                        <td class="px-3.5 py-2.5 font-mono text-[11px] font-semibold text-slate-700">
+                                            @claim.Reference
+                                        </td>
+                                        <td class="px-3.5 py-2.5 font-semibold text-slate-900">
+                                            @FormatMinutes(claim.Minutes)
+                                        </td>
+                                        <td class="px-3.5 py-2.5 text-slate-600 text-[11px] whitespace-nowrap">
+                                            @if (claim.Start.HasValue && claim.End.HasValue)
+                                            {
+                                                <span>@claim.Start.Value.ToString("HH:mm") – @claim.End.Value.ToString("HH:mm")</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400">—</span>
+                                            }
+                                        </td>
+                                        <td class="px-3.5 py-2.5 text-slate-600 max-w-[180px] truncate" title="@(claim.Task ?? claim.Reason)">
+                                            @(claim.Task ?? claim.Reason)
+                                        </td>
+                                        <td class="px-3.5 py-2.5">
+                                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(claim.StateId)">
+                                                @claim.Status
+                                            </span>
+                                        </td>
+                                        <td class="px-3.5 py-2.5 text-[11px] whitespace-nowrap">
+                                            @if (claim.PayrollProcessed)
+                                            {
+                                                <span class="text-emerald-700 font-medium">✓ Processed</span>
+                                            }
+                                            else if (!string.IsNullOrEmpty(claim.PaymentReference))
+                                            {
+                                                <span class="text-emerald-600 font-medium">@claim.PaymentReference</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400">Unprocessed</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="7" class="p-8 text-center text-xs text-slate-500">
+                                        No overtime claims found for this staff member.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Right Column: Preapprovals & Policy Overview (5 cols) -->
+            <div class="lg:col-span-5 min-w-0 space-y-4">
+                
+                <!-- Preapproval & Work Requests Table -->
+                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    <div class="p-3 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                            <h4 class="font-bold text-xs text-slate-800">Preapprovals &amp; Work Authorizations</h4>
+                            <p class="text-[11px] text-slate-400">Planned overtime tasks and authorisations</p>
+                        </div>
+                        <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">@StaffWorkRequests.Count()</span>
+                    </div>
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider">
+                                <th class="px-3 py-2">Ref / Type</th>
+                                <th class="px-3 py-2">Period</th>
+                                <th class="px-3 py-2">Tasks</th>
+                                <th class="px-3 py-2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @if (StaffWorkRequests.Any())
+                            {
+                                @foreach (var work in StaffWorkRequests)
+                                {
+                                    <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                        <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px]">
+                                            <span class="font-semibold text-slate-800 block">@work.Reference</span>
+                                            <span class="text-[10px] text-indigo-600 font-medium">@work.Kind</span>
+                                        </td>
+                                        <td class="px-3 py-2 text-slate-600 text-[11px]">
+                                            <span>@work.From.ToString("dd MMM")</span>
+                                            @if (work.From.Date != work.To.Date)
+                                            {
+                                                <span> – @work.To.ToString("dd MMM")</span>
+                                            }
+                                            @if (work.Start.HasValue && work.End.HasValue)
+                                            {
+                                                <span class="block text-slate-400 text-[10px]">@work.Start.Value.ToString("HH:mm")–@work.End.Value.ToString("HH:mm")</span>
+                                            }
+                                        </td>
+                                        <td class="px-3 py-2 text-slate-700 max-w-[130px] truncate" title="@string.Join(", ", work.Tasks)">
+                                            @(work.Tasks.Count > 0 ? string.Join(", ", work.Tasks) : work.Reason)
+                                        </td>
+                                        <td class="px-3 py-2">
+                                            <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(work.StateId)">
+                                                @work.Status
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                            else
+                            {
+                                <tr>
+                                    <td colspan="4" class="p-6 text-center text-xs text-slate-500">
+                                        No preapproval requests found.
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Overtime Policy & Information Card -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/60 p-4 shadow-2xs space-y-2">
+                    <h5 class="font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        <span class="text-emerald-700 font-bold">ℹ</span>
+                        <span>Overtime Guidelines &amp; Reconciliation</span>
+                    </h5>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                        Claims must be supported by valid check-in and check-out clock pairs recorded outside official working hours.
+                        Preapproved tasks expedite the supervisory approval process and ensure prompt payroll inclusion.
+                    </p>
+                </div>
+
+            </div>
+
         </div>
     }
 </section>
@@ -255,7 +247,6 @@
 
     private bool loading = true;
     private string? error;
-    private string activeSubTab = "claims";
     private string claimFilter = "all";
 
     private List<OvertimeRow> allClaims = [];
