@@ -120,16 +120,16 @@ BEGIN
         DECLARE @HelpDeskTeamId int = SCOPE_IDENTITY();
         -- Assign first 2 staff if available
         INSERT INTO dbo.TeamStaffs (TeamId, StaffId, IsSuperVisor, StartDate, IsValid)
-        SELECT TOP 2 @HelpDeskTeamId, s.StaffId, 0, '2026-01-01', 1
+        SELECT TOP 2 @HelpDeskTeamId, s.IndividualID, 0, '2026-01-01', 1
         FROM dbo.Staffs s
-        WHERE NOT EXISTS (SELECT 1 FROM dbo.TeamStaffs ts WHERE ts.TeamId = @HelpDeskTeamId AND ts.StaffId = s.StaffId);
+        WHERE NOT EXISTS (SELECT 1 FROM dbo.TeamStaffs ts WHERE ts.TeamId = @HelpDeskTeamId AND ts.StaffId = s.IndividualID);
     END;
 
     -- Ensure a sample project exists
     IF NOT EXISTS (SELECT 1 FROM dbo.PR_Projects)
     BEGIN
         DECLARE @TeamId int = (SELECT TOP 1 TeamId FROM dbo.Teams WHERE OrganisationId = @OrgId);
-        DECLARE @MgrStaffId int = (SELECT TOP 1 StaffId FROM dbo.Staffs);
+        DECLARE @MgrStaffId int = (SELECT TOP 1 IndividualID FROM dbo.Staffs);
 
         INSERT INTO dbo.PR_Projects (OrganisationId, TeamId, Name, Reference, Description, ProjectManagerStaffId, ProjectManagerName, StartDate, PlannedEndDate, Status, ProgressPercentage)
         VALUES 
@@ -172,7 +172,7 @@ BEGIN
     -- Ensure a sample evaluation exists
     IF NOT EXISTS (SELECT 1 FROM dbo.EV_Evaluations)
     BEGIN
-        DECLARE @EvalStaffId int = (SELECT TOP 1 StaffId FROM dbo.Staffs);
+        DECLARE @EvalStaffId int = (SELECT TOP 1 IndividualID FROM dbo.Staffs);
         IF @EvalStaffId IS NOT NULL
         BEGIN
             INSERT INTO dbo.EV_Evaluations (OrganisationId, StaffId, StaffName, EvaluatorStaffId, EvaluatorName, EvaluationDate, Period, OverallRating, Status, GeneralComments, Strengths, AreasForImprovement, Goals)

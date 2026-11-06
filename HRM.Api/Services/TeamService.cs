@@ -181,22 +181,28 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
 
     public async Task<List<TeamProjectDto>> GetTeamProjectsAsync(int teamId, CancellationToken ct = default)
     {
+        var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();
         await using var db = await factory.CreateDbContextAsync(ct);
         await EnsureTablesExistAsync(db, ct);
+
+        var team = await db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.TeamId == teamId, ct);
+        if (team == null) return [];
+
+        if (!actor.IsSuperAdministrator && team.OrganisationId != orgId && !await access.HasOrganisationAccessAsync(team.OrganisationId))
+            return [];
 
         var projects = await db.Projects.AsNoTracking()
             .Include(p => p.Team)
             .Include(p => p.Members)
             .Include(p => p.Tasks)
-            .Where(p => p.TeamId == teamId || (p.OrganisationId == orgId && p.TeamId == null))
+            .Where(p => p.TeamId == teamId || (p.TeamId == null && (p.OrganisationId == orgId || p.OrganisationId == team.OrganisationId || p.OrganisationId == 0)))
             .OrderByDescending(p => p.StartDate)
             .ToListAsync(ct);
 
         var dtos = new List<TeamProjectDto>();
-        foreach (var p in projects.Where(p => p.OrganisationId == orgId || p.TeamId == teamId))
+        foreach (var p in projects)
         {
-            await EnsureOrganisationAsync(p.OrganisationId);
             var dto = MapProjectDto(p);
             dto.CanManageAssignments = await CanManageProjectAsync(db, p);
             dtos.Add(dto);

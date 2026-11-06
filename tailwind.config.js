@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+    darkMode: ['selector', '[data-theme="dark"], .dark'],
     content: [
         "./HRM.UI/Components/**/*.{razor,cs}",
         "./HRM.UI/Helpers/**/*.cs",
