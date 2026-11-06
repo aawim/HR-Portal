@@ -20,59 +20,29 @@
 @inject IAttendanceRequestService AttendanceRequests
 @inject IAttendanceService Attendance
 @inject ILeaveChangeService LeaveChanges
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestReview ReviewService
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<AttendanceRequestGrid> Logger
 
 <PageTitle>Attendance Requests - HR Portal</PageTitle>
 <BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
 
-<div class="leave-page min-w-0 w-full mx-auto px-2 sm:px-4">
-    <div class="leave-page-shell">
-        <!-- LEFT: Collapsible Category Navigation Rail (Same style as /online/leaves, with hover transitions) -->
-        <nav class="leave-page-nav @(isSidebarExpanded ? "" : "leave-page-nav--collapsed")" aria-label="Attendance request categories">
-            <div class="leave-navigation-heading flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-2">
-                <h2 class="text-lg font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                    Attendance Requests
-                </h2>
+<div class="w-full min-w-0 p-2 flex flex-col gap-3">
+    <!-- HORIZONTAL TABS (REPLACING CATEGORY RAIL) -->
+    <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Attendance Request Tabs">
+        @foreach (var tab in RequestTabs)
+        {
+            var isActive = activeTab == tab.Key;
+            <a href="@($"/online/attendance/attendance-request/{tab.Key}")"
+               class="rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(isActive ? "bg-emerald-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50")">
+                <span>@tab.Icon</span>
+                <span>@tab.Label</span>
+            </a>
+        }
+    </nav>
 
-                <button @onclick="ToggleSidebar" type="button"
-                        class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0"
-                        title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                    <svg class="w-5 h-5 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                    </svg>
-                </button>
-            </div>
-
-            @foreach (var tab in RequestTabs)
-            {
-                var isActive = activeTab == tab.Key;
-                <a href="@($"/online/attendance/attendance-request/{tab.Key}")"
-                   aria-current="@(isActive ? "page" : null)"
-                   title="@(!isSidebarExpanded ? tab.Label : null)"
-                   class="leave-nav-item group @(isActive ? "leave-nav-item--active" : "")">
-                    <div class="leave-nav-item__icon mx-auto">
-                        @tab.Icon
-                    </div>
-
-                    <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
-                        <h3 class="leave-nav-item__title mb-0.5 truncate">
-                            @tab.Label
-                        </h3>
-                        <p class="text-slate-500 text-xs leading-tight line-clamp-2">
-                            @tab.Description
-                        </p>
-                    </div>
-
-                    <div class="leave-nav-item__chevron flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
-                        </svg>
-                    </div>
-                </a>
-            }
-        </nav>
-
-        <!-- RIGHT: Main Content Panel -->
-        <div class="leave-page-content min-w-0 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-5">
+    <!-- MAIN CONTENT PANEL -->
+    <div class="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 sm:p-5 space-y-4">
             <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-3">
                 <div>
                     <h2 class="text-xl font-bold text-slate-800">@CurrentTabMetadata.Label</h2>
@@ -217,6 +187,37 @@
                             </section>
 
                             <!-- 2. Attendance Request Chit Card -->
+                            @if (review != null && (review.CanApprove || review.CanCancel))
+                            {
+                                <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3" aria-label="Approval Decision and Actions">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                            Approval Decision &amp; Action
+                                        </h4>
+                                        @if (acting) { <span class="text-xs text-emerald-600 font-semibold animate-pulse">Processing...</span> }
+                                    </div>
+                                    @if (reviewError != null)
+                                    {
+                                        <div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">@reviewError</div>
+                                    }
+                                    <div class="space-y-1">
+                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Action Comment</label>
+                                        <textarea @bind="actionComment" rows="2" maxlength="2000" disabled="@acting" placeholder="Enter optional decision remarks..." class="w-full p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg resize-none"></textarea>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        @if (review.CanApprove)
+                                        {
+                                            <button type="button" class="portal-action-btn portal-action-btn--primary" disabled="@acting" @onclick='() => Act("Approve")'>@review.ActionLabel</button>
+                                            <button type="button" class="portal-action-btn" disabled="@acting" @onclick='() => Act("Reject")'>Reject</button>
+                                        }
+                                        @if (review.CanCancel)
+                                        {
+                                            <button type="button" class="portal-action-btn" disabled="@acting" @onclick='() => Act("Cancel")'>Cancel request</button>
+                                        }
+                                    </div>
+                                </section>
+                            }
+
                             <article class="leave-chit-card" aria-label="Attendance request chit">
                                 <div class="leave-chit-header">
                                     <div>
@@ -237,7 +238,7 @@
                                         <dd>@DisplayText(SelectedRequest.StaffName)</dd>
                                     </div>
                                     <div>
-                                        <dt>Request Category</dt>
+                                        <dt>Request Type</dt>
                                         <dd>@DisplayText(SelectedRequest.Kind)</dd>
                                     </div>
                                     <div>
@@ -442,7 +443,6 @@
                 </div>
             }
         </div>
-    </div>
 </div>
 
 <div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
@@ -645,7 +645,41 @@
             ? selectedRequest
             : FilteredRequests.FirstOrDefault();
 
-    private void SelectRequest(AttendanceRequestDto req) => selectedRequest = req;
+    private HRM.Application.Contracts.Pages.AttendanceReview? review;
+    private string? reviewError, actionComment;
+    private bool acting;
+
+    private async Task SelectRequest(AttendanceRequestDto req)
+    {
+        selectedRequest = req;
+        review = null;
+        reviewError = null;
+        actionComment = null;
+        try { review = await ReviewService.GetAsync(req.RequestId); }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to load review for request {RequestId}", req.RequestId); }
+    }
+
+    private async Task Act(string action)
+    {
+        if (acting || review == null) return;
+        acting = true;
+        reviewError = null;
+        var id = review.RequestId;
+        try
+        {
+            var result = await ReviewService.ActAsync(id, review.StateId, action, actionComment);
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                await ExecuteSearch();
+                var row = requestsList.FirstOrDefault(x => x.RequestId == id);
+                if (row != null) await SelectRequest(row);
+            }
+            else { reviewError = result.Message; }
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Attendance request {RequestId} action failed", id); reviewError = "This action could not be completed. Refresh before trying again."; }
+        finally { acting = false; }
+    }
 
     private void OnTableSearchInput(ChangeEventArgs e)
     {
@@ -675,12 +709,13 @@
     private static string DisplayText(string? value) =>
         string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         activeTab = RequestTabs.Any(t => t.Key == TabSection) ? TabSection! : "attendance";
         showAddPanel = false;
         currentPage = 1;
         selectedRequest = FilteredRequests.FirstOrDefault();
+            if (selectedRequest != null) await SelectRequest(selectedRequest);
     }
 
     // Filter Bindings
