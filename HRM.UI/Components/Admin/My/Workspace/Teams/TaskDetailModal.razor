@@ -1,0 +1,163 @@
+@using HRM.DTOs
+
+@if (TaskItem != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+         role="dialog"
+         aria-modal="true"
+         aria-labelledby="task-modal-title"
+         @onkeydown="HandleKeyDown"
+         tabindex="0">
+        <!-- Backdrop click target -->
+        <div class="fixed inset-0" @onclick="CloseAsync" aria-hidden="true"></div>
+
+        <div class="relative w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto z-10"
+             @onclick:stopPropagation>
+            <!-- Header -->
+            <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-3">
+                <div class="min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap mb-1">
+                        <span class="font-mono text-[11px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/40 px-2 py-0.5 rounded-md">
+                            @TaskItem.TaskReference
+                        </span>
+                        <span class="rounded-full px-2.5 py-0.5 text-[10px] font-bold @GetStatusBadge(TaskItem.Status)">
+                            @TaskItem.Status
+                        </span>
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetPriorityBadge(TaskItem.Priority)">
+                            @TaskItem.Priority Priority
+                        </span>
+                    </div>
+                    <h3 id="task-modal-title" class="text-base font-bold text-slate-900 dark:text-slate-100 break-words">
+                        @TaskItem.Title
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Project: <span class="font-medium text-slate-700 dark:text-slate-300">@TaskItem.ProjectName</span>
+                    </p>
+                </div>
+                <button type="button"
+                        class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        @onclick="CloseAsync"
+                        aria-label="Close dialog">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Description -->
+            <div class="space-y-1">
+                <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300">Description</h4>
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 text-xs text-slate-800 dark:text-slate-200 whitespace-pre-wrap leading-relaxed">
+                    @(!string.IsNullOrWhiteSpace(TaskItem.Description) ? TaskItem.Description : "No description provided for this task.")
+                </div>
+            </div>
+
+            <!-- Details Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                <!-- Assigned Employee -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-1 shadow-2xs">
+                    <span class="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Assigned Member</span>
+                    <div class="flex items-center gap-2">
+                        <div class="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
+                            @(string.IsNullOrWhiteSpace(TaskItem.AssignedStaffName) ? "?" : TaskItem.AssignedStaffName[0].ToString().ToUpper())
+                        </div>
+                        <div class="min-w-0">
+                            <span class="font-semibold text-slate-900 dark:text-slate-100 block truncate">
+                                @(!string.IsNullOrWhiteSpace(TaskItem.AssignedStaffName) ? TaskItem.AssignedStaffName : "Unassigned")
+                            </span>
+                            @if (TaskItem.AssignedStaffId.HasValue)
+                            {
+                                <span class="text-[10px] text-slate-500">ID: #@TaskItem.AssignedStaffId</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progress -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 space-y-1.5 shadow-2xs">
+                    <div class="flex items-center justify-between text-[11px]">
+                        <span class="font-medium text-slate-500 dark:text-slate-400">Progress</span>
+                        <span class="font-bold text-slate-900 dark:text-slate-100">@TaskItem.Progress%</span>
+                    </div>
+                    <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-300 @(TaskItem.Progress == 100 ? "bg-emerald-500" : "bg-teal-600")"
+                             style="width: @(Math.Clamp(TaskItem.Progress, 0, 100))%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dates Timeline -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                <div class="p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Start Date</span>
+                    <span class="font-semibold text-slate-800 dark:text-slate-200">
+                        @(TaskItem.StartDate?.ToString("dd MMM yyyy") ?? "Not set")
+                    </span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Expected End</span>
+                    <span class="font-semibold text-slate-800 dark:text-slate-200">
+                        @(TaskItem.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Not set")
+                    </span>
+                </div>
+                <div class="p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Completed Date</span>
+                    <span class="font-semibold @(TaskItem.ActualCompletionDate.HasValue ? "text-emerald-700 dark:text-emerald-400" : "text-slate-500")">
+                        @(TaskItem.ActualCompletionDate?.ToString("dd MMM yyyy") ?? "Pending")
+                    </span>
+                </div>
+            </div>
+
+            <!-- Remarks & Activity History -->
+            @if (!string.IsNullOrWhiteSpace(TaskItem.Remarks))
+            {
+                <div class="space-y-1">
+                    <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300">Remarks &amp; Activity Notes</h4>
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs text-slate-700 dark:text-slate-300">
+                        @TaskItem.Remarks
+                    </div>
+                </div>
+            }
+
+            <!-- Footer Action -->
+            <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 shadow-xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="CloseAsync">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public TeamProjectTaskDto? TaskItem { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await CloseAsync();
+        }
+    }
+
+    private static string GetStatusBadge(string? status) => status switch
+    {
+        "Completed" => "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40",
+        "Ongoing" or "In Progress" or "Active" => "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40",
+        "Parked" or "On Hold" or "Paused" => "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40",
+        _ => "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    };
+
+    private static string GetPriorityBadge(string? priority) => priority switch
+    {
+        "Critical" => "bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300",
+        "High" => "bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300",
+        "Medium" => "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300",
+        _ => "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+    };
+}

@@ -58,4 +58,63 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         public global::System.Int32 staffId { get; set; }
     }
 
+    [HttpGet("search-teams")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamSearchItemDto>>> SearchTeams([FromQuery] global::System.String query)
+    {
+        return Ok(await service.SearchTeamsAsync(query, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-team-by-id")]
+    public async Task<ActionResult<global::HRM.DTOs.TeamDto?>> GetTeamById([FromQuery] global::System.Int32 teamId)
+    {
+        return Ok(await service.GetTeamByIdAsync(teamId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-team-projects")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamProjectDto>>> GetTeamProjects([FromQuery] global::System.Int32 teamId)
+    {
+        return Ok(await service.GetTeamProjectsAsync(teamId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-project-details")]
+    public async Task<ActionResult<global::HRM.DTOs.TeamProjectDto?>> GetProjectDetails([FromQuery] global::System.Int32 projectId)
+    {
+        return Ok(await service.GetProjectDetailsAsync(projectId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-task-details")]
+    public async Task<ActionResult<global::HRM.DTOs.TeamProjectTaskDto?>> GetTaskDetails([FromQuery] global::System.Int32 taskId)
+    {
+        return Ok(await service.GetTaskDetailsAsync(taskId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-staff360")]
+    public async Task<ActionResult<global::HRM.DTOs.Staff360SummaryDto?>> GetStaff360([FromQuery] global::System.Int32 staffId)
+    {
+        return Ok(await service.GetStaff360Async(staffId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-staff-evaluations")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.StaffEvaluationDto>>> GetStaffEvaluations([FromQuery] global::System.Int32 staffId)
+    {
+        return Ok(await service.GetStaffEvaluationsAsync(staffId, HttpContext.RequestAborted));
+    }
+
+    [HttpPost("save-staff-evaluation")]
+    public async Task<ActionResult<global::System.Int32>> SaveStaffEvaluation([FromBody] TeamSaveStaffEvaluationRequest request)
+    {
+        return Ok(await service.SaveStaffEvaluationAsync(request.request, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveStaffEvaluationRequest
+    {
+        public global::HRM.DTOs.SaveEvaluationRequestDto request { get; set; } = default!;
+    }
+
+    [HttpGet("get-help-desk-team")]
+    public async Task<ActionResult<global::HRM.DTOs.TeamDto?>> GetHelpDeskTeam()
+    {
+        return Ok(await service.GetHelpDeskTeamAsync(HttpContext.RequestAborted));
+    }
+
 }

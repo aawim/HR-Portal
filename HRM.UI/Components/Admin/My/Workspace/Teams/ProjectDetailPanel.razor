@@ -1,0 +1,313 @@
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@inject ITeam TeamService
+@inject ILogger<ProjectDetailPanel> Logger
+
+<aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+    <!-- Header -->
+    <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-2">
+        <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <span class="font-mono text-[11px] font-semibold text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/40 px-2 py-0.2 rounded-md">
+                    @(Project?.Reference ?? "PRJ")
+                </span>
+                <span class="rounded-full px-2.5 py-0.5 text-[10px] font-bold @GetStatusBadge(Project?.Status)">
+                    @(Project?.Status ?? "Active")
+                </span>
+            </div>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1 break-words">
+                @(Project?.Name ?? $"Project #{ProjectId}")
+            </h3>
+        </div>
+        <button type="button"
+                class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                @onclick="CloseAsync"
+                title="Close project details panel">
+            ✕
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            Loading project details…
+        </div>
+    }
+    else if (Project != null)
+    {
+        <!-- Description -->
+        @if (!string.IsNullOrWhiteSpace(Project.Description))
+        {
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/30 p-3 text-xs text-slate-700 dark:text-slate-300">
+                @Project.Description
+            </div>
+        }
+
+        <!-- Details Grid -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+            <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/40">
+                <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Project Owner / Manager</span>
+                <span class="font-bold text-slate-900 dark:text-slate-100 block truncate">
+                    @(!string.IsNullOrWhiteSpace(Project.ProjectManagerName) ? Project.ProjectManagerName : "Unassigned")
+                </span>
+            </div>
+            <div class="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800/40">
+                <span class="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">Assigned Team</span>
+                <span class="font-bold text-slate-900 dark:text-slate-100 block truncate">@Project.TeamName</span>
+            </div>
+        </div>
+
+        <!-- Timeline Dates -->
+        <div class="grid grid-cols-3 gap-1.5 text-[11px] p-2 rounded-xl bg-slate-50 dark:bg-slate-800/30 border border-slate-200 dark:border-slate-800">
+            <div>
+                <span class="text-[10px] text-slate-500 block">Start Date</span>
+                <span class="font-semibold text-slate-800 dark:text-slate-200">@Project.StartDate.ToString("dd MMM yyyy")</span>
+            </div>
+            <div>
+                <span class="text-[10px] text-slate-500 block">Planned End</span>
+                <span class="font-semibold text-slate-800 dark:text-slate-200">@(Project.PlannedEndDate?.ToString("dd MMM yyyy") ?? "-")</span>
+            </div>
+            <div>
+                <span class="text-[10px] text-slate-500 block">Actual End</span>
+                <span class="font-semibold @(Project.ActualEndDate.HasValue ? "text-emerald-600" : "text-slate-500")">
+                    @(Project.ActualEndDate?.ToString("dd MMM yyyy") ?? "In Progress")
+                </span>
+            </div>
+        </div>
+
+        <!-- Progress Indicator -->
+        <div class="space-y-1">
+            <div class="flex items-center justify-between text-xs">
+                <span class="font-semibold text-slate-700 dark:text-slate-300">Project Completion</span>
+                <span class="font-bold text-slate-900 dark:text-slate-100">@Project.ProgressPercentage%</span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div class="h-full rounded-full bg-teal-600 transition-all duration-300"
+                     style="width: @Project.ProgressPercentage%"></div>
+            </div>
+        </div>
+
+        <!-- Assigned Members -->
+        @if (Project.Members.Count > 0)
+        {
+            <div class="space-y-1.5">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">
+                    Project Members (@Project.Members.Count)
+                </span>
+                <div class="flex flex-wrap gap-1.5">
+                    @foreach (var m in Project.Members)
+                    {
+                        <span class="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200">
+                            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-[9px]">
+                                @(m.StaffName.Length > 0 ? m.StaffName[0].ToString().ToUpper() : "M")
+                            </span>
+                            <span>@m.StaffName</span>
+                            <span class="text-slate-400 text-[10px]">(@m.Role)</span>
+                        </span>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Tasks Grouped by Category -->
+        <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <div class="flex items-center justify-between">
+                <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                    Project Tasks (@Project.TotalTaskCount)
+                </h4>
+            </div>
+
+            <!-- 1. Ongoing Tasks -->
+            <div class="space-y-1.5">
+                <div class="flex items-center justify-between text-[11px] font-bold text-blue-700 dark:text-blue-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                        Ongoing Tasks
+                    </span>
+                    <span class="rounded-full bg-blue-100 dark:bg-blue-950/60 px-2 py-0.2 text-[10px]">
+                        @Project.OngoingTaskCount
+                    </span>
+                </div>
+                @if (Project.Tasks.Count(t => t.Status is "Ongoing" or "In Progress" or "Active") == 0)
+                {
+                    <p class="text-[11px] text-slate-400 italic p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg">No active ongoing tasks.</p>
+                }
+                else
+                {
+                    <div class="space-y-1.5">
+                        @foreach (var task in Project.Tasks.Where(t => t.Status is "Ongoing" or "In Progress" or "Active"))
+                        {
+                            <div @key="task.TaskId"
+                                 class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-blue-300 dark:hover:border-blue-700 transition cursor-pointer shadow-2xs group"
+                                 @onclick="() => SelectTaskAsync(task)">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-mono text-[10px] text-blue-600 dark:text-blue-400 font-bold">@task.TaskReference</span>
+                                            <span class="font-semibold text-xs text-slate-900 dark:text-slate-100 group-hover:text-blue-600 transition truncate block">
+                                                @task.Title
+                                            </span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Assigned: @(!string.IsNullOrWhiteSpace(task.AssignedStaffName) ? task.AssignedStaffName : "Unassigned") · @task.Priority
+                                        </p>
+                                    </div>
+                                    <span class="font-bold text-xs text-slate-700 dark:text-slate-300 shrink-0">@task.Progress%</span>
+                                </div>
+                                <div class="w-full h-1 rounded-full bg-slate-100 dark:bg-slate-800 mt-2 overflow-hidden">
+                                    <div class="h-full rounded-full bg-blue-600" style="width: @task.Progress%"></div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- 2. Completed Tasks -->
+            <div class="space-y-1.5 pt-1">
+                <div class="flex items-center justify-between text-[11px] font-bold text-emerald-700 dark:text-emerald-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        Completed Tasks
+                    </span>
+                    <span class="rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.2 text-[10px]">
+                        @Project.CompletedTaskCount
+                    </span>
+                </div>
+                @if (Project.Tasks.Count(t => t.Status is "Completed") == 0)
+                {
+                    <p class="text-[11px] text-slate-400 italic p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg">No completed tasks yet.</p>
+                }
+                else
+                {
+                    <div class="space-y-1.5">
+                        @foreach (var task in Project.Tasks.Where(t => t.Status is "Completed"))
+                        {
+                            <div @key="task.TaskId"
+                                 class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-emerald-300 dark:hover:border-emerald-700 transition cursor-pointer shadow-2xs group"
+                                 @onclick="() => SelectTaskAsync(task)">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-mono text-[10px] text-emerald-600 dark:text-emerald-400 font-bold">@task.TaskReference</span>
+                                            <span class="font-semibold text-xs text-slate-900 dark:text-slate-100 group-hover:text-emerald-600 transition truncate block">
+                                                @task.Title
+                                            </span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            Delivered on @(task.ActualCompletionDate?.ToString("dd MMM yyyy") ?? "-")
+                                        </p>
+                                    </div>
+                                    <span class="rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-bold shrink-0">
+                                        ✓ 100%
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- 3. Parked Tasks -->
+            <div class="space-y-1.5 pt-1">
+                <div class="flex items-center justify-between text-[11px] font-bold text-purple-700 dark:text-purple-400">
+                    <span class="flex items-center gap-1.5">
+                        <span class="w-2 h-2 rounded-full bg-purple-500"></span>
+                        Parked / Paused Tasks
+                    </span>
+                    <span class="rounded-full bg-purple-100 dark:bg-purple-950/60 px-2 py-0.2 text-[10px]">
+                        @Project.ParkedTaskCount
+                    </span>
+                </div>
+                @if (Project.Tasks.Count(t => t.Status is "Parked" or "On Hold" or "Paused") == 0)
+                {
+                    <p class="text-[11px] text-slate-400 italic p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg">No parked tasks.</p>
+                }
+                else
+                {
+                    <div class="space-y-1.5">
+                        @foreach (var task in Project.Tasks.Where(t => t.Status is "Parked" or "On Hold" or "Paused"))
+                        {
+                            <div @key="task.TaskId"
+                                 class="p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-purple-300 dark:hover:border-purple-700 transition cursor-pointer shadow-2xs group"
+                                 @onclick="() => SelectTaskAsync(task)">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="min-w-0">
+                                        <div class="flex items-center gap-1.5">
+                                            <span class="font-mono text-[10px] text-purple-600 dark:text-purple-400 font-bold">@task.TaskReference</span>
+                                            <span class="font-semibold text-xs text-slate-900 dark:text-slate-100 group-hover:text-purple-600 transition truncate block">
+                                                @task.Title
+                                            </span>
+                                        </div>
+                                        <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                            @(string.IsNullOrWhiteSpace(task.Remarks) ? "On Hold" : task.Remarks)
+                                        </p>
+                                    </div>
+                                    <span class="rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 text-[9px] font-bold shrink-0">
+                                        Parked
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    <!-- Footer -->
+    <div class="flex items-center justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+        <button type="button"
+                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                @onclick="CloseAsync">
+            Close Project Details
+        </button>
+    </div>
+</aside>
+
+@code {
+    [Parameter] public int ProjectId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<TeamProjectTaskDto> OnTaskClick { get; set; }
+
+    private TeamProjectDto? Project;
+    private bool loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (ProjectId > 0 && (Project == null || Project.ProjectId != ProjectId))
+        {
+            await LoadProjectAsync();
+        }
+    }
+
+    private async Task LoadProjectAsync()
+    {
+        loading = true;
+        try
+        {
+            Project = await TeamService.GetProjectDetailsAsync(ProjectId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load project details for {ProjectId}", ProjectId);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+
+    private async Task SelectTaskAsync(TeamProjectTaskDto task) => await OnTaskClick.InvokeAsync(task);
+
+    private static string GetStatusBadge(string? status) => status switch
+    {
+        "Completed" => "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/40",
+        "Ongoing" or "In Progress" or "Active" => "bg-blue-100 text-blue-800 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800/40",
+        "Parked" or "On Hold" => "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40",
+        _ => "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    };
+}

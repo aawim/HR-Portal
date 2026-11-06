@@ -1,0 +1,322 @@
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@inject ITeam TeamService
+@inject ILogger<MemberEvaluationPanel> Logger
+@inject HRM.Services.ToastService ToastService
+
+<aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+    <!-- Header -->
+    <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-2">
+        <div class="min-w-0">
+            <div class="flex items-center gap-1.5 flex-wrap">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">
+                    Employee Evaluation
+                </h3>
+                <span class="rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 px-2 py-0.2 text-[10px] font-semibold">
+                    Performance Review
+                </span>
+            </div>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                Staff: <span class="font-bold text-slate-700 dark:text-slate-300">@StaffName</span> (ID: #@StaffId)
+            </p>
+        </div>
+        <button type="button"
+                class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                @onclick="CloseAsync"
+                title="Close evaluation panel">
+            ✕
+        </button>
+    </div>
+
+    @if (bannerMessage != null)
+    {
+        <div class="p-3 rounded-xl text-xs flex items-center justify-between @(isSuccess ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200")">
+            <span>@bannerMessage</span>
+            <button type="button" class="font-bold ml-2" @onclick="() => bannerMessage = null">✕</button>
+        </div>
+    }
+
+    <!-- Tab Toggle: New Evaluation vs History -->
+    <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
+        <button type="button"
+                class="flex-1 rounded-md py-1 font-semibold transition @(activeSubTab == "form" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                @onclick='() => activeSubTab = "form"'>
+            Evaluation Form
+        </button>
+        <button type="button"
+                class="flex-1 rounded-md py-1 font-semibold transition @(activeSubTab == "history" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                @onclick='() => activeSubTab = "history"'>
+            History (@evalHistory.Count)
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <div class="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
+            <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+            Loading evaluation data…
+        </div>
+    }
+    else if (activeSubTab == "form")
+    {
+        <form @onsubmit="SubmitEvaluationAsync" @onsubmit:preventDefault class="space-y-4 text-xs">
+            <!-- Review Period -->
+            <div>
+                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Review Period / Cycle *</label>
+                <input type="text"
+                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                       placeholder="e.g. Q4 2026 Review, Annual Review 2026"
+                       @bind="model.Period"
+                       required />
+            </div>
+
+            <!-- Standard Evaluation Criteria (1-5 Rating) -->
+            <div class="space-y-3 pt-1">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1">
+                    <span class="font-bold text-slate-800 dark:text-slate-200">Evaluation Criteria</span>
+                    <span class="text-[11px] font-bold text-teal-700 dark:text-teal-400">
+                        Calculated Rating: @CalculatedOverallRating.ToString("F1") / 5.0
+                    </span>
+                </div>
+
+                @for (int i = 0; i < model.Scores.Count; i++)
+                {
+                    var index = i;
+                    var scoreItem = model.Scores[index];
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 space-y-2">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <span class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
+                                @(index + 1). @scoreItem.CriteriaName
+                            </span>
+                            <!-- Star/Number Rating Buttons (1 to 5) -->
+                            <div class="flex items-center gap-1">
+                                @for (int rating = 1; rating <= 5; rating++)
+                                {
+                                    var r = rating;
+                                    <button type="button"
+                                            class="w-6 h-6 rounded-md font-bold text-xs transition @(scoreItem.Score == r ? "bg-amber-500 text-white shadow-2xs" : "bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-amber-50")"
+                                            @onclick="() => scoreItem.Score = r">
+                                        @r
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <input type="text"
+                               class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600"
+                               placeholder="Specific observations or comments for @scoreItem.CriteriaName..."
+                               @bind="scoreItem.Comments" />
+                    </div>
+                }
+            </div>
+
+            <!-- Strengths -->
+            <div>
+                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Key Strengths &amp; Achievements</label>
+                <textarea rows="2"
+                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                          placeholder="Highlight noticeable accomplishments..."
+                          @bind="model.Strengths"></textarea>
+            </div>
+
+            <!-- Areas for Improvement -->
+            <div>
+                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Areas for Growth &amp; Improvement</label>
+                <textarea rows="2"
+                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                          placeholder="Areas needing guidance or enhancement..."
+                          @bind="model.AreasForImprovement"></textarea>
+            </div>
+
+            <!-- Goals -->
+            <div>
+                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Target Development Goals</label>
+                <textarea rows="2"
+                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                          placeholder="Agreed targets for the upcoming period..."
+                          @bind="model.Goals"></textarea>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="button"
+                        class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                        @onclick="CloseAsync"
+                        disabled="@submitting">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="rounded-lg border border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold hover:bg-teal-50"
+                        @onclick='() => SaveEvaluationAsync("Draft")'
+                        disabled="@submitting">
+                    Save Draft
+                </button>
+                <button type="submit"
+                        class="rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                        disabled="@submitting">
+                    @(submitting ? "Submitting…" : "Submit Evaluation →")
+                </button>
+            </div>
+        </form>
+    }
+    else if (activeSubTab == "history")
+    {
+        <!-- Evaluation History View -->
+        <div class="space-y-3">
+            @if (evalHistory.Count == 0)
+            {
+                <div class="py-12 text-center text-xs text-slate-500 dark:text-slate-400 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-6">
+                    <p class="font-semibold text-slate-700 dark:text-slate-300">No past evaluations recorded</p>
+                    <p class="text-[11px] mt-1 text-slate-400">Past performance reviews will be displayed here.</p>
+                </div>
+            }
+            else
+            {
+                @foreach (var past in evalHistory)
+                {
+                    <div @key="past.EvaluationId"
+                         class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-3.5 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100 block">@past.Period</span>
+                                <span class="text-[10px] text-slate-500">
+                                    Evaluated by @past.EvaluatorName on @past.EvaluationDate.ToString("dd MMM yyyy")
+                                </span>
+                            </div>
+                            <div class="text-right">
+                                <span class="rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-black px-2 py-0.5 text-xs">
+                                    ⭐ @past.OverallRating.ToString("F1")
+                                </span>
+                                <span class="block text-[10px] font-semibold text-slate-500 mt-0.5">@past.Status</span>
+                            </div>
+                        </div>
+
+                        <!-- Criteria Breakdown -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
+                            @foreach (var sc in past.Scores)
+                            {
+                                <div class="flex items-center justify-between bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-100 dark:border-slate-700">
+                                    <span class="text-slate-600 dark:text-slate-400 truncate pr-1">@sc.CriteriaName</span>
+                                    <span class="font-bold text-amber-600 dark:text-amber-400">@sc.Score/5</span>
+                                </div>
+                            }
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(past.GeneralComments))
+                        {
+                            <p class="text-[11px] text-slate-700 dark:text-slate-300 pt-1 italic">
+                                "@past.GeneralComments"
+                            </p>
+                        }
+                    </div>
+                }
+            }
+        </div>
+    }
+</aside>
+
+@code {
+    [Parameter] public int StaffId { get; set; }
+    [Parameter] public string StaffName { get; set; } = "";
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnEvaluationSaved { get; set; }
+
+    private string activeSubTab = "form";
+    private bool loading = true;
+    private bool submitting;
+    private string? bannerMessage;
+    private bool isSuccess;
+
+    private SaveEvaluationRequestDto model = new();
+    private List<StaffEvaluationDto> evalHistory = new();
+
+    private decimal CalculatedOverallRating
+    {
+        get
+        {
+            if (model.Scores.Count == 0) return 4.0m;
+            return Math.Round((decimal)model.Scores.Average(s => s.Score), 1);
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId > 0 && model.StaffId != StaffId)
+        {
+            await LoadDataAsync();
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        loading = true;
+        bannerMessage = null;
+        try
+        {
+            model = new SaveEvaluationRequestDto
+            {
+                StaffId = StaffId,
+                Period = "Q4 2026 Evaluation Cycle",
+                Scores = new List<StaffEvaluationScoreDto>
+                {
+                    new() { CriteriaName = "Quality & Accuracy of Work", Score = 4 },
+                    new() { CriteriaName = "Communication & Teamwork", Score = 5 },
+                    new() { CriteriaName = "Punctuality & Reliability", Score = 4 },
+                    new() { CriteriaName = "Job Knowledge & Technical Skill", Score = 4 },
+                    new() { CriteriaName = "Initiative & Problem Solving", Score = 4 }
+                }
+            };
+
+            evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load evaluation info for staff {StaffId}", StaffId);
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SubmitEvaluationAsync() => await SaveEvaluationAsync("Submitted");
+
+    private async Task SaveEvaluationAsync(string status)
+    {
+        if (string.IsNullOrWhiteSpace(model.Period))
+        {
+            bannerMessage = "Please specify the evaluation review period.";
+            isSuccess = false;
+            return;
+        }
+
+        submitting = true;
+        bannerMessage = null;
+        try
+        {
+            model.Status = status;
+            model.OverallRating = CalculatedOverallRating;
+            var createdId = await TeamService.SaveStaffEvaluationAsync(model);
+
+            isSuccess = true;
+            bannerMessage = $"Evaluation successfully recorded (#{createdId}) with status '{status}'.";
+            ToastService.Success(bannerMessage);
+
+            // Reload history
+            evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+            await OnEvaluationSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to save evaluation for staff {StaffId}", StaffId);
+            bannerMessage = "Failed to save evaluation. Please check logs.";
+            isSuccess = false;
+            ToastService.Error(bannerMessage);
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+}
