@@ -252,7 +252,6 @@ public sealed class AssetCustody
     public ICollection<AssetReturnItem> ReturnItems { get; set; } = new List<AssetReturnItem>();
     public ICollection<AssetTransferDisposition> TransferDispositions { get; set; } = new List<AssetTransferDisposition>();
     public ICollection<AssetServiceRequestItem> ServiceRequestItems { get; set; } = new List<AssetServiceRequestItem>();
-    public ICollection<AssetTemporaryHandover> TemporaryHandovers { get; set; } = new List<AssetTemporaryHandover>();
     public ICollection<AssetReplacementLink> OriginalReplacementLinks { get; set; } = new List<AssetReplacementLink>();
     public ICollection<AssetReplacementLink> NewReplacementLinks { get; set; } = new List<AssetReplacementLink>();
 }

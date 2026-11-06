@@ -68,7 +68,7 @@ public sealed class StaffAssetLifecycleMapping :
 
         b.HasOne(x => x.ServiceRequest).WithMany(x => x.Items).HasForeignKey(x => x.AssetServiceRequestId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.AssetItem).WithMany().HasForeignKey(x => x.AssetItemId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne(x => x.AssetCustody).WithMany().HasForeignKey(x => x.AssetCustodyId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.AssetCustody).WithMany(c => c.ServiceRequestItems).HasForeignKey(x => x.AssetCustodyId).OnDelete(DeleteBehavior.Restrict);
     }
 
     public void Configure(EntityTypeBuilder<AssetMaintenanceJob> b)
@@ -194,9 +194,9 @@ public sealed class StaffAssetLifecycleMapping :
 
         b.HasOne(x => x.ServiceRequest).WithMany(x => x.ReplacementLinks).HasForeignKey(x => x.AssetServiceRequestId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.OriginalAssetItem).WithMany(x => x.OriginalReplacementLinks).HasForeignKey(x => x.OriginalAssetItemId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne(x => x.OriginalAssetCustody).WithMany().HasForeignKey(x => x.OriginalAssetCustodyId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.OriginalAssetCustody).WithMany(c => c.OriginalReplacementLinks).HasForeignKey(x => x.OriginalAssetCustodyId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.ReplacementAssetItem).WithMany(x => x.NewReplacementLinks).HasForeignKey(x => x.ReplacementAssetItemId).OnDelete(DeleteBehavior.Restrict);
-        b.HasOne(x => x.ReplacementAssetCustody).WithMany().HasForeignKey(x => x.ReplacementAssetCustodyId).OnDelete(DeleteBehavior.Restrict);
+        b.HasOne(x => x.ReplacementAssetCustody).WithMany(c => c.NewReplacementLinks).HasForeignKey(x => x.ReplacementAssetCustodyId).OnDelete(DeleteBehavior.Restrict);
         b.HasOne(x => x.RecordedByUser).WithMany().HasForeignKey(x => x.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 

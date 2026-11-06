@@ -954,15 +954,22 @@
             Decisions = lineDecisions
         };
 
-        var res = await AssetService.SubmitStaffDecisionsAsync(batch);
-        if (res.Success)
+        try
         {
-            Toasts.Success("Your asset acknowledgement has been recorded successfully.");
-            await LoadPortalDataAsync();
+            var res = await AssetService.SubmitStaffDecisionsAsync(batch);
+            if (res.Success)
+            {
+                Toasts.Success("Your asset acknowledgement has been recorded successfully.");
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error(ex.Message);
         }
     }
 
@@ -998,16 +1005,23 @@
             AssetCustodyIds = [selectedCustodyIdToReturn]
         };
 
-        var res = await AssetService.CreateReturnAsync(input);
-        if (res.Success)
+        try
         {
-            Toasts.Success("Return request submitted. Please hand over the physical equipment to the asset officer.");
-            showReturnModal = false;
-            await LoadPortalDataAsync();
+            var res = await AssetService.CreateReturnAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Return request submitted. Please hand over the physical equipment to the asset officer.");
+                showReturnModal = false;
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error(ex.Message);
         }
     }
 
@@ -1089,17 +1103,24 @@
             ]
         };
 
-        var res = await AssetService.CreateServiceRequestAsync(input);
-        if (res.Success)
+        try
         {
-            Toasts.Success("Equipment fault reported. The IT workshop will triage and assign a technician.");
-            showFaultModal = false;
-            activeTab = "service";
-            await LoadPortalDataAsync();
+            var res = await AssetService.CreateServiceRequestAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Equipment fault reported. The IT workshop will triage and assign a technician.");
+                showFaultModal = false;
+                activeTab = "service";
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error(ex.Message);
         }
     }
 
@@ -1150,17 +1171,24 @@
             ]
         };
 
-        var res = await AssetService.CreateServiceRequestAsync(input);
-        if (res.Success)
+        try
         {
-            Toasts.Success("Hardware upgrade requested. Active custody will be preserved while parts are installed.");
-            showUpgradeModal = false;
-            activeTab = "service";
-            await LoadPortalDataAsync();
+            var res = await AssetService.CreateServiceRequestAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Hardware upgrade requested. Active custody will be preserved while parts are installed.");
+                showUpgradeModal = false;
+                activeTab = "service";
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error(ex.Message);
         }
     }
 
