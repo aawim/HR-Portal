@@ -1,3 +1,6 @@
+@page "/admin/my/workspace"
+@page "/admin/my/workspace/{ActiveSection}"
+@page "/admin/my/workspace/{EntityRoute}/{EntityId:int}/{ActiveSection}"
 @page "/admin/my/workspace/hub"
 @page "/admin/my/workspace/team-hub"
 @page "/admin/my/workspace-hub"
@@ -29,7 +32,7 @@
 @attribute [Authorize]
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Admin Workspace Hub - HR Portal</PageTitle>
+<PageTitle>Admin Workspace - HR Portal</PageTitle>
 
 <section class="my-workspace-page w-full min-w-0 p-2 space-y-4 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
     
@@ -37,7 +40,7 @@
     <div class="space-y-2">
         <div class="flex items-center justify-between flex-wrap gap-2">
             <div>
-                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Admin Workspace Hub</h1>
+                <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Admin Workspace</h1>
                 <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Management dashboard for supervised teams, employee evaluations, projects, and workforce requests.</p>
             </div>
             <div class="flex items-center gap-2">
@@ -53,11 +56,7 @@
                     <span class="@(loading ? "animate-spin" : "")">↻</span>
                     <span>Refresh</span>
                 </button>
-                <a href="/admin/my/workspace"
-                   class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-2.5 py-1.5 text-xs font-medium text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition"
-                   title="Open Classic Workspace">
-                    Classic View ↗
-                </a>
+
             </div>
         </div>
 
@@ -381,6 +380,26 @@
                         </div>
                     }
                 </div>
+
+                <!-- Embedded Entity Inspector (Organisation / Individual) -->
+                @if (selectedEntityItem != null && activeWorkspaceTab == "Home")
+                {
+                    <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-md space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2 flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-slate-900 dark:text-slate-100 text-sm">@selectedEntityItem.EntityType Profile:</span>
+                                <span class="font-semibold text-teal-700 dark:text-teal-300 text-sm">@selectedEntityItem.Name</span>
+                                <span class="text-xs text-slate-500">(#@selectedEntityItem.Id)</span>
+                            </div>
+                            <button type="button"
+                                    class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                    @onclick="() => selectedEntityItem = null">
+                                ✕ Close
+                            </button>
+                        </div>
+                        <WorkspaceContent Item="selectedEntityItem" OnSelected="SelectSearchResult" ActiveTab="WorkspaceTab.Overview" />
+                    </div>
+                }
 
                 <!-- Embedded Staff Inspector if active from Home -->
                 @if (inspectedStaffId.HasValue && activeWorkspaceTab == "Home")
@@ -1224,9 +1243,14 @@
 
 @code {
     [Parameter] public string? ActiveSection { get; set; }
+    [Parameter] public string? EntityRoute { get; set; }
+    [Parameter] public int? EntityId { get; set; }
     [SupplyParameterFromQuery(Name = "tab")] public string? QueryTab { get; set; }
     [SupplyParameterFromQuery(Name = "teamId")] public int? QueryTeamId { get; set; }
     [SupplyParameterFromQuery(Name = "projectId")] public int? QueryProjectId { get; set; }
+    [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
+    [SupplyParameterFromQuery(Name = "entityType")] public string? EntityTypeQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "entityId")] public int? EntityIdQuery { get; set; }
 
     // Tab state: "Home", "MyTeam", "Calendar", "Request", "Onboarding", "LeaveLog", "Attendance", "TimeChange", "OrgDaily"
     private string activeWorkspaceTab = "Home";
@@ -1271,6 +1295,7 @@
     // Contextual Panel Management
     private enum RightPanelType { None, Member360, Evaluation, ProjectDetails }
     private RightPanelType activeRightPanel = RightPanelType.None;
+    private WorkspaceSearchResult? selectedEntityItem;
     private int? inspectedStaffId;
     private string inspectedStaffName = "";
     private WorkspaceTab inspectedStaffTab = WorkspaceTab.Overview;
@@ -1313,11 +1338,49 @@
     {
         SyncTabsFromRouteAndQuery();
         await LoadAllDataAsync();
+        if (inspectedStaffId.HasValue)
+        {
+            var match = allTeamStaff.FirstOrDefault(s => s.StaffId == inspectedStaffId.Value);
+            if (match != null && !string.IsNullOrWhiteSpace(match.FullName))
+            {
+                inspectedStaffName = match.FullName;
+            }
+        }
+        if (NotificationRequestId.HasValue && selectedLeave == null)
+        {
+            selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+        }
+        if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
+        {
+            try
+            {
+                var resolved = await RecentSearches.ResolveAsync(selectedEntityItem.EntityType, selectedEntityItem.Id);
+                if (resolved != null) selectedEntityItem = resolved;
+            }
+            catch { }
+        }
     }
 
     protected override async Task OnParametersSetAsync()
     {
         SyncTabsFromRouteAndQuery();
+        if (inspectedStaffId.HasValue && (string.IsNullOrWhiteSpace(inspectedStaffName) || inspectedStaffName.StartsWith("Staff #")))
+        {
+            var match = allTeamStaff.FirstOrDefault(s => s.StaffId == inspectedStaffId.Value);
+            if (match != null && !string.IsNullOrWhiteSpace(match.FullName))
+            {
+                inspectedStaffName = match.FullName;
+            }
+        }
+        if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
+        {
+            try
+            {
+                var resolved = await RecentSearches.ResolveAsync(selectedEntityItem.EntityType, selectedEntityItem.Id);
+                if (resolved != null) selectedEntityItem = resolved;
+            }
+            catch { }
+        }
         if (selectedTeamId.HasValue && activeWorkspaceTab == "MyTeam" && currentTeamProjects.Count == 0)
         {
             await LoadTeamProjectsAsync(selectedTeamId.Value);
@@ -1326,7 +1389,45 @@
 
     private void SyncTabsFromRouteAndQuery()
     {
-        if (!string.IsNullOrWhiteSpace(QueryTab))
+        var entity = EntityRoute ?? EntityTypeQuery;
+        var id = EntityId ?? EntityIdQuery;
+        if (id.HasValue && id.Value > 0)
+        {
+            if (string.Equals(entity, "staff", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(entity, WorkspaceEntityType.Staff.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                inspectedStaffId = id.Value;
+                inspectedStaffName = allTeamStaff.FirstOrDefault(s => s.StaffId == id.Value)?.FullName ?? $"Staff #{id.Value}";
+                inspectedStaffTab = (ActiveSection?.ToLowerInvariant()) switch
+                {
+                    "leave" => WorkspaceTab.Leave,
+                    "attendance" => WorkspaceTab.Attendance,
+                    "position" => WorkspaceTab.Position,
+                    "finance" => WorkspaceTab.Finance,
+                    "performance" => WorkspaceTab.Performance,
+                    _ => WorkspaceTab.Overview
+                };
+                activeWorkspaceTab = "Home";
+            }
+            else if (Enum.TryParse<WorkspaceEntityType>(entity, true, out var parsedType) && Enum.IsDefined(parsedType))
+            {
+                selectedEntityItem = new WorkspaceSearchResult
+                {
+                    Id = id.Value,
+                    EntityType = parsedType,
+                    Name = $"{parsedType} #{id.Value}"
+                };
+                activeWorkspaceTab = "Home";
+            }
+        }
+
+        if (NotificationRequestId.HasValue && NotificationRequestId.Value > 0)
+        {
+            activeWorkspaceTab = "Request";
+            activeReqSubTab = "leave";
+            selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+        }
+        else if (!string.IsNullOrWhiteSpace(QueryTab))
         {
             activeWorkspaceTab = QueryTab.ToLowerInvariant() switch
             {
@@ -1384,7 +1485,7 @@
             _ => "home"
         };
 
-        var uri = $"/admin/my/workspace/hub?tab={tabKey}";
+        var uri = $"/admin/my/workspace?tab={tabKey}";
         if (activeWorkspaceTab == "MyTeam" && selectedTeamId.HasValue)
         {
             uri += $"&teamId={selectedTeamId.Value}";
@@ -1392,6 +1493,17 @@
         if (activeWorkspaceTab == "MyTeam" && selectedProjectId.HasValue && activeRightPanel == RightPanelType.ProjectDetails)
         {
             uri += $"&projectId={selectedProjectId.Value}";
+        }
+        if (activeWorkspaceTab == "Home")
+        {
+            if (inspectedStaffId.HasValue)
+            {
+                uri += $"&entityType=Staff&entityId={inspectedStaffId.Value}";
+            }
+            else if (selectedEntityItem != null)
+            {
+                uri += $"&entityType={selectedEntityItem.EntityType}&entityId={selectedEntityItem.Id}";
+            }
         }
 
         Navigation.NavigateTo(uri, replace: false);
@@ -1707,6 +1819,7 @@
 
         if (item.EntityType == WorkspaceEntityType.Staff)
         {
+            selectedEntityItem = null;
             inspectedStaffId = item.Id;
             inspectedStaffName = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : (allTeamStaff.FirstOrDefault(s => s.StaffId == item.Id)?.FullName ?? $"Staff #{item.Id}");
             inspectedStaffTab = WorkspaceTab.Overview;
@@ -1716,7 +1829,11 @@
         }
         else
         {
-            Navigation.NavigateTo($"/admin/my/workspace?entityType={item.EntityType}&entityId={item.Id}");
+            inspectedStaffId = null;
+            selectedEntityItem = item;
+            activeWorkspaceTab = "Home";
+            UpdateUrl();
+            StateHasChanged();
         }
     }
 

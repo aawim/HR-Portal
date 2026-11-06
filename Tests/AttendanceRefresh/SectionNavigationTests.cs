@@ -96,8 +96,8 @@ static class SectionNavigationTests
         Check(Route("/admin/hr/staff/staff-onboarding") == typeof(HRM.Components.Pages.HrCategoryPage), "HR section URL is missing");
         Check(Route("/admin/payroll/payroll/payroll-period") == typeof(HRM.Components.Pages.PayrollCategoryPage), "Payroll section URL is missing");
         Check(Route("/admin/budget/reports/groups") == typeof(HRM.Components.Pages.BudgetCategoryPage), "Budget section URL is missing");
-        Check(Route("/admin/my/workspace/staff/918/attendance") == typeof(HRM.Components.Admin.My.Workspace.Workspace), "Workspace entity tab URL is missing");
-        Check(Route("/admin/my/workspace/org-daily") == typeof(HRM.Components.Admin.My.Workspace.Workspace), "Workspace tab URL is missing");
+        Check(Route("/admin/my/workspace/staff/918/attendance") == typeof(HRM.Components.Admin.My.Workspace.StaffHubWorkspace), "Workspace entity tab URL is missing");
+        Check(Route("/admin/my/workspace/org-daily") == typeof(HRM.Components.Admin.My.Workspace.StaffHubWorkspace), "Workspace tab URL is missing");
         Check(Route("/online/attendance/my-attendance/break-late") == typeof(HRM.Components.Pages.Online.MyAttendanceGrid), "Employee attendance tab URL is missing");
         Check(Route("/admin/attendance/manage-attendance/team-attendance/summary") == typeof(HRM.Components.Admin.Attendance.Attendance.TeamAttendanceGrid), "Team attendance tab URL is missing");
         Check(Route("/admin/settings/org/team") == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationTeamsPage), "Legacy team link was removed");
