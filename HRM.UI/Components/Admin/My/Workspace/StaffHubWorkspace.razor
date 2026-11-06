@@ -732,6 +732,16 @@
                                                                         @onclick="() => OpenMemberEvaluation(member.StaffId, member.FullName)">
                                                                     Evaluation
                                                                 </button>
+                                                                <button type="button"
+                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                                                        @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, member.StaffId, member.FullName)">
+                                                                    Assign Project
+                                                                </button>
+                                                                <button type="button"
+                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                                                        @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, member.StaffId, member.FullName)">
+                                                                    Assign Task
+                                                                </button>
                                                                 <a href="@($"/admin/my/workspace?entityType=Staff&entityId={member.StaffId}")"
                                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 transition">
                                                                     Detail ↗
@@ -795,7 +805,7 @@
 
                                                 <!-- Progress Bar -->
                                                 <div class="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                                                    <div class="h-full rounded-full bg-teal-600" style="width: @proj.ProgressPercentage%"></div>
+                                                    <div class="h-full rounded-full bg-teal-600 @GetProgressWidthClass(proj.ProgressPercentage)"></div>
                                                 </div>
 
                                                 <!-- Tasks Breakdown -->
@@ -835,7 +845,12 @@
                 {
                     <Member360Panel StaffId="inspectedStaffId.Value"
                                     OnClose="CloseRightPanel"
-                                    OnTaskClick="OpenTaskModal" />
+                                    OnTaskClick="OpenTaskModal"
+                                    OnProjectClick="OpenProjectDetails"
+                                    OnAssignProject="() => OpenAssignment(AssignmentModal.AssignmentMode.Project, inspectedStaffId!.Value, inspectedStaffName)"
+                                    OnAssignTask="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, inspectedStaffId!.Value, inspectedStaffName)"
+                                    OnAssignmentsChanged="RefreshAssignmentViewsAsync"
+                                    RefreshVersion="assignmentRefresh" />
                 }
                 else if (activeRightPanel == RightPanelType.Evaluation && evalStaffId.HasValue)
                 {
@@ -848,7 +863,8 @@
                 {
                     <ProjectDetailPanel ProjectId="selectedProjectId.Value"
                                         OnClose="CloseRightPanel"
-                                        OnTaskClick="OpenTaskModal" />
+                                        OnTaskClick="OpenTaskModal"
+                                        OnAssignmentsChanged="RefreshAssignmentViewsAsync" />
                 }
 
             </div>
@@ -1005,6 +1021,10 @@
     <!-- Modals -->
     <!-- 1. Task Details Modal -->
     <TaskDetailModal TaskItem="selectedTaskModalItem" OnClose="() => selectedTaskModalItem = null" />
+
+    <!-- Assignment Modal (project / task assignment from a team member) -->
+    <AssignmentModal Visible="showAssignModal" Mode="assignMode" StaffId="assignStaffId" StaffName="@assignStaffName"
+                     OnSaved="RefreshAssignmentViewsAsync" OnClose="() => showAssignModal = false" />
 
     <!-- 2. Search Teams Modal -->
     <SearchTeamsModal IsOpen="showSearchTeamsModal"
@@ -1533,6 +1553,28 @@
     }
 
     // Contextual Right Panel actions
+    private bool showAssignModal;
+    private AssignmentModal.AssignmentMode assignMode;
+    private int? assignStaffId;
+    private string assignStaffName = "";
+    private int assignmentRefresh;
+
+    private void OpenAssignment(AssignmentModal.AssignmentMode mode, int staffId, string staffName)
+    {
+        assignMode = mode;
+        assignStaffId = staffId;
+        assignStaffName = staffName;
+        showAssignModal = true;
+    }
+
+    // Refresh the team projects list and any open 360 view without a page reload.
+    private async Task RefreshAssignmentViewsAsync()
+    {
+        assignmentRefresh++;
+        if (selectedTeamId.HasValue) await LoadTeamProjectsAsync(selectedTeamId.Value);
+        StateHasChanged();
+    }
+
     private void OpenMember360(int staffId)
     {
         inspectedStaffId = staffId;
@@ -1795,6 +1837,23 @@
         AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave => "bg-purple-100 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800/40",
         AttendanceStatus.MissingCheckout => "bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/40",
         _ => "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    };
+
+    private static string GetProgressWidthClass(int progress) => progress switch
+    {
+        <= 0 => "w-0",
+        <= 10 => "w-1/12",
+        <= 20 => "w-2/12",
+        <= 25 => "w-1/4",
+        <= 33 => "w-4/12",
+        <= 40 => "w-5/12",
+        <= 50 => "w-1/2",
+        <= 60 => "w-7/12",
+        <= 70 => "w-8/12",
+        <= 75 => "w-3/4",
+        <= 80 => "w-10/12",
+        <= 90 => "w-11/12",
+        _ => "w-full"
     };
 
     private static string GetStatusBadgeClass(string? status) => status switch

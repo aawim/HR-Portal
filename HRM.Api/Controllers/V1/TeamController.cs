@@ -117,4 +117,61 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         return Ok(await service.GetHelpDeskTeamAsync(HttpContext.RequestAborted));
     }
 
+    [HttpGet("search-assignable-projects")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.ProjectLookupDto>>> SearchAssignableProjects([FromQuery] global::System.String query)
+    {
+        return Ok(await service.SearchAssignableProjectsAsync(query, HttpContext.RequestAborted));
+    }
+
+    [HttpPost("assign-staff-to-project")]
+    public async Task<ActionResult<global::System.Int32>> AssignStaffToProject([FromBody] TeamAssignStaffToProjectRequest request)
+    {
+        return Ok(await service.AssignStaffToProjectAsync(request.request, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamAssignStaffToProjectRequest
+    {
+        public global::HRM.DTOs.AssignProjectRequestDto request { get; set; } = default!;
+    }
+
+    [HttpPost("update-project-assignment")]
+    public async Task<ActionResult<global::System.Boolean>> UpdateProjectAssignment([FromBody] TeamUpdateProjectAssignmentRequest request)
+    {
+        return Ok(await service.UpdateProjectAssignmentAsync(request.request, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamUpdateProjectAssignmentRequest
+    {
+        public global::HRM.DTOs.UpdateProjectAssignmentRequestDto request { get; set; } = default!;
+    }
+
+    [HttpPost("remove-project-assignment")]
+    public async Task<ActionResult<global::System.Boolean>> RemoveProjectAssignment([FromBody] TeamRemoveProjectAssignmentRequest request)
+    {
+        return Ok(await service.RemoveProjectAssignmentAsync(request.projectMemberId, request.remarks, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamRemoveProjectAssignmentRequest
+    {
+        public global::System.Int32 projectMemberId { get; set; }
+        public global::System.String? remarks { get; set; }
+    }
+
+    [HttpPost("assign-task")]
+    public async Task<ActionResult<global::System.Boolean>> AssignTask([FromBody] TeamAssignTaskRequest request)
+    {
+        return Ok(await service.AssignTaskAsync(request.request, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamAssignTaskRequest
+    {
+        public global::HRM.DTOs.AssignTaskRequestDto request { get; set; } = default!;
+    }
+
+    [HttpGet("get-assignment-history")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AssignmentHistoryDto>>> GetAssignmentHistory([FromQuery] global::System.Int32 projectId, [FromQuery] global::System.Int32? staffId)
+    {
+        return Ok(await service.GetAssignmentHistoryAsync(projectId, staffId, HttpContext.RequestAborted));
+    }
+
 }

@@ -2,6 +2,7 @@
 @using HRM.Services.Interfaces
 @inject ITeam TeamService
 @inject ILogger<Member360Panel> Logger
+@inject HRM.Services.ToastService ToastService
 
 <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
     <!-- Header -->
@@ -70,6 +71,54 @@
                 </div>
             }
 
+            <!-- Assigned Projects -->
+            <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60 space-y-1.5">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 font-medium">Assigned Projects (@Summary.ProjectAssignments.Count(a => a.IsActive))</span>
+                    <div class="flex items-center gap-1">
+                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => OnAssignProject.InvokeAsync()">Assign Project</button>
+                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="() => OnAssignTask.InvokeAsync()">Assign Task</button>
+                    </div>
+                </div>
+                @if (Summary.ProjectAssignments.Count == 0)
+                {
+                    <p class="text-[11px] text-slate-400 italic p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg">No project assignments.</p>
+                }
+                @foreach (var a in Summary.ProjectAssignments)
+                {
+                    <div @key="a.ProjectMemberId" class="p-2 rounded-xl border @(a.IsActive ? "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900" : "border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 opacity-70")">
+                        <div class="flex items-start justify-between gap-2">
+                            <div class="min-w-0">
+                                <button type="button" class="text-xs font-semibold text-blue-700 dark:text-blue-400 hover:underline text-left break-words" @onclick="() => OnProjectClick.InvokeAsync(a.ProjectId)">@a.ProjectName</button>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                    @a.Role · Assigned @a.AssignedDate.ToString("dd MMM yyyy")@(a.ExpectedEndDate.HasValue ? $" · Ends {a.ExpectedEndDate:dd MMM yyyy}" : "")
+                                </p>
+                            </div>
+                            <span class="rounded-full px-2 py-0.5 text-[10px] font-bold shrink-0 @(a.IsActive ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300" : "bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300")">
+                                @(a.IsActive ? a.ProjectStatus : $"Removed {a.RemovedAt:dd MMM yyyy}")
+                            </span>
+                        </div>
+                        @if (a.IsActive && a.CanManage)
+                        {
+                            @if (removeConfirmId == a.ProjectMemberId)
+                            {
+                                var open = Summary.OngoingTasks.Concat(Summary.ParkedTasks).Count(t => t.ProjectId == a.ProjectId);
+                                <div class="mt-1.5 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-2 text-[11px] text-amber-800 dark:text-amber-300" role="alert">
+                                    Remove from this project? History is kept.@(open > 0 ? $" {open} open task(s) stay assigned and need review." : "")
+                                    <div class="flex gap-1.5 mt-1.5">
+                                        <button type="button" class="rounded-lg bg-red-600 hover:bg-red-700 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-50" disabled="@removing" @onclick="() => RemoveAsync(a.ProjectMemberId)">Confirm remove</button>
+                                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300" @onclick="() => removeConfirmId = null">Cancel</button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <button type="button" class="mt-1 text-[10px] font-semibold text-red-600 hover:underline" @onclick="() => removeConfirmId = a.ProjectMemberId">Remove from project</button>
+                            }
+                        }
+                    </div>
+                }
+            </div>
             <!-- Overall Task Performance Gauge -->
             <div class="pt-2 border-t border-slate-200/60 dark:border-slate-700/60">
                 <div class="flex items-center justify-between text-[11px] mb-1">
@@ -78,7 +127,7 @@
                 </div>
                 <div class="w-full h-2 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
                     <div class="h-full rounded-full bg-emerald-500 transition-all duration-300"
-                         style="width: @Summary.CompletionRate%"></div>
+                         @GetProgressWidthClass(Summary.CompletionRate)"></div>
                 </div>
             </div>
         </div>
@@ -129,13 +178,13 @@
                                             </span>
                                         </div>
                                         <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                            Due: @(task.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Open") · @task.Priority Priority
+                                            @task.ProjectName · @(task.StartDate?.ToString("dd MMM yyyy") ?? "No start") → @(task.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Open") · @task.Priority Priority
                                         </p>
                                     </div>
                                     <span class="font-bold text-xs text-slate-700 dark:text-slate-300 shrink-0">@task.Progress%</span>
                                 </div>
                                 <div class="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-800 mt-2 overflow-hidden">
-                                    <div class="h-full rounded-full bg-blue-600" style="width: @task.Progress%"></div>
+                                    <div class="h-full rounded-full bg-blue-600 @GetProgressWidthClass(task.Progress)"></div>
                                 </div>
                             </div>
                         }
@@ -170,7 +219,7 @@
                                             </span>
                                         </div>
                                         <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                            Completed: @(task.ActualCompletionDate?.ToString("dd MMM yyyy") ?? "Delivered")
+                                            Completed: @(task.ActualCompletionDate?.ToString("dd MMM yyyy") ?? "Delivered") · @task.ProjectName · @(task.StartDate?.ToString("dd MMM yyyy") ?? "No start") → @(task.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Open") · @task.Priority Priority
                                         </p>
                                     </div>
                                     <span class="rounded bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.2 text-[9px] font-bold shrink-0">
@@ -210,7 +259,7 @@
                                             </span>
                                         </div>
                                         <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                            @(string.IsNullOrWhiteSpace(task.Remarks) ? "On Hold" : task.Remarks)
+                                            @task.ProjectName · @(task.StartDate?.ToString("dd MMM yyyy") ?? "No start") → @(task.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Open") · @task.Priority Priority
                                         </p>
                                     </div>
                                     <span class="rounded bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 text-[9px] font-bold shrink-0">
@@ -239,14 +288,25 @@
     [Parameter] public int StaffId { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<TeamProjectTaskDto> OnTaskClick { get; set; }
+    [Parameter] public EventCallback<int> OnProjectClick { get; set; }
+    [Parameter] public EventCallback OnAssignProject { get; set; }
+    [Parameter] public EventCallback OnAssignTask { get; set; }
+    [Parameter] public EventCallback OnAssignmentsChanged { get; set; }
+    /// <summary>Incremented by the parent after an assignment is saved so the summary reloads.</summary>
+    [Parameter] public int RefreshVersion { get; set; }
+
+    private int lastRefreshVersion;
+    private int? removeConfirmId;
+    private bool removing;
 
     private Staff360SummaryDto? Summary;
     private bool loading = true;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (StaffId > 0 && (Summary == null || Summary.StaffId != StaffId))
+        if (StaffId > 0 && (Summary == null || Summary.StaffId != StaffId || RefreshVersion != lastRefreshVersion))
         {
+            lastRefreshVersion = RefreshVersion;
             await LoadStaff360Async();
         }
     }
@@ -268,9 +328,45 @@
         }
     }
 
+    private async Task RemoveAsync(int projectMemberId)
+    {
+        removing = true;
+        try
+        {
+            await TeamService.RemoveProjectAssignmentAsync(projectMemberId, null);
+            ToastService.Success("Project assignment removed. History has been kept.");
+            removeConfirmId = null;
+            await LoadStaff360Async();
+            await OnAssignmentsChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to remove project assignment {Id}", projectMemberId);
+            ToastService.Error(ex is UnauthorizedAccessException ? "You are not authorised to remove this assignment." : ex.Message);
+        }
+        finally { removing = false; }
+    }
+
     private async Task CloseAsync() => await OnClose.InvokeAsync();
 
     private async Task SelectTaskAsync(TeamProjectTaskDto task) => await OnTaskClick.InvokeAsync(task);
+
+    private static string GetProgressWidthClass(int progress) => progress switch
+    {
+        <= 0 => "w-0",
+        <= 10 => "w-1/12",
+        <= 20 => "w-2/12",
+        <= 25 => "w-1/4",
+        <= 33 => "w-4/12",
+        <= 40 => "w-5/12",
+        <= 50 => "w-1/2",
+        <= 60 => "w-7/12",
+        <= 70 => "w-8/12",
+        <= 75 => "w-3/4",
+        <= 80 => "w-10/12",
+        <= 90 => "w-11/12",
+        _ => "w-full"
+    };
 
     private static string GetInitials(string name)
     {

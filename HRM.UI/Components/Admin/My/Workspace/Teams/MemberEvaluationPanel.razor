@@ -308,7 +308,9 @@
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to save evaluation for staff {StaffId}", StaffId);
-            bannerMessage = "Failed to save evaluation. Please check logs.";
+            bannerMessage = ex is UnauthorizedAccessException
+                ? "You are not authorised to evaluate this staff member."
+                : $"Failed to save evaluation: {ex.Message}";
             isSuccess = false;
             ToastService.Error(bannerMessage);
         }

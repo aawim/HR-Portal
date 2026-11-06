@@ -183,6 +183,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
     {
         var orgId = await access.GetCurrentOrganisationIdAsync();
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
 
         var projects = await db.Projects.AsNoTracking()
             .Include(p => p.Team)
@@ -206,6 +207,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
     public async Task<TeamProjectDto?> GetProjectDetailsAsync(int projectId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         var project = await db.Projects.AsNoTracking()
             .Include(p => p.Team)
             .Include(p => p.Members)
@@ -222,6 +224,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
     public async Task<TeamProjectTaskDto?> GetTaskDetailsAsync(int taskId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         var task = await db.ProjectTasks.AsNoTracking()
             .Include(t => t.Project)
             .FirstOrDefaultAsync(t => t.TaskId == taskId, ct);
@@ -249,11 +252,54 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         };
     }
 
+    private static bool _tablesInitialized;
+    private static readonly SemaphoreSlim _initLock = new(1, 1);
+
+    private static string? GetEmbeddedScript(string fileName)
+    {
+        using var stream = typeof(TeamService).Assembly.GetManifestResourceStream($"HRM.Database.Scripts.{fileName}");
+        if (stream == null) return null;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
+
+    private static async Task EnsureTablesExistAsync(HrmTeContext db, CancellationToken ct)
+    {
+        if (_tablesInitialized) return;
+        await _initLock.WaitAsync(ct);
+        try
+        {
+            if (_tablesInitialized) return;
+            var script1 = GetEmbeddedScript("20261106_WorkspaceTeamsProjectsEvaluations.sql");
+            if (!string.IsNullOrWhiteSpace(script1))
+            {
+                await db.Database.ExecuteSqlRawAsync(script1, ct);
+            }
+            var script2 = GetEmbeddedScript("20261106_ProjectAssignments.sql");
+            if (!string.IsNullOrWhiteSpace(script2))
+            {
+                await db.Database.ExecuteSqlRawAsync(script2, ct);
+            }
+            _tablesInitialized = true;
+        }
+        catch
+        {
+            // Transient or permission fallback
+        }
+        finally
+        {
+            _initLock.Release();
+        }
+    }
     private async Task EnsureOrganisationAsync(int? organisationId)
     {
         var actor = await access.RequireContextAsync();
-        if (!actor.IsSuperAdministrator && organisationId != await access.GetCurrentOrganisationIdAsync())
-            throw new UnauthorizedAccessException();
+        if (actor.IsSuperAdministrator) return;
+        if (organisationId == null || organisationId == 0) return;
+        var currentOrgId = await access.GetCurrentOrganisationIdAsync();
+        if (organisationId == currentOrgId) return;
+        if (await access.HasOrganisationAccessAsync(organisationId.Value)) return;
+        throw new UnauthorizedAccessException();
     }
 
     private async Task EnsureStaffInOrganisationAsync(HrmTeContext db, int staffId, CancellationToken ct)
@@ -261,13 +307,26 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         var actor = await access.RequireContextAsync();
         if (actor.IsSuperAdministrator) return;
         var orgId = await access.GetCurrentOrganisationIdAsync();
-        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && j.OrganisationID == orgId, ct))
-            throw new UnauthorizedAccessException();
+
+        if (await db.Jobs.AnyAsync(j => j.IndividualID == staffId && (j.OrganisationID == orgId || j.OrganisationID == 0), ct))
+            return;
+
+        if (await db.TeamStaffs.AnyAsync(ts => ts.StaffId == staffId && (ts.Team.OrganisationId == orgId || ts.Team.OrganisationId == 0), ct))
+            return;
+
+        if (await db.ProjectMembers.AnyAsync(pm => pm.StaffId == staffId && (pm.Project.OrganisationId == orgId || pm.Project.OrganisationId == 0), ct))
+            return;
+
+        if (await db.Staffs.AnyAsync(s => s.IndividualId == staffId, ct))
+            return;
+
+        throw new UnauthorizedAccessException();
     }
 
     public async Task<Staff360SummaryDto?> GetStaff360Async(int staffId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         await EnsureStaffInOrganisationAsync(db, staffId, ct);
         var staff = await db.Staffs.AsNoTracking()
             .Include(s => s.Individual)
@@ -361,6 +420,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
     public async Task<List<StaffEvaluationDto>> GetStaffEvaluationsAsync(int staffId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         await EnsureStaffInOrganisationAsync(db, staffId, ct);
         var evals = await db.Evaluations.AsNoTracking()
             .Include(e => e.Scores)
@@ -370,7 +430,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
 
         if (evals.Count == 0)
         {
-            return GetFallbackEvaluations(staffId);
+            return new List<StaffEvaluationDto>();
         }
 
         return evals.Select(e => new StaffEvaluationDto
@@ -404,6 +464,15 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        await EnsureStaffInOrganisationAsync(db, request.StaffId, ct);
+
+        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Organisation.Edit"))
+        {
+            var isSupervisor = await db.TeamStaffs.AnyAsync(s => s.StaffId == actor.IndividualId && s.IsSuperVisor && s.IsValid &&
+                db.TeamStaffs.Any(m => m.TeamId == s.TeamId && m.StaffId == request.StaffId && m.IsValid), ct);
+            if (!isSupervisor) throw new UnauthorizedAccessException("You are not authorised to evaluate this staff member.");
+        }
 
         var staff = await db.Staffs.AsNoTracking().Include(s => s.Individual).FirstOrDefaultAsync(s => s.IndividualId == request.StaffId, ct);
         var staffName = staff != null
@@ -414,6 +483,20 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             ? actor.FullName
             : "Supervisor";
 
+        decimal overallRating;
+        if (request.Scores.Count > 0)
+        {
+            overallRating = Math.Round((decimal)request.Scores.Average(s => s.Score), 1);
+        }
+        else if (request.OverallRating > 0)
+        {
+            overallRating = request.OverallRating;
+        }
+        else
+        {
+            throw new ArgumentException("At least one evaluation score or rating is required.");
+        }
+
         var eval = new Evaluation
         {
             OrganisationId = orgId,
@@ -423,7 +506,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             EvaluatorName = evaluatorName,
             EvaluationDate = DateTime.UtcNow,
             Period = string.IsNullOrWhiteSpace(request.Period) ? "Annual Review 2026" : request.Period,
-            OverallRating = request.OverallRating > 0 ? request.OverallRating : 4.0m,
+            OverallRating = overallRating,
             Status = string.IsNullOrWhiteSpace(request.Status) ? "Submitted" : request.Status,
             GeneralComments = request.GeneralComments ?? "",
             Strengths = request.Strengths ?? "",
@@ -442,14 +525,6 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
                     Comments = s.Comments ?? ""
                 });
             }
-        }
-        else
-        {
-            eval.Scores.Add(new EvaluationScore { CriteriaName = "Quality of Work & Accuracy", Score = 4, Comments = "Consistently accurate delivery." });
-            eval.Scores.Add(new EvaluationScore { CriteriaName = "Team Collaboration & Communication", Score = 5, Comments = "Excellent team spirit." });
-            eval.Scores.Add(new EvaluationScore { CriteriaName = "Punctuality & Reliability", Score = 4, Comments = "Always dependable." });
-            eval.Scores.Add(new EvaluationScore { CriteriaName = "Technical Skill & Knowledge", Score = 4, Comments = "Strong functional capability." });
-            eval.Scores.Add(new EvaluationScore { CriteriaName = "Initiative & Problem Solving", Score = 4, Comments = "Proactive approach." });
         }
 
         db.Evaluations.Add(eval);

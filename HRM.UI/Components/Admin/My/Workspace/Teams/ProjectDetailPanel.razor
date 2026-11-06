@@ -2,6 +2,7 @@
 @using HRM.Services.Interfaces
 @inject ITeam TeamService
 @inject ILogger<ProjectDetailPanel> Logger
+@inject HRM.Services.ToastService ToastService
 
 <aside class="min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
     <!-- Header -->
@@ -84,32 +85,104 @@
             </div>
             <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                 <div class="h-full rounded-full bg-teal-600 transition-all duration-300"
-                     style="width: @Project.ProgressPercentage%"></div>
+                     @GetProgressWidthClass(Project.ProgressPercentage)"></div>
             </div>
         </div>
 
         <!-- Assigned Members -->
-        @if (Project.Members.Count > 0)
-        {
-            <div class="space-y-1.5">
-                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 block">
-                    Project Members (@Project.Members.Count)
-                </span>
-                <div class="flex flex-wrap gap-1.5">
-                    @foreach (var m in Project.Members)
-                    {
-                        <span class="inline-flex items-center gap-1 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] text-slate-800 dark:text-slate-200">
-                            <span class="w-4 h-4 rounded-full bg-teal-100 text-teal-800 font-bold flex items-center justify-center text-[9px]">
-                                @(m.StaffName.Length > 0 ? m.StaffName[0].ToString().ToUpper() : "M")
-                            </span>
-                            <span>@m.StaffName</span>
+        <div class="space-y-1.5">
+            <div class="flex items-center justify-between gap-2 flex-wrap">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200">Project Members (@Project.Members.Count)</span>
+                @if (Project.CanManageAssignments)
+                {
+                    <div class="flex items-center gap-1">
+                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition" @onclick="OpenAddMemberAsync">Add Team Member</button>
+                        <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50" disabled="@(Project.Members.Count == 0)" @onclick="OpenAssignTask">Assign Task</button>
+                    </div>
+                }
+            </div>
+            @if (Project.Members.Count == 0)
+            {
+                <p class="text-[11px] text-slate-400 italic p-2 bg-slate-50 dark:bg-slate-800/30 rounded-lg">No members assigned.</p>
+            }
+            @foreach (var m in Project.Members)
+            {
+                <div @key="m.ProjectMemberId" class="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-[11px] text-slate-800 dark:text-slate-200">
+                    <div class="flex items-start justify-between gap-2">
+                        <div class="min-w-0">
+                            <span class="font-semibold">@m.StaffName</span>
                             <span class="text-slate-400 text-[10px]">(@m.Role)</span>
-                        </span>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400">Since @m.AssignedDate.ToString("dd MMM yyyy")@(m.ExpectedEndDate.HasValue ? $" · Ends {m.ExpectedEndDate:dd MMM yyyy}" : "")</p>
+                            @if (!string.IsNullOrWhiteSpace(m.Remarks))
+                            {
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400 break-words">@m.Remarks</p>
+                            }
+                        </div>
+                        @if (Project.CanManageAssignments)
+                        {
+                            <div class="flex items-center gap-2 shrink-0">
+                                <button type="button" class="text-[10px] font-semibold text-blue-600 hover:underline" @onclick="() => BeginEdit(m)">Edit</button>
+                                <button type="button" class="text-[10px] font-semibold text-red-600 hover:underline" @onclick="() => removeConfirmId = m.ProjectMemberId">Remove</button>
+                            </div>
+                        }
+                    </div>
+                    @if (editingId == m.ProjectMemberId)
+                    {
+                        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500" aria-label="Assignment role" @bind="editRole">
+                                @foreach (var r in Roles)
+                                {
+                                    <option value="@r">@r</option>
+                                }
+                            </select>
+                            <input type="date" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500" aria-label="Expected end date" @bind="editEnd" />
+                            <input type="text" maxlength="1000" placeholder="Remarks" class="sm:col-span-2 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1.5 text-xs focus:border-blue-500 focus:ring-1 focus:ring-blue-500" aria-label="Remarks" @bind="editRemarks" />
+                            <div class="sm:col-span-2 flex justify-end gap-1.5">
+                                <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold" @onclick="() => editingId = null">Cancel</button>
+                                <button type="button" class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-50" disabled="@busy" @onclick="SaveEditAsync">Save</button>
+                            </div>
+                        </div>
+                    }
+                    @if (removeConfirmId == m.ProjectMemberId)
+                    {
+                        var open = Project.Tasks.Count(t => t.AssignedStaffId == m.StaffId && t.Status != "Completed");
+                        <div class="mt-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 p-2 text-amber-800 dark:text-amber-300" role="alert">
+                            Remove @m.StaffName from this project? History is kept.@(open > 0 ? $" {open} open task(s) stay assigned and need review." : "")
+                            <div class="flex gap-1.5 mt-1.5">
+                                <button type="button" class="rounded-lg bg-red-600 hover:bg-red-700 px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-50" disabled="@busy" @onclick="() => RemoveMemberAsync(m.ProjectMemberId)">Confirm remove</button>
+                                <button type="button" class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-700 dark:text-slate-300" @onclick="() => removeConfirmId = null">Cancel</button>
+                            </div>
+                        </div>
                     }
                 </div>
-            </div>
-        }
+            }
 
+            <button type="button" class="text-[11px] font-semibold text-blue-600 hover:underline" @onclick="ToggleHistoryAsync">@(showHistory ? "Hide assignment history" : "View assignment history")</button>
+            @if (showHistory)
+            {
+                <div class="max-h-48 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                    @if (history.Count == 0)
+                    {
+                        <p class="p-2 text-[11px] text-slate-500 italic">No assignment history yet.</p>
+                    }
+                    @foreach (var h in history)
+                    {
+                        <div class="p-2 text-[11px]">
+                            <span class="font-semibold text-slate-800 dark:text-slate-200">@HistoryLabel(h.Action)</span>
+                            <span class="text-slate-600 dark:text-slate-400">@h.StaffName@(string.IsNullOrEmpty(h.PreviousStaffName) ? "" : $" (from {h.PreviousStaffName})")@(string.IsNullOrEmpty(h.TaskTitle) ? "" : $" · {h.TaskTitle}")</span>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400">By @h.PerformedByName · @h.PerformedAt.ToLocalTime().ToString("dd MMM yyyy HH:mm")</p>
+                            @if (!string.IsNullOrWhiteSpace(h.Details))
+                            {
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400 break-words">@h.Details</p>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+
+        <AssignmentModal Visible="showAssign" Mode="assignMode" ProjectId="ProjectId" StaffOptions="assignStaffOptions"
+                         OnSaved="OnAssignedAsync" OnClose="() => showAssign = false" />
         <!-- Tasks Grouped by Category -->
         <div class="space-y-3 pt-2 border-t border-slate-100 dark:border-slate-800">
             <div class="flex items-center justify-between">
@@ -156,7 +229,7 @@
                                     <span class="font-bold text-xs text-slate-700 dark:text-slate-300 shrink-0">@task.Progress%</span>
                                 </div>
                                 <div class="w-full h-1 rounded-full bg-slate-100 dark:bg-slate-800 mt-2 overflow-hidden">
-                                    <div class="h-full rounded-full bg-blue-600" style="width: @task.Progress%"></div>
+                                    <div class="h-full rounded-full bg-blue-600 @GetProgressWidthClass(task.Progress)"></div>
                                 </div>
                             </div>
                         }
@@ -270,9 +343,105 @@
     [Parameter] public int ProjectId { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<TeamProjectTaskDto> OnTaskClick { get; set; }
+    /// <summary>Raised after an assignment changes so the parent can refresh member and project views.</summary>
+    [Parameter] public EventCallback OnAssignmentsChanged { get; set; }
 
+    private static readonly string[] Roles = ["Member", "Lead", "Coordinator", "Contributor", "Reviewer"];
     private TeamProjectDto? Project;
     private bool loading = true;
+    private bool showAssign, busy, showHistory;
+    private AssignmentModal.AssignmentMode assignMode;
+    private List<TeamStaffDto> assignStaffOptions = new();
+    private List<AssignmentHistoryDto> history = new();
+    private int? editingId, removeConfirmId;
+    private string editRole = "Member", editRemarks = "";
+    private DateTime? editEnd;
+
+    private async Task OpenAddMemberAsync()
+    {
+        assignMode = AssignmentModal.AssignmentMode.Project;
+        assignStaffOptions = new();
+        try
+        {
+            if (Project?.TeamId is int teamId)
+            {
+                var team = await TeamService.GetTeamByIdAsync(teamId);
+                var existing = Project.Members.Select(m => m.StaffId).ToHashSet();
+                assignStaffOptions = team?.Staffs.Where(s => !existing.Contains(s.StaffId)).ToList() ?? new();
+            }
+        }
+        catch (Exception ex) { Logger.LogWarning(ex, "Failed to load team members for project {ProjectId}", ProjectId); }
+        showAssign = true;
+    }
+
+    private void OpenAssignTask()
+    {
+        assignMode = AssignmentModal.AssignmentMode.Task;
+        assignStaffOptions = Project?.Members.Select(m => new TeamStaffDto { StaffId = m.StaffId, FullName = m.StaffName }).ToList() ?? new();
+        showAssign = true;
+    }
+
+    private async Task OnAssignedAsync()
+    {
+        await LoadProjectAsync();
+        if (showHistory) history = await TeamService.GetAssignmentHistoryAsync(ProjectId, null);
+        await OnAssignmentsChanged.InvokeAsync();
+    }
+
+    private void BeginEdit(TeamProjectMemberDto m)
+    {
+        removeConfirmId = null; editingId = m.ProjectMemberId;
+        editRole = m.Role; editEnd = m.ExpectedEndDate; editRemarks = m.Remarks;
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (editingId is not int id) return;
+        busy = true;
+        try
+        {
+            await TeamService.UpdateProjectAssignmentAsync(new UpdateProjectAssignmentRequestDto { ProjectMemberId = id, Role = editRole, ExpectedEndDate = editEnd, Remarks = editRemarks });
+            ToastService.Success("Assignment updated.");
+            editingId = null;
+            await OnAssignedAsync();
+        }
+        catch (Exception ex) { ToastService.Error(ex is UnauthorizedAccessException ? "You are not authorised to update this assignment." : ex.Message); }
+        finally { busy = false; }
+    }
+
+    private async Task RemoveMemberAsync(int projectMemberId)
+    {
+        busy = true;
+        try
+        {
+            await TeamService.RemoveProjectAssignmentAsync(projectMemberId, null);
+            ToastService.Success("Member removed from the project. History has been kept.");
+            removeConfirmId = null;
+            await OnAssignedAsync();
+        }
+        catch (Exception ex) { ToastService.Error(ex is UnauthorizedAccessException ? "You are not authorised to remove this member." : ex.Message); }
+        finally { busy = false; }
+    }
+
+    private async Task ToggleHistoryAsync()
+    {
+        showHistory = !showHistory;
+        if (showHistory)
+        {
+            try { history = await TeamService.GetAssignmentHistoryAsync(ProjectId, null); }
+            catch (Exception ex) { Logger.LogWarning(ex, "Failed to load assignment history for {ProjectId}", ProjectId); history = new(); }
+        }
+    }
+
+    private static string HistoryLabel(string action) => action switch
+    {
+        "ProjectAssigned" => "Assigned to project",
+        "ProjectUpdated" => "Assignment updated",
+        "ProjectRemoved" => "Removed from project",
+        "TaskAssigned" => "Task assigned",
+        "TaskReassigned" => "Task reassigned",
+        _ => action
+    };
 
     protected override async Task OnParametersSetAsync()
     {
@@ -302,6 +471,23 @@
     private async Task CloseAsync() => await OnClose.InvokeAsync();
 
     private async Task SelectTaskAsync(TeamProjectTaskDto task) => await OnTaskClick.InvokeAsync(task);
+
+    private static string GetProgressWidthClass(int progress) => progress switch
+    {
+        <= 0 => "w-0",
+        <= 10 => "w-1/12",
+        <= 20 => "w-2/12",
+        <= 25 => "w-1/4",
+        <= 33 => "w-4/12",
+        <= 40 => "w-5/12",
+        <= 50 => "w-1/2",
+        <= 60 => "w-7/12",
+        <= 70 => "w-8/12",
+        <= 75 => "w-3/4",
+        <= 80 => "w-10/12",
+        <= 90 => "w-11/12",
+        _ => "w-full"
+    };
 
     private static string GetStatusBadge(string? status) => status switch
     {

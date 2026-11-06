@@ -81,7 +81,7 @@
                     </div>
                     <div class="w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                         <div class="h-full rounded-full transition-all duration-300 @(TaskItem.Progress == 100 ? "bg-emerald-500" : "bg-teal-600")"
-                             style="width: @(Math.Clamp(TaskItem.Progress, 0, 100))%"></div>
+                             @GetProgressWidthClass(TaskItem.Progress)"></div>
                     </div>
                 </div>
             </div>
@@ -144,6 +144,23 @@
             await CloseAsync();
         }
     }
+
+    private static string GetProgressWidthClass(int progress) => progress switch
+    {
+        <= 0 => "w-0",
+        <= 10 => "w-1/12",
+        <= 20 => "w-2/12",
+        <= 25 => "w-1/4",
+        <= 33 => "w-4/12",
+        <= 40 => "w-5/12",
+        <= 50 => "w-1/2",
+        <= 60 => "w-7/12",
+        <= 70 => "w-8/12",
+        <= 75 => "w-3/4",
+        <= 80 => "w-10/12",
+        <= 90 => "w-11/12",
+        _ => "w-full"
+    };
 
     private static string GetStatusBadge(string? status) => status switch
     {

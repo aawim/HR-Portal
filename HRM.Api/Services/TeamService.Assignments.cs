@@ -1,3 +1,4 @@
+using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.Models;
 using Microsoft.EntityFrameworkCore;
@@ -15,11 +16,12 @@ public partial class TeamService
         var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         query = (query ?? "").Trim();
         if (query.Length > 100) query = query[..100];
 
         var q = db.Projects.AsNoTracking().Include(p => p.Team)
-            .Where(p => (actor.IsSuperAdministrator || p.OrganisationId == orgId) && !ClosedProjectStatuses.Contains(p.Status));
+            .Where(p => (actor.IsSuperAdministrator || p.OrganisationId == orgId || p.OrganisationId == 0) && !ClosedProjectStatuses.Contains(p.Status));
         if (query.Length > 0) q = q.Where(p => p.Name.Contains(query) || p.Reference.Contains(query));
 
         var candidates = await q.OrderBy(p => p.Name).Take(50).ToListAsync(ct);
@@ -50,6 +52,7 @@ public partial class TeamService
         if (remarks.Length > 1000) throw new ArgumentException("Remarks are too long.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var project = await db.Projects.FirstOrDefaultAsync(p => p.ProjectId == request.ProjectId, ct)
             ?? throw new ArgumentException("Project not found.");
@@ -58,6 +61,7 @@ public partial class TeamService
         if (project.PlannedEndDate.HasValue && request.StartDate.Date > project.PlannedEndDate.Value.Date)
             throw new ArgumentException("Start date is after the project's planned end date.");
         await EnsureStaffInOrganisationAsync(db, request.StaffId, ct);
+
 
         if (await db.ProjectMembers.AnyAsync(m => m.ProjectId == project.ProjectId && m.StaffId == request.StaffId && m.IsActive, ct))
             throw new InvalidOperationException("This employee is already actively assigned to the project.");
@@ -87,6 +91,7 @@ public partial class TeamService
         if (remarks.Length > 1000) throw new ArgumentException("Remarks are too long.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var member = await db.ProjectMembers.Include(m => m.Project).FirstOrDefaultAsync(m => m.ProjectMemberId == request.ProjectMemberId, ct);
         if (member == null) return false;
@@ -142,6 +147,7 @@ public partial class TeamService
             throw new ArgumentException("Due date cannot be before the start date.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         await using var tx = await db.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable, ct);
         var task = await db.ProjectTasks.Include(t => t.Project).FirstOrDefaultAsync(t => t.TaskId == request.TaskId, ct)
             ?? throw new ArgumentException("Task not found.");
@@ -149,13 +155,30 @@ public partial class TeamService
         RequireOpenProject(task.Project);
         if (task.Status == "Completed") throw new InvalidOperationException("Completed tasks cannot be assigned.");
         await EnsureStaffInOrganisationAsync(db, request.StaffId, ct);
-        if (!await db.ProjectMembers.AnyAsync(m => m.ProjectId == task.ProjectId && m.StaffId == request.StaffId && m.IsActive, ct))
-            throw new InvalidOperationException("The employee must be an active member of the project before a task can be assigned.");
 
         var previous = task.AssignedStaffId;
         var names = await StaffNamesAsync(db, [request.StaffId], ct);
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.TEAM_STAFF_UPDATE,
             $"Assign task {task.TaskId} to staff {request.StaffId}.");
+
+        if (!await db.ProjectMembers.AnyAsync(m => m.ProjectId == task.ProjectId && m.StaffId == request.StaffId && m.IsActive, ct))
+        {
+            var autoMember = new ProjectMember
+            {
+                ProjectId = task.ProjectId,
+                StaffId = request.StaffId,
+                StaffName = names.GetValueOrDefault(request.StaffId, $"Staff #{request.StaffId}"),
+                Role = "Member",
+                AssignedDate = DateTime.UtcNow.Date,
+                Remarks = "Assigned via task assignment",
+                IsActive = true,
+                AssignedByStaffId = actor.IndividualId
+            };
+            db.ProjectMembers.Add(autoMember);
+            AddHistory(db, task.ProjectId, null, request.StaffId, null, "ProjectAssigned", "Assigned via task assignment", actor.IndividualId, audit.OperationLogId);
+        }
+
+
         task.AssignedStaffId = request.StaffId;
         task.AssignedStaffName = names.GetValueOrDefault(request.StaffId, $"Staff #{request.StaffId}");
         task.Priority = priority;
@@ -174,6 +197,7 @@ public partial class TeamService
     public async Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
         var project = await db.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.ProjectId == projectId, ct);
         if (project == null) return [];
         await EnsureOrganisationAsync(project.OrganisationId);
@@ -202,11 +226,15 @@ public partial class TeamService
     {
         var actor = await access.RequireContextAsync();
         if (actor.IsSuperAdministrator) return true;
-        if (project.OrganisationId != await access.GetCurrentOrganisationIdAsync()) return false;
+        var currentOrgId = await access.GetCurrentOrganisationIdAsync();
+        if (project.OrganisationId != 0 && project.OrganisationId != currentOrgId && !await access.HasOrganisationAccessAsync(project.OrganisationId))
+            return false;
         if (await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Organisation.Edit")) return true;
         if (project.ProjectManagerStaffId == actor.IndividualId) return true;
-        return project.TeamId.HasValue && await db.TeamStaffs.AnyAsync(x =>
-            x.TeamId == project.TeamId && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, default);
+        if (project.TeamId.HasValue && await db.TeamStaffs.AnyAsync(x =>
+            x.TeamId == project.TeamId && x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, default))
+            return true;
+        return await db.TeamStaffs.AnyAsync(x => x.StaffId == actor.IndividualId && x.IsSuperVisor && x.IsValid, default);
     }
 
     private async Task RequireManageProjectAsync(HrmTeContext db, Project project)
