@@ -69,7 +69,50 @@ public class ProjectMember
 
     public bool IsActive { get; set; } = true;
 
+    public DateTime? ExpectedEndDate { get; set; }
+
+    [MaxLength(1000)]
+    public string Remarks { get; set; } = string.Empty;
+
+    public int? AssignedByStaffId { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public int? UpdatedByStaffId { get; set; }
+
+    public DateTime? RemovedAt { get; set; }
+
+    public int? RemovedByStaffId { get; set; }
+
     public virtual Project Project { get; set; } = null!;
+}
+
+[Table("PR_ProjectAssignmentHistories")]
+public class ProjectAssignmentHistory
+{
+    [Key]
+    public int HistoryId { get; set; }
+
+    public int ProjectId { get; set; }
+
+    public int? TaskId { get; set; }
+
+    public int? StaffId { get; set; }
+
+    public int? PreviousStaffId { get; set; }
+
+    [Required]
+    [MaxLength(30)]
+    public string Action { get; set; } = string.Empty; // ProjectAssigned, ProjectUpdated, ProjectRemoved, TaskAssigned, TaskReassigned
+
+    [MaxLength(1000)]
+    public string Details { get; set; } = string.Empty;
+
+    public int PerformedByStaffId { get; set; }
+
+    public DateTime PerformedAt { get; set; } = DateTime.UtcNow;
+
+    public int? OperationLogId { get; set; }
 }
 
 [Table("PR_ProjectTasks")]
@@ -112,6 +155,10 @@ public class ProjectTask
 
     [MaxLength(1000)]
     public string Remarks { get; set; } = string.Empty;
+
+    public DateTime? AssignedAt { get; set; }
+
+    public int? AssignedByStaffId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

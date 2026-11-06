@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs) : ITeam
+public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access, IOperationLogService logs) : ITeam
 {
     public async Task<int> CreateAsync(int organisationId, string name, string? nameDhivehi, DateTime startDate, CancellationToken ct = default)
     {
@@ -192,15 +192,15 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
             .OrderByDescending(p => p.StartDate)
             .ToListAsync(ct);
 
-        if (projects.Count == 0)
+        var dtos = new List<TeamProjectDto>();
+        foreach (var p in projects.Where(p => p.OrganisationId == orgId || p.TeamId == teamId))
         {
-            // If none configured yet for this team, return contextual default projects for preview
-            var team = await db.Teams.AsNoTracking().FirstOrDefaultAsync(t => t.TeamId == teamId, ct);
-            var teamName = team?.Name ?? "Selected Team";
-            return GetFallbackProjects(teamId, teamName, orgId);
+            await EnsureOrganisationAsync(p.OrganisationId);
+            var dto = MapProjectDto(p);
+            dto.CanManageAssignments = await CanManageProjectAsync(db, p);
+            dtos.Add(dto);
         }
-
-        return projects.Select(p => MapProjectDto(p)).ToList();
+        return dtos;
     }
 
     public async Task<TeamProjectDto?> GetProjectDetailsAsync(int projectId, CancellationToken ct = default)
@@ -212,13 +212,11 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
             .Include(p => p.Tasks)
             .FirstOrDefaultAsync(p => p.ProjectId == projectId, ct);
 
-        if (project == null)
-        {
-            var fallback = GetFallbackProjects(0, "Current Team", 1).FirstOrDefault(p => p.ProjectId == projectId);
-            return fallback;
-        }
-
-        return MapProjectDto(project);
+        if (project == null) return null;
+        await EnsureOrganisationAsync(project.OrganisationId);
+        var dto = MapProjectDto(project);
+        dto.CanManageAssignments = await CanManageProjectAsync(db, project);
+        return dto;
     }
 
     public async Task<TeamProjectTaskDto?> GetTaskDetailsAsync(int taskId, CancellationToken ct = default)
@@ -228,11 +226,8 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
             .Include(t => t.Project)
             .FirstOrDefaultAsync(t => t.TaskId == taskId, ct);
 
-        if (task == null)
-        {
-            var allFallbackTasks = GetFallbackProjects(0, "Current Team", 1).SelectMany(p => p.Tasks);
-            return allFallbackTasks.FirstOrDefault(t => t.TaskId == taskId);
-        }
+        if (task?.Project != null) await EnsureOrganisationAsync(task.Project.OrganisationId);
+        if (task == null) return null;
 
         return new TeamProjectTaskDto
         {
@@ -254,9 +249,26 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
         };
     }
 
+    private async Task EnsureOrganisationAsync(int? organisationId)
+    {
+        var actor = await access.RequireContextAsync();
+        if (!actor.IsSuperAdministrator && organisationId != await access.GetCurrentOrganisationIdAsync())
+            throw new UnauthorizedAccessException();
+    }
+
+    private async Task EnsureStaffInOrganisationAsync(HrmTeContext db, int staffId, CancellationToken ct)
+    {
+        var actor = await access.RequireContextAsync();
+        if (actor.IsSuperAdministrator) return;
+        var orgId = await access.GetCurrentOrganisationIdAsync();
+        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && j.OrganisationID == orgId, ct))
+            throw new UnauthorizedAccessException();
+    }
+
     public async Task<Staff360SummaryDto?> GetStaff360Async(int staffId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureStaffInOrganisationAsync(db, staffId, ct);
         var staff = await db.Staffs.AsNoTracking()
             .Include(s => s.Individual)
             .FirstOrDefaultAsync(s => s.IndividualId == staffId, ct);
@@ -280,13 +292,29 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
 
         if (assignedTeams.Count == 0) assignedTeams.Add("Operations Team");
 
+        var actor360 = await access.RequireContextAsync();
+        var org360 = await access.GetCurrentOrganisationIdAsync();
         var dbTasks = await db.ProjectTasks.AsNoTracking()
             .Include(t => t.Project)
-            .Where(t => t.AssignedStaffId == staffId)
+            .Where(t => t.AssignedStaffId == staffId && (actor360.IsSuperAdministrator || t.Project.OrganisationId == org360))
             .ToListAsync(ct);
 
+        var memberships = await db.ProjectMembers.AsNoTracking()
+            .Include(m => m.Project)
+            .Where(m => m.StaffId == staffId && (actor360.IsSuperAdministrator || m.Project.OrganisationId == org360))
+            .OrderByDescending(m => m.IsActive).ThenByDescending(m => m.AssignedDate)
+            .ToListAsync(ct);
+        var projectAssignments = new List<StaffProjectAssignmentDto>();
+        foreach (var m in memberships)
+            projectAssignments.Add(new StaffProjectAssignmentDto
+            {
+                ProjectMemberId = m.ProjectMemberId, ProjectId = m.ProjectId, ProjectReference = m.Project.Reference,
+                ProjectName = m.Project.Name, ProjectStatus = m.Project.Status, Role = m.Role, AssignedDate = m.AssignedDate,
+                ExpectedEndDate = m.ExpectedEndDate, RemovedAt = m.RemovedAt, Remarks = m.Remarks, IsActive = m.IsActive,
+                CanManage = m.IsActive && await CanManageProjectAsync(db, m.Project)
+            });
+
         List<TeamProjectTaskDto> allTasks;
-        if (dbTasks.Count > 0)
         {
             allTasks = dbTasks.Select(t => new TeamProjectTaskDto
             {
@@ -307,16 +335,11 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
                 Remarks = t.Remarks
             }).ToList();
         }
-        else
-        {
-            allTasks = GetFallbackStaffTasks(staffId, fullName);
-        }
 
         var ongoing = allTasks.Where(t => t.Status is "Ongoing" or "In Progress" or "Active").ToList();
         var completed = allTasks.Where(t => t.Status is "Completed").ToList();
         var parked = allTasks.Where(t => t.Status is "Parked" or "On Hold" or "Paused").ToList();
 
-        var teamProjects = GetFallbackProjects(0, assignedTeams.FirstOrDefault() ?? "Assigned Team", 1);
 
         return new Staff360SummaryDto
         {
@@ -327,7 +350,8 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
             Email = $"{string.Join(".", fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant()}@hrm.gov.mv",
             AvatarColor = "bg-blue-600 text-white",
             AssignedTeams = assignedTeams,
-            AssignedProjects = teamProjects,
+            ProjectAssignments = projectAssignments,
+            CanManageAssignments = projectAssignments.Any(a => a.CanManage),
             OngoingTasks = ongoing,
             CompletedTasks = completed,
             ParkedTasks = parked
@@ -337,6 +361,7 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
     public async Task<List<StaffEvaluationDto>> GetStaffEvaluationsAsync(int staffId, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureStaffInOrganisationAsync(db, staffId, ct);
         var evals = await db.Evaluations.AsNoTracking()
             .Include(e => e.Scores)
             .Where(e => e.StaffId == staffId)
@@ -506,13 +531,17 @@ public class TeamService(IDbContextFactory<HrmTeContext> factory, IUserAccessSer
             OngoingTaskCount = ongoing,
             ParkedTaskCount = parked,
             TotalTaskCount = p.Tasks.Count,
-            Members = p.Members.Select(m => new TeamProjectMemberDto
+            Members = p.Members.Where(m => m.IsActive).Select(m => new TeamProjectMemberDto
             {
                 ProjectMemberId = m.ProjectMemberId,
                 ProjectId = m.ProjectId,
                 StaffId = m.StaffId,
                 StaffName = m.StaffName,
-                Role = m.Role
+                Role = m.Role,
+                AssignedDate = m.AssignedDate,
+                ExpectedEndDate = m.ExpectedEndDate,
+                Remarks = m.Remarks,
+                IsActive = m.IsActive
             }).ToList(),
             Tasks = p.Tasks.Select(t => new TeamProjectTaskDto
             {

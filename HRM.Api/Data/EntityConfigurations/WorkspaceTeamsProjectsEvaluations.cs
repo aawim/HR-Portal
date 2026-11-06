@@ -29,7 +29,21 @@ public sealed class ProjectMemberMapping : IEntityTypeConfiguration<ProjectMembe
         b.HasKey(x => x.ProjectMemberId);
         b.Property(x => x.StaffName).HasMaxLength(200);
         b.Property(x => x.Role).HasMaxLength(100);
+        b.Property(x => x.Remarks).HasMaxLength(1000);
         b.HasIndex(x => new { x.ProjectId, x.StaffId });
+    }
+}
+
+public sealed class ProjectAssignmentHistoryMapping : IEntityTypeConfiguration<ProjectAssignmentHistory>
+{
+    public void Configure(EntityTypeBuilder<ProjectAssignmentHistory> b)
+    {
+        b.ToTable("PR_ProjectAssignmentHistories");
+        b.HasKey(x => x.HistoryId);
+        b.Property(x => x.Action).HasMaxLength(30).IsRequired();
+        b.Property(x => x.Details).HasMaxLength(1000);
+        b.HasIndex(x => new { x.ProjectId, x.PerformedAt });
+        b.HasIndex(x => x.StaffId);
     }
 }
 
@@ -88,6 +102,7 @@ public partial class HrmTeContext
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<ProjectTask> ProjectTasks => Set<ProjectTask>();
+    public DbSet<ProjectAssignmentHistory> ProjectAssignmentHistories => Set<ProjectAssignmentHistory>();
     public DbSet<Evaluation> Evaluations => Set<Evaluation>();
     public DbSet<EvaluationScore> EvaluationScores => Set<EvaluationScore>();
 }

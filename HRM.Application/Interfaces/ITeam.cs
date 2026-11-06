@@ -18,5 +18,11 @@ namespace HRM.Services.Interfaces
         Task<List<StaffEvaluationDto>> GetStaffEvaluationsAsync(int staffId, CancellationToken ct = default);
         Task<int> SaveStaffEvaluationAsync(SaveEvaluationRequestDto request, CancellationToken ct = default);
         Task<TeamDto?> GetHelpDeskTeamAsync(CancellationToken ct = default);
+        Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string query, CancellationToken ct = default);
+        Task<int> AssignStaffToProjectAsync(AssignProjectRequestDto request, CancellationToken ct = default);
+        Task<bool> UpdateProjectAssignmentAsync(UpdateProjectAssignmentRequestDto request, CancellationToken ct = default);
+        Task<bool> RemoveProjectAssignmentAsync(int projectMemberId, string? remarks, CancellationToken ct = default);
+        Task<bool> AssignTaskAsync(AssignTaskRequestDto request, CancellationToken ct = default);
+        Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default);
     }
 }

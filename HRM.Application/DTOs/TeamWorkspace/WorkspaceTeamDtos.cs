@@ -35,6 +35,7 @@ namespace HRM.DTOs
         public int OngoingTaskCount { get; set; }
         public int ParkedTaskCount { get; set; }
         public int TotalTaskCount { get; set; }
+        public bool CanManageAssignments { get; set; }
         public List<TeamProjectMemberDto> Members { get; set; } = new();
         public List<TeamProjectTaskDto> Tasks { get; set; } = new();
     }
@@ -46,6 +47,10 @@ namespace HRM.DTOs
         public int StaffId { get; set; }
         public string StaffName { get; set; } = string.Empty;
         public string Role { get; set; } = string.Empty;
+        public DateTime AssignedDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public string Remarks { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
     }
 
     public class TeamProjectTaskDto
@@ -77,6 +82,8 @@ namespace HRM.DTOs
         public string? AvatarColor { get; set; }
         public List<string> AssignedTeams { get; set; } = new();
         public List<TeamProjectDto> AssignedProjects { get; set; } = new();
+        public List<StaffProjectAssignmentDto> ProjectAssignments { get; set; } = new();
+        public bool CanManageAssignments { get; set; }
         public List<TeamProjectTaskDto> OngoingTasks { get; set; } = new();
         public List<TeamProjectTaskDto> CompletedTasks { get; set; } = new();
         public List<TeamProjectTaskDto> ParkedTasks { get; set; } = new();
@@ -122,5 +129,76 @@ namespace HRM.DTOs
         public string AreasForImprovement { get; set; } = string.Empty;
         public string Goals { get; set; } = string.Empty;
         public List<StaffEvaluationScoreDto> Scores { get; set; } = new();
+    }
+
+    public class ProjectLookupDto
+    {
+        public int ProjectId { get; set; }
+        public string Reference { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public string TeamName { get; set; } = string.Empty;
+        public string ProjectManagerName { get; set; } = string.Empty;
+        public DateTime StartDate { get; set; }
+        public DateTime? PlannedEndDate { get; set; }
+    }
+
+    public class StaffProjectAssignmentDto
+    {
+        public int ProjectMemberId { get; set; }
+        public int ProjectId { get; set; }
+        public string ProjectReference { get; set; } = string.Empty;
+        public string ProjectName { get; set; } = string.Empty;
+        public string ProjectStatus { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public DateTime AssignedDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public DateTime? RemovedAt { get; set; }
+        public string Remarks { get; set; } = string.Empty;
+        public bool IsActive { get; set; }
+        public bool CanManage { get; set; }
+    }
+
+    public class AssignProjectRequestDto
+    {
+        public int ProjectId { get; set; }
+        public int StaffId { get; set; }
+        public string Role { get; set; } = "Member";
+        public DateTime StartDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public string Remarks { get; set; } = string.Empty;
+    }
+
+    public class UpdateProjectAssignmentRequestDto
+    {
+        public int ProjectMemberId { get; set; }
+        public string Role { get; set; } = "Member";
+        public DateTime? ExpectedEndDate { get; set; }
+        public string Remarks { get; set; } = string.Empty;
+    }
+
+    public class AssignTaskRequestDto
+    {
+        public int TaskId { get; set; }
+        public int StaffId { get; set; }
+        public string Priority { get; set; } = "Medium";
+        public DateTime? StartDate { get; set; }
+        public DateTime? DueDate { get; set; }
+        public string Remarks { get; set; } = string.Empty;
+    }
+
+    public class AssignmentHistoryDto
+    {
+        public int HistoryId { get; set; }
+        public int ProjectId { get; set; }
+        public int? TaskId { get; set; }
+        public string TaskTitle { get; set; } = string.Empty;
+        public string Action { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string PreviousStaffName { get; set; } = string.Empty;
+        public string Details { get; set; } = string.Empty;
+        public string PerformedByName { get; set; } = string.Empty;
+        public DateTime PerformedAt { get; set; }
     }
 }
