@@ -57,7 +57,7 @@
             </button>
 
             <!-- Complete History & Clearance Report Note Button -->
-            @if (EffectiveIndividualId > 0)
+            @if (EffectiveIndividualId > 0 && !PersonalItemsOnly)
             {
                 <button type="button"
                         class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
@@ -435,7 +435,7 @@
                                             value="@selectedCatalogueItemId"
                                             @onchange="OnCatalogueItemChanged">
                                         <option value="0">Choose from active catalogue...</option>
-                                        @foreach (var catGroup in catalogueItems.GroupBy(i => i.Kind))
+                                        @foreach (var catGroup in DisplayCatalogueItems.GroupBy(i => i.Kind))
                                         {
                                             <optgroup label="@(catGroup.Key == "Asset" ? "Assets / Hardware" : "Consumables / Supplies")">
                                                 @foreach (var item in catGroup)
@@ -487,7 +487,7 @@
                                     <input class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                                            maxlength="200"
                                            @bind="newName"
-                                           placeholder="e.g. Dell Latitude 5420, Wireless Mouse, Notebook" />
+                                           placeholder="@NewItemPlaceholder" />
                                 </div>
                             </div>
                         }
@@ -689,11 +689,14 @@
                             class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
                         Pending
                     </button>
-                    <button type="button"
-                            @onclick='() => filterStatus = "returned"'
-                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
-                        Returned
-                    </button>
+                    @if (!PersonalItemsOnly)
+                    {
+                        <button type="button"
+                                @onclick='() => filterStatus = "returned"'
+                                class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                            Returned
+                        </button>
+                    }
                 </div>
             </div>
 
@@ -701,7 +704,7 @@
             @if (!ListRows.Any())
             {
                 <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
-                    No matching item records found.
+                    @EmptyStateMessage
                 </div>
             }
             <div class="flex flex-col gap-2 max-h-[42rem] overflow-y-auto pr-0.5">
@@ -732,7 +735,7 @@
 
                         <!-- Items Summary with Inventory Badges -->
                         <div class="text-[11px] text-slate-700 font-medium truncate">
-                            @string.Join(", ", r.Lines.Select(l => l.ItemName))
+                            @string.Join(", ", r.Lines.Select(l => l.Quantity > 1 ? $"{l.ItemName} (×{l.Quantity})" : l.ItemName))
                         </div>
 
                         @if (r.Lines.Any(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)))
@@ -850,6 +853,23 @@
     private bool busy;
     private int? selectedRequestId;
     private int loadedIndividualId = -1;
+    private bool? loadedJobRelatedOnly;
+    private bool? loadedPersonalItemsOnly;
+
+    private IEnumerable<RequestableItemDto> DisplayCatalogueItems =>
+        PersonalItemsOnly
+            ? catalogueItems.Where(i => i.Kind != "Asset")
+            : catalogueItems;
+
+    private string NewItemPlaceholder => PersonalItemsOnly
+        ? "e.g. Spiral Notebook, A4 Paper, Ballpoint Pens, Sticky Notes"
+        : "e.g. Dell Latitude 5420, 27-inch 4K Monitor, Ergonomic Keyboard";
+
+    private string EmptyStateMessage => PersonalItemsOnly
+        ? "No personal items, consumables, or stationery records found for this staff member."
+        : JobRelatedOnly
+        ? "No job-related equipment, hardware, or inventory assets assigned to this staff member."
+        : "No matching item records found.";
 
     // Full-page width toggle saved to browser localStorage user setting
     private bool isFullWidth = false;
@@ -937,8 +957,12 @@
             selectedRequestId = RequestId.Value;
         }
 
-        if (loadedIndividualId == IndividualId) return;
+        if (loadedIndividualId == IndividualId && loadedJobRelatedOnly == JobRelatedOnly && loadedPersonalItemsOnly == PersonalItemsOnly)
+            return;
+
         loadedIndividualId = IndividualId;
+        loadedJobRelatedOnly = JobRelatedOnly;
+        loadedPersonalItemsOnly = PersonalItemsOnly;
         ResetForm();
         await Load();
     }
