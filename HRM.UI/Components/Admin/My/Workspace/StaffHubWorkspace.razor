@@ -17,7 +17,10 @@
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
 @using HRM.Components.Admin.My.Workspace.Teams
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
+@using HRM.Application.Contracts.Pages
 @inject ITeam TeamService
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries AttendanceQueries
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestReview AttendanceReviewService
 @inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
 @inject ILeaveChangeService Leaves
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
@@ -34,10 +37,10 @@
 
 <PageTitle>Admin Workspace - HR Portal</PageTitle>
 
-<section class="my-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors">
+<section class="my-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-all duration-300 @(isFullWidth ? "max-w-none" : "max-w-7xl mx-auto")">
     
     <!-- Top Header Area Matching HRM.UI Standard -->
-    <div class="flex flex-col gap-2 p-2">
+    <div class="my-workspace-header staff-overview-no-print flex flex-col gap-2 p-2">
         <div class="flex items-center justify-between flex-wrap gap-2">
             <div>
                 <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">Admin Workspace</h1>
@@ -67,7 +70,7 @@
     </div>
 
     <!-- Solid Folder Navigation Tabs -->
-    <div class="w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
+    <div class="my-workspace-tabs staff-overview-no-print w-full border-b-2 border-teal-700 dark:border-teal-600 overflow-x-auto">
         <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Workspace Tabs">
             <button type="button"
                     class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Home" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
@@ -132,7 +135,7 @@
     {
         <div class="flex flex-col gap-2 p-2">
             <!-- Staff Workspace Header Bar -->
-            <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
+            <div class="staff-workspace-header staff-overview-no-print rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
                 <div class="flex items-center gap-3 min-w-0">
                     <div class="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
                         @GetInitials(inspectedStaffName)
@@ -164,7 +167,7 @@
             </div>
 
             <!-- Full Staff Sub-Tabs Bar (Folder Tabs with Lighter Green) -->
-            <div class="w-full border-b-2 border-emerald-600 dark:border-emerald-500 overflow-x-auto">
+            <div class="staff-workspace-tabs staff-overview-no-print w-full border-b-2 border-emerald-600 dark:border-emerald-500 overflow-x-auto">
                 <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Staff Workspace Tabs">
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Overview ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
@@ -235,7 +238,7 @@
             </div>
 
             <!-- Staff Workspace Body -->
-            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2 gap-2 flex flex-col shadow-xs">
+            <div class="w-full min-w-0 flex flex-col gap-2">
                 <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" />
             </div>
         </div>
@@ -943,167 +946,452 @@
     {
         <div class="flex flex-col gap-2 p-2">
             <!-- Header Area -->
-            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 gap-2 shadow-xs flex items-center justify-between flex-wrap">
+            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 gap-2 shadow-xs flex items-center justify-between flex-wrap">
                 <div>
                     <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Team Requests &amp; Approvals Command Center</h2>
-                    <p class="text-xs text-slate-500 dark:text-slate-400">Review pending leaves, roster swaps, overtime, and position changes.</p>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">Review pending leaves, clock attendance entries, uneven log corrections, and workforce requests.</p>
                 </div>
-                <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline" @onclick="RefreshRequestsAsync">
-                    ↻ Refresh Queue
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-teal-700 dark:text-teal-400 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 cursor-pointer transition" @onclick="RefreshRequestsAsync">
+                    <span>↻ Refresh Queue</span>
                 </button>
             </div>
 
-            <!-- Two-Column Grid Layout -->
-            <div class="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-2 p-2 items-start">
-                
-                <!-- Left Column: Request Categories & Queue List -->
-                <aside class="min-w-0 p-2 flex flex-col gap-2">
-                    <!-- Category Selector Navigation Card -->
-                    <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-1">
-                        <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                            Request Categories
-                        </div>
-                        <button type="button"
-                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "leave" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                                @onclick='() => activeReqSubTab = "leave"'>
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-                                <span>Leave Requests</span>
-                            </span>
-                            @if (pendingLeaves.Count > 0)
-                            {
-                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "leave" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
-                                    @pendingLeaves.Count
-                                </span>
-                            }
-                        </button>
-                        <button type="button"
-                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "duty" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                                @onclick='() => activeReqSubTab = "duty"'>
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                                <span>Duty &amp; Roster</span>
-                            </span>
-                            @if (pendingDutyRequests.Count > 0)
-                            {
-                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "duty" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
-                                    @pendingDutyRequests.Count
-                                </span>
-                            }
-                        </button>
-                        <button type="button"
-                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "overtime" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                                @onclick='() => activeReqSubTab = "overtime"'>
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                                <span>Overtime</span>
-                            </span>
-                        </button>
-                        <button type="button"
-                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "late" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                                @onclick='() => activeReqSubTab = "late"'>
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-                                <span>Late Check-In</span>
-                            </span>
-                        </button>
-                        <button type="button"
-                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "position" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                                @onclick='() => activeReqSubTab = "position"'>
-                            <span class="flex items-center gap-2">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                                <span>Position Changes</span>
-                            </span>
-                        </button>
-                    </div>
-
-                    <!-- Left Column Queue Card -->
-                    @if (activeReqSubTab == "leave")
+            <!-- Horizontal Request Tabs -->
+            <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Request Categories">
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "leave" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("leave")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    <span>Leave Requests</span>
+                    @if (pendingLeaves.Count > 0)
                     {
-                        <PendingLeaveCard Items="pendingLeaves"
-                                          SelectedRequestId="selectedLeave?.RequestId"
-                                          Loading="loading"
-                                          Busy="executingAction"
-                                          Message="@leaveActionMessage"
-                                          OnSelected="r => selectedLeave = r"
-                                          OnRefresh="RefreshRequestsAsync" />
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "leave" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @pendingLeaves.Count
+                        </span>
                     }
-                    else if (activeReqSubTab == "duty")
-                    {
-                        <PendingDutyRequestsCard />
-                    }
-                </aside>
+                </button>
 
-                <!-- Right Column: Detail Inspector & Action Area -->
-                <main class="min-w-0 p-2 flex flex-col gap-2">
-                    @if (activeReqSubTab == "leave")
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "attendance" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("attendance")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    <span>Attendance Requests</span>
+                    @if (AttendancePendingCount > 0)
                     {
-                        @if (selectedLeave != null)
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "attendance" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @AttendancePendingCount
+                        </span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "uneven-log" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("uneven-log")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    <span>Uneven Log Requests</span>
+                    @if (UnevenLogPendingCount > 0)
+                    {
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "uneven-log" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @UnevenLogPendingCount
+                        </span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "duty" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("duty")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+                    <span>Duty &amp; Roster</span>
+                    @if (pendingDutyRequests.Count > 0)
+                    {
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "duty" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @pendingDutyRequests.Count
+                        </span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "overtime" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("overtime")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    <span>Overtime</span>
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "late" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("late")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    <span>Late Check-In</span>
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "position" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("position")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                    <span>Position Changes</span>
+                </button>
+            </nav>
+
+            <!-- Two-Column Workspace Layout (Left: Form to approve & details, Right: All requests) -->
+            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty")
+            {
+                <div class="grid grid-cols-1 xl:grid-cols-12 gap-3 p-2 items-start w-full">
+                    
+                    <!-- ======================================================== -->
+                    <!-- LEFT PANEL (5 cols): FORM TO APPROVE & DETAILS           -->
+                    <!-- ======================================================== -->
+                    <aside class="col-span-12 xl:col-span-5 flex flex-col gap-3 min-w-0">
+                        @if (activeReqSubTab == "leave")
                         {
-                            <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
-                                <LeaveRequestDetails @key="selectedLeave.RequestId"
-                                                     Item="selectedLeave"
-                                                     Busy="executingAction"
-                                                     Message="@leaveActionMessage"
-                                                     OnClose="() => selectedLeave = null"
-                                                     OnExecute="ExecuteLeaveActionAsync"
-                                                     OnChanged="RefreshRequestsAsync" />
-                            </div>
+                            @if (selectedLeave != null)
+                            {
+                                <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs sticky top-4">
+                                    <LeaveRequestDetails @key="selectedLeave.RequestId"
+                                                         Item="selectedLeave"
+                                                         Busy="executingAction"
+                                                         Message="@leaveActionMessage"
+                                                         OnClose="() => selectedLeave = null"
+                                                         OnExecute="ExecuteLeaveActionAsync"
+                                                         OnChanged="RefreshRequestsAsync" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center shadow-xs">
+                                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Leave Request Selected</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
+                                        Select any pending leave request from the queue on the right to inspect applicant details, balances, and take approval actions.
+                                    </p>
+                                </div>
+                            }
                         }
-                        else
+                        else if (activeReqSubTab is "attendance" or "uneven-log")
                         {
-                            <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center shadow-xs">
-                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
-                                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            @if (selectedAttendanceRequest != null)
+                            {
+                                <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3 sticky top-4">
+                                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                                        <div>
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
+                                                @(activeReqSubTab == "uneven-log" ? "Uneven Log Correction" : "Attendance Request")
+                                            </span>
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@selectedAttendanceRequest.StaffName</h3>
+                                        </div>
+                                        <button type="button" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer" @onclick="() => selectedAttendanceRequest = null">✕</button>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Reference</span>
+                                            <span class="font-mono font-bold text-slate-800 dark:text-slate-200">@selectedAttendanceRequest.Reference</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Status</span>
+                                            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                                                @selectedAttendanceRequest.Status
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Clock Time</span>
+                                            <span class="font-bold text-slate-800 dark:text-slate-200">@selectedAttendanceRequest.ClockTime.ToString("dd MMM yyyy, hh:mm tt")</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Clock Mode</span>
+                                            <span class="inline-block px-1.5 py-0.5 rounded bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 font-bold text-slate-800 dark:text-slate-200">
+                                                @selectedAttendanceRequest.Mode
+                                            </span>
+                                        </div>
+                                        <div class="col-span-2">
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Organisation</span>
+                                            <span class="text-slate-700 dark:text-slate-300 truncate block">@selectedAttendanceRequest.OrganisationName</span>
+                                        </div>
+                                        <div class="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-700">
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Applicant Remarks</span>
+                                            <p class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap mt-0.5">
+                                                @(string.IsNullOrWhiteSpace(selectedAttendanceRequest.Comments) ? "No remarks provided." : selectedAttendanceRequest.Comments)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    @if (attendanceReview != null)
+                                    {
+                                        <div class="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-xs flex items-center justify-between">
+                                            <div>
+                                                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">Workflow Stage</span>
+                                                <span class="font-bold text-slate-900 dark:text-slate-100">@attendanceReview.Stage</span>
+                                            </div>
+                                            @if (!string.IsNullOrWhiteSpace(attendanceReview.Message))
+                                            {
+                                                <span class="text-[11px] text-slate-500 dark:text-slate-400">@attendanceReview.Message</span>
+                                            }
+                                        </div>
+                                    }
+
+                                    <div class="border-t border-slate-200 dark:border-slate-800 pt-2 flex flex-col gap-2">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                            Approval Decision &amp; Action
+                                        </h4>
+
+                                        @if (!string.IsNullOrWhiteSpace(attendanceReviewError))
+                                        {
+                                            <div class="p-2.5 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-900 text-xs text-rose-800 dark:text-rose-200">
+                                                @attendanceReviewError
+                                            </div>
+                                        }
+
+                                        @if (attendanceReview != null && (attendanceReview.CanApprove || attendanceReview.CanCancel))
+                                        {
+                                            <div class="space-y-1">
+                                                <label for="hubAttActionComment" class="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                                                    Action Remarks / Notes
+                                                </label>
+                                                <textarea id="hubAttActionComment"
+                                                          @bind="attendanceActionComment"
+                                                          rows="2"
+                                                          disabled="@attendanceActing"
+                                                          placeholder="Enter optional comments or decision notes..."
+                                                          class="w-full p-2 text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-teal-600 resize-none"></textarea>
+                                            </div>
+
+                                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                                @if (attendanceReview.CanApprove)
+                                                {
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@attendanceActing"
+                                                            @onclick='() => ActAttendanceRequest("Approve")'>
+                                                        ✓ @attendanceReview.ActionLabel
+                                                    </button>
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@attendanceActing"
+                                                            @onclick='() => ActAttendanceRequest("Reject")'>
+                                                        ✕ Reject
+                                                    </button>
+                                                }
+                                                @if (attendanceReview.CanCancel)
+                                                {
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@attendanceActing"
+                                                            @onclick='() => ActAttendanceRequest("Cancel")'>
+                                                        Cancel Request
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                        else if (attendanceReview != null)
+                                        {
+                                            <p class="text-xs text-slate-500 italic">No further approval actions can be taken by your account on this request at its current stage.</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center shadow-xs">
+                                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Request Selected</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
+                                        Select an @(activeReqSubTab == "uneven-log" ? "uneven log correction" : "attendance request") from the queue on the right to inspect details and take approval actions.
+                                    </p>
+                                </div>
+                            }
+                        }
+                        else if (activeReqSubTab == "duty")
+                        {
+                            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center shadow-xs">
+                                <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                    <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                     </svg>
                                 </div>
-                                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Request Selected</h3>
-                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
-                                    Select any pending leave request from the queue on the left to inspect applicant details, balances, and take approval actions.
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Duty &amp; Roster Management</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                                    Review shift exchanges, off-day swaps, and roster adjustments selected from the queue on the right.
                                 </p>
+                                <div class="mt-4">
+                                    <a href="/admin/hr/work-planning/duty-roster?tab=requests"
+                                       class="inline-flex items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-xs font-semibold text-white transition">
+                                        Open Full Duty Roster Workspace ↗
+                                    </a>
+                                </div>
                             </div>
                         }
-                    }
-                    else if (activeReqSubTab == "duty")
-                    {
-                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center shadow-xs">
-                            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Duty &amp; Roster Management</h3>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                                Review shift exchanges, off-day swaps, and roster adjustments from the left queue.
-                            </p>
-                            <div class="mt-4">
-                                <a href="/admin/hr/work-planning/duty-roster?tab=requests"
-                                   class="inline-flex items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-xs font-semibold text-white transition">
-                                    Open Full Duty Roster Workspace ↗
-                                </a>
+                    </aside>
+
+                    <!-- ======================================================== -->
+                    <!-- RIGHT PANEL (7 cols): ALL THE REQUESTS                   -->
+                    <!-- ======================================================== -->
+                    <main class="col-span-12 xl:col-span-7 flex flex-col gap-3 min-w-0">
+                        @if (activeReqSubTab == "leave")
+                        {
+                            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Pending Leave Requests</h3>
+                                        <span class="rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 px-2 py-0.5 text-xs font-bold">
+                                            @pendingLeaves.Count
+                                        </span>
+                                    </div>
+                                    <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer" @onclick="RefreshRequestsAsync">
+                                        ↻ Refresh
+                                    </button>
+                                </div>
+
+                                @if (loading)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-400 animate-pulse">Loading leave requests...</div>
+                                }
+                                else if (pendingLeaves.Count == 0)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                                        All caught up! No pending leave requests awaiting approval.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex flex-col gap-2">
+                                        @foreach (var item in pendingLeaves)
+                                        {
+                                            var isSelected = selectedLeave?.RequestId == item.RequestId;
+                                            <button type="button"
+                                                    class="w-full text-left rounded-xl p-3 border transition-all cursor-pointer @(isSelected ? "bg-teal-50/80 dark:bg-teal-950/40 border-teal-500 ring-1 ring-teal-500 shadow-xs" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50")"
+                                                    @onclick="() => selectedLeave = item">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-xs shrink-0">
+                                                            @GetInitials(item.Applicant)
+                                                        </div>
+                                                        <div>
+                                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">@item.Applicant</h4>
+                                                            <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                                                <span class="font-medium text-teal-700 dark:text-teal-400">@item.LeaveType</span>
+                                                                <span>•</span>
+                                                                <span>@item.FromDate.ToString("dd MMM yyyy") – @item.ToDate.ToString("dd MMM yyyy")</span>
+                                                                <span>(@item.Duration @(item.Duration == 1 ? "day" : "days"))</span>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-col items-end gap-1 shrink-0">
+                                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold @(item.IsProcessing ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                                                            @item.Status
+                                                        </span>
+                                                        <span class="text-[10px] text-slate-400 font-mono">@item.Reference</span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                }
                             </div>
-                        </div>
-                    }
-                    else if (activeReqSubTab == "overtime")
-                    {
-                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
-                            <HRM.Components.Shared.OvertimeRequests PendingOnly="true" />
-                        </div>
-                    }
-                    else if (activeReqSubTab == "late")
-                    {
-                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
-                            <HRM.Components.Shared.LateCheckInRequests PendingOnly="true" />
-                        </div>
-                    }
-                    else if (activeReqSubTab == "position")
-                    {
-                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
-                            <HRM.Components.Shared.StaffPositionRequests PendingOnly="true" />
-                        </div>
-                    }
-                </main>
-            </div>
+                        }
+                        else if (activeReqSubTab is "attendance" or "uneven-log")
+                        {
+                            var reqs = attendanceRequestsList.Where(r => activeReqSubTab == "uneven-log" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance").ToList();
+                            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                            @(activeReqSubTab == "uneven-log" ? "Uneven Log Correction Requests" : "Attendance Requests")
+                                        </h3>
+                                        <span class="rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 px-2 py-0.5 text-xs font-bold">
+                                            @reqs.Count
+                                        </span>
+                                    </div>
+                                    <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer" @onclick="RefreshRequestsAsync">
+                                        ↻ Refresh
+                                    </button>
+                                </div>
+
+                                @if (attendanceLoading)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-400 animate-pulse">Loading requests...</div>
+                                }
+                                else if (reqs.Count == 0)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                                        No @(activeReqSubTab == "uneven-log" ? "uneven log correction" : "attendance") requests found.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex flex-col gap-2">
+                                        @foreach (var row in reqs)
+                                        {
+                                            var isSelected = selectedAttendanceRequest?.RequestId == row.RequestId;
+                                            <button type="button"
+                                                    class="w-full text-left rounded-xl p-3 border transition-all cursor-pointer @(isSelected ? "bg-teal-50/80 dark:bg-teal-950/40 border-teal-500 ring-1 ring-teal-500 shadow-xs" : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600 hover:bg-slate-50/50")"
+                                                    @onclick="() => SelectAttendanceRequest(row)">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-xs shrink-0">
+                                                            @GetInitials(row.StaffName)
+                                                        </div>
+                                                        <div>
+                                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">@row.StaffName</h4>
+                                                            <div class="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap">
+                                                                <span class="font-bold text-slate-700 dark:text-slate-300">@row.ClockTime.ToString("dd MMM yyyy, hh:mm tt")</span>
+                                                                <span>•</span>
+                                                                <span class="inline-block bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 px-1.5 py-0.2 rounded font-semibold text-[10px]">@row.Mode</span>
+                                                                @if (!string.IsNullOrWhiteSpace(row.Comments))
+                                                                {
+                                                                    <span>•</span>
+                                                                    <span class="italic truncate max-w-xs text-slate-400">@row.Comments</span>
+                                                                }
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-col items-end gap-1 shrink-0">
+                                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold @(row.Status.Contains("Approve", StringComparison.OrdinalIgnoreCase) ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : row.Status.Contains("Reject", StringComparison.OrdinalIgnoreCase) ? "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300" : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300")">
+                                                            @row.Status
+                                                        </span>
+                                                        <span class="text-[10px] text-slate-400 font-mono">@row.Reference</span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (activeReqSubTab == "duty")
+                        {
+                            <PendingDutyRequestsCard />
+                        }
+                    </main>
+                </div>
+            }
+            else if (activeReqSubTab == "overtime")
+            {
+                <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                    <HRM.Components.Shared.OvertimeRequests PendingOnly="true" />
+                </div>
+            }
+            else if (activeReqSubTab == "late")
+            {
+                <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                    <HRM.Components.Shared.LateCheckInRequests PendingOnly="true" />
+                </div>
+            }
+            else if (activeReqSubTab == "position")
+            {
+                <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                    <HRM.Components.Shared.StaffPositionRequests PendingOnly="true" />
+                </div>
+            }
         </div>
     }
 
-    <!-- ======================================================== -->
     <!-- TAB 5: ONBOARDING                                        -->
     <!-- ======================================================== -->
     @if (activeWorkspaceTab == "Onboarding")
@@ -1363,6 +1651,19 @@
     private string? leaveActionMessage;
     private bool executingAction;
 
+    // Attendance & Uneven log request state in workspace
+    private List<AttendanceRequestRow> attendanceRequestsList = new();
+    private AttendanceRequestRow? selectedAttendanceRequest;
+    private AttendanceReview? attendanceReview;
+    private string? attendanceActionComment;
+    private string? attendanceReviewError;
+    private bool attendanceActing;
+    private bool attendanceLoading;
+
+    private int AttendancePendingCount => attendanceRequestsList.Count(r => r.Kind == "Attendance" && (r.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Verification", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Approval", StringComparison.OrdinalIgnoreCase)));
+    private int UnevenLogPendingCount => attendanceRequestsList.Count(r => r.Kind == "Uneven-log correction" && (r.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Verification", StringComparison.OrdinalIgnoreCase) || r.Status.Contains("Approval", StringComparison.OrdinalIgnoreCase)));
+
+
     // Search & Directory
 
     // Recent Searches & Todos
@@ -1409,7 +1710,7 @@
     private int TotalLeavesCount => todayAttendance.Count(a => a.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave);
     private int AbsentCount => todayAttendance.Count(a => a.Status == AttendanceStatus.Absent);
     private int AvailableStaffCount => Math.Max(0, TotalStaffCount - TotalLeavesCount - AbsentCount);
-    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count;
+    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count + AttendancePendingCount + UnevenLogPendingCount;
 
     protected override async Task OnInitializedAsync()
     {
@@ -1751,6 +2052,34 @@
             pendingDutyRequests = dutyRows.Where(r => r.CanAccept || r.CanApprove).ToList();
         }
         catch { }
+
+        try
+        {
+            attendanceLoading = true;
+            var filter = new AttendanceRequestFilter(DateOnly.FromDateTime(DateTime.Today.AddDays(-60)), DateOnly.FromDateTime(DateTime.Today.AddDays(30)));
+            var page = await AttendanceQueries.GetReceivedAsync(filter);
+            attendanceRequestsList = page?.Requests ?? new();
+            if (selectedAttendanceRequest != null)
+            {
+                selectedAttendanceRequest = attendanceRequestsList.FirstOrDefault(r => r.RequestId == selectedAttendanceRequest.RequestId);
+                if (selectedAttendanceRequest != null)
+                {
+                    attendanceReview = await AttendanceReviewService.GetAsync(selectedAttendanceRequest.RequestId);
+                }
+                else
+                {
+                    attendanceReview = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed loading attendance requests for workspace");
+        }
+        finally
+        {
+            attendanceLoading = false;
+        }
     }
 
     private string? previousTabBeforeStaff;
@@ -1900,10 +2229,67 @@
         OpenStaffWorkspace(staffId);
     }
 
+    private void SetReqSubTab(string subTab)
+    {
+        activeReqSubTab = subTab;
+        selectedLeave = null;
+        selectedAttendanceRequest = null;
+        attendanceReview = null;
+        attendanceActionComment = string.Empty;
+        attendanceReviewError = null;
+    }
+
+    private async Task SelectAttendanceRequest(AttendanceRequestRow row)
+    {
+        selectedAttendanceRequest = row;
+        attendanceActionComment = string.Empty;
+        attendanceReviewError = null;
+        try
+        {
+            attendanceReview = await AttendanceReviewService.GetAsync(row.RequestId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error fetching attendance review details");
+            attendanceReviewError = "Failed to load approval actions.";
+        }
+    }
+
+    private async Task ActAttendanceRequest(string action)
+    {
+        if (selectedAttendanceRequest == null || attendanceReview == null || attendanceActing) return;
+        attendanceActing = true;
+        attendanceReviewError = null;
+        try
+        {
+            var result = await AttendanceReviewService.ActAsync(selectedAttendanceRequest.RequestId, attendanceReview.StateId, action, attendanceActionComment);
+            if (result.Success)
+            {
+                ToastService.Success(result.Message ?? $"Attendance request {action.ToLowerInvariant()}d successfully.");
+                selectedAttendanceRequest = null;
+                attendanceReview = null;
+                await RefreshRequestsAsync();
+            }
+            else
+            {
+                attendanceReviewError = result.Message ?? "Failed to perform action.";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error executing action on attendance request");
+            attendanceReviewError = ex.Message;
+        }
+        finally
+        {
+            attendanceActing = false;
+        }
+    }
+
     private void OpenRequestTab(string subTab)
     {
         activeWorkspaceTab = "Request";
-        activeReqSubTab = subTab;
+        SetReqSubTab(subTab);
         UpdateUrl();
     }
 
