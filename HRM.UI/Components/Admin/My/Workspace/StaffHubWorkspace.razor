@@ -114,8 +114,132 @@
                     @onclick='() => SetActiveTab("OrgDaily")'>
                 Org Daily
             </button>
+            @if (inspectedStaffId.HasValue)
+            {
+                <button type="button"
+                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Staff" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
+                        @onclick='() => SetActiveTab("Staff")'>
+                    👤 @inspectedStaffName
+                </button>
+            }
         </nav>
     </div>
+
+    <!-- ======================================================== -->
+    <!-- TAB: STAFF WORKSPACE (Full Width Dedicated Employee Workspace) -->
+    <!-- ======================================================== -->
+    @if (activeWorkspaceTab == "Staff" && inspectedStaffId.HasValue)
+    {
+        <div class="space-y-4">
+            <!-- Staff Workspace Header Bar -->
+            <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                        @GetInitials(inspectedStaffName)
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">@inspectedStaffName</h2>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                                Staff Workspace
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            ID: #@inspectedStaffId · Complete Employee Records, Attendance, Leaves, Positions &amp; Performance
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition"
+                            @onclick="() => OpenPositionChangeModal(inspectedStaffId.Value, inspectedStaffName)">
+                        ⚡ Change Position
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                            @onclick="CloseStaffWorkspace">
+                        ✕ Close Staff View
+                    </button>
+                </div>
+            </div>
+
+            <!-- Full Staff Sub-Tabs Bar -->
+            <div class="border-b border-slate-200 dark:border-slate-800 overflow-x-auto">
+                <nav class="flex items-center gap-1 text-xs font-semibold min-w-max pb-1" aria-label="Staff Workspace Tabs">
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Overview ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Overview)">
+                        Overview
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Performance ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Performance)">
+                        Performance
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Leave)">
+                        Leave
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Attendance)">
+                        Attendance
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Position ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Position)">
+                        Positions
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Finance ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Finance)">
+                        Finance
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.OT ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.OT)">
+                        Overtime
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.JobRelatedItems)">
+                        Job Items
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.PersonalItems)">
+                        Personal Items
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Documents ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Documents)">
+                        Documents
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.Schedule ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Schedule)">
+                        Schedule
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.WorkTypes ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.WorkTypes)">
+                        Work Types
+                    </button>
+                    <button type="button"
+                            class="rounded-lg px-3 py-1.5 transition @(inspectedStaffTab == WorkspaceTab.StaffTransfer ? "bg-teal-700 text-white" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.StaffTransfer)">
+                        Transfer
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Staff Workspace Body -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+                <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" />
+            </div>
+        </div>
+    }
 
     <!-- ======================================================== -->
     <!-- TAB 1: HOME (Responsive Three-Column Grid: 23% / 54% / 23%) -->
@@ -364,14 +488,23 @@
                                             @GetInitials(staff.FullName)
                                         </div>
                                         <div class="min-w-0">
-                                            <span class="font-semibold text-slate-900 dark:text-slate-100 block truncate">@staff.FullName</span>
+                                            <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/overview")"
+                                               class="font-semibold text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 hover:underline block truncate"
+                                               title="Open Staff Workspace">
+                                                @staff.FullName
+                                            </a>
                                             <span class="text-[10px] text-slate-500">ID: #@staff.StaffId · @(staff.IsSuperVisor ? "Supervisor" : "Member")</span>
                                         </div>
                                     </div>
                                     <div class="flex items-center gap-1.5 shrink-0">
+                                        <a href="@($"/admin/my/workspace/staff/{staff.StaffId}/overview")"
+                                           class="rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                                           title="Open Staff Workspace">
+                                            Staff Workspace &gt;
+                                        </a>
                                         <button type="button"
                                                 class="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50"
-                                                @onclick="() => InspectStaff(staff.StaffId)">
+                                                @onclick="() => OpenMember360(staff.StaffId)">
                                             Inspect 360
                                         </button>
                                     </div>
@@ -681,7 +814,11 @@
                                                                     @GetInitials(member.FullName)
                                                                 </div>
                                                                 <div>
-                                                                    <span class="font-bold text-slate-900 dark:text-slate-100 block">@member.FullName</span>
+                                                                    <a href="@($"/admin/my/workspace/staff/{member.StaffId}/overview")"
+                                                                       class="font-bold text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 hover:underline block"
+                                                                       title="Open Staff Workspace">
+                                                                        @member.FullName
+                                                                    </a>
                                                                     <span class="text-[10px] text-slate-500">ID: #@member.StaffId</span>
                                                                 </div>
                                                             </div>
@@ -718,9 +855,10 @@
                                                                         @onclick="() => OpenAssignment(AssignmentModal.AssignmentMode.Task, member.StaffId, member.FullName)">
                                                                     Assign Task
                                                                 </button>
-                                                                <a href="@($"/admin/my/workspace?entityType=Staff&entityId={member.StaffId}")"
-                                                                   class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-100 transition">
-                                                                    Detail ↗
+                                                                <a href="@($"/admin/my/workspace/staff/{member.StaffId}/overview")"
+                                                                   class="inline-flex items-center gap-1 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 shadow-2xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                                                                   title="Open Staff Workspace">
+                                                                    Staff Workspace &gt;
                                                                 </a>
                                                             </div>
                                                         </td>
@@ -1405,9 +1543,18 @@
                     "position" => WorkspaceTab.Position,
                     "finance" => WorkspaceTab.Finance,
                     "performance" => WorkspaceTab.Performance,
+                    "ot" or "overtime" => WorkspaceTab.OT,
+                    "job-related" or "jobrelateditems" => WorkspaceTab.JobRelatedItems,
+                    "personal-items" or "personalitems" => WorkspaceTab.PersonalItems,
+                    "documents" => WorkspaceTab.Documents,
+                    "leave-type" or "leavetype" => WorkspaceTab.LeaveType,
+                    "schedule" => WorkspaceTab.Schedule,
+                    "work-types" or "worktypes" => WorkspaceTab.WorkTypes,
+                    "staff-transfer" or "stafftransfer" => WorkspaceTab.StaffTransfer,
                     _ => WorkspaceTab.Overview
                 };
-                activeWorkspaceTab = "Home";
+                activeWorkspaceTab = "Staff";
+                return;
             }
             else if (Enum.TryParse<WorkspaceEntityType>(entity, true, out var parsedType) && Enum.IsDefined(parsedType))
             {
@@ -1472,6 +1619,14 @@
 
     private void UpdateUrl()
     {
+        if (activeWorkspaceTab == "Staff" && inspectedStaffId.HasValue)
+        {
+            var sectionSlug = HRM.Helpers.SectionRoutes.Slug(inspectedStaffTab.ToString());
+            var staffUri = $"/admin/my/workspace/staff/{inspectedStaffId.Value}/{sectionSlug}";
+            Navigation.NavigateTo(staffUri, replace: false);
+            return;
+        }
+
         var tabKey = activeWorkspaceTab switch
         {
             "MyTeam" => "my-teams",
@@ -1652,9 +1807,40 @@
         catch { }
     }
 
+    private string? previousTabBeforeStaff;
+
     private void SetActiveTab(string tab)
     {
+        if (activeWorkspaceTab != "Staff")
+        {
+            previousTabBeforeStaff = activeWorkspaceTab;
+        }
         activeWorkspaceTab = tab;
+        UpdateUrl();
+    }
+
+    private void OpenStaffWorkspace(int staffId, string? staffName = null)
+    {
+        if (activeWorkspaceTab != "Staff")
+        {
+            previousTabBeforeStaff = activeWorkspaceTab;
+        }
+        inspectedStaffId = staffId;
+        inspectedStaffName = staffName ?? allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
+        inspectedStaffTab = WorkspaceTab.Overview;
+        activeWorkspaceTab = "Staff";
+        UpdateUrl();
+    }
+
+    private void CloseStaffWorkspace()
+    {
+        activeWorkspaceTab = previousTabBeforeStaff ?? "MyTeam";
+        UpdateUrl();
+    }
+
+    private void SetStaffTab(WorkspaceTab tab)
+    {
+        inspectedStaffTab = tab;
         UpdateUrl();
     }
 
@@ -1760,9 +1946,7 @@
 
     private void InspectStaff(int staffId)
     {
-        inspectedStaffId = staffId;
-        inspectedStaffName = allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
-        inspectedStaffTab = WorkspaceTab.Overview;
+        OpenStaffWorkspace(staffId);
     }
 
     private void OpenRequestTab(string subTab)
@@ -1823,7 +2007,7 @@
             inspectedStaffId = item.Id;
             inspectedStaffName = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : (allTeamStaff.FirstOrDefault(s => s.StaffId == item.Id)?.FullName ?? $"Staff #{item.Id}");
             inspectedStaffTab = WorkspaceTab.Overview;
-            activeWorkspaceTab = "Home";
+            activeWorkspaceTab = "Staff";
             UpdateUrl();
             StateHasChanged();
         }

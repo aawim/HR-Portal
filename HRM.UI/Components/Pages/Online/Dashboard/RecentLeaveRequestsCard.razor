@@ -337,10 +337,11 @@
     }
     private readonly CancellationTokenSource refreshStop = new();
     private Task? refreshLoop;
+    private bool isDisposed;
 
     protected override Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) refreshLoop = RefreshPeriodicallyAsync();
+        if (firstRender && !isDisposed) refreshLoop = RefreshPeriodicallyAsync();
         return Task.CompletedTask;
     }
 
@@ -349,24 +350,33 @@
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(20));
         try
         {
-            while (await timer.WaitForNextTickAsync(refreshStop.Token))
+            while (!isDisposed && await timer.WaitForNextTickAsync(refreshStop.Token))
             {
+                if (isDisposed || refreshStop.IsCancellationRequested) return;
                 await InvokeAsync(async () =>
                 {
-                    if (IsLoading || _processing || ShowCancelConfirm || selectedDetails != null || editingRequestId.HasValue || refreshStop.IsCancellationRequested) return;
+                    if (isDisposed || IsLoading || _processing || ShowCancelConfirm || selectedDetails != null || editingRequestId.HasValue || refreshStop.IsCancellationRequested) return;
                     try { await RefreshAsync(); }
+                    catch (OperationCanceledException) when (isDisposed || refreshStop.IsCancellationRequested) { }
                     catch (Exception ex) { Logger.LogWarning(ex, "Could not refresh recent leave request statuses."); }
-                    StateHasChanged();
+                    if (!isDisposed)
+                    {
+                        StateHasChanged();
+                    }
                 });
             }
         }
-        catch (OperationCanceledException) when (refreshStop.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (isDisposed || refreshStop.IsCancellationRequested) { }
     }
 
     public async ValueTask DisposeAsync()
     {
-        await refreshStop.CancelAsync();
-        if (refreshLoop != null) await refreshLoop;
+        isDisposed = true;
+        try { await refreshStop.CancelAsync(); } catch { }
+        if (refreshLoop != null)
+        {
+            try { await refreshLoop; } catch { }
+        }
         refreshStop.Dispose();
     }
 
@@ -419,6 +429,7 @@
 
     private async Task RefreshAsync()
     {
+        if (isDisposed || refreshStop.IsCancellationRequested) return;
         loadError = null;
         if (ShowAll && filterFrom.HasValue && filterTo.HasValue && filterFrom.Value.Date > filterTo.Value.Date)
         {
@@ -431,26 +442,46 @@
         {
             if (ShowAll && availableStatuses.Count == 0)
             {
+                if (isDisposed || refreshStop.IsCancellationRequested) return;
                 availableStatuses = (await WorkflowQueries.GetLeaveStatesAsync()).Select(s => new HRM.DTOs.Contracts.LeaveStateDto { LeaveStateId = s.Id, StateName = s.Name }).ToList();
             }
+
+            if (isDisposed || refreshStop.IsCancellationRequested) return;
             LeaveRequests =
                 await LeaveService.GetMyLeaveRequestsAsync(ShowAll ? selectedStatusId : null,
                     ShowAll ? filterFrom : null, ShowAll ? filterTo : null, ShowAll ? null : 10);
 
-            await LoadWorkflowInfoAsync();
+            if (isDisposed || refreshStop.IsCancellationRequested) return;
+            try
+            {
+                await LoadWorkflowInfoAsync();
+            }
+            catch (OperationCanceledException) when (isDisposed || refreshStop.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not enrich leave request workflow statuses.");
+            }
+        }
+        catch (OperationCanceledException) when (isDisposed || refreshStop.IsCancellationRequested)
+        {
+            return;
         }
         catch (Exception ex)
         {
+            if (isDisposed || refreshStop.IsCancellationRequested) return;
             Logger.LogError(ex, "Could not load leave request history.");
             loadError = "Leave requests could not be loaded. Please try again.";
         }
         finally
         {
-            IsLoading = false;
+            if (!isDisposed)
+            {
+                IsLoading = false;
+            }
         }
-        // LeaveRequests = await LeaveService.GetMyLeaveRequestsAsync();
-        // IsLoading = false;
-
     }
 
 
@@ -567,10 +598,12 @@
 
     private async Task LoadWorkflowInfoAsync()
     {
+        if (isDisposed || refreshStop.IsCancellationRequested) return;
         LeaveRequestIds.Clear(); LeaveReferences.Clear(); WorkflowInfo.Clear(); RequestStatuses.Clear();
         ProcessingRequests.Clear(); ReturnReasons.Clear(); OwnedRequestIds.Clear(); HandoverLeaveIds.Clear();
         if (LeaveRequests is not { Count: > 0 }) return;
         var rows = await WorkflowQueries.GetMineAsync(LeaveRequests.Select(l => l.LeaveId).ToArray(), refreshStop.Token);
+        if (isDisposed || refreshStop.IsCancellationRequested) return;
         foreach (var row in rows)
         {
             LeaveRequestIds[row.LeaveId] = row.RequestId;

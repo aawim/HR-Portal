@@ -22,6 +22,7 @@ public sealed class LeaveRequestWorkflowQueries(IDbContextFactory<HrmTeContext> 
     }
     public async Task<List<LeaveRequestWorkflowSummary>> GetMineAsync(IReadOnlyList<int> leaveIds, CancellationToken ct = default)
     {
+        if (leaveIds == null || leaveIds.Count == 0) return [];
         var actor = await access.RequireContextAsync();
         if (leaveIds.Count > 1000 || leaveIds.Any(id => id <= 0)) throw new ArgumentException("Select up to 1,000 leave records.");
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -29,6 +30,7 @@ public sealed class LeaveRequestWorkflowQueries(IDbContextFactory<HrmTeContext> 
             .Select(l => new { l.LeaveId, l.RequestId, Reference = l.Request.ReferenceNumber, State = l.Request.RequestStateId,
                 Status = l.Request.RequestState.StateName, Processing = l.Request.RequestState.IsProcessingState, Final = l.Request.RequestState.IsFinalState,
                 Reason = l.Request.StateChangeRemarks, Handover = db.LeaveHandoverReviews.Any(h => h.LeaveId == l.LeaveId) }).ToListAsync(ct);
+        if (mappings.Count == 0) return [];
         var requests = mappings.Select(m => m.RequestId).ToArray();
         var workflows = await db.WfRequestInstances.AsNoTracking().Where(w => requests.Contains(w.RequestId))
             .Select(w => new { w.RequestId, Id = w.WorkflowRequestInstanceId, Status = w.WorkflowStatus,
