@@ -61,52 +61,9 @@
             </div>
         </div>
 
-        <!-- Search Bar with Standard Styling & Proper Spacing -->
-        <div class="relative w-full max-w-2xl">
-            <div class="relative w-full">
-                <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400 dark:text-slate-500">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
-                </span>
-                <input type="text"
-                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 py-2 pl-10 pr-9 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 shadow-xs focus:border-teal-600 dark:focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-600 transition"
-                       placeholder="Search staff by ID, Name across directory..."
-                       @bind="searchText"
-                       @bind:event="oninput"
-                       @onkeydown="HandleSearchKeyDown" />
-                @if (!string.IsNullOrWhiteSpace(searchText))
-                {
-                    <button type="button"
-                            class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
-                            @onclick="ClearSearch">
-                        ✕
-                    </button>
-                }
-            </div>
-            <p class="text-[11px] italic text-slate-500 dark:text-slate-400 mt-1 pl-1">Search staff by ID or Name to inspect 360° work profile</p>
-
-            <!-- Search Autocomplete Dropdown -->
-            @if (searchResults.Count > 0)
-            {
-                <div class="absolute left-0 right-0 mt-1 z-40 max-h-72 overflow-y-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-1 shadow-xl">
-                    @foreach (var res in searchResults)
-                    {
-                        <button type="button"
-                                @key="@($"{res.EntityType}-{res.Id}")"
-                                class="w-full text-left rounded-lg px-3 py-2 text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-between"
-                                @onclick="() => SelectSearchResult(res)">
-                            <div>
-                                <span class="font-bold text-slate-900 dark:text-slate-100 block">@res.Name</span>
-                                <span class="text-[11px] text-slate-500 dark:text-slate-400">@(!string.IsNullOrWhiteSpace(res.Description) ? res.Description : res.IDCard)</span>
-                            </div>
-                            <span class="rounded bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 px-2 py-0.5 text-[10px] font-semibold border border-teal-200 dark:border-teal-800/40">
-                                @res.EntityType
-                            </span>
-                        </button>
-                    }
-                </div>
-            }
+        <!-- Workspace Directory Search (Using Standard Workspace Directory Search Component) -->
+        <div class="relative w-full max-w-xl">
+            <WorkspaceSearch OnSelected="SelectSearchResult" />
         </div>
     </div>
 
@@ -887,8 +844,9 @@
     <!-- ======================================================== -->
     @if (activeWorkspaceTab == "Request")
     {
-        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
-            <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 flex-wrap gap-2">
+        <div class="space-y-4">
+            <!-- Header Area -->
+            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-2">
                 <div>
                     <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">Team Requests &amp; Approvals Command Center</h2>
                     <p class="text-xs text-slate-500 dark:text-slate-400">Review pending leaves, roster swaps, overtime, and position changes.</p>
@@ -898,73 +856,153 @@
                 </button>
             </div>
 
-            <!-- Sub categories -->
-            <div class="flex flex-wrap gap-1 border-b border-slate-100 dark:border-slate-800 pb-2 text-xs">
-                <button type="button"
-                        class="rounded-lg px-3 py-1 font-semibold transition @(activeReqSubTab == "leave" ? "bg-teal-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                        @onclick='() => activeReqSubTab = "leave"'>
-                    Leave Requests (@pendingLeaves.Count)
-                </button>
-                <button type="button"
-                        class="rounded-lg px-3 py-1 font-semibold transition @(activeReqSubTab == "duty" ? "bg-teal-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                        @onclick='() => activeReqSubTab = "duty"'>
-                    Duty &amp; Roster (@pendingDutyRequests.Count)
-                </button>
-                <button type="button"
-                        class="rounded-lg px-3 py-1 font-semibold transition @(activeReqSubTab == "overtime" ? "bg-teal-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                        @onclick='() => activeReqSubTab = "overtime"'>
-                    Overtime
-                </button>
-                <button type="button"
-                        class="rounded-lg px-3 py-1 font-semibold transition @(activeReqSubTab == "late" ? "bg-teal-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                        @onclick='() => activeReqSubTab = "late"'>
-                    Late Check-In
-                </button>
-                <button type="button"
-                        class="rounded-lg px-3 py-1 font-semibold transition @(activeReqSubTab == "position" ? "bg-teal-700 text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300")"
-                        @onclick='() => activeReqSubTab = "position"'>
-                    Position Changes (Approval Flow)
-                </button>
-            </div>
-
-            @if (activeReqSubTab == "leave")
-            {
-                <PendingLeaveCard Items="pendingLeaves"
-                                  SelectedRequestId="selectedLeave?.RequestId"
-                                  Loading="loading"
-                                  Busy="executingAction"
-                                  Message="@leaveActionMessage"
-                                  OnSelected="r => selectedLeave = r"
-                                  OnRefresh="RefreshRequestsAsync" />
-                @if (selectedLeave != null)
-                {
-                    <div class="mt-4 rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50/20 dark:bg-slate-800 p-4">
-                        <LeaveRequestDetails @key="selectedLeave.RequestId"
-                                             Item="selectedLeave"
-                                             Busy="executingAction"
-                                             Message="@leaveActionMessage"
-                                             OnClose="() => selectedLeave = null"
-                                             OnExecute="ExecuteLeaveActionAsync"
-                                             OnChanged="RefreshRequestsAsync" />
+            <!-- Two-Column Grid Layout -->
+            <div class="grid grid-cols-1 lg:grid-cols-[300px_minmax(0,1fr)] gap-4 items-start">
+                
+                <!-- Left Column: Request Categories & Queue List -->
+                <aside class="min-w-0 space-y-4">
+                    <!-- Category Selector Navigation Card -->
+                    <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs space-y-1">
+                        <div class="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                            Request Categories
+                        </div>
+                        <button type="button"
+                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "leave" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
+                                @onclick='() => activeReqSubTab = "leave"'>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                                <span>Leave Requests</span>
+                            </span>
+                            @if (pendingLeaves.Count > 0)
+                            {
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "leave" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                                    @pendingLeaves.Count
+                                </span>
+                            }
+                        </button>
+                        <button type="button"
+                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "duty" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
+                                @onclick='() => activeReqSubTab = "duty"'>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                                <span>Duty &amp; Roster</span>
+                            </span>
+                            @if (pendingDutyRequests.Count > 0)
+                            {
+                                <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "duty" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                                    @pendingDutyRequests.Count
+                                </span>
+                            }
+                        </button>
+                        <button type="button"
+                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "overtime" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
+                                @onclick='() => activeReqSubTab = "overtime"'>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                                <span>Overtime</span>
+                            </span>
+                        </button>
+                        <button type="button"
+                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "late" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
+                                @onclick='() => activeReqSubTab = "late"'>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                                <span>Late Check-In</span>
+                            </span>
+                        </button>
+                        <button type="button"
+                                class="w-full flex items-center justify-between rounded-xl px-3 py-2 text-xs font-semibold transition @(activeReqSubTab == "position" ? "bg-teal-700 text-white shadow-xs" : "hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300")"
+                                @onclick='() => activeReqSubTab = "position"'>
+                            <span class="flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                                <span>Position Changes</span>
+                            </span>
+                        </button>
                     </div>
-                }
-            }
-            else if (activeReqSubTab == "duty")
-            {
-                <PendingDutyRequestsCard />
-            }
-            else if (activeReqSubTab == "overtime")
-            {
-                <HRM.Components.Shared.OvertimeRequests PendingOnly="true" />
-            }
-            else if (activeReqSubTab == "late")
-            {
-                <HRM.Components.Shared.LateCheckInRequests PendingOnly="true" />
-            }
-            else if (activeReqSubTab == "position")
-            {
-                <HRM.Components.Shared.StaffPositionRequests PendingOnly="true" />
-            }
+
+                    <!-- Left Column Queue Card -->
+                    @if (activeReqSubTab == "leave")
+                    {
+                        <PendingLeaveCard Items="pendingLeaves"
+                                          SelectedRequestId="selectedLeave?.RequestId"
+                                          Loading="loading"
+                                          Busy="executingAction"
+                                          Message="@leaveActionMessage"
+                                          OnSelected="r => selectedLeave = r"
+                                          OnRefresh="RefreshRequestsAsync" />
+                    }
+                    else if (activeReqSubTab == "duty")
+                    {
+                        <PendingDutyRequestsCard />
+                    }
+                </aside>
+
+                <!-- Right Column: Detail Inspector & Action Area -->
+                <main class="min-w-0 space-y-4">
+                    @if (activeReqSubTab == "leave")
+                    {
+                        @if (selectedLeave != null)
+                        {
+                            <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+                                <LeaveRequestDetails @key="selectedLeave.RequestId"
+                                                     Item="selectedLeave"
+                                                     Busy="executingAction"
+                                                     Message="@leaveActionMessage"
+                                                     OnClose="() => selectedLeave = null"
+                                                     OnExecute="ExecuteLeaveActionAsync"
+                                                     OnChanged="RefreshRequestsAsync" />
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center shadow-xs">
+                                <div class="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                    <svg class="h-7 w-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Request Selected</h3>
+                                <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto">
+                                    Select any pending leave request from the queue on the left to inspect applicant details, balances, and take approval actions.
+                                </p>
+                            </div>
+                        }
+                    }
+                    else if (activeReqSubTab == "duty")
+                    {
+                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-6 text-center shadow-xs">
+                            <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">Duty &amp; Roster Management</h3>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                                Review shift exchanges, off-day swaps, and roster adjustments from the left queue.
+                            </p>
+                            <div class="mt-4">
+                                <a href="/admin/hr/work-planning/duty-roster?tab=requests"
+                                   class="inline-flex items-center gap-2 rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-2 text-xs font-semibold text-white transition">
+                                    Open Full Duty Roster Workspace ↗
+                                </a>
+                            </div>
+                        </div>
+                    }
+                    else if (activeReqSubTab == "overtime")
+                    {
+                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                            <HRM.Components.Shared.OvertimeRequests PendingOnly="true" />
+                        </div>
+                    }
+                    else if (activeReqSubTab == "late")
+                    {
+                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                            <HRM.Components.Shared.LateCheckInRequests PendingOnly="true" />
+                        </div>
+                    }
+                    else if (activeReqSubTab == "position")
+                    {
+                        <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-xs">
+                            <HRM.Components.Shared.StaffPositionRequests PendingOnly="true" />
+                        </div>
+                    }
+                </main>
+            </div>
         </div>
     }
 
@@ -1224,9 +1262,6 @@
     private bool executingAction;
 
     // Search & Directory
-    private string searchText = "";
-    private List<WorkspaceSearchResult> searchResults = new();
-    private CancellationTokenSource? searchCts;
 
     // Recent Searches & Todos
     private List<WorkspaceSearchResult> recentSearchItems = new();
@@ -1657,45 +1692,26 @@
         }
     }
 
-    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    private async Task SelectSearchResult(WorkspaceSearchResult item)
     {
-        searchCts?.Cancel();
-        searchCts = new CancellationTokenSource();
-        var ct = searchCts.Token;
-
-        if (string.IsNullOrWhiteSpace(searchText) || searchText.Trim().Length < 2)
-        {
-            searchResults.Clear();
-            return;
-        }
-
         try
         {
-            await Task.Delay(250, ct);
-            var page = await Directory.SearchAsync(new WorkspaceSearchFilter(searchText.Trim(), false, false, null, null), ct);
-            searchResults = (page.Staff ?? new()).Concat(page.Organisations ?? new()).Take(8).ToList();
+            await RecentSearches.RememberAsync(item);
+            recentSearchItems = await RecentSearches.GetAsync() ?? new();
         }
-        catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Search failed for {Query}", searchText);
+            Logger.LogWarning(ex, "Failed to remember recent search");
         }
-    }
 
-    private void ClearSearch()
-    {
-        searchText = "";
-        searchResults.Clear();
-    }
-
-    private void SelectSearchResult(WorkspaceSearchResult item)
-    {
-        ClearSearch();
         if (item.EntityType == WorkspaceEntityType.Staff)
         {
-            InspectStaff(item.Id);
+            inspectedStaffId = item.Id;
+            inspectedStaffName = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : (allTeamStaff.FirstOrDefault(s => s.StaffId == item.Id)?.FullName ?? $"Staff #{item.Id}");
+            inspectedStaffTab = WorkspaceTab.Overview;
             activeWorkspaceTab = "Home";
             UpdateUrl();
+            StateHasChanged();
         }
         else
         {

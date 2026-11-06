@@ -29,15 +29,27 @@
         </span>
 
 
-        <input class="w-full pl-10 pr-4 py-3
-                      border border-slate-200
-                      rounded-xl text-sm
-                      bg-white shadow-sm
-                      focus:ring-2 focus:ring-blue-500"
+        <input class="w-full pl-9 pr-9 py-2
+                      border border-slate-300 dark:border-slate-700
+                      rounded-lg text-xs
+                      bg-white dark:bg-slate-900
+                      text-slate-900 dark:text-slate-100
+                      placeholder:text-slate-400 dark:placeholder:text-slate-500
+                      shadow-xs
+                      focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
         placeholder="@(StaffOnly ? "Search employee by name or national ID..." : "Search staff or organisation...")"
         aria-label="@(StaffOnly ? "Search employee" : "Search staff or organisation")"
         @bind="SearchText"
         @bind:event="oninput" />
+
+        @if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            <button type="button"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                    @onclick="() => SearchText = string.Empty">
+                ✕
+            </button>
+        }
 
     </div>
 
@@ -45,9 +57,9 @@
     @if (!string.IsNullOrWhiteSpace(SearchText))
     {
         <div class="absolute w-full mt-2
-                    bg-white rounded-xl
-                    shadow-lg border
-                    border-slate-200
+                    bg-white dark:bg-slate-900 rounded-xl
+                    shadow-xl border
+                    border-slate-200 dark:border-slate-700
                     max-h-96 overflow-auto z-50">
 
 
@@ -73,11 +85,11 @@
                     {
                         <button class="w-full text-left
                                        px-4 py-3
-                                       hover:bg-slate-50
-                                       border-b"
+                                       hover:bg-slate-50 dark:hover:bg-slate-800
+                                       border-b border-slate-100 dark:border-slate-800 transition"
                         @onclick="() => Select(item)">
 
-                            <div class="font-medium text-slate-700">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">
                                 @item.Name  |  <span> @item.NameDv (@item.IDCard) </span>
                             </div>
 
@@ -103,11 +115,11 @@
                     {
                         <button class="w-full text-left
                                        px-4 py-3
-                                       hover:bg-slate-50
-                                       border-b"
+                                       hover:bg-slate-50 dark:hover:bg-slate-800
+                                       border-b border-slate-100 dark:border-slate-800 transition"
                         @onclick="() => Select(item)">
 
-                            <div class="font-medium text-slate-700">
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">
                                 @item.Name | <span class="dhivehi-font"> @item.NameDv </span>
                             </div>
 
