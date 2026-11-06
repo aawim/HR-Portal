@@ -16,6 +16,7 @@
 @using HRM.Components.Admin.My.Workspace.Staff
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
 @using HRM.Components.Admin.My.Workspace.Teams
+@using HRM.Components.Admin.My.Workspace.Organisation
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
 @using HRM.Application.Contracts.Pages
 @inject ITeam TeamService
@@ -123,6 +124,14 @@
                         class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Staff" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
                         @onclick='() => SetActiveTab("Staff")'>
                     👤 @inspectedStaffName
+                </button>
+            }
+            @if (inspectedOrgId.HasValue)
+            {
+                <button type="button"
+                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Organisation" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
+                        @onclick='() => SetActiveTab("Organisation")'>
+                    🏛️ @inspectedOrgName
                 </button>
             }
         </nav>
@@ -240,6 +249,87 @@
             <!-- Staff Workspace Body -->
             <div class="w-full min-w-0 flex flex-col gap-2">
                 <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" />
+            </div>
+        </div>
+    }
+
+    <!-- ======================================================== -->
+    <!-- TAB: ORGANISATION WORKSPACE (Full Width Dedicated Organisation Workspace) -->
+    <!-- ======================================================== -->
+    @if (activeWorkspaceTab == "Organisation" && inspectedOrgId.HasValue)
+    {
+        <div class="flex flex-col gap-2 p-2">
+            <!-- Organisation Workspace Header Bar -->
+            <div class="org-workspace-header rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
+                <div class="flex items-center gap-3 min-w-0">
+                    <div class="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
+                        @GetInitials(inspectedOrgName)
+                    </div>
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">@inspectedOrgName</h2>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                                Organisation Workspace
+                            </span>
+                        </div>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                            ID: #@inspectedOrgId · Departments, Teams, Staff, Roles, Permissions &amp; Documents
+                        </p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                            @onclick="CloseOrganisationWorkspace">
+                        ✕ Close Organisation View
+                    </button>
+                </div>
+            </div>
+
+            <!-- Full Organisation Sub-Tabs Bar (Folder Tabs with Lighter Green) -->
+            <div class="org-workspace-tabs w-full border-b-2 border-emerald-600 dark:border-emerald-500 overflow-x-auto">
+                <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Organisation Workspace Tabs">
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Overview ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Overview)">
+                        Overview
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Staff ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Staff)">
+                        Staff
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Teams ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Teams)">
+                        Teams
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.AssignedRoles ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.AssignedRoles)">
+                        Roles
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Permissions ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Permissions)">
+                        Permissions
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.LeaveType ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.LeaveType)">
+                        Leave Types
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedOrgTab == WorkspaceTab.Documents ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetOrgTab(WorkspaceTab.Documents)">
+                        Documents
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Organisation Workspace Body -->
+            <div class="w-full min-w-0 flex flex-col gap-2">
+                <OrganisationWorkspace OrganisationId="inspectedOrgId.Value" ActiveTab="inspectedOrgTab" OnStaffSelected="SelectSearchResult" OnLoaded="OnOrgLoaded" />
             </div>
         </div>
     }
@@ -1677,6 +1767,9 @@
     private int? inspectedStaffId;
     private string inspectedStaffName = "";
     private WorkspaceTab inspectedStaffTab = WorkspaceTab.Overview;
+    private int? inspectedOrgId;
+    private string inspectedOrgName = "";
+    private WorkspaceTab inspectedOrgTab = WorkspaceTab.Overview;
 
     private int? evalStaffId;
     private string evalStaffName = "";
@@ -1737,6 +1830,18 @@
             }
             catch { }
         }
+        if (inspectedOrgId.HasValue && (string.IsNullOrWhiteSpace(inspectedOrgName) || inspectedOrgName.StartsWith("Organisation #")))
+        {
+            try
+            {
+                var resolved = await RecentSearches.ResolveAsync(WorkspaceEntityType.Organisation, inspectedOrgId.Value);
+                if (resolved != null && !string.IsNullOrWhiteSpace(resolved.Name))
+                {
+                    inspectedOrgName = resolved.Name;
+                }
+            }
+            catch { }
+        }
     }
 
     protected override async Task OnParametersSetAsync()
@@ -1759,6 +1864,18 @@
             }
             catch { }
         }
+        if (inspectedOrgId.HasValue && (string.IsNullOrWhiteSpace(inspectedOrgName) || inspectedOrgName.StartsWith("Organisation #")))
+        {
+            try
+            {
+                var resolved = await RecentSearches.ResolveAsync(WorkspaceEntityType.Organisation, inspectedOrgId.Value);
+                if (resolved != null && !string.IsNullOrWhiteSpace(resolved.Name))
+                {
+                    inspectedOrgName = resolved.Name;
+                }
+            }
+            catch { }
+        }
         if (selectedTeamId.HasValue && activeWorkspaceTab == "MyTeam" && currentTeamProjects.Count == 0)
         {
             await LoadTeamProjectsAsync(selectedTeamId.Value);
@@ -1767,10 +1884,11 @@
 
     private void SyncTabsFromRouteAndQuery()
     {
-        if (string.Equals(QueryTab, "home", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(EntityRoute))
+        if (string.Equals(QueryTab, "home", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(EntityRoute) && string.IsNullOrWhiteSpace(EntityTypeQuery))
         {
             activeWorkspaceTab = "Home";
             inspectedStaffId = null;
+            inspectedOrgId = null;
             selectedEntityItem = null;
             return;
         }
@@ -1801,6 +1919,29 @@
                     _ => WorkspaceTab.Overview
                 };
                 activeWorkspaceTab = "Staff";
+                return;
+            }
+            else if (string.Equals(entity, "organisation", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(entity, "organization", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(entity, "org", StringComparison.OrdinalIgnoreCase) ||
+                     string.Equals(entity, WorkspaceEntityType.Organisation.ToString(), StringComparison.OrdinalIgnoreCase))
+            {
+                inspectedOrgId = id.Value;
+                if (string.IsNullOrWhiteSpace(inspectedOrgName) || inspectedOrgName.StartsWith("Organisation #"))
+                {
+                    inspectedOrgName = $"Organisation #{id.Value}";
+                }
+                inspectedOrgTab = (ActiveSection?.ToLowerInvariant()) switch
+                {
+                    "staff" => WorkspaceTab.Staff,
+                    "teams" or "team" => WorkspaceTab.Teams,
+                    "assigned-roles" or "assignedroles" or "roles" or "role" => WorkspaceTab.AssignedRoles,
+                    "permissions" or "permission" => WorkspaceTab.Permissions,
+                    "leave-type" or "leavetype" or "leave-types" or "leavetypes" => WorkspaceTab.LeaveType,
+                    "documents" or "document" => WorkspaceTab.Documents,
+                    _ => WorkspaceTab.Overview
+                };
+                activeWorkspaceTab = "Organisation";
                 return;
             }
             else if (Enum.TryParse<WorkspaceEntityType>(entity, true, out var parsedType) && Enum.IsDefined(parsedType))
@@ -1871,6 +2012,14 @@
             var sectionSlug = HRM.Helpers.SectionRoutes.Slug(inspectedStaffTab.ToString());
             var staffUri = $"/admin/my/workspace/staff/{inspectedStaffId.Value}/{sectionSlug}";
             Navigation.NavigateTo(staffUri, replace: false);
+            return;
+        }
+
+        if (activeWorkspaceTab == "Organisation" && inspectedOrgId.HasValue)
+        {
+            var sectionSlug = HRM.Helpers.SectionRoutes.Slug(inspectedOrgTab.ToString());
+            var orgUri = $"/admin/my/workspace/organisation/{inspectedOrgId.Value}/{sectionSlug}";
+            Navigation.NavigateTo(orgUri, replace: false);
             return;
         }
 
@@ -2094,13 +2243,14 @@
 
     private void SetActiveTab(string tab)
     {
-        if (activeWorkspaceTab != "Staff")
+        if (activeWorkspaceTab != "Staff" && activeWorkspaceTab != "Organisation")
         {
             previousTabBeforeStaff = activeWorkspaceTab;
         }
         if (tab == "Home")
         {
             inspectedStaffId = null;
+            inspectedOrgId = null;
             selectedEntityItem = null;
         }
         activeWorkspaceTab = tab;
@@ -2109,10 +2259,11 @@
 
     private void OpenStaffWorkspace(int staffId, string? staffName = null)
     {
-        if (activeWorkspaceTab != "Staff")
+        if (activeWorkspaceTab != "Staff" && activeWorkspaceTab != "Organisation")
         {
             previousTabBeforeStaff = activeWorkspaceTab;
         }
+        inspectedOrgId = null;
         inspectedStaffId = staffId;
         inspectedStaffName = staffName ?? allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
         inspectedStaffTab = WorkspaceTab.Overview;
@@ -2122,6 +2273,7 @@
 
     private void CloseStaffWorkspace()
     {
+        inspectedStaffId = null;
         activeWorkspaceTab = previousTabBeforeStaff ?? "MyTeam";
         UpdateUrl();
     }
@@ -2130,6 +2282,42 @@
     {
         inspectedStaffTab = tab;
         UpdateUrl();
+    }
+
+    private void OpenOrganisationWorkspace(int orgId, string? orgName = null)
+    {
+        if (activeWorkspaceTab != "Staff" && activeWorkspaceTab != "Organisation")
+        {
+            previousTabBeforeStaff = activeWorkspaceTab;
+        }
+        inspectedStaffId = null;
+        inspectedOrgId = orgId;
+        inspectedOrgName = !string.IsNullOrWhiteSpace(orgName) ? orgName : $"Organisation #{orgId}";
+        inspectedOrgTab = WorkspaceTab.Overview;
+        activeWorkspaceTab = "Organisation";
+        UpdateUrl();
+    }
+
+    private void CloseOrganisationWorkspace()
+    {
+        inspectedOrgId = null;
+        activeWorkspaceTab = previousTabBeforeStaff ?? "Home";
+        UpdateUrl();
+    }
+
+    private void SetOrgTab(WorkspaceTab tab)
+    {
+        inspectedOrgTab = tab;
+        UpdateUrl();
+    }
+
+    private void OnOrgLoaded(OrganisationWorkspaceData data)
+    {
+        if (data != null && !string.IsNullOrWhiteSpace(data.Name))
+        {
+            inspectedOrgName = data.Name;
+            StateHasChanged();
+        }
     }
 
     private void NavigateToTeamsTab()
@@ -2349,16 +2537,21 @@
         if (item.EntityType == WorkspaceEntityType.Staff)
         {
             selectedEntityItem = null;
-            inspectedStaffId = item.Id;
-            inspectedStaffName = !string.IsNullOrWhiteSpace(item.Name) ? item.Name : (allTeamStaff.FirstOrDefault(s => s.StaffId == item.Id)?.FullName ?? $"Staff #{item.Id}");
-            inspectedStaffTab = WorkspaceTab.Overview;
-            activeWorkspaceTab = "Staff";
-            UpdateUrl();
+            inspectedOrgId = null;
+            OpenStaffWorkspace(item.Id, item.Name);
+            StateHasChanged();
+        }
+        else if (item.EntityType == WorkspaceEntityType.Organisation)
+        {
+            selectedEntityItem = null;
+            inspectedStaffId = null;
+            OpenOrganisationWorkspace(item.Id, item.Name);
             StateHasChanged();
         }
         else
         {
             inspectedStaffId = null;
+            inspectedOrgId = null;
             selectedEntityItem = item;
             activeWorkspaceTab = "Home";
             UpdateUrl();
