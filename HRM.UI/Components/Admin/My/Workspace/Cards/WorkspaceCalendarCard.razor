@@ -1,2 +1,620 @@
-@using HRM.Components.Pages.Online.Leave.Cards
-<LeaveCalendarCard IncludeTeam="true" />
+@using HRM.DTOs.Leave
+@inject HRM.Services.Leave.Contracts.LeaveCalendarServiceContracts.IOperations CalendarService
+@inject ILogger<WorkspaceCalendarCard> Logger
+
+<div class="space-y-4">
+    <!-- Top Action / Month Switcher Header -->
+    <header class="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-base font-bold text-slate-900 dark:text-slate-100">
+                    Team &amp; Personal Calendar Command Center
+                </h2>
+                <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2.5 py-0.5 text-xs font-semibold">
+                    @month.ToString("MMMM yyyy")
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Review scheduled leaves, team absences, public events, and plan upcoming time off.
+            </p>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+            <div class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-0.5">
+                <button type="button"
+                        class="rounded-md px-2.5 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                        disabled="@busy"
+                        @onclick="() => MoveMonthAsync(-1)"
+                        title="Previous Month">
+                    ‹ Prev
+                </button>
+                <span class="px-2.5 text-xs font-bold text-slate-800 dark:text-slate-100">
+                    @month.ToString("MMM yyyy")
+                </span>
+                <button type="button"
+                        class="rounded-md px-2.5 py-1 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                        disabled="@busy"
+                        @onclick="() => MoveMonthAsync(1)"
+                        title="Next Month">
+                    Next ›
+                </button>
+            </div>
+
+            <button type="button"
+                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                    disabled="@busy"
+                    @onclick="GoToTodayAsync">
+                Today
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition"
+                    disabled="@busy"
+                    @onclick="LoadCalendarAsync">
+                <span class="@(busy ? "animate-spin" : "")">↻</span>
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(message))
+    {
+        <div role="status" class="flex items-center justify-between rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50 dark:bg-emerald-950/50 p-3 text-xs text-emerald-900 dark:text-emerald-200 shadow-2xs">
+            <div class="flex items-center gap-2">
+                <span>ℹ️</span>
+                <span>@message</span>
+            </div>
+            <button type="button" class="font-bold text-emerald-700 dark:text-emerald-400 hover:text-emerald-900" @onclick="() => message = null">✕</button>
+        </div>
+    }
+
+    <!-- TWO-COLUMN LAYOUT: Left (Calendar Grid & CRUD) and Right (List of Calendar Items) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+        
+        <!-- LEFT COLUMN: Calendar Grid + CRUD (6 Cols) -->
+        <div class="lg:col-span-6 min-w-0 space-y-4">
+            
+            <!-- CARD 1: Monthly Calendar Grid (Fully styled with high contrast dark mode) -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">
+                            Month View: @month.ToString("MMMM yyyy")
+                        </h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                            Click any date to view day items or prefill the plan form.
+                        </p>
+                    </div>
+                    @if (selected.HasValue)
+                    {
+                        <span class="rounded-full bg-blue-100 dark:bg-blue-950/70 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2.5 py-0.5 text-[11px] font-bold">
+                            Selected: @selected.Value.ToString("dd MMM")
+                        </span>
+                    }
+                </div>
+
+                <!-- 7-Day Grid Container with explicit dark-mode borders -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-700/80 overflow-hidden shadow-2xs">
+                    <!-- Weekday Header Row -->
+                    <div class="grid grid-cols-7 bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700/80 text-center font-bold text-xs py-2 text-slate-700 dark:text-slate-200">
+                        @foreach (var name in weekDays)
+                        {
+                            <span>@name</span>
+                        }
+                    </div>
+
+                    <!-- Days Grid -->
+                    <div class="grid grid-cols-7 divide-x divide-y divide-slate-200 dark:divide-slate-700/80 bg-white dark:bg-slate-900 text-xs">
+                        @for (var i = 0; i < (int)month.DayOfWeek; i++)
+                        {
+                            <div class="min-h-12 bg-slate-50/60 dark:bg-slate-950/40"></div>
+                        }
+
+                        @for (var i = 1; i <= DateTime.DaysInMonth(month.Year, month.Month); i++)
+                        {
+                            var day = month.AddDays(i - 1);
+                            var dayEvents = OnDay(day).ToList();
+                            var isSelected = selected == day;
+                            var isToday = day == Today;
+                            var isWeekend = day.DayOfWeek is DayOfWeek.Friday or DayOfWeek.Saturday;
+
+                            <button type="button"
+                                    disabled="@busy"
+                                    aria-label="@(day.ToString("dd MMM yyyy") + ", " + dayEvents.Count + " entries")"
+                                    aria-pressed="@isSelected"
+                                    class="min-h-12 p-1.5 flex flex-col items-center justify-between transition-colors cursor-pointer text-left focus:outline-none focus:ring-1 focus:ring-blue-500
+                                           @(isSelected ? "bg-blue-600 text-white dark:bg-blue-600 font-bold shadow-xs" :
+                                             isToday ? "bg-blue-50/70 dark:bg-blue-950/40 ring-2 ring-inset ring-blue-500/80 text-blue-900 dark:text-blue-200 font-bold" :
+                                             isWeekend ? "bg-slate-50/60 dark:bg-slate-800/40 text-slate-500 dark:text-slate-400" :
+                                             "bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200")
+                                           hover:bg-blue-50/80 dark:hover:bg-slate-800"
+                                    @onclick="() => SelectDate(day)">
+                                <div class="w-full flex items-center justify-between">
+                                    <span class="text-xs font-semibold @(isSelected ? "text-white" : isToday ? "text-blue-700 dark:text-blue-400 font-bold" : "text-slate-700 dark:text-slate-300")">
+                                        @i
+                                    </span>
+                                    @if (isToday && !isSelected)
+                                    {
+                                        <span class="text-[9px] font-bold text-blue-600 dark:text-blue-400">Today</span>
+                                    }
+                                </div>
+
+                                <!-- Dots & event indicators -->
+                                <div class="w-full flex flex-col gap-0.5 mt-1">
+                                    <div class="flex items-center justify-center gap-1">
+                                        @if (dayEvents.Any(x => x.IsPlan))
+                                        {
+                                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 shadow-2xs" title="Planned leave"></span>
+                                        }
+                                        @if (dayEvents.Any(x => !x.IsPlan))
+                                        {
+                                            <span class="h-1.5 w-1.5 rounded-full bg-blue-500 shadow-2xs" title="Approved/Submitted leave"></span>
+                                        }
+                                    </div>
+
+                                    @foreach (var ev in dayEvents.Where(x => x.From.Date == day.Date).Take(1))
+                                    {
+                                        <div class="w-full truncate rounded px-1 text-[9px] leading-tight font-medium
+                                                    @(isSelected ? "bg-white/20 text-white" :
+                                                      ev.IsPlan ? "bg-amber-100 text-amber-900 dark:bg-amber-950/80 dark:text-amber-200 border border-amber-200 dark:border-amber-800/60" :
+                                                      "bg-blue-100 text-blue-900 dark:bg-blue-950/80 dark:text-blue-200 border border-blue-200 dark:border-blue-800/60")"
+                                             title="@($"{ev.Person} · {ev.Title}")">
+                                            @GetFirstWord(ev.Person)
+                                        </div>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Legend -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-600 dark:text-slate-400">
+                    <div class="flex items-center gap-3">
+                        <span class="inline-flex items-center gap-1">
+                            <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                            <span>Planned Leave</span>
+                        </span>
+                        <span class="inline-flex items-center gap-1">
+                            <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                            <span>Approved / Official</span>
+                        </span>
+                    </div>
+                    <span class="text-slate-400 dark:text-slate-500">Blue border: Today</span>
+                </div>
+            </div>
+
+            <!-- CARD 2: The CRUD Form (Plan Leave / Calendar Entry) -->
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                            <span>@(editingPlanId.HasValue ? "✏️ Update Leave Plan" : "📅 Plan Leave / Calendar Entry")</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            Schedule upcoming planned time off visible to supervisors without deducting leave balance.
+                        </p>
+                    </div>
+                    @if (editingPlanId.HasValue)
+                    {
+                        <button type="button"
+                                class="text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold"
+                                @onclick="ResetCrudForm">
+                            Cancel Edit
+                        </button>
+                    }
+                </div>
+
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                            Plan Title *
+                        </label>
+                        <input type="text"
+                               class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                               maxlength="100"
+                               placeholder="e.g. Annual Family Vacation, Study Leave, Rest & Recuperation"
+                               disabled="@busy"
+                               @bind="crudTitle" />
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                                From Date *
+                            </label>
+                            <input type="date"
+                                   class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   disabled="@busy"
+                                   @bind="crudFrom" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 dark:text-slate-300">
+                                To Date *
+                            </label>
+                            <input type="date"
+                                   class="mt-1 block w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   disabled="@busy"
+                                   @bind="crudTo" />
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/30 p-2.5 text-[11px] text-blue-800 dark:text-blue-300">
+                        Planning leave notifies team supervisors in advance. It does not submit a final application or alter balances.
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs disabled:opacity-50 transition"
+                                    disabled="@(busy || string.IsNullOrWhiteSpace(crudTitle))"
+                                    @onclick="SaveCrudPlanAsync">
+                                <span>✓</span>
+                                <span>@(editingPlanId.HasValue ? "Update Plan" : "Save Leave Plan")</span>
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                    disabled="@busy"
+                                    @onclick="ResetCrudForm">
+                                Clear
+                            </button>
+                        </div>
+
+                        @if (editingPlanId.HasValue)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center justify-center gap-1 rounded-lg border border-rose-200 dark:border-rose-900/60 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition"
+                                    disabled="@busy"
+                                    @onclick="() => RemovePlanAsync(editingPlanId.Value)">
+                                🗑 Delete Plan
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- RIGHT COLUMN: List of Calendar Items (6 Cols) -->
+        <div class="lg:col-span-6 min-w-0 space-y-4">
+            
+            <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+                <div class="flex items-center justify-between flex-wrap gap-2 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <span>📋 Calendar Items &amp; Team Absences</span>
+                        </h3>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                            Comprehensive record of scheduled team leaves and planned employee absences.
+                        </p>
+                    </div>
+                    <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-xs font-bold text-slate-700 dark:text-slate-300">
+                        @FilteredEntries.Count() items
+                    </span>
+                </div>
+
+                <!-- Scope Filter & Search Bar -->
+                <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div class="inline-flex items-center rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-50 dark:bg-slate-800">
+                        <button type="button"
+                                class="rounded-md px-2.5 py-1 font-semibold transition @(filterScope == "month" ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                @onclick='() => filterScope = "month"'>
+                            All Month (@entries.Count)
+                        </button>
+                        <button type="button"
+                                class="rounded-md px-2.5 py-1 font-semibold transition @(filterScope == "selected" ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                @onclick='() => filterScope = "selected"'>
+                            Selected Day (@(selected.HasValue ? OnDay(selected.Value).Count() : 0))
+                        </button>
+                        <button type="button"
+                                class="rounded-md px-2.5 py-1 font-semibold transition @(filterScope == "mine" ? "bg-white dark:bg-slate-700 text-blue-700 dark:text-blue-300 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                                @onclick='() => filterScope = "mine"'>
+                            My Plans (@entries.Count(x => x.IsOwner))
+                        </button>
+                    </div>
+
+                    <div class="w-full sm:w-auto flex-1 min-w-[10rem]">
+                        <input type="text"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                               placeholder="Filter by name or title..."
+                               @bind="searchQuery"
+                               @bind:event="oninput" />
+                    </div>
+                </div>
+
+                <!-- Calendar Items List -->
+                @if (!FilteredEntries.Any())
+                {
+                    <div class="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1">
+                        <span class="text-2xl">📅</span>
+                        <p class="font-semibold text-slate-700 dark:text-slate-300">No Calendar Entries Found</p>
+                        <p class="text-slate-400 dark:text-slate-500 text-[11px]">
+                            @(filterScope == "selected" && selected.HasValue
+                                ? $"No leave entries scheduled for {selected.Value:dd MMM yyyy}."
+                                : "No leave or planning records match the active month or search filter.")
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2.5 max-h-[36rem] overflow-y-auto pr-1">
+                        @foreach (var entry in FilteredEntries)
+                        {
+                            var isSelectedDay = selected.HasValue && entry.From.Date <= selected.Value.Date && entry.To.Date >= selected.Value.Date;
+                            var durationDays = Math.Max(1, (int)(entry.To.Date - entry.From.Date).TotalDays + 1);
+
+                            <div @key="@($"{entry.Id}-{entry.PersonId}-{entry.IsPlan}")"
+                                 class="rounded-xl border p-3 text-xs transition-colors space-y-2 cursor-pointer
+                                        @(isSelectedDay ? "border-blue-300 dark:border-blue-800 bg-blue-50/40 dark:bg-blue-950/20 shadow-2xs" :
+                                          "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:bg-slate-50/70 dark:hover:bg-slate-800/50 shadow-2xs")"
+                                 @onclick="() => SelectDate(entry.From)">
+                                
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2.5 min-w-0">
+                                        <div class="h-8 w-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0
+                                                    @(entry.IsOwner ? "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300" :
+                                                      "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")">
+                                            @GetInitials(entry.Person)
+                                        </div>
+                                        <div class="min-w-0">
+                                            <div class="flex items-center gap-1.5 flex-wrap">
+                                                <h4 class="font-bold text-slate-900 dark:text-slate-100 truncate">
+                                                    @(entry.IsOwner ? "You" : entry.Person)
+                                                </h4>
+                                                @if (entry.IsOwner)
+                                                {
+                                                    <span class="rounded bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-1.5 py-0.2 text-[9px] font-bold">
+                                                        You
+                                                    </span>
+                                                }
+                                            </div>
+                                            <p class="text-[11px] font-medium text-slate-600 dark:text-slate-300 truncate mt-0.5">
+                                                @entry.Title
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex items-center gap-1.5 shrink-0">
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold border
+                                                     @(entry.IsPlan ? "bg-amber-50 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border-amber-200 dark:border-amber-800/60" :
+                                                       entry.Status == "Approved" ? "bg-emerald-50 text-emerald-800 dark:bg-emerald-950/70 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/60" :
+                                                       "bg-blue-50 text-blue-800 dark:bg-blue-950/70 dark:text-blue-300 border-blue-200 dark:border-blue-800/60")">
+                                            @(entry.IsPlan ? "🟠 Planned" : $"🔵 {entry.Status}")
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                    <div class="flex items-center gap-1.5">
+                                        <span>📅 @entry.From.ToString("dd MMM yyyy")</span>
+                                        <span>→</span>
+                                        <span>@entry.To.ToString("dd MMM yyyy")</span>
+                                        <span class="font-semibold text-slate-700 dark:text-slate-300">(@durationDays d)</span>
+                                    </div>
+
+                                    @if (entry.IsPlan && entry.IsOwner)
+                                    {
+                                        <div class="inline-flex items-center gap-1.5">
+                                            <button type="button"
+                                                    class="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-[11px]"
+                                                    @onclick:stopPropagation
+                                                    @onclick="() => EditPlanInCrud(entry)">
+                                                Edit
+                                            </button>
+                                            <span class="text-slate-300 dark:text-slate-700">·</span>
+                                            <button type="button"
+                                                    class="text-rose-600 dark:text-rose-400 hover:underline font-semibold text-[11px]"
+                                                    @onclick:stopPropagation
+                                                    @onclick="() => RemovePlanAsync(entry.Id)">
+                                                Delete
+                                            </button>
+                                        </div>
+                                    }
+                                </div>
+
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private static DateTime Today => TimeZoneInfo.ConvertTimeBySystemTimeZoneId(DateTime.UtcNow, "Indian/Maldives").Date;
+    private readonly string[] weekDays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    private DateTime month = new(Today.Year, Today.Month, 1);
+    private DateTime? selected = Today;
+    private List<LeaveCalendarEntry> entries = [];
+    private bool busy;
+    private string? message;
+    private string filterScope = "month"; // "month", "selected", "mine"
+    private string searchQuery = "";
+
+    // CRUD Form state
+    private int? editingPlanId;
+    private string crudTitle = "";
+    private DateTime crudFrom = Today;
+    private DateTime crudTo = Today;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCalendarAsync();
+    }
+
+    private IEnumerable<LeaveCalendarEntry> OnDay(DateTime day) =>
+        entries.Where(x => x.From.Date <= day.Date && x.To.Date >= day.Date);
+
+    private IEnumerable<LeaveCalendarEntry> FilteredEntries
+    {
+        get
+        {
+            var query = entries.AsEnumerable();
+
+            if (filterScope == "selected" && selected.HasValue)
+            {
+                query = query.Where(x => x.From.Date <= selected.Value.Date && x.To.Date >= selected.Value.Date);
+            }
+            else if (filterScope == "mine")
+            {
+                query = query.Where(x => x.IsOwner);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchQuery))
+            {
+                var term = searchQuery.Trim().ToLowerInvariant();
+                query = query.Where(x => (x.Person?.ToLowerInvariant().Contains(term) ?? false) ||
+                                         (x.Title?.ToLowerInvariant().Contains(term) ?? false) ||
+                                         (x.Status?.ToLowerInvariant().Contains(term) ?? false));
+            }
+
+            return query.OrderBy(x => x.From).ThenBy(x => x.Person);
+        }
+    }
+
+    private async Task MoveMonthAsync(int direction)
+    {
+        month = month.AddMonths(direction);
+        selected = null;
+        ResetCrudForm();
+        await LoadCalendarAsync();
+    }
+
+    private async Task GoToTodayAsync()
+    {
+        month = new DateTime(Today.Year, Today.Month, 1);
+        selected = Today;
+        crudFrom = Today;
+        crudTo = Today;
+        await LoadCalendarAsync();
+    }
+
+    private void SelectDate(DateTime day)
+    {
+        selected = day;
+        if (!editingPlanId.HasValue)
+        {
+            crudFrom = day;
+            crudTo = day;
+        }
+    }
+
+    private void EditPlanInCrud(LeaveCalendarEntry plan)
+    {
+        editingPlanId = plan.Id;
+        crudTitle = plan.Title;
+        crudFrom = plan.From.Date;
+        crudTo = plan.To.Date;
+        selected = plan.From.Date;
+    }
+
+    private void ResetCrudForm()
+    {
+        editingPlanId = null;
+        crudTitle = "";
+        crudFrom = selected ?? Today;
+        crudTo = selected ?? Today;
+    }
+
+    private async Task LoadCalendarAsync()
+    {
+        busy = true;
+        try
+        {
+            entries = await CalendarService.LoadAsync(month, includeTeam: true);
+        }
+        catch (Exception ex)
+        {
+            entries = [];
+            Logger.LogError(ex, "Could not load workspace leave calendar.");
+            message = "Unable to load calendar data. Please retry.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SaveCrudPlanAsync()
+    {
+        if (busy || string.IsNullOrWhiteSpace(crudTitle)) return;
+        busy = true;
+        message = null;
+
+        try
+        {
+            if (editingPlanId.HasValue)
+            {
+                // Remove previous plan, then save updated plan
+                await CalendarService.RemovePlanAsync(editingPlanId.Value);
+            }
+
+            await CalendarService.SavePlanAsync(crudFrom, crudTo, crudTitle);
+            message = editingPlanId.HasValue ? "Leave plan updated successfully." : "Leave plan saved successfully.";
+            ResetCrudForm();
+            await LoadCalendarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            message = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not save leave plan.");
+            message = "Could not save plan. Please check inputs and retry.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RemovePlanAsync(int planId)
+    {
+        if (busy) return;
+        busy = true;
+        message = null;
+
+        try
+        {
+            await CalendarService.RemovePlanAsync(planId);
+            if (editingPlanId == planId)
+            {
+                ResetCrudForm();
+            }
+            message = "Leave plan removed.";
+            await LoadCalendarAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            message = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not remove leave plan {PlanId}", planId);
+            message = "Unable to remove leave plan. Please retry.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string GetFirstWord(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 0 ? parts[0] : "";
+    }
+
+    private static string GetInitials(string fullName)
+    {
+        if (string.IsNullOrWhiteSpace(fullName)) return "E";
+        var parts = fullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+}
