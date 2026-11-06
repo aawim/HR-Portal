@@ -18,6 +18,7 @@
 @using HRM.Components.Admin.My.Workspace.Teams
 @using HRM.Components.Admin.My.Workspace.Organisation
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
+@using HRM.DTOs.Items
 @using HRM.Application.Contracts.Pages
 @inject ITeam TeamService
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries AttendanceQueries
@@ -26,6 +27,7 @@
 @inject ILeaveChangeService Leaves
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
 @inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations PositionService
+@inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations ItemService
 @inject IWorkspaceDirectoryService Directory
 @inject HRM.Services.Contracts.WorkspaceRecentSearchServiceContracts.IOperations RecentSearches
 @inject IUserTodoService Todos
@@ -1120,10 +1122,36 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                     <span>Position Changes</span>
                 </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "job-items" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("job-items")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                    <span>Job-Related Equipment</span>
+                    @if (JobItemsPendingCount > 0)
+                    {
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "job-items" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @JobItemsPendingCount
+                        </span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "personal-items" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("personal-items")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                    <span>Personal Items &amp; Supplies</span>
+                    @if (PersonalItemsPendingCount > 0)
+                    {
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "personal-items" ? "bg-white/20 text-white" : "bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300")">
+                            @PersonalItemsPendingCount
+                        </span>
+                    }
+                </button>
             </nav>
 
             <!-- Two-Column Workspace Layout (Left: Form to approve & details, Right: All requests) -->
-            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty")
+            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty" or "job-items" or "personal-items")
             {
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-3 p-2 items-start w-full">
                     
@@ -1317,6 +1345,193 @@
                                 </div>
                             </div>
                         }
+                        else if (activeReqSubTab is "job-items" or "personal-items")
+                        {
+                            @if (selectedItemRequest != null)
+                            {
+                                <div class="rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3 sticky top-4 max-h-[85vh] overflow-y-auto">
+                                    <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
+                                        <div>
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
+                                                @(selectedItemRequest.Purpose == "Job related" ? "Job-Related Equipment Request" : "Personal Consumables Request")
+                                            </span>
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">@selectedItemRequest.StaffName</h3>
+                                        </div>
+                                        <button type="button" class="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer" @onclick="() => selectedItemRequest = null">✕</button>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Reference</span>
+                                            <span class="font-mono font-bold text-slate-800 dark:text-slate-200">@selectedItemRequest.Reference</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Status</span>
+                                            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold @(selectedItemRequest.Status is "Submitted" or "ReturnRequested" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : selectedItemRequest.Status is "InUse" or "Received" or "Approved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")">
+                                                @selectedItemRequest.Status
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Request Kind</span>
+                                            <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                                                @selectedItemRequest.Kind
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Submitted Date</span>
+                                            <span class="font-bold text-slate-800 dark:text-slate-200">@selectedItemRequest.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</span>
+                                        </div>
+                                        @if (selectedItemRequest.ReplacesRequestId.HasValue)
+                                        {
+                                            <div class="col-span-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200">
+                                                <span class="font-bold">Replaces Previous Item:</span> @(selectedItemRequest.ReplacesReference ?? $"IM-{selectedItemRequest.ReplacesRequestId}")
+                                            </div>
+                                        }
+                                        <div class="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-700">
+                                            <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider block">Applicant Reason / Remarks</span>
+                                            <p class="text-slate-700 dark:text-slate-300 whitespace-pre-wrap mt-0.5">
+                                                @(string.IsNullOrWhiteSpace(selectedItemRequest.Reason) ? "No reason provided." : selectedItemRequest.Reason)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Item Lines Breakdown -->
+                                    <div class="border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden text-xs">
+                                        <div class="bg-slate-100 dark:bg-slate-800 p-2 font-bold text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-700">
+                                            Requested Items (@selectedItemRequest.Lines.Count)
+                                        </div>
+                                        <div class="divide-y divide-slate-200 dark:divide-slate-800">
+                                            @foreach (var line in selectedItemRequest.Lines)
+                                            {
+                                                <div class="p-2.5 flex flex-col gap-1 bg-white dark:bg-slate-900">
+                                                    <div class="flex items-center justify-between">
+                                                        <span class="font-bold text-slate-900 dark:text-slate-100">@line.ItemName</span>
+                                                        <span class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-0.5 font-bold text-slate-700 dark:text-slate-300">Qty: @line.Quantity</span>
+                                                    </div>
+                                                    @if (!string.IsNullOrWhiteSpace(line.InventoryNumber) || !string.IsNullOrWhiteSpace(line.SerialNumber))
+                                                    {
+                                                        <div class="text-[11px] text-slate-500 font-mono">
+                                                            @if (!string.IsNullOrWhiteSpace(line.InventoryNumber)) { <span>Inv: @line.InventoryNumber </span> }
+                                                            @if (!string.IsNullOrWhiteSpace(line.SerialNumber)) { <span>· S/N: @line.SerialNumber</span> }
+                                                        </div>
+                                                    }
+                                                    @if (line.ExpectedReturnDate.HasValue)
+                                                    {
+                                                        <div class="text-[11px] text-slate-500">
+                                                            Return expected: @line.ExpectedReturnDate.Value.ToString("dd MMM yyyy")
+                                                        </div>
+                                                    }
+                                                    @if (!string.IsNullOrWhiteSpace(line.Remarks))
+                                                    {
+                                                        <div class="text-[11px] text-slate-600 dark:text-slate-400 italic">
+                                                            @line.Remarks
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+
+                                    <!-- Approval Decision & Actions -->
+                                    <div class="border-t border-slate-200 dark:border-slate-800 pt-2 flex flex-col gap-2">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                            Approval Decision &amp; Action
+                                        </h4>
+
+                                        @if (!string.IsNullOrWhiteSpace(itemActionError))
+                                        {
+                                            <div class="p-2.5 rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-900 text-xs text-rose-800 dark:text-rose-200">
+                                                @itemActionError
+                                            </div>
+                                        }
+
+                                        @if (selectedItemRequest.Actions.Count > 0)
+                                        {
+                                            @if (selectedItemRequest.Actions.Contains("ConfirmReturn"))
+                                            {
+                                                <div>
+                                                    <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                                                        Return Condition
+                                                    </label>
+                                                    <select @bind="itemReturnCondition" disabled="@itemActing" class="w-full p-2 text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl">
+                                                        <option value="Good">Good (Ready for Reissue)</option>
+                                                        <option value="Fair">Fair (Normal Wear)</option>
+                                                        <option value="Damaged">Damaged (Requires Repair)</option>
+                                                        <option value="Unusable">Unusable (Decommission)</option>
+                                                        <option value="Lost">Lost</option>
+                                                    </select>
+                                                </div>
+                                            }
+
+                                            <div class="space-y-1">
+                                                <label class="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                                                    Decision Remarks / Notes
+                                                </label>
+                                                <textarea @bind="itemActionComment"
+                                                          rows="2"
+                                                          disabled="@itemActing"
+                                                          placeholder="Enter optional comments or decision notes..."
+                                                          class="w-full p-2 text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-teal-600 resize-none"></textarea>
+                                            </div>
+
+                                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                                @if (selectedItemRequest.Actions.Contains("Approve"))
+                                                {
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@itemActing"
+                                                            @onclick='() => ActItemRequest("Approve")'>
+                                                        ✓ Approve &amp; Issue
+                                                    </button>
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@itemActing"
+                                                            @onclick='() => ActItemRequest("Reject")'>
+                                                        ✕ Reject
+                                                    </button>
+                                                }
+                                                @if (selectedItemRequest.Actions.Contains("ConfirmReturn"))
+                                                {
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@itemActing"
+                                                            @onclick='() => ActItemRequest("ConfirmReturn")'>
+                                                        ✓ Confirm Return &amp; Check In
+                                                    </button>
+                                                }
+                                                @if (selectedItemRequest.Actions.Contains("Cancel"))
+                                                {
+                                                    <button type="button"
+                                                            class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3.5 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-xs transition cursor-pointer disabled:opacity-50"
+                                                            disabled="@itemActing"
+                                                            @onclick='() => ActItemRequest("Cancel")'>
+                                                        Cancel Request
+                                                    </button>
+                                                }
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <p class="text-xs text-slate-500 italic">No approval actions can be taken by your account on this request at its current stage (@selectedItemRequest.Status).</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center shadow-xs">
+                                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Item Request Selected</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
+                                        Select a request from the queue on the right to inspect requested items, specifications, and take approval actions.
+                                    </p>
+                                </div>
+                            }
+                        }
                     </aside>
 
                     <!-- ======================================================== -->
@@ -1457,6 +1672,94 @@
                         else if (activeReqSubTab == "duty")
                         {
                             <PendingDutyRequestsCard />
+                        }
+                        else if (activeReqSubTab is "job-items" or "personal-items")
+                        {
+                            var isJob = activeReqSubTab == "job-items";
+                            var filtered = itemRequestsList.Where(r => isJob ? r.Purpose == "Job related" : r.Purpose != "Job related").ToList();
+                            if (!showAllItemHistory)
+                            {
+                                filtered = filtered.Where(r => r.Status is "Submitted" or "ReturnRequested").ToList();
+                            }
+
+                            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                            @(isJob ? "Job-Related Equipment Queue" : "Personal Consumables Queue")
+                                        </h3>
+                                        <span class="rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 px-2 py-0.5 text-xs font-bold">
+                                            @(isJob ? JobItemsPendingCount : PersonalItemsPendingCount) Pending
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                                            <input type="checkbox" @bind="showAllItemHistory" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                            <span>Show All / History</span>
+                                        </label>
+                                        <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer" @onclick="RefreshRequestsAsync">
+                                            ↻ Refresh
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if (itemLoading)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-400 animate-pulse">Loading item requests...</div>
+                                }
+                                else if (filtered.Count == 0)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                                        All caught up! No requests found in this queue.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex flex-col gap-2">
+                                        @foreach (var row in filtered)
+                                        {
+                                            var isSelected = selectedItemRequest?.RequestId == row.RequestId;
+                                            <button type="button"
+                                                    class="w-full text-left rounded-xl p-3 border transition flex flex-col gap-2 cursor-pointer @(isSelected ? "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 shadow-xs" : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900")"
+                                                    @onclick="() => selectedItemRequest = row">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="flex items-center gap-2.5 min-w-0">
+                                                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-bold text-xs flex items-center justify-center shrink-0">
+                                                            @(string.IsNullOrWhiteSpace(row.StaffName) ? "S" : row.StaffName.Substring(0, 1).ToUpperInvariant())
+                                                        </div>
+                                                        <div class="min-w-0">
+                                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@row.StaffName</h4>
+                                                            <span class="text-[10px] text-slate-400">Submitted @row.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-col items-end gap-1 shrink-0">
+                                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold @(row.Status is "Submitted" or "ReturnRequested" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : row.Status is "InUse" or "Received" or "Approved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")">
+                                                            @row.Status
+                                                        </span>
+                                                        <span class="text-[10px] text-slate-400 font-mono">@row.Reference</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="flex items-center gap-2 flex-wrap text-xs">
+                                                    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                        @row.Kind
+                                                    </span>
+                                                    <span class="text-slate-700 dark:text-slate-300 font-medium">
+                                                        @string.Join(", ", row.Lines.Select(l => $"{l.Quantity}x {l.ItemName}"))
+                                                    </span>
+                                                </div>
+
+                                                @if (!string.IsNullOrWhiteSpace(row.Reason))
+                                                {
+                                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1 italic">
+                                                        “@row.Reason”
+                                                    </p>
+                                                }
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
                         }
                     </main>
                 </div>
@@ -1803,7 +2106,19 @@
     private int TotalLeavesCount => todayAttendance.Count(a => a.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave);
     private int AbsentCount => todayAttendance.Count(a => a.Status == AttendanceStatus.Absent);
     private int AvailableStaffCount => Math.Max(0, TotalStaffCount - TotalLeavesCount - AbsentCount);
-    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count + AttendancePendingCount + UnevenLogPendingCount;
+    private int JobItemsPendingCount => itemRequestsList.Count(r => r.Purpose == "Job related" && (r.Status is "Submitted" or "ReturnRequested"));
+    private int PersonalItemsPendingCount => itemRequestsList.Count(r => r.Purpose != "Job related" && (r.Status is "Submitted" or "ReturnRequested"));
+    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count + AttendancePendingCount + UnevenLogPendingCount + JobItemsPendingCount + PersonalItemsPendingCount;
+
+    // Item Requests State
+    private List<ItemStaffRequestDto> itemRequestsList = new();
+    private ItemStaffRequestDto? selectedItemRequest;
+    private bool itemActing = false;
+    private string? itemActionError;
+    private string itemActionComment = "";
+    private string itemReturnCondition = "Good";
+    private bool itemLoading = false;
+    private bool showAllItemHistory = false;
 
     protected override async Task OnInitializedAsync()
     {
@@ -2236,6 +2551,52 @@
         finally
         {
             attendanceLoading = false;
+        }
+
+        try
+        {
+            itemLoading = true;
+            itemRequestsList = await ItemService.GetStaffRequestsAsync() ?? new();
+            if (selectedItemRequest != null)
+            {
+                selectedItemRequest = itemRequestsList.FirstOrDefault(r => r.RequestId == selectedItemRequest.RequestId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed loading item requests for workspace");
+        }
+        finally
+        {
+            itemLoading = false;
+        }
+    }
+
+    private async Task ActItemRequest(string action)
+    {
+        if (selectedItemRequest == null) return;
+        itemActing = true;
+        itemActionError = null;
+        try
+        {
+            var actionCode = action == "ConfirmReturn" ? $"ConfirmReturn:{itemReturnCondition}" : action;
+            var result = await ItemService.ActStaffRequestAsync(selectedItemRequest.RequestId, selectedItemRequest.StateId, actionCode, itemActionComment);
+            if (!result.Success)
+            {
+                itemActionError = result.Message;
+                return;
+            }
+            ToastService.Success(result.Message);
+            itemActionComment = "";
+            await RefreshRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            itemActionError = ex.Message;
+        }
+        finally
+        {
+            itemActing = false;
         }
     }
 

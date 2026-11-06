@@ -33,7 +33,8 @@ public sealed partial class ItemCatalogueService
         var org = actor.IsSuperAdministrator && selected is > 0 ? selected.Value : current;
         if (org <= 0 || !actor.IsSuperAdministrator && (selected.HasValue && selected != current || !await access.HasOrganisationAccessAsync(org)))
             throw new UnauthorizedAccessException("Select your current organisation.");
-        return (org, actor.IndividualId, actor.UserId, actor.IsSuperAdministrator || await access.HasPermissionAsync("Admin"));
+        var manage = actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin || actor.IsSupervisor || await access.HasPermissionAsync("Admin");
+        return (org, actor.IndividualId, actor.UserId, manage);
     }
 
     public async Task<List<RequestableItemDto>> GetRequestableItemsAsync(int? organisationId = null)
@@ -301,8 +302,15 @@ public sealed partial class ItemCatalogueService
                 // HR assignment is pre-approved: stock is reserved now and the staff member must accept it.
                 await IssueStockAsync(db, row);
                 Move(row, "Issued", St.PendingAcceptance, actor, null, null);
+                await SyncJobRelatedItemToAssetSystemAsync(db, row, actor.User);
+                await NotifyStaffAsync(db, row, $"New equipment/items ({string.Join(", ", lines.Select(l => $"{l.Quantity}x {l.ItemName}"))}) were assigned to you. Please confirm receipt.", actor.User);
             }
-            await SyncJobRelatedItemToAssetSystemAsync(db, row, actor.User);
+            else
+            {
+                // Requisitions, replacements and upgrades submitted to HR.
+                // Strict rule: No notification to sender!
+                await NotifyApproversAsync(db, row, $"{model.Kind} request ({string.Join(", ", lines.Select(l => $"{l.Quantity}x {l.ItemName}"))}) submitted by staff #{person}.", actor.User, actor.Person);
+            }
             await db.SaveChangesAsync();
             await tx.CommitAsync();
             return ServiceResult.Ok(model.Kind == "Issue"
@@ -333,7 +341,7 @@ public sealed partial class ItemCatalogueService
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable);
         try
         {
-            var row = await db.ItemStaffRequests.Include(r => r.Lines)
+            var row = await db.ItemStaffRequests.Include(r => r.Lines).Include(r => r.Request)
                 .SingleOrDefaultAsync(r => r.RequestId == requestId && r.OrganisationId == actor.Org)
                 ?? throw new UnauthorizedAccessException("Item record unavailable in this organisation.");
             if (!AllowedActions(row, actor.Person, actor.Manage).Contains(code))
@@ -347,15 +355,18 @@ public sealed partial class ItemCatalogueService
                     await IssueStockAsync(db, row);
                     Move(row, "Approved", St.PendingAcceptance, actor, null, comment);
                     message = "Approved and issued. Waiting for the staff member to accept.";
+                    await NotifyStaffAsync(db, row, $"Your item request #{row.RequestId} has been approved and issued. Please confirm receipt.", actor.User);
                     break;
                 case "Reject":
                     if (comment is null) throw new InvalidOperationException("Enter a reason for rejecting.");
                     Move(row, "Rejected", St.Rejected, actor, null, comment);
                     message = "Request rejected.";
+                    await NotifyStaffAsync(db, row, $"Your item request #{row.RequestId} was rejected. Reason: {comment}", actor.User);
                     break;
                 case "Cancel":
                     Move(row, "Cancelled", St.Cancelled, actor, null, comment);
                     message = "Request cancelled.";
+                    await NotifyApproversAsync(db, row, $"Item request #{row.RequestId} was cancelled by the applicant.", actor.User, actor.Person);
                     break;
                 case "Accept":
                     row.AcceptedAtUtc = DateTime.UtcNow;
@@ -372,17 +383,20 @@ public sealed partial class ItemCatalogueService
                         }
                     }
                     message = "Items accepted.";
+                    await NotifyApproversAsync(db, row, $"Staff #{row.IndividualId} accepted items under request #{row.RequestId}.", actor.User, actor.Person);
                     break;
                 case "Decline":
                     if (comment is null) throw new InvalidOperationException("Enter a reason for declining.");
                     await RestoreStockAsync(db, row, "Good");
                     Move(row, "Declined", St.Declined, actor, null, comment);
                     message = "Items declined and returned to stock.";
+                    await NotifyApproversAsync(db, row, $"Staff #{row.IndividualId} declined items under request #{row.RequestId}. Reason: {comment}", actor.User, actor.Person);
                     break;
                 case "RequestReturn":
                     row.ReturnRequestedAtUtc = DateTime.UtcNow;
                     Move(row, "ReturnRequested", St.ReturnRequested, actor, null, comment);
                     message = "Return submitted. HR will check the items.";
+                    await NotifyApproversAsync(db, row, $"Staff #{row.IndividualId} requested return for items under request #{row.RequestId}.", actor.User, actor.Person);
                     break;
                 case "ConfirmReturn":
                     if (condition is null || !ReturnConditions.Contains(condition))
@@ -395,6 +409,7 @@ public sealed partial class ItemCatalogueService
                     row.ReturnNotes = comment;
                     Move(row, "ReturnConfirmed", St.Returned, actor, condition, comment);
                     message = condition == "Good" ? "Return confirmed." : $"Return confirmed and recorded as {condition}.";
+                    await NotifyStaffAsync(db, row, $"The return of items for request #{row.RequestId} was confirmed by HR ({condition}).", actor.User);
                     break;
                 default:
                     throw new InvalidOperationException("Use the request form to ask for a replacement or upgrade.");
@@ -765,5 +780,98 @@ public sealed partial class ItemCatalogueService
         }
 
         issuance.UpdatedAtUtc = nowUtc;
+    }
+
+
+    private static async Task NotifyApproversAsync(HrmTeContext db, ItemStaffRequest row, string message, int senderUserId, int senderPersonId)
+    {
+        var approverUsers = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
+                        u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
+                        u.UserId != senderUserId && u.BusinessEntityID != senderPersonId &&
+                        (u.AdminPortalAccessEnabled ||
+                         u.UserRoles.Any(r => r.IsActive && (r.Role.Name.Contains("Admin") || r.Role.Name.Contains("HR"))) ||
+                         u.UserAssignedUserGroups.Any(g => g.UserGroup.GroupName.Contains("Admin") || g.UserGroup.GroupName.Contains("HR"))))
+            .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
+            .Distinct()
+            .ToListAsync();
+
+        if (approverUsers.Count == 0)
+        {
+            approverUsers = await db.Users.AsNoTracking()
+                .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
+                            u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
+                            u.UserId != senderUserId && u.BusinessEntityID != senderPersonId &&
+                            u.AdminPortalAccessEnabled)
+                .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
+                .Distinct()
+                .ToListAsync();
+        }
+
+        var refNumber = row.Request?.ReferenceNumber ?? $"IM-{row.RequestId}";
+        var truncatedMessage = message.Length > 500 ? message[..500] : message;
+
+        foreach (var approver in approverUsers)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = approver.UserId,
+                IndividualId = approver.PersonId,
+                OrganisationId = row.OrganisationId,
+                Kind = "ItemRequest",
+                Message = truncatedMessage,
+                Url = $"/admin/my/workspace?tab=requests&requestId={row.RequestId}",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            db.RequestNotifications.Add(new RequestNotification
+            {
+                UserId = approver.UserId,
+                RequestId = row.RequestId,
+                NotificationKind = "ActionRequired",
+                FromStateId = 1,
+                ToStateId = 1,
+                ReferenceNumber = refNumber,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
+    }
+
+    private static async Task NotifyStaffAsync(HrmTeContext db, ItemStaffRequest row, string message, int senderUserId)
+    {
+        var staffUsers = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.BusinessEntityID == row.IndividualId &&
+                        u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
+                        u.UserId != senderUserId)
+            .Select(u => u.UserId)
+            .ToListAsync();
+
+        var refNumber = row.Request?.ReferenceNumber ?? $"IM-{row.RequestId}";
+        var truncatedMessage = message.Length > 500 ? message[..500] : message;
+
+        foreach (var userId in staffUsers)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = userId,
+                IndividualId = row.IndividualId,
+                OrganisationId = row.OrganisationId,
+                Kind = "ItemRequest",
+                Message = truncatedMessage,
+                Url = $"/online/item-requests?requestId={row.RequestId}",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            db.RequestNotifications.Add(new RequestNotification
+            {
+                UserId = userId,
+                RequestId = row.RequestId,
+                NotificationKind = "StateChanged",
+                FromStateId = 1,
+                ToStateId = 1,
+                ReferenceNumber = refNumber,
+                CreatedAtUtc = DateTime.UtcNow
+            });
+        }
     }
 }

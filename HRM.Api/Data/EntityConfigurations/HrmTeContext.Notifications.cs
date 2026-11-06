@@ -26,6 +26,9 @@ public partial class HrmTeContext
         {
             var request = entry.Entity;
             if (!request.ApplicantBusinessEntityId.HasValue) continue;
+            if (ChangeTracker.Entries<ItemStaffRequest>().Any(n => ReferenceEquals(n.Entity.Request, request) || n.Entity.RequestId == request.RequestId) ||
+                ItemStaffRequests.Local.Any(n => n.RequestId == request.RequestId))
+                continue;
             var users = Users.Where(u => u.IsActive && u.LocalUserStateId == 1 &&
                 u.BusinessEntityID == request.ApplicantBusinessEntityId &&
                 (request.OrganisationBusinessEntityID == null || u.UserOrganisation!.BusinessEntityID == request.OrganisationBusinessEntityID))
