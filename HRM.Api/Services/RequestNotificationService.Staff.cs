@@ -8,7 +8,7 @@ public sealed partial class RequestNotificationService
     private static async Task<RequestNotificationInbox> LoadStaffInboxAsync(HrmTeContext db, Actor actor, CancellationToken ct)
     {
         if(db.Model.FindEntityType(typeof(StaffNotification)) == null) return new(0, []);
-        var query = db.StaffNotifications.AsNoTracking().Where(x => x.UserId == actor.UserId && x.IndividualId == actor.PersonId && x.OrganisationId == actor.OrganisationId);
+        var query = db.StaffNotifications.AsNoTracking().Where(x => x.UserId == actor.UserId && (actor.OrganisationId == null || x.OrganisationId == actor.OrganisationId));
         if(db.Model.FindEntityType(typeof(StaffChatMembership)) != null)
             query = query.Where(n => (n.Kind != "Chat" && n.Kind != "ChatMembership") || n.Url == StaffChatService.PageUrl ||
                 db.StaffChatMemberships.Any(m => m.UserId == actor.UserId && m.LeftAtUtc == null &&
@@ -16,14 +16,14 @@ public sealed partial class RequestNotificationService
         var count = await query.CountAsync(x => x.ReadAtUtc == null, ct);
         var rows = await query.OrderByDescending(x => x.ReadAtUtc == null).ThenByDescending(x => x.CreatedAtUtc).ThenByDescending(x => x.StaffNotificationId).Take(30).ToListAsync(ct);
         // Negative IDs distinguish non-request activity when marking a combined inbox item read.
-        return new(count, rows.Select(x => new RequestNotificationItem(-x.StaffNotificationId, x.Kind == "LeaveBalance" ? "Leave balance" : x.Kind,
+        return new(count, rows.Select(x => new RequestNotificationItem(-x.StaffNotificationId, x.Kind == "LeaveBalance" ? "Leave balance" : x.Kind == "ItemRequest" ? "Equipment & Supplies" : x.Kind == "AssetService" ? "Asset Maintenance" : x.Kind,
             "", "", x.CreatedAtUtc, x.ReadAtUtc.HasValue, x.Url, Message: x.Message)).ToList());
     }
 
     private static async Task MarkStaffReadAsync(HrmTeContext db, Actor actor, long? notificationId, CancellationToken ct)
     {
         if(db.Model.FindEntityType(typeof(StaffNotification)) == null || notificationId is >= 0) return;
-        var rows = await db.StaffNotifications.Where(x => x.UserId == actor.UserId && x.IndividualId == actor.PersonId && x.OrganisationId == actor.OrganisationId &&
+        var rows = await db.StaffNotifications.Where(x => x.UserId == actor.UserId && (actor.OrganisationId == null || x.OrganisationId == actor.OrganisationId) &&
             x.ReadAtUtc == null && (!notificationId.HasValue || x.StaffNotificationId == -notificationId.Value)).ToListAsync(ct);
         foreach(var row in rows) row.ReadAtUtc = DateTime.UtcNow;
     }

@@ -297,7 +297,50 @@ public sealed partial class ItemCatalogueService
                 Reason = model.Reason.Trim(), CreatedAtUtc = DateTime.UtcNow, Lines = lines, Status = St.Submitted };
             db.ItemStaffRequests.Add(row);
             AddEvent(row, model.Kind == "Issue" ? "Assigned" : "Submitted", null, St.Submitted, actor, null, model.Reason.Trim());
-            if (model.Kind == "Issue")
+            if (model.Kind == "Upgrade")
+            {
+                // Synchronize Hardware Upgrade directly to AM_AssetServiceRequests for Serialized Asset Management
+                var originalLine = (await db.ItemStaffRequests.Include(r => r.Lines).FirstOrDefaultAsync(r => r.RequestId == model.ReplacesRequestId))?.Lines.FirstOrDefault();
+                var invCode = originalLine?.InventoryNumber ?? (originalLine != null ? $"JOB-{model.ReplacesRequestId}-L{originalLine.ItemStaffRequestLineId}" : $"JOB-{model.ReplacesRequestId}");
+                var asset = await db.AssetItems.FirstOrDefaultAsync(a => (a.AssetCode == invCode || (originalLine != null && a.Name == originalLine.ItemName)) && a.OwnerOrganisationId == actor.Org);
+                var custody = asset != null ? await db.AssetCustodies.FirstOrDefaultAsync(c => c.AssetItemId == asset.AssetItemId && c.Status == AssetCustodyStatuses.Active) : null;
+
+                var assetServiceReq = new AssetServiceRequest
+                {
+                    RequestId = request.RequestId,
+                    ReferenceNumber = $"SR-UPG-{request.RequestId}",
+                    IndividualId = person,
+                    JobId = job.JobId,
+                    OrganisationId = actor.Org,
+                    StructureId = job.OrganisationStructureId,
+                    RequestType = AssetServiceRequestTypes.HardwareUpgrade,
+                    Priority = "Standard",
+                    Title = $"Hardware Upgrade Request: {lines.FirstOrDefault()?.ItemName ?? "Equipment"}",
+                    Description = model.Reason.Trim(),
+                    Status = AssetServiceRequestStatuses.Submitted,
+                    RequestedByUserId = actor.User,
+                    SubmittedAtUtc = DateTime.UtcNow
+                };
+
+                if (asset != null)
+                {
+                    assetServiceReq.Items.Add(new AssetServiceRequestItem
+                    {
+                        AssetItemId = asset.AssetItemId,
+                        AssetCustodyId = custody?.AssetCustodyId,
+                        ItemRequestType = AssetServiceRequestTypes.HardwareUpgrade,
+                        ReportedFaultOrRequirement = model.Reason.Trim(),
+                        TargetComponentCategory = lines.FirstOrDefault()?.ItemName ?? "RAM",
+                        TargetSpecification = lines.FirstOrDefault()?.Remarks ?? model.Reason.Trim(),
+                        Status = "Pending"
+                    });
+                }
+                db.AssetServiceRequests.Add(assetServiceReq);
+
+                // Notify approvers (strictly no sender self-notification)
+                await NotifyApproversAsync(db, row, $"Hardware upgrade request ({string.Join(", ", lines.Select(l => l.ItemName))}) submitted by staff #{person}.", actor.User, actor.Person);
+            }
+            else if (model.Kind == "Issue")
             {
                 // HR assignment is pre-approved: stock is reserved now and the staff member must accept it.
                 await IssueStockAsync(db, row);
@@ -352,18 +395,50 @@ public sealed partial class ItemCatalogueService
             {
                 case "Approve":
                     await ValidateEmploymentAsync(db, row);
-                    await IssueStockAsync(db, row);
-                    Move(row, "Approved", St.PendingAcceptance, actor, null, comment);
-                    message = "Approved and issued. Waiting for the staff member to accept.";
-                    await NotifyStaffAsync(db, row, $"Your item request #{row.RequestId} has been approved and issued. Please confirm receipt.", actor.User);
+                    if (row.Kind == "Upgrade")
+                    {
+                        var assetReq = await db.AssetServiceRequests.FirstOrDefaultAsync(r => r.RequestId == row.RequestId);
+                        if (assetReq != null)
+                        {
+                            assetReq.Status = AssetServiceRequestStatuses.Approved;
+                        }
+                        Move(row, "Approved", St.InUse, actor, null, comment);
+                        row.AcceptedAtUtc = DateTime.UtcNow;
+                        message = "Hardware upgrade approved. Active equipment custody is preserved while parts are installed.";
+                        await NotifyStaffAsync(db, row, $"Your hardware upgrade request #{row.RequestId} was approved by HR.", actor.User);
+                    }
+                    else
+                    {
+                        await IssueStockAsync(db, row);
+                        Move(row, "Approved", St.PendingAcceptance, actor, null, comment);
+                        message = "Approved and issued. Waiting for the staff member to accept.";
+                        await NotifyStaffAsync(db, row, $"Your item request #{row.RequestId} has been approved and issued. Please confirm receipt.", actor.User);
+                    }
                     break;
                 case "Reject":
                     if (comment is null) throw new InvalidOperationException("Enter a reason for rejecting.");
+                    if (row.Kind == "Upgrade")
+                    {
+                        var assetReq = await db.AssetServiceRequests.FirstOrDefaultAsync(r => r.RequestId == row.RequestId);
+                        if (assetReq != null)
+                        {
+                            assetReq.Status = AssetServiceRequestStatuses.Rejected;
+                            assetReq.ResolutionSummary = comment;
+                        }
+                    }
                     Move(row, "Rejected", St.Rejected, actor, null, comment);
                     message = "Request rejected.";
                     await NotifyStaffAsync(db, row, $"Your item request #{row.RequestId} was rejected. Reason: {comment}", actor.User);
                     break;
                 case "Cancel":
+                    if (row.Kind == "Upgrade")
+                    {
+                        var assetReq = await db.AssetServiceRequests.FirstOrDefaultAsync(r => r.RequestId == row.RequestId);
+                        if (assetReq != null)
+                        {
+                            assetReq.Status = AssetServiceRequestStatuses.Cancelled;
+                        }
+                    }
                     Move(row, "Cancelled", St.Cancelled, actor, null, comment);
                     message = "Request cancelled.";
                     await NotifyApproversAsync(db, row, $"Item request #{row.RequestId} was cancelled by the applicant.", actor.User, actor.Person);
@@ -371,9 +446,10 @@ public sealed partial class ItemCatalogueService
                 case "Accept":
                     row.AcceptedAtUtc = DateTime.UtcNow;
                     Move(row, "Accepted", row.Purpose == JobRelated ? St.InUse : St.Received, actor, null, comment);
-                    if (row.ReplacesRequestId.HasValue)
+                    if (row.ReplacesRequestId.HasValue && row.Kind == "Replacement")
                     {
                         // The replaced item must now be handed back and checked by HR.
+                        // (Upgrades preserve custody of the original item; replacements return it).
                         var old = await db.ItemStaffRequests.SingleAsync(r => r.RequestId == row.ReplacesRequestId.Value);
                         if (old.Status == St.InUse)
                         {
@@ -540,7 +616,7 @@ public sealed partial class ItemCatalogueService
     /// </summary>
     private static async Task SyncJobRelatedItemToAssetSystemAsync(HrmTeContext db, ItemStaffRequest row, int userId)
     {
-        if (row.Purpose != JobRelated) return;
+        if (row.Purpose != JobRelated || row.Kind == "Upgrade") return;
 
         var nowUtc = DateTime.UtcNow;
         var todayDate = nowUtc.AddHours(5).Date;
@@ -787,20 +863,32 @@ public sealed partial class ItemCatalogueService
     {
         var approverUsers = await db.Users.AsNoTracking()
             .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
-                        u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
                         u.UserId != senderUserId && u.BusinessEntityID != senderPersonId &&
-                        (u.AdminPortalAccessEnabled ||
-                         u.UserRoles.Any(r => r.IsActive && (r.Role.Name.Contains("Admin") || r.Role.Name.Contains("HR"))) ||
+                        (u.UserOrganisationId != null && u.UserOrganisation!.BusinessEntityID == row.OrganisationId ||
+                         u.AdminPortalAccessOrganisationId == row.OrganisationId ||
+                         u.AdminPortalAccessEnabled ||
+                         u.UserRoles.Any(r => r.IsActive && (r.Role.Name.Contains("Admin") || r.Role.Name.Contains("HR") || r.Role.RoleKey.Contains("Admin") || r.Role.RoleKey.Contains("HR"))) ||
                          u.UserAssignedUserGroups.Any(g => g.UserGroup.GroupName.Contains("Admin") || g.UserGroup.GroupName.Contains("HR"))))
             .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
             .Distinct()
             .ToListAsync();
 
+        // Also include team supervisors for the applicant's active teams in this organisation
+        var supervisors = await (from ts in db.TeamStaffs.AsNoTracking()
+                                 join t in db.Teams on ts.TeamId equals t.TeamId
+                                 join s in db.Staffs on ts.StaffId equals s.IndividualId
+                                 join u in db.Users on s.IndividualId equals u.BusinessEntityID
+                                 where ts.IsSuperVisor && ts.IsValid && t.OrganisationId == row.OrganisationId &&
+                                       u.IsActive && u.UserId != senderUserId && u.BusinessEntityID != senderPersonId
+                                 select new { u.UserId, PersonId = u.BusinessEntityID })
+                                 .Distinct()
+                                 .ToListAsync();
+        approverUsers = approverUsers.Concat(supervisors).DistinctBy(x => x.UserId).ToList();
+
         if (approverUsers.Count == 0)
         {
             approverUsers = await db.Users.AsNoTracking()
                 .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
-                            u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
                             u.UserId != senderUserId && u.BusinessEntityID != senderPersonId &&
                             u.AdminPortalAccessEnabled)
                 .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
@@ -841,7 +929,6 @@ public sealed partial class ItemCatalogueService
     {
         var staffUsers = await db.Users.AsNoTracking()
             .Where(u => u.IsActive && u.BusinessEntityID == row.IndividualId &&
-                        u.UserOrganisation != null && u.UserOrganisation.BusinessEntityID == row.OrganisationId &&
                         u.UserId != senderUserId)
             .Select(u => u.UserId)
             .ToListAsync();

@@ -59,7 +59,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
         var owned = db.RequestNotifications.Where(n => n.UserId == actor.UserId &&
             (n.NotificationKind != "DutyAcceptance" || n.Request.RequestStateId == 10) &&
             (n.Request.OrganisationBusinessEntityID == null || n.Request.OrganisationBusinessEntityID == actor.OrganisationId) &&
-            (n.NotificationKind != "ActionRequired" || (n.RequestStageInstanceId.HasValue && pending.Contains(n.RequestStageInstanceId.Value))) &&
+            (n.NotificationKind != "ActionRequired" || !n.RequestStageInstanceId.HasValue || pending.Contains(n.RequestStageInstanceId.Value)) &&
             (!n.NotificationKind.StartsWith("Handover") || (n.LeaveId.HasValue &&
                 db.LeaveHandoverReviews.Any(r => r.LeaveId == n.LeaveId && r.Revision == n.HandoverRevision) &&
                 ((n.NotificationKind == "HandoverTasks" && tasks.Contains(n.LeaveId.Value)) ||
@@ -137,7 +137,7 @@ public sealed partial class RequestNotificationService(IDbContextFactory<HrmTeCo
             n.ViewUrl == StaffPositionManagementService.RequestsPageUrl ? StaffPositionManagementService.RequestsPageUrl :
             n.ViewUrl == WeeklyHourExceptionService.PageUrl ? WeeklyHourExceptionService.PageUrl :
             n.ViewUrl == "/online/duty-roster" ? "/online/duty-roster" :
-            n.ViewUrl == "/online/item-requests" ? (n.NotificationKind == "ActionRequired" ? $"/admin/hr/items/staff-items?requestId={n.RequestId}" : $"/online/item-requests?requestId={n.RequestId}") :
+            n.ViewUrl == "/online/item-requests" ? (n.NotificationKind == "ActionRequired" ? $"/admin/my/workspace?tab=requests&requestId={n.RequestId}" : $"/online/item-requests?requestId={n.RequestId}") :
             n.ViewUrl == AdminAccessGrantService.PageUrl ? "/online/admin-access" :
             n.ViewUrl == StaffOnboardingService.PageUrl ? $"{StaffOnboardingService.PageUrl}?requestId={n.RequestId}" :
             n.NotificationKind.StartsWith("Handover") ? $"/online/leave-handovers/{n.LeaveId}" :

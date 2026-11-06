@@ -583,8 +583,12 @@ public sealed class ItemStaffRequestLineTests
             Assert.Equal("Submitted", upgradeReq.Status);
             Assert.Equal(801, upgradeReq.ReplacesRequestId);
 
-            // CRITICAL CHECK: Asset issuance must NOT be created prematurely on request submission!
-            // It should only be created when HR approves the request.
+            // Asset Service Request (Assets) must be synchronized
+            var assetReq = await db.AssetServiceRequests.FirstOrDefaultAsync(r => r.RequestId == upgradeReq.RequestId);
+            Assert.NotNull(assetReq);
+            Assert.Equal("HardwareUpgrade", assetReq.RequestType);
+
+            // CRITICAL CHECK: Asset issuance must NOT be created on upgrade request submission
             var issuance = await db.AssetIssuances.FirstOrDefaultAsync(i => i.RequestId == upgradeReq.RequestId);
             Assert.Null(issuance);
 
@@ -595,7 +599,7 @@ public sealed class ItemStaffRequestLineTests
             // APPROVER NOTIFICATION CHECK: Admin (user 1) MUST receive a notification
             var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
             Assert.NotNull(adminNotif);
-            Assert.Contains("Upgrade request", adminNotif.Message);
+            Assert.Contains("upgrade request", adminNotif.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
 
@@ -670,12 +674,20 @@ public sealed class ItemStaffRequestLineTests
         await using (var db = factory.CreateDbContext())
         {
             var upgradeReq = await db.ItemStaffRequests.Include(r => r.Lines).FirstAsync(r => r.RequestId == upgradeRequestId);
-            Assert.Equal("PendingAcceptance", upgradeReq.Status);
+            Assert.Equal("InUse", upgradeReq.Status);
 
-            // Asset issuance should now exist and be pending acknowledgement
+            // Hardware upgrade preserves custody: no issuance/handover is created
             var issuance = await db.AssetIssuances.FirstOrDefaultAsync(i => i.RequestId == upgradeRequestId);
-            Assert.NotNull(issuance);
-            Assert.Equal("PendingStaffAcknowledgement", issuance.Status);
+            Assert.Null(issuance);
+
+            // Asset Service Request is marked Approved
+            var assetReq = await db.AssetServiceRequests.FirstOrDefaultAsync(r => r.RequestId == upgradeRequestId);
+            Assert.NotNull(assetReq);
+            Assert.Equal("Approved", assetReq.Status);
+
+            // Original item remains InUse (not returned)
+            var oldReq = await db.ItemStaffRequests.FirstAsync(r => r.RequestId == 801);
+            Assert.Equal("InUse", oldReq.Status);
 
             // Staff member (user 2) must be notified of approval
             var staffNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 2);
@@ -685,35 +697,6 @@ public sealed class ItemStaffRequestLineTests
             // HR Admin (user 1, who approved) must NOT be notified of their own action
             var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
             Assert.Null(adminNotif);
-
-            // Clear notifications for next step
-            db.StaffNotifications.RemoveRange(db.StaffNotifications);
-            db.RequestNotifications.RemoveRange(db.RequestNotifications);
-            await db.SaveChangesAsync();
-        }
-
-        // Step 4: Staff Jane Doe accepts the new upgraded equipment
-        SetActorStaff(100, 2);
-        var acceptResult = await service.ActStaffRequestAsync(upgradeRequestId, 2, "Accept", "Received and tested working.");
-        Assert.True(acceptResult.Success, acceptResult.Message);
-
-        await using (var db = factory.CreateDbContext())
-        {
-            var upgradeReq = await db.ItemStaffRequests.FirstAsync(r => r.RequestId == upgradeRequestId);
-            Assert.Equal("InUse", upgradeReq.Status);
-
-            // The old item (RequestId 801) must now automatically transition to ReturnRequested
-            var oldReq = await db.ItemStaffRequests.FirstAsync(r => r.RequestId == 801);
-            Assert.Equal("ReturnRequested", oldReq.Status);
-
-            // HR Admin (user 1) should be notified that staff accepted
-            var adminNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 1);
-            Assert.NotNull(adminNotif);
-            Assert.Contains("accepted", adminNotif.Message, StringComparison.OrdinalIgnoreCase);
-
-            // Staff (user 2, who accepted) must NOT receive notification of their own action
-            var staffNotif = await db.StaffNotifications.FirstOrDefaultAsync(n => n.UserId == 2);
-            Assert.Null(staffNotif);
         }
     }
 

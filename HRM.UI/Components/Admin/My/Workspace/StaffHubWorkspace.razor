@@ -1383,8 +1383,8 @@
                                         </div>
                                         @if (selectedItemRequest.ReplacesRequestId.HasValue)
                                         {
-                                            <div class="col-span-2 p-2 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-[11px] text-purple-900 dark:text-purple-200">
-                                                <span class="font-bold">Replaces Previous Item:</span> @(selectedItemRequest.ReplacesReference ?? $"IM-{selectedItemRequest.ReplacesRequestId}")
+                                            <div class="col-span-2 p-2 rounded-lg @(selectedItemRequest.Kind == "Upgrade" ? "bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-900 dark:text-blue-200" : "bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-900 dark:text-purple-200") text-[11px]">
+                                                <span class="font-bold">@(selectedItemRequest.Kind == "Upgrade" ? "Hardware Upgrade for Existing Asset:" : "Replaces Previous Item:")</span> @(selectedItemRequest.ReplacesReference ?? $"IM-{selectedItemRequest.ReplacesRequestId}") @(selectedItemRequest.Kind == "Upgrade" ? "(Preserves active custody)" : "")
                                             </div>
                                         }
                                         <div class="col-span-2 pt-1 border-t border-slate-200 dark:border-slate-700">
@@ -1481,7 +1481,7 @@
                                                             class="inline-flex items-center gap-1.5 rounded-xl bg-teal-700 hover:bg-teal-800 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
                                                             disabled="@itemActing"
                                                             @onclick='() => ActItemRequest("Approve")'>
-                                                        ✓ Approve &amp; Issue
+                                                        @(selectedItemRequest.Kind == "Upgrade" ? "✓ Approve Upgrade" : "✓ Approve & Issue")
                                                     </button>
                                                     <button type="button"
                                                             class="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
@@ -2132,9 +2132,18 @@
                 inspectedStaffName = match.FullName;
             }
         }
-        if (NotificationRequestId.HasValue && selectedLeave == null)
+        if (NotificationRequestId.HasValue && selectedLeave == null && selectedItemRequest == null)
         {
-            selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+            var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
+            if (itemReq != null)
+            {
+                activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
+                selectedItemRequest = itemReq;
+            }
+            else
+            {
+                selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+            }
         }
         if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
         {
@@ -2274,8 +2283,17 @@
         if (NotificationRequestId.HasValue && NotificationRequestId.Value > 0)
         {
             activeWorkspaceTab = "Request";
-            activeReqSubTab = "leave";
-            selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+            var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
+            if (itemReq != null)
+            {
+                activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
+                selectedItemRequest = itemReq;
+            }
+            else
+            {
+                activeReqSubTab = "leave";
+                selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+            }
         }
         else if (!string.IsNullOrWhiteSpace(QueryTab))
         {

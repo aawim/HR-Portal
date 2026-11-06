@@ -263,6 +263,7 @@ public sealed partial class StaffAssetService
         await db.SaveChangesAsync();
 
         RecordAssetEvent(db, input.OrganisationId, null, "AssetServiceRequest", request.AssetServiceRequestId, "ServiceRequestSubmitted", null, request.Status, actor.UserId, new { request.ReferenceNumber, request.RequestType });
+        await NotifyAssetApproversAsync(db, request, actor.UserId, input.IndividualId);
         await db.SaveChangesAsync();
 
         return ServiceResult.Ok();
@@ -1233,5 +1234,105 @@ public sealed partial class StaffAssetService
         await db.SaveChangesAsync();
 
         return ServiceResult.Ok();
+    }
+
+    private static async Task NotifyAssetApproversAsync(HrmTeContext db, AssetServiceRequest request, int senderUserId, int senderIndividualId)
+    {
+        var approverUsers = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
+                        u.UserId != senderUserId && u.BusinessEntityID != senderIndividualId &&
+                        (u.UserOrganisationId != null && u.UserOrganisation!.BusinessEntityID == request.OrganisationId ||
+                         u.AdminPortalAccessOrganisationId == request.OrganisationId ||
+                         u.AdminPortalAccessEnabled ||
+                         u.UserRoles.Any(r => r.IsActive && (r.Role.Name.Contains("Admin") || r.Role.Name.Contains("HR") || r.Role.RoleKey.Contains("Admin") || r.Role.RoleKey.Contains("HR"))) ||
+                         u.UserAssignedUserGroups.Any(g => g.UserGroup.GroupName.Contains("Admin") || g.UserGroup.GroupName.Contains("HR"))))
+            .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
+            .Distinct()
+            .ToListAsync();
+
+        if (approverUsers.Count == 0)
+        {
+            approverUsers = await db.Users.AsNoTracking()
+                .Where(u => u.IsActive && u.LocalUserStateId == 1 &&
+                            u.UserId != senderUserId && u.BusinessEntityID != senderIndividualId &&
+                            u.AdminPortalAccessEnabled)
+                .Select(u => new { u.UserId, PersonId = u.BusinessEntityID })
+                .Distinct()
+                .ToListAsync();
+        }
+
+        var message = $"{request.RequestType} request ({request.Title}) submitted for staff #{request.IndividualId}.";
+        var truncatedMessage = message.Length > 500 ? message[..500] : message;
+
+        foreach (var approver in approverUsers)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = approver.UserId,
+                IndividualId = approver.PersonId,
+                OrganisationId = request.OrganisationId,
+                Kind = "AssetService",
+                Message = truncatedMessage,
+                Url = $"/admin/my/workspace?tab=requests&requestId={request.RequestId ?? 0}",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            if (request.RequestId.HasValue && request.RequestId.Value > 0)
+            {
+                db.RequestNotifications.Add(new RequestNotification
+                {
+                    UserId = approver.UserId,
+                    RequestId = request.RequestId.Value,
+                    NotificationKind = "ActionRequired",
+                    FromStateId = 1,
+                    ToStateId = 1,
+                    ReferenceNumber = request.ReferenceNumber,
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+        }
+    }
+
+    private static async Task NotifyAssetStaffAsync(HrmTeContext db, AssetServiceRequest request, string message, int senderUserId)
+    {
+        await NotifyAssetStaffByIndividualAsync(db, request.IndividualId, request.OrganisationId, message, senderUserId, request.RequestId, request.ReferenceNumber);
+    }
+
+    private static async Task NotifyAssetStaffByIndividualAsync(HrmTeContext db, int individualId, int organisationId, string message, int senderUserId, int? requestId = null, string? referenceNumber = null)
+    {
+        var staffUsers = await db.Users.AsNoTracking()
+            .Where(u => u.IsActive && u.BusinessEntityID == individualId && u.UserId != senderUserId)
+            .Select(u => u.UserId)
+            .ToListAsync();
+
+        var truncatedMessage = message.Length > 500 ? message[..500] : message;
+
+        foreach (var userId in staffUsers)
+        {
+            db.StaffNotifications.Add(new StaffNotification
+            {
+                UserId = userId,
+                IndividualId = individualId,
+                OrganisationId = organisationId,
+                Kind = "AssetService",
+                Message = truncatedMessage,
+                Url = "/online/my-assets",
+                CreatedAtUtc = DateTime.UtcNow
+            });
+
+            if (requestId.HasValue && requestId.Value > 0)
+            {
+                db.RequestNotifications.Add(new RequestNotification
+                {
+                    UserId = userId,
+                    RequestId = requestId.Value,
+                    NotificationKind = "StateChanged",
+                    FromStateId = 1,
+                    ToStateId = 1,
+                    ReferenceNumber = referenceNumber ?? $"SR-{requestId.Value}",
+                    CreatedAtUtc = DateTime.UtcNow
+                });
+            }
+        }
     }
 }
