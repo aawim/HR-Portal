@@ -492,7 +492,7 @@
                             </div>
                         }
 
-                        @if (IsHrAssign)
+                        @if (IsHrAssign && !PersonalItemsOnly)
                         {
                             <div class="grid gap-2.5 sm:grid-cols-3">
                                 <div>
@@ -916,7 +916,7 @@
         }
     }
 
-    private bool IsHrAssign => canManageStaffItems && IndividualId > 0 && !PersonalItemsOnly;
+    private bool IsHrAssign => canManageStaffItems && IndividualId > 0;
     private string returnCondition = "Good";
     private string? replacingReference;
 
@@ -987,7 +987,7 @@
             {
                 IndividualId = IndividualId,
                 Kind = IsHrAssign ? "Issue" : "Requisition",
-                Purpose = IsHrAssign || JobRelatedOnly ? "Job related" : "Common"
+                Purpose = PersonalItemsOnly ? "Common" : (IsHrAssign || JobRelatedOnly ? "Job related" : "Common")
             };
         replacingReference = null;
         ResetLineInputs();

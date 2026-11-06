@@ -303,4 +303,98 @@ public sealed class ItemStaffRequestLineTests
         Assert.Equal("Good", verifiedUnit.Condition);
         Assert.Null(verifiedUnit.IssuedToIndividualId);
     }
+
+    [Fact]
+    public async Task ItemStaffRequest_WhenHrAssignsToThemselves_FailsWithSelfAssignError()
+    {
+        await SeedBaseDataAsync();
+        var service = CreateService();
+
+        var input = new ItemStaffRequestInput
+        {
+            OrganisationId = 10,
+            IndividualId = 999, // actor.Person
+            Purpose = "Job related",
+            Kind = "Issue",
+            Reason = "Self-assigning laptop",
+            Lines =
+            [
+                new()
+                {
+                    ItemId = 200,
+                    ItemName = "Dell Latitude 5420",
+                    Quantity = 1
+                }
+            ]
+        };
+
+        var result = await service.SubmitStaffRequestAsync(input);
+        Assert.False(result.Success);
+        Assert.Equal("Staff raise item requests for themselves. HR assigns job-related items from the staff workspace.", result.Message);
+    }
+
+    [Fact]
+    public async Task ItemStaffRequest_WhenHrAssignsCommonPersonalItemsToStaff_PreservesCommonPurpose()
+    {
+        await SeedBaseDataAsync();
+        var service = CreateService();
+
+        var input = new ItemStaffRequestInput
+        {
+            OrganisationId = 10,
+            IndividualId = 100, // another staff
+            Purpose = "Common",
+            Kind = "Issue",
+            Reason = "Issuing stationary and consumables to staff",
+            Lines =
+            [
+                new()
+                {
+                    ItemName = "Spiral Notebook A4",
+                    Quantity = 3
+                }
+            ]
+        };
+
+        var result = await service.SubmitStaffRequestAsync(input);
+        Assert.True(result.Success, result.Message);
+
+        var list = await service.GetStaffRequestsAsync(10, 100);
+        var item = Assert.Single(list);
+        Assert.Equal("Common", item.Purpose);
+        Assert.Equal("Issue", item.Kind);
+        Assert.Equal(3, item.Lines[0].Quantity);
+    }
+
+    [Fact]
+    public async Task ItemStaffRequest_WhenHrRaisesRequisitionForStaff_Succeeds()
+    {
+        await SeedBaseDataAsync();
+        var service = CreateService();
+
+        var input = new ItemStaffRequestInput
+        {
+            OrganisationId = 10,
+            IndividualId = 100, // another staff
+            Purpose = "Common",
+            Kind = "Requisition",
+            Reason = "HR requisitioning office supplies on behalf of staff",
+            Lines =
+            [
+                new()
+                {
+                    ItemName = "Sticky Notes Pack",
+                    Quantity = 5
+                }
+            ]
+        };
+
+        var result = await service.SubmitStaffRequestAsync(input);
+        Assert.True(result.Success, result.Message);
+
+        var list = await service.GetStaffRequestsAsync(10, 100);
+        var item = Assert.Single(list);
+        Assert.Equal("Common", item.Purpose);
+        Assert.Equal("Requisition", item.Kind);
+    }
 }

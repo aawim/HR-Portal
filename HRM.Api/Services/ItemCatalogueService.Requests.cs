@@ -211,19 +211,30 @@ public sealed partial class ItemCatalogueService
         int person;
         if (model.Kind == "Issue")
         {
-            // HR assigns job-related items to another staff member; the staff member then accepts them.
+            // HR assigns items to another staff member; the staff member then accepts them.
             if (!actor.Manage) return ServiceResult.Fail("Only HR can assign items to staff.");
-            if (model.IndividualId <= 0 || model.IndividualId == actor.Person)
-                return ServiceResult.Fail("HR can only assign items to other staff, not to themselves.");
+            if (model.IndividualId <= 0)
+                return ServiceResult.Fail("Select a staff member to assign items to.");
+            if (model.IndividualId == actor.Person)
+                return ServiceResult.Fail("Staff raise item requests for themselves. HR assigns job-related items from the staff workspace.");
             person = model.IndividualId;
-            model.Purpose = JobRelated;
+            if (string.IsNullOrWhiteSpace(model.Purpose))
+                model.Purpose = JobRelated;
         }
         else
         {
-            // Requisitions, replacements and upgrades are always raised by the staff member for themselves.
+            // Requisitions, replacements and upgrades can be raised by staff for themselves,
+            // or by HR on behalf of a staff member.
             if (model.IndividualId > 0 && model.IndividualId != actor.Person)
-                return ServiceResult.Fail("Staff raise item requests for themselves. HR assigns job-related items from the staff workspace.");
-            person = actor.Person;
+            {
+                if (!actor.Manage)
+                    return ServiceResult.Fail("Staff raise item requests for themselves. HR assigns job-related items from the staff workspace.");
+                person = model.IndividualId;
+            }
+            else
+            {
+                person = actor.Person;
+            }
             if (model.Kind is "Replacement" or "Upgrade") model.Purpose = JobRelated;
         }
 
