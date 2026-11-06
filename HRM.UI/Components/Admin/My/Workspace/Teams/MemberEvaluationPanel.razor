@@ -10,15 +10,23 @@
         <div class="min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap">
                 <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">
-                    Employee Evaluation
+                    Employee Performance Evaluation
                 </h3>
-                <span class="rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 px-2 py-0.2 text-[10px] font-semibold">
-                    Performance Review
+                <span class="rounded-full bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                    @GetStatusText(currentFormStatus)
                 </span>
             </div>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                Staff: <span class="font-bold text-slate-700 dark:text-slate-300">@StaffName</span> (ID: #@StaffId)
-            </p>
+            <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+                <span>Staff: <strong class="text-slate-800 dark:text-slate-200">@StaffName</strong> (#@StaffId)</span>
+                @if (!string.IsNullOrWhiteSpace(designation))
+                {
+                    <span>• @designation</span>
+                }
+                @if (!string.IsNullOrWhiteSpace(department))
+                {
+                    <span>• @department</span>
+                }
+            </div>
         </div>
         <button type="button"
                 class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
@@ -30,21 +38,26 @@
 
     @if (bannerMessage != null)
     {
-        <div class="p-3 rounded-xl text-xs flex items-center justify-between @(isSuccess ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-rose-50 text-rose-800 border border-rose-200")">
+        <div class="p-3 rounded-xl text-xs flex items-center justify-between @(isSuccess ? "bg-emerald-50 text-emerald-800 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800" : "bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800")">
             <span>@bannerMessage</span>
             <button type="button" class="font-bold ml-2" @onclick="() => bannerMessage = null">✕</button>
         </div>
     }
 
-    <!-- Tab Toggle: New Evaluation vs History -->
-    <div class="flex rounded-lg border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
+    <!-- Tab Toggle Navigation -->
+    <div class="flex rounded-xl border border-slate-200 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
         <button type="button"
-                class="flex-1 rounded-md py-1 font-semibold transition @(activeSubTab == "form" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                class="flex-1 rounded-lg py-1.5 font-semibold transition @(activeSubTab == "form" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
                 @onclick='() => activeSubTab = "form"'>
             Evaluation Form
         </button>
         <button type="button"
-                class="flex-1 rounded-md py-1 font-semibold transition @(activeSubTab == "history" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900")"
+                class="flex-1 rounded-lg py-1.5 font-semibold transition @(activeSubTab == "evidence" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
+                @onclick='() => activeSubTab = "evidence"'>
+            Work Evidence (@(staff360?.TotalTasks ?? 0))
+        </button>
+        <button type="button"
+                class="flex-1 rounded-lg py-1.5 font-semibold transition @(activeSubTab == "history" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200")"
                 @onclick='() => activeSubTab = "history"'>
             History (@evalHistory.Count)
         </button>
@@ -54,114 +67,366 @@
     {
         <div class="py-12 text-center text-xs text-slate-500 dark:text-slate-400">
             <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
-            Loading evaluation data…
+            Loading evaluation and performance records…
         </div>
     }
     else if (activeSubTab == "form")
     {
         <form @onsubmit="SubmitEvaluationAsync" @onsubmit:preventDefault class="space-y-4 text-xs">
-            <!-- Review Period -->
-            <div>
-                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Review Period / Cycle *</label>
-                <input type="text"
-                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
-                       placeholder="e.g. Q4 2026 Review, Annual Review 2026"
-                       @bind="model.Period"
-                       required />
+            
+            <!-- Metadata & Template Bar -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Evaluation Template *</label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+                                value="@model.TemplateName"
+                                @onchange="OnTemplateChanged">
+                            @foreach (var t in availableTemplates)
+                            {
+                                <option value="@t.TemplateName">@t.TemplateName</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Review Period / Cycle *</label>
+                        <input type="text"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+                               placeholder="e.g. Q4 2026 Review Cycle"
+                               @bind="model.Period"
+                               required />
+                    </div>
+                </div>
+
+                <!-- Template Description & Overall Calculated Rating Gauge -->
+                <div class="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-700/60 pt-2 flex-wrap gap-2">
+                    <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                        @selectedTemplateDescription
+                    </p>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">Overall Rating:</span>
+                        <span class="rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 px-2.5 py-1 text-xs font-black text-teal-800 dark:text-teal-300 flex items-center gap-1 shadow-2xs">
+                            ⭐ @CalculatedOverallRating.ToString("F1") / 5.0
+                            <span class="text-[10px] font-semibold text-teal-600 dark:text-teal-400">(@GetRatingScaleLabel(CalculatedOverallRating))</span>
+                        </span>
+                    </div>
+                </div>
             </div>
 
-            <!-- Standard Evaluation Criteria (1-5 Rating) -->
+            <!-- SECTION 1: WORK PERFORMANCE -->
             <div class="space-y-3 pt-1">
-                <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-1">
-                    <span class="font-bold text-slate-800 dark:text-slate-200">Evaluation Criteria</span>
-                    <span class="text-[11px] font-bold text-teal-700 dark:text-teal-400">
-                        Calculated Rating: @CalculatedOverallRating.ToString("F1") / 5.0
-                    </span>
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1">
+                    <h4 class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/60 text-[10px] font-bold text-teal-800 dark:text-teal-300">1</span>
+                        <span>Work Performance</span>
+                    </h4>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Scored 1 (Needs Improvement) to 5 (Outstanding)</span>
                 </div>
 
                 @for (int i = 0; i < model.Scores.Count; i++)
                 {
                     var index = i;
                     var scoreItem = model.Scores[index];
-                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 space-y-2">
-                        <div class="flex items-center justify-between flex-wrap gap-2">
-                            <span class="font-semibold text-slate-800 dark:text-slate-200 text-xs">
-                                @(index + 1). @scoreItem.CriteriaName
-                            </span>
-                            <!-- Star/Number Rating Buttons (1 to 5) -->
+                    if (scoreItem.Category != "Work Performance") continue;
+
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3 space-y-2">
+                        <div class="flex items-start justify-between flex-wrap gap-2">
+                            <div>
+                                <span class="font-semibold text-slate-900 dark:text-slate-100 text-xs block">
+                                    @scoreItem.CriteriaName
+                                </span>
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    @GetCriteriaDescription(scoreItem.CriteriaName)
+                                </span>
+                            </div>
+
+                            <!-- Rating 1-5 Buttons -->
                             <div class="flex items-center gap-1">
                                 @for (int rating = 1; rating <= 5; rating++)
                                 {
                                     var r = rating;
                                     <button type="button"
-                                            class="w-6 h-6 rounded-md font-bold text-xs transition @(scoreItem.Score == r ? "bg-amber-500 text-white shadow-2xs" : "bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 hover:bg-amber-50")"
+                                            class="w-7 h-7 rounded-lg font-bold text-xs transition @(scoreItem.Score == r ? "bg-amber-500 text-white shadow-2xs ring-1 ring-amber-600" : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-slate-700")"
+                                            title="@GetRatingScaleLabel(r)"
                                             @onclick="() => scoreItem.Score = r">
                                         @r
                                     </button>
                                 }
                             </div>
                         </div>
+
                         <input type="text"
-                               class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600"
-                               placeholder="Specific observations or comments for @scoreItem.CriteriaName..."
+                               class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-2.5 py-1 text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none"
+                               placeholder="Observations or evidence for @scoreItem.CriteriaName..."
                                @bind="scoreItem.Comments" />
                     </div>
                 }
             </div>
 
-            <!-- Strengths -->
-            <div>
-                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Key Strengths &amp; Achievements</label>
-                <textarea rows="2"
-                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
-                          placeholder="Highlight noticeable accomplishments..."
-                          @bind="model.Strengths"></textarea>
+            <!-- SECTION 2: PROFESSIONAL COMPETENCIES -->
+            <div class="space-y-3 pt-2">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1">
+                    <h4 class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/60 text-[10px] font-bold text-teal-800 dark:text-teal-300">2</span>
+                        <span>Professional Competencies</span>
+                    </h4>
+                    <span class="text-[11px] text-slate-500 dark:text-slate-400">Core skills &amp; workplace behavior</span>
+                </div>
+
+                @for (int i = 0; i < model.Scores.Count; i++)
+                {
+                    var index = i;
+                    var scoreItem = model.Scores[index];
+                    if (scoreItem.Category != "Professional Competencies") continue;
+
+                    <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 p-3 space-y-2">
+                        <div class="flex items-start justify-between flex-wrap gap-2">
+                            <div>
+                                <span class="font-semibold text-slate-900 dark:text-slate-100 text-xs block">
+                                    @scoreItem.CriteriaName
+                                </span>
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    @GetCriteriaDescription(scoreItem.CriteriaName)
+                                </span>
+                            </div>
+
+                            <!-- Rating 1-5 Buttons -->
+                            <div class="flex items-center gap-1">
+                                @for (int rating = 1; rating <= 5; rating++)
+                                {
+                                    var r = rating;
+                                    <button type="button"
+                                            class="w-7 h-7 rounded-lg font-bold text-xs transition @(scoreItem.Score == r ? "bg-amber-500 text-white shadow-2xs ring-1 ring-amber-600" : "bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-amber-50 dark:hover:bg-slate-700")"
+                                            title="@GetRatingScaleLabel(r)"
+                                            @onclick="() => scoreItem.Score = r">
+                                        @r
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <input type="text"
+                               class="w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 px-2.5 py-1 text-[11px] text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-600 focus:outline-none"
+                               placeholder="Observations or evidence for @scoreItem.CriteriaName..."
+                               @bind="scoreItem.Comments" />
+                    </div>
+                }
             </div>
 
-            <!-- Areas for Improvement -->
-            <div>
-                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Areas for Growth &amp; Improvement</label>
-                <textarea rows="2"
-                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
-                          placeholder="Areas needing guidance or enhancement..."
-                          @bind="model.AreasForImprovement"></textarea>
+            <!-- SECTION 3: PROJECT & TASK PERFORMANCE (SUPPORTING EVIDENCE) -->
+            <div class="space-y-3 pt-2">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1">
+                    <h4 class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/60 text-[10px] font-bold text-teal-800 dark:text-teal-300">3</span>
+                        <span>Project &amp; Task Supporting Evidence</span>
+                    </h4>
+                    <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline" @onclick='() => activeSubTab = "evidence"'>
+                        Inspect All Tasks →
+                    </button>
+                </div>
+
+                <!-- Snapshot Card -->
+                <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 p-3 space-y-2">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-[11px]">
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <span class="block text-slate-500 dark:text-slate-400">Projects</span>
+                            <span class="font-bold text-slate-800 dark:text-slate-200 text-sm">@(staff360?.ProjectAssignments.Count ?? 0)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <span class="block text-slate-500 dark:text-slate-400">Ongoing Tasks</span>
+                            <span class="font-bold text-blue-600 dark:text-blue-400 text-sm">@(staff360?.OngoingTasks.Count ?? 0)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <span class="block text-slate-500 dark:text-slate-400">Completed</span>
+                            <span class="font-bold text-emerald-600 dark:text-emerald-400 text-sm">@(staff360?.CompletedTasks.Count ?? 0)</span>
+                        </div>
+                        <div class="bg-white dark:bg-slate-900 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                            <span class="block text-slate-500 dark:text-slate-400">Parked</span>
+                            <span class="font-bold text-amber-600 dark:text-amber-400 text-sm">@(staff360?.ParkedTasks.Count ?? 0)</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Project Contributions &amp; Specific Deliverables</label>
+                        <textarea rows="2"
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                                  placeholder="Highlight direct contributions to assigned projects, key milestones achieved, and work packages delivered..."
+                                  @bind="model.ProjectContributions"></textarea>
+                    </div>
+                </div>
             </div>
 
-            <!-- Goals -->
-            <div>
-                <label class="block font-medium text-slate-700 dark:text-slate-300 p-1">Target Development Goals</label>
-                <textarea rows="2"
-                          class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
-                          placeholder="Agreed targets for the upcoming period..."
-                          @bind="model.Goals"></textarea>
+            <!-- SECTION 4: OVERALL ASSESSMENT & PROFESSIONAL DEVELOPMENT -->
+            <div class="space-y-3 pt-2">
+                <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-1">
+                    <h4 class="font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                        <span class="flex h-5 w-5 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900/60 text-[10px] font-bold text-teal-800 dark:text-teal-300">4</span>
+                        <span>Overall Assessment &amp; Development</span>
+                    </h4>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Key Strengths</label>
+                        <textarea rows="2"
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                                  placeholder="Notable competencies, work ethic, and positive habits..."
+                                  @bind="model.Strengths"></textarea>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Areas for Growth &amp; Improvement</label>
+                        <textarea rows="2"
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                                  placeholder="Areas requiring coaching, technical polish, or guidance..."
+                                  @bind="model.AreasForImprovement"></textarea>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Training Recommendations</label>
+                        <textarea rows="2"
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                                  placeholder="Recommended internal/external training courses or certifications..."
+                                  @bind="model.TrainingRecommendations"></textarea>
+                    </div>
+                    <div>
+                        <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Development Objectives &amp; Next Cycle Goals</label>
+                        <textarea rows="2"
+                                  class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                                  placeholder="Actionable performance targets and objectives for upcoming cycle..."
+                                  @bind="model.Goals"></textarea>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700 dark:text-slate-300 mb-1">Supervisor General Comments &amp; Recommendations</label>
+                    <textarea rows="2"
+                              class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-600 focus:ring-1 focus:ring-teal-600"
+                              placeholder="Overall evaluation summary and appraisal notes..."
+                              @bind="model.GeneralComments"></textarea>
+                </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <!-- Action Buttons Footer -->
+            <div class="flex items-center justify-between gap-2 pt-3 border-t border-slate-100 dark:border-slate-800 flex-wrap">
                 <button type="button"
-                        class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50"
+                        class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700"
                         @onclick="CloseAsync"
                         disabled="@submitting">
                     Cancel
                 </button>
-                <button type="button"
-                        class="rounded-lg border border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold hover:bg-teal-50"
-                        @onclick='() => SaveEvaluationAsync("Draft")'
-                        disabled="@submitting">
-                    Save Draft
-                </button>
-                <button type="submit"
-                        class="rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
-                        disabled="@submitting">
-                    @(submitting ? "Submitting…" : "Submit Evaluation →")
-                </button>
+
+                <div class="flex items-center gap-2">
+                    <button type="button"
+                            class="rounded-lg border border-teal-600 text-teal-700 dark:text-teal-400 bg-white dark:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold hover:bg-teal-50 dark:hover:bg-slate-700 transition"
+                            @onclick='() => SaveEvaluationAsync("Draft")'
+                            disabled="@submitting">
+                        Save Draft
+                    </button>
+                    <button type="button"
+                            class="rounded-lg border border-indigo-600 text-indigo-700 dark:text-indigo-400 bg-white dark:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold hover:bg-indigo-50 dark:hover:bg-slate-700 transition"
+                            @onclick='() => SaveEvaluationAsync("Finalised")'
+                            disabled="@submitting"
+                            title="Commit evaluation as finalised (ready for employee acknowledgement)">
+                        Finalise Evaluation
+                    </button>
+                    <button type="submit"
+                            class="rounded-lg bg-teal-700 hover:bg-teal-800 px-4 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                            disabled="@submitting">
+                        @(submitting ? "Submitting…" : "Submit Evaluation →")
+                    </button>
+                </div>
             </div>
         </form>
+    }
+    else if (activeSubTab == "evidence")
+    {
+        <!-- Supporting Project and Task Performance Evidence Tab -->
+        <div class="space-y-4 text-xs">
+            <!-- Projects -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-900 dark:text-slate-100">Assigned Projects (@(staff360?.ProjectAssignments.Count ?? 0))</h4>
+                @if (staff360?.ProjectAssignments.Count == 0)
+                {
+                    <p class="text-slate-500 italic p-2 bg-slate-50 dark:bg-slate-800/40 rounded-lg">No projects assigned to this staff member.</p>
+                }
+                else
+                {
+                    <div class="space-y-2">
+                        @foreach (var p in staff360?.ProjectAssignments ?? new())
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-bold text-slate-800 dark:text-slate-200 block">@p.ProjectName</span>
+                                    <span class="text-[11px] text-slate-500">Role: @p.Role • Joined: @p.AssignedDate.ToString("dd MMM yyyy")</span>
+                                </div>
+                                <span class="rounded px-2 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                    @p.ProjectStatus
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Ongoing Tasks -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-900 dark:text-slate-100">Ongoing Tasks (@(staff360?.OngoingTasks.Count ?? 0))</h4>
+                @if (staff360?.OngoingTasks.Count == 0)
+                {
+                    <p class="text-slate-500 italic p-2 bg-slate-50 dark:bg-slate-800/40 rounded-lg">No active tasks currently ongoing.</p>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        @foreach (var t in staff360?.OngoingTasks ?? new())
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-semibold text-slate-800 dark:text-slate-200 block">@t.Title</span>
+                                    <span class="text-[10px] text-slate-500">Project: @t.ProjectName • Due: @(t.ExpectedEndDate?.ToString("dd MMM yyyy") ?? "Not set")</span>
+                                </div>
+                                <span class="rounded px-2 py-0.5 text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                    @t.Progress%
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Completed Tasks -->
+            <div class="space-y-2">
+                <h4 class="font-bold text-slate-900 dark:text-slate-100">Completed Tasks (@(staff360?.CompletedTasks.Count ?? 0))</h4>
+                @if (staff360?.CompletedTasks.Count == 0)
+                {
+                    <p class="text-slate-500 italic p-2 bg-slate-50 dark:bg-slate-800/40 rounded-lg">No completed tasks recorded.</p>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        @foreach (var t in staff360?.CompletedTasks ?? new())
+                        {
+                            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-2.5 flex items-center justify-between">
+                                <div>
+                                    <span class="font-semibold text-slate-800 dark:text-slate-200 block line-through text-slate-500">@t.Title</span>
+                                    <span class="text-[10px] text-slate-500">Project: @t.ProjectName</span>
+                                </div>
+                                <span class="rounded px-2 py-0.5 text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                    Done
+                                </span>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
     }
     else if (activeSubTab == "history")
     {
         <!-- Evaluation History View -->
-        <div class="space-y-3">
+        <div class="space-y-3 text-xs">
             @if (evalHistory.Count == 0)
             {
                 <div class="py-12 text-center text-xs text-slate-500 dark:text-slate-400 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-6">
@@ -174,38 +439,146 @@
                 @foreach (var past in evalHistory)
                 {
                     <div @key="past.EvaluationId"
-                         class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-3.5 space-y-2">
-                        <div class="flex items-center justify-between">
+                         class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 p-3.5 space-y-3">
+                        
+                        <!-- Top Summary Row -->
+                        <div class="flex items-start justify-between flex-wrap gap-2">
                             <div>
-                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100 block">@past.Period</span>
-                                <span class="text-[10px] text-slate-500">
-                                    Evaluated by @past.EvaluatorName on @past.EvaluationDate.ToString("dd MMM yyyy")
+                                <div class="flex items-center gap-1.5">
+                                    <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@past.Period</span>
+                                    <span class="rounded-full px-2 py-0.2 text-[10px] font-semibold @GetStatusBadgeStyle(past.Status)">
+                                        @past.Status
+                                    </span>
+                                </div>
+                                <span class="text-[10px] text-slate-500 block mt-0.5">
+                                    Template: @past.TemplateName • Evaluator: @past.EvaluatorName (@past.EvaluationDate.ToString("dd MMM yyyy"))
                                 </span>
                             </div>
                             <div class="text-right">
-                                <span class="rounded bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 font-black px-2 py-0.5 text-xs">
-                                    ⭐ @past.OverallRating.ToString("F1")
+                                <span class="rounded-lg bg-teal-50 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800 text-teal-800 dark:text-teal-300 font-black px-2.5 py-1 text-xs shadow-2xs">
+                                    ⭐ @past.OverallRating.ToString("F1") / 5.0
                                 </span>
-                                <span class="block text-[10px] font-semibold text-slate-500 mt-0.5">@past.Status</span>
+                                <span class="block text-[10px] font-semibold text-teal-600 dark:text-teal-400 mt-0.5">
+                                    @GetRatingScaleLabel(past.OverallRating)
+                                </span>
                             </div>
                         </div>
 
                         <!-- Criteria Breakdown -->
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-700/60 text-[11px]">
-                            @foreach (var sc in past.Scores)
-                            {
-                                <div class="flex items-center justify-between bg-white dark:bg-slate-800 px-2 py-1 rounded border border-slate-100 dark:border-slate-700">
-                                    <span class="text-slate-600 dark:text-slate-400 truncate pr-1">@sc.CriteriaName</span>
-                                    <span class="font-bold text-amber-600 dark:text-amber-400">@sc.Score/5</span>
-                                </div>
-                            }
+                        <div class="space-y-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-400">Criteria Ratings</span>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px]">
+                                @foreach (var sc in past.Scores)
+                                {
+                                    <div class="flex items-center justify-between bg-white dark:bg-slate-900 px-2.5 py-1 rounded-lg border border-slate-100 dark:border-slate-700/80">
+                                        <span class="text-slate-700 dark:text-slate-300 truncate pr-1">@sc.CriteriaName</span>
+                                        <span class="font-bold text-amber-600 dark:text-amber-400 shrink-0">@sc.Score/5</span>
+                                    </div>
+                                }
+                            </div>
                         </div>
+
+                        <!-- Feedback Notes -->
+                        @if (!string.IsNullOrWhiteSpace(past.Strengths) || !string.IsNullOrWhiteSpace(past.AreasForImprovement))
+                        {
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] pt-1">
+                                @if (!string.IsNullOrWhiteSpace(past.Strengths))
+                                {
+                                    <div class="bg-emerald-50/50 dark:bg-emerald-950/20 rounded-lg p-2 border border-emerald-100 dark:border-emerald-800/40">
+                                        <strong class="text-emerald-800 dark:text-emerald-300 block mb-0.5">Strengths:</strong>
+                                        <p class="text-slate-700 dark:text-slate-300 italic">@past.Strengths</p>
+                                    </div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(past.AreasForImprovement))
+                                {
+                                    <div class="bg-amber-50/50 dark:bg-amber-950/20 rounded-lg p-2 border border-amber-100 dark:border-amber-800/40">
+                                        <strong class="text-amber-800 dark:text-amber-300 block mb-0.5">Areas for Growth:</strong>
+                                        <p class="text-slate-700 dark:text-slate-300 italic">@past.AreasForImprovement</p>
+                                    </div>
+                                }
+                            </div>
+                        }
 
                         @if (!string.IsNullOrWhiteSpace(past.GeneralComments))
                         {
-                            <p class="text-[11px] text-slate-700 dark:text-slate-300 pt-1 italic">
-                                "@past.GeneralComments"
-                            </p>
+                            <div class="bg-white dark:bg-slate-900 rounded-lg p-2 border border-slate-100 dark:border-slate-700 text-[11px]">
+                                <strong class="text-slate-800 dark:text-slate-200 block mb-0.5">Supervisor Comments:</strong>
+                                <p class="text-slate-600 dark:text-slate-300 italic">"@past.GeneralComments"</p>
+                            </div>
+                        }
+
+                        <!-- Workflow & Acknowledgement Card -->
+                        <div class="border-t border-slate-200/60 dark:border-slate-700/60 pt-2 flex items-center justify-between flex-wrap gap-2 text-[10px]">
+                            <div>
+                                @if (past.Status == "Acknowledged")
+                                {
+                                    <span class="text-emerald-700 dark:text-emerald-400 font-semibold flex items-center gap-1">
+                                        ✓ Acknowledged by @past.AcknowledgedBy on @past.AcknowledgedAt?.ToString("dd MMM yyyy")
+                                    </span>
+                                }
+                                else if (past.Status == "Finalised")
+                                {
+                                    <span class="text-indigo-700 dark:text-indigo-400 font-semibold flex items-center gap-1">
+                                        Finalised by @(past.FinalisedBy ?? past.EvaluatorName) • Awaiting Employee Acknowledgement
+                                    </span>
+                                }
+                                else if (past.Status == "Draft")
+                                {
+                                    <span class="text-slate-500 italic">
+                                        Draft in progress • Not yet submitted
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Actions on past evaluation -->
+                            <div class="flex items-center gap-2">
+                                @if (past.Status is "Draft" or "Returned")
+                                {
+                                    <button type="button"
+                                            class="rounded px-2.5 py-1 text-xs font-semibold bg-white dark:bg-slate-800 border border-teal-600 text-teal-700 dark:text-teal-400 hover:bg-teal-50"
+                                            @onclick="() => ResumeDraft(past)">
+                                        Resume / Edit Draft ↗
+                                    </button>
+                                }
+                                else if (past.Status == "Finalised")
+                                {
+                                    <button type="button"
+                                            class="rounded px-2.5 py-1 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs"
+                                            @onclick="() => PromptAcknowledgement(past.EvaluationId)">
+                                        Acknowledge Review ✓
+                                    </button>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Acknowledgement Inline Input Form -->
+                        @if (acknowledgingId == past.EvaluationId)
+                        {
+                            <div class="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-950/20 p-3 space-y-2 mt-2">
+                                <p class="text-[11px] font-semibold text-emerald-900 dark:text-emerald-200">
+                                    Employee Acknowledgement
+                                </p>
+                                <p class="text-[10px] text-slate-500 dark:text-slate-400">
+                                    Acknowledging this evaluation confirms you have reviewed and discussed the appraisal with your supervisor. Acknowledgement does not indicate agreement with individual ratings.
+                                </p>
+                                <input type="text"
+                                       class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-1.5 text-xs text-slate-900 dark:text-slate-100"
+                                       placeholder="Optional acknowledgement comments or reflections..."
+                                       @bind="acknowledgementNotes" />
+                                <div class="flex items-center justify-end gap-2 pt-1">
+                                    <button type="button"
+                                            class="rounded px-2 py-1 text-xs text-slate-600 hover:underline"
+                                            @onclick="() => acknowledgingId = null">
+                                        Cancel
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1 text-xs font-semibold text-white shadow-2xs"
+                                            @onclick="SubmitAcknowledgementAsync"
+                                            disabled="@submitting">
+                                        Confirm Acknowledgement
+                                    </button>
+                                </div>
+                            </div>
                         }
                     </div>
                 }
@@ -226,14 +599,33 @@
     private string? bannerMessage;
     private bool isSuccess;
 
+    private string designation = "";
+    private string department = "";
+    private string currentFormStatus = "Draft";
+
     private SaveEvaluationRequestDto model = new();
     private List<StaffEvaluationDto> evalHistory = new();
+    private List<EvaluationTemplateDto> availableTemplates = new();
+    private Staff360SummaryDto? staff360;
+
+    private int? acknowledgingId;
+    private string acknowledgementNotes = "";
+
+    private string selectedTemplateDescription =>
+        availableTemplates.FirstOrDefault(t => t.TemplateName == model.TemplateName)?.Description
+        ?? "Standard performance evaluation template.";
 
     private decimal CalculatedOverallRating
     {
         get
         {
             if (model.Scores.Count == 0) return 4.0m;
+            var totalWeight = model.Scores.Sum(s => s.Weight > 0 ? s.Weight : 1.0m);
+            if (totalWeight > 0)
+            {
+                var weightedSum = model.Scores.Sum(s => s.Score * (s.Weight > 0 ? s.Weight : 1.0m));
+                return Math.Round(weightedSum / totalWeight, 1);
+            }
             return Math.Round((decimal)model.Scores.Average(s => s.Score), 1);
         }
     }
@@ -252,31 +644,145 @@
         bannerMessage = null;
         try
         {
-            model = new SaveEvaluationRequestDto
-            {
-                StaffId = StaffId,
-                Period = "Q4 2026 Evaluation Cycle",
-                Scores = new List<StaffEvaluationScoreDto>
-                {
-                    new() { CriteriaName = "Quality & Accuracy of Work", Score = 4 },
-                    new() { CriteriaName = "Communication & Teamwork", Score = 5 },
-                    new() { CriteriaName = "Punctuality & Reliability", Score = 4 },
-                    new() { CriteriaName = "Job Knowledge & Technical Skill", Score = 4 },
-                    new() { CriteriaName = "Initiative & Problem Solving", Score = 4 }
-                }
-            };
+            // 1. Load Templates
+            availableTemplates = await TeamService.GetEvaluationTemplatesAsync() ?? new();
 
+            // 2. Load Staff 360 Work Data (designation, department, projects, tasks)
+            staff360 = await TeamService.GetStaff360Async(StaffId);
+            if (staff360 != null)
+            {
+                designation = staff360.Designation;
+                department = staff360.Department;
+            }
+
+            // 3. Load Evaluation History
             evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+
+            // 4. Check if there is an existing Draft evaluation to resume
+            var existingDraft = evalHistory.FirstOrDefault(e => e.Status == "Draft" || e.Status == "Returned");
+            if (existingDraft != null)
+            {
+                ResumeDraft(existingDraft);
+            }
+            else
+            {
+                // Initialize clean form with standard template
+                InitializeTemplate("Standard Staff Evaluation");
+            }
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Failed to load evaluation info for staff {StaffId}", StaffId);
+            bannerMessage = "Unable to load evaluation data.";
+            isSuccess = false;
         }
         finally
         {
             loading = false;
         }
     }
+
+    private void InitializeTemplate(string templateName)
+    {
+        var tmpl = availableTemplates.FirstOrDefault(t => t.TemplateName == templateName)
+                   ?? availableTemplates.FirstOrDefault();
+
+        model = new SaveEvaluationRequestDto
+        {
+            StaffId = StaffId,
+            Period = "Annual Review 2026",
+            TemplateName = tmpl?.TemplateName ?? "Standard Staff Evaluation",
+            Status = "Draft",
+            Scores = (tmpl?.Criteria ?? new()).Select(c => new StaffEvaluationScoreDto
+            {
+                Category = c.Category,
+                CriteriaName = c.CriteriaName,
+                Score = c.DefaultScore,
+                Weight = c.Weight
+            }).ToList()
+        };
+        currentFormStatus = "Draft";
+    }
+
+    private void OnTemplateChanged(ChangeEventArgs e)
+    {
+        var chosen = e.Value?.ToString() ?? "Standard Staff Evaluation";
+        InitializeTemplate(chosen);
+    }
+
+    private void ResumeDraft(StaffEvaluationDto past)
+    {
+        model = new SaveEvaluationRequestDto
+        {
+            EvaluationId = past.EvaluationId,
+            StaffId = past.StaffId,
+            Period = past.Period,
+            TemplateName = past.TemplateName,
+            Status = past.Status,
+            GeneralComments = past.GeneralComments,
+            Achievements = past.Achievements,
+            Strengths = past.Strengths,
+            AreasForImprovement = past.AreasForImprovement,
+            TrainingRecommendations = past.TrainingRecommendations,
+            DevelopmentObjectives = past.DevelopmentObjectives,
+            Goals = past.Goals,
+            ProjectContributions = past.ProjectContributions,
+            Scores = past.Scores.Select(s => new StaffEvaluationScoreDto
+            {
+                ScoreId = s.ScoreId,
+                EvaluationId = s.EvaluationId,
+                Category = s.Category,
+                CriteriaName = s.CriteriaName,
+                Score = s.Score,
+                Weight = s.Weight,
+                Comments = s.Comments
+            }).ToList()
+        };
+        currentFormStatus = past.Status;
+        activeSubTab = "form";
+        bannerMessage = $"Resumed {past.Status} from {past.Period}.";
+        isSuccess = true;
+    }
+
+    private string GetCriteriaDescription(string criteriaName)
+    {
+        foreach (var tmpl in availableTemplates)
+        {
+            var match = tmpl.Criteria.FirstOrDefault(c => c.CriteriaName == criteriaName);
+            if (match != null && !string.IsNullOrWhiteSpace(match.Description))
+                return match.Description;
+        }
+        return "Performance appraisal criterion.";
+    }
+
+    private static string GetRatingScaleLabel(decimal score)
+    {
+        if (score >= 4.8m) return "Outstanding";
+        if (score >= 4.0m) return "Exceeds Expectations";
+        if (score >= 3.0m) return "Meets Expectations";
+        if (score >= 2.0m) return "Below Expectations";
+        return "Needs Improvement";
+    }
+
+    private static string GetStatusText(string status) => status switch
+    {
+        "Draft" => "Draft Review",
+        "Submitted" => "Submitted",
+        "Under Review" => "Under Review",
+        "Finalised" => "Finalised",
+        "Acknowledged" => "Acknowledged",
+        "Returned" => "Returned for Revision",
+        _ => status
+    };
+
+    private static string GetStatusBadgeStyle(string status) => status switch
+    {
+        "Finalised" => "bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300",
+        "Acknowledged" => "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+        "Submitted" => "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
+        "Returned" => "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300",
+        _ => "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+    };
 
     private async Task SubmitEvaluationAsync() => await SaveEvaluationAsync("Submitted");
 
@@ -298,12 +804,18 @@
             var createdId = await TeamService.SaveStaffEvaluationAsync(model);
 
             isSuccess = true;
+            currentFormStatus = status;
             bannerMessage = $"Evaluation successfully recorded (#{createdId}) with status '{status}'.";
             ToastService.Success(bannerMessage);
 
             // Reload history
             evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
             await OnEvaluationSaved.InvokeAsync();
+
+            if (status != "Draft")
+            {
+                activeSubTab = "history";
+            }
         }
         catch (Exception ex)
         {
@@ -313,6 +825,41 @@
                 : $"Failed to save evaluation: {ex.Message}";
             isSuccess = false;
             ToastService.Error(bannerMessage);
+        }
+        finally
+        {
+            submitting = false;
+        }
+    }
+
+    private void PromptAcknowledgement(int evalId)
+    {
+        acknowledgingId = evalId;
+        acknowledgementNotes = "";
+    }
+
+    private async Task SubmitAcknowledgementAsync()
+    {
+        if (!acknowledgingId.HasValue) return;
+
+        submitting = true;
+        try
+        {
+            await TeamService.AcknowledgeEvaluationAsync(new AcknowledgeEvaluationRequestDto
+            {
+                EvaluationId = acknowledgingId.Value,
+                Comments = acknowledgementNotes
+            });
+
+            ToastService.Success("Evaluation successfully acknowledged.");
+            acknowledgingId = null;
+            evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+            await OnEvaluationSaved.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to acknowledge evaluation {Id}", acknowledgingId);
+            ToastService.Error($"Failed to acknowledge evaluation: {ex.Message}");
         }
         finally
         {

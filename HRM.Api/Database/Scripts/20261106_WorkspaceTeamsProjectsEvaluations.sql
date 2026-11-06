@@ -77,20 +77,74 @@ BEGIN
         OrganisationId int NOT NULL,
         StaffId int NOT NULL,
         StaffName nvarchar(200) NOT NULL,
+        Designation nvarchar(150) NULL,
+        DepartmentName nvarchar(150) NULL,
+        TeamName nvarchar(150) NULL,
         EvaluatorStaffId int NOT NULL,
         EvaluatorName nvarchar(200) NOT NULL,
         EvaluationDate datetime2 NOT NULL CONSTRAINT DF_EV_Evaluations_EvaluationDate DEFAULT(SYSUTCDATETIME()),
-        Period nvarchar(50) NOT NULL,
+        Period nvarchar(100) NOT NULL,
+        TemplateName nvarchar(100) NOT NULL CONSTRAINT DF_EV_Evaluations_TemplateName DEFAULT(N'Standard Staff Evaluation'),
         OverallRating decimal(3,1) NOT NULL CONSTRAINT DF_EV_Evaluations_OverallRating DEFAULT(3.0),
         Status nvarchar(50) NOT NULL CONSTRAINT DF_EV_Evaluations_Status DEFAULT(N'Submitted'),
         GeneralComments nvarchar(2000) NULL,
+        Achievements nvarchar(1000) NULL,
         Strengths nvarchar(1000) NULL,
         AreasForImprovement nvarchar(1000) NULL,
+        TrainingRecommendations nvarchar(1000) NULL,
+        DevelopmentObjectives nvarchar(1000) NULL,
         Goals nvarchar(1000) NULL,
+        ProjectContributions nvarchar(2000) NULL,
+        FinalisedBy nvarchar(200) NULL,
+        FinalisedAt datetime2 NULL,
+        AcknowledgedBy nvarchar(200) NULL,
+        AcknowledgedAt datetime2 NULL,
+        AcknowledgementComments nvarchar(1000) NULL,
         CreatedAt datetime2 NOT NULL CONSTRAINT DF_EV_Evaluations_CreatedAt DEFAULT(SYSUTCDATETIME()),
         UpdatedAt datetime2 NULL
     );
     CREATE INDEX IX_EV_Evaluations_OrganisationId_StaffId ON dbo.EV_Evaluations(OrganisationId, StaffId);
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'Designation')
+        ALTER TABLE dbo.EV_Evaluations ADD Designation nvarchar(150) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'DepartmentName')
+        ALTER TABLE dbo.EV_Evaluations ADD DepartmentName nvarchar(150) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'TeamName')
+        ALTER TABLE dbo.EV_Evaluations ADD TeamName nvarchar(150) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'TemplateName')
+        ALTER TABLE dbo.EV_Evaluations ADD TemplateName nvarchar(100) NOT NULL CONSTRAINT DF_EV_Evaluations_TemplateName DEFAULT(N'Standard Staff Evaluation');
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'Achievements')
+        ALTER TABLE dbo.EV_Evaluations ADD Achievements nvarchar(1000) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'TrainingRecommendations')
+        ALTER TABLE dbo.EV_Evaluations ADD TrainingRecommendations nvarchar(1000) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'DevelopmentObjectives')
+        ALTER TABLE dbo.EV_Evaluations ADD DevelopmentObjectives nvarchar(1000) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'ProjectContributions')
+        ALTER TABLE dbo.EV_Evaluations ADD ProjectContributions nvarchar(2000) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'FinalisedBy')
+        ALTER TABLE dbo.EV_Evaluations ADD FinalisedBy nvarchar(200) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'FinalisedAt')
+        ALTER TABLE dbo.EV_Evaluations ADD FinalisedAt datetime2 NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'AcknowledgedBy')
+        ALTER TABLE dbo.EV_Evaluations ADD AcknowledgedBy nvarchar(200) NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'AcknowledgedAt')
+        ALTER TABLE dbo.EV_Evaluations ADD AcknowledgedAt datetime2 NULL;
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_Evaluations') AND name = N'AcknowledgementComments')
+        ALTER TABLE dbo.EV_Evaluations ADD AcknowledgementComments nvarchar(1000) NULL;
 END;
 
 -- 5. EV_EvaluationScores
@@ -99,12 +153,22 @@ BEGIN
     CREATE TABLE dbo.EV_EvaluationScores(
         ScoreId int IDENTITY(1,1) NOT NULL CONSTRAINT PK_EV_EvaluationScores PRIMARY KEY,
         EvaluationId int NOT NULL,
-        CriteriaName nvarchar(100) NOT NULL,
+        Category nvarchar(100) NOT NULL CONSTRAINT DF_EV_EvaluationScores_Category DEFAULT(N'Work Performance'),
+        CriteriaName nvarchar(150) NOT NULL,
         Score int NOT NULL CONSTRAINT DF_EV_EvaluationScores_Score DEFAULT(3),
+        Weight decimal(4,2) NOT NULL CONSTRAINT DF_EV_EvaluationScores_Weight DEFAULT(1.0),
         Comments nvarchar(500) NULL,
         CONSTRAINT FK_EV_EvaluationScores_EV_Evaluations_EvaluationId FOREIGN KEY (EvaluationId) REFERENCES dbo.EV_Evaluations(EvaluationId) ON DELETE CASCADE
     );
     CREATE INDEX IX_EV_EvaluationScores_EvaluationId ON dbo.EV_EvaluationScores(EvaluationId);
+END
+ELSE
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_EvaluationScores') AND name = N'Category')
+        ALTER TABLE dbo.EV_EvaluationScores ADD Category nvarchar(100) NOT NULL CONSTRAINT DF_EV_EvaluationScores_Category DEFAULT(N'Work Performance');
+
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID(N'dbo.EV_EvaluationScores') AND name = N'Weight')
+        ALTER TABLE dbo.EV_EvaluationScores ADD Weight decimal(4,2) NOT NULL CONSTRAINT DF_EV_EvaluationScores_Weight DEFAULT(1.0);
 END;
 
 -- 6. Seed Help Desk & Service Desk Team and dummy projects/evaluations if not already present

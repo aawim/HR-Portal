@@ -18,6 +18,15 @@ public class Evaluation
     [MaxLength(200)]
     public string StaffName { get; set; } = string.Empty;
 
+    [MaxLength(150)]
+    public string? Designation { get; set; }
+
+    [MaxLength(150)]
+    public string? DepartmentName { get; set; }
+
+    [MaxLength(150)]
+    public string? TeamName { get; set; }
+
     public int EvaluatorStaffId { get; set; }
 
     [MaxLength(200)]
@@ -25,17 +34,23 @@ public class Evaluation
 
     public DateTime EvaluationDate { get; set; } = DateTime.UtcNow;
 
-    [MaxLength(50)]
+    [MaxLength(100)]
     public string Period { get; set; } = string.Empty;
+
+    [MaxLength(100)]
+    public string TemplateName { get; set; } = "Standard Staff Evaluation";
 
     [Column(TypeName = "decimal(3,1)")]
     public decimal OverallRating { get; set; }
 
     [MaxLength(50)]
-    public string Status { get; set; } = "Submitted"; // Draft, Submitted, Approved
+    public string Status { get; set; } = "Submitted"; // Draft, Submitted, Under Review, Finalised, Acknowledged, Returned
 
     [MaxLength(2000)]
     public string GeneralComments { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
+    public string Achievements { get; set; } = string.Empty;
 
     [MaxLength(1000)]
     public string Strengths { get; set; } = string.Empty;
@@ -44,7 +59,29 @@ public class Evaluation
     public string AreasForImprovement { get; set; } = string.Empty;
 
     [MaxLength(1000)]
+    public string TrainingRecommendations { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
+    public string DevelopmentObjectives { get; set; } = string.Empty;
+
+    [MaxLength(1000)]
     public string Goals { get; set; } = string.Empty;
+
+    [MaxLength(2000)]
+    public string ProjectContributions { get; set; } = string.Empty;
+
+    [MaxLength(200)]
+    public string? FinalisedBy { get; set; }
+
+    public DateTime? FinalisedAt { get; set; }
+
+    [MaxLength(200)]
+    public string? AcknowledgedBy { get; set; }
+
+    public DateTime? AcknowledgedAt { get; set; }
+
+    [MaxLength(1000)]
+    public string? AcknowledgementComments { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -61,11 +98,17 @@ public class EvaluationScore
 
     public int EvaluationId { get; set; }
 
-    [Required]
     [MaxLength(100)]
+    public string Category { get; set; } = "Work Performance"; // Work Performance, Professional Competencies
+
+    [Required]
+    [MaxLength(150)]
     public string CriteriaName { get; set; } = string.Empty;
 
     public int Score { get; set; } = 3;
+
+    [Column(TypeName = "decimal(4,2)")]
+    public decimal Weight { get; set; } = 1.0m;
 
     [MaxLength(500)]
     public string Comments { get; set; } = string.Empty;

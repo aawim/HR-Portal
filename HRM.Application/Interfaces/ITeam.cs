@@ -16,7 +16,10 @@ namespace HRM.Services.Interfaces
         Task<TeamProjectTaskDto?> GetTaskDetailsAsync(int taskId, CancellationToken ct = default);
         Task<Staff360SummaryDto?> GetStaff360Async(int staffId, CancellationToken ct = default);
         Task<List<StaffEvaluationDto>> GetStaffEvaluationsAsync(int staffId, CancellationToken ct = default);
+        Task<StaffEvaluationDto?> GetStaffEvaluationDetailsAsync(int evaluationId, CancellationToken ct = default);
         Task<int> SaveStaffEvaluationAsync(SaveEvaluationRequestDto request, CancellationToken ct = default);
+        Task<bool> AcknowledgeEvaluationAsync(AcknowledgeEvaluationRequestDto request, CancellationToken ct = default);
+        Task<List<EvaluationTemplateDto>> GetEvaluationTemplatesAsync(CancellationToken ct = default);
         Task<TeamDto?> GetHelpDeskTeamAsync(CancellationToken ct = default);
         Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string query, CancellationToken ct = default);
         Task<int> AssignStaffToProjectAsync(AssignProjectRequestDto request, CancellationToken ct = default);

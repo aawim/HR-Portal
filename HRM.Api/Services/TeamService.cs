@@ -439,31 +439,61 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             return new List<StaffEvaluationDto>();
         }
 
-        return evals.Select(e => new StaffEvaluationDto
-        {
-            EvaluationId = e.EvaluationId,
-            StaffId = e.StaffId,
-            StaffName = e.StaffName,
-            EvaluatorStaffId = e.EvaluatorStaffId,
-            EvaluatorName = e.EvaluatorName,
-            EvaluationDate = e.EvaluationDate,
-            Period = e.Period,
-            OverallRating = e.OverallRating,
-            Status = e.Status,
-            GeneralComments = e.GeneralComments,
-            Strengths = e.Strengths,
-            AreasForImprovement = e.AreasForImprovement,
-            Goals = e.Goals,
-            Scores = e.Scores.Select(s => new StaffEvaluationScoreDto
-            {
-                ScoreId = s.ScoreId,
-                EvaluationId = s.EvaluationId,
-                CriteriaName = s.CriteriaName,
-                Score = s.Score,
-                Comments = s.Comments
-            }).ToList()
-        }).ToList();
+        return evals.Select(MapToEvaluationDto).ToList();
     }
+
+    public async Task<StaffEvaluationDto?> GetStaffEvaluationDetailsAsync(int evaluationId, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+        var eval = await db.Evaluations.AsNoTracking()
+            .Include(e => e.Scores)
+            .FirstOrDefaultAsync(e => e.EvaluationId == evaluationId, ct);
+
+        if (eval == null) return null;
+        await EnsureStaffInOrganisationAsync(db, eval.StaffId, ct);
+        return MapToEvaluationDto(eval);
+    }
+
+    private static StaffEvaluationDto MapToEvaluationDto(Evaluation e) => new()
+    {
+        EvaluationId = e.EvaluationId,
+        StaffId = e.StaffId,
+        StaffName = e.StaffName,
+        Designation = e.Designation ?? "",
+        DepartmentName = e.DepartmentName ?? "",
+        TeamName = e.TeamName ?? "",
+        EvaluatorStaffId = e.EvaluatorStaffId,
+        EvaluatorName = e.EvaluatorName,
+        EvaluationDate = e.EvaluationDate,
+        Period = e.Period,
+        TemplateName = string.IsNullOrWhiteSpace(e.TemplateName) ? "Standard Staff Evaluation" : e.TemplateName,
+        OverallRating = e.OverallRating,
+        Status = e.Status,
+        GeneralComments = e.GeneralComments ?? "",
+        Achievements = e.Achievements ?? "",
+        Strengths = e.Strengths ?? "",
+        AreasForImprovement = e.AreasForImprovement ?? "",
+        TrainingRecommendations = e.TrainingRecommendations ?? "",
+        DevelopmentObjectives = e.DevelopmentObjectives ?? "",
+        Goals = e.Goals ?? "",
+        ProjectContributions = e.ProjectContributions ?? "",
+        FinalisedBy = e.FinalisedBy,
+        FinalisedAt = e.FinalisedAt,
+        AcknowledgedBy = e.AcknowledgedBy,
+        AcknowledgedAt = e.AcknowledgedAt,
+        AcknowledgementComments = e.AcknowledgementComments,
+        Scores = e.Scores.Select(s => new StaffEvaluationScoreDto
+        {
+            ScoreId = s.ScoreId,
+            EvaluationId = s.EvaluationId,
+            Category = string.IsNullOrWhiteSpace(s.Category) ? "Work Performance" : s.Category,
+            CriteriaName = s.CriteriaName,
+            Score = s.Score,
+            Weight = s.Weight > 0 ? s.Weight : 1.0m,
+            Comments = s.Comments ?? ""
+        }).ToList()
+    };
 
     public async Task<int> SaveStaffEvaluationAsync(SaveEvaluationRequestDto request, CancellationToken ct = default)
     {
@@ -473,26 +503,28 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         await EnsureTablesExistAsync(db, ct);
         await EnsureStaffInOrganisationAsync(db, request.StaffId, ct);
 
-        if (!actor.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && !await access.HasPermissionAsync("Organisation.Edit"))
+        var isSuperOrAdmin = actor.IsSuperAdministrator || await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Organisation.Edit");
+        if (!isSuperOrAdmin)
         {
             var isSupervisor = await db.TeamStaffs.AnyAsync(s => s.StaffId == actor.IndividualId && s.IsSuperVisor && s.IsValid &&
                 db.TeamStaffs.Any(m => m.TeamId == s.TeamId && m.StaffId == request.StaffId && m.IsValid), ct);
             if (!isSupervisor) throw new UnauthorizedAccessException("You are not authorised to evaluate this staff member.");
         }
 
-        var staff = await db.Staffs.AsNoTracking().Include(s => s.Individual).FirstOrDefaultAsync(s => s.IndividualId == request.StaffId, ct);
-        var staffName = staff != null
-            ? (staff.Individual.FirstNameEnglish + " " + (staff.Individual.MiddleNameEnglish ?? "") + " " + (staff.Individual.LastNameEnglish ?? "")).Trim()
-            : $"Staff #{request.StaffId}";
-
-        var evaluatorName = actor.ActiveJob != null
-            ? actor.FullName
-            : "Supervisor";
-
+        // Calculate overall score: weighted if weights provided, else average
         decimal overallRating;
         if (request.Scores.Count > 0)
         {
-            overallRating = Math.Round((decimal)request.Scores.Average(s => s.Score), 1);
+            var totalWeight = request.Scores.Sum(s => s.Weight > 0 ? s.Weight : 1.0m);
+            if (totalWeight > 0)
+            {
+                var weightedSum = request.Scores.Sum(s => s.Score * (s.Weight > 0 ? s.Weight : 1.0m));
+                overallRating = Math.Round(weightedSum / totalWeight, 1);
+            }
+            else
+            {
+                overallRating = Math.Round((decimal)request.Scores.Average(s => s.Score), 1);
+            }
         }
         else if (request.OverallRating > 0)
         {
@@ -500,24 +532,111 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         }
         else
         {
-            throw new ArgumentException("At least one evaluation score or rating is required.");
+            overallRating = 3.0m;
         }
+
+        var status = string.IsNullOrWhiteSpace(request.Status) ? "Submitted" : request.Status;
+
+        // Editing an existing evaluation (Draft, Returned, or Revision)
+        if (request.EvaluationId > 0)
+        {
+            var existing = await db.Evaluations
+                .Include(e => e.Scores)
+                .FirstOrDefaultAsync(e => e.EvaluationId == request.EvaluationId, ct);
+
+            if (existing == null) throw new InvalidOperationException($"Evaluation #{request.EvaluationId} not found.");
+
+            // If existing is already Finalised or Acknowledged, only SuperAdmin/Admin can alter
+            if ((existing.Status == "Finalised" || existing.Status == "Acknowledged") && !isSuperOrAdmin)
+            {
+                throw new InvalidOperationException("Finalised or Acknowledged evaluations cannot be modified without administrator authorisation.");
+            }
+
+            existing.Period = string.IsNullOrWhiteSpace(request.Period) ? existing.Period : request.Period;
+            existing.TemplateName = string.IsNullOrWhiteSpace(request.TemplateName) ? existing.TemplateName : request.TemplateName;
+            existing.OverallRating = overallRating;
+            existing.Status = status;
+            existing.GeneralComments = request.GeneralComments ?? "";
+            existing.Achievements = request.Achievements ?? "";
+            existing.Strengths = request.Strengths ?? "";
+            existing.AreasForImprovement = request.AreasForImprovement ?? "";
+            existing.TrainingRecommendations = request.TrainingRecommendations ?? "";
+            existing.DevelopmentObjectives = request.DevelopmentObjectives ?? "";
+            existing.Goals = request.Goals ?? "";
+            existing.ProjectContributions = request.ProjectContributions ?? "";
+            existing.UpdatedAt = DateTime.UtcNow;
+
+            if (status == "Finalised" && existing.FinalisedAt == null)
+            {
+                existing.FinalisedBy = actor.FullName;
+                existing.FinalisedAt = DateTime.UtcNow;
+            }
+
+            // Update scores
+            db.EvaluationScores.RemoveRange(existing.Scores);
+            if (request.Scores.Count > 0)
+            {
+                foreach (var s in request.Scores)
+                {
+                    existing.Scores.Add(new EvaluationScore
+                    {
+                        Category = string.IsNullOrWhiteSpace(s.Category) ? "Work Performance" : s.Category,
+                        CriteriaName = s.CriteriaName,
+                        Score = s.Score,
+                        Weight = s.Weight > 0 ? s.Weight : 1.0m,
+                        Comments = s.Comments ?? ""
+                    });
+                }
+            }
+
+            await db.SaveChangesAsync(ct);
+            return existing.EvaluationId;
+        }
+
+        // Creating a new evaluation
+        var staff = await db.Staffs.AsNoTracking().Include(s => s.Individual).FirstOrDefaultAsync(s => s.IndividualId == request.StaffId, ct);
+        var staffName = staff != null
+            ? (staff.Individual.FirstNameEnglish + " " + (staff.Individual.MiddleNameEnglish ?? "") + " " + (staff.Individual.LastNameEnglish ?? "")).Trim()
+            : $"Staff #{request.StaffId}";
+
+        var activeJob = await db.Jobs.AsNoTracking()
+            .Include(j => j.JobPositions).ThenInclude(jp => jp.Position)
+            .Include(j => j.JobType)
+            .Include(j => j.OrganisationStructure)
+            .FirstOrDefaultAsync(j => j.IndividualID == request.StaffId && (j.OrganisationID == orgId || j.OrganisationID == 0), ct);
+
+        var teamMembership = await db.TeamStaffs.AsNoTracking()
+            .Include(ts => ts.Team)
+            .FirstOrDefaultAsync(ts => ts.StaffId == request.StaffId && ts.IsValid, ct);
+
+        var evaluatorName = actor.ActiveJob != null ? actor.FullName : "Supervisor";
 
         var eval = new Evaluation
         {
             OrganisationId = orgId,
             StaffId = request.StaffId,
             StaffName = staffName,
+            Designation = activeJob?.JobPositions.FirstOrDefault()?.Position.Name ?? activeJob?.JobType?.TypeName ?? "Staff Member",
+            DepartmentName = activeJob?.OrganisationStructure?.Name ?? teamMembership?.Team?.Name ?? "General",
+            TeamName = teamMembership?.Team?.Name ?? "Operations",
             EvaluatorStaffId = actor.IndividualId,
             EvaluatorName = evaluatorName,
             EvaluationDate = DateTime.UtcNow,
             Period = string.IsNullOrWhiteSpace(request.Period) ? "Annual Review 2026" : request.Period,
+            TemplateName = string.IsNullOrWhiteSpace(request.TemplateName) ? "Standard Staff Evaluation" : request.TemplateName,
             OverallRating = overallRating,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "Submitted" : request.Status,
+            Status = status,
             GeneralComments = request.GeneralComments ?? "",
+            Achievements = request.Achievements ?? "",
             Strengths = request.Strengths ?? "",
             AreasForImprovement = request.AreasForImprovement ?? "",
-            Goals = request.Goals ?? ""
+            TrainingRecommendations = request.TrainingRecommendations ?? "",
+            DevelopmentObjectives = request.DevelopmentObjectives ?? "",
+            Goals = request.Goals ?? "",
+            ProjectContributions = request.ProjectContributions ?? "",
+            FinalisedBy = status == "Finalised" ? actor.FullName : null,
+            FinalisedAt = status == "Finalised" ? DateTime.UtcNow : null,
+            CreatedAt = DateTime.UtcNow
         };
 
         if (request.Scores.Count > 0)
@@ -526,8 +645,10 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             {
                 eval.Scores.Add(new EvaluationScore
                 {
+                    Category = string.IsNullOrWhiteSpace(s.Category) ? "Work Performance" : s.Category,
                     CriteriaName = s.CriteriaName,
                     Score = s.Score,
+                    Weight = s.Weight > 0 ? s.Weight : 1.0m,
                     Comments = s.Comments ?? ""
                 });
             }
@@ -536,6 +657,98 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         db.Evaluations.Add(eval);
         await db.SaveChangesAsync(ct);
         return eval.EvaluationId;
+    }
+
+    public async Task<bool> AcknowledgeEvaluationAsync(AcknowledgeEvaluationRequestDto request, CancellationToken ct = default)
+    {
+        var actor = await access.RequireContextAsync();
+        await using var db = await factory.CreateDbContextAsync(ct);
+        await EnsureTablesExistAsync(db, ct);
+
+        var eval = await db.Evaluations.FirstOrDefaultAsync(e => e.EvaluationId == request.EvaluationId, ct);
+        if (eval == null) throw new InvalidOperationException($"Evaluation #{request.EvaluationId} not found.");
+
+        var isSuperOrAdmin = actor.IsSuperAdministrator || await access.HasPermissionAsync("Admin");
+        if (eval.StaffId != actor.IndividualId && !isSuperOrAdmin)
+        {
+            throw new UnauthorizedAccessException("Only the evaluated staff member may acknowledge this evaluation.");
+        }
+
+        eval.Status = "Acknowledged";
+        eval.AcknowledgedBy = actor.FullName;
+        eval.AcknowledgedAt = DateTime.UtcNow;
+        eval.AcknowledgementComments = request.Comments ?? "";
+        eval.UpdatedAt = DateTime.UtcNow;
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<List<EvaluationTemplateDto>> GetEvaluationTemplatesAsync(CancellationToken ct = default)
+    {
+        await Task.CompletedTask;
+        return new List<EvaluationTemplateDto>
+        {
+            new()
+            {
+                TemplateName = "Standard Staff Evaluation",
+                Description = "Comprehensive performance review covering core work outputs, competencies, and development.",
+                Criteria = new List<EvaluationCriteriaTemplateDto>
+                {
+                    new() { Category = "Work Performance", CriteriaName = "Quality of Work", Description = "Accuracy, thoroughness, and attention to detail in deliverables", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Productivity", Description = "Volume of work produced, output rate, and efficiency", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Timely Completion of Tasks", Description = "Meeting agreed deadlines, punctuality, and responsiveness", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Responsibility & Accountability", Description = "Ownership of duties, reliability, and minimal supervision required", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Achievement of Objectives", Description = "Attainment of key performance indicators and department goals", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Job Knowledge & Expertise", Description = "Understanding of procedures, professional knowledge, and tools", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Technical Competency", Description = "Practical application of specialized systems and workflows", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Communication & Interpersonal", Description = "Clarity in verbal and written interactions across teams", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Teamwork & Collaboration", Description = "Supporting colleagues, positive engagement, and cooperative mindset", DefaultScore = 5, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Problem-Solving", Description = "Analytical diagnosis, troubleshooting, and sound judgment", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Initiative & Improvement", Description = "Proactive approach, recommending efficiencies, and self-starter attitude", DefaultScore = 4, Weight = 1.0m }
+                }
+            },
+            new()
+            {
+                TemplateName = "Technical & Engineering Evaluation",
+                Description = "Tailored for IT, development, systems, and specialized technical roles.",
+                Criteria = new List<EvaluationCriteriaTemplateDto>
+                {
+                    new() { Category = "Work Performance", CriteriaName = "System Architecture & Quality", Description = "Code robustness, architectural integrity, and bug-free releases", DefaultScore = 4, Weight = 1.2m },
+                    new() { Category = "Work Performance", CriteriaName = "Sprint / Milestone Delivery", Description = "Velocity, ticket resolution speed, and sprint burndown consistency", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Documentation & Standards", Description = "Technical specifications, API docs, and compliance with team standards", DefaultScore = 3, Weight = 0.8m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Technical Mastery", Description = "Depth in programming languages, frameworks, and cloud tooling", DefaultScore = 4, Weight = 1.2m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Incident Troubleshooting", Description = "Root cause discovery, fast emergency mitigation, and post-mortems", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Team Mentorship & Review", Description = "Code reviews, knowledge sharing, and onboarding junior members", DefaultScore = 4, Weight = 0.8m }
+                }
+            },
+            new()
+            {
+                TemplateName = "Leadership & Supervisory Evaluation",
+                Description = "Designed for team leaders, department heads, and project managers.",
+                Criteria = new List<EvaluationCriteriaTemplateDto>
+                {
+                    new() { Category = "Work Performance", CriteriaName = "Strategic Objective Delivery", Description = "Delivering departmental mandates and leadership goals", DefaultScore = 4, Weight = 1.2m },
+                    new() { Category = "Work Performance", CriteriaName = "Resource & Task Allocation", Description = "Balanced workloads, resource optimization, and delegation", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Team Guidance & Mentorship", Description = "Coaching team members, nurturing talent, and boosting morale", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Decision Making & Accountability", Description = "Timely tough calls, integrity, and owning results", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Cross-Department Collaboration", Description = "Building bridges with stakeholders and executive alignment", DefaultScore = 4, Weight = 1.0m }
+                }
+            },
+            new()
+            {
+                TemplateName = "Operations & Support Evaluation",
+                Description = "Designed for Help Desk, operations, customer service, and support staff.",
+                Criteria = new List<EvaluationCriteriaTemplateDto>
+                {
+                    new() { Category = "Work Performance", CriteriaName = "Ticket & Request Resolution", Description = "First-response rate, resolution speed, and backlog clearance", DefaultScore = 4, Weight = 1.2m },
+                    new() { Category = "Work Performance", CriteriaName = "Service Quality & Courtesy", Description = "Customer satisfaction, empathy, and professional communication", DefaultScore = 5, Weight = 1.0m },
+                    new() { Category = "Work Performance", CriteriaName = "Shift & Roster Punctuality", Description = "Attendance adherence, shift coverage, and minimal downtime", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Troubleshooting & Escalation", Description = "Diagnosing issues rapidly and following correct escalation pathways", DefaultScore = 4, Weight = 1.0m },
+                    new() { Category = "Professional Competencies", CriteriaName = "Adaptability & Stress Handling", Description = "Composure during surges and managing unexpected operational demands", DefaultScore = 4, Weight = 0.8m }
+                }
+            }
+        };
     }
 
     public async Task<TeamDto?> GetHelpDeskTeamAsync(CancellationToken ct = default)

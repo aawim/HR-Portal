@@ -96,16 +96,29 @@ namespace HRM.DTOs
         public int EvaluationId { get; set; }
         public int StaffId { get; set; }
         public string StaffName { get; set; } = string.Empty;
+        public string Designation { get; set; } = string.Empty;
+        public string DepartmentName { get; set; } = string.Empty;
+        public string TeamName { get; set; } = string.Empty;
         public int EvaluatorStaffId { get; set; }
         public string EvaluatorName { get; set; } = string.Empty;
         public DateTime EvaluationDate { get; set; }
         public string Period { get; set; } = string.Empty;
+        public string TemplateName { get; set; } = "Standard Staff Evaluation";
         public decimal OverallRating { get; set; }
-        public string Status { get; set; } = "Submitted";
+        public string Status { get; set; } = "Submitted"; // Draft, Submitted, Under Review, Finalised, Acknowledged, Returned
         public string GeneralComments { get; set; } = string.Empty;
+        public string Achievements { get; set; } = string.Empty;
         public string Strengths { get; set; } = string.Empty;
         public string AreasForImprovement { get; set; } = string.Empty;
+        public string TrainingRecommendations { get; set; } = string.Empty;
+        public string DevelopmentObjectives { get; set; } = string.Empty;
         public string Goals { get; set; } = string.Empty;
+        public string ProjectContributions { get; set; } = string.Empty;
+        public string? FinalisedBy { get; set; }
+        public DateTime? FinalisedAt { get; set; }
+        public string? AcknowledgedBy { get; set; }
+        public DateTime? AcknowledgedAt { get; set; }
+        public string? AcknowledgementComments { get; set; }
         public List<StaffEvaluationScoreDto> Scores { get; set; } = new();
     }
 
@@ -113,22 +126,52 @@ namespace HRM.DTOs
     {
         public int ScoreId { get; set; }
         public int EvaluationId { get; set; }
+        public string Category { get; set; } = "Work Performance";
         public string CriteriaName { get; set; } = string.Empty;
-        public int Score { get; set; }
+        public int Score { get; set; } = 3;
+        public decimal Weight { get; set; } = 1.0m;
         public string Comments { get; set; } = string.Empty;
     }
 
     public class SaveEvaluationRequestDto
     {
+        public int EvaluationId { get; set; }
         public int StaffId { get; set; }
         public string Period { get; set; } = string.Empty;
+        public string TemplateName { get; set; } = "Standard Staff Evaluation";
         public decimal OverallRating { get; set; }
-        public string Status { get; set; } = "Submitted";
+        public string Status { get; set; } = "Submitted"; // Draft, Submitted, Finalised, Returned
         public string GeneralComments { get; set; } = string.Empty;
+        public string Achievements { get; set; } = string.Empty;
         public string Strengths { get; set; } = string.Empty;
         public string AreasForImprovement { get; set; } = string.Empty;
+        public string TrainingRecommendations { get; set; } = string.Empty;
+        public string DevelopmentObjectives { get; set; } = string.Empty;
         public string Goals { get; set; } = string.Empty;
+        public string ProjectContributions { get; set; } = string.Empty;
         public List<StaffEvaluationScoreDto> Scores { get; set; } = new();
+    }
+
+    public class AcknowledgeEvaluationRequestDto
+    {
+        public int EvaluationId { get; set; }
+        public string? Comments { get; set; }
+    }
+
+    public class EvaluationTemplateDto
+    {
+        public string TemplateName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public List<EvaluationCriteriaTemplateDto> Criteria { get; set; } = new();
+    }
+
+    public class EvaluationCriteriaTemplateDto
+    {
+        public string Category { get; set; } = "Work Performance";
+        public string CriteriaName { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+        public int DefaultScore { get; set; } = 3;
+        public decimal Weight { get; set; } = 1.0m;
     }
 
     public class ProjectLookupDto

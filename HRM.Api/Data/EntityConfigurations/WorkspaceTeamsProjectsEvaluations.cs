@@ -72,14 +72,25 @@ public sealed class EvaluationMapping : IEntityTypeConfiguration<Evaluation>
         b.ToTable("EV_Evaluations");
         b.HasKey(x => x.EvaluationId);
         b.Property(x => x.StaffName).HasMaxLength(200);
+        b.Property(x => x.Designation).HasMaxLength(150);
+        b.Property(x => x.DepartmentName).HasMaxLength(150);
+        b.Property(x => x.TeamName).HasMaxLength(150);
         b.Property(x => x.EvaluatorName).HasMaxLength(200);
-        b.Property(x => x.Period).HasMaxLength(50);
+        b.Property(x => x.Period).HasMaxLength(100);
+        b.Property(x => x.TemplateName).HasMaxLength(100);
         b.Property(x => x.OverallRating).HasColumnType("decimal(3,1)");
         b.Property(x => x.Status).HasMaxLength(50);
         b.Property(x => x.GeneralComments).HasMaxLength(2000);
+        b.Property(x => x.Achievements).HasMaxLength(1000);
         b.Property(x => x.Strengths).HasMaxLength(1000);
         b.Property(x => x.AreasForImprovement).HasMaxLength(1000);
+        b.Property(x => x.TrainingRecommendations).HasMaxLength(1000);
+        b.Property(x => x.DevelopmentObjectives).HasMaxLength(1000);
         b.Property(x => x.Goals).HasMaxLength(1000);
+        b.Property(x => x.ProjectContributions).HasMaxLength(2000);
+        b.Property(x => x.FinalisedBy).HasMaxLength(200);
+        b.Property(x => x.AcknowledgedBy).HasMaxLength(200);
+        b.Property(x => x.AcknowledgementComments).HasMaxLength(1000);
         b.HasMany(x => x.Scores).WithOne(x => x.Evaluation).HasForeignKey(x => x.EvaluationId).OnDelete(DeleteBehavior.Cascade);
         b.HasIndex(x => new { x.OrganisationId, x.StaffId });
     }
@@ -91,7 +102,9 @@ public sealed class EvaluationScoreMapping : IEntityTypeConfiguration<Evaluation
     {
         b.ToTable("EV_EvaluationScores");
         b.HasKey(x => x.ScoreId);
-        b.Property(x => x.CriteriaName).HasMaxLength(100).IsRequired();
+        b.Property(x => x.Category).HasMaxLength(100);
+        b.Property(x => x.CriteriaName).HasMaxLength(150).IsRequired();
+        b.Property(x => x.Weight).HasColumnType("decimal(4,2)");
         b.Property(x => x.Comments).HasMaxLength(500);
         b.HasIndex(x => x.EvaluationId);
     }

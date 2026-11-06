@@ -100,6 +100,12 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         return Ok(await service.GetStaffEvaluationsAsync(staffId, HttpContext.RequestAborted));
     }
 
+    [HttpGet("get-staff-evaluation-details")]
+    public async Task<ActionResult<global::HRM.DTOs.StaffEvaluationDto?>> GetStaffEvaluationDetails([FromQuery] global::System.Int32 evaluationId)
+    {
+        return Ok(await service.GetStaffEvaluationDetailsAsync(evaluationId, HttpContext.RequestAborted));
+    }
+
     [HttpPost("save-staff-evaluation")]
     public async Task<ActionResult<global::System.Int32>> SaveStaffEvaluation([FromBody] TeamSaveStaffEvaluationRequest request)
     {
@@ -109,6 +115,23 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     public sealed class TeamSaveStaffEvaluationRequest
     {
         public global::HRM.DTOs.SaveEvaluationRequestDto request { get; set; } = default!;
+    }
+
+    [HttpPost("acknowledge-evaluation")]
+    public async Task<ActionResult<global::System.Boolean>> AcknowledgeEvaluation([FromBody] TeamAcknowledgeEvaluationRequest request)
+    {
+        return Ok(await service.AcknowledgeEvaluationAsync(request.request, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamAcknowledgeEvaluationRequest
+    {
+        public global::HRM.DTOs.AcknowledgeEvaluationRequestDto request { get; set; } = default!;
+    }
+
+    [HttpGet("get-evaluation-templates")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.EvaluationTemplateDto>>> GetEvaluationTemplates()
+    {
+        return Ok(await service.GetEvaluationTemplatesAsync(HttpContext.RequestAborted));
     }
 
     [HttpGet("get-help-desk-team")]
