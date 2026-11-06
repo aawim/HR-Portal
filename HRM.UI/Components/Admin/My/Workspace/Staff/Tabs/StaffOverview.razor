@@ -2,207 +2,794 @@
 
 @using HRM.DTOs.JobPosition
 @using HRM.DTOs.Profile
-@using HRM.DTOs.Leave
 @using HRM.DTOs.Profile.ProfileAccess
+@using HRM.DTOs.UserContext
 @using HRM.Enum
-@using HRM.Components.Profile
-@using HRM.Components.Profile.Personal
-@using HRM.Components.Profile.Employment
 @using Services.Interfaces.Profile
 
 @inject NavigationManager NavigationManager
 @inject IProfileService ProfileService
+@inject IJSRuntime JS
 
-<PageTitle>@(_profile?.FullName ?? "Profile")</PageTitle>
+<PageTitle>@(_profile?.FullName ?? "Staff Profile") · Overview</PageTitle>
 
-<div class="w-full space-y-4">
+<div class="w-full space-y-5 staff-overview">
 
     @if (_loading)
     {
-        <div class="w-full space-y-4">
-            <ProfileOverviewSkeleton />
+        <!-- Professional Loading Skeleton -->
+        <div class="space-y-4 animate-pulse">
+            <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-xs flex items-center gap-4">
+                <div class="w-20 h-20 rounded-2xl bg-slate-200"></div>
+                <div class="space-y-2 flex-1">
+                    <div class="h-5 w-48 rounded bg-slate-200"></div>
+                    <div class="h-4 w-72 rounded bg-slate-100"></div>
+                    <div class="h-4 w-36 rounded bg-slate-100"></div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                @for (int i = 0; i < 4; i++)
+                {
+                    <div class="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
+                        <div class="h-3 w-20 rounded bg-slate-100"></div>
+                        <div class="h-5 w-28 rounded bg-slate-200"></div>
+                    </div>
+                }
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                <div class="lg:col-span-8 space-y-4">
+                    <div class="h-64 rounded-2xl border border-slate-200 bg-white"></div>
+                    <div class="h-64 rounded-2xl border border-slate-200 bg-white"></div>
+                </div>
+                <div class="lg:col-span-4 space-y-4">
+                    <div class="h-48 rounded-2xl border border-slate-200 bg-white"></div>
+                    <div class="h-48 rounded-2xl border border-slate-200 bg-white"></div>
+                </div>
+            </div>
         </div>
     }
     else if (!string.IsNullOrWhiteSpace(_errorMessage))
     {
-        <div class="w-full px-3 py-8 sm:px-5 lg:px-6 xl:px-8">
-
-            <div class="mx-auto max-w-3xl rounded-2xl border
-                        border-red-200 bg-red-50 p-6 shadow-sm">
-
-                <div class="flex items-start gap-3">
-
-                    <span class="material-symbols-rounded mt-0.5 text-red-600">
-                        error
-                    </span>
-
-                    <div class="min-w-0 flex-1">
-
-                        <h2 class="font-semibold text-red-900">
-                            Unable to load profile
-                        </h2>
-
-                        <p class="mt-1 text-sm text-red-700">
-                            @_errorMessage
-                        </p>
-
-                        <div class="mt-4 flex flex-wrap gap-3">
-
-                            <button type="button"
-                                    class="inline-flex items-center gap-2
-                                           rounded-xl bg-red-700 px-4 py-2
-                                           text-sm font-medium text-white
-                                           transition hover:bg-red-800"
-                                    @onclick="LoadProfileAsync">
-
-                                <span class="material-symbols-rounded text-[18px]">
-                                    refresh
-                                </span>
-
-                                Try again
-                            </button>
-
-                            <button type="button"
-                                    class="inline-flex items-center gap-2
-                                           rounded-xl border border-red-300
-                                           bg-white px-4 py-2 text-sm
-                                           font-medium text-red-700 transition
-                                           hover:bg-red-100"
-                                    @onclick="GoBack">
-
-                                <span class="material-symbols-rounded text-[18px]">
-                                    arrow_back
-                                </span>
-
-                                Back
-                            </button>
-
-                        </div>
-
+        <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-xs text-rose-800 shadow-xs">
+            <div class="flex items-start gap-3">
+                <span class="text-rose-600 text-xl font-bold">⚠️</span>
+                <div class="space-y-2 flex-1">
+                    <h3 class="font-bold text-rose-900 text-sm">Unable to load employee profile</h3>
+                    <p class="text-rose-700">@_errorMessage</p>
+                    <div class="pt-2">
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 hover:bg-rose-800 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs transition"
+                                @onclick="LoadProfileAsync">
+                            ↻ Try Again
+                        </button>
                     </div>
-
                 </div>
-
             </div>
-
         </div>
     }
     else if (_profile is null)
     {
-        <div class="w-full px-3 py-8 sm:px-5 lg:px-6 xl:px-8">
-
-            <ProfileEmptyState Icon="person_off"
-                               Title="Profile not found"
-                               Description="The requested individual could not be found." />
-
+        <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-10 text-center text-xs text-slate-500 shadow-xs">
+            <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-400 mb-2">
+                👤
+            </div>
+            <h3 class="text-sm font-bold text-slate-800">Profile Not Found</h3>
+            <p class="mt-1">The requested staff record could not be loaded or does not exist.</p>
         </div>
     }
     else
     {
-        <ProfileHeader Profile="@_profile"
-                       ShowBackButton="@(StaffId <= 0)"
-                       ShowPrintButton="true"
-                       ShowEditButton="true"
-                       ShowActionsButton="true"
-                       OnBack="@GoBack"
-                       OnPrint="@PrintProfile"
-                       OnEdit="@EditProfile"
-                       OnActions="@OpenProfileActions" />
+        <!-- ======================================================== -->
+        <!-- 1. EXECUTIVE HERO IDENTITY BANNER -->
+        <!-- ======================================================== -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
 
-        <div class="w-full space-y-4">
-
-            <div class="w-full space-y-6">
-
-                <ProfileQuickStats Profile="@_profile" />
-
-                <div class="grid w-full grid-cols-1 gap-6
-                            2xl:grid-cols-12">
-
-                    <!-- Main profile content -->
-                    <section class="min-w-0 space-y-6
-                                    2xl:col-span-8">
- 
-
-                        <ProfilePersonalDetails Profile="@_profile"
-                                                IsDisabled="false"
-                                                ShowEditButton="true"
-                                                OnEdit="@EditPersonalDetails" />
-
-
-
-                        <ProfileAccess Access="@_profile.Access" />
-
-
-
-
-                        @if (_profile.HasActiveJob && _profile.ActiveJob != null)
+                <!-- Left: Avatar & Identity Details -->
+                <div class="flex items-start sm:items-center gap-4 min-w-0">
+                    <div class="relative shrink-0">
+                        @if (!string.IsNullOrWhiteSpace(_profile.ImageUrl))
                         {
-                            <ProfileActiveJob Job="@_profile.ActiveJob"
-                                              IsLoading="false"
-                                              Message="@_activeJobMessage" />
-
-                            <ProfilePositions Positions="@_profile.ActivePositions"
-                                              OnAdd="@AddPosition"
-                                              OnView="@ViewPositionAsync" />
-
-                            <ProfileLeaveTypes
-                                                StaffId="@StaffId"
-                                                JobId="@_profile.ActiveJob.JobId"
-                                                IsLoading="false"
-                                                IsDisabled="false"
-                                                ShowAdjustButton="false" />
-
-
+                            <img src="@_profile.ImageUrl"
+                                 alt="@_profile.FullName"
+                                 class="h-20 w-20 sm:h-22 sm:w-22 rounded-2xl object-cover ring-2 ring-emerald-500/30 shadow-xs" />
                         }
                         else
                         {
-                            <ProfileEmploymentState ProfileType="@_profile.ProfileType"
-                                                    OnCreateJob="@CreateJob" />
+                            <div class="flex h-20 w-20 sm:h-22 sm:w-22 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 text-2xl font-bold text-white shadow-xs">
+                                @GetInitials(_profile.FullName)
+                            </div>
                         }
+                        <span class="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-white dark:bg-slate-900 ring-2 ring-white dark:ring-slate-900" title="Active">
+                            <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
+                        </span>
+                    </div>
 
-                        @if (_profile.HasEmploymentHistory)
+                    <div class="min-w-0 flex-1 space-y-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <h1 class="text-xl sm:text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight truncate">
+                                @_profile.FullName
+                            </h1>
+                            <span class="rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold">
+                                @(_profile.ActiveJob?.JobStateName ?? "Active Staff")
+                            </span>
+                            <span class="rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-2.5 py-0.5 text-[11px] font-semibold">
+                                @(_profile.ActiveJob?.JobTypeName ?? _profile.ActiveJob?.EmploymentType ?? "Permanent Staff")
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(_profile.FullNameDhivehi))
                         {
-                            <ProfileJobHistory PositionHistory="@_profile.PositionHistory"
-                                               IsLoading="false"
-                                               IsDisabled="false"
-                                               OnView="@ViewJobAsync" />
+                            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 font-dhivehi" dir="rtl">
+                                @_profile.FullNameDhivehi
+                            </p>
                         }
 
-                        <ProfileEducation EducationRecords="@_profile.Education"
-                                          OnAdd="@AddEducation"
-                                          OnEdit="@EditEducationAsync" />
+                        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-600 dark:text-slate-400 pt-0.5">
+                            <div class="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-400">
+                                <svg class="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                </svg>
+                                <span>@(_profile.ActiveJob?.PositionName ?? "Position Not Assigned")</span>
+                            </div>
 
-                    </section>
+                            <span class="text-slate-300 dark:text-slate-700">·</span>
 
-                    <!-- Supporting profile information -->
-                    <aside class="min-w-0 space-y-6
-                                  2xl:col-span-4">
+                            <div class="flex items-center gap-1">
+                                <svg class="h-3.5 w-3.5 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                                </svg>
+                                <span>@(_profile.ActiveJob?.OrganisationName ?? "Organisation")</span>
+                                @if (!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationStructureName))
+                                {
+                                    <span>(@_profile.ActiveJob.OrganisationStructureName)</span>
+                                }
+                            </div>
 
+                            <span class="text-slate-300 dark:text-slate-700">·</span>
 
-                        <Permissions Access="@_profile.Access"
-                                       OnViewRole="@ViewRoleAsync" />
+                            <div class="flex items-center gap-1.5 font-mono text-[11px] text-slate-500">
+                                <span class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
+                                    EMP: #@(!string.IsNullOrEmpty(_profile.ActiveJob?.EmployeeNumber) ? _profile.ActiveJob.EmployeeNumber : EffectiveStaffId.ToString())
+                                </span>
+                                @if (!string.IsNullOrWhiteSpace(_profile.IdentityCardNumber))
+                                {
+                                    <span class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-1.5 py-0.5 rounded">
+                                        NID: @_profile.IdentityCardNumber
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
+                <!-- Right: Quick Actions -->
+                <div class="flex flex-wrap items-center gap-2 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100 dark:border-slate-800">
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                            @onclick="PrintProfile">
+                        <svg class="h-3.5 w-3.5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                        </svg>
+                        <span>Print Dossier</span>
+                    </button>
 
+                    @if (_profile.Contacts.FirstOrDefault(c => c.ContactTypeName.Contains("Email", StringComparison.OrdinalIgnoreCase)) is { } emailContact)
+                    {
+                        <a href="@($"mailto:{emailContact.Value}")"
+                           class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200 shadow-2xs hover:bg-emerald-100 transition"
+                           title="Send Email">
+                            <svg class="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                            </svg>
+                            <span>Email</span>
+                        </a>
+                    }
 
-                        <ProfileContacts Contacts="@_profile.Contacts"
-                                         IsLoading="false"
-                                         IsDisabled="false"
-                                         ShowEditButton="true"
-                                         OnEdit="@EditContactAsync" />
-   
-                        <ProfileAddresses Addresses="@_profile.Addresses"
-                                          IsLoading="false"
-                                          IsDisabled="false"
-                                          ShowAddButton="true"
-                                          OnAdd="@AddAddress"
-                                          OnEdit="@EditAddressAsync" />
+                    @if (_profile.Contacts.FirstOrDefault(c => c.ContactTypeName.Contains("Phone", StringComparison.OrdinalIgnoreCase) || c.ContactTypeName.Contains("Mobile", StringComparison.OrdinalIgnoreCase)) is { } phoneContact)
+                    {
+                        <a href="@($"tel:{phoneContact.Value}")"
+                           class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50/80 dark:bg-emerald-950/40 px-3 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200 shadow-2xs hover:bg-emerald-100 transition"
+                           title="Call Phone">
+                            <svg class="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                            </svg>
+                            <span>Call</span>
+                        </a>
+                    }
+                </div>
 
-                        <ProfileDocuments Documents="@_profile.Documents"
-                                          OnUpload="@UploadDocument"
-                                          OnView="@ViewDocumentAsync" />
+            </div>
+        </div>
 
-                    </aside>
+        <!-- ======================================================== -->
+        <!-- 2. HIGH-IMPACT QUICK STATS ROW -->
+        <!-- ======================================================== -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
 
+            <!-- Card 1: Employment Status -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Status</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate block">
+                        @(_profile.ActiveJob?.JobStateName ?? "Active Staff")
+                    </span>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">
+                        @(_profile.ActiveJob?.JobTypeName ?? "Standard Terms")
+                    </span>
+                </div>
+            </div>
+
+            <!-- Card 2: Service & Tenure -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 dark:bg-teal-950/50 text-teal-600 dark:text-teal-400">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Service Tenure</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate block">
+                        @(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.ServiceDurationText) ? _profile.ActiveJob.ServiceDurationText : "Recent hire")
+                    </span>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">
+                        Joined: @(_profile.ActiveJob is { JoinedDate: var jd } && jd != default ? jd.ToString("dd MMM yyyy") : "-")
+                    </span>
+                </div>
+            </div>
+
+            <!-- Card 3: Department / Division -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Department</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate block">
+                        @(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationStructureName) ? _profile.ActiveJob.OrganisationStructureName : (!string.IsNullOrWhiteSpace(_profile.ActiveJob?.DepartmentName) ? _profile.ActiveJob.DepartmentName : "General Staff"))
+                    </span>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">
+                        @(_profile.ActiveJob?.OrganisationName ?? "Organisation")
+                    </span>
+                </div>
+            </div>
+
+            <!-- Card 4: Access & Governance -->
+            <div class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3.5 shadow-xs flex items-center gap-3">
+                <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 dark:bg-violet-950/50 text-violet-600 dark:text-violet-400">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                </div>
+                <div class="min-w-0">
+                    <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">Governance</span>
+                    <span class="text-sm font-bold text-slate-900 dark:text-slate-100 truncate block">
+                        @_profile.Access.Roles.Count Roles Assigned
+                    </span>
+                    <span class="text-[10px] text-slate-500 dark:text-slate-400 truncate block">
+                        @_profile.Access.Teams.Count Teams · @_profile.Access.Groups.Count Groups
+                    </span>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ======================================================== -->
+        <!-- 3. INTERACTIVE SECTION FILTER PILLS -->
+        <!-- ======================================================== -->
+        <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Profile Sections">
+            <button type="button"
+                    class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "all" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                    @onclick='() => _activeSectionFilter = "all"'>
+                All Information
+            </button>
+            <button type="button"
+                    class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "job" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                    @onclick='() => _activeSectionFilter = "job"'>
+                💼 Employment &amp; Position
+            </button>
+            <button type="button"
+                    class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "personal" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                    @onclick='() => _activeSectionFilter = "personal"'>
+                👤 Personal Details
+            </button>
+            <button type="button"
+                    class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "contact" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                    @onclick='() => _activeSectionFilter = "contact"'>
+                📞 Contact &amp; Addresses
+            </button>
+            <button type="button"
+                    class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "access" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                    @onclick='() => _activeSectionFilter = "access"'>
+                🛡️ Access &amp; Governance
+            </button>
+            @if (_profile.PositionHistory.Count > 0)
+            {
+                <button type="button"
+                        class="rounded-lg px-3.5 py-1.5 text-xs font-bold transition @(_activeSectionFilter == "history" ? "bg-emerald-600 text-white shadow-xs" : "bg-emerald-50/70 hover:bg-emerald-100/90 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border border-emerald-200/80 dark:border-slate-700")"
+                        @onclick='() => _activeSectionFilter = "history"'>
+                    📜 Career History (@_profile.PositionHistory.Count)
+                </button>
+            }
+        </nav>
+
+        <!-- ======================================================== -->
+        <!-- 4. STRUCTURED 2-PANEL MAIN CONTENT GRID -->
+        <!-- ======================================================== -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+            <!-- LEFT COLUMN: Employment, Positions, Personal, Career -->
+            <div class="@(_activeSectionFilter is "contact" or "access" ? "hidden lg:block lg:col-span-6" : "lg:col-span-7 xl:col-span-8") space-y-5">
+
+                <!-- SECTION: ACTIVE EMPLOYMENT & JOB POSITION -->
+                @if (_activeSectionFilter is "all" or "job")
+                {
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 font-bold text-xs">
+                                    💼
+                                </span>
+                                <div>
+                                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Active Employment &amp; Position</h2>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Current job assignment, organization unit, and reporting hierarchy.</p>
+                                </div>
+                            </div>
+                            <span class="rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold">
+                                @(_profile.ActiveJob?.JobStateName ?? "Active")
+                            </span>
+                        </div>
+
+                        <!-- Current Position Highlight Banner -->
+                        <div class="rounded-xl border border-emerald-100 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div class="space-y-1">
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">Primary Designation</span>
+                                <h3 class="text-base font-bold text-slate-900 dark:text-slate-100">
+                                    @(_profile.ActiveJob?.PositionName ?? "No Position Assigned")
+                                </h3>
+                                <p class="text-xs text-slate-600 dark:text-slate-400">
+                                    @(_profile.ActiveJob?.OrganisationName ?? "Organization") · @(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationStructureName) ? _profile.ActiveJob.OrganisationStructureName : "General Department")
+                                </p>
+                            </div>
+                            <div class="text-left sm:text-right shrink-0">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 block">Service Length</span>
+                                <span class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                    @(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.ServiceDurationText) ? _profile.ActiveJob.ServiceDurationText : "-")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Detailed Key-Value Grid -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Employee Number</span>
+                                <span class="text-xs font-bold font-mono text-slate-800 dark:text-slate-200">
+                                    @(!string.IsNullOrEmpty(_profile.ActiveJob?.EmployeeNumber) ? _profile.ActiveJob.EmployeeNumber : $"#{EffectiveStaffId}")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Employment Type</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @(_profile.ActiveJob?.JobTypeName ?? _profile.ActiveJob?.EmploymentType ?? "Permanent Staff")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Joined Date</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @(_profile.ActiveJob is { JoinedDate: var jd2 } && jd2 != default ? jd2.ToString("dd MMM yyyy") : "-")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Department / Division</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @(!string.IsNullOrEmpty(_profile.ActiveJob?.OrganisationStructureName) ? _profile.ActiveJob.OrganisationStructureName : (!string.IsNullOrEmpty(_profile.ActiveJob?.DepartmentName) ? _profile.ActiveJob.DepartmentName : "-"))
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Reporting Supervisor</span>
+                                <span class="text-xs font-semibold text-emerald-800 dark:text-emerald-300">
+                                    @(!string.IsNullOrEmpty(_profile.ActiveJob?.SupervisorName) ? _profile.ActiveJob.SupervisorName : "Not Assigned")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Confirmation Status</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @(_profile.ActiveJob?.ConfirmedDate.HasValue == true ? $"Confirmed on {_profile.ActiveJob.ConfirmedDate.Value:dd MMM yyyy}" : "Probation / Active")
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Active Positions Table -->
+                        @if (_profile.ActivePositions.Count > 0)
+                        {
+                            <div class="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                                <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                    Assigned Roles &amp; Positions (@_profile.ActivePositions.Count)
+                                </h4>
+                                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                            <tr>
+                                                <th class="p-2.5">Position Title</th>
+                                                <th class="p-2.5">Structure / Unit</th>
+                                                <th class="p-2.5">Effective Period</th>
+                                                <th class="p-2.5 text-center">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                            @foreach (var pos in _profile.ActivePositions)
+                                            {
+                                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                                    <td class="p-2.5 font-bold text-slate-900 dark:text-slate-100">
+                                                        @pos.PositionName
+                                                        @if (pos.IsCurrent)
+                                                        {
+                                                            <span class="ml-1.5 rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-1.5 py-0.2 text-[10px] font-bold">
+                                                                Primary
+                                                            </span>
+                                                        }
+                                                    </td>
+                                                    <td class="p-2.5 text-slate-600 dark:text-slate-400">@pos.OrganisationStructureName</td>
+                                                    <td class="p-2.5 font-mono text-[11px] text-slate-600 dark:text-slate-400">@pos.FromDate.ToString("dd MMM yyyy") – @(pos.ToDate?.ToString("dd MMM yyyy") ?? "Present")</td>
+                                                    <td class="p-2.5 text-center">
+                                                        <span class="rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px] font-semibold">
+                                                            Active
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- SECTION: PERSONAL & DEMOGRAPHIC DETAILS -->
+                @if (_activeSectionFilter is "all" or "personal")
+                {
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 font-bold text-xs">
+                                    👤
+                                </span>
+                                <div>
+                                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Personal &amp; Demographic Details</h2>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Legal identity, national documentation, date of birth, and nationality.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Full Legal Name</span>
+                                <span class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                    @_profile.FullName
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Name in Dhivehi</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200 font-dhivehi" dir="rtl">
+                                    @(!string.IsNullOrWhiteSpace(_profile.FullNameDhivehi) ? _profile.FullNameDhivehi : "-")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">National ID Card</span>
+                                <span class="text-xs font-bold font-mono text-slate-900 dark:text-slate-100">
+                                    @(!string.IsNullOrWhiteSpace(_profile.IdentityCardNumber) ? _profile.IdentityCardNumber : "Not provided")
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Date of Birth</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @GetDateOfBirthText(_profile.DateOfBirth)
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Gender</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @GetGenderText(_profile.GenderId)
+                                </span>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                                <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">Nationality</span>
+                                <span class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                    @(!string.IsNullOrWhiteSpace(_profile.NationalityName) ? _profile.NationalityName : "Maldivian")
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- SECTION: CAREER PROGRESSION & POSITION HISTORY -->
+                @if ((_activeSectionFilter is "all" or "history") && _profile.PositionHistory.Count > 0)
+                {
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+                            <div class="flex items-center gap-2.5">
+                                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 font-bold text-xs">
+                                    📜
+                                </span>
+                                <div>
+                                    <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100">Position History &amp; Career Progression</h2>
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400">Record of promotions, transfers, and previous designations held.</p>
+                                </div>
+                            </div>
+                            <span class="rounded-full bg-slate-100 dark:bg-slate-800 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 dark:text-slate-300">
+                                @_profile.PositionHistory.Count Records
+                            </span>
+                        </div>
+
+                        <div class="relative border-l-2 border-emerald-200 dark:border-emerald-800 ml-3 space-y-4 py-1">
+                            @foreach (var hist in _profile.PositionHistory.OrderByDescending(x => x.FromDate))
+                            {
+                                <div class="relative pl-6">
+                                    <span class="absolute -left-[9px] top-1.5 h-4 w-4 rounded-full border-2 border-white dark:border-slate-900 bg-emerald-600 shadow-xs"></span>
+                                    <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                                        <div class="flex flex-wrap items-center justify-between gap-1">
+                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">@hist.PositionName</h4>
+                                            <span class="font-mono text-[11px] text-slate-500">
+                                                @hist.FromDate.ToString("MMM yyyy") – @(hist.ToDate.HasValue ? hist.ToDate.Value.ToString("MMM yyyy") : "Present")
+                                            </span>
+                                        </div>
+                                        <p class="text-[11px] text-slate-600 dark:text-slate-400">
+                                            @hist.OrganisationName @(!string.IsNullOrEmpty(hist.OrganisationStructureName) ? $"· {hist.OrganisationStructureName}" : "")
+                                        </p>
+                                        @if (!string.IsNullOrWhiteSpace(hist.JobPositionStateName))
+                                        {
+                                            <p class="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium">Status: @hist.JobPositionStateName</p>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+            </div>
+
+            <!-- RIGHT COLUMN: Contacts, Residency, System Access, Documents -->
+            <div class="@(_activeSectionFilter is "job" or "personal" or "history" ? "hidden lg:block lg:col-span-6" : "lg:col-span-5 xl:col-span-4") space-y-5">
+
+                <!-- SECTION: CONTACT INFORMATION -->
+                @if (_activeSectionFilter is "all" or "contact")
+                {
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 text-xs">
+                                    📞
+                                </span>
+                                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                    Contact Details
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2.5">
+                            @if (_profile.Contacts.Count > 0)
+                            {
+                                @foreach (var contact in _profile.Contacts)
+                                {
+                                    var isEmail = contact.ContactTypeName.Contains("Email", StringComparison.OrdinalIgnoreCase);
+                                    var isPhone = contact.ContactTypeName.Contains("Phone", StringComparison.OrdinalIgnoreCase) ||
+                                                  contact.ContactTypeName.Contains("Mobile", StringComparison.OrdinalIgnoreCase);
+
+                                    <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 flex items-start gap-3">
+                                        <div class="mt-0.5 text-slate-400">
+                                            @if (isEmail)
+                                            {
+                                                <svg class="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                </svg>
+                                            }
+                                            else if (isPhone)
+                                            {
+                                                <svg class="h-4 w-4 text-teal-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                                </svg>
+                                            }
+                                            else
+                                            {
+                                                <svg class="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            }
+                                        </div>
+                                        <div class="min-w-0 flex-1">
+                                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
+                                                @contact.ContactTypeName
+                                            </span>
+                                            @if (isEmail)
+                                            {
+                                                <a href="@($"mailto:{contact.Value}")" class="text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:underline break-all">
+                                                    @contact.Value
+                                                </a>
+                                            }
+                                            else if (isPhone)
+                                            {
+                                                <a href="@($"tel:{contact.Value}")" class="text-xs font-bold text-slate-900 dark:text-slate-100 hover:underline">
+                                                    @contact.Value
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-xs font-bold text-slate-900 dark:text-slate-100 break-all">
+                                                    @contact.Value
+                                                </span>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-xs text-slate-400 p-2">No contact records on file.</p>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- SECTION: RESIDENCY & ADDRESSES -->
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-3">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 text-xs">
+                                    📍
+                                </span>
+                                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                    Addresses &amp; Residency
+                                </h3>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2.5">
+                            @if (_profile.Addresses.Count > 0)
+                            {
+                                @foreach (var addr in _profile.Addresses)
+                                {
+                                    <div class="rounded-xl border border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3 space-y-1">
+                                        <div class="flex items-center justify-between">
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                                                @(!string.IsNullOrEmpty(addr.AddressTypeName) ? addr.AddressTypeName : "Address")
+                                            </span>
+                                            @if (addr.IsPrimary)
+                                            {
+                                                <span class="rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                                    Primary
+                                                </span>
+                                            }
+                                        </div>
+                                        <p class="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                                            @addr.AddressLine1 @addr.AddressLine2
+                                        </p>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                            @addr.IslandName @addr.AtollName @addr.CountryName
+                                        </p>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <p class="text-xs text-slate-400 p-2">No address information recorded.</p>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <!-- SECTION: ACCESS, TEAMS & SECURITY ROLES -->
+                @if (_activeSectionFilter is "all" or "access")
+                {
+                    <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-xs space-y-4">
+                        <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                            <div class="flex items-center gap-2">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-50 dark:bg-violet-950/60 text-violet-600 dark:text-violet-400 text-xs">
+                                    🛡️
+                                </span>
+                                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">
+                                    Governance &amp; Access
+                                </h3>
+                            </div>
+                        </div>
+
+                        <!-- System Roles -->
+                        <div class="space-y-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                                Assigned System Roles (@_profile.Access.Roles.Count)
+                            </span>
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach (var r in _profile.Access.Roles)
+                                {
+                                    <span class="rounded-lg bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800 text-violet-800 dark:text-violet-300 px-2.5 py-1 text-xs font-semibold">
+                                        🛡️ @r.RoleName
+                                    </span>
+                                }
+                                @if (_profile.Access.Roles.Count == 0)
+                                {
+                                    <span class="text-xs text-slate-400">Standard employee role.</span>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Teams -->
+                        <div class="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                                Working Teams (@_profile.Access.Teams.Count)
+                            </span>
+                            <div class="flex flex-wrap gap-1.5">
+                                @foreach (var t in _profile.Access.Teams)
+                                {
+                                    <span class="rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 px-2.5 py-1 text-xs font-semibold">
+                                        👥 @t.TeamName
+                                    </span>
+                                }
+                                @if (_profile.Access.Teams.Count == 0)
+                                {
+                                    <span class="text-xs text-slate-400">No team memberships assigned.</span>
+                                }
+                            </div>
+                        </div>
+
+                        <!-- Groups -->
+                        @if (_profile.Access.Groups.Count > 0)
+                        {
+                            <div class="space-y-1.5 pt-2 border-t border-slate-100 dark:border-slate-800">
+                                <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">
+                                    Functional Groups (@_profile.Access.Groups.Count)
+                                </span>
+                                <div class="flex flex-wrap gap-1.5">
+                                    @foreach (var g in _profile.Access.Groups)
+                                    {
+                                        <span class="rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 px-2.5 py-1 text-xs font-semibold">
+                                            @g.GroupName
+                                        </span>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- SECTION: QUICK SHORTCUTS TO RELATED MODULES -->
+                <div class="rounded-2xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 space-y-2">
+                    <h4 class="text-xs font-bold text-emerald-900 dark:text-emerald-300">Quick Workspace Navigation</h4>
+                    <p class="text-[11px] text-slate-600 dark:text-slate-400">Jump directly to other dedicated records for this employee:</p>
+                    <div class="grid grid-cols-2 gap-2 pt-1 text-xs">
+                        <a href="@($"/admin/my/workspace/staff/{EffectiveStaffId}/leave")"
+                           class="flex items-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 transition">
+                            🏖️ Leave History
+                        </a>
+                        <a href="@($"/admin/my/workspace/staff/{EffectiveStaffId}/attendance")"
+                           class="flex items-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 transition">
+                            ⏱️ Attendance Log
+                        </a>
+                        <a href="@($"/admin/my/workspace/staff/{EffectiveStaffId}/performance")"
+                           class="flex items-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 transition">
+                            📊 Performance
+                        </a>
+                        <a href="@($"/admin/my/workspace/staff/{EffectiveStaffId}/finance")"
+                           class="flex items-center gap-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-white dark:bg-slate-900 px-2.5 py-1.5 font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100/50 transition">
+                            💰 Finance Records
+                        </a>
+                    </div>
                 </div>
 
             </div>
@@ -213,43 +800,32 @@
 </div>
 
 @code {
-    [Parameter]
-    public int IndividualId { get; set; }
+    [Parameter] public int IndividualId { get; set; }
+    [Parameter] public int StaffId { get; set; }
 
-    [Parameter]
-    public int StaffId { get; set; }
+    private int EffectiveStaffId => StaffId > 0 ? StaffId : IndividualId;
 
     private ProfileOverviewDto? _profile;
-
     private bool _loading = true;
-
     private string? _errorMessage;
-
-    private string? _activeJobMessage;
-
     private int _loadedStaffId;
+    private string _activeSectionFilter = "all";
 
     protected override async Task OnParametersSetAsync()
     {
-        if (StaffId <= 0)
+        var targetId = EffectiveStaffId;
+        if (targetId <= 0)
         {
             _profile = null;
             _loading = false;
-            _errorMessage =
-                "A valid individual ID is required.";
-
+            _errorMessage = "A valid staff or individual ID is required.";
             return;
         }
 
-        if (_loadedStaffId == StaffId &&
-            _profile is not null)
-        {
+        if (_loadedStaffId == targetId && _profile is not null)
             return;
-        }
 
-        _loadedStaffId =
-            StaffId;
-
+        _loadedStaffId = targetId;
         await LoadProfileAsync();
     }
 
@@ -259,26 +835,14 @@
         {
             _loading = true;
             _errorMessage = null;
-            _activeJobMessage = null;
             _profile = null;
-
-            _profile =
-                await ProfileService.GetProfileAsync(StaffId);
-
-            if (_profile?.ActiveJob is null)
-            {
-                _activeJobMessage =
-                    "This individual does not have an active approved job.";
-            }
+            _profile = await ProfileService.GetProfileAsync(EffectiveStaffId);
         }
-        catch (Exception exception)
+        catch (Exception ex)
         {
             _profile = null;
-
-            _errorMessage =
-                "An unexpected error occurred while loading the profile.";
-
-            Console.Error.WriteLine(exception);
+            _errorMessage = "An unexpected error occurred while loading the employee profile.";
+            Console.Error.WriteLine(ex);
         }
         finally
         {
@@ -286,115 +850,36 @@
         }
     }
 
-    private void GoBack()
+    private static string GetInitials(string? name)
     {
-        NavigationManager.NavigateTo("/admin/my/workspace");
+        if (string.IsNullOrWhiteSpace(name)) return "ST";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0].Length >= 2 ? parts[0][..2].ToUpperInvariant() : parts[0].ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
     }
 
-    private Task ViewRoleAsync(ProfileRoleDto role)
-{
-    // Later:
-    // _selectedRole = role;
-    // _showRoleDrawer = true;
-
-    return Task.CompletedTask;
-}
-
-
-
-    private void PrintProfile()
+    private static string GetDateOfBirthText(DateTime dob)
     {
+        if (dob == default || dob.Year < 1900) return "Not recorded";
+        var today = DateTime.Today;
+        var age = today.Year - dob.Year;
+        if (dob.Date > today.AddYears(-age)) age--;
+        return $"{dob:dd MMM yyyy} ({age} years)";
     }
 
-    private void EditProfile()
+    private static string GetGenderText(int genderId) => genderId switch
     {
-    }
+        1 => "Male",
+        2 => "Female",
+        _ => "Not specified"
+    };
 
-    private void OpenProfileActions()
+    private async Task PrintProfile()
     {
+        try
+        {
+            await JS.InvokeVoidAsync("window.print");
+        }
+        catch { }
     }
-
-    private void EditPersonalDetails()
-    {
-    }
-
-    private Task CreateJob()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task AddPosition()
-    {
-        return Task.CompletedTask;
-    }
- 
-
-    private Task EditContactAsync()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task AddAddress()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task EditAddressAsync()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task AddEducation()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task EditEducationAsync()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task UploadDocument()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task ViewDocumentAsync()
-    {
-        return Task.CompletedTask;
-    }
-
-    private Task ViewPositionAsync(ProfilePositionDto position)
-    {
-        // Example:
-        // selectedPosition = position;
-        // activePanel = ProfilePanel.PositionDetails;
-
-        return Task.CompletedTask;
-    }
-    private Task ViewLeaveHistoryAsync(JobLeaveTypeDto leaveType)
-    {
-        // selectedLeaveType = leaveType;
-        // Open leave-history drawer.
-
-        return Task.CompletedTask;
-    }
-
-    private Task AdjustLeaveBalanceAsync(JobLeaveTypeDto leaveType)
-    {
-        // selectedLeaveType = leaveType;
-        // Open leave-balance adjustment drawer.
-
-        return Task.CompletedTask;
-    }
-
-    private Task ViewJobAsync(
-       JobPositionHistoryDto historyItem)
-    {
-        // _selectedPositionHistory = historyItem;
-        // Open the position-history detail drawer.
-
-        return Task.CompletedTask;
-    }
-  
 }

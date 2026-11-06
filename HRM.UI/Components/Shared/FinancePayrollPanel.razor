@@ -5,42 +5,433 @@
 @inject HRM.Services.Interfaces.Profile.IProfileService Profiles
 @inject HRM.Services.Interfaces.IUserAccessService Access
 @inject HRM.Services.ToastService Toasts
-<div class="space-y-3 text-sm">
-    @if(error!=null){<p role="alert" class="rounded border p-3">@error</p>}
-    @if(!ReadOnly)
+
+<div class="space-y-4 text-xs w-full min-w-0">
+
+    @if (error != null)
     {
-        <WorkspaceSearch StaffOnly="true" RequireActivePosition="true" OnSelected="AddStaff" />
-        <div class="flex flex-wrap gap-2">@foreach(var job in jobs){<button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="()=>Remove(job.Key)">@job.Value ×</button>}</div>
-        <fieldset disabled="@busy" class="flex flex-wrap items-end gap-3">
-            <label>Payroll month<input type="month" value="@month" @onchange="ChangeMonth" /></label>
-            <label>Payroll cycle<select @bind="cycle"><option value="0">Select</option>@foreach(var c in cycles){<option value="@c.Id">@c.Name</option>}</select></label>
-            <label>Reference<input @bind="reference" maxlength="200" /></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" @onclick="Preview">Preview payroll</button>
-            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(preview==null||preview.Issues.Count>0||preview.Lines.Count==0)" @onclick="Post">Post and lock payroll</button>
-        </fieldset>
-        <details class="rounded-lg border p-3"><summary class="cursor-pointer">Request a new payroll cycle</summary><div class="flex flex-wrap items-end gap-3 mt-3"><label>Organisation payroll period<select @bind="period"><option value="0">Select</option>@foreach(var p in periods){<option value="@p.Id">@p.Name</option>}</select></label><label>Reason<input @bind="cycleReason" maxlength="2000" /></label><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="RequestCycle">Request cycle approval</button><button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="MonthChanged">Refresh cycles</button></div></details>
-        @if(preview!=null)
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400">✕</button>
+        </div>
+    }
+
+    @if (!ReadOnly)
+    {
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+            <!-- Left Column: Payroll Processing Form -->
+            <div class="lg:col-span-5 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                <div class="border-b border-slate-200 dark:border-slate-800 pb-2">
+                    <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Payroll Processing</h3>
+                    <p class="text-[11px] text-slate-500 mt-0.5">Prepare and post monthly salary and allowance batches.</p>
+                </div>
+
+                @if (!StaffId.HasValue || StaffId.Value == 0)
+                {
+                    <div class="space-y-1.5">
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Target Staff Members</label>
+                        <WorkspaceSearch StaffOnly="true" RequireActivePosition="true" OnSelected="AddStaff" />
+                        <div class="flex flex-wrap gap-1.5 pt-1">
+                            @foreach (var job in jobs)
+                            {
+                                <span class="inline-flex items-center gap-1 rounded-full border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-800 dark:text-emerald-200">
+                                    @job.Value
+                                    <button type="button" class="text-emerald-600 hover:text-emerald-900 font-bold ml-1" @onclick="() => Remove(job.Key)">×</button>
+                                </span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <fieldset disabled="@busy" class="space-y-3">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Payroll Month</label>
+                            <input type="month" value="@month" @onchange="ChangeMonth"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Payroll Cycle</label>
+                            <select @bind="cycle"
+                                    class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                                <option value="0">Select cycle</option>
+                                @foreach (var c in cycles)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Batch Reference</label>
+                        <input @bind="reference" maxlength="200" placeholder="e.g. PR-2026-NOV"
+                               class="mt-1 w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3.5 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-xs transition"
+                                @onclick="Preview">
+                            ⚡ Preview Payroll
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                                disabled="@(preview == null || preview.Issues.Count > 0 || preview.Lines.Count == 0)"
+                                @onclick="Post">
+                            ✓ Post &amp; Lock Payroll
+                        </button>
+                    </div>
+                </fieldset>
+
+                <!-- New Payroll Cycle Collapsible -->
+                <details class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3">
+                    <summary class="cursor-pointer font-semibold text-slate-700 dark:text-slate-300 text-xs">
+                        Request a New Payroll Cycle
+                    </summary>
+                    <div class="space-y-2.5 pt-3">
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Period</label>
+                            <select @bind="period"
+                                    class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs">
+                                <option value="0">Select period</option>
+                                @foreach (var p in periods)
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">Reason</label>
+                            <input @bind="cycleReason" maxlength="2000"
+                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-xs" />
+                        </div>
+                        <div class="flex items-center gap-2 pt-1">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                                    disabled="@busy"
+                                    @onclick="RequestCycle">
+                                Request Cycle Approval
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 transition"
+                                    disabled="@busy"
+                                    @onclick="MonthChanged">
+                                ↻ Refresh
+                            </button>
+                        </div>
+                    </div>
+                </details>
+            </div>
+
+            <!-- Right Column: Payroll Preview & Posted History -->
+            <div class="lg:col-span-7 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+                @if (preview != null)
+                {
+                    <div class="space-y-2 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Payroll Preview</h4>
+                        @foreach (var issue in preview.Issues)
+                        {
+                            <p role="alert" class="text-rose-600 text-xs font-semibold">⚠️ @issue</p>
+                        }
+                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                    <tr>
+                                        @if (!StaffId.HasValue || StaffId.Value == 0)
+                                        {
+                                            <th class="p-2">Staff</th>
+                                        }
+                                        <th class="p-2">Type</th>
+                                        <th class="p-2">Description</th>
+                                        <th class="p-2 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    @foreach (var line in preview.Lines)
+                                    {
+                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                            @if (!StaffId.HasValue || StaffId.Value == 0)
+                                            {
+                                                <td class="p-2 font-medium">@line.Staff</td>
+                                            }
+                                            <td class="p-2 font-semibold text-emerald-800 dark:text-emerald-300">@line.Kind</td>
+                                            <td class="p-2 text-slate-600 dark:text-slate-400">@line.Description</td>
+                                            <td class="p-2 text-right font-bold font-mono">@line.Amount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <div class="space-y-2.5">
+                    <h4 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Posted Payroll History</h4>
+                    <div class="space-y-2 max-h-96 overflow-y-auto pr-1">
+                        @foreach (var batch in history)
+                        {
+                            <details class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-2xs">
+                                <summary class="cursor-pointer font-semibold text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                                    <span>@batch.Month.ToString("MMMM yyyy") · @batch.Reference</span>
+                                    <span class="text-[11px] text-slate-400">Posted: @batch.PostedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</span>
+                                </summary>
+                                <div class="overflow-x-auto mt-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                                            <tr>
+                                                @if (!StaffId.HasValue || StaffId.Value == 0)
+                                                {
+                                                    <th class="p-2">Staff</th>
+                                                }
+                                                <th class="p-2">Type</th>
+                                                <th class="p-2">Description</th>
+                                                <th class="p-2 text-right">Amount</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                            @foreach (var line in batch.Lines)
+                                            {
+                                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                                    @if (!StaffId.HasValue || StaffId.Value == 0)
+                                                    {
+                                                        <td class="p-2 font-medium">@line.Staff</td>
+                                                    }
+                                                    <td class="p-2">@line.Kind</td>
+                                                    <td class="p-2 text-slate-500">@line.Description</td>
+                                                    <td class="p-2 text-right font-mono font-bold">@line.Amount.ToString("N2")</td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </details>
+                        }
+                        @if (history.Count == 0)
+                        {
+                            <p class="text-xs text-slate-500 p-2">No posted payroll entries on record.</p>
+                        }
+                    </div>
+                </div>
+
+            </div>
+
+        </div>
+    }
+    else
+    {
+        <!-- Read-Only History View in 2-Column Grid -->
+        <div class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-3">
+            <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Payroll History</h3>
+            <div class="space-y-2">
+                @foreach (var batch in history)
+                {
+                    <details class="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-3 shadow-2xs">
+                        <summary class="cursor-pointer font-semibold text-xs text-slate-800 dark:text-slate-200 flex items-center justify-between">
+                            <span>@batch.Month.ToString("MMMM yyyy") · @batch.Reference</span>
+                            <span class="text-[11px] text-slate-400">Posted: @batch.PostedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</span>
+                        </summary>
+                        <div class="overflow-x-auto mt-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold">
+                                    <tr>
+                                        @if (!StaffId.HasValue || StaffId.Value == 0)
+                                        {
+                                            <th class="p-2">Staff</th>
+                                        }
+                                        <th class="p-2">Type</th>
+                                        <th class="p-2">Description</th>
+                                        <th class="p-2 text-right">Amount</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                    @foreach (var line in batch.Lines)
+                                    {
+                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                            @if (!StaffId.HasValue || StaffId.Value == 0)
+                                            {
+                                                <td class="p-2 font-medium">@line.Staff</td>
+                                            }
+                                            <td class="p-2">@line.Kind</td>
+                                            <td class="p-2 text-slate-500">@line.Description</td>
+                                            <td class="p-2 text-right font-mono font-bold">@line.Amount.ToString("N2")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                }
+                @if (history.Count == 0)
+                {
+                    <p class="text-xs text-slate-500 p-2">No posted payroll entries found for this employee.</p>
+                }
+            </div>
+        </div>
+    }
+
+</div>
+
+@code {
+    [Parameter] public int? StaffId { get; set; }
+    [Parameter] public bool ReadOnly { get; set; }
+
+    private string month = DateTime.UtcNow.AddHours(5).ToString("yyyy-MM");
+    private string reference = "";
+    private string cycleReason = "";
+    private int cycle, period;
+    private bool busy;
+    private string? error;
+    private Guid batchId = Guid.NewGuid();
+    private Dictionary<int, string> jobs = new();
+    private List<FinanceOption> cycles = new(), periods = new();
+    private FinancePayrollPreview? preview;
+    private List<FinancePayrollHistory> history = new();
+
+    private DateTime Month => DateTime.TryParseExact(month + "-01", "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var value)
+        ? value
+        : throw new InvalidOperationException("Select a payroll month.");
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
         {
-            @foreach(var issue in preview.Issues){<p role="alert">@issue</p>}
-            <div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Staff</th><th>Type</th><th>Description</th><th>Currency ID</th><th>Amount</th></tr></thead><tbody>@foreach(var line in preview.Lines){<tr><td>@line.Staff</td><td>@line.Kind</td><td>@line.Description</td><td>@line.CurrencyTypeId</td><td>@line.Amount.ToString("N2")</td></tr>}</tbody></table></div>
+            history = await Finance.PayrollHistoryAsync(StaffId);
+            if (!ReadOnly)
+            {
+                periods = (await Finance.GetConfigurationAsync()).PayrollPeriods;
+                await MonthChanged();
+            }
+        }
+        catch (Exception)
+        {
+            error = "Payroll information could not be loaded.";
         }
     }
-    <h3 class="font-semibold">Posted payroll</h3>
-    @foreach(var batch in history)
+
+    private async Task MonthChanged()
     {
-        <details class="rounded-lg border p-3"><summary>@batch.Month.ToString("MMMM yyyy") · @batch.Reference · Posted @batch.PostedAtUtc.AddHours(5).ToString("dd MMM yyyy HH:mm")</summary><div class="overflow-x-auto"><table class="w-full"><thead><tr><th>Staff</th><th>Type</th><th>Description</th><th>Amount</th></tr></thead><tbody>@foreach(var line in batch.Lines){<tr><td>@line.Staff</td><td>@line.Kind</td><td>@line.Description</td><td>@line.Amount.ToString("N2") (currency @line.CurrencyTypeId)</td></tr>}</tbody></table></div></details>
+        preview = null;
+        cycle = 0;
+        batchId = Guid.NewGuid();
+        try
+        {
+            cycles = await Finance.GetPayrollCyclesAsync(Month);
+        }
+        catch (Exception)
+        {
+            error = "Payroll cycles could not be loaded.";
+        }
     }
-    @if(history.Count==0){<p>No posted payroll entries.</p>}
-</div>
-@code{
-    [Parameter] public int? StaffId{get;set;}[Parameter]public bool ReadOnly{get;set;}
-    private string month=DateTime.UtcNow.AddHours(5).ToString("yyyy-MM"),reference="",cycleReason="";private int cycle,period;private bool busy;private string? error;private Guid batchId=Guid.NewGuid();private Dictionary<int,string> jobs=[];private List<FinanceOption> cycles=[],periods=[];private FinancePayrollPreview? preview;private List<FinancePayrollHistory> history=[];
-    private DateTime Month=>DateTime.TryParseExact(month+"-01","yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var value)?value:throw new InvalidOperationException("Select a payroll month.");
-    protected override async Task OnInitializedAsync(){try{history=await Finance.PayrollHistoryAsync(StaffId);if(!ReadOnly){periods=(await Finance.GetConfigurationAsync()).PayrollPeriods;await MonthChanged();}}catch(Exception){error="Payroll information could not be loaded.";}}
-    private async Task MonthChanged(){preview=null;cycle=0;batchId=Guid.NewGuid();try{cycles=await Finance.GetPayrollCyclesAsync(Month);}catch(Exception){error="Payroll cycles could not be loaded.";}}
-    private async Task ChangeMonth(ChangeEventArgs e){month=e.Value?.ToString()??"";await MonthChanged();}
-    private async Task AddStaff(WorkspaceSearchResult item){try{var job=(await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId??0;if(job>0){jobs[job]=item.Name;preview=null;batchId=Guid.NewGuid();}}catch(Exception){error="Staff employment could not be loaded.";}}
-    private void Remove(int id){jobs.Remove(id);preview=null;batchId=Guid.NewGuid();}
-    private async Task Preview(){if(busy)return;busy=true;error=null;try{preview=await Finance.PreviewPayrollAsync(Month,jobs.Keys.ToList());}catch(Exception){error="Payroll could not be previewed. Check the selected staff and month.";}finally{busy=false;}}
-    private async Task RequestCycle(){if(busy)return;busy=true;error=null;try{var actor=await Access.RequireContextAsync();var result=await Finance.SubmitAsync(new(){Kind="PayrollCycle",JobId=actor.ActiveJob?.JobId??0,PayrollPeriodId=period,FromDate=Month,Reason=cycleReason});if(result.Success){Toasts.Success(result.Message);cycleReason="";}else error=result.Message;}catch(Exception){error="A payroll cycle could not be requested. Check your active employment and payroll permission.";}finally{busy=false;}}
-    private async Task Post(){if(busy)return;busy=true;error=null;try{var result=await Finance.PostPayrollAsync(new(Month,cycle,reference,batchId,jobs.Keys.ToList(),preview?.Fingerprint??""));if(result.Success){Toasts.Success(result.Message);preview=null;history=await Finance.PayrollHistoryAsync(StaffId);batchId=Guid.NewGuid();}else error=result.Message;}catch(Exception){error="Payroll was not confirmed. Refresh before retrying.";}finally{busy=false;}}
+
+    private async Task ChangeMonth(ChangeEventArgs e)
+    {
+        month = e.Value?.ToString() ?? "";
+        await MonthChanged();
+    }
+
+    private async Task AddStaff(WorkspaceSearchResult item)
+    {
+        try
+        {
+            var job = (await Profiles.GetProfileAsync(item.Id))?.ActiveJob?.JobId ?? 0;
+            if (job > 0)
+            {
+                jobs[job] = item.Name;
+                preview = null;
+                batchId = Guid.NewGuid();
+            }
+        }
+        catch (Exception)
+        {
+            error = "Staff employment could not be loaded.";
+        }
+    }
+
+    private void Remove(int id)
+    {
+        jobs.Remove(id);
+        preview = null;
+        batchId = Guid.NewGuid();
+    }
+
+    private async Task Preview()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            preview = await Finance.PreviewPayrollAsync(Month, jobs.Keys.ToList());
+        }
+        catch (Exception)
+        {
+            error = "Payroll could not be previewed. Check the selected staff and month.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RequestCycle()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var actor = await Access.RequireContextAsync();
+            var result = await Finance.SubmitAsync(new()
+            {
+                Kind = "PayrollCycle",
+                JobId = actor.ActiveJob?.JobId ?? 0,
+                PayrollPeriodId = period,
+                FromDate = Month,
+                Reason = cycleReason
+            });
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                cycleReason = "";
+            }
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "A payroll cycle could not be requested. Check your active employment and payroll permission.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Post()
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await Finance.PostPayrollAsync(new(Month, cycle, reference, batchId, jobs.Keys.ToList(), preview?.Fingerprint ?? ""));
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                preview = null;
+                history = await Finance.PayrollHistoryAsync(StaffId);
+                batchId = Guid.NewGuid();
+            }
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "Payroll was not confirmed. Refresh before retrying.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 }
