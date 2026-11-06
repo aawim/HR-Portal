@@ -1945,6 +1945,14 @@
         {
             // 1. Teams & Staff
             myTeams = await TeamService.GetMyTeamsAsync() ?? new();
+            if (selectedTeamId.HasValue && !myTeams.Any(t => t.TeamId == selectedTeamId.Value))
+            {
+                var discovered = await TeamService.GetTeamByIdAsync(selectedTeamId.Value);
+                if (discovered != null)
+                {
+                    myTeams.Insert(0, discovered);
+                }
+            }
             allTeamStaff = myTeams
                 .SelectMany(t => t.Staffs.Select(s => new TeamStaffFlattened(s.StaffId, s.FullName, s.IsSuperVisor, t.TeamId, t.Name)))
                 .GroupBy(s => s.StaffId)

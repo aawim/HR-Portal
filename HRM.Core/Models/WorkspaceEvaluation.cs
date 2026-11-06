@@ -47,28 +47,28 @@ public class Evaluation
     public string Status { get; set; } = "Submitted"; // Draft, Submitted, Under Review, Finalised, Acknowledged, Returned
 
     [MaxLength(2000)]
-    public string GeneralComments { get; set; } = string.Empty;
+    public string? GeneralComments { get; set; }
 
     [MaxLength(1000)]
-    public string Achievements { get; set; } = string.Empty;
+    public string? Achievements { get; set; }
 
     [MaxLength(1000)]
-    public string Strengths { get; set; } = string.Empty;
+    public string? Strengths { get; set; }
 
     [MaxLength(1000)]
-    public string AreasForImprovement { get; set; } = string.Empty;
+    public string? AreasForImprovement { get; set; }
 
     [MaxLength(1000)]
-    public string TrainingRecommendations { get; set; } = string.Empty;
+    public string? TrainingRecommendations { get; set; }
 
     [MaxLength(1000)]
-    public string DevelopmentObjectives { get; set; } = string.Empty;
+    public string? DevelopmentObjectives { get; set; }
 
     [MaxLength(1000)]
-    public string Goals { get; set; } = string.Empty;
+    public string? Goals { get; set; }
 
     [MaxLength(2000)]
-    public string ProjectContributions { get; set; } = string.Empty;
+    public string? ProjectContributions { get; set; }
 
     [MaxLength(200)]
     public string? FinalisedBy { get; set; }
@@ -111,7 +111,7 @@ public class EvaluationScore
     public decimal Weight { get; set; } = 1.0m;
 
     [MaxLength(500)]
-    public string Comments { get; set; } = string.Empty;
+    public string? Comments { get; set; }
 
     public virtual Evaluation Evaluation { get; set; } = null!;
 }

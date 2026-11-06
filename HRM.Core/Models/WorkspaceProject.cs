@@ -24,12 +24,12 @@ public class Project
     public string Reference { get; set; } = string.Empty;
 
     [MaxLength(1000)]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     public int? ProjectManagerStaffId { get; set; }
 
     [MaxLength(200)]
-    public string ProjectManagerName { get; set; } = string.Empty;
+    public string? ProjectManagerName { get; set; }
 
     public DateTime StartDate { get; set; }
 
@@ -72,7 +72,7 @@ public class ProjectMember
     public DateTime? ExpectedEndDate { get; set; }
 
     [MaxLength(1000)]
-    public string Remarks { get; set; } = string.Empty;
+    public string? Remarks { get; set; }
 
     public int? AssignedByStaffId { get; set; }
 
@@ -132,12 +132,12 @@ public class ProjectTask
     public string Title { get; set; } = string.Empty;
 
     [MaxLength(1000)]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     public int? AssignedStaffId { get; set; }
 
     [MaxLength(200)]
-    public string AssignedStaffName { get; set; } = string.Empty;
+    public string? AssignedStaffName { get; set; }
 
     public DateTime? StartDate { get; set; }
 
@@ -154,7 +154,7 @@ public class ProjectTask
     public int Progress { get; set; }
 
     [MaxLength(1000)]
-    public string Remarks { get; set; } = string.Empty;
+    public string? Remarks { get; set; }
 
     public DateTime? AssignedAt { get; set; }
 

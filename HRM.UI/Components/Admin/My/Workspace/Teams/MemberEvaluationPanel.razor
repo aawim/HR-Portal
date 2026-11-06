@@ -645,18 +645,41 @@
         try
         {
             // 1. Load Templates
-            availableTemplates = await TeamService.GetEvaluationTemplatesAsync() ?? new();
+            try
+            {
+                availableTemplates = await TeamService.GetEvaluationTemplatesAsync() ?? new();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to load evaluation templates from API.");
+                availableTemplates = new();
+            }
 
             // 2. Load Staff 360 Work Data (designation, department, projects, tasks)
-            staff360 = await TeamService.GetStaff360Async(StaffId);
-            if (staff360 != null)
+            try
             {
-                designation = staff360.Designation;
-                department = staff360.Department;
+                staff360 = await TeamService.GetStaff360Async(StaffId);
+                if (staff360 != null)
+                {
+                    designation = staff360.Designation;
+                    department = staff360.Department;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not load Staff 360 for staff {StaffId}", StaffId);
             }
 
             // 3. Load Evaluation History
-            evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+            try
+            {
+                evalHistory = await TeamService.GetStaffEvaluationsAsync(StaffId) ?? new();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not load evaluation history for staff {StaffId}", StaffId);
+                evalHistory = new();
+            }
 
             // 4. Check if there is an existing Draft evaluation to resume
             var existingDraft = evalHistory.FirstOrDefault(e => e.Status == "Draft" || e.Status == "Returned");
