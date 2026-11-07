@@ -504,6 +504,7 @@ namespace HRM.Components.Shared
             //ADDED BY AHMED SHARIEPH 2019
             public const int JOB_TERMINATION_TERMINATED = 93;
             public const int JOB_TERMINATION_DUE_TO_OTHER_REASON = 94;
+            public const int EMPLOYMENT_CERTIFICATE_REQUEST = 120;
 
 
         }

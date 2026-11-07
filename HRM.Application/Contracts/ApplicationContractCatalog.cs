@@ -87,6 +87,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Application.Contracts.Pages.IOutOfOfficeRequests),
         typeof(global::HRM.Application.Contracts.Pages.ICurrentEmployeeSession),
         typeof(global::HRM.Application.Contracts.Pages.ILeaveApplications),
-        typeof(global::HRM.Application.Contracts.Pages.IEmployeeAddresses)
+        typeof(global::HRM.Application.Contracts.Pages.IEmployeeAddresses),
+        typeof(global::HRM.Services.Contracts.CertificateServiceContracts.IOperations)
     ]);
 }

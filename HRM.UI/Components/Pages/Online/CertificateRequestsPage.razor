@@ -1,0 +1,870 @@
+@page "/online/certificates"
+@namespace HRM.Components.Pages.Online
+@using HRM.DTOs.Certificates
+@using HRM.Helpers
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+
+@inject CertificateServiceContracts.IOperations CertificateService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
+@inject ILogger<CertificateRequestsPage> Logger
+
+<PageTitle>Employment &amp; Work Experience Certificates - Digital HR</PageTitle>
+
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">HR Verification</span>
+                <span class="text-xs text-slate-400">Official Correspondence</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Employment &amp; Work Experience Certificates</h1>
+            <p class="text-xs text-slate-500">Request, track, and download official HR-issued service and work experience certificates.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleFullWidth"
+                    title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
+                @if (isFullWidth)
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="RefreshAsync"
+                    disabled="@isLoading">
+                <svg class="w-3.5 h-3.5 @(isLoading ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Primary Action: New Request -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="OpenNewRequestForm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span>+ Request Certificate</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" class="text-rose-600 hover:text-rose-900 font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    <!-- 2-Panel Grid System -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+        <!-- LEFT PANEL: Operations, Request Form or Selected Detail -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            @if (showRequestForm)
+            {
+                <!-- REQUEST FORM -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Request Official Certificate</h2>
+                        <p class="text-xs text-slate-500 px-1">Submit an official request to HR. Information will be verified against system records.</p>
+                    </div>
+                    <button type="button" class="text-xs text-slate-500 hover:text-slate-800 p-1" @onclick="CancelForm">✕ Cancel</button>
+                </div>
+
+                <!-- Verified Employee Identity Context Prepopulation -->
+                @if (history != null)
+                {
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-semibold text-blue-900">Authenticated Staff Record</span>
+                            <span class="rounded bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-800">#@history.EmployeeNumber</span>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            <div>
+                                <span class="text-slate-500 block">Full Name:</span>
+                                <span class="font-bold text-slate-800">@history.FullName</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">Organisation:</span>
+                                <span class="font-bold text-slate-800">@history.OrganisationName</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">Designation:</span>
+                                <span class="font-semibold text-slate-800">@history.CurrentJobTitle (@history.DepartmentName)</span>
+                            </div>
+                            <div>
+                                <span class="text-slate-500 block">Verified Service Duration:</span>
+                                <span class="font-semibold text-emerald-700">@history.FormattedServiceDuration (@history.JoinedDate.ToString("dd MMM yyyy") to @(history.TerminatedDate?.ToString("dd MMM yyyy") ?? "Present"))</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- Certificate Type Options -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-800 p-1">Certificate Type *</label>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-1">
+                        <label class="rounded-xl border p-3 flex flex-col gap-1 cursor-pointer transition @(formInput.CertificateType == "StandardService" ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-600" : "border-slate-200 bg-white hover:border-slate-300")">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-slate-900">Standard Service Certificate</span>
+                                <input type="radio" name="certType" value="StandardService" checked="@(formInput.CertificateType == "StandardService")" @onchange='() => SetCertType("StandardService")' class="text-blue-600" />
+                            </div>
+                            <p class="text-[11px] text-slate-500">Official statement confirming dates of employment, substantive job titles, active service status, and cumulative tenure.</p>
+                        </label>
+
+                        <label class="rounded-xl border p-3 flex flex-col gap-1 cursor-pointer transition @(formInput.CertificateType == "DetailedExperience" ? "border-blue-600 bg-blue-50/60 ring-1 ring-blue-600" : "border-slate-200 bg-white hover:border-slate-300")">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-xs text-slate-900">Detailed Work Experience Certificate</span>
+                                <input type="radio" name="certType" value="DetailedExperience" checked="@(formInput.CertificateType == "DetailedExperience")" @onchange='() => SetCertType("DetailedExperience")' class="text-blue-600" />
+                            </div>
+                            <p class="text-[11px] text-slate-500">Comprehensive credential including official job responsibilities, position progression, and assigned project participations.</p>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Purpose & Details -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Purpose of Certificate *</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                @bind="formInput.Purpose">
+                            <option value="">-- Select Purpose --</option>
+                            <option value="Bank Loan Application">Bank Loan / Financial Application</option>
+                            <option value="Visa / Immigration Application">Visa / Immigration / Travel</option>
+                            <option value="Higher Education / University">Higher Education / University Admission</option>
+                            <option value="Job Application / Employment Verification">New Employment Verification</option>
+                            <option value="Professional License Registration">Professional Licensing Board</option>
+                            <option value="Government Authority Verification">Government Authority Submission</option>
+                            <option value="Other Official Verification">Other Official Purpose</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Addressed To</label>
+                        <input type="text"
+                               placeholder="e.g. TO WHOM IT MAY CONCERN, or Bank of Maldives"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               @bind="formInput.AddressedTo" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Purpose Details / Specification (Optional)</label>
+                    <input type="text"
+                           placeholder="e.g. Reference for Home Loan Department or Australian High Commission"
+                           class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           @bind="formInput.PurposeDetails" />
+                </div>
+
+                <!-- Scope Options -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+                    <span class="font-bold text-xs text-slate-800">Employment Scope &amp; Period</span>
+
+                    <div class="flex flex-wrap gap-4 text-xs">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="reqScope" value="FullCareer" checked="@(formInput.RequestScope == "FullCareer")" @onchange='() => formInput.RequestScope = "FullCareer"' class="text-blue-600" />
+                            <span>Full Career Service Record</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input type="radio" name="reqScope" value="SpecificPeriod" checked="@(formInput.RequestScope == "SpecificPeriod")" @onchange='() => formInput.RequestScope = "SpecificPeriod"' class="text-blue-600" />
+                            <span>Specific Employment Period</span>
+                        </label>
+                    </div>
+
+                    @if (formInput.RequestScope == "SpecificPeriod")
+                    {
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1">
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-600">Period Start Date</label>
+                                <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" @bind="formInput.SpecificPeriodStart" />
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-medium text-slate-600">Period End Date</label>
+                                <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" @bind="formInput.SpecificPeriodEnd" />
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Inclusions -->
+                    <div class="border-t border-slate-200/80 pt-2 flex flex-wrap gap-4 text-xs mt-1">
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" @bind="formInput.IncludeResponsibilities" class="rounded text-blue-600" />
+                            <span>Include verified job responsibilities</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" @bind="formInput.IncludeProjects" class="rounded text-blue-600" />
+                            <span>Include project / initiative experience</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                            <input type="checkbox" @bind="formInput.IncludeSalary" class="rounded text-blue-600" />
+                            <span>Include current basic salary</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Additional comments -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Additional Employee Comments / Requests for HR (Optional)</label>
+                    <textarea rows="2"
+                              placeholder="Any specific instructions or submission requirements for HR..."
+                              class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              @bind="formInput.EmployeeComments"></textarea>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                            @onclick="CancelForm">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@isSubmitting"
+                            @onclick="SubmitRequestAsync">
+                        @if (isSubmitting)
+                        {
+                            <svg class="w-3.5 h-3.5 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span>Submitting...</span>
+                        }
+                        else
+                        {
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            <span>Submit Request to HR</span>
+                        }
+                    </button>
+                </div>
+            }
+            else if (selectedRequest != null)
+            {
+                <!-- SELECTED REQUEST DETAILS & ISSUED CERTIFICATE DOWNLOAD -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs font-bold text-blue-700">@selectedRequest.ReferenceNumber</span>
+                            @RenderStatusBadge(selectedRequest.Status)
+                        </div>
+                        <h2 class="text-sm font-bold text-slate-900 mt-1">@selectedRequest.CertificateType</h2>
+                    </div>
+                    <button type="button" class="text-xs text-slate-400 hover:text-slate-700 p-1" @onclick="() => selectedRequest = null">✕</button>
+                </div>
+
+                @if (selectedRequest.Status == "Issued" && selectedIssuedCert != null)
+                {
+                    <!-- ISSUED CERTIFICATE HERO CARD -->
+                    <div class="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4 flex flex-col gap-3">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                </div>
+                                <div>
+                                    <h3 class="text-xs font-bold text-emerald-950">Certificate Approved &amp; Officially Issued</h3>
+                                    <p class="text-[11px] text-emerald-700">Ref: <span class="font-mono font-semibold">@selectedIssuedCert.CertificateNumber</span> • Issued @selectedIssuedCert.IssueDate.ToString("dd MMM yyyy")</p>
+                                </div>
+                            </div>
+
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition"
+                                    @onclick="() => DownloadPdfAsync(selectedIssuedCert.IssuedCertificateId, selectedIssuedCert.CertificateNumber)">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span>Download Official PDF</span>
+                            </button>
+                        </div>
+
+                        <!-- Verification & Security Section -->
+                        <div class="rounded-lg bg-white p-3 border border-emerald-100 flex items-center justify-between gap-3 flex-wrap">
+                            <div class="space-y-1 text-xs">
+                                <span class="text-slate-500 block">Digital Verification Token:</span>
+                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md break-all">@selectedIssuedCert.VerificationToken</span>
+                                <div class="text-[11px] text-slate-500 mt-1">
+                                    Verified Authorised Signatory: <strong class="text-slate-700">@selectedIssuedCert.SignatoryName</strong> (@selectedIssuedCert.SignatoryTitle)
+                                </div>
+                            </div>
+
+                            <div class="flex items-center gap-3 shrink-0">
+                                <div class="w-16 h-16 border border-slate-200 rounded p-1 bg-white">
+                                    @((MarkupString)QrCodeGenerator.ToSvg(QrCodeGenerator.GenerateMatrix($"https://hrm.gov.mv/verify/certificate/{selectedIssuedCert.VerificationToken}"), pixelSize: 2, quietZone: 0))
+                                </div>
+                                <a href="/verify/certificate/@selectedIssuedCert.VerificationToken"
+                                   target="_blank"
+                                   class="text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline block">
+                                    Open Verification Portal ↗
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (selectedRequest.Status == "ReturnedForClarification")
+                {
+                    <div class="rounded-xl border border-purple-200 bg-purple-50 p-3.5 flex flex-col gap-2 text-xs">
+                        <div class="flex items-center gap-2 text-purple-900 font-bold">
+                            <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            <span>Returned by HR for Clarification</span>
+                        </div>
+                        <p class="text-purple-800">HR Reason: @selectedRequest.ReturnReason</p>
+                    </div>
+                }
+                else if (selectedRequest.Status == "Rejected")
+                {
+                    <div class="rounded-xl border border-rose-200 bg-rose-50 p-3.5 flex flex-col gap-2 text-xs">
+                        <div class="flex items-center gap-2 text-rose-900 font-bold">
+                            <svg class="w-4 h-4 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <span>Certificate Request Rejected</span>
+                        </div>
+                        <p class="text-rose-800">HR Reason: @selectedRequest.RejectionReason</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="rounded-xl border border-amber-200 bg-amber-50 p-3.5 flex items-center justify-between text-xs text-amber-900">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span>Under HR Review. You will receive an official notification once reviewed.</span>
+                        </div>
+
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                @onclick="() => CancelRequestAsync(selectedRequest.CertificateRequestId)">
+                            Cancel Request
+                        </button>
+                    </div>
+                }
+
+                <!-- Request Parameters Breakdown -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2 text-xs">
+                    <span class="font-bold text-slate-800">Request Particulars</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                            <span class="text-slate-500 block">Stated Purpose:</span>
+                            <span class="font-medium text-slate-800">@selectedRequest.Purpose</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Addressed To:</span>
+                            <span class="font-medium text-slate-800">@(string.IsNullOrWhiteSpace(selectedRequest.AddressedTo) ? "TO WHOM IT MAY CONCERN" : selectedRequest.AddressedTo)</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Scope:</span>
+                            <span class="font-medium text-slate-800">@selectedRequest.RequestScope</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Submission Date:</span>
+                            <span class="font-medium text-slate-800">@selectedRequest.CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Live A4-style certificate preview if issued -->
+                @if (selectedIssuedCert != null && selectedIssuedCert.Snapshot != null)
+                {
+                    <div class="border border-slate-300 rounded-xl p-6 bg-white shadow-xs space-y-4 text-slate-800">
+                        <!-- Preview Header -->
+                        <div class="text-center border-b border-teal-700 pb-3">
+                            <span class="text-[11px] font-bold text-slate-500 uppercase tracking-widest block">Republic of Maldives</span>
+                            <h3 class="text-base font-extrabold text-teal-800">@selectedIssuedCert.Snapshot.OrganisationName</h3>
+                            <span class="text-[10px] text-slate-400">Human Resources Management Directorate • Official Records</span>
+                        </div>
+
+                        <div class="text-center py-1">
+                            <h4 class="text-sm font-bold text-slate-900 tracking-wide uppercase">@selectedIssuedCert.Snapshot.CertificateTitle</h4>
+                            <div class="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                                <span>Ref: <strong>@selectedIssuedCert.CertificateNumber</strong></span>
+                                <span>Date: <strong>@selectedIssuedCert.IssueDate.ToString("dd MMMM yyyy")</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="text-xs font-bold text-slate-900">
+                            @selectedIssuedCert.Snapshot.AddressedTo
+                        </div>
+
+                        <div class="text-xs leading-relaxed text-justify space-y-2 text-slate-700">
+                            <p>@selectedIssuedCert.Snapshot.IntroductoryText</p>
+                            <p>@selectedIssuedCert.Snapshot.ServiceStatement</p>
+                        </div>
+
+                        @if (selectedIssuedCert.Snapshot.Positions.Count > 0)
+                        {
+                            <div class="space-y-1.5 pt-2">
+                                <span class="text-[11px] font-bold text-teal-800 uppercase tracking-wider block">Verified Position Record</span>
+                                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                    <table class="w-full text-left text-[11px]">
+                                        <thead class="bg-slate-50 text-slate-700 border-b border-slate-200">
+                                            <tr>
+                                                <th class="p-2">Position &amp; Department</th>
+                                                <th class="p-2">Period</th>
+                                                <th class="p-2">Key Responsibilities</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            @foreach (var p in selectedIssuedCert.Snapshot.Positions)
+                                            {
+                                                <tr>
+                                                    <td class="p-2 font-semibold">@p.Title<br/><span class="text-slate-500 font-normal">@p.Department</span></td>
+                                                    <td class="p-2 text-slate-600">@p.PeriodText</td>
+                                                    <td class="p-2 text-slate-600">
+                                                        @if (p.Responsibilities.Count > 0)
+                                                        {
+                                                            <ul class="list-disc pl-4 space-y-0.5">
+                                                                @foreach (var resp in p.Responsibilities)
+                                                                {
+                                                                    <li>@resp</li>
+                                                                }
+                                                            </ul>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span>Official verified duties.</span>
+                                                        }
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        }
+
+                        <p class="text-xs leading-relaxed text-justify text-slate-700">@selectedIssuedCert.Snapshot.ConcludingText</p>
+
+                        <!-- Signatory & QR -->
+                        <div class="flex items-end justify-between border-t border-slate-200 pt-4 mt-6">
+                            <div class="text-xs space-y-0.5">
+                                <span class="font-bold text-slate-900 block">@selectedIssuedCert.SignatoryName</span>
+                                <span class="text-slate-600 block">@selectedIssuedCert.SignatoryTitle</span>
+                                <span class="text-slate-500 text-[11px] block">@selectedIssuedCert.Snapshot.OrganisationName</span>
+                                <span class="text-[10px] text-teal-700 font-bold block mt-1">✓ DIGITALLY VERIFIED CREDENTIAL</span>
+                            </div>
+
+                            <div class="text-right">
+                                <div class="w-16 h-16 ml-auto border border-slate-200 rounded p-1 bg-white">
+                                    @((MarkupString)QrCodeGenerator.ToSvg(QrCodeGenerator.GenerateMatrix($"https://hrm.gov.mv/verify/certificate/{selectedIssuedCert.VerificationToken}"), pixelSize: 2, quietZone: 0))
+                                </div>
+                                <span class="text-[9px] text-slate-400 font-mono block mt-0.5">@selectedIssuedCert.VerificationToken[..Math.Min(10, selectedIssuedCert.VerificationToken.Length)]...</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <!-- EMPTY STATE / INSTRUCTIONS -->
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">Employment Certificates</h3>
+                        <p class="max-w-sm text-slate-500 mt-1">Select an existing request or issued certificate from the list on the right, or click "+ Request Certificate" to apply for a new certificate.</p>
+                    </div>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                            @onclick="OpenNewRequestForm">
+                        + Request Certificate
+                    </button>
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: History, Summary Table & Previously Issued Certificates -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <!-- Sub-tabs: Requests vs Issued -->
+            <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                <button type="button"
+                        class="flex-1 rounded-md py-1.5 text-xs font-semibold transition text-center @(activeRightTab == "Requests" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => activeRightTab = "Requests"'>
+                    Requests (@myRequests.Count)
+                </button>
+                <button type="button"
+                        class="flex-1 rounded-md py-1.5 text-xs font-semibold transition text-center @(activeRightTab == "Issued" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => activeRightTab = "Issued"'>
+                    Issued Certificates (@issuedCertificates.Count)
+                </button>
+            </div>
+
+            @if (activeRightTab == "Requests")
+            {
+                <!-- REQUESTS QUEUE -->
+                @if (myRequests.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
+                        No certificate requests submitted yet.
+                    </div>
+                }
+                else
+                {
+                    <div class="flex flex-col gap-2 overflow-y-auto max-h-[700px] pr-1">
+                        @foreach (var req in myRequests)
+                        {
+                            <div class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(selectedRequest?.CertificateRequestId == req.CertificateRequestId ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => SelectRequest(req)">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-mono text-[11px] font-bold text-blue-700">@req.ReferenceNumber</span>
+                                    @RenderStatusBadge(req.Status)
+                                </div>
+                                <div class="font-bold text-slate-800">@req.CertificateType</div>
+                                <div class="text-[11px] text-slate-500 flex items-center justify-between">
+                                    <span>Purpose: @req.Purpose</span>
+                                    <span>@req.CreatedAt.ToString("dd MMM yyyy")</span>
+                                </div>
+
+                                @if (req.Status == "Issued" && req.IssuedCertificateId.HasValue)
+                                {
+                                    <div class="mt-1 flex items-center justify-between border-t border-slate-100 pt-1.5">
+                                        <span class="font-mono text-[10px] text-emerald-800 font-semibold">@req.CertificateNumber</span>
+                                        <span class="text-[10px] text-emerald-700 font-bold">Download Ready →</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <!-- ISSUED CERTIFICATES ARCHIVE -->
+                @if (issuedCertificates.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6 text-center text-xs text-slate-500">
+                        No issued certificates on record.
+                    </div>
+                }
+                else
+                {
+                    <div class="flex flex-col gap-2 overflow-y-auto max-h-[700px] pr-1">
+                        @foreach (var cert in issuedCertificates)
+                        {
+                            <div class="rounded-xl border p-3 text-xs transition flex flex-col gap-2 border-slate-200 bg-white hover:shadow-xs">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-mono text-[11px] font-bold text-emerald-800">@cert.CertificateNumber</span>
+                                    @RenderStatusBadge(cert.Status)
+                                </div>
+
+                                <div>
+                                    <div class="font-bold text-slate-800">@cert.CertificateType</div>
+                                    <div class="text-[11px] text-slate-500">Issued: @cert.IssueDate.ToString("dd MMMM yyyy")</div>
+                                    <div class="text-[11px] text-slate-500">Signatory: @cert.SignatoryName</div>
+                                </div>
+
+                                <div class="flex items-center justify-between border-t border-slate-100 pt-2">
+                                    <a href="/verify/certificate/@cert.VerificationToken" target="_blank" class="text-[11px] text-blue-600 hover:text-blue-800 underline">
+                                        Verify ↗
+                                    </a>
+
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-md bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700 transition"
+                                            @onclick="() => DownloadPdfAsync(cert.IssuedCertificateId, cert.CertificateNumber)">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                        <span>PDF</span>
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </aside>
+    </div>
+</div>
+
+<style>
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+    .page-panels-full {
+        max-width: none;
+    }
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
+@code {
+    private const string FullWidthSettingKey = "hrm.certificates.full-width";
+
+    private bool isFullWidth;
+    private bool isLoading;
+    private bool isSubmitting;
+    private bool showRequestForm;
+    private string activeRightTab = "Requests";
+    private string? errorMessage;
+
+    private List<CertificateRequestSummaryDto> myRequests = [];
+    private List<IssuedCertificateDetailDto> issuedCertificates = [];
+    private CertificateVerifiedEmploymentHistoryDto? history;
+    private CertificateRequestSummaryDto? selectedRequest;
+    private IssuedCertificateDetailDto? selectedIssuedCert;
+
+    private CertificateRequestInput formInput = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (saved == "true")
+                {
+                    isFullWidth = true;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Could not read localStorage for full width setting.");
+            }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth ? "true" : "false");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not write localStorage.");
+        }
+    }
+
+    private async Task LoadDataAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            myRequests = await CertificateService.GetMyRequestsAsync();
+            issuedCertificates = await CertificateService.GetMyIssuedCertificatesAsync();
+            history = await CertificateService.GetVerifiedEmploymentHistoryAsync();
+
+            if (selectedRequest != null)
+            {
+                selectedRequest = myRequests.FirstOrDefault(r => r.CertificateRequestId == selectedRequest.CertificateRequestId) ?? selectedRequest;
+                if (selectedRequest.IssuedCertificateId.HasValue)
+                {
+                    selectedIssuedCert = issuedCertificates.FirstOrDefault(c => c.IssuedCertificateId == selectedRequest.IssuedCertificateId.Value);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading certificate requests data.");
+            errorMessage = "Unable to load certificate requests. Please check your network connection.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshAsync() => await LoadDataAsync();
+
+    private void OpenNewRequestForm()
+    {
+        formInput = new CertificateRequestInput
+        {
+            CertificateType = "StandardService",
+            RequestScope = "FullCareer",
+            IncludeResponsibilities = true,
+            IncludeProjects = false,
+            IncludeSalary = false,
+            AddressedTo = "TO WHOM IT MAY CONCERN"
+        };
+        showRequestForm = true;
+        selectedRequest = null;
+        selectedIssuedCert = null;
+    }
+
+    private void CancelForm()
+    {
+        showRequestForm = false;
+    }
+
+    private void SetCertType(string type)
+    {
+        formInput.CertificateType = type;
+        if (type == "DetailedExperience")
+        {
+            formInput.IncludeResponsibilities = true;
+            formInput.IncludeProjects = true;
+        }
+    }
+
+    private async Task SubmitRequestAsync()
+    {
+        if (string.IsNullOrWhiteSpace(formInput.Purpose))
+        {
+            Toasts.Warning("Please select the purpose of this certificate request.");
+            return;
+        }
+
+        isSubmitting = true;
+        errorMessage = null;
+        try
+        {
+            var result = await CertificateService.SubmitCertificateRequestAsync(formInput);
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                showRequestForm = false;
+                await LoadDataAsync();
+                selectedRequest = myRequests.FirstOrDefault();
+            }
+            else
+            {
+                errorMessage = result.Message;
+                Toasts.Error(result.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error submitting certificate request.");
+            errorMessage = "Failed to submit request: " + ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task CancelRequestAsync(int certificateRequestId)
+    {
+        try
+        {
+            var res = await CertificateService.CancelCertificateRequestAsync(certificateRequestId);
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                await LoadDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task SelectRequest(CertificateRequestSummaryDto req)
+    {
+        showRequestForm = false;
+        selectedRequest = req;
+        selectedIssuedCert = null;
+
+        if (req.IssuedCertificateId.HasValue)
+        {
+            selectedIssuedCert = issuedCertificates.FirstOrDefault(c => c.IssuedCertificateId == req.IssuedCertificateId.Value);
+            if (selectedIssuedCert == null)
+            {
+                try
+                {
+                    var detail = await CertificateService.GetRequestDetailAsync(req.CertificateRequestId);
+                    selectedIssuedCert = detail.IssuedCertificate;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error loading detail for request {ReqId}", req.CertificateRequestId);
+                }
+            }
+        }
+    }
+
+    private async Task DownloadPdfAsync(int issuedCertificateId, string certificateNumber)
+    {
+        try
+        {
+            var pdfBytes = await CertificateService.GetIssuedCertificatePdfAsync(issuedCertificateId);
+            if (pdfBytes == null || pdfBytes.Length == 0)
+            {
+                // Generate PDF on the fly and persist
+                var snap = await CertificateService.GetCertificateSnapshotAsync(issuedCertificateId);
+                var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                pdfBytes = CertificatePdfGenerator.Generate(snap, fontPath);
+                await CertificateService.SaveIssuedCertificatePdfAsync(issuedCertificateId, pdfBytes);
+            }
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(pdfBytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"{certificateNumber}.pdf", "application/pdf", reference);
+            Toasts.Success("Certificate downloaded successfully.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to download certificate PDF {CertId}", issuedCertificateId);
+            Toasts.Error("Unable to download certificate: " + ex.Message);
+        }
+    }
+
+    private static RenderFragment RenderStatusBadge(string status) => builder =>
+    {
+        var css = status switch
+        {
+            "Submitted" => "bg-amber-100 text-amber-800",
+            "UnderReview" => "bg-blue-100 text-blue-800",
+            "Approved" => "bg-emerald-100 text-emerald-800",
+            "Issued" => "bg-emerald-100 text-emerald-800",
+            "ReturnedForClarification" => "bg-purple-100 text-purple-800",
+            "Rejected" => "bg-rose-100 text-rose-800",
+            "Cancelled" => "bg-slate-100 text-slate-700",
+            "Active" => "bg-emerald-100 text-emerald-800",
+            "Revoked" => "bg-rose-100 text-rose-800",
+            "Superseded" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2.5 py-0.5 font-semibold text-[11px] {css}");
+        builder.AddContent(2, status == "ReturnedForClarification" ? "Returned" : status);
+        builder.CloseElement();
+    };
+}

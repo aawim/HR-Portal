@@ -119,5 +119,12 @@ namespace HRM.Authorization
         public const string AssetTechnicianExecute = "Asset.Technician.Execute";
         public const string AssetUpgradeAuthorize = "Asset.Upgrade.Authorize";
         public const string AssetClearanceAuthorize = "Asset.Clearance.Authorize";
+
+        public const string CertificateRequest = "Certificate.Request";
+        public const string CertificateView = "Certificate.View";
+        public const string CertificateReview = "Certificate.Review";
+        public const string CertificateApprove = "Certificate.Approve";
+        public const string CertificateRevoke = "Certificate.Revoke";
+        public const string CertificateGenerate = "Certificate.Generate";
     }
 }

@@ -223,6 +223,8 @@ public static class BackendServiceRegistration
         services.AddScoped<IStaffTransferActivationService, HRM.Services.StaffTransferActivationService>();
         services.AddScoped<HRM.Services.StaffTransferService>();
         services.AddScoped<HRM.Services.StaffAssetService>();
+        services.AddScoped<HRM.Api.Services.CertificateService>();
+        services.AddScoped<HRM.Services.Contracts.CertificateServiceContracts.IOperations>(provider => provider.GetRequiredService<HRM.Api.Services.CertificateService>());
         if (includeBackgroundWorkers) services.AddHostedService<HRM.Services.StaffTransferActivationWorker>();
 
         services.AddUserAppData();

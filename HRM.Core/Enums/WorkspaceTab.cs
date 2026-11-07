@@ -55,6 +55,7 @@ namespace HRM.Enum
         Finance,
         [Display(Name = "Staff Transfer")]
         StaffTransfer,
-        Onboarding
+        Onboarding,
+        Certificates
     }
 }

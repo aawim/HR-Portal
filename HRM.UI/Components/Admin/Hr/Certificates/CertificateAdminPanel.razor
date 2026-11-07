@@ -1,0 +1,943 @@
+@namespace HRM.Components.Admin.Hr.Certificates
+@using HRM.DTOs.Certificates
+@using HRM.Helpers
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@rendermode RenderMode.InteractiveServer
+
+@inject CertificateServiceContracts.IOperations CertificateService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
+@inject ILogger<CertificateAdminPanel> Logger
+
+<section class="certificate-admin w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2">
+                <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">HR Administration</span>
+                <span class="text-xs text-slate-400">Official Certification Authority</span>
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Employment &amp; Work Experience Certificate Management</h1>
+            <p class="text-xs text-slate-500">Review pending requests, verify employment records, preview official certificates, and approve issuance.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleFullWidth"
+                    title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
+                @if (isFullWidth)
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="RefreshAsync"
+                    disabled="@isLoading">
+                <svg class="w-3.5 h-3.5 @(isLoading ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Refresh Queue</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" class="text-rose-600 hover:text-rose-900 font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    <!-- 2-Panel Grid System -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+        <!-- LEFT PANEL: Operations, Verification & Review -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-4">
+            @if (activeDetail != null)
+            {
+                <!-- HEADER & STATUS -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="font-mono text-xs font-bold text-blue-700">@activeDetail.Summary.ReferenceNumber</span>
+                            @RenderStatusBadge(activeDetail.Summary.Status)
+                            <span class="text-xs text-slate-400">• Submitted @activeDetail.Summary.CreatedAt.ToString("dd MMM yyyy HH:mm")</span>
+                        </div>
+                        <h2 class="text-base font-bold text-slate-900 mt-1">@activeDetail.Summary.CertificateType</h2>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        @if (activeDetail.Summary.Status is "Submitted" or "UnderReview")
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-purple-300 bg-purple-50 px-3 py-1.5 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition"
+                                    @onclick="() => ShowActionModal(ModalKind.Return)">
+                                Return for Clarification
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                    @onclick="() => ShowActionModal(ModalKind.Reject)">
+                                Reject
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition"
+                                    @onclick="() => ShowActionModal(ModalKind.Approve)">
+                                ✓ Approve &amp; Issue
+                            </button>
+                        }
+                        else if (activeDetail.Summary.Status == "Issued" && activeDetail.IssuedCertificate != null)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50 transition"
+                                    @onclick="() => ShowActionModal(ModalKind.Reissue)">
+                                ⚡ Reissue / Supersede
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                    @onclick="() => ShowActionModal(ModalKind.Revoke)">
+                                ✕ Revoke
+                            </button>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                    @onclick="() => DownloadPdfAsync(activeDetail.IssuedCertificate.IssuedCertificateId, activeDetail.IssuedCertificate.CertificateNumber)">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                                <span>Download PDF</span>
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- EMPLOYEE VERIFIED IDENTITY CARD -->
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 flex flex-col gap-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold text-slate-800">Verified Personnel Record</span>
+                        <span class="font-mono text-xs font-bold text-slate-600">ID: #@activeDetail.EmploymentHistory.EmployeeNumber</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 text-xs">
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Full Name:</span>
+                            <span class="font-bold text-slate-900">@activeDetail.EmploymentHistory.FullName</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Designation:</span>
+                            <span class="font-semibold text-slate-800">@activeDetail.EmploymentHistory.CurrentJobTitle</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Department:</span>
+                            <span class="text-slate-800">@activeDetail.EmploymentHistory.DepartmentName</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Employment Commenced:</span>
+                            <span class="font-semibold text-slate-800">@activeDetail.EmploymentHistory.JoinedDate.ToString("dd MMMM yyyy")</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Employment Status:</span>
+                            <span class="font-bold @(activeDetail.EmploymentHistory.IsCurrentlyEmployed ? "text-emerald-700" : "text-slate-600")">
+                                @(activeDetail.EmploymentHistory.IsCurrentlyEmployed ? "Active in Service" : $"Concluded ({activeDetail.EmploymentHistory.TerminatedDate?.ToString("dd MMM yyyy")})")
+                            </span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block text-[11px]">Cumulative Service Tenure:</span>
+                            <span class="font-bold text-teal-800">@activeDetail.EmploymentHistory.FormattedServiceDuration</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- REQUEST PARTICULARS & PROPOSED DETAILS -->
+                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2">
+                    <span class="text-xs font-bold text-blue-950">Employee Request Specification</span>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        <div>
+                            <span class="text-slate-500 block">Stated Purpose:</span>
+                            <span class="font-semibold text-slate-800">@activeDetail.Summary.Purpose</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Addressed To:</span>
+                            <span class="font-semibold text-slate-800">@(string.IsNullOrWhiteSpace(activeDetail.Summary.AddressedTo) ? "TO WHOM IT MAY CONCERN" : activeDetail.Summary.AddressedTo)</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Scope:</span>
+                            <span class="text-slate-800">@activeDetail.Summary.RequestScope</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-500 block">Request State:</span>
+                            <span class="font-semibold text-slate-800">@activeDetail.Summary.Status</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VERIFIED POSITION & RESPONSIBILITY HISTORY -->
+                <div class="space-y-2">
+                    <div class="flex items-center justify-between">
+                        <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Verified Position History &amp; Official Duties</h3>
+                        <span class="text-[11px] text-slate-500">(@activeDetail.EmploymentHistory.Positions.Count assignments recorded)</span>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Position Title</th>
+                                    <th class="p-2.5">Department</th>
+                                    <th class="p-2.5">Tenure</th>
+                                    <th class="p-2.5">Official Verified Responsibilities</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var pos in activeDetail.EmploymentHistory.Positions)
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2.5 font-semibold text-slate-800">@pos.PositionTitle</td>
+                                        <td class="p-2.5 text-slate-600">@pos.Department</td>
+                                        <td class="p-2.5 text-slate-600">@pos.FromDate.ToString("dd MMM yyyy") - @(pos.ToDate.HasValue ? pos.ToDate.Value.ToString("dd MMM yyyy") : "Present")</td>
+                                        <td class="p-2.5 text-slate-600">
+                                            @if (pos.OfficialResponsibilities.Count > 0)
+                                            {
+                                                <ul class="list-disc pl-4 space-y-0.5 text-[11px]">
+                                                    @foreach (var r in pos.OfficialResponsibilities)
+                                                    {
+                                                        <li>@r</li>
+                                                    }
+                                                </ul>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400 italic">Core position responsibilities verified.</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- VERIFIED PROJECT EXPERIENCE IF APPLICABLE -->
+                @if (activeDetail.EmploymentHistory.Projects.Count > 0)
+                {
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Verified Project Assignments</h3>
+                            <span class="text-[11px] text-slate-500">(@activeDetail.EmploymentHistory.Projects.Count projects recorded)</span>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2.5">Project Name</th>
+                                        <th class="p-2.5">Reference</th>
+                                        <th class="p-2.5">Role</th>
+                                        <th class="p-2.5">Assigned Date</th>
+                                        <th class="p-2.5">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var prj in activeDetail.EmploymentHistory.Projects)
+                                    {
+                                        <tr class="hover:bg-slate-50/50">
+                                            <td class="p-2.5 font-semibold text-slate-800">@prj.ProjectName</td>
+                                            <td class="p-2.5 font-mono text-[11px] text-slate-600">@prj.ProjectReference</td>
+                                            <td class="p-2.5 text-slate-600">@prj.Role</td>
+                                            <td class="p-2.5 text-slate-600">@prj.AssignedDate.ToString("dd MMM yyyy")</td>
+                                            <td class="p-2.5">
+                                                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">@prj.ProjectStatus</span>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+
+                <!-- LIVE CERTIFICATE PREVIEW PANEL -->
+                @if (activeDetail.CurrentDraftSnapshot != null)
+                {
+                    <div class="space-y-2 pt-2 border-t border-slate-200">
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-xs font-bold text-slate-900 uppercase tracking-wider">Certificate Live Preview</h3>
+                            <span class="text-[11px] text-slate-500">Formatted according to official government stationery template</span>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-300 bg-white p-6 shadow-xs space-y-4 text-slate-800">
+                            <!-- Letterhead -->
+                            <div class="text-center border-b border-teal-700 pb-3">
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">Republic of Maldives</span>
+                                <h4 class="text-base font-extrabold text-teal-800">@activeDetail.CurrentDraftSnapshot.OrganisationName</h4>
+                                <span class="text-[10px] text-slate-400">Human Resources Management Directorate • Official Records</span>
+                            </div>
+
+                            <div class="text-center py-1">
+                                <h5 class="text-sm font-bold text-slate-900 tracking-wide uppercase">@activeDetail.CurrentDraftSnapshot.CertificateTitle</h5>
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 mt-2">
+                                    <span>Certificate Ref: <strong>@(activeDetail.IssuedCertificate?.CertificateNumber ?? "DRAFT PREVIEW")</strong></span>
+                                    <span>Date: <strong>@DateTime.Today.ToString("dd MMMM yyyy")</strong></span>
+                                </div>
+                            </div>
+
+                            <div class="text-xs font-bold text-slate-900">
+                                @activeDetail.CurrentDraftSnapshot.AddressedTo
+                            </div>
+
+                            <div class="text-xs leading-relaxed text-justify space-y-2 text-slate-700">
+                                <p>@activeDetail.CurrentDraftSnapshot.IntroductoryText</p>
+                                <p>@activeDetail.CurrentDraftSnapshot.ServiceStatement</p>
+                            </div>
+
+                            @if (activeDetail.CurrentDraftSnapshot.Positions.Count > 0)
+                            {
+                                <div class="space-y-1 pt-2">
+                                    <span class="text-[11px] font-bold text-teal-800 uppercase tracking-wider block">Verified Position Record</span>
+                                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                        <table class="w-full text-left text-[11px]">
+                                            <thead class="bg-slate-50 text-slate-700 border-b border-slate-200">
+                                                <tr>
+                                                    <th class="p-2">Position &amp; Department</th>
+                                                    <th class="p-2">Period</th>
+                                                    <th class="p-2">Key Responsibilities</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody class="divide-y divide-slate-100">
+                                                @foreach (var p in activeDetail.CurrentDraftSnapshot.Positions)
+                                                {
+                                                    <tr>
+                                                        <td class="p-2 font-semibold">@p.Title<br/><span class="text-slate-500 font-normal">@p.Department</span></td>
+                                                        <td class="p-2 text-slate-600">@p.PeriodText</td>
+                                                        <td class="p-2 text-slate-600">
+                                                            @if (p.Responsibilities.Count > 0)
+                                                            {
+                                                                <ul class="list-disc pl-4 space-y-0.5">
+                                                                    @foreach (var resp in p.Responsibilities)
+                                                                    {
+                                                                        <li>@resp</li>
+                                                                    }
+                                                                </ul>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span>Official civil service duties verified.</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                }
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            }
+
+                            <p class="text-xs leading-relaxed text-justify text-slate-700">@activeDetail.CurrentDraftSnapshot.ConcludingText</p>
+
+                            <!-- Signatory & QR -->
+                            <div class="flex items-end justify-between border-t border-slate-200 pt-4 mt-4">
+                                <div class="text-xs space-y-0.5">
+                                    <span class="font-bold text-slate-900 block">@activeDetail.CurrentDraftSnapshot.SignatoryName</span>
+                                    <span class="text-slate-600 block">@activeDetail.CurrentDraftSnapshot.SignatoryTitle</span>
+                                    <span class="text-slate-500 text-[11px] block">@activeDetail.CurrentDraftSnapshot.OrganisationName</span>
+                                    <span class="text-[10px] text-teal-700 font-bold block mt-1">✓ OFFICIAL HR CREDENTIAL</span>
+                                </div>
+
+                                <div class="text-right">
+                                    <div class="w-16 h-16 ml-auto border border-slate-200 rounded p-1 bg-white">
+                                        @((MarkupString)QrCodeGenerator.ToSvg(QrCodeGenerator.GenerateMatrix($"https://hrm.gov.mv/verify/certificate/PREVIEW"), pixelSize: 2, quietZone: 0))
+                                    </div>
+                                    <span class="text-[9px] text-slate-400 font-mono block mt-0.5">VERIFICATION QR</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                }
+
+                <!-- AUDIT TRAIL -->
+                @if (activeDetail.AuditTrail.Count > 0)
+                {
+                    <div class="space-y-1.5 pt-2 border-t border-slate-100">
+                        <span class="text-xs font-bold text-slate-700 block">Audit Timeline</span>
+                        <div class="space-y-1">
+                            @foreach (var audit in activeDetail.AuditTrail)
+                            {
+                                <div class="flex items-center justify-between text-[11px] text-slate-500 bg-slate-50 rounded-lg px-2.5 py-1">
+                                    <span><strong class="text-slate-700">@audit.Action</strong> by @audit.PerformedByUserName • @audit.Details</span>
+                                    <span>@audit.Timestamp.ToString("dd MMM yyyy HH:mm")</span>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+            else
+            {
+                <!-- EMPTY STATE / SELECT PROMPT -->
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center text-xs text-slate-500 flex flex-col items-center gap-3">
+                    <div class="w-12 h-12 rounded-full bg-teal-50 text-teal-700 flex items-center justify-center">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a3 3 0 006 0M9 5a3 3 0 016 0M9 12h6m-6 4h6"/></svg>
+                    </div>
+                    <div>
+                        <h3 class="text-sm font-bold text-slate-800">No Request Selected</h3>
+                        <p class="max-w-sm text-slate-500 mt-1">Select a certificate request from the queue on the right to inspect employment details, review official responsibilities, and issue the certificate.</p>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Certificate Requests Queue & Filters -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <span class="font-bold text-xs text-slate-900">Certificate Requests Queue</span>
+                <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@filteredRequests.Count items</span>
+            </div>
+
+            <!-- Search -->
+            <div>
+                <input type="text"
+                       placeholder="Search by staff name, ID, or reference..."
+                       class="w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                       @bind="searchTerm"
+                       @bind:event="oninput" />
+            </div>
+
+            <!-- Queue Status Filter Pills -->
+            <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50 overflow-x-auto">
+                <button type="button"
+                        class="flex-1 rounded-md py-1 text-[11px] font-semibold transition text-center whitespace-nowrap @(activeFilter == "Pending" ? "bg-white text-teal-800 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilter("Pending")'>
+                    Pending
+                </button>
+                <button type="button"
+                        class="flex-1 rounded-md py-1 text-[11px] font-semibold transition text-center whitespace-nowrap @(activeFilter == "Issued" ? "bg-white text-teal-800 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilter("Issued")'>
+                    Issued
+                </button>
+                <button type="button"
+                        class="flex-1 rounded-md py-1 text-[11px] font-semibold transition text-center whitespace-nowrap @(activeFilter == "ReturnedForClarification" ? "bg-white text-teal-800 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilter("ReturnedForClarification")'>
+                    Returned
+                </button>
+                <button type="button"
+                        class="flex-1 rounded-md py-1 text-[11px] font-semibold transition text-center whitespace-nowrap @(activeFilter == "All" ? "bg-white text-teal-800 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SetFilter("All")'>
+                    All
+                </button>
+            </div>
+
+            <!-- Requests List -->
+            @if (filteredRequests.Count == 0)
+            {
+                <div class="rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-8 text-center text-xs text-slate-500">
+                    No certificate requests found for this filter.
+                </div>
+            }
+            else
+            {
+                <div class="flex flex-col gap-2 overflow-y-auto max-h-[750px] pr-1">
+                    @foreach (var req in filteredRequests)
+                    {
+                        <div class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(activeDetail?.Summary.CertificateRequestId == req.CertificateRequestId ? "border-teal-600 bg-teal-50/60 shadow-xs ring-1 ring-teal-600" : "border-slate-200 bg-white hover:border-slate-300")"
+                             @onclick="() => SelectRequestAsync(req.CertificateRequestId)">
+                            <div class="flex items-center justify-between">
+                                <span class="font-mono text-[11px] font-bold text-blue-700">@req.ReferenceNumber</span>
+                                @RenderStatusBadge(req.Status)
+                            </div>
+
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-900">@req.EmployeeName</span>
+                                <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 font-mono">#@req.EmployeeNumber</span>
+                            </div>
+
+                            <div class="text-[11px] text-slate-500">
+                                <span>@req.CertificateType</span> • <span class="italic">@req.Purpose</span>
+                            </div>
+
+                            <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1.5 mt-0.5">
+                                <span>Submitted: @req.CreatedAt.ToString("dd MMM yyyy")</span>
+                                @if (req.Status == "Issued" && !string.IsNullOrWhiteSpace(req.CertificateNumber))
+                                {
+                                    <span class="font-mono font-semibold text-emerald-800">@req.CertificateNumber</span>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        </aside>
+    </div>
+</section>
+
+<!-- ACTION MODAL DIALOG (Return, Reject, Approve, Reissue, Revoke) -->
+@if (activeModal != ModalKind.None)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-900">
+                    @(activeModal switch
+                    {
+                        ModalKind.Approve => "Approve & Issue Certificate",
+                        ModalKind.Return => "Return Request for Clarification",
+                        ModalKind.Reject => "Reject Certificate Request",
+                        ModalKind.Revoke => "Revoke Issued Certificate",
+                        ModalKind.Reissue => "Reissue & Supersede Certificate",
+                        _ => "Review Action"
+                    })
+                </h3>
+                <button type="button" class="text-slate-400 hover:text-slate-700 p-1" @onclick="CloseModal">✕</button>
+            </div>
+
+            @if (activeModal == ModalKind.Approve)
+            {
+                <div class="space-y-3 text-xs">
+                    <p class="text-slate-600">You are approving this request and generating an immutable official certificate snapshot with a unique reference number and QR verification token.</p>
+
+                    <div>
+                        <label class="block font-semibold text-slate-800 p-1">Authorised Signatory Name *</label>
+                        <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="modalSignatoryName" />
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-800 p-1">Authorised Signatory Official Title *</label>
+                        <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="modalSignatoryTitle" />
+                    </div>
+
+                    <div>
+                        <label class="block font-semibold text-slate-800 p-1">Addressed To</label>
+                        <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="modalAddressedTo" />
+                    </div>
+                </div>
+            }
+            else if (activeModal == ModalKind.Return)
+            {
+                <div class="space-y-2 text-xs">
+                    <label class="block font-semibold text-slate-800 p-1">Reason for Return *</label>
+                    <textarea rows="3"
+                              placeholder="Explain what clarification or additional information is required from the employee..."
+                              class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-purple-500"
+                              @bind="modalReason"></textarea>
+                </div>
+            }
+            else if (activeModal == ModalKind.Reject)
+            {
+                <div class="space-y-2 text-xs">
+                    <label class="block font-semibold text-slate-800 p-1">Reason for Rejection *</label>
+                    <textarea rows="3"
+                              placeholder="Provide the administrative justification for declining this certificate request..."
+                              class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+                              @bind="modalReason"></textarea>
+                </div>
+            }
+            else if (activeModal == ModalKind.Revoke)
+            {
+                <div class="space-y-2 text-xs">
+                    <p class="text-rose-700 font-semibold">Caution: Revoking this certificate will invalidate all public verification checks and mark the credential as revoked immediately.</p>
+                    <label class="block font-semibold text-slate-800 p-1">Reason for Revocation *</label>
+                    <textarea rows="3"
+                              placeholder="Official reason for revoking this issued certificate..."
+                              class="w-full rounded-lg border border-slate-300 p-2 text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+                              @bind="modalReason"></textarea>
+                </div>
+            }
+            else if (activeModal == ModalKind.Reissue)
+            {
+                <div class="space-y-3 text-xs">
+                    <p class="text-slate-600">The current certificate will be marked as Superseded. A newly revised certificate with updated parameters will be generated with a new unique reference.</p>
+                    <div>
+                        <label class="block font-semibold text-slate-800 p-1">Reason for Supersession / Reissue *</label>
+                        <input type="text" placeholder="e.g. Corrected recipient designation or title change" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="modalReason" />
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-800 p-1">Signatory Name</label>
+                        <input type="text" class="w-full rounded-lg border border-slate-300 p-2 text-xs" @bind="modalSignatoryName" />
+                    </div>
+                </div>
+            }
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button"
+                        class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                        @onclick="CloseModal">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="rounded-lg px-4 py-1.5 text-xs font-semibold text-white shadow-xs transition @(activeModal == ModalKind.Reject || activeModal == ModalKind.Revoke ? "bg-rose-600 hover:bg-rose-700" : activeModal == ModalKind.Return ? "bg-purple-600 hover:bg-purple-700" : "bg-emerald-600 hover:bg-emerald-700")"
+                        disabled="@isActing"
+                        @onclick="ExecuteModalActionAsync">
+                    @(isActing ? "Processing..." : "Confirm & Execute")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+    .page-panels-full {
+        max-width: none;
+    }
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
+@code {
+    private const string FullWidthSettingKey = "hrm.certificate-admin.full-width";
+
+    private bool isFullWidth;
+    private bool isLoading;
+    private bool isActing;
+    private string activeFilter = "Pending";
+    private string searchTerm = "";
+    private string? errorMessage;
+
+    private List<CertificateRequestSummaryDto> allRequests = [];
+    private CertificateRequestDetailDto? activeDetail;
+
+    private enum ModalKind { None, Approve, Return, Reject, Revoke, Reissue }
+    private ModalKind activeModal = ModalKind.None;
+    private string modalReason = "";
+    private string modalSignatoryName = "";
+    private string modalSignatoryTitle = "";
+    private string modalAddressedTo = "";
+
+    private List<CertificateRequestSummaryDto> filteredRequests
+    {
+        get
+        {
+            var query = allRequests.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(activeFilter) && !activeFilter.Equals("All", StringComparison.OrdinalIgnoreCase))
+            {
+                if (activeFilter.Equals("Pending", StringComparison.OrdinalIgnoreCase))
+                    query = query.Where(r => r.Status == "Submitted" || r.Status == "UnderReview");
+                else
+                    query = query.Where(r => r.Status == activeFilter);
+            }
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim();
+                query = query.Where(r => r.EmployeeName.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                                         (r.EmployeeNumber != null && r.EmployeeNumber.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                                         r.ReferenceNumber.Contains(term, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return query.ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadQueueAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (saved == "true")
+                {
+                    isFullWidth = true;
+                    StateHasChanged();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Could not read localStorage for admin full width setting.");
+            }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth ? "true" : "false");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not write localStorage.");
+        }
+    }
+
+    private async Task LoadQueueAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            allRequests = await CertificateService.GetAdminPendingRequestsAsync(statusFilter: "All");
+            if (activeDetail != null)
+            {
+                await SelectRequestAsync(activeDetail.Summary.CertificateRequestId);
+            }
+            else if (filteredRequests.Count > 0)
+            {
+                await SelectRequestAsync(filteredRequests.First().CertificateRequestId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading admin certificate requests.");
+            errorMessage = "Failed to load requests queue: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RefreshAsync() => await LoadQueueAsync();
+
+    private void SetFilter(string filter) => activeFilter = filter;
+
+    private async Task SelectRequestAsync(int certificateRequestId)
+    {
+        try
+        {
+            activeDetail = await CertificateService.GetRequestDetailAsync(certificateRequestId);
+            modalAddressedTo = activeDetail.Summary.AddressedTo ?? "TO WHOM IT MAY CONCERN";
+            modalSignatoryName = "Director of Human Resources";
+            modalSignatoryTitle = "Director, HR Management";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load request detail {Id}", certificateRequestId);
+            Toasts.Error("Could not load request details: " + ex.Message);
+        }
+    }
+
+    private void ShowActionModal(ModalKind kind)
+    {
+        activeModal = kind;
+        modalReason = "";
+        if (activeDetail != null)
+        {
+            modalAddressedTo = activeDetail.Summary.AddressedTo ?? "TO WHOM IT MAY CONCERN";
+            modalSignatoryName = "Director of Human Resources";
+            modalSignatoryTitle = "Director, HR Management";
+        }
+    }
+
+    private void CloseModal()
+    {
+        activeModal = ModalKind.None;
+        modalReason = "";
+    }
+
+    private async Task ExecuteModalActionAsync()
+    {
+        if (activeDetail == null) return;
+        isActing = true;
+        errorMessage = null;
+
+        try
+        {
+            if (activeModal == ModalKind.Approve)
+            {
+                var actionInput = new CertificateReviewActionInput
+                {
+                    CertificateRequestId = activeDetail.Summary.CertificateRequestId,
+                    Action = "Issue",
+                    CorrectedAddressedTo = modalAddressedTo,
+                    CorrectedSignatoryName = modalSignatoryName,
+                    CorrectedSignatoryTitle = modalSignatoryTitle
+                };
+                var res = await CertificateService.ReviewActionAsync(actionInput);
+                if (res.Success)
+                {
+                    Toasts.Success("Certificate approved and officially issued.");
+                    CloseModal();
+                    await LoadQueueAsync();
+                }
+                else Toasts.Error(res.Message);
+            }
+            else if (activeModal == ModalKind.Return)
+            {
+                if (string.IsNullOrWhiteSpace(modalReason))
+                {
+                    Toasts.Warning("Please specify the clarification required.");
+                    return;
+                }
+                var actionInput = new CertificateReviewActionInput
+                {
+                    CertificateRequestId = activeDetail.Summary.CertificateRequestId,
+                    Action = "Return",
+                    Reason = modalReason
+                };
+                var res = await CertificateService.ReviewActionAsync(actionInput);
+                if (res.Success)
+                {
+                    Toasts.Success("Request returned for clarification.");
+                    CloseModal();
+                    await LoadQueueAsync();
+                }
+                else Toasts.Error(res.Message);
+            }
+            else if (activeModal == ModalKind.Reject)
+            {
+                if (string.IsNullOrWhiteSpace(modalReason))
+                {
+                    Toasts.Warning("Please specify a reason for rejection.");
+                    return;
+                }
+                var actionInput = new CertificateReviewActionInput
+                {
+                    CertificateRequestId = activeDetail.Summary.CertificateRequestId,
+                    Action = "Reject",
+                    Reason = modalReason
+                };
+                var res = await CertificateService.ReviewActionAsync(actionInput);
+                if (res.Success)
+                {
+                    Toasts.Success("Request marked as rejected.");
+                    CloseModal();
+                    await LoadQueueAsync();
+                }
+                else Toasts.Error(res.Message);
+            }
+            else if (activeModal == ModalKind.Revoke)
+            {
+                if (activeDetail.IssuedCertificate == null) return;
+                if (string.IsNullOrWhiteSpace(modalReason))
+                {
+                    Toasts.Warning("Revocation reason is required.");
+                    return;
+                }
+                var revokeInput = new CertificateRevokeInput
+                {
+                    IssuedCertificateId = activeDetail.IssuedCertificate.IssuedCertificateId,
+                    Reason = modalReason
+                };
+                var res = await CertificateService.RevokeCertificateAsync(revokeInput);
+                if (res.Success)
+                {
+                    Toasts.Success(res.Message);
+                    CloseModal();
+                    await LoadQueueAsync();
+                }
+                else Toasts.Error(res.Message);
+            }
+            else if (activeModal == ModalKind.Reissue)
+            {
+                if (activeDetail.IssuedCertificate == null) return;
+                if (string.IsNullOrWhiteSpace(modalReason))
+                {
+                    Toasts.Warning("Reason for reissue / supersession is required.");
+                    return;
+                }
+                var reissueInput = new CertificateReissueInput
+                {
+                    IssuedCertificateId = activeDetail.IssuedCertificate.IssuedCertificateId,
+                    Reason = modalReason,
+                    CorrectedAddressedTo = modalAddressedTo,
+                    CorrectedSignatoryName = modalSignatoryName
+                };
+                var res = await CertificateService.ReissueCertificateAsync(reissueInput);
+                if (res.Success)
+                {
+                    Toasts.Success(res.Message);
+                    CloseModal();
+                    await LoadQueueAsync();
+                }
+                else Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error executing modal action.");
+            errorMessage = "Action execution failed: " + ex.Message;
+        }
+        finally
+        {
+            isActing = false;
+        }
+    }
+
+    private async Task DownloadPdfAsync(int issuedCertificateId, string certificateNumber)
+    {
+        try
+        {
+            var pdfBytes = await CertificateService.GetIssuedCertificatePdfAsync(issuedCertificateId);
+            if (pdfBytes == null || pdfBytes.Length == 0)
+            {
+                var snap = await CertificateService.GetCertificateSnapshotAsync(issuedCertificateId);
+                var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                pdfBytes = CertificatePdfGenerator.Generate(snap, fontPath);
+                await CertificateService.SaveIssuedCertificatePdfAsync(issuedCertificateId, pdfBytes);
+            }
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(pdfBytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"{certificateNumber}.pdf", "application/pdf", reference);
+            Toasts.Success("Official certificate downloaded.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Download error for {CertId}", issuedCertificateId);
+            Toasts.Error("Failed to download PDF: " + ex.Message);
+        }
+    }
+
+    private static RenderFragment RenderStatusBadge(string status) => builder =>
+    {
+        var css = status switch
+        {
+            "Submitted" => "bg-amber-100 text-amber-800",
+            "UnderReview" => "bg-blue-100 text-blue-800",
+            "Approved" => "bg-emerald-100 text-emerald-800",
+            "Issued" => "bg-emerald-100 text-emerald-800",
+            "ReturnedForClarification" => "bg-purple-100 text-purple-800",
+            "Rejected" => "bg-rose-100 text-rose-800",
+            "Cancelled" => "bg-slate-100 text-slate-700",
+            "Active" => "bg-emerald-100 text-emerald-800",
+            "Revoked" => "bg-rose-100 text-rose-800",
+            "Superseded" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2.5 py-0.5 font-semibold text-[11px] {css}");
+        builder.AddContent(2, status == "ReturnedForClarification" ? "Returned" : status);
+        builder.CloseElement();
+    };
+}
