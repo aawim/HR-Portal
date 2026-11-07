@@ -332,7 +332,6 @@ public partial class HrmTeContext : DbContext
 
     public virtual DbSet<Passport> Passports { get; set; }
 
-    public virtual DbSet<PayrollCycle> PayrollCycles { get; set; }
 
     public virtual DbSet<Position> Positions { get; set; }
 
@@ -3042,25 +3041,6 @@ public partial class HrmTeContext : DbContext
 
         });
 
-        modelBuilder.Entity<PayrollCycle>(entity =>
-        {
-            entity.HasKey(e => e.RequestId);
-
-            entity.Property(e => e.RequestId)
-                .ValueGeneratedNever()
-                .HasColumnName("RequestID");
-            entity.Property(e => e.OrganisationPayrollPeriodId).HasColumnName("OrganisationPayrollPeriodID");
-
-            entity.HasOne(d => d.OrganisationPayrollPeriod).WithMany(p => p.PayrollCycles)
-                .HasForeignKey(d => d.OrganisationPayrollPeriodId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycles_OrganisationPayrollPeriods");
-
-            entity.HasOne(d => d.Request).WithOne(p => p.PayrollCycle)
-                .HasForeignKey<PayrollCycle>(d => d.RequestId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_PayrollCycles_Requests");
-        });
 
         modelBuilder.Entity<Position>(entity =>
         {
@@ -3886,9 +3866,6 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OperationLogId)
                 .HasConstraintName("FK_DeductionSchedules_OperationLogs");
 
-            entity.HasOne(d => d.PayrollCycleRequest).WithMany(p => p.StaffPayrollItemTypeSchedules)
-                .HasForeignKey(d => d.PayrollCycleRequestId)
-                .HasConstraintName("FK_StaffPayrollItemTypeSchedules_PayrollCycles");
 
             entity.HasOne(d => d.StaffPayrollItemType).WithMany(p => p.StaffPayrollItemTypeSchedules)
                 .HasForeignKey(d => d.StaffPayrollItemTypeId)

@@ -67,7 +67,7 @@ public sealed class StaffFinanceMapping : IEntityTypeConfiguration<AllowanceAsse
     public void Configure(EntityTypeBuilder<StaffFinanceDocument> b)
     { Table(b,"AD_RequestDocuments"); b.Property(x=>x.ContentType).HasMaxLength(100); b.Property(x=>x.Content).HasColumnType("varbinary(max)"); b.HasOne<StaffFinanceRequest>().WithMany().HasForeignKey(x=>x.RequestId).OnDelete(DeleteBehavior.Restrict); }
     public void Configure(EntityTypeBuilder<StaffFinancePayrollBatch> b)
-    { Table(b,"AD_PayrollBatches"); b.Property(x=>x.SelectionJson).HasColumnType("nvarchar(max)"); b.Property(x=>x.Fingerprint).HasMaxLength(64); b.HasIndex(x=>new{x.OrganisationId,x.ClientBatchId}).IsUnique(); b.HasOne<PayrollCycle>().WithMany().HasForeignKey(x=>x.PayrollCycleRequestId).OnDelete(DeleteBehavior.Restrict); b.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict); }
+    { Table(b,"AD_PayrollBatches"); b.Property(x=>x.SelectionJson).HasColumnType("nvarchar(max)"); b.Property(x=>x.Fingerprint).HasMaxLength(64); b.HasIndex(x=>new{x.OrganisationId,x.ClientBatchId}).IsUnique(); b.HasOne<Organisation>().WithMany().HasForeignKey(x=>x.OrganisationId).OnDelete(DeleteBehavior.Restrict); }
     public void Configure(EntityTypeBuilder<StaffFinancePayrollEntry> b)
     {
         Table(b,"AD_PayrollEntries"); b.Property(x=>x.SourceKey).HasMaxLength(100); b.HasIndex(x=>new{x.OrganisationId,x.Month,x.SourceKey}).IsUnique();

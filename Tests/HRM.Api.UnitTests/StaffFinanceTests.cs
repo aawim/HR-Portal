@@ -5,6 +5,7 @@ using HRM.DTOs;
 using HRM.DTOs.ApprovalFlow;
 using HRM.Models;
 using HRM.Models.Archives;
+using HRM.Models.Payroll;
 using HRM.Models.Workflow;
 using HRM.Services;
 using HRM.Services.Interfaces;
@@ -66,7 +67,9 @@ public sealed class StaffFinanceTests
             db.RequestTypes.Add(new(){RequestTypeId=501,TypeName="Deduction Deferral Request"});
             db.Requests.Add(new(){RequestId=1000,OrganisationBusinessEntityID=10,ApplicantBusinessEntityId=200,RequestStateId=4});
             db.OrganisationPayrollPeriods.Add(new(){OrganisationPayrollPeriodId=1,OrganisationId=10,StartDay=1,EndDay=31,IsValid=true});
-            db.PayrollCycles.Add(new(){RequestId=1000,OrganisationPayrollPeriodId=1,PayrollMonth=DateOnly.FromDateTime(Month),StartDate=DateOnly.FromDateTime(Month),EndDate=DateOnly.FromDateTime(Month.AddMonths(1).AddDays(-1))});
+            var period=new PayrollPeriod{PayrollPeriodId=1,OrganisationId=10,PeriodYear=Month.Year,PeriodMonth=Month.Month,PeriodStartDate=DateOnly.FromDateTime(Month),PeriodEndDate=DateOnly.FromDateTime(Month.AddMonths(1).AddDays(-1)),PeriodStatus=PayrollPeriodStatus.Open};
+            db.PayrollPeriods.Add(period);
+            db.PayrollRuns.Add(new PayrollRun{PayrollRunId=1000,OrganisationId=10,PayrollPeriodId=1,RunType=PayrollRunType.RegularMonthly,Status=PayrollRunStatus.Calculated,Title="Cycle 1000",TotalGrossEarnings=0,TotalDeductions=0,TotalEmployerContributions=0,TotalNetPayable=0});
             await db.SaveChangesAsync();
         }
         public async Task AddAgreement(decimal total=1200)
@@ -122,16 +125,15 @@ public sealed class StaffFinanceTests
     [Fact] public async Task Legacy_payroll_cycles_use_period_tenant_without_needing_request_organisation()
     {
         var f=new Fixture();await f.Seed();f.Access.Permissions.Add("StaffFinance.Payroll");
-        await using(var db=f.Factory.CreateDbContext()){(await db.Requests.SingleAsync(x=>x.RequestId==1000)).OrganisationBusinessEntityID=null;await db.SaveChangesAsync();}
         Assert.Equal(1000,Assert.Single(await f.Service.GetPayrollCyclesAsync(Month)).Id);
         f.Access.Organisation=20;Assert.Empty(await f.Service.GetPayrollCyclesAsync(Month));
     }
     [Fact] public async Task Payroll_cycle_is_created_only_at_final_workflow_approval()
     {
         var f=new Fixture();await f.Seed();await f.AddWorkflow(new(){Kind="PayrollCycle",JobId=10,PayrollPeriodId=1,FromDate=Month.AddMonths(1),Reason="Next payroll period"});
-        await using(var db=f.Factory.CreateDbContext())Assert.False(await db.PayrollCycles.AnyAsync(x=>x.RequestId==2000));
+        await using(var db=f.Factory.CreateDbContext())Assert.False(await db.PayrollRuns.AnyAsync(x=>x.PayrollPeriod!=null&&x.PayrollPeriod.PeriodMonth==Month.AddMonths(1).Month));
         Assert.True((await f.Service.ActAsync(2000,7,"Approve","Confirmed")).Success);
-        await using(var db=f.Factory.CreateDbContext()){var cycle=await db.PayrollCycles.SingleAsync(x=>x.RequestId==2000);Assert.Equal(1,cycle.OrganisationPayrollPeriodId);Assert.Equal(DateOnly.FromDateTime(Month.AddMonths(1)),cycle.PayrollMonth);Assert.Equal(4,(await db.Requests.SingleAsync(x=>x.RequestId==2000)).RequestStateId);}
+        await using(var db=f.Factory.CreateDbContext()){var run=await db.PayrollRuns.Include(r=>r.PayrollPeriod).SingleAsync(x=>x.PayrollPeriod!=null&&x.PayrollPeriod.PeriodMonth==Month.AddMonths(1).Month);Assert.Equal(10,run.OrganisationId);Assert.Equal(4,(await db.Requests.SingleAsync(x=>x.RequestId==2000)).RequestStateId);}
     }
     [Fact] public async Task Payroll_posts_once_allocates_deductions_and_rejects_changed_retry()
     {

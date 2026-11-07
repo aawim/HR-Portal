@@ -61,7 +61,6 @@ public partial class Request
 
     public virtual OutOfOfficeRequest? OutOfOfficeRequest { get; set; }
 
-    public virtual PayrollCycle? PayrollCycle { get; set; }
 
     public virtual ICollection<RequestCheckListVerification> RequestCheckListVerifications { get; set; } = new List<RequestCheckListVerification>();
 

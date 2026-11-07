@@ -5,6 +5,7 @@ using HRM.Application.Features.StaffFinance;
 using HRM.Components.Shared;
 using HRM.DTOs;
 using HRM.Models;
+using HRM.Models.Payroll;
 using Microsoft.EntityFrameworkCore;
 namespace HRM.Services;
 
@@ -50,9 +51,7 @@ public sealed partial class StaffFinanceService
         }
         if(input.Kind=="PayrollCycle")
         {
-            var period=await db.OrganisationPayrollPeriods.SingleOrDefaultAsync(x=>x.OrganisationPayrollPeriodId==input.PayrollPeriodId&&x.OrganisationId==org&&x.IsValid)??throw new InvalidOperationException("Select an active organisation payroll period.");
-            if(period.StartDay is <1 or >31||period.EndDay is <1 or >31)throw new InvalidOperationException("The payroll period needs valid start and end days.");
-            if(await db.PayrollCycles.AnyAsync(x=>x.OrganisationPayrollPeriodId==period.OrganisationPayrollPeriodId&&x.PayrollMonth.Year==input.FromDate.Year&&x.PayrollMonth.Month==input.FromDate.Month))throw new InvalidOperationException("A payroll cycle already exists for this period and month.");
+            if(await db.PayrollPeriods.AnyAsync(x=>x.OrganisationId==org&&x.PeriodYear==input.FromDate.Year&&x.PeriodMonth==input.FromDate.Month))throw new InvalidOperationException("A payroll period already exists for this organisation and month.");
         }
         else if(input.Kind=="Allowance")
         {
@@ -165,9 +164,38 @@ public sealed partial class StaffFinanceService
         if(row.Kind=="Allowance"&&(input.Amount<=0||input.CurrencyTypeId<=0))throw new InvalidOperationException("HR must assess the allowance amount and currency before final approval.");
         if(row.Kind=="PayrollCycle")
         {
-            var period=await db.OrganisationPayrollPeriods.SingleAsync(x=>x.OrganisationPayrollPeriodId==input.PayrollPeriodId&&x.OrganisationId==row.OrganisationId);
-            var month=new DateTime(input.FromDate.Year,input.FromDate.Month,1);var startMonth=period.StartDay==1?month:month.AddMonths(-1);
-            db.PayrollCycles.Add(new(){RequestId=row.RequestId,OrganisationPayrollPeriodId=period.OrganisationPayrollPeriodId,PayrollMonth=DateOnly.FromDateTime(month),StartDate=new(startMonth.Year,startMonth.Month,Math.Min(period.StartDay,DateTime.DaysInMonth(startMonth.Year,startMonth.Month))),EndDate=new(month.Year,month.Month,Math.Min(period.EndDay,DateTime.DaysInMonth(month.Year,month.Month))),CycleState=4});
+            var periodDate=new DateOnly(input.FromDate.Year,input.FromDate.Month,1);
+            var periodEndDate=periodDate.AddMonths(1).AddDays(-1);
+            var period=await db.PayrollPeriods.SingleOrDefaultAsync(p=>p.OrganisationId==row.OrganisationId&&p.PeriodYear==input.FromDate.Year&&p.PeriodMonth==input.FromDate.Month);
+            if(period==null)
+            {
+                period=new PayrollPeriod
+                {
+                    OrganisationId=row.OrganisationId,
+                    PeriodYear=input.FromDate.Year,
+                    PeriodMonth=input.FromDate.Month,
+                    PeriodStartDate=periodDate,
+                    PeriodEndDate=periodEndDate,
+                    AttendanceCutoffDate=periodEndDate,
+                    AdjustmentCutoffDate=periodEndDate,
+                    PaymentDate=periodEndDate,
+                    PeriodStatus=PayrollPeriodStatus.Open,
+                    CreatedAtUtc=DateTime.UtcNow,
+                    UpdatedAtUtc=DateTime.UtcNow
+                };
+                db.PayrollPeriods.Add(period);
+                await db.SaveChangesAsync();
+            }
+            db.PayrollRuns.Add(new PayrollRun
+            {
+                OrganisationId=row.OrganisationId,
+                PayrollPeriodId=period.PayrollPeriodId,
+                RunType=PayrollRunType.RegularMonthly,
+                Status=PayrollRunStatus.Draft,
+                Title=$"{input.FromDate:MMMM yyyy} Regular Payroll",
+                Description=$"Created via finance cycle request #{row.RequestId}",
+                PreparedAtUtc=DateTime.UtcNow
+            });
         }
         else if(row.Kind=="Allowance")db.StaffAllowances.Add(new(){OrganisationId=row.OrganisationId,IndividualId=row.IndividualId,JobId=row.JobId,RequestId=row.RequestId,AllowanceTypeId=input.AllowanceTypeId,CurrencyTypeId=input.CurrencyTypeId,Amount=input.Amount,FrequencyMonths=input.FrequencyMonths,FromDate=input.FromDate.Date,ToDate=input.ToDate?.Date});
         else if(row.Kind=="EndAllowance") (await db.StaffAllowances.SingleAsync(x=>x.Id==input.AllowanceTypeId)).ToDate=input.FromDate.Date;

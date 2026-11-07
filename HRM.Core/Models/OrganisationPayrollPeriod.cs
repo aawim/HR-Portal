@@ -20,5 +20,4 @@ public partial class OrganisationPayrollPeriod
 
     public virtual Organisation Organisation { get; set; } = null!;
 
-    public virtual ICollection<PayrollCycle> PayrollCycles { get; set; } = new List<PayrollCycle>();
 }

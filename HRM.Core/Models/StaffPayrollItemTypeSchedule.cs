@@ -24,7 +24,6 @@ public partial class StaffPayrollItemTypeSchedule
 
     public virtual OperationLog? OperationLog { get; set; }
 
-    public virtual PayrollCycle? PayrollCycleRequest { get; set; }
 
     public virtual StaffPayrollItemType StaffPayrollItemType { get; set; } = null!;
 }

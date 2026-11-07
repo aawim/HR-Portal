@@ -13,8 +13,8 @@ public sealed partial class StaffFinanceService
     {
         var actor=await ScopeAsync();if(!actor.Post)throw new UnauthorizedAccessException("Finance payroll permission is required.");
         await using var db=await factory.CreateDbContextAsync();
-        return await db.PayrollCycles.Where(x=>x.PayrollMonth.Year==month.Year&&x.PayrollMonth.Month==month.Month&&x.OrganisationPayrollPeriod.OrganisationId==actor.Org)
-            .OrderByDescending(x=>x.RequestId).Select(x=>new FinanceOption(x.RequestId,x.Request.ReferenceNumber??("Cycle "+x.RequestId))).ToListAsync();
+        return await db.PayrollRuns.Where(x=>x.PayrollPeriod.PeriodYear==month.Year&&x.PayrollPeriod.PeriodMonth==month.Month&&x.OrganisationId==actor.Org)
+            .OrderByDescending(x=>x.PayrollRunId).Select(x=>new FinanceOption(x.PayrollRunId,x.Title)).ToListAsync();
     }
     public async Task<FinancePayrollPreview> PreviewPayrollAsync(DateTime month,List<int> jobIds)
     {
@@ -97,7 +97,7 @@ public sealed partial class StaffFinanceService
             {
                 return existing.PostedByUserId==actor.User&&existing.Month==month&&existing.Reference==input.Reference.Trim()&&existing.PayrollCycleRequestId==input.PayrollCycleRequestId&&existing.SelectionJson==System.Text.Json.JsonSerializer.Serialize(input.JobIds.Distinct().Order())&&existing.Fingerprint==input.ExpectedFingerprint?ServiceResult.Ok("This payroll batch was already posted."):ServiceResult.Fail("This payroll submission changed. Refresh and try again.");
             }
-            if(!await db.PayrollCycles.AnyAsync(x=>x.RequestId==input.PayrollCycleRequestId&&x.PayrollMonth.Year==month.Year&&x.PayrollMonth.Month==month.Month&&x.OrganisationPayrollPeriod.OrganisationId==actor.Org))throw new InvalidOperationException("Select a payroll cycle for this organisation and month.");
+            if(!await db.PayrollRuns.AnyAsync(x=>x.PayrollRunId==input.PayrollCycleRequestId&&x.PayrollPeriod.PeriodYear==month.Year&&x.PayrollPeriod.PeriodMonth==month.Month&&x.OrganisationId==actor.Org))throw new InvalidOperationException("Select an active payroll run for this organisation and month.");
             var preview=await PreviewPayrollAsync(db,actor,input.Month,input.JobIds);
             if(preview.Issues.Count>0)throw new InvalidOperationException(string.Join(" ",preview.Issues));
             if(preview.Lines.Count==0)throw new InvalidOperationException("There are no eligible payroll entries.");
