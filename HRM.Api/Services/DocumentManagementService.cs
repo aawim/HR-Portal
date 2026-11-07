@@ -2505,6 +2505,9 @@ public sealed class DocumentManagementService(
         await using var db = await OpenDbAsync(org);
 
         var reqTypeId = await EnsureDocumentRequestTypeAsync(db);
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
         var opLog = await logs.CreateAsync(
             db,
             SharedConfig.OperationLogActionTypes.REQUESTS_CREATE,
@@ -2543,6 +2546,7 @@ public sealed class DocumentManagementService(
 
         db.DmsDocumentRequests.Add(docReq);
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return ServiceResult.Ok($"Official document request '{centralRequest.ReferenceNumber}' submitted for HR review.");
     }
