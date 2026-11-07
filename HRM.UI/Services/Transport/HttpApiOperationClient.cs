@@ -15,6 +15,24 @@ public sealed class HttpApiOperationClient(HttpClient http, Action? sessionEnded
     {
         using var response = await SendAsync(contract, method, arguments, ct);
         if (response.StatusCode == HttpStatusCode.NoContent) return default!;
+        if (typeof(T) == typeof(string))
+        {
+            var media = response.Content.Headers.ContentType?.MediaType;
+            if (media is null || !media.Contains("json", StringComparison.OrdinalIgnoreCase))
+            {
+                var text = await response.Content.ReadAsStringAsync(ct);
+                return (T)(object)text;
+            }
+            var content = await response.Content.ReadAsStringAsync(ct);
+            try
+            {
+                return JsonSerializer.Deserialize<T>(content, ApiOperationKeys.Json)!;
+            }
+            catch (JsonException)
+            {
+                return (T)(object)content;
+            }
+        }
         return (await response.Content.ReadFromJsonAsync<T>(ApiOperationKeys.Json, ct))!;
     }
 

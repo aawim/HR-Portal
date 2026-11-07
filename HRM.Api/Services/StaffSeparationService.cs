@@ -765,31 +765,34 @@ public sealed class StaffSeparationService(
         {
             item = await db.SeparationWorkHandoverItems.FindAsync(input.WorkHandoverItemId.Value)
                 ?? throw new KeyNotFoundException("Work handover item not found.");
-            item.ItemType = input.ItemType;
-            item.ItemTitle = input.ItemTitle;
-            item.Details = input.Details;
-            item.RecipientIndividualId = input.RecipientIndividualId;
-            item.TargetCompletionDate = input.TargetCompletionDate;
-            item.Status = input.Status;
-            item.HandoverNotes = input.HandoverNotes;
+            if (!string.IsNullOrWhiteSpace(input.ItemType)) item.ItemType = input.ItemType;
+            if (!string.IsNullOrWhiteSpace(input.ItemTitle)) item.ItemTitle = input.ItemTitle;
+            if (input.Details != null) item.Details = input.Details;
+            if (input.RecipientIndividualId > 0) item.RecipientIndividualId = input.RecipientIndividualId;
+            if (input.TargetCompletionDate != default) item.TargetCompletionDate = input.TargetCompletionDate;
+            if (!string.IsNullOrWhiteSpace(input.Status)) item.Status = input.Status;
+            if (input.HandoverNotes != null) item.HandoverNotes = input.HandoverNotes;
             if (input.Status == StaffSeparationWorkHandoverItemStatuses.Verified)
             {
                 item.VerifiedAtUtc = DateTime.UtcNow;
-                item.VerifiedByIndividualId = actor.IndividualId;
+                item.VerifiedByIndividualId = actor.IndividualId > 0 ? actor.IndividualId : null;
             }
         }
         else
         {
+            if (input.RecipientIndividualId <= 0)
+                throw new InvalidOperationException("A valid recipient colleague is required.");
+
             item = new SeparationWorkHandoverItem
             {
                 WorkHandoverId = separation.WorkHandover.WorkHandoverId,
                 StaffSeparationId = separation.StaffSeparationId,
-                ItemType = input.ItemType,
+                ItemType = string.IsNullOrWhiteSpace(input.ItemType) ? StaffSeparationWorkHandoverItemTypes.ProjectAssignment : input.ItemType,
                 ItemTitle = input.ItemTitle,
                 Details = input.Details,
                 RecipientIndividualId = input.RecipientIndividualId,
                 TargetCompletionDate = input.TargetCompletionDate == default ? TodayMaldives : input.TargetCompletionDate,
-                Status = input.Status,
+                Status = string.IsNullOrWhiteSpace(input.Status) ? StaffSeparationWorkHandoverItemStatuses.Pending : input.Status,
                 HandoverNotes = input.HandoverNotes
             };
             db.SeparationWorkHandoverItems.Add(item);

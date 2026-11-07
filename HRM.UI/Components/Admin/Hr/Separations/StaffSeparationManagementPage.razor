@@ -1310,14 +1310,27 @@
 
     private async Task VerifyHandoverItemAsync(int itemId)
     {
+        var existing = activeDetail?.WorkHandover?.Items.FirstOrDefault(i => i.WorkHandoverItemId == itemId);
         var input = new StaffSeparationHandoverItemInput
         {
             WorkHandoverItemId = itemId,
             StaffSeparationId = activeDetail!.StaffSeparationId,
-            Status = "Verified"
+            ItemType = existing?.ItemType ?? "ProjectAssignment",
+            ItemTitle = existing?.ItemTitle ?? "",
+            RecipientIndividualId = existing?.RecipientIndividualId ?? 0,
+            TargetCompletionDate = existing?.TargetCompletionDate ?? DateTime.UtcNow.Date,
+            Status = StaffSeparationWorkHandoverItemStatuses.Verified
         };
         var res = await Separations.SaveHandoverItemAsync(input);
-        if (res.Success) await RefreshActiveDetailAsync();
+        if (res.Success)
+        {
+            Toasts.Success("Handover item verified.");
+            await RefreshActiveDetailAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
     }
 
     private async Task DeleteHandoverItemAsync(int itemId)
