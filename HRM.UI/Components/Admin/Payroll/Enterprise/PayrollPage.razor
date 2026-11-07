@@ -787,75 +787,110 @@
     private async Task QueueCalculationAsync()
     {
         if (selectedRun == null) return;
-        var res = await Payroll.QueueCalculationAsync(selectedRun.PayrollRunId);
-        if (res.Success)
+        try
         {
-            Toasts.Success(res.Message);
-            await RefreshAllAsync();
+            var res = await Payroll.QueueCalculationAsync(selectedRun.PayrollRunId);
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Queue calculation failed: {ex.Message}");
         }
     }
 
     private async Task SubmitReviewAsync()
     {
         if (selectedRun == null) return;
-        var res = await Payroll.SubmitReviewAsync(selectedRun.PayrollRunId, "Submitted for review");
-        if (res.Success)
+        try
         {
-            Toasts.Success("Payroll submitted for review.");
-            await RefreshAllAsync();
+            var res = await Payroll.SubmitReviewAsync(selectedRun.PayrollRunId, "Submitted for review");
+            if (res.Success)
+            {
+                Toasts.Success("Payroll submitted for review.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Submit for review failed: {ex.Message}");
         }
     }
 
     private async Task ApprovePayrollAsync()
     {
         if (selectedRun == null) return;
-        var res = await Payroll.ApprovePayrollAsync(selectedRun.PayrollRunId, "Approved by authority");
-        if (res.Success)
+        try
         {
-            Toasts.Success("Payroll approved successfully.");
-            await RefreshAllAsync();
+            var res = await Payroll.ApprovePayrollAsync(selectedRun.PayrollRunId, "Approved by authority");
+            if (res.Success)
+            {
+                Toasts.Success("Payroll approved successfully.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Approval failed: {ex.Message}");
         }
     }
 
     private async Task FinalisePayrollAsync()
     {
         if (selectedRun == null) return;
-        var res = await Payroll.FinalisePayrollAsync(selectedRun.PayrollRunId, "Finalised and locked");
-        if (res.Success)
+        try
         {
-            Toasts.Success("Payroll finalised. Results are now immutable.");
-            await RefreshAllAsync();
+            var res = await Payroll.FinalisePayrollAsync(selectedRun.PayrollRunId, "Finalised and locked");
+            if (res.Success)
+            {
+                Toasts.Success("Payroll finalised. Results are now immutable.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Finalisation failed: {ex.Message}");
         }
     }
 
     private async Task RejectPayrollAsync()
     {
         if (selectedRun == null) return;
-        var res = await Payroll.RejectPayrollAsync(selectedRun.PayrollRunId, "Adjustments required by approver");
-        if (res.Success)
+        try
         {
-            Toasts.Warning("Payroll rejected and returned to draft.");
-            await RefreshAllAsync();
+            var res = await Payroll.RejectPayrollAsync(selectedRun.PayrollRunId, "Adjustments required by approver");
+            if (res.Success)
+            {
+                Toasts.Warning("Payroll rejected and returned to draft.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Rejection failed: {ex.Message}");
         }
     }
 
@@ -922,26 +957,44 @@
 
     private async Task CreatePeriodAsync()
     {
-        var res = await Payroll.CreatePeriodAsync(new PayrollPeriodInput(newPeriodYear, newPeriodMonth));
-        if (res.Success)
+        try
         {
-            Toasts.Success("Payroll period created.");
-            showCreatePeriodModal = false;
-            await RefreshAllAsync();
+            var res = await Payroll.CreatePeriodAsync(new PayrollPeriodInput(newPeriodYear, newPeriodMonth));
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                showCreatePeriodModal = false;
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Could not create period: {ex.Message}");
         }
     }
 
     private async Task ClosePeriodAsync(int periodId)
     {
-        var res = await Payroll.UpdatePeriodStatusAsync(periodId, (int)PayrollPeriodStatus.Closed);
-        if (res.Success)
+        try
         {
-            Toasts.Success("Period closed.");
-            await RefreshAllAsync();
+            var res = await Payroll.UpdatePeriodStatusAsync(periodId, (int)PayrollPeriodStatus.Closed);
+            if (res.Success)
+            {
+                Toasts.Success("Period closed.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Could not close period: {ex.Message}");
         }
     }
 
@@ -953,16 +1006,23 @@
             return;
         }
 
-        var res = await Payroll.CreateRunAsync(new CreatePayrollRunInput(newRunPeriodId, newRunType, newRunTitle, null));
-        if (res.Success)
+        try
         {
-            Toasts.Success("Payroll run created.");
-            showCreateRunModal = false;
-            await RefreshAllAsync();
+            var res = await Payroll.CreateRunAsync(new CreatePayrollRunInput(newRunPeriodId, newRunType, newRunTitle, null));
+            if (res.Success)
+            {
+                Toasts.Success("Payroll run created.");
+                showCreateRunModal = false;
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Toasts.Error(res.Message);
+            Toasts.Error($"Could not create run: {ex.Message}");
         }
     }
 

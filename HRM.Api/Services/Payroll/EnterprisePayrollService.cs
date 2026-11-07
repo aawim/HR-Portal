@@ -47,9 +47,27 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
     private async Task<(int orgId, int userId, int individualId, bool isSuper)> RequireOrgScopeAsync()
     {
         var actor = await _access.RequireContextAsync();
-        var org = await _access.GetCurrentOrganisationIdAsync();
-        if (org <= 0 || !await _access.HasOrganisationAccessAsync(org))
+        int org = 0;
+        try
+        {
+            org = await _access.GetCurrentOrganisationIdAsync();
+        }
+        catch
+        {
+            org = actor.Organisation?.OrganisationBusinessEntityId
+                  ?? actor.ActiveJob?.OrganisationId
+                  ?? 0;
+        }
+
+        if (org <= 0 && actor.IsSuperAdministrator)
+        {
+            await using var db = await _factory.CreateDbContextAsync();
+            org = await db.Organisations.Select(o => o.BusinessEntityID).FirstOrDefaultAsync();
+        }
+
+        if (org <= 0 || (!actor.IsSuperAdministrator && !await _access.HasOrganisationAccessAsync(org)))
             throw new UnauthorizedAccessException("Select your current organisation.");
+
         return (org, actor.UserId, actor.IndividualId, actor.IsSuperAdministrator);
     }
 
