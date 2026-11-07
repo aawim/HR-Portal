@@ -16,7 +16,15 @@
     <!-- Header -->
     <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 flex-wrap gap-2">
         <div>
-            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Employment &amp; Work Experience Certificates</h3>
+            <div class="flex items-center gap-2">
+                <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Employment &amp; Work Experience Certificates</h3>
+                @if (pendingRequests.Count > 0)
+                {
+                    <span class="rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-[10px] font-bold">
+                        @pendingRequests.Count Pending Action
+                    </span>
+                }
+            </div>
             <p class="text-xs text-slate-500 dark:text-slate-400">Manage officially issued service certificates, experience credentials, and pending requests for this staff member.</p>
         </div>
 
@@ -24,6 +32,12 @@
             <span class="rounded bg-teal-50 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 px-2 py-0.5 text-xs font-semibold">
                 Staff #@StaffId
             </span>
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                    disabled="@isLoading"
+                    @onclick="LoadStaffCertificatesAsync">
+                <span>↻ Refresh</span>
+            </button>
             <button type="button"
                     class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-teal-800 transition"
                     @onclick="() => showIssueModal = true">
@@ -43,30 +57,140 @@
         <!-- PENDING REQUESTS FOR THIS EMPLOYEE -->
         @if (pendingRequests.Count > 0)
         {
-            <div class="rounded-xl border border-amber-200 bg-amber-50/50 p-4 flex flex-col gap-2.5">
-                <div class="flex items-center justify-between">
-                    <span class="font-bold text-xs text-amber-900">Pending Certificate Requests (@pendingRequests.Count)</span>
-                    <span class="text-[11px] text-amber-700 font-medium">Awaiting HR Review</span>
+            <div class="rounded-2xl border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 dark:border-amber-800 p-4 flex flex-col gap-3 shadow-xs">
+                <div class="flex items-center justify-between flex-wrap gap-2 border-b border-amber-200/80 dark:border-amber-800/60 pb-2">
+                    <div class="flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse"></span>
+                        <span class="font-bold text-xs text-amber-950 dark:text-amber-200">Pending Certificate Requests (@pendingRequests.Count)</span>
+                    </div>
+                    <span class="rounded-full bg-amber-100 dark:bg-amber-900/60 text-amber-800 dark:text-amber-200 px-2.5 py-0.5 text-[10px] font-bold">
+                        Awaiting HR Verification &amp; Approval
+                    </span>
                 </div>
 
-                <div class="divide-y divide-amber-200/60">
+                <div class="divide-y divide-amber-200/60 dark:divide-amber-800/60">
                     @foreach (var req in pendingRequests)
                     {
-                        <div class="py-2 flex items-center justify-between flex-wrap gap-2 text-xs">
-                            <div>
-                                <span class="font-mono font-bold text-blue-700">@req.ReferenceNumber</span>
-                                <span class="font-semibold text-slate-900 ml-2">@req.CertificateType</span>
-                                <span class="text-slate-500 ml-2">• Purpose: @req.Purpose</span>
+                        var isInspecting = selectedReviewDetail?.Summary.CertificateRequestId == req.CertificateRequestId;
+                        <div class="py-3 flex flex-col gap-3 text-xs">
+                            <div class="flex items-start justify-between flex-wrap gap-2">
+                                <div class="space-y-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-mono font-bold text-blue-700 dark:text-blue-400">@req.ReferenceNumber</span>
+                                        <span class="rounded-md bg-white dark:bg-slate-800 border border-amber-200 dark:border-slate-700 px-2 py-0.5 font-bold text-slate-900 dark:text-slate-100">
+                                            @(req.CertificateType == "DetailedExperience" ? "Detailed Work Experience Certificate" : "Standard Service Certificate")
+                                        </span>
+                                        <span class="rounded-full bg-amber-200/80 text-amber-900 px-2 py-0.5 font-bold text-[10px]">
+                                            @req.Status
+                                        </span>
+                                        <span class="text-[11px] text-slate-500">
+                                            Submitted @req.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")
+                                        </span>
+                                    </div>
+                                    <div class="text-slate-700 dark:text-slate-300 flex flex-wrap gap-x-4 gap-y-1">
+                                        <span><strong>Purpose:</strong> @req.Purpose</span>
+                                        <span><strong>Scope:</strong> @req.RequestScope</span>
+                                        <span><strong>Addressed To:</strong> @(string.IsNullOrWhiteSpace(req.AddressedTo) ? "To Whom It May Concern" : req.AddressedTo)</span>
+                                    </div>
+                                </div>
+
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <button type="button"
+                                            class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 transition"
+                                            @onclick="() => ToggleInspectRequestAsync(req.CertificateRequestId)">
+                                        @(isInspecting ? "Hide Review Panel" : "🔍 Review & Preview")
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-lg bg-teal-700 hover:bg-teal-800 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
+                                            disabled="@isSubmitting"
+                                            @onclick="() => QuickApproveAsync(req.CertificateRequestId)">
+                                        ✓ Approve &amp; Issue
+                                    </button>
+                                </div>
                             </div>
 
-                            <div class="flex items-center gap-2">
-                                <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 font-semibold text-[10px]">@req.Status</span>
-                                <button type="button"
-                                        class="rounded bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition"
-                                        @onclick="() => QuickApproveAsync(req.CertificateRequestId)">
-                                    ✓ Approve &amp; Issue
-                                </button>
-                            </div>
+                            @if (isInspecting && selectedReviewDetail != null)
+                            {
+                                <div class="rounded-xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 space-y-3 shadow-xs">
+                                    <div class="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                                        <div>
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400 block">HR Verification &amp; Approval Review</span>
+                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                                @selectedReviewDetail.EmploymentHistory.FullName (#@selectedReviewDetail.EmploymentHistory.EmployeeNumber) — @selectedReviewDetail.EmploymentHistory.CurrentJobTitle
+                                            </h4>
+                                        </div>
+                                        <span class="text-[11px] text-slate-500">
+                                            Service Duration: <strong>@selectedReviewDetail.EmploymentHistory.FormattedServiceDuration</strong>
+                                        </span>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        <div>
+                                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Addressed To</label>
+                                            <input type="text" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs" @bind="reviewAddressedTo" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Authorised Signatory Name</label>
+                                            <input type="text" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs" @bind="reviewSignatoryName" placeholder="e.g. Director of Human Resources" />
+                                        </div>
+                                        <div>
+                                            <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">Signatory Title</label>
+                                            <input type="text" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs" @bind="reviewSignatoryTitle" placeholder="Human Resources Department" />
+                                        </div>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center gap-4 pt-1">
+                                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                            <input type="checkbox" @bind="reviewIncludeResp" class="rounded text-teal-600" />
+                                            <span>Include verified responsibilities (@selectedReviewDetail.EmploymentHistory.Positions.Count positions)</span>
+                                        </label>
+                                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                            <input type="checkbox" @bind="reviewIncludeProj" class="rounded text-teal-600" />
+                                            <span>Include project experience (@selectedReviewDetail.EmploymentHistory.Projects.Count projects)</span>
+                                        </label>
+                                        <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                            <input type="checkbox" @bind="reviewIncludeSalary" class="rounded text-teal-600" />
+                                            <span>Include basic salary</span>
+                                        </label>
+                                    </div>
+
+                                    <!-- Draft Certificate Statement Preview -->
+                                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 space-y-1.5 text-[11px] text-slate-700 dark:text-slate-300">
+                                        <div class="font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                                            Draft Preview — @selectedReviewDetail.CurrentDraftSnapshot.CertificateTitle
+                                        </div>
+                                        <p>@selectedReviewDetail.CurrentDraftSnapshot.IntroductoryText</p>
+                                        <p>@selectedReviewDetail.CurrentDraftSnapshot.ServiceStatement</p>
+                                        <p>@selectedReviewDetail.CurrentDraftSnapshot.ConcludingText</p>
+                                    </div>
+
+                                    <div>
+                                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">HR Review Remarks / Clarification or Rejection Reason</label>
+                                        <textarea rows="2" class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-2 text-xs" placeholder="Required if returning for clarification or rejecting..." @bind="reviewReason"></textarea>
+                                    </div>
+
+                                    <div class="flex flex-wrap items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-2">
+                                        <button type="button"
+                                                class="rounded-lg border border-purple-300 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 text-xs font-semibold text-purple-800 transition disabled:opacity-50"
+                                                disabled="@isSubmitting"
+                                                @onclick='() => SubmitReviewDecisionAsync(req.CertificateRequestId, "Return")'>
+                                            ↩ Return for Clarification
+                                        </button>
+                                        <button type="button"
+                                                class="rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 px-3 py-1.5 text-xs font-semibold text-rose-800 transition disabled:opacity-50"
+                                                disabled="@isSubmitting"
+                                                @onclick='() => SubmitReviewDecisionAsync(req.CertificateRequestId, "Reject")'>
+                                            ✕ Reject Request
+                                        </button>
+                                        <button type="button"
+                                                class="rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-1.5 text-xs font-bold text-white shadow-xs transition disabled:opacity-50"
+                                                disabled="@isSubmitting"
+                                                @onclick='() => SubmitReviewDecisionAsync(req.CertificateRequestId, "Issue")'>
+                                            ✓ Verify, Approve &amp; Issue Official PDF
+                                        </button>
+                                    </div>
+                                </div>
+                            }
                         </div>
                     }
                 </div>
@@ -74,7 +198,7 @@
         }
 
         <!-- ISSUED CERTIFICATES ARCHIVE -->
-        @if (issuedCertificates.Count == 0 && pendingRequests.Count == 0)
+        @if (issuedCertificates.Count == 0 && allStaffRequests.Count == 0)
         {
             <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 p-8 text-center text-xs text-slate-500 dark:text-slate-400 space-y-3">
                 <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
@@ -93,10 +217,11 @@
                 </button>
             </div>
         }
-        else if (issuedCertificates.Count > 0)
+
+        @if (issuedCertificates.Count > 0)
         {
             <div class="space-y-2">
-                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block">Issued Official Certificates</span>
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block">Issued Official Certificates (@issuedCertificates.Count)</span>
 
                 <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
                     <table class="w-full text-left text-xs">
@@ -138,6 +263,45 @@
                                             </button>
                                         </div>
                                     </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        @if (allStaffRequests.Count > 0)
+        {
+            <div class="space-y-2">
+                <span class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider block">Certificate Request History (@allStaffRequests.Count)</span>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                            <tr>
+                                <th class="p-2.5">Request Ref</th>
+                                <th class="p-2.5">Certificate Type</th>
+                                <th class="p-2.5">Purpose</th>
+                                <th class="p-2.5">Submitted</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5">Issued Certificate #</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                            @foreach (var req in allStaffRequests)
+                            {
+                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                    <td class="p-2.5 font-mono font-bold text-blue-700 dark:text-blue-400">@req.ReferenceNumber</td>
+                                    <td class="p-2.5 font-medium text-slate-900 dark:text-slate-100">@req.CertificateType</td>
+                                    <td class="p-2.5 text-slate-600 dark:text-slate-400">@req.Purpose</td>
+                                    <td class="p-2.5 text-slate-600 dark:text-slate-400">@req.CreatedAt.ToLocalTime().ToString("dd MMM yyyy, hh:mm tt")</td>
+                                    <td class="p-2.5">
+                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @(req.Status == "Issued" ? "bg-emerald-100 text-emerald-800" : req.Status is "Submitted" or "UnderReview" ? "bg-amber-100 text-amber-800" : req.Status == "Rejected" ? "bg-rose-100 text-rose-800" : "bg-slate-100 text-slate-700")">
+                                            @req.Status
+                                        </span>
+                                    </td>
+                                    <td class="p-2.5 font-mono text-slate-600 dark:text-slate-400">@(req.CertificateNumber ?? "—")</td>
                                 </tr>
                             }
                         </tbody>
@@ -205,6 +369,9 @@
     [Parameter]
     public int StaffId { get; set; }
 
+    [Parameter]
+    public EventCallback OnChanged { get; set; }
+
     private bool isLoading;
     private bool isSubmitting;
     private bool showIssueModal;
@@ -215,8 +382,18 @@
     private bool includeResp = true;
     private bool includeProj = true;
 
+    private List<CertificateRequestSummaryDto> allStaffRequests = [];
     private List<CertificateRequestSummaryDto> pendingRequests = [];
     private List<IssuedCertificateDetailDto> issuedCertificates = [];
+
+    private CertificateRequestDetailDto? selectedReviewDetail;
+    private string reviewAddressedTo = "TO WHOM IT MAY CONCERN";
+    private string reviewSignatoryName = "";
+    private string reviewSignatoryTitle = "Human Resources Department";
+    private bool reviewIncludeResp = true;
+    private bool reviewIncludeProj = true;
+    private bool reviewIncludeSalary;
+    private string reviewReason = "";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -230,10 +407,16 @@
         try
         {
             var allReqs = await CertificateService.GetAdminPendingRequestsAsync(statusFilter: "All");
-            pendingRequests = allReqs.Where(r => r.IndividualId == StaffId && (r.Status == "Submitted" || r.Status == "UnderReview")).ToList();
+            allStaffRequests = allReqs.Where(r => r.IndividualId == StaffId).ToList();
+            pendingRequests = allStaffRequests.Where(r => r.Status == "Submitted" || r.Status == "UnderReview").ToList();
 
             var myIssued = await CertificateService.GetMyIssuedCertificatesAsync();
             issuedCertificates = myIssued.Where(c => c.IndividualId == StaffId).ToList();
+
+            if (selectedReviewDetail != null && !pendingRequests.Any(r => r.CertificateRequestId == selectedReviewDetail.Summary.CertificateRequestId))
+            {
+                selectedReviewDetail = null;
+            }
         }
         catch (Exception ex)
         {
@@ -245,8 +428,88 @@
         }
     }
 
+    private async Task ToggleInspectRequestAsync(int certificateRequestId)
+    {
+        if (selectedReviewDetail?.Summary.CertificateRequestId == certificateRequestId)
+        {
+            selectedReviewDetail = null;
+            return;
+        }
+
+        try
+        {
+            var detail = await CertificateService.GetRequestDetailAsync(certificateRequestId);
+            selectedReviewDetail = detail;
+            reviewAddressedTo = detail.Summary.AddressedTo ?? "TO WHOM IT MAY CONCERN";
+            reviewSignatoryName = detail.CurrentDraftSnapshot.SignatoryName;
+            reviewSignatoryTitle = detail.CurrentDraftSnapshot.SignatoryTitle;
+            reviewIncludeResp = detail.CurrentDraftSnapshot.Positions.Any(p => p.Responsibilities.Count > 0);
+            reviewIncludeProj = detail.CurrentDraftSnapshot.Projects.Count > 0;
+            reviewIncludeSalary = detail.CurrentDraftSnapshot.BasicSalary.HasValue;
+            reviewReason = "";
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error("Unable to load certificate request details: " + ex.Message);
+        }
+    }
+
+    private async Task SubmitReviewDecisionAsync(int requestId, string action)
+    {
+        if (action is "Return" or "Reject" && string.IsNullOrWhiteSpace(reviewReason))
+        {
+            Toasts.Error($"Please provide a reason before selecting '{action}'.");
+            return;
+        }
+
+        isSubmitting = true;
+        try
+        {
+            var res = await CertificateService.ReviewActionAsync(new CertificateReviewActionInput
+            {
+                CertificateRequestId = requestId,
+                Action = action,
+                Reason = reviewReason,
+                CorrectedAddressedTo = reviewAddressedTo,
+                IncludeResponsibilities = reviewIncludeResp,
+                IncludeProjects = reviewIncludeProj,
+                IncludeSalary = reviewIncludeSalary,
+                CorrectedSignatoryName = reviewSignatoryName,
+                CorrectedSignatoryTitle = reviewSignatoryTitle
+            });
+
+            if (res.Success)
+            {
+                if (action == "Issue")
+                {
+                    await GenerateAndPersistPdfForRequestAsync(requestId);
+                }
+                Toasts.Success(res.Message);
+                selectedReviewDetail = null;
+                await LoadStaffCertificatesAsync();
+                if (OnChanged.HasDelegate)
+                {
+                    await OnChanged.InvokeAsync();
+                }
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
     private async Task QuickApproveAsync(int requestId)
     {
+        isSubmitting = true;
         try
         {
             var res = await CertificateService.ReviewActionAsync(new CertificateReviewActionInput
@@ -256,14 +519,41 @@
             });
             if (res.Success)
             {
-                Toasts.Success("Certificate issued.");
+                await GenerateAndPersistPdfForRequestAsync(requestId);
+                Toasts.Success("Certificate approved and issued.");
                 await LoadStaffCertificatesAsync();
+                if (OnChanged.HasDelegate)
+                {
+                    await OnChanged.InvokeAsync();
+                }
             }
             else Toasts.Error(res.Message);
         }
         catch (Exception ex)
         {
             Toasts.Error(ex.Message);
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task GenerateAndPersistPdfForRequestAsync(int certificateRequestId)
+    {
+        try
+        {
+            var detail = await CertificateService.GetRequestDetailAsync(certificateRequestId);
+            if (detail.IssuedCertificate != null)
+            {
+                var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                var pdfBytes = CertificatePdfGenerator.Generate(detail.IssuedCertificate.Snapshot, fontPath);
+                await CertificateService.SaveIssuedCertificatePdfAsync(detail.IssuedCertificate.IssuedCertificateId, pdfBytes);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Deferred PDF generation for certificate request {RequestId}", certificateRequestId);
         }
     }
 
@@ -293,10 +583,15 @@
                         CertificateRequestId = latest.CertificateRequestId,
                         Action = "Issue"
                     });
+                    await GenerateAndPersistPdfForRequestAsync(latest.CertificateRequestId);
                 }
                 Toasts.Success("Official certificate generated and issued.");
                 showIssueModal = false;
                 await LoadStaffCertificatesAsync();
+                if (OnChanged.HasDelegate)
+                {
+                    await OnChanged.InvokeAsync();
+                }
             }
             else
             {

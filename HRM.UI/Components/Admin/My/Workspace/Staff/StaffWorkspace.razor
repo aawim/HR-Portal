@@ -1,4 +1,4 @@
-﻿@*
+@*
 @page "/admin/my/workspace/staff" *@
 @using HRM.Components.Admin.My.Workspace.Staff.Tabs
 @using HRM.Enum
@@ -89,7 +89,7 @@
                     }
                     else if (ActiveTab == WorkspaceTab.Certificates)
                     {
-                        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" />
+                        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
                     }
                    
 
@@ -109,6 +109,9 @@
 
     [Parameter]
     public WorkspaceTab ActiveTab { get; set; }
+
+    [Parameter]
+    public EventCallback OnRequestsChanged { get; set; }
 
     private int? loadedStaffId;
     private int? loadedOrganisationId;

@@ -19,6 +19,7 @@
 @using HRM.Components.Admin.My.Workspace.Organisation
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
 @using HRM.DTOs.Items
+@using HRM.DTOs.Certificates
 @using HRM.Application.Contracts.Pages
 @inject ITeam TeamService
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries AttendanceQueries
@@ -28,6 +29,8 @@
 @inject HRM.WorkPlanning.Services.Contracts.DutyRosterServiceContracts.IOperations Duties
 @inject HRM.Services.Contracts.StaffPositionManagementServiceContracts.IOperations PositionService
 @inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations ItemService
+@inject HRM.Services.Contracts.CertificateServiceContracts.IOperations CertificateService
+@inject IWebHostEnvironment Environment
 @inject IWorkspaceDirectoryService Directory
 @inject HRM.Services.Contracts.WorkspaceRecentSearchServiceContracts.IOperations RecentSearches
 @inject IUserTodoService Todos
@@ -122,10 +125,17 @@
             </button>
             @if (inspectedStaffId.HasValue)
             {
+                var staffTotalPending = GetStaffTotalPendingCount(inspectedStaffId.Value, inspectedStaffName);
                 <button type="button"
-                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Staff" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
+                        class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-1.5 @(activeWorkspaceTab == "Staff" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
                         @onclick='() => SetActiveTab("Staff")'>
-                    👤 @inspectedStaffName
+                    <span>👤 @inspectedStaffName</span>
+                    @if (staffTotalPending > 0)
+                    {
+                        <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(activeWorkspaceTab == "Staff" ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                            @staffTotalPending
+                        </span>
+                    }
                 </button>
             }
             @if (inspectedOrgId.HasValue)
@@ -191,14 +201,26 @@
                         Performance
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Leave)">
-                        Leave
+                        <span>Leave</span>
+                        @if (GetStaffPendingLeaveCount(inspectedStaffId.Value, inspectedStaffName) > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Leave ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @GetStaffPendingLeaveCount(inspectedStaffId.Value, inspectedStaffName)
+                            </span>
+                        }
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Attendance)">
-                        Attendance
+                        <span>Attendance</span>
+                        @if (GetStaffPendingAttendanceCount(inspectedStaffId.Value, inspectedStaffName) > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Attendance ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @GetStaffPendingAttendanceCount(inspectedStaffId.Value, inspectedStaffName)
+                            </span>
+                        }
                     </button>
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Position ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
@@ -216,14 +238,26 @@
                         Overtime
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.JobRelatedItems)">
-                        Job Items
+                        <span>Job Items</span>
+                        @if (GetStaffPendingJobItemsCount(inspectedStaffId.Value, inspectedStaffName) > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.JobRelatedItems ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @GetStaffPendingJobItemsCount(inspectedStaffId.Value, inspectedStaffName)
+                            </span>
+                        }
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.PersonalItems)">
-                        Personal Items
+                        <span>Personal Items</span>
+                        @if (GetStaffPendingPersonalItemsCount(inspectedStaffId.Value, inspectedStaffName) > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.PersonalItems ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @GetStaffPendingPersonalItemsCount(inspectedStaffId.Value, inspectedStaffName)
+                            </span>
+                        }
                     </button>
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Documents ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
@@ -246,16 +280,22 @@
                         Transfer
                     </button>
                     <button type="button"
-                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Certificates ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r flex items-center gap-1.5 @(inspectedStaffTab == WorkspaceTab.Certificates ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Certificates)">
-                        Certificates
+                        <span>Certificates</span>
+                        @if (GetStaffPendingCertificatesCount(inspectedStaffId.Value) > 0)
+                        {
+                            <span class="rounded-full px-1.5 py-0.2 text-[10px] font-bold @(inspectedStaffTab == WorkspaceTab.Certificates ? "bg-white/25 text-white" : "bg-amber-500 text-white")">
+                                @GetStaffPendingCertificatesCount(inspectedStaffId.Value)
+                            </span>
+                        }
                     </button>
                 </nav>
             </div>
 
             <!-- Staff Workspace Body -->
             <div class="w-full min-w-0 flex flex-col gap-2">
-                <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" />
+                <StaffWorkspace StaffId="inspectedStaffId.Value" ActiveTab="inspectedStaffTab" OnRequestsChanged="RefreshRequestsAsync" />
             </div>
         </div>
     }
@@ -508,6 +548,19 @@
                             <button type="button"
                                     class="text-[11px] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 hover:bg-white dark:hover:bg-slate-800 shadow-2xs font-medium"
                                     @onclick='() => OpenRequestTab("position")'>
+                                View
+                            </button>
+                        </div>
+                        <div class="p-2.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
+                            <div>
+                                <span class="font-bold text-slate-900 dark:text-slate-100 block">Employment Certificates</span>
+                                <span class="text-[10px] @(CertificatesPendingCount > 0 ? "text-amber-600 dark:text-amber-400 font-bold" : "text-slate-500 dark:text-slate-400")">
+                                    @CertificatesPendingCount Pending
+                                </span>
+                            </div>
+                            <button type="button"
+                                    class="text-[11px] text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 hover:bg-white dark:hover:bg-slate-800 shadow-2xs font-medium"
+                                    @onclick='() => OpenRequestTab("certificates")'>
                                 View
                             </button>
                         </div>
@@ -1153,10 +1206,23 @@
                         </span>
                     }
                 </button>
+
+                <button type="button"
+                        class="rounded-xl px-3.5 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeReqSubTab == "certificates" ? "bg-teal-700 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/60")"
+                        @onclick='() => SetReqSubTab("certificates")'>
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                    <span>Employment Certificates</span>
+                    @if (CertificatesPendingCount > 0)
+                    {
+                        <span class="rounded-full px-2 py-0.5 text-[10px] font-bold @(activeReqSubTab == "certificates" ? "bg-white/20 text-white" : "bg-amber-500 text-white")">
+                            @CertificatesPendingCount
+                        </span>
+                    }
+                </button>
             </nav>
 
             <!-- Two-Column Workspace Layout (Left: Form to approve & details, Right: All requests) -->
-            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty" or "job-items" or "personal-items")
+            @if (activeReqSubTab is "leave" or "attendance" or "uneven-log" or "duty" or "job-items" or "personal-items" or "certificates")
             {
                 <div class="grid grid-cols-1 xl:grid-cols-12 gap-3 p-2 items-start w-full">
                     
@@ -1537,6 +1603,169 @@
                                 </div>
                             }
                         }
+                        else if (activeReqSubTab == "certificates")
+                        {
+                            @if (selectedCertificateRequest != null)
+                            {
+                                <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3">
+                                    <div class="flex items-start justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                        <div>
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-700 dark:text-teal-400">
+                                                @(selectedCertificateRequest.CertificateType == "DetailedExperience" ? "Detailed Work Experience Certificate" : "Standard Service Certificate")
+                                            </span>
+                                            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100 mt-0.5">@selectedCertificateRequest.EmployeeName</h3>
+                                            <div class="flex items-center gap-2 mt-0.5 flex-wrap">
+                                                <span class="text-[10px] text-slate-400 font-mono">Ref: @selectedCertificateRequest.ReferenceNumber</span>
+                                                <button type="button"
+                                                        class="text-[10px] font-bold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer"
+                                                        @onclick="() => OpenStaffWorkspaceWithTab(selectedCertificateRequest.IndividualId, selectedCertificateRequest.EmployeeName, WorkspaceTab.Certificates)">
+                                                    👤 Open Staff Workspace →
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold @(selectedCertificateRequest.Status is "Submitted" or "UnderReview" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : selectedCertificateRequest.Status is "Issued" or "Approved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")">
+                                            @selectedCertificateRequest.Status
+                                        </span>
+                                    </div>
+
+                                    <div class="grid grid-cols-2 gap-2 text-xs bg-slate-50 dark:bg-slate-800/60 rounded-xl p-3 border border-slate-200/80 dark:border-slate-700/60">
+                                        <div>
+                                            <span class="text-slate-400 block text-[10px]">Purpose</span>
+                                            <span class="font-semibold text-slate-800 dark:text-slate-200">@selectedCertificateRequest.Purpose</span>
+                                        </div>
+                                        <div>
+                                            <span class="text-slate-400 block text-[10px]">Submitted</span>
+                                            <span class="font-semibold text-slate-800 dark:text-slate-200">@selectedCertificateRequest.CreatedAt.ToString("dd MMM yyyy, hh:mm tt")</span>
+                                        </div>
+                                        @if (!string.IsNullOrWhiteSpace(selectedCertificateRequest.DepartmentName))
+                                        {
+                                            <div>
+                                                <span class="text-slate-400 block text-[10px]">Department</span>
+                                                <span class="font-semibold text-slate-800 dark:text-slate-200">@selectedCertificateRequest.DepartmentName</span>
+                                            </div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(selectedCertificateRequest.CurrentDesignation))
+                                        {
+                                            <div>
+                                                <span class="text-slate-400 block text-[10px]">Designation</span>
+                                                <span class="font-semibold text-slate-800 dark:text-slate-200">@selectedCertificateRequest.CurrentDesignation</span>
+                                            </div>
+                                        }
+                                    </div>
+
+                                    @if (selectedCertificateDetail != null)
+                                    {
+                                        @if (!string.IsNullOrWhiteSpace(selectedCertificateDetail.Summary.RequestScope))
+                                        {
+                                            <div class="rounded-xl bg-slate-50 dark:bg-slate-800/40 p-2.5 border border-slate-200 dark:border-slate-800 text-xs">
+                                                <span class="text-[10px] font-bold uppercase text-slate-400 block mb-0.5">Requested Scope / Details</span>
+                                                <p class="text-slate-700 dark:text-slate-300">@selectedCertificateDetail.Summary.RequestScope</p>
+                                            </div>
+                                        }
+
+                                        <div class="rounded-xl border border-teal-200 dark:border-teal-800/60 bg-teal-50/40 dark:bg-teal-950/20 p-3 flex flex-col gap-2">
+                                            <span class="text-[10px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300">Verified Employment Record</span>
+                                            <div class="text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                                                <div><strong>Service Duration:</strong> @selectedCertificateDetail.EmploymentHistory.FormattedServiceDuration</div>
+                                                <div><strong>Positions Found:</strong> @selectedCertificateDetail.EmploymentHistory.Positions.Count · <strong>Projects:</strong> @selectedCertificateDetail.EmploymentHistory.Projects.Count</div>
+                                            </div>
+                                        </div>
+
+                                        @if (selectedCertificateRequest.Status is "Submitted" or "UnderReview")
+                                        {
+                                            <div class="flex flex-col gap-2 pt-1">
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Addressed To</label>
+                                                    <input type="text" @bind="certAddressedTo"
+                                                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100" />
+                                                </div>
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Signatory Name</label>
+                                                        <input type="text" @bind="certSignatoryName"
+                                                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100" />
+                                                    </div>
+                                                    <div>
+                                                        <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">Signatory Title</label>
+                                                        <input type="text" @bind="certSignatoryTitle"
+                                                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-800 dark:text-slate-100" />
+                                                    </div>
+                                                </div>
+                                                <div class="flex flex-wrap gap-3 text-xs pt-1">
+                                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                                        <input type="checkbox" @bind="certIncludeResp" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                                        <span>Include Responsibilities</span>
+                                                    </label>
+                                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                                        <input type="checkbox" @bind="certIncludeProj" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                                        <span>Include Projects</span>
+                                                    </label>
+                                                    <label class="inline-flex items-center gap-1.5 cursor-pointer">
+                                                        <input type="checkbox" @bind="certIncludeSalary" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                                        <span>Include Salary</span>
+                                                    </label>
+                                                </div>
+                                                <div>
+                                                    <label class="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">HR Remarks / Decision Note</label>
+                                                    <textarea @bind="certActionComment" rows="2" placeholder="Optional remarks or clarification reason..."
+                                                              class="w-full rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:border-teal-600 focus:outline-none"></textarea>
+                                                </div>
+                                            </div>
+                                        }
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(certActionError))
+                                    {
+                                        <div class="rounded-lg bg-rose-50 dark:bg-rose-950/60 border border-rose-200 dark:border-rose-800 p-2 text-xs text-rose-700 dark:text-rose-300">
+                                            @certActionError
+                                        </div>
+                                    }
+
+                                    <div class="flex flex-wrap items-center gap-2 pt-1">
+                                        @if (selectedCertificateRequest.Status is "Submitted" or "UnderReview")
+                                        {
+                                            <button type="button" disabled="@certActing"
+                                                    @onclick='() => ActCertificateRequestAsync("Issue")'
+                                                    class="flex-1 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs py-2 px-3 shadow-xs transition cursor-pointer disabled:opacity-50">
+                                                ✓ Approve &amp; Issue Certificate
+                                            </button>
+                                            <button type="button" disabled="@certActing"
+                                                    @onclick='() => ActCertificateRequestAsync("Return")'
+                                                    class="rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-bold text-xs py-2 px-3 transition cursor-pointer disabled:opacity-50">
+                                                ↩ Return
+                                            </button>
+                                            <button type="button" disabled="@certActing"
+                                                    @onclick='() => ActCertificateRequestAsync("Reject")'
+                                                    class="rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 font-bold text-xs py-2 px-3 transition cursor-pointer disabled:opacity-50">
+                                                ✕ Reject
+                                            </button>
+                                        }
+                                        else if (selectedCertificateDetail?.IssuedCertificate != null)
+                                        {
+                                            <button type="button"
+                                                    @onclick="() => DownloadIssuedCertPdfAsync(selectedCertificateDetail.IssuedCertificate.IssuedCertificateId, selectedCertificateDetail.IssuedCertificate.CertificateNumber)"
+                                                    class="flex-1 text-center rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs py-2 px-3 shadow-xs transition cursor-pointer">
+                                                📄 Download Issued Certificate (@selectedCertificateDetail.IssuedCertificate.CertificateNumber)
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center shadow-xs">
+                                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-600 dark:text-teal-400 mb-3 border border-teal-200 dark:border-teal-800/40">
+                                        <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Certificate Request Selected</h3>
+                                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs mx-auto">
+                                        Select a certificate request from the queue on the right to verify employment records, customize signatory details, and issue the official PDF certificate.
+                                    </p>
+                                </div>
+                            }
+                        }
                     </aside>
 
                     <!-- ======================================================== -->
@@ -1760,6 +1989,95 @@
                                                         “@row.Reason”
                                                     </p>
                                                 }
+                                            </button>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else if (activeReqSubTab == "certificates")
+                        {
+                            var filteredCerts = showAllCertHistory
+                                ? certificateRequestsList
+                                : certificateRequestsList.Where(r => r.Status is "Submitted" or "UnderReview").ToList();
+
+                            <div class="rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col gap-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">
+                                            Employment &amp; Work Experience Certificate Requests
+                                        </h3>
+                                        <span class="rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 px-2 py-0.5 text-xs font-bold">
+                                            @CertificatesPendingCount Pending
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-3">
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 cursor-pointer select-none">
+                                            <input type="checkbox" @bind="showAllCertHistory" class="rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                            <span>Show All / History</span>
+                                        </label>
+                                        <button type="button" class="text-xs font-semibold text-teal-700 dark:text-teal-400 hover:underline cursor-pointer" @onclick="RefreshRequestsAsync">
+                                            ↻ Refresh
+                                        </button>
+                                    </div>
+                                </div>
+
+                                @if (certLoading)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-400 animate-pulse">Loading certificate requests...</div>
+                                }
+                                else if (filteredCerts.Count == 0)
+                                {
+                                    <div class="py-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                                        All caught up! No pending certificate requests found.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="flex flex-col gap-2">
+                                        @foreach (var cert in filteredCerts)
+                                        {
+                                            var isSelected = selectedCertificateRequest?.CertificateRequestId == cert.CertificateRequestId;
+                                            <button type="button"
+                                                    class="w-full text-left rounded-xl p-3 border transition flex flex-col gap-2 cursor-pointer @(isSelected ? "border-teal-500 dark:border-teal-400 bg-teal-50/50 dark:bg-teal-950/30 shadow-xs" : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900")"
+                                                    @onclick="() => SelectCertificateRequestAsync(cert)">
+                                                <div class="flex items-start justify-between gap-2">
+                                                    <div class="flex items-center gap-2.5 min-w-0">
+                                                        <div class="w-8 h-8 rounded-full bg-teal-100 dark:bg-teal-950 text-teal-700 dark:text-teal-300 font-bold text-xs flex items-center justify-center shrink-0">
+                                                            @GetInitials(cert.EmployeeName)
+                                                        </div>
+                                                        <div class="min-w-0">
+                                                            <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">@cert.EmployeeName</h4>
+                                                            <span class="text-[10px] text-slate-400">
+                                                                @(string.IsNullOrWhiteSpace(cert.CurrentDesignation) ? "Staff" : cert.CurrentDesignation)
+                                                                @(string.IsNullOrWhiteSpace(cert.DepartmentName) ? "" : $" · {cert.DepartmentName}")
+                                                                · Submitted @cert.CreatedAt.ToString("dd MMM yyyy, hh:mm tt")
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex flex-col items-end gap-1 shrink-0">
+                                                        <span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold @(cert.Status is "Submitted" or "UnderReview" ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300" : cert.Status is "Issued" or "Approved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")">
+                                                            @cert.Status
+                                                        </span>
+                                                        <span class="text-[10px] text-slate-400 font-mono">@cert.ReferenceNumber</span>
+                                                    </div>
+                                                </div>
+
+                                                <div class="flex items-center justify-between gap-2 flex-wrap text-xs">
+                                                    <div class="flex items-center gap-2 flex-wrap">
+                                                        <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                                                            @(cert.CertificateType == "DetailedExperience" ? "Detailed Work Experience" : "Standard Service Certificate")
+                                                        </span>
+                                                        <span class="text-slate-700 dark:text-slate-300 font-medium">
+                                                            Purpose: @cert.Purpose
+                                                        </span>
+                                                    </div>
+                                                    <span class="text-[11px] font-semibold text-teal-700 dark:text-teal-400 hover:underline"
+                                                          @onclick:stopPropagation="true"
+                                                          @onclick="() => OpenStaffWorkspaceWithTab(cert.IndividualId, cert.EmployeeName, WorkspaceTab.Certificates)">
+                                                        👤 Open Staff Certificates Tab →
+                                                    </span>
+                                                </div>
                                             </button>
                                         }
                                     </div>
@@ -2113,7 +2431,44 @@
     private int AvailableStaffCount => Math.Max(0, TotalStaffCount - TotalLeavesCount - AbsentCount);
     private int JobItemsPendingCount => itemRequestsList.Count(r => r.Purpose == "Job related" && (r.Status is "Submitted" or "ReturnRequested"));
     private int PersonalItemsPendingCount => itemRequestsList.Count(r => r.Purpose != "Job related" && (r.Status is "Submitted" or "ReturnRequested"));
-    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count + AttendancePendingCount + UnevenLogPendingCount + JobItemsPendingCount + PersonalItemsPendingCount;
+    private int CertificatesPendingCount => certificateRequestsList.Count(r => r.Status is "Submitted" or "UnderReview");
+    private int TotalPendingRequestsCount => pendingLeaves.Count + pendingDutyRequests.Count + AttendancePendingCount + UnevenLogPendingCount + JobItemsPendingCount + PersonalItemsPendingCount + CertificatesPendingCount;
+
+    // Staff-scoped Pending Badge Helpers for Staff Workspace Tabs
+    private int GetStaffPendingLeaveCount(int staffId, string? staffName) =>
+        !string.IsNullOrWhiteSpace(staffName)
+            ? pendingLeaves.Count(l => string.Equals(l.Applicant?.Trim(), staffName.Trim(), StringComparison.OrdinalIgnoreCase))
+            : 0;
+
+    private int GetStaffPendingAttendanceCount(int staffId, string? staffName) =>
+        !string.IsNullOrWhiteSpace(staffName)
+            ? attendanceRequestsList.Count(a =>
+                (a.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase)
+                 || a.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase)
+                 || a.Status.Contains("Verification", StringComparison.OrdinalIgnoreCase)
+                 || a.Status.Contains("Approval", StringComparison.OrdinalIgnoreCase))
+                && string.Equals(a.StaffName?.Trim(), staffName.Trim(), StringComparison.OrdinalIgnoreCase))
+            : 0;
+
+    private int GetStaffPendingJobItemsCount(int staffId, string? staffName) =>
+        !string.IsNullOrWhiteSpace(staffName)
+            ? itemRequestsList.Count(r => string.Equals(r.StaffName?.Trim(), staffName.Trim(), StringComparison.OrdinalIgnoreCase) && r.Purpose == "Job related" && (r.Status is "Submitted" or "ReturnRequested"))
+            : 0;
+
+    private int GetStaffPendingPersonalItemsCount(int staffId, string? staffName) =>
+        !string.IsNullOrWhiteSpace(staffName)
+            ? itemRequestsList.Count(r => string.Equals(r.StaffName?.Trim(), staffName.Trim(), StringComparison.OrdinalIgnoreCase) && r.Purpose != "Job related" && (r.Status is "Submitted" or "ReturnRequested"))
+            : 0;
+
+    private int GetStaffPendingCertificatesCount(int staffId) =>
+        certificateRequestsList.Count(r => r.IndividualId == staffId && (r.Status is "Submitted" or "UnderReview"));
+
+    private int GetStaffTotalPendingCount(int staffId, string? staffName) =>
+        GetStaffPendingLeaveCount(staffId, staffName)
+        + GetStaffPendingAttendanceCount(staffId, staffName)
+        + GetStaffPendingJobItemsCount(staffId, staffName)
+        + GetStaffPendingPersonalItemsCount(staffId, staffName)
+        + GetStaffPendingCertificatesCount(staffId);
 
     // Item Requests State
     private List<ItemStaffRequestDto> itemRequestsList = new();
@@ -2124,6 +2479,22 @@
     private string itemReturnCondition = "Good";
     private bool itemLoading = false;
     private bool showAllItemHistory = false;
+
+    // Certificate Requests State
+    private List<CertificateRequestSummaryDto> certificateRequestsList = new();
+    private CertificateRequestSummaryDto? selectedCertificateRequest;
+    private CertificateRequestDetailDto? selectedCertificateDetail;
+    private bool certLoading = false;
+    private bool certActing = false;
+    private string? certActionError;
+    private bool showAllCertHistory = false;
+    private string certAddressedTo = "To Whom It May Concern";
+    private string certSignatoryName = "Head of Human Resources";
+    private string certSignatoryTitle = "Human Resources Department";
+    private bool certIncludeResp = true;
+    private bool certIncludeProj = true;
+    private bool certIncludeSalary = false;
+    private string certActionComment = "";
 
     protected override async Task OnInitializedAsync()
     {
@@ -2136,18 +2507,39 @@
             {
                 inspectedStaffName = match.FullName;
             }
-        }
-        if (NotificationRequestId.HasValue && selectedLeave == null && selectedItemRequest == null)
-        {
-            var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
-            if (itemReq != null)
+            else if (string.IsNullOrWhiteSpace(inspectedStaffName) || inspectedStaffName.StartsWith("Staff #"))
             {
-                activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
-                selectedItemRequest = itemReq;
+                try
+                {
+                    var identity = await Directory.GetStaffIdentityAsync(inspectedStaffId.Value);
+                    if (identity != null && !string.IsNullOrWhiteSpace(identity.Name))
+                    {
+                        inspectedStaffName = identity.Name;
+                    }
+                }
+                catch { }
+            }
+        }
+        if (NotificationRequestId.HasValue && selectedLeave == null && selectedItemRequest == null && selectedCertificateRequest == null)
+        {
+            var certReq = certificateRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value || r.CertificateRequestId == NotificationRequestId.Value);
+            if (certReq != null)
+            {
+                activeReqSubTab = "certificates";
+                await SelectCertificateRequestAsync(certReq);
             }
             else
             {
-                selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+                var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
+                if (itemReq != null)
+                {
+                    activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
+                    selectedItemRequest = itemReq;
+                }
+                else
+                {
+                    selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+                }
             }
         }
         if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
@@ -2182,6 +2574,18 @@
             if (match != null && !string.IsNullOrWhiteSpace(match.FullName))
             {
                 inspectedStaffName = match.FullName;
+            }
+            else
+            {
+                try
+                {
+                    var identity = await Directory.GetStaffIdentityAsync(inspectedStaffId.Value);
+                    if (identity != null && !string.IsNullOrWhiteSpace(identity.Name))
+                    {
+                        inspectedStaffName = identity.Name;
+                    }
+                }
+                catch { }
             }
         }
         if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
@@ -2289,16 +2693,25 @@
         if (NotificationRequestId.HasValue && NotificationRequestId.Value > 0)
         {
             activeWorkspaceTab = "Request";
-            var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
-            if (itemReq != null)
+            var certReq = certificateRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value || r.CertificateRequestId == NotificationRequestId.Value);
+            if (certReq != null)
             {
-                activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
-                selectedItemRequest = itemReq;
+                activeReqSubTab = "certificates";
+                selectedCertificateRequest = certReq;
             }
             else
             {
-                activeReqSubTab = "leave";
-                selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+                var itemReq = itemRequestsList.FirstOrDefault(r => r.RequestId == NotificationRequestId.Value);
+                if (itemReq != null)
+                {
+                    activeReqSubTab = itemReq.Purpose == "Job related" ? "job-items" : "personal-items";
+                    selectedItemRequest = itemReq;
+                }
+                else
+                {
+                    activeReqSubTab = "leave";
+                    selectedLeave = pendingLeaves.FirstOrDefault(l => l.RequestId == NotificationRequestId.Value);
+                }
             }
         }
         else if (!string.IsNullOrWhiteSpace(QueryTab))
@@ -2594,6 +3007,162 @@
         {
             itemLoading = false;
         }
+
+        try
+        {
+            certLoading = true;
+            certificateRequestsList = await CertificateService.GetAdminPendingRequestsAsync(statusFilter: "All") ?? new();
+            if (selectedCertificateRequest != null)
+            {
+                var updatedCert = certificateRequestsList.FirstOrDefault(r => r.CertificateRequestId == selectedCertificateRequest.CertificateRequestId);
+                if (updatedCert != null)
+                {
+                    await SelectCertificateRequestAsync(updatedCert);
+                }
+                else
+                {
+                    selectedCertificateRequest = null;
+                    selectedCertificateDetail = null;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed loading certificate requests for workspace");
+        }
+        finally
+        {
+            certLoading = false;
+        }
+    }
+
+    private async Task SelectCertificateRequestAsync(CertificateRequestSummaryDto summary)
+    {
+        selectedCertificateRequest = summary;
+        certActionError = null;
+        certActionComment = "";
+        try
+        {
+            selectedCertificateDetail = await CertificateService.GetRequestDetailAsync(summary.CertificateRequestId);
+            if (selectedCertificateDetail != null)
+            {
+                certAddressedTo = string.IsNullOrWhiteSpace(selectedCertificateDetail.Summary.AddressedTo)
+                    ? "TO WHOM IT MAY CONCERN"
+                    : selectedCertificateDetail.Summary.AddressedTo;
+                if (selectedCertificateDetail.CurrentDraftSnapshot != null)
+                {
+                    certSignatoryName = selectedCertificateDetail.CurrentDraftSnapshot.SignatoryName;
+                    certSignatoryTitle = selectedCertificateDetail.CurrentDraftSnapshot.SignatoryTitle;
+                    certIncludeResp = selectedCertificateDetail.CurrentDraftSnapshot.Positions.Any(p => p.Responsibilities.Count > 0);
+                    certIncludeProj = selectedCertificateDetail.CurrentDraftSnapshot.Projects.Count > 0;
+                    certIncludeSalary = selectedCertificateDetail.CurrentDraftSnapshot.BasicSalary.HasValue;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load certificate detail {Id}", summary.CertificateRequestId);
+        }
+    }
+
+    private async Task ActCertificateRequestAsync(string action)
+    {
+        if (selectedCertificateRequest == null) return;
+        if ((action == "Reject" || action == "Return") && string.IsNullOrWhiteSpace(certActionComment))
+        {
+            certActionError = "Please enter remarks explaining the reason.";
+            return;
+        }
+
+        certActing = true;
+        certActionError = null;
+        try
+        {
+            var reqId = selectedCertificateRequest.CertificateRequestId;
+            var res = await CertificateService.ReviewActionAsync(new CertificateReviewActionInput
+            {
+                CertificateRequestId = reqId,
+                Action = action,
+                Reason = certActionComment,
+                Comments = certActionComment,
+                CorrectedAddressedTo = certAddressedTo,
+                CorrectedSignatoryName = certSignatoryName,
+                CorrectedSignatoryTitle = certSignatoryTitle,
+                IncludeResponsibilities = certIncludeResp,
+                IncludeProjects = certIncludeProj,
+                IncludeSalary = certIncludeSalary
+            });
+
+            if (!res.Success)
+            {
+                certActionError = res.Message;
+                return;
+            }
+
+            if (action == "Issue")
+            {
+                var detail = await CertificateService.GetRequestDetailAsync(reqId);
+                if (detail.IssuedCertificate != null)
+                {
+                    var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                    var pdfBytes = HRM.Services.CertificatePdfGenerator.Generate(detail.IssuedCertificate.Snapshot, fontPath);
+                    await CertificateService.SaveIssuedCertificatePdfAsync(detail.IssuedCertificate.IssuedCertificateId, pdfBytes);
+                }
+            }
+
+            ToastService.Success(res.Message);
+            certActionComment = "";
+            await RefreshRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            certActionError = ex.Message;
+        }
+        finally
+        {
+            certActing = false;
+        }
+    }
+
+    private async Task DownloadIssuedCertPdfAsync(int issuedCertificateId, string certificateNumber)
+    {
+        try
+        {
+            var pdfBytes = await CertificateService.GetIssuedCertificatePdfAsync(issuedCertificateId);
+            if (pdfBytes == null || pdfBytes.Length == 0)
+            {
+                var snap = await CertificateService.GetCertificateSnapshotAsync(issuedCertificateId);
+                var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                pdfBytes = HRM.Services.CertificatePdfGenerator.Generate(snap, fontPath);
+                await CertificateService.SaveIssuedCertificatePdfAsync(issuedCertificateId, pdfBytes);
+            }
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(pdfBytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"{certificateNumber}.pdf", "application/pdf", reference);
+            ToastService.Success("Certificate downloaded.");
+        }
+        catch (Exception ex)
+        {
+            ToastService.Error("Failed downloading certificate: " + ex.Message);
+        }
+    }
+
+    private void OpenStaffWorkspaceWithTab(int staffId, string? staffName, WorkspaceTab tab)
+    {
+        if (activeWorkspaceTab != "Staff" && activeWorkspaceTab != "Organisation")
+        {
+            previousTabBeforeStaff = activeWorkspaceTab;
+        }
+        inspectedOrgId = null;
+        inspectedStaffId = staffId;
+        inspectedStaffName = !string.IsNullOrWhiteSpace(staffName)
+            ? staffName
+            : allTeamStaff.FirstOrDefault(s => s.StaffId == staffId)?.FullName ?? $"Staff #{staffId}";
+        inspectedStaffTab = tab;
+        activeWorkspaceTab = "Staff";
+        UpdateUrl();
     }
 
     private async Task ActItemRequest(string action)

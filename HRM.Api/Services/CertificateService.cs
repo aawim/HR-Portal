@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -138,7 +138,10 @@ public sealed class CertificateService(
             throw new UnauthorizedAccessException("Please select an organisation context.");
 
         var isHrOrAdmin = isSuper || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
-                          actor.IsOrganisationAdmin || await access.HasPermissionAsync("Admin") ||
+                          actor.IsOrganisationAdmin || actor.IsSupervisor ||
+                          await access.HasPermissionAsync("Admin") ||
+                          await access.HasPermissionAsync("Employee.View") ||
+                          await access.HasPermissionAsync("Employee.Edit") ||
                           await access.HasPermissionAsync(Permissions.CertificateReview) ||
                           await access.HasPermissionAsync(Permissions.CertificateApprove);
 
@@ -177,12 +180,20 @@ public sealed class CertificateService(
 
         await using var db = await OpenDbAsync();
         var currentOrg = await access.GetCurrentOrganisationIdAsync();
+        var isSuper = actor.IsSuperAdministrator || await access.HasPermissionAsync("Super.Admin.Manage");
+        var isHrOrAdmin = isSuper || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager ||
+                          actor.IsOrganisationAdmin || actor.IsSupervisor ||
+                          await access.HasPermissionAsync("Admin") ||
+                          await access.HasPermissionAsync("Employee.View") ||
+                          await access.HasPermissionAsync("Employee.Edit") ||
+                          await access.HasPermissionAsync(Permissions.CertificateReview) ||
+                          await access.HasPermissionAsync(Permissions.CertificateApprove);
 
         var rows = await db.IssuedCertificates
             .AsNoTracking()
             .Include(c => c.CertificateRequest)
             .Include(c => c.Individual)
-            .Where(c => c.IndividualId == actor.IndividualId && (currentOrg <= 0 || c.OrganisationId == currentOrg))
+            .Where(c => (isHrOrAdmin || c.IndividualId == actor.IndividualId) && (currentOrg <= 0 || c.OrganisationId == currentOrg))
             .OrderByDescending(c => c.IssueDate)
             .ToListAsync();
 
@@ -432,7 +443,7 @@ public sealed class CertificateService(
         });
 
         // Send notification to HR officers (Strictly distinct recipients, strictly excluding actor.UserId to prevent duplicate self-notification)
-        await NotifyHrOfficersAsync(db, org, actor.UserId, $"New {certRequest.CertificateType} request submitted by {FullName(individual)} (#{individual.Staff?.EmployeeNumber ?? targetIndividualId.ToString()}).", $"/admin/hr/requests");
+        await NotifyHrOfficersAsync(db, org, actor.UserId, $"New {certRequest.CertificateType} request submitted by {FullName(individual)} (#{individual.Staff?.EmployeeNumber ?? targetIndividualId.ToString()}).", $"/admin/my/workspace?tab=requests&requestId={unifiedReq.RequestId}");
 
         await db.SaveChangesAsync();
         await tx.CommitAsync();
@@ -489,7 +500,7 @@ public sealed class CertificateService(
     {
         var (actor, org, isHrOrAdmin) = await ScopeAsync(organisationId);
         if (!isHrOrAdmin)
-            throw new UnauthorizedAccessException("HR administrative access is required to view certificate queues.");
+            return [];
 
         await using var db = await OpenDbAsync();
 
@@ -510,7 +521,40 @@ public sealed class CertificateService(
         }
 
         var rows = await query.OrderByDescending(r => r.CreatedAt).ToListAsync();
-        return rows.Select(MapToSummary).ToList();
+        var summaries = rows.Select(MapToSummary).ToList();
+
+        if (summaries.Count > 0)
+        {
+            var individualIds = summaries.Select(s => s.IndividualId).Distinct().ToList();
+            var jobs = await db.Jobs
+                .AsNoTracking()
+                .Include(j => j.OrganisationStructure)
+                .Include(j => j.JobPositions)
+                    .ThenInclude(jp => jp.Position)
+                .Where(j => individualIds.Contains(j.IndividualID) && j.OrganisationID == org)
+                .OrderByDescending(j => j.JobStateId == 4)
+                .ThenByDescending(j => j.JoinedDate)
+                .ToListAsync();
+
+            var jobLookup = jobs.GroupBy(j => j.IndividualID).ToDictionary(g => g.Key, g => g.First());
+            foreach (var s in summaries)
+            {
+                if (jobLookup.TryGetValue(s.IndividualId, out var job))
+                {
+                    s.DepartmentName = job.OrganisationStructure?.Name ?? "General Operations";
+                    var pos = job.JobPositions
+                        .OrderByDescending(jp => jp.JobPositionStateId == 4)
+                        .ThenByDescending(jp => jp.FromDate)
+                        .FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(pos?.Position?.Name))
+                    {
+                        s.CurrentDesignation = pos.Position.Name;
+                    }
+                }
+            }
+        }
+
+        return summaries;
     }
 
     public async Task<CertificateRequestDetailDto> GetRequestDetailAsync(int certificateRequestId)
@@ -1143,7 +1187,7 @@ public sealed class CertificateService(
             OrganisationId = orgId,
             OrganisationName = history.OrganisationName,
             OrganisationRegistrationNumber = "GOV-MV-HRM",
-            HeaderNotes = "Republic of Maldives â€¢ Civil & Public Service Human Resource Management",
+            HeaderNotes = "Republic of Maldives - Civil & Public Service Human Resource Management",
             IndividualId = history.IndividualId,
             EmployeeNumber = history.EmployeeNumber,
             FullName = history.FullName,

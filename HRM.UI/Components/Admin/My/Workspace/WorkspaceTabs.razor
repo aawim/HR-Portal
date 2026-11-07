@@ -7,6 +7,7 @@
 
         @foreach (var tab in AvailableTabs)
         {
+            var badgeCount = GetTabBadgeCount(tab);
             <button type="button" class="@TabClass(tab)" aria-pressed="@(ActiveTab==tab?"true":"false")"
                     @onclick="() => ChangeTab(tab)">
 
@@ -15,6 +16,13 @@
                     @GetTabIcon(tab)
 
                     @GetTabText(tab)
+
+                    @if (badgeCount > 0)
+                    {
+                        <span class="rounded-full px-1.5 py-0.5 text-[10px] font-bold leading-none @(ActiveTab == tab ? "bg-white text-emerald-700" : "bg-amber-500 text-white")">
+                            @badgeCount
+                        </span>
+                    }
 
                 </span>
 
@@ -36,6 +44,12 @@
 
     [Parameter]
     public EventCallback<WorkspaceTab> ActiveTabChanged { get; set; }
+
+    [Parameter]
+    public IReadOnlyDictionary<WorkspaceTab, int>? TabBadgeCounts { get; set; }
+
+    private int GetTabBadgeCount(WorkspaceTab tab) =>
+        TabBadgeCounts != null && TabBadgeCounts.TryGetValue(tab, out var count) ? count : 0;
 
     private IEnumerable<WorkspaceTab> AvailableTabs
     {

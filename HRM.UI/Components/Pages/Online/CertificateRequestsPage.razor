@@ -681,8 +681,11 @@
         try
         {
             myRequests = await CertificateService.GetMyRequestsAsync();
-            issuedCertificates = await CertificateService.GetMyIssuedCertificatesAsync();
+            var allIssued = await CertificateService.GetMyIssuedCertificatesAsync();
             history = await CertificateService.GetVerifiedEmploymentHistoryAsync();
+            issuedCertificates = history != null && history.IndividualId > 0
+                ? allIssued.Where(c => c.IndividualId == history.IndividualId).ToList()
+                : allIssued;
 
             if (selectedRequest != null)
             {
