@@ -77,15 +77,23 @@ public sealed class PayrollProcessor : IPayrollProcessor
             run.TotalEmployees = snapshotItems.Count;
             await db.SaveChangesAsync(cancellationToken);
 
-            // Create batch records if not existing
+            // Synchronize batch records
             var existingBatches = await db.PayrollRunBatches
                 .Where(b => b.PayrollRunId == payrollRunId)
-                .ToDictionaryAsync(b => b.BatchNumber, cancellationToken);
+                .ToListAsync(cancellationToken);
 
+            var extraBatches = existingBatches.Where(b => b.BatchNumber > batches.Count).ToList();
+            if (extraBatches.Count > 0)
+            {
+                db.PayrollRunBatches.RemoveRange(extraBatches);
+                existingBatches.RemoveAll(b => b.BatchNumber > batches.Count);
+            }
+
+            var batchDict = existingBatches.ToDictionary(b => b.BatchNumber);
             for (int i = 0; i < batches.Count; i++)
             {
                 int batchNum = i + 1;
-                if (!existingBatches.ContainsKey(batchNum))
+                if (!batchDict.TryGetValue(batchNum, out var batch))
                 {
                     var newBatch = new PayrollRunBatch
                     {
@@ -95,6 +103,10 @@ public sealed class PayrollProcessor : IPayrollProcessor
                         Status = PayrollBatchStatus.Pending
                     };
                     db.PayrollRunBatches.Add(newBatch);
+                }
+                else
+                {
+                    batch.TotalEmployees = batches[i].Count;
                 }
             }
             await db.SaveChangesAsync(cancellationToken);
@@ -113,6 +125,7 @@ public sealed class PayrollProcessor : IPayrollProcessor
                 }
 
                 int batchIndex = batch.BatchNumber - 1;
+                if (batchIndex >= batches.Count) continue;
                 var batchEmployees = batches[batchIndex];
 
                 await ProcessBatchInternalAsync(db, run, batch, batchEmployees, cancellationToken);
@@ -183,14 +196,21 @@ public sealed class PayrollProcessor : IPayrollProcessor
         var newEmployees = new List<PayrollEmployee>();
         var newExceptions = new List<PayrollException>();
 
+        // Ensure distinct individuals in the batch to avoid duplicates
+        var distinctEmployees = employees
+            .GroupBy(e => e.IndividualId)
+            .Select(g => g.First())
+            .ToList();
+
         try
         {
-            foreach (var empInput in employees)
+            foreach (var empInput in distinctEmployees)
             {
                 if (existingProcessedIndividualIds.Contains(empInput.IndividualId))
                 {
                     continue; // Skip already calculated
                 }
+                existingProcessedIndividualIds.Add(empInput.IndividualId);
 
                 var outcome = _engine.CalculateEmployee(
                     empInput,

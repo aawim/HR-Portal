@@ -38,10 +38,14 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
         if (existingSnapshots.Count > 0)
         {
             var deserialized = new List<EmployeePayrollInputItem>();
+            var seenIndividuals = new HashSet<int>();
             foreach (var s in existingSnapshots)
             {
                 var item = JsonSerializer.Deserialize<EmployeePayrollInputItem>(s.SnapshotJson);
-                if (item != null) deserialized.Add(item);
+                if (item != null && seenIndividuals.Add(item.IndividualId))
+                {
+                    deserialized.Add(item);
+                }
             }
             return deserialized;
         }
@@ -50,13 +54,20 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
         var periodStartDt = periodStart.ToDateTime(TimeOnly.MinValue);
         var periodEndDt = periodEnd.ToDateTime(TimeOnly.MaxValue);
 
-        var jobs = await db.Jobs
+        var allJobs = await db.Jobs
             .AsNoTracking()
             .Include(j => j.Individual)
             .Where(j => j.OrganisationID == organisationId &&
+                        j.JobStateId == 4 && // Approved active job
                         j.JoinedDate <= periodEndDt &&
                         (!j.TerminatedDate.HasValue || j.TerminatedDate.Value >= periodStartDt))
             .ToListAsync();
+
+        // Ensure 1 active job per individual (pick the most recently joined/updated job)
+        var jobs = allJobs
+            .GroupBy(j => j.IndividualID)
+            .Select(g => g.OrderByDescending(j => j.JoinedDate).ThenByDescending(j => j.JobId).First())
+            .ToList();
 
         var jobIds = jobs.Select(j => j.JobId).ToList();
 

@@ -307,14 +307,32 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         }
 
         run.Status = PayrollRunStatus.Queued;
-        
-        // Reset any non-completed batches so retrying recalculates them cleanly
-        var nonCompletedBatches = await db.PayrollRunBatches
-            .Where(b => b.PayrollRunId == runId && b.Status != PayrollBatchStatus.Completed)
-            .ToListAsync();
-        foreach (var b in nonCompletedBatches)
+        run.Description = null;
+        run.ProcessedEmployees = 0;
+
+        // When queuing or retrying calculation, clean up any previous calculated/partial records
+        var existingEmployees = await db.PayrollEmployees.Where(e => e.PayrollRunId == runId).ToListAsync();
+        if (existingEmployees.Count > 0)
         {
-            b.Status = PayrollBatchStatus.Pending;
+            db.PayrollEmployees.RemoveRange(existingEmployees);
+        }
+
+        var existingExceptions = await db.PayrollExceptions.Where(e => e.PayrollRunId == runId).ToListAsync();
+        if (existingExceptions.Count > 0)
+        {
+            db.PayrollExceptions.RemoveRange(existingExceptions);
+        }
+
+        var existingBatches = await db.PayrollRunBatches.Where(b => b.PayrollRunId == runId).ToListAsync();
+        if (existingBatches.Count > 0)
+        {
+            db.PayrollRunBatches.RemoveRange(existingBatches);
+        }
+
+        var existingSnapshots = await db.PayrollInputSnapshots.Where(s => s.PayrollRunId == runId).ToListAsync();
+        if (existingSnapshots.Count > 0)
+        {
+            db.PayrollInputSnapshots.RemoveRange(existingSnapshots);
         }
 
         await db.SaveChangesAsync();
