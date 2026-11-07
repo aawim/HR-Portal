@@ -153,5 +153,21 @@ namespace HRM.Authorization
         public const string DocumentArchive = "Document.Archive";
         public const string DocumentDispose = "Document.Dispose";
         public const string DocumentConfigure = "Document.Configure";
+
+        // =========================
+        // Payroll & Compensation Management
+        // =========================
+        public const string PayrollView = "Payroll.View";
+        public const string PayrollConfigure = "Payroll.Configure";
+        public const string PayrollPrepare = "Payroll.Prepare";
+        public const string PayrollCalculate = "Payroll.Calculate";
+        public const string PayrollReview = "Payroll.Review";
+        public const string PayrollApprove = "Payroll.Approve";
+        public const string PayrollFinalise = "Payroll.Finalise";
+        public const string PayrollExport = "Payroll.Export";
+        public const string PayrollPaymentPrepare = "Payroll.PaymentPrepare";
+        public const string PayrollPaymentAuthorise = "Payroll.PaymentAuthorise";
+        public const string PayrollPayslipView = "Payroll.PayslipView";
+        public const string PayrollAuditView = "Payroll.AuditView";
     }
 }

@@ -6,8 +6,8 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/user-preference")]
 public sealed class UserPreferenceController(global::HRM.Services.Contracts.UserPreferenceServiceContracts.IOperations service) : HrmApiController
 {
-    [HttpGet("get-theme")]
     [AllowMissingEmployee]
+    [HttpGet("get-theme")]
     public async Task<ActionResult<global::HRM.Services.UserThemePreference>> GetTheme()
     {
         return Ok(await service.GetThemeAsync());

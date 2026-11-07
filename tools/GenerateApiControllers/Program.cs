@@ -63,6 +63,7 @@ foreach(var contract in ApplicationContractCatalog.All)
    _=>[]
   };
   if(permissions.Length>0)file.AppendLine("    [ApiPermission("+string.Join(", ",permissions.Select(k=>JsonSerializer.Serialize(k)))+")]");
+  if (baseName is "UserPreference" && stem is "GetTheme") file.AppendLine("    [AllowMissingEmployee]");
   file.AppendLine($"    [Http{(get?"Get":"Post")}(\"{route}\")]");
   var result=method.ReturnType==typeof(Task)?null:method.ReturnType.GenericTypeArguments[0];
   var resultName=result is null?"IActionResult":"ActionResult<"+Name(result,nulls.Create(method.ReturnParameter).GenericTypeArguments[0])+">";

@@ -247,6 +247,16 @@ public static class BackendServiceRegistration
         services.AddScoped<IAddress, AddressService>();
         services.AddScoped<ITeam, TeamService>();
 
+        // Payroll & Compensation Services
+        services.AddSingleton<HRM.Application.Features.Payroll.IPayrollCalculationEngine, HRM.Application.Features.Payroll.PayrollCalculationEngine>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayrollQueueService, HRM.Services.Payroll.PayrollQueueService>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayrollSnapshotService, HRM.Services.Payroll.PayrollSnapshotService>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayrollProcessor, HRM.Services.Payroll.PayrollProcessor>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayrollApprovalService, HRM.Services.Payroll.PayrollApprovalService>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayrollPaymentService, HRM.Services.Payroll.PayrollPaymentService>();
+        services.AddScoped<HRM.Application.Features.Payroll.IPayslipService, HRM.Services.Payroll.PayslipService>();
+        services.AddScoped<HRM.Application.Contracts.Pages.IEnterprisePayroll, HRM.Services.Payroll.EnterprisePayrollService>();
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 

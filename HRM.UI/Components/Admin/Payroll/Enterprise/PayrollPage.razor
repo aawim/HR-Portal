@@ -1,0 +1,1001 @@
+@page "/admin/payroll/payroll"
+@page "/admin/payroll-management"
+@rendermode RenderMode.InteractiveServer
+@using HRM.Application.Contracts.Pages
+@using HRM.DTOs
+@using HRM.Models.Payroll
+@inject IEnterprisePayroll Payroll
+@inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>Enterprise Payroll &amp; Compensation Management</PageTitle>
+
+<section class="payroll-page w-full min-w-0 p-2 flex flex-col gap-3">
+
+    <!-- Sticky Header complying with HRM.UI Design Standard -->
+    <header class="sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3.5 shadow-sm rounded-xl">
+        <div>
+            <div class="flex items-center gap-2">
+                <h1 class="text-lg font-bold text-slate-900">Enterprise Payroll &amp; Compensation</h1>
+                <span class="rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                    Multi-Organisation
+                </span>
+                <span class="rounded-full bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 flex items-center gap-1">
+                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-pulse"></span>
+                    Worker Engine Active
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+                Deterministic calculation engine, durable background queues, multi-level approvals, and idempotent payments.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="RefreshAllAsync">
+                <svg class="h-3.5 w-3.5 text-slate-600 @(isLoading ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Create Period Button -->
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="() => showCreatePeriodModal = true">
+                <span>+ New Period</span>
+            </button>
+
+            <!-- Create Run Button -->
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="() => showCreateRunModal = true">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+                </svg>
+                <span>New Payroll Run</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Top KPI Cards Overview -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Active Period</div>
+            <div class="mt-1 text-lg font-extrabold text-slate-900">
+                @(selectedPeriod != null ? $"{selectedPeriod.PeriodYear}-{selectedPeriod.PeriodMonth:D2}" : "None")
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                @(selectedPeriod != null ? $"Pay date: {selectedPeriod.PaymentDate:dd MMM yyyy}" : "Select or create period")
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Runs</div>
+            <div class="mt-1 text-lg font-extrabold text-slate-900">@runs.Count</div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                @runs.Count(r => r.Status == (int)PayrollRunStatus.Finalised) Finalised
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-emerald-600">Gross Earnings</div>
+            <div class="mt-1 text-lg font-extrabold text-emerald-700">
+                @TotalGross.ToString("N2") <span class="text-xs font-normal text-slate-500">MVR</span>
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">Across current period</div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-amber-600">Total Deductions</div>
+            <div class="mt-1 text-lg font-extrabold text-amber-700">
+                @TotalDeductions.ToString("N2") <span class="text-xs font-normal text-slate-500">MVR</span>
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">Pension, Tax &amp; Agreements</div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-blue-600">Net Payable</div>
+            <div class="mt-1 text-lg font-extrabold text-blue-700">
+                @TotalNet.ToString("N2") <span class="text-xs font-normal text-slate-500">MVR</span>
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">Bank transfer total</div>
+        </div>
+    </div>
+
+    <!-- Tabbed Navigation Bar -->
+    <div class="flex items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 rounded-xl shadow-xs">
+        <button type="button"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "runs" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
+                @onclick="@(() => activeTab = "runs")">
+            Runs &amp; Calculation Engine
+        </button>
+        <button type="button"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "employees" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
+                @onclick="@(() => LoadEmployeesAsync())">
+            Employee Payroll Results
+        </button>
+        <button type="button"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "payments" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
+                @onclick="@(() => LoadPaymentBatchesAsync())">
+            Payment Batches &amp; Bank Files
+        </button>
+        <button type="button"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "periods" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
+                @onclick="@(() => activeTab = "periods")">
+            Payroll Periods &amp; Cutoffs
+        </button>
+    </div>
+
+    <!-- TAB 1: RUNS & CALCULATION ENGINE -->
+    @if (activeTab == "runs")
+    {
+        <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+            <!-- Left Panel: Runs List -->
+            <div class="page-panel-left min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-sm font-bold text-slate-900">Monthly Payroll Runs</h2>
+                    <span class="text-xs text-slate-500">@runs.Count run(s) configured</span>
+                </div>
+
+                @if (runs.Count == 0)
+                {
+                    <div class="p-8 text-center text-slate-500 text-xs border border-dashed border-slate-200 rounded-xl">
+                        No payroll runs created for this period. Click <strong>+ New Payroll Run</strong> above to begin.
+                    </div>
+                }
+                else
+                {
+                    <div class="overflow-x-auto rounded-lg border border-slate-200">
+                        <table class="w-full text-left text-xs text-slate-600">
+                            <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Title &amp; Type</th>
+                                    <th class="p-2.5">Status</th>
+                                    <th class="p-2.5 text-right">Employees</th>
+                                    <th class="p-2.5 text-right">Net Payable</th>
+                                    <th class="p-2.5 text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var r in runs)
+                                {
+                                    <tr class="hover:bg-slate-50/80 cursor-pointer @(selectedRun?.PayrollRunId == r.PayrollRunId ? "bg-blue-50/50" : "")"
+                                        @onclick="() => SelectRun(r)">
+                                        <td class="p-2.5">
+                                            <div class="font-bold text-slate-900">@r.Title</div>
+                                            <div class="text-[11px] text-slate-400">@GetRunTypeName(r.RunType) · ID: #@r.PayrollRunId</div>
+                                        </td>
+                                        <td class="p-2.5">
+                                            @GetStatusBadge(r.Status)
+                                        </td>
+                                        <td class="p-2.5 text-right font-medium">
+                                            @r.ProcessedEmployees / @r.TotalEmployees
+                                        </td>
+                                        <td class="p-2.5 text-right font-bold text-slate-900">
+                                            @r.TotalNetPayable.ToString("N2")
+                                        </td>
+                                        <td class="p-2.5 text-center" @onclick:stopPropagation>
+                                            <button type="button"
+                                                    class="rounded border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
+                                                    @onclick="() => SelectRun(r)">
+                                                Manage
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <!-- Right Panel: Run Operation & Real-Time Worker Progress -->
+            <aside class="page-panel-right min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                @if (selectedRun == null)
+                {
+                    <div class="p-8 text-center text-slate-400 text-xs">
+                        Select a payroll run from the list to view background calculation progress, run validation, and manage approvals.
+                    </div>
+                }
+                else
+                {
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">@selectedRun.Title</h3>
+                            <div class="text-[11px] text-slate-500">State: @GetStatusBadge(selectedRun.Status)</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-xs font-bold text-slate-900">#@selectedRun.PayrollRunId</div>
+                            <div class="text-[11px] text-slate-400">@GetRunTypeName(selectedRun.RunType)</div>
+                        </div>
+                    </div>
+
+                    <!-- Background Progress Bar Card -->
+                    <div class="rounded-lg border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                        <div class="flex items-center justify-between text-xs font-semibold text-slate-700">
+                            <span>Background Worker Progress</span>
+                            <span>@(currentProgress != null ? $"{currentProgress.PercentComplete:F1}%" : "0.0%")</span>
+                        </div>
+                        <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+                            <div class="bg-blue-600 h-2 rounded-full transition-all duration-500"
+                                 style="width: @(currentProgress != null ? Math.Min(100.0, currentProgress.PercentComplete) : 0)%">
+                            </div>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px] text-slate-500">
+                            <span>@(currentProgress?.CurrentStage ?? "Idle")</span>
+                            <span>Processed: @selectedRun.ProcessedEmployees of @selectedRun.TotalEmployees</span>
+                        </div>
+                    </div>
+
+                    <!-- Workflow Stage Action Buttons -->
+                    <div class="flex flex-col gap-2 border-t border-slate-100 pt-2">
+                        <div class="text-xs font-bold text-slate-800">Processing &amp; Approval Actions</div>
+
+                        <!-- 1. Queue Background Calculation -->
+                        @if (selectedRun.Status == (int)PayrollRunStatus.Draft ||
+                             selectedRun.Status == (int)PayrollRunStatus.Calculated ||
+                             selectedRun.Status == (int)PayrollRunStatus.ValidationFailed)
+                        {
+                            <button type="button"
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                                    @onclick="QueueCalculationAsync">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                <span>Queue Calculation in Worker Service</span>
+                            </button>
+                        }
+
+                        <!-- 2. Submit for Review -->
+                        @if (selectedRun.Status == (int)PayrollRunStatus.Calculated)
+                        {
+                            <button type="button"
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 transition-colors"
+                                    @onclick="SubmitReviewAsync">
+                                <span>Submit for Review</span>
+                            </button>
+                        }
+
+                        <!-- 3. Approve Payroll (Segregation of Duties Enforced) -->
+                        @if (selectedRun.Status == (int)PayrollRunStatus.UnderReview)
+                        {
+                            <div class="flex gap-2">
+                                <button type="button"
+                                        class="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition-colors"
+                                        @onclick="ApprovePayrollAsync">
+                                    Approve Payroll
+                                </button>
+                                <button type="button"
+                                        class="rounded-lg border border-red-300 bg-white px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                        @onclick="RejectPayrollAsync">
+                                    Reject
+                                </button>
+                            </div>
+                        }
+
+                        <!-- 4. Finalise Payroll (Immutable Lock) -->
+                        @if (selectedRun.Status == (int)PayrollRunStatus.Approved)
+                        {
+                            <button type="button"
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-purple-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-purple-700 transition-colors"
+                                    @onclick="FinalisePayrollAsync">
+                                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                </svg>
+                                <span>Finalise &amp; Lock Payroll (Immutable)</span>
+                            </button>
+                        }
+
+                        <!-- 5. Prepare Payment Batch -->
+                        @if (selectedRun.Status == (int)PayrollRunStatus.Finalised)
+                        {
+                            <button type="button"
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-indigo-700 transition-colors"
+                                    @onclick="PreparePaymentBatchAsync">
+                                <span>Prepare Bank Payment Instructions</span>
+                            </button>
+                        }
+                    </div>
+
+                    <!-- Exceptions Viewer -->
+                    @if (exceptions.Count > 0)
+                    {
+                        <div class="rounded-lg border border-amber-200 bg-amber-50/60 p-3 flex flex-col gap-1.5">
+                            <div class="flex items-center justify-between text-xs font-bold text-amber-900">
+                                <span>Validation Issues (@exceptions.Count)</span>
+                                <span class="rounded bg-amber-200 px-1.5 py-0.5 text-[10px] text-amber-800">
+                                    @exceptions.Count(e => e.Severity == 2) Blocking
+                                </span>
+                            </div>
+                            <div class="max-h-36 overflow-y-auto space-y-1 text-xs">
+                                @foreach (var exc in exceptions)
+                                {
+                                    <div class="flex items-start gap-1.5 text-slate-700">
+                                        <span class="font-mono text-[10px] px-1 rounded @(exc.Severity == 2 ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800")">
+                                            @exc.Code
+                                        </span>
+                                        <span class="text-[11px]">@exc.Message</span>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                }
+            </aside>
+        </div>
+    }
+
+    <!-- TAB 2: EMPLOYEE PAYROLL RESULTS -->
+    @if (activeTab == "employees")
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="flex items-center gap-2">
+                    <h2 class="text-sm font-bold text-slate-900">Itemized Employee Payroll Results</h2>
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-semibold text-slate-600">
+                        @employees.Count records
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="text"
+                           placeholder="Search employee name or number..."
+                           class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 w-64"
+                           @bind="employeeSearchTerm"
+                           @bind:event="oninput"
+                           @bind:after="LoadEmployeesAsync" />
+                </div>
+            </div>
+
+            @if (employees.Count == 0)
+            {
+                <div class="p-8 text-center text-slate-400 text-xs">
+                    No employee results available. Queue a calculation run first.
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5">Employee</th>
+                                <th class="p-2.5">Position / Dept</th>
+                                <th class="p-2.5 text-right">Base Salary</th>
+                                <th class="p-2.5 text-right">Gross Earnings</th>
+                                <th class="p-2.5 text-right">Total Deductions</th>
+                                <th class="p-2.5 text-right">Employer Pension</th>
+                                <th class="p-2.5 text-right">Net Payable</th>
+                                <th class="p-2.5 text-center">Status</th>
+                                <th class="p-2.5 text-center">Breakdown</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var emp in employees)
+                            {
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-2.5">
+                                        <div class="font-bold text-slate-900">@emp.EmployeeName</div>
+                                        <div class="text-[11px] text-slate-400">@emp.EmployeeNumber</div>
+                                    </td>
+                                    <td class="p-2.5">
+                                        <div>@emp.PositionTitle</div>
+                                        <div class="text-[11px] text-slate-400">@emp.DepartmentName</div>
+                                    </td>
+                                    <td class="p-2.5 text-right font-medium">@emp.BaseSalary.ToString("N2")</td>
+                                    <td class="p-2.5 text-right font-bold text-emerald-700">@emp.GrossEarnings.ToString("N2")</td>
+                                    <td class="p-2.5 text-right font-bold text-amber-700">@emp.TotalDeductions.ToString("N2")</td>
+                                    <td class="p-2.5 text-right text-slate-500">@emp.EmployerContributions.ToString("N2")</td>
+                                    <td class="p-2.5 text-right font-black text-blue-700 text-sm">@emp.NetSalary.ToString("N2")</td>
+                                    <td class="p-2.5 text-center">
+                                        @if (emp.CalculationStatus == "Calculated")
+                                        {
+                                            <span class="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 border border-emerald-200">OK</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="rounded bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 border border-red-200">@emp.CalculationStatus</span>
+                                        }
+                                    </td>
+                                    <td class="p-2.5 text-center">
+                                        <button type="button"
+                                                class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                @onclick="() => OpenBreakdownModal(emp)">
+                                            Inspect Lines
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- TAB 3: PAYMENT BATCHES & BANK EXPORT -->
+    @if (activeTab == "payments")
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Payment Instruction Batches</h2>
+                    <p class="text-xs text-slate-500">Prepare bank transfers, generate secure export files, and reconcile payments.</p>
+                </div>
+            </div>
+
+            @if (paymentBatches.Count == 0)
+            {
+                <div class="p-8 text-center text-slate-400 text-xs">
+                    No payment batches created. Finalise a payroll run and prepare bank instructions.
+                </div>
+            }
+            else
+            {
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5">Batch Reference</th>
+                                <th class="p-2.5">Bank &amp; Format</th>
+                                <th class="p-2.5 text-right">Transactions</th>
+                                <th class="p-2.5 text-right">Total Amount (MVR)</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5 text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var b in paymentBatches)
+                            {
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-2.5 font-bold text-slate-900">@b.BatchReference</td>
+                                    <td class="p-2.5">@b.BankCode (@b.FormatCode)</td>
+                                    <td class="p-2.5 text-right font-medium">@b.TotalCount staff</td>
+                                    <td class="p-2.5 text-right font-extrabold text-slate-900">@b.TotalAmount.ToString("N2")</td>
+                                    <td class="p-2.5">
+                                        <span class="rounded px-2 py-0.5 text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-200">
+                                            @((PaymentBatchStatus)b.Status)
+                                        </span>
+                                    </td>
+                                    <td class="p-2.5 text-center flex items-center justify-center gap-2">
+                                        <button type="button"
+                                                class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-blue-600 hover:bg-blue-50"
+                                                @onclick="() => DownloadBankExportAsync(b.PaymentBatchId)">
+                                            Export Bank CSV
+                                        </button>
+                                        @if (b.Status != (int)PaymentBatchStatus.Reconciled)
+                                        {
+                                            <button type="button"
+                                                    class="rounded border border-emerald-300 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50"
+                                                    @onclick="() => ReconcileBatchAsync(b.PaymentBatchId)">
+                                                Reconcile
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+
+    <!-- TAB 4: PERIODS & CUTOFF CONFIGURATION -->
+    @if (activeTab == "periods")
+    {
+        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-sm font-bold text-slate-900">Configured Payroll Periods</h2>
+                    <p class="text-xs text-slate-500">Period date ranges, attendance cutoff, and payment settlement dates.</p>
+                </div>
+                <button type="button"
+                        class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                        @onclick="() => showCreatePeriodModal = true">
+                    + Create Period
+                </button>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                <table class="w-full text-left text-xs text-slate-600">
+                    <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                        <tr>
+                            <th class="p-2.5">Period (Year-Month)</th>
+                            <th class="p-2.5">Start Date</th>
+                            <th class="p-2.5">End Date</th>
+                            <th class="p-2.5">Attendance Cutoff</th>
+                            <th class="p-2.5">Payment Date</th>
+                            <th class="p-2.5">Status</th>
+                            <th class="p-2.5 text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach (var p in periods)
+                        {
+                            <tr class="hover:bg-slate-50">
+                                <td class="p-2.5 font-bold text-slate-900">@p.PeriodYear-@p.PeriodMonth.ToString("D2")</td>
+                                <td class="p-2.5">@p.PeriodStartDate.ToString("dd MMM yyyy")</td>
+                                <td class="p-2.5">@p.PeriodEndDate.ToString("dd MMM yyyy")</td>
+                                <td class="p-2.5">@p.AttendanceCutoffDate.ToString("dd MMM yyyy")</td>
+                                <td class="p-2.5 font-medium text-slate-800">@p.PaymentDate.ToString("dd MMM yyyy")</td>
+                                <td class="p-2.5">
+                                    <span class="rounded px-2 py-0.5 text-[10px] font-semibold @(p.PeriodStatus == (int)PayrollPeriodStatus.Open ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600")">
+                                        @((PayrollPeriodStatus)p.PeriodStatus)
+                                    </span>
+                                </td>
+                                <td class="p-2.5 text-center">
+                                    @if (p.PeriodStatus == (int)PayrollPeriodStatus.Open)
+                                    {
+                                        <button type="button"
+                                                class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                @onclick="() => ClosePeriodAsync(p.PayrollPeriodId)">
+                                            Close Period
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+
+</section>
+
+<!-- MODAL 1: CREATE PERIOD -->
+@if (showCreatePeriodModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 class="text-sm font-bold text-slate-900">Create New Payroll Period</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600" @onclick="() => showCreatePeriodModal = false">✕</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="font-semibold text-slate-700">Year</label>
+                    <input type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodYear" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Month (1-12)</label>
+                    <input type="number" min="1" max="12" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodMonth" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700" @onclick="() => showCreatePeriodModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="CreatePeriodAsync">Create Period</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL 2: CREATE RUN -->
+@if (showCreateRunModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 class="text-sm font-bold text-slate-900">Create New Payroll Run</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600" @onclick="() => showCreateRunModal = false">✕</button>
+            </div>
+            <div class="flex flex-col gap-2.5 text-xs">
+                <div>
+                    <label class="font-semibold text-slate-700">Target Payroll Period</label>
+                    <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newRunPeriodId">
+                        @foreach (var p in periods)
+                        {
+                            <option value="@p.PayrollPeriodId">@p.PeriodYear-@p.PeriodMonth.ToString("D2") (Status: @((PayrollPeriodStatus)p.PeriodStatus))</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Run Type</label>
+                    <select class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newRunType">
+                        <option value="1">Regular Monthly</option>
+                        <option value="2">Supplementary</option>
+                        <option value="3">Off-Cycle</option>
+                        <option value="4">Final Settlement</option>
+                        <option value="5">Arrears &amp; Adjustments</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Run Title</label>
+                    <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newRunTitle" placeholder="e.g. November 2026 Regular Payroll" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700" @onclick="() => showCreateRunModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="CreateRunAsync">Create Run</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL 3: ITEMIZED EMPLOYEE LINES DRILLDOWN -->
+@if (activeInspectionEmployee != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div class="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3 max-h-[85vh] overflow-hidden">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900">@activeInspectionEmployee.EmployeeName</h3>
+                    <div class="text-xs text-slate-500">@activeInspectionEmployee.EmployeeNumber · @activeInspectionEmployee.PositionTitle</div>
+                </div>
+                <button type="button" class="text-slate-400 hover:text-slate-600" @onclick="() => activeInspectionEmployee = null">✕</button>
+            </div>
+
+            <div class="overflow-y-auto max-h-[60vh] space-y-3 pr-1 text-xs">
+                <div class="rounded-lg border border-slate-200 p-3 bg-slate-50 grid grid-cols-4 gap-2 text-center">
+                    <div>
+                        <div class="text-slate-400 text-[10px] uppercase font-bold">Base Salary</div>
+                        <div class="font-extrabold text-slate-900">@activeInspectionEmployee.BaseSalary.ToString("N2")</div>
+                    </div>
+                    <div>
+                        <div class="text-emerald-600 text-[10px] uppercase font-bold">Gross Earnings</div>
+                        <div class="font-extrabold text-emerald-700">@activeInspectionEmployee.GrossEarnings.ToString("N2")</div>
+                    </div>
+                    <div>
+                        <div class="text-amber-600 text-[10px] uppercase font-bold">Deductions</div>
+                        <div class="font-extrabold text-amber-700">@activeInspectionEmployee.TotalDeductions.ToString("N2")</div>
+                    </div>
+                    <div>
+                        <div class="text-blue-600 text-[10px] uppercase font-bold">Net Salary</div>
+                        <div class="font-extrabold text-blue-700">@activeInspectionEmployee.NetSalary.ToString("N2")</div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2">Component</th>
+                                <th class="p-2 text-right">Rate</th>
+                                <th class="p-2 text-right">Units</th>
+                                <th class="p-2 text-right">Amount</th>
+                                <th class="p-2">Reference</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var line in activeInspectionEmployee.Lines)
+                            {
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-2 font-medium text-slate-900">@line.ComponentName</td>
+                                    <td class="p-2 text-right">@line.Rate.ToString("N2")</td>
+                                    <td class="p-2 text-right">@line.Units.ToString("N2")</td>
+                                    <td class="p-2 text-right font-bold @(line.ComponentType >= 9 && line.ComponentType <= 14 ? "text-amber-700" : "text-emerald-700")">
+                                        @line.CalculatedAmount.ToString("N2")
+                                    </td>
+                                    <td class="p-2 text-[11px] text-slate-400">@line.SourceReference</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="flex justify-end border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => activeInspectionEmployee = null">Close</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isFullWidth = false;
+    private bool isLoading = false;
+    private string activeTab = "runs";
+
+    private List<PayrollPeriodRow> periods = new();
+    private PayrollPeriodRow? selectedPeriod;
+    private List<PayrollRunSummaryRow> runs = new();
+    private PayrollRunSummaryRow? selectedRun;
+    private PayrollProgressRow? currentProgress;
+    private List<PayrollExceptionRow> exceptions = new();
+    private List<PayrollEmployeeRow> employees = new();
+    private List<PaymentBatchRow> paymentBatches = new();
+
+    private string employeeSearchTerm = "";
+    private bool showCreatePeriodModal = false;
+    private bool showCreateRunModal = false;
+    private PayrollEmployeeRow? activeInspectionEmployee;
+
+    private int newPeriodYear = DateTime.UtcNow.Year;
+    private int newPeriodMonth = DateTime.UtcNow.Month;
+    private int newRunPeriodId = 0;
+    private int newRunType = 1;
+    private string newRunTitle = "";
+
+    private decimal TotalGross => runs.Sum(r => r.TotalGrossEarnings);
+    private decimal TotalDeductions => runs.Sum(r => r.TotalDeductions);
+    private decimal TotalNet => runs.Sum(r => r.TotalNetPayable);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await RefreshAllAsync();
+    }
+
+    private void ToggleFullWidth() => isFullWidth = !isFullWidth;
+
+    private async Task RefreshAllAsync()
+    {
+        isLoading = true;
+        try
+        {
+            periods = await Payroll.GetPeriodsAsync();
+            if (periods.Count > 0 && selectedPeriod == null)
+            {
+                selectedPeriod = periods.FirstOrDefault(p => p.PeriodStatus == (int)PayrollPeriodStatus.Open) ?? periods.First();
+                newRunPeriodId = selectedPeriod.PayrollPeriodId;
+                newRunTitle = $"{DateTime.UtcNow:MMMM yyyy} Regular Payroll";
+            }
+
+            runs = await Payroll.GetRunsAsync(selectedPeriod?.PayrollPeriodId);
+            if (runs.Count > 0 && selectedRun == null)
+            {
+                selectedRun = runs.First();
+                await SelectRun(selectedRun);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load payroll data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectRun(PayrollRunSummaryRow run)
+    {
+        selectedRun = run;
+        try
+        {
+            currentProgress = await Payroll.GetProgressAsync(run.PayrollRunId);
+            exceptions = await Payroll.GetExceptionsAsync(run.PayrollRunId);
+        }
+        catch { }
+    }
+
+    private async Task QueueCalculationAsync()
+    {
+        if (selectedRun == null) return;
+        var res = await Payroll.QueueCalculationAsync(selectedRun.PayrollRunId);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        if (selectedRun == null) return;
+        var res = await Payroll.SubmitReviewAsync(selectedRun.PayrollRunId, "Submitted for review");
+        if (res.Success)
+        {
+            Toasts.Success("Payroll submitted for review.");
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task ApprovePayrollAsync()
+    {
+        if (selectedRun == null) return;
+        var res = await Payroll.ApprovePayrollAsync(selectedRun.PayrollRunId, "Approved by authority");
+        if (res.Success)
+        {
+            Toasts.Success("Payroll approved successfully.");
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task FinalisePayrollAsync()
+    {
+        if (selectedRun == null) return;
+        var res = await Payroll.FinalisePayrollAsync(selectedRun.PayrollRunId, "Finalised and locked");
+        if (res.Success)
+        {
+            Toasts.Success("Payroll finalised. Results are now immutable.");
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task RejectPayrollAsync()
+    {
+        if (selectedRun == null) return;
+        var res = await Payroll.RejectPayrollAsync(selectedRun.PayrollRunId, "Adjustments required by approver");
+        if (res.Success)
+        {
+            Toasts.Warning("Payroll rejected and returned to draft.");
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task LoadEmployeesAsync()
+    {
+        activeTab = "employees";
+        if (selectedRun == null) return;
+        employees = await Payroll.GetEmployeesAsync(selectedRun.PayrollRunId, 1, 100, employeeSearchTerm);
+    }
+
+    private void OpenBreakdownModal(PayrollEmployeeRow emp)
+    {
+        activeInspectionEmployee = emp;
+    }
+
+    private async Task LoadPaymentBatchesAsync()
+    {
+        activeTab = "payments";
+        paymentBatches = await Payroll.GetPaymentBatchesAsync(selectedRun?.PayrollRunId);
+    }
+
+    private async Task PreparePaymentBatchAsync()
+    {
+        if (selectedRun == null) return;
+        try
+        {
+            var batch = await Payroll.PreparePaymentBatchAsync(selectedRun.PayrollRunId, "BML", "CSV");
+            Toasts.Success($"Payment batch {batch.BatchReference} prepared for {batch.TotalCount} staff.");
+            await LoadPaymentBatchesAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Payment batch preparation failed: {ex.Message}");
+        }
+    }
+
+    private async Task DownloadBankExportAsync(int batchId)
+    {
+        try
+        {
+            string csv = await Payroll.ExportPaymentFileAsync(batchId);
+            await JS.InvokeVoidAsync("alert", $"Bank CSV file prepared successfully for batch #{batchId}:\n\n" + (csv.Length > 200 ? csv[..200] + "..." : csv));
+            Toasts.Success("Bank CSV export completed.");
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task ReconcileBatchAsync(int batchId)
+    {
+        var res = await Payroll.ReconcilePaymentBatchAsync(batchId, $"BNK-CONFIRM-{DateTime.UtcNow:yyyyMMdd}");
+        if (res.Success)
+        {
+            Toasts.Success("Payment batch reconciled.");
+            await LoadPaymentBatchesAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task CreatePeriodAsync()
+    {
+        var res = await Payroll.CreatePeriodAsync(new PayrollPeriodInput(newPeriodYear, newPeriodMonth));
+        if (res.Success)
+        {
+            Toasts.Success("Payroll period created.");
+            showCreatePeriodModal = false;
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task ClosePeriodAsync(int periodId)
+    {
+        var res = await Payroll.UpdatePeriodStatusAsync(periodId, (int)PayrollPeriodStatus.Closed);
+        if (res.Success)
+        {
+            Toasts.Success("Period closed.");
+            await RefreshAllAsync();
+        }
+    }
+
+    private async Task CreateRunAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newRunTitle))
+        {
+            Toasts.Error("Enter a title for the payroll run.");
+            return;
+        }
+
+        var res = await Payroll.CreateRunAsync(new CreatePayrollRunInput(newRunPeriodId, newRunType, newRunTitle, null));
+        if (res.Success)
+        {
+            Toasts.Success("Payroll run created.");
+            showCreateRunModal = false;
+            await RefreshAllAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private static string GetRunTypeName(int runType) => runType switch
+    {
+        1 => "Regular Monthly",
+        2 => "Supplementary",
+        3 => "Off-Cycle",
+        4 => "Final Settlement",
+        5 => "Arrears & Adjustments",
+        _ => "Standard"
+    };
+
+    private static RenderFragment GetStatusBadge(int status) => builder =>
+    {
+        var (cls, text) = (PayrollRunStatus)status switch
+        {
+            PayrollRunStatus.Draft => ("bg-slate-100 text-slate-700 border-slate-200", "Draft"),
+            PayrollRunStatus.Queued => ("bg-blue-100 text-blue-800 border-blue-200", "Queued"),
+            PayrollRunStatus.Calculating => ("bg-blue-100 text-blue-800 border-blue-200 animate-pulse", "Calculating"),
+            PayrollRunStatus.Calculated => ("bg-indigo-100 text-indigo-800 border-indigo-200", "Calculated"),
+            PayrollRunStatus.ValidationFailed => ("bg-red-100 text-red-800 border-red-200", "Validation Issues"),
+            PayrollRunStatus.UnderReview => ("bg-amber-100 text-amber-800 border-amber-200", "Under Review"),
+            PayrollRunStatus.Approved => ("bg-emerald-100 text-emerald-800 border-emerald-200", "Approved"),
+            PayrollRunStatus.Finalised => ("bg-purple-100 text-purple-800 border-purple-200", "Finalised & Locked"),
+            PayrollRunStatus.PaymentPrepared => ("bg-cyan-100 text-cyan-800 border-cyan-200", "Payment Prepared"),
+            PayrollRunStatus.Paid => ("bg-teal-100 text-teal-800 border-teal-200", "Paid & Reconciled"),
+            _ => ("bg-slate-100 text-slate-700 border-slate-200", ((PayrollRunStatus)status).ToString())
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold {cls}");
+        builder.AddContent(2, text);
+        builder.CloseElement();
+    };
+}

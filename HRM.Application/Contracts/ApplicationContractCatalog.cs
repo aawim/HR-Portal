@@ -90,6 +90,7 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Application.Contracts.Pages.ILeaveApplications),
         typeof(global::HRM.Application.Contracts.Pages.IEmployeeAddresses),
         typeof(global::HRM.Services.Contracts.CertificateServiceContracts.IOperations),
-        typeof(global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations)
+        typeof(global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations),
+        typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll)
     ]);
 }
