@@ -22,94 +22,168 @@
 @inject IUserAccessService UserAccess
 @rendermode RenderMode.InteractiveServer
 
-<PageTitle>Settings - HR Portal</PageTitle>
+<PageTitle>@(ResolvedCategoryName == "org" ? "Organisation Workspace - Settings" : "Settings - HR Portal")</PageTitle>
 
 <AuthorizeView>
     <Authorized>
-        <div class="settings-page mx-auto w-full min-w-0 p-4">
-
-            <div class="flex flex-col md:flex-row gap-3 items-start">
-
-                <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-60" : "w-20")">
-
-                    <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
-
-                        <h2 class="text-base font-semibold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
-                            @ResolvedCategoryName Management
-                        </h2>
-
-                        <button aria-expanded="@isSidebarExpanded" aria-label="Toggle settings sections" @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
-                            <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="settings-section-list @(isSidebarExpanded ? "" : "settings-section-list-collapsed") flex flex-col gap-1 mb-2">
-                        @foreach (var item in VisibleItems)
-                        {
-                            <button aria-current="@(activeItem?.Title == item.Title ? "page" : null)" @onclick="() => SelectItem(item)"
-                            title="@(!isSidebarExpanded ? item.Title : null)"
-                            class="settings-section-link text-left p-1 rounded-xl border transition-colors group flex items-center gap-3 overflow-hidden
-                       @(activeItem?.Title == item.Title ? "settings-section-active" : "bg-white hover:bg-slate-50")">
-
-                                <div class="w-8 h-8 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
-                        @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700")">
-                                    @item.Icon
-                                </div>
-
-                                <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
-                                    <h3 class="settings-section-label font-bold text-sm mb-0.5 @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
-                                        @item.Title
-                                    </h3>
-
-                                </div>
-
-                                <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
-                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
-                                </div>
+        @if (ResolvedCategoryName == "org")
+        {
+            <!-- Admin Workspace Style Layout for /admin/settings/org -->
+            <section class="org-workspace-page w-full min-w-0 p-2 flex flex-col gap-2 bg-slate-50/50 text-slate-900 transition-all duration-300">
+                <!-- Top Header Area Matching Admin Workspace Standard -->
+                <div class="org-workspace-header flex flex-col gap-2 p-2">
+                    <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-xl md:text-2xl font-bold tracking-tight text-slate-900">Organisation Workspace</h1>
+                                <span class="rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-semibold text-teal-800">
+                                    Organisation Settings
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Central management for organisation details, document centre, structure types, calendars, locations and permissions.
+                            </p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                    @onclick="() => StateHasChanged()">
+                                <span>↻</span>
+                                <span>Refresh</span>
                             </button>
-                        }
+                        </div>
                     </div>
                 </div>
 
-                <div class="w-full min-w-0 md:flex-1">
+                <!-- Solid Folder Navigation Tabs Matching Admin Workspace -->
+                <div class="org-workspace-tabs w-full border-b-2 border-teal-700 overflow-x-auto">
+                    <nav class="flex items-end gap-1 min-w-max pb-0" aria-label="Organisation Workspace Sections">
+                        @foreach (var item in VisibleItems)
+                        {
+                            var isActive = activeItem?.Title == item.Title;
+                            <button type="button"
+                                    aria-current="@(isActive ? "page" : null)"
+                                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r flex items-center gap-2 @(isActive ? "bg-teal-700 text-white border-teal-700 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 border-slate-300 hover:bg-[#86b0be]/60")"
+                                    @onclick="() => SelectItem(item)">
+                                <span class="text-base">@item.Icon</span>
+                                <span>@item.Title</span>
+                            </button>
+                        }
+                    </nav>
+                </div>
 
-                    <div class="flex flex-col lg:flex-row gap-2 mt-1">
+                <!-- Dynamic Content Panel -->
+                <div class="w-full min-w-0 bg-white rounded-b-2xl rounded-tr-2xl border border-slate-200 p-4 shadow-xs">
+                    @if (activeItem == null)
+                    {
+                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-12">
+                            <div class="text-6xl mb-4">👈</div>
+                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @if (activeItem.ComponentType != null)
+                        {
+                            <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                        }
+                        else
+                        {
+                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
+                                <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+        }
+        else
+        {
+            <div class="settings-page mx-auto w-full min-w-0 p-4">
 
-                        <div class="settings-content flex-1 min-w-0 bg-white rounded-xl border border-slate-200 p-3">
+                <div class="flex flex-col md:flex-row gap-3 items-start">
 
-                            @if (activeItem == null)
+                    <div class="flex-shrink-0 flex flex-col gap-1 transition-all duration-300 ease-in-out overflow-hidden @(isSidebarExpanded ? "w-full md:w-60" : "w-20")">
+
+                        <div class="flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-3">
+
+                            <h2 class="text-base font-semibold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                                @ResolvedCategoryName Management
+                            </h2>
+
+                            <button aria-expanded="@isSidebarExpanded" aria-label="Toggle settings sections" @onclick="ToggleSidebar" class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0" title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
+                                <svg class="w-6 h-6 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="settings-section-list @(isSidebarExpanded ? "" : "settings-section-list-collapsed") flex flex-col gap-1 mb-2">
+                            @foreach (var item in VisibleItems)
                             {
-                                <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-6">
-                                    <div class="text-6xl mb-4">👈</div>
-                                    <p class="text-lg font-medium">Select an item from the menu to view data.</p>
-                                </div>
-                            }
-                            else
-                            {
+                                <button aria-current="@(activeItem?.Title == item.Title ? "page" : null)" @onclick="() => SelectItem(item)"
+                                title="@(!isSidebarExpanded ? item.Title : null)"
+                                class="settings-section-link text-left p-1 rounded-xl border transition-colors group flex items-center gap-3 overflow-hidden
+                           @(activeItem?.Title == item.Title ? "settings-section-active" : "bg-white hover:bg-slate-50")">
 
-                                <div class="mt-2">
-                                    @if (activeItem.ComponentType != null)
-                                    {
-                                        <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
-                                    }
-                                    else
-                                    {
-                                        <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
-                                            <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
-                                        </div>
-                                    }
-                                </div>
+                                    <div class="w-8 h-8 flex items-center justify-center rounded-lg text-xl flex-shrink-0 transition-colors duration-300 mx-auto
+                            @(activeItem?.Title == item.Title ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600 group-hover:bg-blue-100 group-hover:text-blue-700")">
+                                        @item.Icon
+                                    </div>
+
+                                    <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
+                                        <h3 class="settings-section-label font-bold text-sm mb-0.5 @(activeItem?.Title == item.Title ? "text-blue-800" : "text-slate-800 group-hover:text-blue-700")">
+                                            @item.Title
+                                        </h3>
+
+                                    </div>
+
+                                    <div class="flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden") @(activeItem?.Title == item.Title ? "text-blue-600" : "text-slate-300 group-hover:text-blue-600")">
+                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                                    </div>
+                                </button>
                             }
+                        </div>
+                    </div>
+
+                    <div class="w-full min-w-0 md:flex-1">
+
+                        <div class="flex flex-col lg:flex-row gap-2 mt-1">
+
+                            <div class="settings-content flex-1 min-w-0 bg-white rounded-xl border border-slate-200 p-3">
+
+                                @if (activeItem == null)
+                                {
+                                    <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 py-6">
+                                        <div class="text-6xl mb-4">👈</div>
+                                        <p class="text-lg font-medium">Select an item from the menu to view data.</p>
+                                    </div>
+                                }
+                                else
+                                {
+
+                                    <div class="mt-2">
+                                        @if (activeItem.ComponentType != null)
+                                        {
+                                            <DynamicComponent @key="(ResolvedCategoryName, Section)" Type="@activeItem.ComponentType" Parameters="SelectedParameters" />
+                                        }
+                                        else
+                                        {
+                                            <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
+                                                <p><strong>@activeItem.Title</strong> is not available yet. Return to the section menu to choose an available feature.</p>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+
                         </div>
 
                     </div>
+                </div>
 
             </div>
-         </div>
-
-        </div>
+        }
     </Authorized>
 
     <NotAuthorized>
@@ -134,6 +208,8 @@
         ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)(OrganisationId ?? QueryOrganisationId)!, ["InitialKind"] = TeamSection == "departments" ? "Department" : "Team" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)
             ? new Dictionary<string, object> { ["InitialOrganisationId"] = (object?)OrganisationId!, ["InitialSection"] = OrganisationSection! }
+        : activeItem?.ComponentType == typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)
+            ? new Dictionary<string, object> { ["InitialSection"] = "types" }
         : activeItem?.ComponentType == typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)
             ? new Dictionary<string, object> { ["Kind"] = activeItem.Title switch {
                 "Manage type" => HRM.DTOs.Organisation.OrganisationResourceKind.StructureTypes,
@@ -148,11 +224,18 @@
         (x.ComponentType != typeof(LeaveCarryForwardSettings) || canViewCarryForward));
     private string ItemSlug(SubItem item) => item.Title switch
     {
-        "Teams and supervisors" => "teams", "Organisation Permissions" => "permissions", "Manage" => "manage", "Manage type" => "types",
+        "Teams and supervisors" => "teams",
+        "Organisation Permissions" => "permissions",
+        "Manage" => "manage",
+        "Manage type" => "types",
+        "Document Centre" => "document-types",
+        "Document Types" => "document-types",
         "Leave Set Management" => "manage-leave-sets",
         "Job Type Configuration" => "job-types",
         "Request State Transitions" => "state-transitions",
-        "Request Approval Flows" => "approval-flows", "Leave Accrual by Job Type" => "accrual", "Leave Carry Forward" => "carry-forward",
+        "Request Approval Flows" => "approval-flows",
+        "Leave Accrual by Job Type" => "accrual",
+        "Leave Carry Forward" => "carry-forward",
         _ => HRM.Helpers.SectionRoutes.Slug(item.Title)
     };
 
@@ -198,7 +281,7 @@
         },
         "org" => new() {
             new("Manage", "🏢", "Manage organisation details, addresses, contacts, teams and supervisors.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationSettingsEditor)),
-            new("Document Types", "📄", "Manage organisation document classifications and image requirements.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationDocumentTypes)),
+            new("Document Centre", "🗂️", "Central enterprise document repository, classifications and document requests.", typeof(HRM.Components.Admin.Hr.Documents.DocumentCentreAdminPanel)),
             new("Manage type", "🏷️", "Manage Organisation Structure Types, such as departments and divisions.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Calendar", "📅", "View and assign organisation calendars.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
             new("Locations", "📍", "View organisation locations and manage their addresses.", typeof(HRM.Components.Admin.Settings.Organisations.OrganisationResources)),
@@ -260,13 +343,6 @@
     private void SelectItem(WorkspaceSearchResult item)
     {
         SelectedItem = item;
-        ActiveTab = WorkspaceTab.Overview;
-    }
-
-    private void ResetWorkspace()
-    {
-        SelectedItem = null;
-        ActiveTab = WorkspaceTab.Overview;
     }
 
     private void OnTabChanged(WorkspaceTab tab)
@@ -285,8 +361,9 @@
     {
         CategoryName = ResolvedCategoryName;
         if (CategoryName == "leaves" && Section is "new-lt" or "manage-new-lt") { Navigation.NavigateTo("/admin/settings/leaves/leave-types", replace: true); return; }
-        if(CategoryName=="leaves" && Section=="leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return; }
+        if (CategoryName == "leaves" && Section == "leave-sets") { Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets", replace: true); return; }
         if (CategoryName == "documents") { Navigation.NavigateTo("/admin/settings/org/document-types", replace: true); return; }
+        if (CategoryName.Equals("org", StringComparison.OrdinalIgnoreCase) && Section is "document-centre" or "document-center") Section = "document-types";
         if ((CategoryName == "workplaning" && Section == "work-types") ||
             ((CategoryName is "job" or "jobs") && (string.IsNullOrWhiteSpace(Section) || Section == "work-types")))
         {
@@ -313,7 +390,7 @@
         {
             var current = new Uri(Navigation.Uri);
             var target = "/admin/hr/supervisors/management" + current.Query;
-            if (TeamSection == "departments") target = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target,"teamView","departments");
+            if (TeamSection == "departments") target = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target, "teamView", "departments");
             Navigation.NavigateTo(target + current.Fragment, replace: true);
             return;
         }

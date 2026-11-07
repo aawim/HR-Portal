@@ -10,8 +10,21 @@
 
 @code {
     private HRM.Helpers.NavigationTrail? trail;
-    private bool IsSettings => new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/').Equals("/admin/settings", StringComparison.OrdinalIgnoreCase)
-        || new Uri(Navigation.Uri).AbsolutePath.StartsWith("/admin/settings/", StringComparison.OrdinalIgnoreCase);
+    private bool IsSettings
+    {
+        get
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath.TrimEnd('/');
+            if (path.Equals("/admin/settings/positions", StringComparison.OrdinalIgnoreCase) ||
+                path.StartsWith("/admin/settings/positions/", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return path.Equals("/admin/settings", StringComparison.OrdinalIgnoreCase)
+                || path.StartsWith("/admin/settings/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
 
     protected override void OnInitialized()
     {
