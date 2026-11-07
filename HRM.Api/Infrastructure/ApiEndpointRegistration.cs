@@ -109,6 +109,8 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.ItemCatalogueService>());
         services.TryAddScoped<global::HRM.Services.StaffTransferService>();
         services.TryAddScoped<global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffTransferService>());
+        services.TryAddScoped<global::HRM.Services.StaffSeparationService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffSeparationService>());
         services.TryAddScoped<global::HRM.Services.StaffAssetService>();
         services.TryAddScoped<global::HRM.Services.Contracts.StaffAssetServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffAssetService>());
         services.TryAddScoped<global::HRM.Api.Services.CertificateService>();

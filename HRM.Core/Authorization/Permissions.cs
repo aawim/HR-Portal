@@ -103,6 +103,15 @@ namespace HRM.Authorization
         public const string StaffTransferExportRestrictedPdf = "StaffTransfer.ExportRestrictedPdf";
 
         // =========================
+        // Staff Separation and Offboarding
+        // =========================
+        public const string StaffSeparationView = "StaffSeparation.View";
+        public const string StaffSeparationInitiate = "StaffSeparation.Initiate";
+        public const string StaffSeparationClearanceReview = "StaffSeparation.ClearanceReview";
+        public const string StaffSeparationFinalApprove = "StaffSeparation.FinalApprove";
+        public const string StaffSeparationExecute = "StaffSeparation.Execute";
+
+        // =========================
         // Staff Asset Management
         // =========================
 

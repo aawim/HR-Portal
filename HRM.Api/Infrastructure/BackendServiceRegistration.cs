@@ -222,6 +222,7 @@ public static class BackendServiceRegistration
         services.AddScoped<HRM.Services.LeaveSetConfigurationService>();
         services.AddScoped<IStaffTransferActivationService, HRM.Services.StaffTransferActivationService>();
         services.AddScoped<HRM.Services.StaffTransferService>();
+        services.AddScoped<HRM.Services.StaffSeparationService>();
         services.AddScoped<HRM.Services.StaffAssetService>();
         services.AddScoped<HRM.Api.Services.CertificateService>();
         services.AddScoped<HRM.Services.Contracts.CertificateServiceContracts.IOperations>(provider => provider.GetRequiredService<HRM.Api.Services.CertificateService>());
