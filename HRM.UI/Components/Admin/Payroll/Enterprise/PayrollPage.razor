@@ -257,19 +257,31 @@
                     <div class="flex flex-col gap-2 border-t border-slate-100 pt-2">
                         <div class="text-xs font-bold text-slate-800">Processing &amp; Approval Actions</div>
 
-                        <!-- 1. Queue Background Calculation -->
-                        @if (selectedRun.Status == (int)PayrollRunStatus.Draft ||
-                             selectedRun.Status == (int)PayrollRunStatus.Calculated ||
-                             selectedRun.Status == (int)PayrollRunStatus.ValidationFailed)
+                        <!-- 1. Queue Background Calculation / Retry Failed -->
+                        @if (selectedRun.Status != (int)PayrollRunStatus.Finalised &&
+                             selectedRun.Status != (int)PayrollRunStatus.UnderReview &&
+                             selectedRun.Status != (int)PayrollRunStatus.Approved &&
+                             selectedRun.Status != (int)PayrollRunStatus.PaymentPrepared &&
+                             selectedRun.Status != (int)PayrollRunStatus.Paid &&
+                             selectedRun.Status != (int)PayrollRunStatus.Closed)
                         {
                             <button type="button"
-                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                                    class="w-full inline-flex items-center justify-center gap-1.5 rounded-lg @(selectedRun.Status == (int)PayrollRunStatus.Failed || selectedRun.Status == (int)PayrollRunStatus.ValidationFailed ? "bg-rose-600 hover:bg-rose-700" : "bg-blue-600 hover:bg-blue-700") px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors"
                                     @onclick="QueueCalculationAsync">
                                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                                 </svg>
-                                <span>Queue Calculation in Worker Service</span>
+                                <span>
+                                    @(selectedRun.Status switch
+                                    {
+                                        (int)PayrollRunStatus.Failed => "Retry Failed Calculation",
+                                        (int)PayrollRunStatus.ValidationFailed => "Re-calculate / Retry Validation",
+                                        (int)PayrollRunStatus.Queued => "Re-queue Calculation",
+                                        (int)PayrollRunStatus.Calculating => "Force Re-queue Calculation",
+                                        (int)PayrollRunStatus.Calculated => "Re-calculate All Employees",
+                                        _ => "Queue Calculation in Worker Service"
+                                    })
+                                </span>
                             </button>
                         }
 
@@ -1092,6 +1104,7 @@
             PayrollRunStatus.Finalised => ("bg-purple-100 text-purple-800 border-purple-200", "Finalised & Locked"),
             PayrollRunStatus.PaymentPrepared => ("bg-cyan-100 text-cyan-800 border-cyan-200", "Payment Prepared"),
             PayrollRunStatus.Paid => ("bg-teal-100 text-teal-800 border-teal-200", "Paid & Reconciled"),
+            PayrollRunStatus.Failed => ("bg-rose-100 text-rose-800 border-rose-200", "Failed"),
             _ => ("bg-slate-100 text-slate-700 border-slate-200", ((PayrollRunStatus)status).ToString())
         };
 

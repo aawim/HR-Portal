@@ -307,6 +307,16 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
         }
 
         run.Status = PayrollRunStatus.Queued;
+        
+        // Reset any non-completed batches so retrying recalculates them cleanly
+        var nonCompletedBatches = await db.PayrollRunBatches
+            .Where(b => b.PayrollRunId == runId && b.Status != PayrollBatchStatus.Completed)
+            .ToListAsync();
+        foreach (var b in nonCompletedBatches)
+        {
+            b.Status = PayrollBatchStatus.Pending;
+        }
+
         await db.SaveChangesAsync();
 
         long jobId = await _queueService.EnqueueJobAsync(orgId, runId, PayrollJobType.CalculateBatch, priority: 10);
