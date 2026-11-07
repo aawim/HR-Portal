@@ -6,6 +6,23 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/enterprise-payroll")]
 public sealed class EnterprisePayrollController(global::HRM.Application.Contracts.Pages.IEnterprisePayroll service) : HrmApiController
 {
+    [HttpGet("get-configuration")]
+    public async Task<ActionResult<global::HRM.Application.Contracts.Pages.PayrollConfigurationDto>> GetConfiguration()
+    {
+        return Ok(await service.GetConfigurationAsync());
+    }
+
+    [HttpPost("save-configuration")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveConfiguration([FromBody] EnterprisePayrollSaveConfigurationRequest request)
+    {
+        return Ok(await service.SaveConfigurationAsync(request.input));
+    }
+
+    public sealed class EnterprisePayrollSaveConfigurationRequest
+    {
+        public global::HRM.Application.Contracts.Pages.UpdatePayrollConfigurationInput input { get; set; } = default!;
+    }
+
     [HttpGet("get-periods")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.Application.Contracts.Pages.PayrollPeriodRow>>> GetPeriods([FromQuery] global::System.Int32? year = null)
     {
@@ -33,6 +50,17 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     {
         public global::System.Int32 periodId { get; set; }
         public global::System.Int32 newStatus { get; set; }
+    }
+
+    [HttpPost("update-period-dates")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdatePeriodDates([FromBody] EnterprisePayrollUpdatePeriodDatesRequest request)
+    {
+        return Ok(await service.UpdatePeriodDatesAsync(request.input));
+    }
+
+    public sealed class EnterprisePayrollUpdatePeriodDatesRequest
+    {
+        public global::HRM.Application.Contracts.Pages.UpdatePayrollPeriodInput input { get; set; } = default!;
     }
 
     [HttpGet("get-runs")]

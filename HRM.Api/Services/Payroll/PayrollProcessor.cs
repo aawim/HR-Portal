@@ -202,6 +202,20 @@ public sealed class PayrollProcessor : IPayrollProcessor
             .Select(g => g.First())
             .ToList();
 
+        // Load active organization calculation rules (Pension %, Overtime Multiplier, etc.)
+        var rules = await db.CalculationRules
+            .AsNoTracking()
+            .Where(r => r.OrganisationId == run.OrganisationId && r.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var eePensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_EE");
+        var erPensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_ER");
+        var otRule = rules.FirstOrDefault(r => r.RuleCode == "OT_STANDARD");
+
+        decimal eePensionRate = eePensionRule != null && eePensionRule.PercentageValue >= 0 ? eePensionRule.PercentageValue / 100m : 0.07m;
+        decimal erPensionRate = erPensionRule != null && erPensionRule.PercentageValue >= 0 ? erPensionRule.PercentageValue / 100m : 0.07m;
+        decimal otMultiplier = otRule != null && otRule.PercentageValue > 0 ? otRule.PercentageValue : 1.50m;
+
         try
         {
             foreach (var empInput in distinctEmployees)
@@ -215,7 +229,10 @@ public sealed class PayrollProcessor : IPayrollProcessor
                 var outcome = _engine.CalculateEmployee(
                     empInput,
                     run.PayrollPeriod!.PeriodStartDate,
-                    run.PayrollPeriod.PeriodEndDate
+                    run.PayrollPeriod.PeriodEndDate,
+                    eePensionRate,
+                    erPensionRate,
+                    otMultiplier
                 );
 
                 var empEntity = new PayrollEmployee

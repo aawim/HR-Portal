@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HRM.Application.Contracts.Pages;
 using HRM.Application.Features.Payroll;
@@ -69,6 +70,181 @@ public sealed class EnterprisePayrollService : IEnterprisePayroll
             throw new UnauthorizedAccessException("Select your current organisation.");
 
         return (org, actor.UserId, actor.IndividualId, actor.IsSuperAdministrator);
+    }
+
+    public async Task<PayrollConfigurationDto> GetConfigurationAsync()
+    {
+        var (orgId, _, _, _) = await RequireOrgScopeAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var rules = await db.CalculationRules
+            .AsNoTracking()
+            .Where(r => r.OrganisationId == orgId && r.IsActive)
+            .ToListAsync();
+
+        var eeRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_EE");
+        var erRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_ER");
+        var otRule = rules.FirstOrDefault(r => r.RuleCode == "OT_STANDARD");
+        var periodSettingsRule = rules.FirstOrDefault(r => r.RuleCode == "PERIOD_SETTINGS");
+
+        int defPaymentDay = 28;
+        int attCutoffDay = 20;
+        int adjCutoffDay = 22;
+
+        if (periodSettingsRule?.ConfigurationJson != null)
+        {
+            try
+            {
+                using var doc = JsonDocument.Parse(periodSettingsRule.ConfigurationJson);
+                if (doc.RootElement.TryGetProperty("DefaultPaymentDay", out var pDay)) defPaymentDay = pDay.GetInt32();
+                if (doc.RootElement.TryGetProperty("AttendanceCutoffDay", out var aDay)) attCutoffDay = aDay.GetInt32();
+                if (doc.RootElement.TryGetProperty("AdjustmentCutoffDay", out var jDay)) adjCutoffDay = jDay.GetInt32();
+            }
+            catch { }
+        }
+
+        return new PayrollConfigurationDto(
+            EmployeePensionPercentage: eeRule?.PercentageValue ?? 7.0m,
+            EmployerPensionPercentage: erRule?.PercentageValue ?? 7.0m,
+            OvertimeMultiplier: otRule?.PercentageValue ?? 1.50m,
+            DefaultPaymentDay: defPaymentDay,
+            AttendanceCutoffDay: attCutoffDay,
+            AdjustmentCutoffDay: adjCutoffDay
+        );
+    }
+
+    public async Task<ServiceResult> SaveConfigurationAsync(UpdatePayrollConfigurationInput input)
+    {
+        var (orgId, userId, _, _) = await RequireOrgScopeAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        if (input.EmployeePensionPercentage < 0 || input.EmployeePensionPercentage > 50)
+            return ServiceResult.Fail("Employee pension percentage must be between 0% and 50%.");
+
+        if (input.EmployerPensionPercentage < 0 || input.EmployerPensionPercentage > 50)
+            return ServiceResult.Fail("Employer pension percentage must be between 0% and 50%.");
+
+        if (input.OvertimeMultiplier < 1.0m || input.OvertimeMultiplier > 5.0m)
+            return ServiceResult.Fail("Overtime rate multiplier must be between 1.0 and 5.0.");
+
+        var rules = await db.CalculationRules
+            .Where(r => r.OrganisationId == orgId)
+            .ToListAsync();
+
+        // 1. Employee Pension
+        var eeRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_EE");
+        if (eeRule == null)
+        {
+            eeRule = new CalculationRule
+            {
+                OrganisationId = orgId,
+                RuleCode = "PENSION_EE",
+                RuleName = "Employee Pension Contribution",
+                RuleType = "Pension",
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.CalculationRules.Add(eeRule);
+        }
+        eeRule.PercentageValue = input.EmployeePensionPercentage;
+        eeRule.IsActive = true;
+
+        // 2. Employer Pension
+        var erRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_ER");
+        if (erRule == null)
+        {
+            erRule = new CalculationRule
+            {
+                OrganisationId = orgId,
+                RuleCode = "PENSION_ER",
+                RuleName = "Employer Pension Contribution",
+                RuleType = "Pension",
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.CalculationRules.Add(erRule);
+        }
+        erRule.PercentageValue = input.EmployerPensionPercentage;
+        erRule.IsActive = true;
+
+        // 3. Overtime Multiplier
+        var otRule = rules.FirstOrDefault(r => r.RuleCode == "OT_STANDARD");
+        if (otRule == null)
+        {
+            otRule = new CalculationRule
+            {
+                OrganisationId = orgId,
+                RuleCode = "OT_STANDARD",
+                RuleName = "Standard Overtime Multiplier",
+                RuleType = "Overtime",
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.CalculationRules.Add(otRule);
+        }
+        otRule.PercentageValue = input.OvertimeMultiplier;
+        otRule.IsActive = true;
+
+        // 4. Period Cutoffs Configuration
+        var periodSettingsRule = rules.FirstOrDefault(r => r.RuleCode == "PERIOD_SETTINGS");
+        if (periodSettingsRule == null)
+        {
+            periodSettingsRule = new CalculationRule
+            {
+                OrganisationId = orgId,
+                RuleCode = "PERIOD_SETTINGS",
+                RuleName = "Default Period Cutoff Days",
+                RuleType = "PeriodDefaults",
+                EffectiveFrom = new DateOnly(2020, 1, 1),
+                IsActive = true,
+                CreatedAtUtc = DateTime.UtcNow
+            };
+            db.CalculationRules.Add(periodSettingsRule);
+        }
+        periodSettingsRule.ConfigurationJson = JsonSerializer.Serialize(new
+        {
+            DefaultPaymentDay = Math.Clamp(input.DefaultPaymentDay, 1, 31),
+            AttendanceCutoffDay = Math.Clamp(input.AttendanceCutoffDay, 1, 31),
+            AdjustmentCutoffDay = Math.Clamp(input.AdjustmentCutoffDay, 1, 31)
+        });
+        periodSettingsRule.IsActive = true;
+
+        db.PayrollAuditEvents.Add(new PayrollAuditEvent
+        {
+            OrganisationId = orgId,
+            UserId = userId,
+            ActionType = "UPDATE_CONFIG",
+            Description = $"Updated payroll configuration: Employee Pension={input.EmployeePensionPercentage:F2}%, Employer Pension={input.EmployerPensionPercentage:F2}%, Overtime Multiplier={input.OvertimeMultiplier:F2}x",
+            TimestampUtc = DateTime.UtcNow
+        });
+
+        await db.SaveChangesAsync();
+        return ServiceResult.Ok("Payroll configurations saved successfully.");
+    }
+
+    public async Task<ServiceResult> UpdatePeriodDatesAsync(UpdatePayrollPeriodInput input)
+    {
+        var (orgId, _, _, _) = await RequireOrgScopeAsync();
+        await using var db = await _factory.CreateDbContextAsync();
+
+        var period = await db.PayrollPeriods.SingleOrDefaultAsync(p => p.PayrollPeriodId == input.PayrollPeriodId && p.OrganisationId == orgId);
+        if (period == null) return ServiceResult.Fail("Payroll period not found.");
+
+        if (period.PeriodStatus == PayrollPeriodStatus.Locked)
+            return ServiceResult.Fail("Cannot modify dates of a locked payroll period.");
+
+        period.PeriodStartDate = input.StartDate;
+        period.PeriodEndDate = input.EndDate;
+        period.AttendanceCutoffDate = input.AttendanceCutoffDate;
+        period.AdjustmentCutoffDate = input.AdjustmentCutoffDate;
+        period.PaymentDate = input.PaymentDate;
+        period.UpdatedAtUtc = DateTime.UtcNow;
+
+        await db.SaveChangesAsync();
+        return ServiceResult.Ok("Payroll period dates updated successfully.");
     }
 
     public async Task<List<PayrollPeriodRow>> GetPeriodsAsync(int? year = null)

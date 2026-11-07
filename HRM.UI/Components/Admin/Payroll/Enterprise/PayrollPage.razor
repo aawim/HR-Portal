@@ -148,7 +148,7 @@
         <button type="button"
                 class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "periods" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
                 @onclick="@(() => activeTab = "periods")">
-            Payroll Periods &amp; Cutoffs
+            Periods &amp; Configurations
         </button>
     </div>
 
@@ -518,65 +518,197 @@
                 </div>
             }
         </div>
-    }
-
-    <!-- TAB 4: PERIODS & CUTOFF CONFIGURATION -->
+    }    <!-- TAB 4: PERIODS & CONFIGURATION -->
     @if (activeTab == "periods")
     {
-        <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
-            <div class="flex items-center justify-between">
-                <div>
-                    <h2 class="text-sm font-bold text-slate-900">Configured Payroll Periods</h2>
-                    <p class="text-xs text-slate-500">Period date ranges, attendance cutoff, and payment settlement dates.</p>
+        <div class="flex flex-col gap-4">
+
+            <!-- STATUTORY PENSION & CALCULATION CONFIGURATION CARD -->
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-lg bg-indigo-50 p-1.5 text-indigo-700">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                            </span>
+                            <h2 class="text-sm font-bold text-slate-900">Statutory Pension &amp; Payroll Calculation Rules</h2>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Configure Maldives Pension Act contribution rates, overtime multipliers, and automated cutoff day templates applied across all payroll runs.</p>
+                    </div>
+                    <button type="button"
+                            class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-1.5 shadow-xs"
+                            disabled="@isSavingConfig"
+                            @onclick="SaveConfigurationsAsync">
+                        @if (isSavingConfig)
+                        {
+                            <span class="animate-spin inline-block h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full"></span>
+                            <span>Saving...</span>
+                        }
+                        else
+                        {
+                            <span>💾 Save Payroll Configurations</span>
+                        }
+                    </button>
                 </div>
-                <button type="button"
-                        class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                        @onclick="() => showCreatePeriodModal = true">
-                    + Create Period
-                </button>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <!-- Pension Settings Column -->
+                    <div class="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3 flex flex-col gap-2.5">
+                        <span class="font-bold text-indigo-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-indigo-500"></span>
+                            Pension Contribution Rates
+                        </span>
+                        <div>
+                            <label class="font-semibold text-slate-700">Employee Pension Contribution (%)</label>
+                            <div class="relative mt-1">
+                                <input type="number" step="0.1" min="0" max="50"
+                                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 pr-8 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
+                                       @bind="configEmployeePension" />
+                                <span class="absolute right-3 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                            </div>
+                            <span class="text-[11px] text-slate-500">Mandatory statutory deduction (standard: 7.00%)</span>
+                        </div>
+                        <div>
+                            <label class="font-semibold text-slate-700">Employer Pension Contribution (%)</label>
+                            <div class="relative mt-1">
+                                <input type="number" step="0.1" min="0" max="50"
+                                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 pr-8 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
+                                       @bind="configEmployerPension" />
+                                <span class="absolute right-3 top-1.5 text-xs text-slate-400 font-bold">%</span>
+                            </div>
+                            <span class="text-[11px] text-slate-500">Mandatory statutory contribution (standard: 7.00%)</span>
+                        </div>
+                    </div>
+
+                    <!-- Overtime & Calculation Column -->
+                    <div class="rounded-xl border border-amber-100 bg-amber-50/30 p-3 flex flex-col gap-2.5">
+                        <span class="font-bold text-amber-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            Overtime &amp; Rate Multipliers
+                        </span>
+                        <div>
+                            <label class="font-semibold text-slate-700">Standard Overtime Multiplier</label>
+                            <div class="relative mt-1">
+                                <input type="number" step="0.05" min="1.0" max="5.0"
+                                       class="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 pr-8 text-xs font-semibold text-slate-900 focus:border-blue-500 focus:outline-none"
+                                       @bind="configOvertimeMultiplier" />
+                                <span class="absolute right-3 top-1.5 text-xs text-slate-400 font-bold">x</span>
+                            </div>
+                            <span class="text-[11px] text-slate-500">Normal working day rate multiplier (standard: 1.50x)</span>
+                        </div>
+                        <div class="rounded-lg bg-amber-100/60 p-2 text-[11px] text-amber-800">
+                            <strong>Note:</strong> OT hourly rate is computed as <code>(Basic Salary / 160) × Multiplier</code> per civil service regulation.
+                        </div>
+                    </div>
+
+                    <!-- Period Schedule Templates Column -->
+                    <div class="rounded-xl border border-emerald-100 bg-emerald-50/30 p-3 flex flex-col gap-2.5">
+                        <span class="font-bold text-emerald-900 flex items-center gap-1.5">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Default Monthly Cutoff Days
+                        </span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <label class="font-semibold text-slate-700">Attendance Cutoff</label>
+                                <input type="number" min="1" max="31"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900"
+                                       @bind="configAttendanceCutoffDay" />
+                                <span class="text-[10px] text-slate-500">Day of month</span>
+                            </div>
+                            <div>
+                                <label class="font-semibold text-slate-700">Adjustment Cutoff</label>
+                                <input type="number" min="1" max="31"
+                                       class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-900"
+                                       @bind="configAdjustmentCutoffDay" />
+                                <span class="text-[10px] text-slate-500">Day of month</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="font-semibold text-slate-700">Default Payment Settlement Day</label>
+                            <input type="number" min="1" max="31"
+                                   class="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-900"
+                                   @bind="configDefaultPaymentDay" />
+                            <span class="text-[11px] text-slate-500">Day of month for bank transfer instructions</span>
+                        </div>
+                    </div>
+                </div>
             </div>
 
-            <div class="overflow-x-auto rounded-lg border border-slate-200">
-                <table class="w-full text-left text-xs text-slate-600">
-                    <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
-                        <tr>
-                            <th class="p-2.5">Period (Year-Month)</th>
-                            <th class="p-2.5">Start Date</th>
-                            <th class="p-2.5">End Date</th>
-                            <th class="p-2.5">Attendance Cutoff</th>
-                            <th class="p-2.5">Payment Date</th>
-                            <th class="p-2.5">Status</th>
-                            <th class="p-2.5 text-center">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @foreach (var p in periods)
-                        {
-                            <tr class="hover:bg-slate-50">
-                                <td class="p-2.5 font-bold text-slate-900">@p.PeriodYear-@p.PeriodMonth.ToString("D2")</td>
-                                <td class="p-2.5">@p.PeriodStartDate.ToString("dd MMM yyyy")</td>
-                                <td class="p-2.5">@p.PeriodEndDate.ToString("dd MMM yyyy")</td>
-                                <td class="p-2.5">@p.AttendanceCutoffDate.ToString("dd MMM yyyy")</td>
-                                <td class="p-2.5 font-medium text-slate-800">@p.PaymentDate.ToString("dd MMM yyyy")</td>
-                                <td class="p-2.5">
-                                    <span class="rounded px-2 py-0.5 text-[10px] font-semibold @(p.PeriodStatus == (int)PayrollPeriodStatus.Open ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600")">
-                                        @((PayrollPeriodStatus)p.PeriodStatus)
-                                    </span>
-                                </td>
-                                <td class="p-2.5 text-center">
-                                    @if (p.PeriodStatus == (int)PayrollPeriodStatus.Open)
-                                    {
-                                        <button type="button"
-                                                class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                                                @onclick="() => ClosePeriodAsync(p.PayrollPeriodId)">
-                                            Close Period
-                                        </button>
-                                    }
-                                </td>
+            <!-- PERIODS TABLE CARD -->
+            <div class="rounded-xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Configured Payroll Periods</h2>
+                        <p class="text-xs text-slate-500">Active and past period date ranges, cutoff checkpoints, and payment settlement dates.</p>
+                    </div>
+                    <button type="button"
+                            class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 flex items-center gap-1 shadow-xs"
+                            @onclick="OpenCreatePeriodModal">
+                        <span>＋</span> Create Period
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto rounded-lg border border-slate-200">
+                    <table class="w-full text-left text-xs text-slate-600">
+                        <thead class="bg-slate-50 font-semibold text-slate-700 border-b border-slate-200">
+                            <tr>
+                                <th class="p-2.5">Period (Year-Month)</th>
+                                <th class="p-2.5">Period Date Range</th>
+                                <th class="p-2.5">Attendance Cutoff</th>
+                                <th class="p-2.5">Adjustment Cutoff</th>
+                                <th class="p-2.5">Payment Date</th>
+                                <th class="p-2.5">Runs</th>
+                                <th class="p-2.5">Status</th>
+                                <th class="p-2.5 text-center">Actions</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var p in periods)
+                            {
+                                <tr class="hover:bg-slate-50">
+                                    <td class="p-2.5 font-bold text-slate-900">@p.PeriodYear-@p.PeriodMonth.ToString("D2")</td>
+                                    <td class="p-2.5">@p.PeriodStartDate.ToString("dd MMM yyyy") &rarr; @p.PeriodEndDate.ToString("dd MMM yyyy")</td>
+                                    <td class="p-2.5 text-slate-700">@p.AttendanceCutoffDate.ToString("dd MMM yyyy")</td>
+                                    <td class="p-2.5 text-slate-700">@p.AdjustmentCutoffDate.ToString("dd MMM yyyy")</td>
+                                    <td class="p-2.5 font-semibold text-slate-900">@p.PaymentDate.ToString("dd MMM yyyy")</td>
+                                    <td class="p-2.5">
+                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">@p.TotalRunsCount run(s)</span>
+                                    </td>
+                                    <td class="p-2.5">
+                                        <span class="rounded px-2 py-0.5 text-[10px] font-semibold @(p.PeriodStatus == (int)PayrollPeriodStatus.Open ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-600")">
+                                            @((PayrollPeriodStatus)p.PeriodStatus)
+                                        </span>
+                                    </td>
+                                    <td class="p-2.5 text-center">
+                                        <div class="inline-flex items-center gap-1.5">
+                                            <button type="button"
+                                                    class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                    @onclick="() => OpenEditPeriodModal(p)">
+                                                Edit Dates
+                                            </button>
+                                            @if (p.PeriodStatus == (int)PayrollPeriodStatus.Open)
+                                            {
+                                                <button type="button"
+                                                        class="rounded border border-rose-300 bg-rose-50 px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-100"
+                                                        @onclick="() => ClosePeriodAsync(p.PayrollPeriodId)">
+                                                    Close
+                                                </button>
+                                            }
+                                            else
+                                            {
+                                                <button type="button"
+                                                        class="rounded border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                        @onclick="() => ReopenPeriodAsync(p.PayrollPeriodId)">
+                                                    Re-open
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     }
@@ -587,24 +719,87 @@
 @if (showCreatePeriodModal)
 {
     <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
-        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3">
             <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                 <h3 class="text-sm font-bold text-slate-900">Create New Payroll Period</h3>
-                <button type="button" class="text-slate-400 hover:text-slate-600" @onclick="() => showCreatePeriodModal = false">✕</button>
+                <button type="button" class="text-slate-400 hover:text-slate-600 text-base" @onclick="() => showCreatePeriodModal = false">✕</button>
             </div>
             <div class="grid grid-cols-2 gap-3 text-xs">
                 <div>
                     <label class="font-semibold text-slate-700">Year</label>
-                    <input type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodYear" />
+                    <input type="number" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5"
+                           value="@newPeriodYear"
+                           @onchange="(e) => { if (int.TryParse(e.Value?.ToString(), out var y)) { newPeriodYear = y; ComputeNewPeriodDates(); } }" />
                 </div>
                 <div>
                     <label class="font-semibold text-slate-700">Month (1-12)</label>
-                    <input type="number" min="1" max="12" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodMonth" />
+                    <input type="number" min="1" max="12" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5"
+                           value="@newPeriodMonth"
+                           @onchange="(e) => { if (int.TryParse(e.Value?.ToString(), out var m)) { newPeriodMonth = m; ComputeNewPeriodDates(); } }" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Start Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodStartDate" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">End Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodEndDate" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Attendance Cutoff Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodAttendanceCutoff" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Adjustment Cutoff Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="newPeriodAdjustmentCutoff" />
+                </div>
+                <div class="col-span-2">
+                    <label class="font-semibold text-slate-700">Payment Settlement Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-blue-900" @bind="newPeriodPaymentDate" />
                 </div>
             </div>
             <div class="flex justify-end gap-2 border-t border-slate-100 pt-3">
-                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700" @onclick="() => showCreatePeriodModal = false">Cancel</button>
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => showCreatePeriodModal = false">Cancel</button>
                 <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="CreatePeriodAsync">Create Period</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- MODAL 1B: EDIT PERIOD DATES -->
+@if (showEditPeriodModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl border border-slate-200 flex flex-col gap-3">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                <h3 class="text-sm font-bold text-slate-900">Edit Payroll Period Dates</h3>
+                <button type="button" class="text-slate-400 hover:text-slate-600 text-base" @onclick="() => showEditPeriodModal = false">✕</button>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                    <label class="font-semibold text-slate-700">Start Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="editPeriodStartDate" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">End Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="editPeriodEndDate" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Attendance Cutoff Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="editPeriodAttendanceCutoff" />
+                </div>
+                <div>
+                    <label class="font-semibold text-slate-700">Adjustment Cutoff Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5" @bind="editPeriodAdjustmentCutoff" />
+                </div>
+                <div class="col-span-2">
+                    <label class="font-semibold text-slate-700">Payment Settlement Date</label>
+                    <input type="date" class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 font-semibold text-blue-900" @bind="editPeriodPaymentDate" />
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 border-t border-slate-100 pt-3">
+                <button type="button" class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50" @onclick="() => showEditPeriodModal = false">Cancel</button>
+                <button type="button" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="SavePeriodDatesAsync">Save Period Dates</button>
             </div>
         </div>
     </div>
@@ -739,10 +934,32 @@
     private string employeeSearchTerm = "";
     private bool showCreatePeriodModal = false;
     private bool showCreateRunModal = false;
+    private bool showEditPeriodModal = false;
     private PayrollEmployeeRow? activeInspectionEmployee;
+
+    private PayrollConfigurationDto? payrollConfig;
+    private decimal configEmployeePension = 7.00m;
+    private decimal configEmployerPension = 7.00m;
+    private decimal configOvertimeMultiplier = 1.50m;
+    private int configDefaultPaymentDay = 28;
+    private int configAttendanceCutoffDay = 20;
+    private int configAdjustmentCutoffDay = 22;
+    private bool isSavingConfig = false;
 
     private int newPeriodYear = DateTime.UtcNow.Year;
     private int newPeriodMonth = DateTime.UtcNow.Month;
+    private DateOnly newPeriodStartDate = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+    private DateOnly newPeriodEndDate = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month));
+    private DateOnly newPeriodAttendanceCutoff = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, Math.Min(20, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month)));
+    private DateOnly newPeriodAdjustmentCutoff = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, Math.Min(22, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month)));
+    private DateOnly newPeriodPaymentDate = new(DateTime.UtcNow.Year, DateTime.UtcNow.Month, Math.Min(28, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month)));
+
+    private int editingPeriodId = 0;
+    private DateOnly editPeriodStartDate;
+    private DateOnly editPeriodEndDate;
+    private DateOnly editPeriodAttendanceCutoff;
+    private DateOnly editPeriodAdjustmentCutoff;
+    private DateOnly editPeriodPaymentDate;
     private int newRunPeriodId = 0;
     private int newRunType = 1;
     private string newRunTitle = "";
@@ -763,6 +980,21 @@
         isLoading = true;
         try
         {
+            try
+            {
+                payrollConfig = await Payroll.GetConfigurationAsync();
+                if (payrollConfig != null)
+                {
+                    configEmployeePension = payrollConfig.EmployeePensionPercentage;
+                    configEmployerPension = payrollConfig.EmployerPensionPercentage;
+                    configOvertimeMultiplier = payrollConfig.OvertimeMultiplier;
+                    configDefaultPaymentDay = payrollConfig.DefaultPaymentDay;
+                    configAttendanceCutoffDay = payrollConfig.AttendanceCutoffDay;
+                    configAdjustmentCutoffDay = payrollConfig.AdjustmentCutoffDay;
+                }
+            }
+            catch { }
+
             periods = await Payroll.GetPeriodsAsync();
             if (periods.Count > 0 && selectedPeriod == null)
             {
@@ -1011,11 +1243,138 @@
         }
     }
 
+    private async Task SaveConfigurationsAsync()
+    {
+        isSavingConfig = true;
+        try
+        {
+            var input = new UpdatePayrollConfigurationInput(
+                configEmployeePension,
+                configEmployerPension,
+                configOvertimeMultiplier,
+                configDefaultPaymentDay,
+                configAttendanceCutoffDay,
+                configAdjustmentCutoffDay
+            );
+            var res = await Payroll.SaveConfigurationAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Payroll configurations saved successfully.");
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to save configuration: {ex.Message}");
+        }
+        finally
+        {
+            isSavingConfig = false;
+        }
+    }
+
+    private void OpenCreatePeriodModal()
+    {
+        newPeriodYear = DateTime.UtcNow.Year;
+        newPeriodMonth = DateTime.UtcNow.Month;
+        ComputeNewPeriodDates();
+        showCreatePeriodModal = true;
+    }
+
+    private void ComputeNewPeriodDates()
+    {
+        var daysInMonth = DateTime.DaysInMonth(newPeriodYear, newPeriodMonth);
+        newPeriodStartDate = new DateOnly(newPeriodYear, newPeriodMonth, 1);
+        newPeriodEndDate = new DateOnly(newPeriodYear, newPeriodMonth, daysInMonth);
+
+        int attDay = Math.Min(configAttendanceCutoffDay, daysInMonth);
+        int adjDay = Math.Min(configAdjustmentCutoffDay, daysInMonth);
+        int payDay = Math.Min(configDefaultPaymentDay, daysInMonth);
+
+        newPeriodAttendanceCutoff = new DateOnly(newPeriodYear, newPeriodMonth, attDay);
+        newPeriodAdjustmentCutoff = new DateOnly(newPeriodYear, newPeriodMonth, adjDay);
+        newPeriodPaymentDate = new DateOnly(newPeriodYear, newPeriodMonth, payDay);
+    }
+
+    private void OpenEditPeriodModal(PayrollPeriodRow p)
+    {
+        editingPeriodId = p.PayrollPeriodId;
+        editPeriodStartDate = p.PeriodStartDate;
+        editPeriodEndDate = p.PeriodEndDate;
+        editPeriodAttendanceCutoff = p.AttendanceCutoffDate;
+        editPeriodAdjustmentCutoff = p.AdjustmentCutoffDate;
+        editPeriodPaymentDate = p.PaymentDate;
+        showEditPeriodModal = true;
+    }
+
+    private async Task SavePeriodDatesAsync()
+    {
+        try
+        {
+            var res = await Payroll.UpdatePeriodDatesAsync(new UpdatePayrollPeriodInput(
+                editingPeriodId,
+                editPeriodStartDate,
+                editPeriodEndDate,
+                editPeriodAttendanceCutoff,
+                editPeriodAdjustmentCutoff,
+                editPeriodPaymentDate
+            ));
+            if (res.Success)
+            {
+                Toasts.Success("Period dates updated.");
+                showEditPeriodModal = false;
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to update period dates: {ex.Message}");
+        }
+    }
+
+    private async Task ReopenPeriodAsync(int periodId)
+    {
+        try
+        {
+            var res = await Payroll.UpdatePeriodStatusAsync(periodId, (int)PayrollPeriodStatus.Open);
+            if (res.Success)
+            {
+                Toasts.Success("Period reopened.");
+                await RefreshAllAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Could not reopen period: {ex.Message}");
+        }
+    }
+
     private async Task CreatePeriodAsync()
     {
         try
         {
-            var res = await Payroll.CreatePeriodAsync(new PayrollPeriodInput(newPeriodYear, newPeriodMonth));
+            var input = new PayrollPeriodInput(
+                newPeriodYear,
+                newPeriodMonth,
+                PayrollGroupId: null,
+                StartDate: newPeriodStartDate,
+                EndDate: newPeriodEndDate,
+                AttendanceCutoffDate: newPeriodAttendanceCutoff,
+                AdjustmentCutoffDate: newPeriodAdjustmentCutoff,
+                PaymentDate: newPeriodPaymentDate
+            );
+            var res = await Payroll.CreatePeriodAsync(input);
             if (res.Success)
             {
                 Toasts.Success(res.Message);

@@ -166,11 +166,41 @@ public sealed record PayslipRow(
     List<PayrollLineItemRow> EmployerItems
 );
 
+public sealed record PayrollConfigurationDto(
+    decimal EmployeePensionPercentage,
+    decimal EmployerPensionPercentage,
+    decimal OvertimeMultiplier,
+    int DefaultPaymentDay,
+    int AttendanceCutoffDay,
+    int AdjustmentCutoffDay
+);
+
+public sealed record UpdatePayrollConfigurationInput(
+    decimal EmployeePensionPercentage,
+    decimal EmployerPensionPercentage,
+    decimal OvertimeMultiplier,
+    int DefaultPaymentDay,
+    int AttendanceCutoffDay,
+    int AdjustmentCutoffDay
+);
+
+public sealed record UpdatePayrollPeriodInput(
+    int PayrollPeriodId,
+    DateOnly StartDate,
+    DateOnly EndDate,
+    DateOnly AttendanceCutoffDate,
+    DateOnly AdjustmentCutoffDate,
+    DateOnly PaymentDate
+);
+
 public interface IEnterprisePayroll
 {
+    Task<PayrollConfigurationDto> GetConfigurationAsync();
+    Task<ServiceResult> SaveConfigurationAsync(UpdatePayrollConfigurationInput input);
     Task<List<PayrollPeriodRow>> GetPeriodsAsync(int? year = null);
     Task<ServiceResult> CreatePeriodAsync(PayrollPeriodInput input);
     Task<ServiceResult> UpdatePeriodStatusAsync(int periodId, int newStatus);
+    Task<ServiceResult> UpdatePeriodDatesAsync(UpdatePayrollPeriodInput input);
     Task<List<PayrollRunSummaryRow>> GetRunsAsync(int? periodId = null);
     Task<PayrollRunSummaryRow> GetRunDetailAsync(int runId);
     Task<PayrollProgressRow> GetProgressAsync(int runId);
