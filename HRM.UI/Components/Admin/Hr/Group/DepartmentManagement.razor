@@ -4,224 +4,583 @@
 @inject NavigationManager Navigation
 @using HRM.DTOs.Organisation
 
-<div class="w-full max-w-[1400px] mx-auto space-y-6 p-4">
-    <!-- Header with Back Button and Title -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-2 border-b border-[var(--app-border-color)]">
+<section class="departments-page w-full min-w-0 p-2 flex flex-col gap-3">
+    <!-- Full-Width Sticky Header -->
+    <header class="departments-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xs p-3 shadow-xs">
         <div class="flex items-center gap-3">
-            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors inline-flex items-center gap-1 text-xs" aria-label="Go back to the previous page" @onclick="GoBack">
-                <span aria-hidden="true">←</span> Back
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    aria-label="Go back to previous page"
+                    @onclick="GoBack">
+                <span aria-hidden="true">←</span>
+                <span>Back</span>
             </button>
             <div>
-                <h1 class="text-xl font-semibold text-[var(--select-text)]">Departments Management</h1>
-                <p class="text-xs text-[var(--select-muted)]">Approved departments, supervisors, and assigned workforce.</p>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-lg font-bold text-slate-900">Departments Management</h1>
+                    @if (!string.IsNullOrWhiteSpace(organisation))
+                    {
+                        <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">@organisation</span>
+                    }
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Approved departments, supervisors, and assigned workforce roster.</p>
             </div>
         </div>
-        <div class="flex items-center gap-2">
-            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white shadow-sm hover:bg-blue-700 transition-colors" href="/admin/hr/departments/management">Departments</a>
-            <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-[var(--select-hover)] text-[var(--select-text)] border border-[var(--app-border-color)] hover:bg-[var(--app-border-color)] transition-colors" href="/admin/settings/org/types">Structure types</a>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Quick Link: Manage Supervisors -->
+            <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-xs hover:bg-indigo-100 transition-colors"
+               href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">
+                <span>👥</span>
+                <span>Manage Supervisors</span>
+            </a>
+
+            <!-- Quick Link: Structure Types -->
+            <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+               href="/admin/settings/org/types">
+                <span>⚙️</span>
+                <span>Structure Types</span>
+            </a>
         </div>
-    </div>
+    </header>
 
     @if (error != null)
     {
-        <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm">
-            @error
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
         </div>
     }
 
     @if (data != null)
     {
-        <div class="grid grid-cols-1 gap-6 xl:grid-cols-12">
+        <!-- KPI Summary Strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Departments</span>
+                    <span class="text-xl font-bold text-slate-900">@TotalDepartmentCount</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <span class="text-lg">🏢</span>
+                </div>
+            </div>
 
-            <!-- Left Panel: Department Details & CRUD Panel (Master/Detail) -->
-            <section class="min-w-0 xl:col-span-8">
-                <div class="bg-[var(--select-bg)] rounded-2xl border border-[var(--app-border-color)] shadow-sm overflow-hidden">
-                    @if (selected == null)
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Assigned Workforce</span>
+                    <span class="text-xl font-bold text-slate-900">@TotalStaffCount</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <span class="text-lg">👥</span>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">With Supervisors</span>
+                    <span class="text-xl font-bold text-slate-900">@SupervisedDepartmentCount</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <span class="text-lg">🛡️</span>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Structure Types</span>
+                    <span class="text-xl font-bold text-slate-900">@data.StructureTypes.Count</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                    <span class="text-lg">🏷️</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2-Panel Master-Detail Layout -->
+        <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+
+            <!-- LEFT PANEL: Department Directory & Filters -->
+            <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                <!-- Panel Header -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900">Departments Directory</h2>
+                        <p class="text-xs text-slate-500">
+                            Showing @Filtered.Count() of @TotalDepartmentCount departments
+                        </p>
+                    </div>
+                    @if (Filtered.Count() != TotalDepartmentCount)
                     {
-                        <div class="flex flex-col items-center justify-center p-12 text-center text-[var(--select-muted)] min-h-[400px]">
-                            <div class="text-5xl mb-3">👈</div>
-                            <h3 class="text-base font-semibold text-[var(--select-text)]">Select a Department</h3>
-                            <p class="text-xs text-[var(--select-muted)] mt-1 max-w-xs">Choose any department from the list on the right to view assigned staff and management controls.</p>
-                        </div>
-                    }
-                    else
-                    {
-                        <!-- Details Header -->
-                        <div class="flex items-center justify-between gap-3 border-b border-[var(--app-border-color)] px-6 py-4 bg-[var(--select-hover)]/50">
-                            <div class="flex items-center gap-3">
-                                <div class="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                                    <span class="material-symbols-rounded" aria-hidden="true">corporate_face</span>
-                                </div>
-                                <div>
-                                    <h2 class="text-sm font-semibold text-[var(--select-text)]">@selected.Name</h2>
-                                    <p class="mt-0.5 text-xs text-[var(--select-muted)]">
-                                        @(data.StructureTypes.FirstOrDefault(t => t.Id == selected.StructureTypeId)?.Name ?? "Department") · @selected.Members.Count assigned staff
-                                    </p>
-                                </div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <a class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors shadow-sm"
-                                   href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">
-                                    Manage supervisors
-                                </a>
-                                <button type="button" class="px-2.5 py-1.5 text-xs font-medium text-[var(--select-muted)] hover:text-[var(--select-text)] hover:bg-[var(--app-border-color)] rounded-lg transition-colors"
-                                        @onclick="() => selected = null">
-                                    Close
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Details Body -->
-                        <div class="p-6 space-y-6">
-                            <!-- Supervisors Card -->
-                            <div class="bg-[var(--select-hover)]/70 border border-[var(--app-border-color)] rounded-lg p-4 space-y-2">
-                                <h4 class="text-xs font-bold text-[var(--select-muted)] uppercase tracking-wider">Supervisors</h4>
-                                @if (selected.Supervisors.Any())
-                                {
-                                    <div class="flex flex-wrap gap-2">
-                                        @foreach (var sup in selected.Supervisors)
-                                        {
-                                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-[var(--select-bg)] border border-[var(--app-border-color)] text-[var(--select-text)] shadow-2xs">
-                                                👤 @sup.Name
-                                            </span>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <p class="text-xs text-[var(--select-muted)] italic">No supervisors currently assigned to this structure.</p>
-                                }
-                            </div>
-
-                            <!-- Assigned Staff List -->
-                            <div>
-                                <div class="flex items-center justify-between mb-3">
-                                    <h3 class="text-sm font-semibold text-[var(--select-text)]">Assigned Staff Members (@selected.Members.Count)</h3>
-                                </div>
-
-                                @if (selected.Members.Any())
-                                {
-                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[380px] overflow-y-auto pr-1">
-                                        @foreach (var member in selected.Members)
-                                        {
-                                            <a class="flex items-center justify-between p-3 rounded-lg border border-[var(--app-border-color)] bg-[var(--select-bg)] hover:border-blue-400 hover:shadow-xs transition-all group"
-                                               href="@($"/admin/my/workspace/staff/{member.Id}/overview")">
-                                                <div class="flex items-center gap-2.5 min-w-0">
-                                                    <span class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 flex items-center justify-center font-bold text-xs shrink-0">
-                                                        @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name.Substring(0, 1).ToUpper())
-                                                    </span>
-                                                    <span class="text-xs font-semibold text-[var(--select-text)] group-hover:text-blue-600 truncate">
-                                                        @member.Name
-                                                    </span>
-                                                </div>
-                                                <span class="text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-0.5 transition-transform shrink-0">
-                                                    Profile →
-                                                </span>
-                                            </a>
-                                        }
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div class="p-8 text-center border border-dashed border-[var(--app-border-color)] rounded-lg text-[var(--select-muted)]">
-                                        <p class="text-xs">No active staff currently assigned to this department.</p>
-                                    </div>
-                                }
-                            </div>
-                        </div>
+                        <button type="button"
+                                class="text-xs font-medium text-blue-600 hover:text-blue-800 underline"
+                                @onclick="ResetFilters">
+                            Reset filters
+                        </button>
                     }
                 </div>
-            </section>
 
-            <!-- Right Panel: Department List (Sidebar) -->
-            <aside class="min-w-0 xl:col-span-4">
-                <section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                    <!-- Section Header -->
-                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-                        <div>
-                            <h3 class="text-sm font-semibold text-slate-800">Organisation Departments</h3>
-                            <p class="mt-0.5 text-xs text-slate-500">@organisation · @Filtered.Count() structures</p>
-                        </div>
+                <!-- Search and Structure Type Filter -->
+                <div class="flex flex-col gap-2">
+                    <div class="relative">
+                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+                        <input type="text"
+                               class="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                               placeholder="Search department name..."
+                               @bind="search"
+                               @bind:event="oninput" />
+                        @if (!string.IsNullOrWhiteSpace(search))
+                        {
+                            <button type="button"
+                                    class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs"
+                                    @onclick="() => search = string.Empty">✕</button>
+                        }
                     </div>
 
-
-
-                    <!-- Filter Controls -->
-                    <div class="border-b border-slate-100 bg-slate-50 px-4 py-2">
-                        <select class="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500" @bind="type">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                @bind="type">
                             <option value="0">All structure types</option>
                             @foreach (var t in data.StructureTypes)
                             {
                                 <option value="@t.Id">@t.Name</option>
                             }
                         </select>
-                    </div>
 
-                    <!-- Department Scrollable List -->
-                    <div class="divide-y divide-slate-100 overflow-y-auto" style="max-height: 600px; scrollbar-gutter: stable;">
-                        @foreach (var row in Filtered)
-                        {
-                            var isSelected = selected?.Id == row.Id;
-                            <button type="button" class="block w-full border-l-4 px-4 py-3 text-left transition-colors @(isSelected ? "border-blue-600 bg-blue-50" : "border-transparent hover:bg-slate-50")"
-                                    @onclick="() => selected = row">
-                                <div class="flex items-center justify-between gap-2">
-                                    <div class="min-w-0 flex-1">
-                                        <span class="block text-sm font-semibold text-slate-800 truncate">🏢 @row.Name</span>
-                                        <span class="mt-0.5 block text-xs text-slate-500">
-                                            Type: @(data.StructureTypes.FirstOrDefault(t => t.Id == row.StructureTypeId)?.Name ?? "N/A")
-                                        </span>
-                                        @if (row.Members.Count > 0)
-                                        {
-                                            <span class="mt-1 block text-xs text-blue-700 font-medium">
-                                                @row.Members.Count staff →
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="mt-1 block text-xs text-slate-500 italic">
-                                                No staff assigned
-                                            </span>
-                                        }
-                                    </div>
-                                    <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold shrink-0 @(row.Members.Count > 0 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
-                                        @row.Members.Count
+                        <!-- Filter Status Pill Select -->
+                        <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                            <button type="button"
+                                    class="flex-1 py-1 text-center text-xs font-medium rounded-md transition-colors @(statusFilter == "all" ? "bg-white text-blue-700 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900")"
+                                    @onclick='() => statusFilter = "all"'>
+                                All
+                            </button>
+                            <button type="button"
+                                    class="flex-1 py-1 text-center text-xs font-medium rounded-md transition-colors @(statusFilter == "staff" ? "bg-white text-blue-700 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900")"
+                                    @onclick='() => statusFilter = "staff"'>
+                                Staff
+                            </button>
+                            <button type="button"
+                                    class="flex-1 py-1 text-center text-xs font-medium rounded-md transition-colors @(statusFilter == "nosup" ? "bg-white text-blue-700 shadow-xs font-semibold" : "text-slate-600 hover:text-slate-900")"
+                                    @onclick='() => statusFilter = "nosup"'>
+                                No Lead
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Department Scrollable Card List -->
+                <div class="overflow-y-auto space-y-2 pr-1" style="max-height: 600px; scrollbar-gutter: stable;">
+                    @foreach (var row in Filtered)
+                    {
+                        var isSelected = selected?.Id == row.Id;
+                        var hasSup = row.Supervisors.Any();
+                        var typeName = data.StructureTypes.FirstOrDefault(t => t.Id == row.StructureTypeId)?.Name ?? "Department";
+
+                        <div role="button"
+                             tabindex="0"
+                             class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-2 @(isSelected ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/60")"
+                             @onclick="() => SelectDepartment(row)"
+                             @onkeydown="(e) => HandleKeySelect(e, row)">
+                            <div class="flex items-center justify-between gap-2">
+                                <div class="min-w-0 flex-1 flex items-center gap-2">
+                                    <span class="text-base shrink-0">🏢</span>
+                                    <span class="font-semibold text-slate-900 truncate text-sm">@row.Name</span>
+                                </div>
+                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold shrink-0 @(row.Members.Count > 0 ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-500")">
+                                    @row.Members.Count staff
+                                </span>
+                            </div>
+
+                            <div class="flex items-center justify-between gap-2 pt-1 border-t border-slate-100/80">
+                                <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600 truncate">
+                                    @typeName
+                                </span>
+
+                                @if (hasSup)
+                                {
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-medium text-slate-600 truncate" title="@string.Join(", ", row.Supervisors.Select(s => s.Name))">
+                                        <span>👤</span>
+                                        <span class="truncate">@row.Supervisors.Count @(row.Supervisors.Count == 1 ? "lead" : "leads")</span>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">
+                                        <span>⚠️</span>
+                                        <span>No lead</span>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    @if (!Filtered.Any())
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+                            <p class="font-semibold text-slate-700">No matching departments</p>
+                            <p class="mt-1">Try adjusting your search query or structure type filter.</p>
+                            <button type="button"
+                                    class="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-800"
+                                    @onclick="ResetFilters">
+                                ↺ Reset all filters
+                            </button>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <!-- RIGHT PANEL: Department Details & Workforce Roster -->
+            <div class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-4">
+                @if (selected == null)
+                {
+                    <div class="flex flex-col items-center justify-center p-12 text-center text-slate-500 min-h-[460px] rounded-xl border border-dashed border-slate-200">
+                        <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 mb-4">
+                            <span class="text-3xl">🏢</span>
+                        </div>
+                        <h3 class="text-base font-bold text-slate-900">Select a Department</h3>
+                        <p class="text-xs text-slate-500 mt-1 max-w-sm">
+                            Choose any department from the directory on the left to inspect its assigned workforce, supervisor governance, and profile links.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    var selectedType = data.StructureTypes.FirstOrDefault(t => t.Id == selected.StructureTypeId)?.Name ?? "Department";
+                    var hasSupervisorIssue = data.SupervisorIssues.TryGetValue(selected.Id, out var issueDetail);
+
+                    <!-- Selected Department Header -->
+                    <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+                        <div class="flex items-center gap-3">
+                            <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100 shrink-0">
+                                <span class="text-2xl">🏢</span>
+                            </div>
+                            <div>
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <h2 class="text-base font-bold text-slate-900">@selected.Name</h2>
+                                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-800">
+                                        @selectedType
                                     </span>
                                 </div>
-                            </button>
-                        }
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    @selected.Members.Count assigned staff · @selected.Supervisors.Count designated supervisor(s)
+                                </p>
+                            </div>
+                        </div>
 
-                        @if (!Filtered.Any())
+                        <div class="flex items-center gap-2">
+                            <a class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                               href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">
+                                <span>Manage supervisors</span>
+                                <span aria-hidden="true">→</span>
+                            </a>
+                            <button type="button"
+                                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors"
+                                    @onclick="() => selected = null">
+                                Close
+                            </button>
+                        </div>
+                    </div>
+
+                    @if (hasSupervisorIssue && !string.IsNullOrWhiteSpace(issueDetail))
+                    {
+                        <div class="flex items-center justify-between rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                            <div class="flex items-center gap-2">
+                                <span class="text-amber-600 font-bold">⚠️</span>
+                                <span><strong>Supervisor Warning:</strong> @issueDetail</span>
+                            </div>
+                            <a href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")"
+                               class="text-xs font-semibold text-amber-800 underline hover:text-amber-950">
+                                Fix now
+                            </a>
+                        </div>
+                    }
+
+                    <!-- Supervisors Section -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 flex flex-col gap-2.5">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold uppercase tracking-wider text-slate-700">Department Leadership</span>
+                            <span class="text-xs text-slate-500">@selected.Supervisors.Count supervisor(s)</span>
+                        </div>
+
+                        @if (selected.Supervisors.Any())
                         {
-                            <div class="px-4 py-12 text-center text-xs text-slate-500">
-                                No matching departments found.
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (var sup in selected.Supervisors)
+                                {
+                                    <div class="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 shadow-2xs">
+                                        <span class="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 shrink-0">
+                                            @(string.IsNullOrWhiteSpace(sup.Name) ? "?" : sup.Name.Substring(0, 1).ToUpper())
+                                        </span>
+                                        <span class="text-xs font-semibold text-slate-800">@sup.Name</span>
+                                        <span class="rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-medium text-indigo-700">Supervisor</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="flex items-center justify-between rounded-lg border border-dashed border-amber-300 bg-amber-50/60 p-3 text-xs text-amber-800">
+                                <div class="flex items-center gap-2">
+                                    <span>⚠️</span>
+                                    <span>No supervisor designated for this department. Requests may require manual escalation.</span>
+                                </div>
+                                <a class="font-semibold text-amber-900 underline hover:text-amber-950 text-xs shrink-0"
+                                   href="@($"/admin/hr/supervisors/management?organisationId={orgId}&teamView=departments")">
+                                    Assign Lead →
+                                </a>
                             </div>
                         }
                     </div>
-                </section>
-            </aside>
+
+                    <!-- Assigned Staff Section -->
+                    <div class="flex flex-col gap-3">
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                            <div>
+                                <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                    Assigned Staff Members (@selected.Members.Count)
+                                </h3>
+                                <p class="text-xs text-slate-500">Directly mapped employees to this organisation department.</p>
+                            </div>
+
+                            @if (selected.Members.Any())
+                            {
+                                <div class="relative w-full sm:w-56">
+                                    <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+                                    <input type="text"
+                                           class="w-full rounded-lg border border-slate-300 bg-white pl-7 pr-6 py-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                           placeholder="Filter staff by name..."
+                                           @bind="staffSearch"
+                                           @bind:event="oninput" />
+                                    @if (!string.IsNullOrWhiteSpace(staffSearch))
+                                    {
+                                        <button type="button"
+                                                class="absolute inset-y-0 right-0 pr-2 flex items-center text-slate-400 hover:text-slate-600 text-xs"
+                                                @onclick="() => staffSearch = string.Empty">✕</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+
+                        @if (selected.Members.Any())
+                        {
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[420px] overflow-y-auto pr-1" style="scrollbar-gutter: stable;">
+                                @foreach (var member in FilteredMembers)
+                                {
+                                    <a class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40 hover:shadow-xs transition-all group"
+                                       href="@($"/admin/my/workspace/staff/{member.Id}/overview")"
+                                       title="Open workspace profile for @member.Name">
+                                        <div class="flex items-center gap-2.5 min-w-0">
+                                            <span class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xs shrink-0 ring-2 ring-white">
+                                                @(string.IsNullOrWhiteSpace(member.Name) ? "?" : member.Name.Substring(0, 1).ToUpper())
+                                            </span>
+                                            <div class="min-w-0">
+                                                <span class="block text-xs font-semibold text-slate-800 group-hover:text-blue-600 truncate">
+                                                    @member.Name
+                                                </span>
+                                                <span class="block text-[11px] text-slate-500 font-mono">
+                                                    ID: @member.Id
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <span class="text-xs text-blue-600 font-medium group-hover:translate-x-0.5 transition-transform shrink-0 pl-2">
+                                            Profile →
+                                        </span>
+                                    </a>
+                                }
+
+                                @if (!FilteredMembers.Any())
+                                {
+                                    <div class="col-span-full p-6 text-center text-xs text-slate-500 rounded-xl border border-dashed border-slate-200">
+                                        No staff members match "<strong>@staffSearch</strong>".
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-slate-500">
+                                <p class="text-xs font-semibold text-slate-700">No active staff currently assigned</p>
+                                <p class="text-xs mt-1">Staff members can be assigned through staff profile work details or transfer workflows.</p>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
 
         </div>
     }
     else if (busy)
     {
-        <div role="status" class="flex items-center justify-center p-12 text-xs text-[var(--select-muted)]">
-            Loading departments…
+        <div role="status" class="flex flex-col items-center justify-center p-16 text-slate-500 rounded-2xl border border-slate-200 bg-white shadow-xs">
+            <div class="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mb-3"></div>
+            <span class="text-xs font-semibold text-slate-700">Loading department structures…</span>
         </div>
     }
-</div>
+</section>
+
+<style>
+    .departments-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .departments-header {
+        width: 100%;
+    }
+
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+
+    .page-panels-full {
+        max-width: none;
+    }
+
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+    }
+</style>
 
 @code {
     [Inject] private HRM.Services.Interfaces.IUserAccessService Access { get; set; } = null!;
+
+    private const string FullWidthSettingKey = "hrm.departments-management.full-width";
+
     private OrganisationTeamSettingsData? data;
     private OrganisationTeamSettingsRow? selected;
-    private int orgId, type;
+    private int orgId;
+    private int type = 0;
     private bool busy;
-    private string organisation = "", search = "";
+    private bool isFullWidth = false;
+    private string organisation = "";
+    private string search = "";
+    private string staffSearch = "";
+    private string statusFilter = "all";
     private string? error;
 
-    private IEnumerable<OrganisationTeamSettingsRow> Filtered => data?.Rows.Where(r => r.Kind == "Department" && (type == 0 || r.StructureTypeId == type) && r.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) ?? [];
+    private int TotalDepartmentCount => data?.Rows.Count(r => r.Kind == "Department") ?? 0;
+    private int TotalStaffCount => data?.Rows.Where(r => r.Kind == "Department").Sum(r => r.Members.Count) ?? 0;
+    private int SupervisedDepartmentCount => data?.Rows.Count(r => r.Kind == "Department" && r.Supervisors.Any()) ?? 0;
+
+    private IEnumerable<OrganisationTeamSettingsRow> Filtered =>
+        data?.Rows.Where(r =>
+            r.Kind == "Department" &&
+            (type == 0 || r.StructureTypeId == type) &&
+            (string.IsNullOrWhiteSpace(search) || r.Name.Contains(search, StringComparison.OrdinalIgnoreCase)) &&
+            (statusFilter switch
+            {
+                "staff" => r.Members.Count > 0,
+                "nosup" => !r.Supervisors.Any(),
+                _ => true
+            })
+        ) ?? [];
+
+    private IEnumerable<OrganisationSettingsOption> FilteredMembers =>
+        selected?.Members.Where(m =>
+            string.IsNullOrWhiteSpace(staffSearch) ||
+            m.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase)
+        ) ?? [];
 
     protected override Task OnInitializedAsync() => Load();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(saved, out var val))
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
+
+    private void SelectDepartment(OrganisationTeamSettingsRow row)
+    {
+        selected = row;
+        staffSearch = string.Empty;
+    }
+
+    private void HandleKeySelect(KeyboardEventArgs e, OrganisationTeamSettingsRow row)
+    {
+        if (e.Key is "Enter" or " ")
+        {
+            SelectDepartment(row);
+        }
+    }
+
+    private void ResetFilters()
+    {
+        search = string.Empty;
+        type = 0;
+        statusFilter = "all";
+    }
 
     private async Task GoBack()
     {
@@ -243,7 +602,16 @@
             orgId = await Access.GetCurrentOrganisationIdAsync();
             data = await Settings.GetTeamSettingsAsync(orgId);
             organisation = (await Settings.GetTeamOrganisationsAsync()).FirstOrDefault(o => o.Id == orgId)?.Name ?? "";
-            selected = null;
+
+            if (selected != null)
+            {
+                selected = data?.Rows.FirstOrDefault(r => r.Id == selected.Id && r.Kind == "Department");
+            }
+
+            if (selected == null)
+            {
+                selected = Filtered.FirstOrDefault();
+            }
         }
         catch (Exception ex)
         {
