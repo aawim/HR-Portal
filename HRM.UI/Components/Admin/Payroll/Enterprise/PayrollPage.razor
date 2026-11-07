@@ -1,9 +1,11 @@
 @page "/admin/payroll/payroll"
 @page "/admin/payroll-management"
 @rendermode RenderMode.InteractiveServer
+@implements IDisposable
 @using HRM.Application.Contracts.Pages
 @using HRM.DTOs
 @using HRM.Models.Payroll
+@using System.Threading
 @inject IEnterprisePayroll Payroll
 @inject HRM.Services.ToastService Toasts
 @inject IJSRuntime JS
@@ -720,6 +722,7 @@
     private List<PayrollExceptionRow> exceptions = new();
     private List<PayrollEmployeeRow> employees = new();
     private List<PaymentBatchRow> paymentBatches = new();
+    private CancellationTokenSource? pollCts;
 
     private string employeeSearchTerm = "";
     private bool showCreatePeriodModal = false;
@@ -780,8 +783,46 @@
         {
             currentProgress = await Payroll.GetProgressAsync(run.PayrollRunId);
             exceptions = await Payroll.GetExceptionsAsync(run.PayrollRunId);
+            if (run.Status == (int)PayrollRunStatus.Calculating || (currentProgress != null && currentProgress.PercentComplete < 100.0 && currentProgress.PercentComplete > 0))
+            {
+                StartProgressPolling();
+            }
         }
         catch { }
+    }
+
+    private void StartProgressPolling()
+    {
+        pollCts?.Cancel();
+        pollCts?.Dispose();
+        pollCts = new CancellationTokenSource();
+        var token = pollCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                while (!token.IsCancellationRequested && selectedRun != null)
+                {
+                    await Task.Delay(1500, token);
+                    var progress = await Payroll.GetProgressAsync(selectedRun.PayrollRunId);
+                    currentProgress = progress;
+                    await InvokeAsync(StateHasChanged);
+
+                    if (progress == null || progress.PercentComplete >= 100.0)
+                    {
+                        await InvokeAsync(async () =>
+                        {
+                            await RefreshAllAsync();
+                            StateHasChanged();
+                        });
+                        break;
+                    }
+                }
+            }
+            catch (OperationCanceledException) { }
+            catch { }
+        }, token);
     }
 
     private async Task QueueCalculationAsync()
@@ -794,6 +835,7 @@
             {
                 Toasts.Success(res.Message);
                 await RefreshAllAsync();
+                StartProgressPolling();
             }
             else
             {
@@ -1058,4 +1100,10 @@
         builder.AddContent(2, text);
         builder.CloseElement();
     };
+
+    public void Dispose()
+    {
+        pollCts?.Cancel();
+        pollCts?.Dispose();
+    }
 }

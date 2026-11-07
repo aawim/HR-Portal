@@ -11,11 +11,11 @@ var builder = Host.CreateApplicationBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection") ??
                        builder.Configuration.GetConnectionString("HrmTeContext") ??
-                       "Server=(localdb)\\mssqllocaldb;Database=HRM_Database;Trusted_Connection=True;MultipleActiveResultSets=true";
+                       "Server=DESKTOP-IGBGLUQ\\SQLEXPRESS;Database=NewHRM_DB;Trusted_Connection=True;TrustServerCertificate=True;";
 
 builder.Services.AddDbContextFactory<HrmTeContext>(options =>
 {
-    options.UseSqlServer(connectionString);
+    options.UseSqlServer(connectionString, sql => sql.EnableRetryOnFailure());
 });
 
 // Register Payroll services

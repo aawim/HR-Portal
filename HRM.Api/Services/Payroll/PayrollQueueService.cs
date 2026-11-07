@@ -49,55 +49,60 @@ public sealed class PayrollQueueService : IPayrollQueueService
     public async Task<PayrollBackgroundJob?> ClaimNextJobAsync(string workerInstanceId, TimeSpan leaseDuration, CancellationToken cancellationToken = default)
     {
         await using var db = await _factory.CreateDbContextAsync(cancellationToken);
-        var now = DateTime.UtcNow;
-        var leaseExpiry = now.Add(leaseDuration);
+        var strategy = db.Database.CreateExecutionStrategy();
 
-        // Try atomic update via EF Core with transaction for relational provider
-        Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
-        if (db.Database.IsRelational())
+        return await strategy.ExecuteAsync(async () =>
         {
-            tx = await db.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
-        }
+            await using var innerDb = await _factory.CreateDbContextAsync(cancellationToken);
+            var now = DateTime.UtcNow;
+            var leaseExpiry = now.Add(leaseDuration);
 
-        try
-        {
-            var job = await db.PayrollBackgroundJobs
-                .Where(j => j.Status == PayrollJobStatus.Pending ||
-                           (j.Status == PayrollJobStatus.Processing && j.LeaseExpiresAtUtc.HasValue && j.LeaseExpiresAtUtc < now && j.AttemptCount < j.MaxAttempts))
-                .OrderBy(j => j.Priority)
-                .ThenBy(j => j.CreatedAtUtc)
-                .FirstOrDefaultAsync(cancellationToken);
-
-            if (job == null)
+            Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction? tx = null;
+            if (innerDb.Database.IsRelational())
             {
-                if (tx != null) await tx.RollbackAsync(cancellationToken);
-                return null;
+                tx = await innerDb.Database.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken);
             }
 
-            job.Status = PayrollJobStatus.Processing;
-            job.LeaseOwner = workerInstanceId;
-            job.LeaseExpiresAtUtc = leaseExpiry;
-            job.LastHeartbeatAtUtc = now;
-            job.StartedAtUtc ??= now;
-            job.AttemptCount += 1;
-            job.FencingToken += 1;
+            try
+            {
+                var job = await innerDb.PayrollBackgroundJobs
+                    .Where(j => j.Status == PayrollJobStatus.Pending ||
+                               (j.Status == PayrollJobStatus.Processing && j.LeaseExpiresAtUtc.HasValue && j.LeaseExpiresAtUtc < now && j.AttemptCount < j.MaxAttempts))
+                    .OrderBy(j => j.Priority)
+                    .ThenBy(j => j.CreatedAtUtc)
+                    .FirstOrDefaultAsync(cancellationToken);
 
-            await db.SaveChangesAsync(cancellationToken);
-            if (tx != null) await tx.CommitAsync(cancellationToken);
+                if (job == null)
+                {
+                    if (tx != null) await tx.RollbackAsync(cancellationToken);
+                    return null;
+                }
 
-            _logger.LogInformation("Worker {Worker} claimed job {JobId} with fencing token {Token}", workerInstanceId, job.JobId, job.FencingToken);
-            return job;
-        }
-        catch (Exception ex)
-        {
-            if (tx != null) await tx.RollbackAsync(cancellationToken);
-            _logger.LogWarning(ex, "Failed to claim next payroll job");
-            return null;
-        }
-        finally
-        {
-            if (tx != null) await tx.DisposeAsync();
-        }
+                job.Status = PayrollJobStatus.Processing;
+                job.LeaseOwner = workerInstanceId;
+                job.LeaseExpiresAtUtc = leaseExpiry;
+                job.LastHeartbeatAtUtc = now;
+                job.StartedAtUtc ??= now;
+                job.AttemptCount += 1;
+                job.FencingToken += 1;
+
+                await innerDb.SaveChangesAsync(cancellationToken);
+                if (tx != null) await tx.CommitAsync(cancellationToken);
+
+                _logger.LogInformation("Worker {Worker} claimed job {JobId} with fencing token {Token}", workerInstanceId, job.JobId, job.FencingToken);
+                return job;
+            }
+            catch (Exception ex)
+            {
+                if (tx != null) await tx.RollbackAsync(cancellationToken);
+                _logger.LogWarning(ex, "Failed to claim next payroll job");
+                return null;
+            }
+            finally
+            {
+                if (tx != null) await tx.DisposeAsync();
+            }
+        });
     }
 
     public async Task<bool> RenewLeaseAsync(long jobId, string workerInstanceId, long fencingToken, TimeSpan leaseDuration)
