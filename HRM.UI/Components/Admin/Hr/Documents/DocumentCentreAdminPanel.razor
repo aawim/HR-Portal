@@ -1,0 +1,1725 @@
+@namespace HRM.Components.Admin.Hr.Documents
+@using System.IO
+@using System.Text
+@using HRM.DTOs.Documents
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@rendermode RenderMode.InteractiveServer
+
+@inject DocumentManagementServiceContracts.IOperations DmsService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
+@inject ILogger<DocumentCentreAdminPanel> Logger
+
+<section class="dms-admin-page w-full min-w-0 p-2 space-y-4">
+    <!-- Full-Width Sticky Header -->
+    <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+        <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">DHR-DMS Platform</span>
+                <span class="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">SHA-256 Verified Storage</span>
+                @if (dashboard != null && !string.IsNullOrWhiteSpace(dashboard.OrganisationName))
+                {
+                    <span class="text-xs text-slate-400">• @dashboard.OrganisationName</span>
+                }
+            </div>
+            <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">Enterprise Document &amp; Records Management Centre</h1>
+            <p class="text-xs text-slate-500 mt-0.5">Central repository for staff dossiers, organisation libraries, official correspondence, versioning, workflows, and records governance.</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Width / Shrink View Toggle -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="ToggleFullWidth"
+                    title="@(isFullWidth ? "Shrink view width" : "Expand to full viewport width")">
+                @if (isFullWidth)
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Refresh Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="RefreshAllAsync"
+                    disabled="@isLoading">
+                <svg class="w-3.5 h-3.5 @(isLoading ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                <span>Refresh</span>
+            </button>
+
+            <!-- Primary Action: Upload / Register Document -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="OpenUploadForm">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span>+ Register / Upload Document</span>
+            </button>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-rose-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>@errorMessage</span>
+            </div>
+            <button type="button" class="text-rose-600 hover:text-rose-900 font-bold" @onclick="() => errorMessage = null">✕</button>
+        </div>
+    }
+
+    <!-- Segmented Navigation Bar for the 9 Admin Document Centre Modules -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs">
+        <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
+            @foreach (var tab in AdminTabs)
+            {
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == tab.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick="() => SwitchTabAsync(tab.Key)">
+                    @tab.Label
+                    @if (tab.BadgeCount(dashboard) > 0)
+                    {
+                        <span class="ml-1 rounded-full bg-amber-100 text-amber-800 px-1.5 py-0.2 text-[10px]">@tab.BadgeCount(dashboard)</span>
+                    }
+                </button>
+            }
+        </div>
+
+        @if (dashboard != null)
+        {
+            <div class="flex items-center gap-3 text-xs text-slate-500 px-2">
+                <span>Total Registry: <strong class="text-slate-800">@dashboard.TotalDocuments</strong></span>
+                <span>• Official Records: <strong class="text-emerald-700">@dashboard.OfficialRecordsCount</strong></span>
+                <span>• Legal Holds: <strong class="text-rose-700">@dashboard.ActiveLegalHoldsCount</strong></span>
+                <span>• Vault Size: <strong class="font-mono text-slate-800">@FormatSize(dashboard.TotalStorageBytes)</strong></span>
+            </div>
+        }
+    </div>
+
+    <!-- 2-Panel Grid System -->
+    <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+        <!-- LEFT PANEL: Operations, Selected Document Inspector, Templates, Governance or Upload Form -->
+        <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            @if (showUploadModal)
+            {
+                <!-- CENTRAL DOCUMENT REGISTRATION & UPLOAD FORM -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Register &amp; Upload Central Document</h2>
+                        <p class="text-xs text-slate-500 px-1">Files are scanned for malware, verified by magic header, hashed with SHA-256, and stored in private multi-instance storage.</p>
+                    </div>
+                    <button type="button" class="text-xs text-slate-500 hover:text-slate-800 p-1" @onclick="() => showUploadModal = false">✕ Cancel</button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Document Type &amp; Policy *</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="uploadInput.DmsDocumentTypeId" @bind:after="OnUploadDocumentTypeChanged">
+                            <option value="0">-- Select Document Type --</option>
+                            @if (dashboard != null)
+                            {
+                                @foreach (var dt in dashboard.DocumentTypes.Where(t => t.IsActive))
+                                {
+                                    <option value="@dt.DmsDocumentTypeId">[@dt.CategoryName] @dt.Name (@dt.PermittedExtensions)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Document Title *</label>
+                        <input type="text"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                               placeholder="e.g. Employment Contract / Policy Circular"
+                               @bind="uploadInput.Title" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Security Classification</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                                @bind="uploadInput.Classification">
+                            <option value="Public">Public (Organisation-Wide)</option>
+                            <option value="Internal">Internal</option>
+                            <option value="Confidential">Confidential</option>
+                            <option value="Restricted">Restricted</option>
+                            <option value="Secret">Secret</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Effective Access Scope</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                                @bind="uploadInput.AccessScope">
+                            <option value="PublicOrg">Public Organisation Library</option>
+                            <option value="DepartmentAndHr">Department &amp; HR</option>
+                            <option value="EmployeeAndHr">Subject Employee &amp; HR</option>
+                            <option value="SupervisorAndHr">Supervisor &amp; HR</option>
+                            <option value="HrOnly">HR Administration Only</option>
+                            <option value="ExecutiveOnly">Executive Leadership Only</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Subject Staff Individual ID (Optional)</label>
+                        <input type="number"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                               placeholder="e.g. Staff Individual ID if staff file"
+                               @bind="uploadInput.SubjectIndividualId" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">External Reference Code &amp; Tags</label>
+                        <input type="text"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                               placeholder="e.g. REF-2026-09, contract, verified"
+                               @bind="uploadInput.ReferenceCode" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Link to HRM Business Record Type (Optional)</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                                @bind="uploadInput.PrimaryLinkEntityType">
+                            <option value="">-- None / Default Scope --</option>
+                            <option value="Staff">Staff Record</option>
+                            <option value="Organisation">Organisation Record</option>
+                            <option value="Department">Department Structure</option>
+                            <option value="Request">Workflow Request</option>
+                            <option value="Transfer">Staff Transfer</option>
+                            <option value="Asset">Asset / Equipment</option>
+                            <option value="Project">Project / Task</option>
+                            <option value="Evaluation">Performance Evaluation</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Linked Record ID (Optional)</label>
+                        <input type="number"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                               placeholder="Entity ID"
+                               @bind="uploadInput.PrimaryLinkEntityId" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-800 p-1">Description / Abstract</label>
+                    <textarea rows="2"
+                              class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                              placeholder="Enter summary notes or abstract..."
+                              @bind="uploadInput.Description"></textarea>
+                </div>
+
+                <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2">
+                    <label class="block text-xs font-bold text-slate-800 p-1">Select File Binary *</label>
+                    <InputFile OnChange="HandleUploadFileSelected" class="text-xs text-slate-700" />
+                    @if (!string.IsNullOrWhiteSpace(uploadInput.FileName))
+                    {
+                        <div class="text-xs text-emerald-700 font-medium">
+                            Selected: <strong>@uploadInput.FileName</strong> (@FormatSize(uploadInput.FileContent.LongLength))
+                        </div>
+                    }
+                    <label class="inline-flex items-center gap-2 text-xs text-slate-700 mt-1">
+                        <input type="checkbox" @bind="uploadInput.SubmitImmediatelyForApproval" />
+                        <span>Submit immediately for formal approval workflow if required by document type</span>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            @onclick="() => showUploadModal = false">
+                        Cancel
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50"
+                            disabled="@isSubmitting"
+                            @onclick="SubmitUploadAsync">
+                        @(isSubmitting ? "Scanning & Storing..." : "Upload & Register Document")
+                    </button>
+                </div>
+            }
+            else if (activeTab == "dashboard" && selectedDocument == null)
+            {
+                <!-- DASHBOARD OVERVIEW PANEL -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Enterprise Repository Metrics &amp; Categories</h2>
+                        <p class="text-xs text-slate-500 px-1">Click any category card to filter the central repository or select a document on the right to inspect versions, links, and permissions.</p>
+                    </div>
+                </div>
+
+                @if (dashboard != null)
+                {
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <span class="text-[11px] text-slate-500 font-medium">Staff Dossier Files</span>
+                            <div class="text-lg font-bold text-slate-900 mt-0.5">@dashboard.StaffDocumentsCount</div>
+                        </div>
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                            <span class="text-[11px] text-slate-500 font-medium">Organisation Library</span>
+                            <div class="text-lg font-bold text-blue-700 mt-0.5">@dashboard.OrganisationLibraryCount</div>
+                        </div>
+                        <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+                            <span class="text-[11px] text-amber-800 font-medium">Pending Approvals / Requests</span>
+                            <div class="text-lg font-bold text-amber-900 mt-0.5">@(dashboard.PendingApprovalCount + dashboard.PendingVerificationCount + dashboard.PendingDocumentRequestsCount)</div>
+                        </div>
+                        <div class="rounded-xl border border-purple-200 bg-purple-50/60 p-3">
+                            <span class="text-[11px] text-purple-800 font-medium">Archived / Legal Hold</span>
+                            <div class="text-lg font-bold text-purple-900 mt-0.5">@dashboard.ArchivedDocumentsCount / @dashboard.ActiveLegalHoldsCount</div>
+                        </div>
+                    </div>
+
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Configured Enterprise Document Categories (12 Domains)</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        @foreach (var cat in dashboard.Categories)
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-white p-3 hover:border-blue-400 transition cursor-pointer flex items-center justify-between gap-2"
+                                 @onclick="() => FilterByCategoryAsync(cat.CategoryId)">
+                                <div class="min-w-0">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="font-mono text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded">@cat.TargetDomain</span>
+                                        <span class="text-xs font-bold text-slate-800 truncate">@cat.Name</span>
+                                    </div>
+                                    <p class="text-[11px] text-slate-500 truncate mt-0.5">@cat.Description</p>
+                                </div>
+                                <div class="text-right shrink-0">
+                                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@cat.DocumentsCount docs</span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else if (activeTab == "requests")
+            {
+                <!-- EMPLOYEE OFFICIAL DOCUMENT REQUESTS WORKFLOW PANEL -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Official Document Requests &amp; HR Issuance</h2>
+                        <p class="text-xs text-slate-500 px-1">Review employee requests for verification letters, NOCs, and service records. Official PDFs are generated from verified HRM data and locked upon approval.</p>
+                    </div>
+                </div>
+
+                @if (selectedRequest != null)
+                {
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+                        <div class="flex items-center justify-between flex-wrap gap-2">
+                            <div>
+                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@selectedRequest.ReferenceNumber</span>
+                                <span class="ml-2 text-xs font-bold text-slate-900">@selectedRequest.RequestKind</span>
+                                @RenderStatusBadge(selectedRequest.Status)
+                            </div>
+                            <span class="text-xs text-slate-500">Applicant: <strong>@selectedRequest.ApplicantName</strong> (@selectedRequest.ApplicantStaffNumber)</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                            <div><span class="text-slate-500">Purpose:</span> <strong class="text-slate-800">@selectedRequest.Purpose</strong></div>
+                            <div><span class="text-slate-500">Addressed To:</span> <strong class="text-slate-800">@selectedRequest.AddressedTo</strong></div>
+                            @if (!string.IsNullOrWhiteSpace(selectedRequest.IssuedDocumentNumber))
+                            {
+                                <div><span class="text-slate-500">Issued Record:</span> <strong class="font-mono text-emerald-700">@selectedRequest.IssuedDocumentNumber</strong></div>
+                            }
+                        </div>
+
+                        @if (requestTemplatePreview != null)
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-white p-3 space-y-2 text-xs">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                                    <span class="font-bold text-slate-800">Verified HRM Template Preview: @requestTemplatePreview.ResolvedTitle</span>
+                                    <span class="font-mono text-[11px] text-slate-500">@requestTemplatePreview.DocumentNumber</span>
+                                </div>
+                                <pre class="whitespace-pre-wrap font-sans text-xs text-slate-700 leading-relaxed">@requestTemplatePreview.ResolvedBodyText</pre>
+                            </div>
+                        }
+
+                        @if (selectedRequest.Status is "Submitted" or "UnderReview")
+                        {
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 p-1">Signatory Name</label>
+                                    <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="requestActionSignatoryName" />
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 p-1">Signatory Title</label>
+                                    <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="requestActionSignatoryTitle" />
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-700 p-1">HR Review / Approval Remarks</label>
+                                <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Enter review or approval notes..." @bind="requestActionComments" />
+                            </div>
+                            <div class="flex flex-wrap items-center gap-2 pt-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-xs transition"
+                                        @onclick='() => ExecuteRequestActionAsync("ApproveAndIssue")'>
+                                    ✓ Approve, Generate Official PDF &amp; Issue
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                                        @onclick='() => ExecuteRequestActionAsync("ReturnForCorrection")'>
+                                    Return for Clarification
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                        @onclick='() => ExecuteRequestActionAsync("Reject")'>
+                                    Reject Request
+                                </button>
+                            </div>
+                        }
+                        else if (selectedRequest.IssuedDocumentId.HasValue)
+                        {
+                            <div class="flex items-center gap-2 pt-1">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                        @onclick="() => DownloadDocumentAsync(selectedRequest.IssuedDocumentId.Value, null, false)">
+                                    ⬇ Download Issued Official PDF (@selectedRequest.IssuedDocumentNumber)
+                                </button>
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        @onclick="() => InspectDocumentAsync(selectedRequest.IssuedDocumentId.Value)">
+                                    Inspect Central Record
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                        Select a document request from the queue on the right to preview resolved HRM placeholders and approve/issue the official PDF.
+                    </div>
+                }
+            }
+            else if (activeTab == "templates")
+            {
+                <!-- CONFIGURABLE TEMPLATES & SAFE PLACEHOLDER EDITOR -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Document Template &amp; Placeholder Designer</h2>
+                        <p class="text-xs text-slate-500 px-1">Every save creates a new preserved template version. Arbitrary expressions are blocked; only verified HRM placeholders are permitted.</p>
+                    </div>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                            @onclick="NewTemplateForm">
+                        + New Template
+                    </button>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 text-[11px] text-slate-600">
+                    <strong>Permitted Safe Placeholders:</strong>
+                    <code class="text-blue-700">{{EmployeeName}}</code>,
+                    <code class="text-blue-700">{{NationalId}}</code>,
+                    <code class="text-blue-700">{{StaffNumber}}</code>,
+                    <code class="text-blue-700">{{CurrentPosition}}</code>,
+                    <code class="text-blue-700">{{DepartmentName}}</code>,
+                    <code class="text-blue-700">{{OrganisationName}}</code>,
+                    <code class="text-blue-700">{{EmploymentStartDate}}</code>,
+                    <code class="text-blue-700">{{ServiceDuration}}</code>,
+                    <code class="text-blue-700">{{DocumentNumber}}</code>,
+                    <code class="text-blue-700">{{IssueDate}}</code>,
+                    <code class="text-blue-700">{{Purpose}}</code>,
+                    <code class="text-blue-700">{{AddressedTo}}</code>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Template Code *</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.Code" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Template Name *</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.Name" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Document Title Pattern *</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.DocumentTitlePattern" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Header Banner Text</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.HeaderText" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Default Signatory Name</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.SignatoryName" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Default Signatory Title</label>
+                        <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingTemplate.SignatoryTitle" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-800 p-1">Body Template (with Verified Placeholders) *</label>
+                    <textarea rows="5" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs font-mono" @bind="editingTemplate.BodyTemplate"></textarea>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-4 text-xs text-slate-700">
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingTemplate.IncludeOrganisationLetterhead" /> Letterhead</label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingTemplate.IncludePositionHistoryTable" /> Position History Table</label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingTemplate.IncludeQrVerification" /> QR Verification</label>
+                    <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingTemplate.IsEmployeeRequestable" /> Employee Requestable</label>
+                </div>
+
+                <div class="flex items-center justify-between pt-2 border-t border-slate-100">
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            @onclick="PreviewCurrentTemplatePdfAsync">
+                        👁 Preview &amp; Download Sample PDF
+                    </button>
+                    <button type="button"
+                            class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                            @onclick="SaveTemplateAsync">
+                        Save New Template Version
+                    </button>
+                </div>
+            }
+            else if (activeTab == "configuration")
+            {
+                <!-- DOCUMENT TYPES & RETENTION POLICIES CONFIGURATION -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-800 p-1">Document Types, Access Defaults &amp; Retention Schedules</h2>
+                        <p class="text-xs text-slate-500 px-1">Configure permitted extensions, file size limits, verification/approval requirements, and policy-backed retention schedules.</p>
+                    </div>
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Add / Update Document Type Policy</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Category *</label>
+                            <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingDocType.CategoryId">
+                                <option value="0">-- Select Category --</option>
+                                @if (dashboard != null)
+                                {
+                                    @foreach (var c in dashboard.Categories)
+                                    {
+                                        <option value="@c.CategoryId">@c.Name (@c.TargetDomain)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Type Code *</label>
+                            <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="e.g. POLICE_CLEARANCE" @bind="editingDocType.Code" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Type Name *</label>
+                            <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="e.g. Police Clearance Certificate" @bind="editingDocType.Name" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Default Classification</label>
+                            <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingDocType.DefaultClassification">
+                                <option value="Public">Public</option>
+                                <option value="Internal">Internal</option>
+                                <option value="Confidential">Confidential</option>
+                                <option value="Restricted">Restricted</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Permitted Formats</label>
+                            <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingDocType.PermittedExtensions" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Retention Policy</label>
+                            <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="editingDocType.RetentionPolicyId">
+                                <option value="">-- Permanent / Default --</option>
+                                @if (dashboard != null)
+                                {
+                                    @foreach (var rp in dashboard.RetentionPolicies)
+                                    {
+                                        <option value="@rp.RetentionPolicyId">@rp.Name (@rp.PolicyReferenceNumber)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-4 text-xs text-slate-700 pt-1">
+                        <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingDocType.RequiresVerification" /> Requires Verification</label>
+                        <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingDocType.RequiresApproval" /> Requires Approval</label>
+                        <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingDocType.IsOfficialRecordWhenApproved" /> Immutable Official Record on Approval</label>
+                        <label class="inline-flex items-center gap-1.5"><input type="checkbox" @bind="editingDocType.AllowEmployeeUpload" /> Allow Employee Upload</label>
+                    </div>
+                    <div class="flex justify-end">
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                @onclick="SaveDocTypeAsync">
+                            Save Document Type Policy
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Retention Schedule Configuration -->
+                <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2.5">
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Approved Retention Schedules (Policy Reference Required)</h3>
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Code</th>
+                                    <th class="p-2.5">Schedule Name</th>
+                                    <th class="p-2.5">Retention</th>
+                                    <th class="p-2.5">Disposition</th>
+                                    <th class="p-2.5">Policy Ref</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @if (dashboard != null)
+                                {
+                                    @foreach (var rp in dashboard.RetentionPolicies)
+                                    {
+                                        <tr class="hover:bg-slate-50/50">
+                                            <td class="p-2.5 font-mono font-semibold text-blue-700">@rp.Code</td>
+                                            <td class="p-2.5 font-medium text-slate-900">@rp.Name</td>
+                                            <td class="p-2.5 text-slate-600">@(rp.RetentionMonths.HasValue ? $"{rp.RetentionMonths} months ({rp.TriggerEvent})" : "Permanent")</td>
+                                            <td class="p-2.5 text-slate-600">@rp.DispositionAction</td>
+                                            <td class="p-2.5 font-mono text-slate-700">@rp.PolicyReferenceNumber</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            }
+            else if (selectedDocument != null)
+            {
+                <!-- SELECTED DOCUMENT INSPECTOR (METADATA, PREVIEW, VERSIONS, MULTI-RECORD LINKS, PERMISSIONS, LEGAL HOLD & AUDIT) -->
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@selectedDocument.Summary.DocumentNumber</span>
+                            @RenderStatusBadge(selectedDocument.Summary.Status)
+                            @RenderClassificationBadge(selectedDocument.Summary.Classification)
+                            @if (selectedDocument.Summary.IsOfficialRecord)
+                            {
+                                <span class="bg-emerald-100 text-emerald-800 rounded-full px-2.5 py-0.5 font-semibold text-[11px]">🔒 Immutable Official Record</span>
+                            }
+                            @if (selectedDocument.Summary.HasActiveLegalHold)
+                            {
+                                <span class="bg-rose-100 text-rose-800 rounded-full px-2.5 py-0.5 font-semibold text-[11px]">⚖ LEGAL HOLD ACTIVE</span>
+                            }
+                        </div>
+                        <h2 class="text-base font-bold text-slate-900 mt-1">@selectedDocument.Summary.Title</h2>
+                        <p class="text-xs text-slate-500">
+                            @selectedDocument.Summary.CategoryName • @selectedDocument.Summary.DocumentTypeName • Current Version: <strong>v@(selectedDocument.Summary.CurrentVersionNumber).0</strong> (@selectedDocument.Summary.CurrentFileName, @FormatSize(selectedDocument.Summary.CurrentFileSizeBytes))
+                        </p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @if (selectedDocument.EffectivePermissions.CanPreview)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                    @onclick="() => PreviewDocumentAsync(selectedDocument.Summary.DocumentId, null)">
+                                👁 Preview
+                            </button>
+                        }
+                        @if (selectedDocument.EffectivePermissions.CanDownload)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                    @onclick="() => DownloadDocumentAsync(selectedDocument.Summary.DocumentId, null, false)">
+                                ⬇ Download
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                <!-- Workflow & Governance Action Bar -->
+                <div class="flex flex-wrap items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    @if (selectedDocument.EffectivePermissions.CanReview && !selectedDocument.Summary.IsVerified)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                                @onclick='() => RunLifecycleActionAsync("Verify", "Verified against original credentials")'>
+                            ✓ Verify Record
+                        </button>
+                    }
+                    @if (selectedDocument.EffectivePermissions.CanApprove && selectedDocument.Summary.Status is "PendingApproval" or "Active" or "Draft")
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-emerald-700"
+                                @onclick='() => RunLifecycleActionAsync("Approve", "Approved by HR Authority")'>
+                            ✓ Approve Record
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
+                                @onclick='() => RunLifecycleActionAsync("Publish", "Published as official institutional record")'>
+                            📢 Publish Official
+                        </button>
+                    }
+                    @if (selectedDocument.EffectivePermissions.CanSign)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                @onclick='() => RunLifecycleActionAsync("Sign", "Digitally signed with SHA-256 digest")'>
+                            ✍ Digital Sign-Off
+                        </button>
+                    }
+                    @if (selectedDocument.EffectivePermissions.CanAddVersion)
+                    {
+                        @if (!selectedDocument.Summary.IsLockedForEdit)
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                    @onclick='() => RunLifecycleActionAsync("CheckOut", "Checked out for revision")'>
+                                🔒 Check Out
+                            </button>
+                        }
+                        else
+                        {
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 hover:bg-amber-100"
+                                    @onclick='() => RunLifecycleActionAsync("CheckIn", "Checked in without version upload")'>
+                                🔓 Check In (@selectedDocument.Summary.CheckedOutByUserName)
+                            </button>
+                        }
+                    }
+                    @if (selectedDocument.EffectivePermissions.CanArchive && selectedDocument.Summary.Status != "Archived")
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+                                @onclick='() => RunLifecycleActionAsync("Archive", "Moved to institutional archive")'>
+                            📦 Archive
+                        </button>
+                    }
+                    @if (selectedDocument.EffectivePermissions.CanDispose)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-rose-300 bg-white px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                @onclick='() => RunLifecycleActionAsync("Dispose", "Formal disposal executed under retention policy")'>
+                            🗑 Formal Dispose
+                        </button>
+                    }
+                </div>
+
+                <!-- Inline File Preview Panel -->
+                @if (!string.IsNullOrWhiteSpace(previewDataUrl))
+                {
+                    <div class="rounded-xl border border-blue-200 bg-slate-900/5 p-3 space-y-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold text-slate-800">Secure In-Browser Document Preview (@previewFileName)</span>
+                            <button type="button" class="text-xs text-slate-500 hover:text-slate-900 font-semibold" @onclick="() => previewDataUrl = null">✕ Close Preview</button>
+                        </div>
+                        @if (previewContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <img src="@previewDataUrl" alt="@previewFileName" class="max-h-96 mx-auto rounded-lg border border-slate-200 shadow-xs" />
+                        }
+                        else if (previewContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+                        {
+                            <iframe src="@previewDataUrl" class="w-full h-96 rounded-lg border border-slate-200 bg-white"></iframe>
+                        }
+                        else
+                        {
+                            <div class="p-4 text-xs text-slate-600 bg-white rounded-lg border border-slate-200">
+                                Binary verified (SHA-256 OK). Use the Download button above to open <strong>@previewFileName</strong> in its native application.
+                            </div>
+                        }
+                    </div>
+                }
+
+                <!-- Inspector Sub-Tabs: Versions, Multi-Record Links, Security & Legal Holds, Audit Trail -->
+                <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5 w-fit">
+                    <button type="button" class="px-2.5 py-1 rounded text-xs font-semibold @(inspectorTab == "versions" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")" @onclick='() => inspectorTab = "versions"'>
+                        Versions (@selectedDocument.Versions.Count)
+                    </button>
+                    <button type="button" class="px-2.5 py-1 rounded text-xs font-semibold @(inspectorTab == "links" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")" @onclick='() => inspectorTab = "links"'>
+                        Linked HRM Records (@selectedDocument.Links.Count)
+                    </button>
+                    <button type="button" class="px-2.5 py-1 rounded text-xs font-semibold @(inspectorTab == "security" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")" @onclick='() => inspectorTab = "security"'>
+                        Access &amp; Legal Holds (@(selectedDocument.Permissions.Count + selectedDocument.LegalHolds.Count))
+                    </button>
+                    <button type="button" class="px-2.5 py-1 rounded text-xs font-semibold @(inspectorTab == "audit" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600")" @onclick='() => inspectorTab = "audit"'>
+                        Audit Events (@selectedDocument.AuditEvents.Count)
+                    </button>
+                </div>
+
+                @if (inspectorTab == "versions")
+                {
+                    <!-- Upload New Version Box -->
+                    @if (selectedDocument.EffectivePermissions.CanAddVersion)
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-wrap items-center justify-between gap-2">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <InputFile OnChange="HandleNewVersionFileSelected" class="text-xs text-slate-700" />
+                                <input type="text"
+                                       class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs w-64"
+                                       placeholder="Version change comments..."
+                                       @bind="newVersionInput.ChangeComments" />
+                            </div>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+                                    disabled="@(newVersionInput.FileContent.Length == 0 || isSubmitting)"
+                                    @onclick="UploadNewVersionAsync">
+                                + Upload Preserved Version
+                            </button>
+                        </div>
+                    }
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Version</th>
+                                    <th class="p-2.5">File Name &amp; Size</th>
+                                    <th class="p-2.5">SHA-256 Content Hash</th>
+                                    <th class="p-2.5">Comments &amp; Author</th>
+                                    <th class="p-2.5 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var ver in selectedDocument.Versions)
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2.5 font-mono font-bold text-blue-700">
+                                            @ver.VersionLabel
+                                            @if (ver.IsCurrentVersion)
+                                            {
+                                                <span class="ml-1 rounded-full bg-emerald-100 text-emerald-800 px-2 py-0.5 text-[10px]">Current</span>
+                                            }
+                                        </td>
+                                        <td class="p-2.5 text-slate-800">@ver.OriginalFileName <span class="text-slate-400">(@FormatSize(ver.FileSizeBytes))</span></td>
+                                        <td class="p-2.5 font-mono text-[11px] text-slate-500" title="@ver.Sha256Hash">@ver.Sha256Hash[..Math.Min(16, ver.Sha256Hash.Length)]...</td>
+                                        <td class="p-2.5 text-slate-600">
+                                            <div>@ver.ChangeComments</div>
+                                            <div class="text-[10px] text-slate-400">@ver.CreatedByUserName • @ver.CreatedAtUtc.ToString("dd MMM yyyy HH:mm")</div>
+                                        </td>
+                                        <td class="p-2.5 text-right space-x-1">
+                                            <button type="button"
+                                                    class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                                    @onclick="() => DownloadDocumentAsync(selectedDocument.Summary.DocumentId, ver.VersionNumber, false)">
+                                                Download
+                                            </button>
+                                            @if (!ver.IsCurrentVersion && selectedDocument.EffectivePermissions.CanAddVersion)
+                                            {
+                                                <button type="button"
+                                                        class="rounded border border-blue-300 bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700 hover:bg-blue-100"
+                                                        @onclick="() => RestoreVersionAsync(ver.VersionNumber)">
+                                                    Restore
+                                                </button>
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (inspectorTab == "links")
+                {
+                    <!-- Multi-Record Linking Without Physical Duplication -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-wrap items-end gap-2">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">HRM Business Entity Type</label>
+                            <select class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="newLinkInput.TargetEntityType">
+                                <option value="Staff">Staff Record</option>
+                                <option value="Organisation">Organisation Record</option>
+                                <option value="Department">Department Structure</option>
+                                <option value="Request">Workflow Request</option>
+                                <option value="Transfer">Staff Transfer</option>
+                                <option value="Asset">Asset / Equipment</option>
+                                <option value="Project">Project / Task</option>
+                                <option value="Evaluation">Performance Evaluation</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Record ID *</label>
+                            <input type="number" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs w-28" @bind="newLinkInput.TargetEntityId" />
+                        </div>
+                        <div class="flex-1 min-w-[160px]">
+                            <label class="block text-xs font-medium text-slate-700 p-1">Display Label / Reference</label>
+                            <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="e.g. Transfer Order #42" @bind="newLinkInput.TargetDisplayName" />
+                        </div>
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                @onclick="LinkToRecordAsync">
+                            + Link Record
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto rounded-xl border border-slate-200">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Target Type</th>
+                                    <th class="p-2.5">Entity ID &amp; Label</th>
+                                    <th class="p-2.5">Relationship</th>
+                                    <th class="p-2.5">Linked By</th>
+                                    <th class="p-2.5 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var lnk in selectedDocument.Links)
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2.5 font-mono font-semibold text-blue-700">@lnk.TargetEntityType</td>
+                                        <td class="p-2.5 text-slate-800">#@lnk.TargetEntityId — @(lnk.TargetDisplayName ?? lnk.TargetReferenceCode ?? "Linked Record")</td>
+                                        <td class="p-2.5 text-slate-600">@lnk.LinkRelationship</td>
+                                        <td class="p-2.5 text-slate-500">@lnk.LinkedByUserName (@lnk.LinkedAtUtc.ToString("dd MMM yyyy"))</td>
+                                        <td class="p-2.5 text-right">
+                                            <button type="button"
+                                                    class="text-rose-600 hover:underline text-[11px] font-semibold"
+                                                    @onclick="() => UnlinkRecordAsync(lnk.DocumentLinkId)">
+                                                Unlink
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+                else if (inspectorTab == "security")
+                {
+                    <!-- Legal Hold & Explicit Access Control Entries -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                            <h4 class="text-xs font-bold text-slate-800">Grant Explicit Access Policy (ACE)</h4>
+                            <div class="grid grid-cols-2 gap-2">
+                                <select class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="newAceInput.PrincipalType">
+                                    <option value="User">User ID</option>
+                                    <option value="Individual">Staff Individual ID</option>
+                                    <option value="Department">Department ID</option>
+                                    <option value="UserGroup">User Group Name</option>
+                                </select>
+                                <select class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="newAceInput.PermissionLevel">
+                                    <option value="Preview">Preview Only</option>
+                                    <option value="Download">Preview &amp; Download</option>
+                                    <option value="Contribute">Contribute / Version</option>
+                                    <option value="Approve">Approve</option>
+                                    <option value="Deny">Explicit Deny</option>
+                                </select>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <input type="number" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Principal ID (if ID)" @bind="newAceInput.PrincipalId" />
+                                <input type="text" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Group/Display Name" @bind="newAceInput.PrincipalName" />
+                            </div>
+                            <button type="button"
+                                    class="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                    @onclick="GrantAceAsync">
+                                Apply Access Rule
+                            </button>
+                        </div>
+
+                        <div class="rounded-xl border border-rose-200 bg-rose-50/40 p-3 flex flex-col gap-2">
+                            <h4 class="text-xs font-bold text-rose-900">Place or Release Legal Hold</h4>
+                            <input type="text" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Hold Reference (e.g. LH-2026-01)" @bind="legalHoldInput.HoldReference" />
+                            <input type="text" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Case / Audit / Inquiry Matter Name" @bind="legalHoldInput.CaseOrMatterName" />
+                            <input type="text" class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="Reason / Release Notes" @bind="legalHoldInput.HoldReason" />
+                            <div class="flex items-center gap-2">
+                                <button type="button"
+                                        class="inline-flex items-center gap-1 rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-rose-700"
+                                        @onclick="() => ToggleLegalHoldAsync(false)">
+                                    ⚖ Place Legal Hold
+                                </button>
+                                @if (selectedDocument.Summary.HasActiveLegalHold)
+                                {
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                            @onclick="() => ToggleLegalHoldAsync(true)">
+                                        Release Active Hold
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                else if (inspectorTab == "audit")
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 max-h-80">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                <tr>
+                                    <th class="p-2.5">Timestamp (UTC)</th>
+                                    <th class="p-2.5">Event</th>
+                                    <th class="p-2.5">Actor</th>
+                                    <th class="p-2.5">Audit Details</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100">
+                                @foreach (var ev in selectedDocument.AuditEvents)
+                                {
+                                    <tr class="hover:bg-slate-50/50">
+                                        <td class="p-2.5 font-mono text-[11px] text-slate-500">@ev.OccurredAtUtc.ToString("dd MMM yyyy HH:mm:ss")</td>
+                                        <td class="p-2.5 font-semibold text-slate-800">@ev.EventType</td>
+                                        <td class="p-2.5 text-slate-700">@ev.PerformedByUserName</td>
+                                        <td class="p-2.5 text-slate-600">@ev.EventDescription</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+            else
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+                    Select a document or record from the right panel to inspect its metadata, preview content, manage versions, link HRM records, or execute workflow actions.
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Search Filters & Selectable Repository / Queue List -->
+        <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+            @if (activeTab == "requests")
+            {
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Employee Document Requests (@documentRequests.Count)</h3>
+                </div>
+
+                @if (documentRequests.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                        No official document requests found in queue.
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-[640px] overflow-y-auto pr-1">
+                        @foreach (var req in documentRequests)
+                        {
+                            var isSel = selectedRequest?.DocumentRequestId == req.DocumentRequestId;
+                            <div class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(isSel ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => SelectRequestAsync(req)">
+                                <div class="flex items-center justify-between gap-2">
+                                    <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@req.ReferenceNumber</span>
+                                    @RenderStatusBadge(req.Status)
+                                </div>
+                                <div class="font-bold text-slate-900">@req.RequestKind — @req.ApplicantName</div>
+                                <div class="text-[11px] text-slate-500">Purpose: @req.Purpose • @req.CreatedAtUtc.ToString("dd MMM yyyy")</div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else if (activeTab == "templates")
+            {
+                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Versioned Document Templates (@(dashboard?.Templates.Count ?? 0))</h3>
+                </div>
+                @if (dashboard != null)
+                {
+                    <div class="space-y-2 max-h-[640px] overflow-y-auto pr-1">
+                        @foreach (var tpl in dashboard.Templates)
+                        {
+                            var isSel = editingTemplate.DocumentTemplateId == tpl.DocumentTemplateId;
+                            <div class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1 @(isSel ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => SelectTemplateForEdit(tpl)">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@tpl.Code (v@(tpl.VersionNumber))</span>
+                                    <span class="text-[10px] font-semibold @(tpl.IsEmployeeRequestable ? "text-emerald-700" : "text-slate-500")">@(tpl.IsEmployeeRequestable ? "Self-Service Enabled" : "HR Internal")</span>
+                                </div>
+                                <div class="font-bold text-slate-900 mt-0.5">@tpl.Name</div>
+                                <div class="text-[11px] text-slate-500 truncate">@tpl.Description</div>
+                            </div>
+                        }
+                    </div>
+                }
+            }
+            else
+            {
+                <!-- CENTRAL REPOSITORY SEARCH & FILTER CONTROLS -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <input type="text"
+                           class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none"
+                           placeholder="Search number, title, tag, ref..."
+                           @bind="searchFilter.SearchText"
+                           @bind:event="oninput"
+                           @bind:after="RunSearchAsync" />
+
+                    <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                            @bind="searchFilter.CategoryId"
+                            @bind:after="RunSearchAsync">
+                        <option value="">All Categories</option>
+                        @if (dashboard != null)
+                        {
+                            @foreach (var cat in dashboard.Categories)
+                            {
+                                <option value="@cat.CategoryId">@cat.Name</option>
+                            }
+                        }
+                    </select>
+
+                    <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                            @bind="searchFilter.Classification"
+                            @bind:after="RunSearchAsync">
+                        <option value="">All Classifications</option>
+                        <option value="Public">Public</option>
+                        <option value="Internal">Internal</option>
+                        <option value="Confidential">Confidential</option>
+                        <option value="Restricted">Restricted</option>
+                        <option value="Secret">Secret</option>
+                    </select>
+
+                    <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"
+                            @bind="searchFilter.Status"
+                            @bind:after="RunSearchAsync">
+                        <option value="">Active &amp; Official</option>
+                        <option value="PendingVerification">Pending Verification</option>
+                        <option value="PendingApproval">Pending Approval</option>
+                        <option value="OfficialRecord">Official Records</option>
+                        <option value="Published">Published</option>
+                        <option value="Archived">Archived</option>
+                        <option value="Revoked">Revoked / Superseded</option>
+                    </select>
+                </div>
+
+                @if (searchResults.Count == 0)
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                        No documents match the current filter criteria. Use <strong>+ Register / Upload Document</strong> to add records.
+                    </div>
+                }
+                else
+                {
+                    <div class="space-y-2 max-h-[620px] overflow-y-auto pr-1">
+                        @foreach (var doc in searchResults)
+                        {
+                            var isSel = selectedDocument?.Summary.DocumentId == doc.DocumentId;
+                            <div class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(isSel ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => InspectDocumentAsync(doc.DocumentId)">
+                                <div class="flex items-center justify-between gap-1.5 flex-wrap">
+                                    <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@doc.DocumentNumber</span>
+                                    <div class="flex items-center gap-1">
+                                        @RenderClassificationBadge(doc.Classification)
+                                        @RenderStatusBadge(doc.Status)
+                                    </div>
+                                </div>
+                                <div class="font-bold text-slate-900 truncate">@doc.Title</div>
+                                <div class="flex items-center justify-between text-[11px] text-slate-500">
+                                    <span>@doc.CategoryName • v@(doc.CurrentVersionNumber).0</span>
+                                    <span>@FormatSize(doc.CurrentFileSizeBytes)</span>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(doc.SubjectEmployeeName))
+                                {
+                                    <div class="text-[11px] text-teal-700 font-medium">
+                                        Staff: @doc.SubjectEmployeeName (@doc.SubjectStaffNumber)
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            }
+        </aside>
+    </div>
+</section>
+
+@code {
+    [Parameter] public string? InitialSection { get; set; }
+
+    private const string FullWidthStorageKey = "hrm.dms.full-width";
+    private bool isFullWidth;
+    private bool isLoading;
+    private bool isSubmitting;
+    private string? errorMessage;
+
+    private string activeTab = "dashboard";
+    private string inspectorTab = "versions";
+    private bool showUploadModal;
+
+    private DmsDashboardSummaryDto? dashboard;
+    private List<DmsDocumentSummaryDto> searchResults = [];
+    private DmsDocumentDetailDto? selectedDocument;
+    private DmsDocumentSearchFilterDto searchFilter = new();
+
+    private List<DmsDocumentRequestDto> documentRequests = [];
+    private DmsDocumentRequestDto? selectedRequest;
+    private DmsTemplatePreviewDto? requestTemplatePreview;
+    private string requestActionComments = string.Empty;
+    private string requestActionSignatoryName = "Director of Human Resources";
+    private string requestActionSignatoryTitle = "Human Resources Division";
+
+    private DmsDocumentUploadInput uploadInput = new();
+    private DmsDocumentNewVersionInput newVersionInput = new();
+    private DmsDocumentLinkInput newLinkInput = new() { TargetEntityType = "Staff", LinkRelationship = "SupportingEvidence" };
+    private DmsDocumentPermissionInput newAceInput = new() { PrincipalType = "User", PermissionLevel = "Preview" };
+    private DmsLegalHoldInput legalHoldInput = new();
+    private DmsDocumentTemplateDto editingTemplate = new();
+    private DmsDocumentTypeDto editingDocType = new();
+
+    private string? previewDataUrl;
+    private string previewContentType = string.Empty;
+    private string previewFileName = string.Empty;
+
+    private sealed record AdminTabItem(string Key, string Label, Func<DmsDashboardSummaryDto?, int> BadgeCount);
+    private static readonly List<AdminTabItem> AdminTabs =
+    [
+        new("dashboard", "Dashboard", _ => 0),
+        new("registry", "Central Registry", d => d?.TotalDocuments ?? 0),
+        new("staff", "Staff Documents", d => d?.StaffDocumentsCount ?? 0),
+        new("organisation", "Organisation Libraries", d => d?.OrganisationLibraryCount ?? 0),
+        new("approvals", "Pending Approvals", d => (d?.PendingApprovalCount ?? 0) + (d?.PendingVerificationCount ?? 0)),
+        new("requests", "Document Requests", d => d?.PendingDocumentRequestsCount ?? 0),
+        new("templates", "Templates", _ => 0),
+        new("archives", "Archives & Holds", d => (d?.ArchivedDocumentsCount ?? 0) + (d?.ActiveLegalHoldsCount ?? 0)),
+        new("configuration", "Configuration", _ => 0)
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(InitialSection))
+        {
+            activeTab = InitialSection.ToLowerInvariant();
+        }
+        await RefreshAllAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+                {
+                    isFullWidth = parsed;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
+    }
+
+    private async Task RefreshAllAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            dashboard = await DmsService.GetDashboardAsync();
+            if (dashboard.Templates.Count > 0 && editingTemplate.DocumentTemplateId == 0)
+            {
+                SelectTemplateForEdit(dashboard.Templates[0]);
+            }
+            await ApplyTabFilterAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load DHR-DMS dashboard.");
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SwitchTabAsync(string tabKey)
+    {
+        activeTab = tabKey;
+        showUploadModal = false;
+        previewDataUrl = null;
+        await ApplyTabFilterAsync();
+    }
+
+    private async Task ApplyTabFilterAsync()
+    {
+        searchFilter = new DmsDocumentSearchFilterDto();
+        switch (activeTab)
+        {
+            case "staff":
+                searchFilter.TargetDomain = "Staff";
+                break;
+            case "organisation":
+                searchFilter.TargetDomain = "Organisation";
+                break;
+            case "approvals":
+                searchFilter.Status = "PendingApproval";
+                break;
+            case "archives":
+                searchFilter.IncludeArchived = true;
+                break;
+            case "requests":
+                documentRequests = await DmsService.GetAdminDocumentRequestsAsync();
+                if (documentRequests.Count > 0 && selectedRequest == null)
+                {
+                    await SelectRequestAsync(documentRequests[0]);
+                }
+                return;
+            case "templates":
+                return;
+        }
+
+        await RunSearchAsync();
+    }
+
+    private async Task FilterByCategoryAsync(int categoryId)
+    {
+        activeTab = "registry";
+        searchFilter = new DmsDocumentSearchFilterDto { CategoryId = categoryId };
+        await RunSearchAsync();
+    }
+
+    private async Task RunSearchAsync()
+    {
+        try
+        {
+            searchResults = await DmsService.SearchDocumentsAsync(searchFilter);
+            if (selectedDocument != null && searchResults.Any(d => d.DocumentId == selectedDocument.Summary.DocumentId))
+            {
+                selectedDocument = await DmsService.GetDocumentDetailAsync(selectedDocument.Summary.DocumentId);
+            }
+            else if (activeTab != "dashboard" && searchResults.Count > 0)
+            {
+                selectedDocument = await DmsService.GetDocumentDetailAsync(searchResults[0].DocumentId);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
+    private async Task InspectDocumentAsync(long documentId)
+    {
+        showUploadModal = false;
+        previewDataUrl = null;
+        selectedDocument = await DmsService.GetDocumentDetailAsync(documentId);
+    }
+
+    private void OpenUploadForm()
+    {
+        uploadInput = new DmsDocumentUploadInput
+        {
+            Classification = "Internal",
+            AccessScope = "EmployeeAndHr",
+            DocumentDate = DateTime.Today
+        };
+        if (dashboard != null && dashboard.DocumentTypes.Count > 0)
+        {
+            var firstType = dashboard.DocumentTypes[0];
+            uploadInput.DmsDocumentTypeId = firstType.DmsDocumentTypeId;
+            uploadInput.Classification = firstType.DefaultClassification;
+            uploadInput.AccessScope = firstType.DefaultAccessScope;
+        }
+        showUploadModal = true;
+    }
+
+    private void OnUploadDocumentTypeChanged()
+    {
+        var dt = dashboard?.DocumentTypes.FirstOrDefault(x => x.DmsDocumentTypeId == uploadInput.DmsDocumentTypeId);
+        if (dt != null)
+        {
+            uploadInput.Classification = dt.DefaultClassification;
+            uploadInput.AccessScope = dt.DefaultAccessScope;
+        }
+    }
+
+    private async Task HandleUploadFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 30 * 1024 * 1024).CopyToAsync(ms);
+            uploadInput.FileName = file.Name;
+            uploadInput.ContentType = file.ContentType;
+            uploadInput.FileContent = ms.ToArray();
+            if (string.IsNullOrWhiteSpace(uploadInput.Title))
+            {
+                uploadInput.Title = Path.GetFileNameWithoutExtension(file.Name);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Could not read selected file: " + ex.Message;
+        }
+    }
+
+    private async Task SubmitUploadAsync()
+    {
+        isSubmitting = true;
+        errorMessage = null;
+        try
+        {
+            var res = await DmsService.UploadDocumentAsync(uploadInput);
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                showUploadModal = false;
+                await RefreshAllAsync();
+            }
+            else
+            {
+                errorMessage = res.Message;
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task HandleNewVersionFileSelected(InputFileChangeEventArgs e)
+    {
+        try
+        {
+            var file = e.File;
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(maxAllowedSize: 30 * 1024 * 1024).CopyToAsync(ms);
+            newVersionInput.FileName = file.Name;
+            newVersionInput.ContentType = file.ContentType;
+            newVersionInput.FileContent = ms.ToArray();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Could not read version file: " + ex.Message;
+        }
+    }
+
+    private async Task UploadNewVersionAsync()
+    {
+        if (selectedDocument is null) return;
+        isSubmitting = true;
+        try
+        {
+            newVersionInput.DocumentId = selectedDocument.Summary.DocumentId;
+            var res = await DmsService.UploadNewVersionAsync(newVersionInput);
+            if (res.Success)
+            {
+                Toasts.Success(res.Message);
+                newVersionInput = new DmsDocumentNewVersionInput();
+                await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+            }
+            else
+            {
+                errorMessage = res.Message;
+            }
+        }
+        finally
+        {
+            isSubmitting = false;
+        }
+    }
+
+    private async Task RestoreVersionAsync(int versionNumber)
+    {
+        if (selectedDocument is null) return;
+        var res = await DmsService.ExecuteLifecycleActionAsync(new DmsDocumentLifecycleActionInput
+        {
+            DocumentId = selectedDocument.Summary.DocumentId,
+            Action = "RestoreVersion",
+            TargetVersionNumber = versionNumber,
+            Comments = $"Restored version v{versionNumber}.0"
+        });
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task RunLifecycleActionAsync(string action, string defaultComment)
+    {
+        if (selectedDocument is null) return;
+        var res = await DmsService.ExecuteLifecycleActionAsync(new DmsDocumentLifecycleActionInput
+        {
+            DocumentId = selectedDocument.Summary.DocumentId,
+            Action = action,
+            Comments = defaultComment
+        });
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await RefreshAllAsync();
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task LinkToRecordAsync()
+    {
+        if (selectedDocument is null) return;
+        newLinkInput.DocumentId = selectedDocument.Summary.DocumentId;
+        var res = await DmsService.LinkDocumentToRecordAsync(newLinkInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task UnlinkRecordAsync(long linkId)
+    {
+        if (selectedDocument is null) return;
+        var res = await DmsService.UnlinkDocumentFromRecordAsync(linkId);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task GrantAceAsync()
+    {
+        if (selectedDocument is null) return;
+        newAceInput.DocumentId = selectedDocument.Summary.DocumentId;
+        var res = await DmsService.GrantOrRevokePermissionAsync(newAceInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task ToggleLegalHoldAsync(bool release)
+    {
+        if (selectedDocument is null) return;
+        legalHoldInput.DocumentId = selectedDocument.Summary.DocumentId;
+        legalHoldInput.Release = release;
+        legalHoldInput.ReleaseNotes = legalHoldInput.HoldReason;
+        var res = await DmsService.ManageLegalHoldAsync(legalHoldInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await RefreshAllAsync();
+            await InspectDocumentAsync(selectedDocument.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task PreviewDocumentAsync(long documentId, int? versionNumber)
+    {
+        var dl = await DmsService.DownloadDocumentVersionAsync(documentId, versionNumber, isPreview: true);
+        if (!dl.Success)
+        {
+            errorMessage = dl.ErrorMessage;
+            return;
+        }
+        previewFileName = dl.FileName;
+        previewContentType = dl.ContentType;
+        previewDataUrl = $"data:{dl.ContentType};base64,{Convert.ToBase64String(dl.Content)}";
+    }
+
+    private async Task DownloadDocumentAsync(long documentId, int? versionNumber, bool isPreview)
+    {
+        try
+        {
+            var dl = await DmsService.DownloadDocumentVersionAsync(documentId, versionNumber, isPreview);
+            if (!dl.Success)
+            {
+                errorMessage = dl.ErrorMessage;
+                Toasts.Error(dl.ErrorMessage ?? "Download failed.");
+                return;
+            }
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(dl.Content);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", dl.FileName, dl.ContentType, reference);
+            Toasts.Success($"Downloaded '{dl.FileName}' (SHA-256 verified).");
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Download failed: " + ex.Message;
+        }
+    }
+
+    private async Task SelectRequestAsync(DmsDocumentRequestDto req)
+    {
+        selectedRequest = req;
+        try
+        {
+            requestTemplatePreview = await DmsService.ResolveTemplatePreviewAsync(
+                req.DocumentTemplateId ?? 0,
+                req.ApplicantIndividualId,
+                req.Purpose,
+                req.AddressedTo);
+            requestActionSignatoryName = requestTemplatePreview.SignatoryName;
+            requestActionSignatoryTitle = requestTemplatePreview.SignatoryTitle;
+        }
+        catch { }
+    }
+
+    private async Task ExecuteRequestActionAsync(string action)
+    {
+        if (selectedRequest is null) return;
+        byte[]? pdfBytes = null;
+        if (action == "ApproveAndIssue" && requestTemplatePreview != null)
+        {
+            try
+            {
+                requestTemplatePreview.SignatoryName = requestActionSignatoryName;
+                requestTemplatePreview.SignatoryTitle = requestActionSignatoryTitle;
+                var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+                pdfBytes = DmsDocumentPdfGenerator.Generate(requestTemplatePreview, fontPath);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "MigraDoc PDF fallback triggered.");
+            }
+        }
+
+        var res = await DmsService.ProcessDocumentRequestActionAsync(new DmsDocumentRequestActionInput
+        {
+            DocumentRequestId = selectedRequest.DocumentRequestId,
+            Action = action,
+            Comments = requestActionComments,
+            SignatoryName = requestActionSignatoryName,
+            SignatoryTitle = requestActionSignatoryTitle,
+            GeneratedPdfBytes = pdfBytes
+        });
+
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            documentRequests = await DmsService.GetAdminDocumentRequestsAsync();
+            selectedRequest = documentRequests.FirstOrDefault(r => r.DocumentRequestId == selectedRequest.DocumentRequestId);
+            await RefreshAllAsync();
+        }
+        else errorMessage = res.Message;
+    }
+
+    private void SelectTemplateForEdit(DmsDocumentTemplateDto tpl)
+    {
+        editingTemplate = new DmsDocumentTemplateDto
+        {
+            DocumentTemplateId = tpl.DocumentTemplateId,
+            CategoryId = tpl.CategoryId,
+            DmsDocumentTypeId = tpl.DmsDocumentTypeId,
+            Code = tpl.Code,
+            Name = tpl.Name,
+            Description = tpl.Description,
+            VersionNumber = tpl.VersionNumber,
+            DocumentTitlePattern = tpl.DocumentTitlePattern,
+            HeaderText = tpl.HeaderText,
+            BodyTemplate = tpl.BodyTemplate,
+            FooterText = tpl.FooterText,
+            SignatoryName = tpl.SignatoryName,
+            SignatoryTitle = tpl.SignatoryTitle,
+            IncludeOrganisationLetterhead = tpl.IncludeOrganisationLetterhead,
+            IncludePositionHistoryTable = tpl.IncludePositionHistoryTable,
+            IncludeQrVerification = tpl.IncludeQrVerification,
+            IsEmployeeRequestable = tpl.IsEmployeeRequestable,
+            IsActive = tpl.IsActive
+        };
+    }
+
+    private void NewTemplateForm()
+    {
+        editingTemplate = new DmsDocumentTemplateDto
+        {
+            Code = "TPL-CUSTOM-LETTER",
+            Name = "Official Custom Letter",
+            DocumentTitlePattern = "Official Letter - {{EmployeeName}}",
+            HeaderText = "OFFICIAL HR CORRESPONDENCE",
+            BodyTemplate = "This is to certify that {{EmployeeName}} (Staff No: {{StaffNumber}}) is currently serving as {{CurrentPosition}} in {{DepartmentName}} at {{OrganisationName}}.",
+            SignatoryName = "Director of Human Resources",
+            SignatoryTitle = "Human Resources Division",
+            IncludeOrganisationLetterhead = true,
+            IncludeQrVerification = true,
+            IsEmployeeRequestable = true,
+            IsActive = true
+        };
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        var res = await DmsService.SaveTemplateAsync(editingTemplate);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await RefreshAllAsync();
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task PreviewCurrentTemplatePdfAsync()
+    {
+        try
+        {
+            var preview = await DmsService.ResolveTemplatePreviewAsync(editingTemplate.DocumentTemplateId);
+            var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+            var pdfBytes = DmsDocumentPdfGenerator.Generate(preview, fontPath);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(pdfBytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"{preview.DocumentNumber}-Preview.pdf", "application/pdf", reference);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Template PDF preview failed: " + ex.Message;
+        }
+    }
+
+    private async Task SaveDocTypeAsync()
+    {
+        var res = await DmsService.SaveDocumentTypeAsync(editingDocType);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            editingDocType = new DmsDocumentTypeDto();
+            await RefreshAllAsync();
+        }
+        else errorMessage = res.Message;
+    }
+
+    private static string FormatSize(long bytes) =>
+        bytes >= 1024 * 1024
+            ? $"{bytes / 1024.0 / 1024.0:F2} MB"
+            : $"{Math.Max(1, bytes / 1024)} KB";
+
+    private static RenderFragment RenderStatusBadge(string status) => builder =>
+    {
+        var css = status switch
+        {
+            "PendingVerification" or "PendingApproval" or "Submitted" or "UnderReview" => "bg-amber-100 text-amber-800",
+            "Approved" or "Active" or "OfficialRecord" or "Published" or "Issued" => "bg-emerald-100 text-emerald-800",
+            "Rejected" or "Revoked" or "Disposed" => "bg-rose-100 text-rose-800",
+            "Archived" or "ReturnedForCorrection" or "Superseded" => "bg-purple-100 text-purple-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2.5 py-0.5 font-semibold text-[11px] {css}");
+        builder.AddContent(2, status);
+        builder.CloseElement();
+    };
+
+    private static RenderFragment RenderClassificationBadge(string classification) => builder =>
+    {
+        var css = classification switch
+        {
+            "Public" => "bg-blue-50 text-blue-700",
+            "Internal" => "bg-slate-100 text-slate-700",
+            "Confidential" => "bg-amber-100 text-amber-800",
+            "Restricted" or "Secret" => "bg-rose-100 text-rose-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"rounded-full px-2 py-0.5 font-medium text-[11px] {css}");
+        builder.AddContent(2, classification);
+        builder.CloseElement();
+    };
+}

@@ -6,14 +6,29 @@ namespace HRM.Api.Controllers.V1;
 [Route("api/v1/leave-type-catalogue")]
 public sealed class LeaveTypeCatalogueController(global::HRM.Services.Interfaces.LeaveType.ILeaveTypeCatalogueService service) : HrmApiController
 {
-    [HttpGet("subtypes")]
-    public async Task<ActionResult<HRM.DTOs.LeaveTypes.LeaveSubtypeSettings>> GetSubtypes([FromQuery]int leaveTypeId)=>Ok(await service.GetSubtypesAsync(leaveTypeId));
-    [HttpPost("subtypes")]
-    public async Task<ActionResult<HRM.DTOs.LeaveTypes.ServiceResult<int>>> SaveSubtypes([FromBody]SubtypeSaveRequest request)=>Ok(await service.SaveSubtypesAsync(request.request));
-    public sealed class SubtypeSaveRequest {public HRM.DTOs.LeaveTypes.LeaveSubtypeSettings request{get;set;}=new();}
-    [HttpGet("certificate")]
-    [ResponseCache(NoStore=true,Location=ResponseCacheLocation.None)]
-    public async Task<ActionResult<HRM.DTOs.LeaveTypes.LeaveCertificateDownload?>> GetCertificate([FromQuery]int leaveId)=>Ok(await service.GetCertificateAsync(leaveId));
+    [HttpGet("get-subtypes")]
+    public async Task<ActionResult<global::HRM.DTOs.LeaveTypes.LeaveSubtypeSettings>> GetSubtypes([FromQuery] global::System.Int32 leaveTypeId)
+    {
+        return Ok(await service.GetSubtypesAsync(leaveTypeId));
+    }
+
+    [HttpPost("save-subtypes")]
+    public async Task<ActionResult<global::HRM.DTOs.LeaveTypes.ServiceResult<global::System.Int32>>> SaveSubtypes([FromBody] LeaveTypeCatalogueSaveSubtypesRequest request)
+    {
+        return Ok(await service.SaveSubtypesAsync(request.request));
+    }
+
+    public sealed class LeaveTypeCatalogueSaveSubtypesRequest
+    {
+        public global::HRM.DTOs.LeaveTypes.LeaveSubtypeSettings request { get; set; } = default!;
+    }
+
+    [HttpGet("get-certificate")]
+    public async Task<ActionResult<global::HRM.DTOs.LeaveTypes.LeaveCertificateDownload?>> GetCertificate([FromQuery] global::System.Int32 leaveId)
+    {
+        return Ok(await service.GetCertificateAsync(leaveId));
+    }
+
     [HttpGet("get-request-types")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.LeaveTypes.LeaveRequestTypeOption>>> GetRequestTypes()
     {

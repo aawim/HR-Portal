@@ -1,33 +1,287 @@
-<div class="w-full p-2 flex flex-col gap-2">
+@namespace HRM.Components.Admin.My.Workspace.Staff.Tabs
+@using System.IO
+@using HRM.DTOs.Documents
+@using HRM.Services
+@using HRM.Services.Contracts
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@rendermode RenderMode.InteractiveServer
+
+@inject DocumentManagementServiceContracts.IOperations DmsService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<div class="w-full p-2 flex flex-col gap-3">
+    <!-- Header -->
     <div class="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3 flex-wrap gap-2">
         <div>
-            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Employee Documents &amp; Files</h3>
-            <p class="text-xs text-slate-500 dark:text-slate-400">View and manage uploaded credentials, contracts, certificates, and identity documents.</p>
+            <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">Employee Documents &amp; Personnel Dossier (DHR-DMS)</h3>
+            <p class="text-xs text-slate-500 dark:text-slate-400">Personal files, employment records, qualifications, certificates, transfers, work experience, evaluations, and asset clearance documents.</p>
         </div>
         <div class="flex items-center gap-2">
             <span class="rounded bg-slate-100 dark:bg-slate-800 px-2 py-1 text-[10px] font-semibold text-slate-600 dark:text-slate-400">
-                Staff #@StaffId
+                Staff #@StaffId (@documents.Count files)
             </span>
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                    @onclick="() => showUpload = !showUpload">
+                @(showUpload ? "✕ Close Upload" : "+ Upload Staff Document")
+            </button>
         </div>
     </div>
 
-    <!-- Empty State / Documents Registry -->
-    <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 p-8 text-center text-xs text-slate-500 dark:text-slate-400 space-y-3">
-        <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 dark:text-slate-500">
-            <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-            </svg>
+    <!-- 8 Required Staff Document Section Filter Pills -->
+    <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5 w-fit">
+        @foreach (var sec in StaffSections)
+        {
+            <button type="button"
+                    class="px-2.5 py-1 rounded text-xs font-semibold transition @(activeSection == sec.Key ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                    @onclick="() => SelectSection(sec.Key)">
+                @sec.Label
+            </button>
+        }
+    </div>
+
+    @if (showUpload)
+    {
+        <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+            <h4 class="text-xs font-bold text-slate-800 p-1">Upload &amp; Link Document to Staff #@StaffId</h4>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-2.5">
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Document Type *</label>
+                    <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="uploadInput.DmsDocumentTypeId">
+                        @foreach (var dt in docTypes)
+                        {
+                            <option value="@dt.DmsDocumentTypeId">[@dt.CategoryName] @dt.Name</option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Title *</label>
+                    <input type="text" class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="e.g. Employment Contract / Degree" @bind="uploadInput.Title" />
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Classification</label>
+                    <select class="w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="uploadInput.Classification">
+                        <option value="Internal">Internal</option>
+                        <option value="Confidential">Confidential</option>
+                        <option value="Restricted">Restricted</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <InputFile OnChange="HandleFileSelected" class="text-xs text-slate-700" />
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                        @onclick="SubmitStaffUploadAsync">
+                    Upload &amp; Register
+                </button>
+            </div>
         </div>
-        <div>
-            <p class="font-semibold text-slate-800 dark:text-slate-200 text-sm">No Attached Documents</p>
-            <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
-                No identity records, certificates, or uploaded contract files are currently attached to this staff record.
+    }
+
+    @if (FilteredDocuments.Count == 0)
+    {
+        <div class="rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/40 p-8 text-center text-xs text-slate-500 dark:text-slate-400 space-y-2">
+            <p class="font-semibold text-slate-800 dark:text-slate-200 text-sm">No Documents in This Section</p>
+            <p class="text-xs text-slate-500 max-w-md mx-auto">
+                Use <strong>+ Upload Staff Document</strong> above to register and link a verified file to this employee's central dossier.
             </p>
         </div>
-    </div>
+    }
+    else
+    {
+        <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+            <table class="w-full text-left text-xs">
+                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                    <tr>
+                        <th class="p-2.5">Doc Number</th>
+                        <th class="p-2.5">Title &amp; Category</th>
+                        <th class="p-2.5">Version</th>
+                        <th class="p-2.5">Verification &amp; Status</th>
+                        <th class="p-2.5 text-right">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100">
+                    @foreach (var doc in FilteredDocuments)
+                    {
+                        <tr class="hover:bg-slate-50/50">
+                            <td class="p-2.5 font-mono text-[11px] font-semibold text-blue-700">@doc.DocumentNumber</td>
+                            <td class="p-2.5">
+                                <div class="font-bold text-slate-900">@doc.Title</div>
+                                <div class="text-[11px] text-slate-500">@doc.CategoryName • @doc.DocumentTypeName (@doc.Classification)</div>
+                            </td>
+                            <td class="p-2.5 font-mono text-slate-700">v@(doc.CurrentVersionNumber).0</td>
+                            <td class="p-2.5">
+                                <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(doc.IsVerified ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                    @(doc.IsVerified ? "✓ Verified" : doc.Status)
+                                </span>
+                            </td>
+                            <td class="p-2.5 text-right space-x-1">
+                                @if (!doc.IsVerified)
+                                {
+                                    <button type="button"
+                                            class="rounded bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                                            @onclick="() => VerifyStaffDocAsync(doc.DocumentId)">
+                                        ✓ Verify
+                                    </button>
+                                }
+                                <button type="button"
+                                        class="rounded border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                                        @onclick="() => InspectVersionsAsync(doc.DocumentId)">
+                                    History
+                                </button>
+                                <button type="button"
+                                        class="rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-blue-700"
+                                        @onclick="() => DownloadStaffDocAsync(doc.DocumentId)">
+                                    ⬇ Download
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (selectedDetail != null)
+    {
+        <div class="rounded-xl border border-slate-200 bg-slate-50/80 p-3 space-y-2 text-xs">
+            <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-800">Version History &amp; Audit — @selectedDetail.Summary.DocumentNumber (@selectedDetail.Summary.Title)</span>
+                <button type="button" class="text-slate-500 hover:text-slate-900" @onclick="() => selectedDetail = null">✕ Close</button>
+            </div>
+            <div class="divide-y divide-slate-200">
+                @foreach (var v in selectedDetail.Versions)
+                {
+                    <div class="py-1.5 flex items-center justify-between">
+                        <span><strong>@v.VersionLabel</strong> — @v.OriginalFileName (@v.ChangeComments)</span>
+                        <span class="font-mono text-[11px] text-slate-500">SHA-256: @v.Sha256Hash[..Math.Min(12, v.Sha256Hash.Length)]... • @v.CreatedAtUtc.ToString("dd MMM yyyy")</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
 
 @code {
-    [Parameter]
-    public int StaffId { get; set; }
+    [Parameter] public int StaffId { get; set; }
+
+    private string activeSection = "ALL";
+    private bool showUpload;
+    private List<DmsDocumentSummaryDto> documents = [];
+    private List<DmsDocumentTypeDto> docTypes = [];
+    private DmsDocumentDetailDto? selectedDetail;
+    private DmsDocumentUploadInput uploadInput = new();
+
+    private sealed record SectionFilter(string Key, string Label, Func<DmsDocumentSummaryDto, bool> Predicate);
+    private static readonly List<SectionFilter> StaffSections =
+    [
+        new("ALL", "All Dossier Files", _ => true),
+        new("PERSONAL", "Personal File", d => d.CategoryName.Contains("Personal", StringComparison.OrdinalIgnoreCase)),
+        new("EMPLOYMENT", "Employment", d => d.CategoryName.Contains("Employment", StringComparison.OrdinalIgnoreCase) || d.CategoryName.Contains("Position", StringComparison.OrdinalIgnoreCase)),
+        new("QUALIFICATIONS", "Qualifications", d => d.DocumentTypeName.Contains("Qualification", StringComparison.OrdinalIgnoreCase) || d.DocumentTypeName.Contains("Academic", StringComparison.OrdinalIgnoreCase)),
+        new("CERTIFICATES", "Certificates", d => d.CategoryName.Contains("Certificate", StringComparison.OrdinalIgnoreCase)),
+        new("TRANSFER", "Transfer Documents", d => d.CategoryName.Contains("Transfer", StringComparison.OrdinalIgnoreCase)),
+        new("EXPERIENCE", "Work Experience", d => d.DocumentTypeName.Contains("Experience", StringComparison.OrdinalIgnoreCase) || d.DocumentTypeName.Contains("Service", StringComparison.OrdinalIgnoreCase)),
+        new("EVALUATION", "Evaluations", d => d.CategoryName.Contains("Evaluation", StringComparison.OrdinalIgnoreCase)),
+        new("ASSET", "Assets & Clearance", d => d.CategoryName.Contains("Asset", StringComparison.OrdinalIgnoreCase))
+    ];
+
+    private List<DmsDocumentSummaryDto> FilteredDocuments =>
+        StaffSections.FirstOrDefault(s => s.Key == activeSection) is { } filter
+            ? documents.Where(filter.Predicate).ToList()
+            : documents;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (StaffId > 0)
+        {
+            await LoadStaffDocumentsAsync();
+        }
+    }
+
+    private async Task LoadStaffDocumentsAsync()
+    {
+        try
+        {
+            documents = await DmsService.GetStaffDocumentsAsync(StaffId);
+            if (docTypes.Count == 0)
+            {
+                docTypes = await DmsService.GetDocumentTypesAsync();
+            }
+            uploadInput = new DmsDocumentUploadInput
+            {
+                SubjectIndividualId = StaffId,
+                DmsDocumentTypeId = docTypes.FirstOrDefault()?.DmsDocumentTypeId ?? 0,
+                Classification = "Confidential",
+                AccessScope = "EmployeeAndHr"
+            };
+        }
+        catch { }
+    }
+
+    private void SelectSection(string key) => activeSection = key;
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 20 * 1024 * 1024).CopyToAsync(ms);
+        uploadInput.FileName = file.Name;
+        uploadInput.ContentType = file.ContentType;
+        uploadInput.FileContent = ms.ToArray();
+        if (string.IsNullOrWhiteSpace(uploadInput.Title))
+        {
+            uploadInput.Title = Path.GetFileNameWithoutExtension(file.Name);
+        }
+    }
+
+    private async Task SubmitStaffUploadAsync()
+    {
+        uploadInput.SubjectIndividualId = StaffId;
+        var res = await DmsService.UploadDocumentAsync(uploadInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showUpload = false;
+            await LoadStaffDocumentsAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private async Task VerifyStaffDocAsync(long documentId)
+    {
+        var res = await DmsService.ExecuteLifecycleActionAsync(new DmsDocumentLifecycleActionInput
+        {
+            DocumentId = documentId,
+            Action = "Verify",
+            Comments = "Verified in Staff Workspace."
+        });
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await LoadStaffDocumentsAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private async Task InspectVersionsAsync(long documentId)
+    {
+        selectedDetail = await DmsService.GetDocumentDetailAsync(documentId);
+    }
+
+    private async Task DownloadStaffDocAsync(long documentId)
+    {
+        var dl = await DmsService.DownloadDocumentVersionAsync(documentId, null, isPreview: false);
+        if (!dl.Success)
+        {
+            Toasts.Error(dl.ErrorMessage ?? "Download failed.");
+            return;
+        }
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+        using var stream = new MemoryStream(dl.Content);
+        using var reference = new DotNetStreamReference(stream);
+        await module.InvokeVoidAsync("download", dl.FileName, dl.ContentType, reference);
+    }
 }

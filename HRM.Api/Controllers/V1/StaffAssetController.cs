@@ -1,263 +1,311 @@
-using HRM.Api.Infrastructure;
-using HRM.DTOs;
-using HRM.DTOs.Assets;
-using HRM.Enums;
-using HRM.Services.Contracts;
+// Typed endpoints delegate to canonical application services.
 using Microsoft.AspNetCore.Mvc;
-
+using HRM.Api.Infrastructure;
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/staff-asset")]
-public sealed class StaffAssetController : HrmApiController
+public sealed class StaffAssetController(global::HRM.Services.Contracts.StaffAssetServiceContracts.IOperations service) : HrmApiController
 {
-    private readonly StaffAssetServiceContracts.IOperations _service;
-
-    public StaffAssetController(StaffAssetServiceContracts.IOperations service)
-    {
-        _service = service;
-    }
-
     [HttpGet("load-dashboard")]
-    public Task<AssetDashboardData> LoadDashboardAsync(
-        [FromQuery] int? organisationId = null,
-        [FromQuery] string? statusFilter = null)
-        => _service.LoadDashboardAsync(organisationId, statusFilter);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetDashboardData>> LoadDashboard([FromQuery] global::System.Int32? organisationId = null, [FromQuery] global::System.String? statusFilter = null)
+    {
+        return Ok(await service.LoadDashboardAsync(organisationId, statusFilter));
+    }
 
     [HttpPost("save-category")]
-    public Task<ServiceResult> SaveCategoryAsync([FromBody] SaveCategoryRequest request)
-        => _service.SaveCategoryAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveCategory([FromBody] StaffAssetSaveCategoryRequest request)
+    {
+        return Ok(await service.SaveCategoryAsync(request.input));
+    }
+
+    public sealed class StaffAssetSaveCategoryRequest
+    {
+        public global::HRM.DTOs.Assets.AssetCategorySaveInput input { get; set; } = default!;
+    }
 
     [HttpPost("save-asset-item")]
-    public Task<ServiceResult> SaveAssetItemAsync([FromBody] SaveAssetItemRequest request)
-        => _service.SaveAssetItemAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveAssetItem([FromBody] StaffAssetSaveAssetItemRequest request)
+    {
+        return Ok(await service.SaveAssetItemAsync(request.input));
+    }
+
+    public sealed class StaffAssetSaveAssetItemRequest
+    {
+        public global::HRM.DTOs.Assets.AssetItemSaveInput input { get; set; } = default!;
+    }
 
     [HttpGet("load-issuance-detail")]
-    public Task<AssetIssuanceDetailDto> LoadIssuanceDetailAsync([FromQuery] int assetIssuanceId)
-        => _service.LoadIssuanceDetailAsync(assetIssuanceId);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetIssuanceDetailDto>> LoadIssuanceDetail([FromQuery] global::System.Int32 assetIssuanceId)
+    {
+        return Ok(await service.LoadIssuanceDetailAsync(assetIssuanceId));
+    }
 
     [HttpPost("save-issuance-draft")]
-    public Task<ServiceResult> SaveIssuanceDraftAsync([FromBody] SaveIssuanceDraftRequest request)
-        => _service.SaveIssuanceDraftAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveIssuanceDraft([FromBody] StaffAssetSaveIssuanceDraftRequest request)
+    {
+        return Ok(await service.SaveIssuanceDraftAsync(request.input));
+    }
+
+    public sealed class StaffAssetSaveIssuanceDraftRequest
+    {
+        public global::HRM.DTOs.Assets.AssetIssuanceDraftInput input { get; set; } = default!;
+    }
 
     [HttpPost("reserve-issuance-lines")]
-    public Task<ServiceResult> ReserveIssuanceLinesAsync([FromBody] ReserveIssuanceLinesRequest request)
-        => _service.ReserveIssuanceLinesAsync(request.assetIssuanceId);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ReserveIssuanceLines([FromBody] StaffAssetReserveIssuanceLinesRequest request)
+    {
+        return Ok(await service.ReserveIssuanceLinesAsync(request.assetIssuanceId));
+    }
+
+    public sealed class StaffAssetReserveIssuanceLinesRequest
+    {
+        public global::System.Int32 assetIssuanceId { get; set; }
+    }
 
     [HttpPost("verify-handover")]
-    public Task<ServiceResult> VerifyHandoverAsync([FromBody] VerifyHandoverRequest request)
-        => _service.VerifyHandoverAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> VerifyHandover([FromBody] StaffAssetVerifyHandoverRequest request)
+    {
+        return Ok(await service.VerifyHandoverAsync(request.input));
+    }
 
-    [HttpPost("cancel-issuance")]
-    public Task<ServiceResult> CancelIssuanceAsync([FromBody] CancelIssuanceRequest request)
-        => _service.CancelIssuanceAsync(request.assetIssuanceId, request.reason);
+    public sealed class StaffAssetVerifyHandoverRequest
+    {
+        public global::HRM.DTOs.Assets.AssetHandoverInput input { get; set; } = default!;
+    }
+
+    [HttpGet("cancel-issuance")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CancelIssuance([FromQuery] global::System.Int32 assetIssuanceId, [FromQuery] global::System.String reason)
+    {
+        return Ok(await service.CancelIssuanceAsync(assetIssuanceId, reason));
+    }
 
     [HttpGet("load-my-assets-portal")]
-    public Task<MyAssetsPortalData> LoadMyAssetsPortalAsync()
-        => _service.LoadMyAssetsPortalAsync();
+    public async Task<ActionResult<global::HRM.DTOs.Assets.MyAssetsPortalData>> LoadMyAssetsPortal()
+    {
+        return Ok(await service.LoadMyAssetsPortalAsync());
+    }
 
     [HttpPost("submit-staff-decisions")]
-    public Task<ServiceResult> SubmitStaffDecisionsAsync([FromBody] SubmitStaffDecisionsRequest request)
-        => _service.SubmitStaffDecisionsAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitStaffDecisions([FromBody] StaffAssetSubmitStaffDecisionsRequest request)
+    {
+        return Ok(await service.SubmitStaffDecisionsAsync(request.input));
+    }
+
+    public sealed class StaffAssetSubmitStaffDecisionsRequest
+    {
+        public global::HRM.DTOs.Assets.StaffAssetDecisionBatchInput input { get; set; } = default!;
+    }
 
     [HttpPost("submit-hr-review")]
-    public Task<ServiceResult> SubmitHrReviewAsync([FromBody] SubmitHrReviewRequest request)
-        => _service.SubmitHrReviewAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitHrReview([FromBody] StaffAssetSubmitHrReviewRequest request)
+    {
+        return Ok(await service.SubmitHrReviewAsync(request.input));
+    }
+
+    public sealed class StaffAssetSubmitHrReviewRequest
+    {
+        public global::HRM.DTOs.Assets.AssetHrReviewBatchInput input { get; set; } = default!;
+    }
 
     [HttpPost("replace-issuance-line")]
-    public Task<ServiceResult> ReplaceIssuanceLineAsync([FromBody] ReplaceIssuanceLineRequest request)
-        => _service.ReplaceIssuanceLineAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ReplaceIssuanceLine([FromBody] StaffAssetReplaceIssuanceLineRequest request)
+    {
+        return Ok(await service.ReplaceIssuanceLineAsync(request.input));
+    }
+
+    public sealed class StaffAssetReplaceIssuanceLineRequest
+    {
+        public global::HRM.DTOs.Assets.AssetReplaceLineInput input { get; set; } = default!;
+    }
 
     [HttpPost("create-return")]
-    public Task<ServiceResult> CreateReturnAsync([FromBody] CreateReturnRequest request)
-        => _service.CreateReturnAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CreateReturn([FromBody] StaffAssetCreateReturnRequest request)
+    {
+        return Ok(await service.CreateReturnAsync(request.input));
+    }
+
+    public sealed class StaffAssetCreateReturnRequest
+    {
+        public global::HRM.DTOs.Assets.AssetReturnCreateInput input { get; set; } = default!;
+    }
 
     [HttpPost("inspect-return")]
-    public Task<ServiceResult> InspectReturnAsync([FromBody] InspectReturnRequest request)
-        => _service.InspectReturnAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> InspectReturn([FromBody] StaffAssetInspectReturnRequest request)
+    {
+        return Ok(await service.InspectReturnAsync(request.input));
+    }
+
+    public sealed class StaffAssetInspectReturnRequest
+    {
+        public global::HRM.DTOs.Assets.AssetReturnInspectInput input { get; set; } = default!;
+    }
 
     [HttpPost("record-transfer-disposition")]
-    public Task<ServiceResult> RecordTransferDispositionAsync([FromBody] RecordTransferDispositionRequest request)
-        => _service.RecordTransferDispositionAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RecordTransferDisposition([FromBody] StaffAssetRecordTransferDispositionRequest request)
+    {
+        return Ok(await service.RecordTransferDispositionAsync(request.input));
+    }
+
+    public sealed class StaffAssetRecordTransferDispositionRequest
+    {
+        public global::HRM.DTOs.Assets.AssetTransferDispositionInput input { get; set; } = default!;
+    }
 
     [HttpGet("get-printable-document")]
-    public Task<AssetPrintableDocumentDto> GetPrintableDocumentAsync(
-        [FromQuery] int assetIssuanceId,
-        [FromQuery] string variant = AssetDocumentVariants.StandardHandoverRecord)
-        => _service.GetPrintableDocumentAsync(assetIssuanceId, variant);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetPrintableDocumentDto>> GetPrintableDocument([FromQuery] global::System.Int32 assetIssuanceId, [FromQuery] global::System.String variant = "StandardHandoverRecord")
+    {
+        return Ok(await service.GetPrintableDocumentAsync(assetIssuanceId, variant));
+    }
 
     [HttpGet("load-service-request-detail")]
-    public Task<AssetServiceRequestDetailDto> LoadServiceRequestDetailAsync([FromQuery] int assetServiceRequestId)
-        => _service.LoadServiceRequestDetailAsync(assetServiceRequestId);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetServiceRequestDetailDto>> LoadServiceRequestDetail([FromQuery] global::System.Int32 assetServiceRequestId)
+    {
+        return Ok(await service.LoadServiceRequestDetailAsync(assetServiceRequestId));
+    }
 
     [HttpPost("create-service-request")]
-    public Task<ServiceResult> CreateServiceRequestAsync([FromBody] CreateServiceRequestRequest request)
-        => _service.CreateServiceRequestAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CreateServiceRequest([FromBody] StaffAssetCreateServiceRequestRequest request)
+    {
+        return Ok(await service.CreateServiceRequestAsync(request.input));
+    }
+
+    public sealed class StaffAssetCreateServiceRequestRequest
+    {
+        public global::HRM.DTOs.Assets.AssetServiceRequestCreateInput input { get; set; } = default!;
+    }
 
     [HttpPost("assign-technician")]
-    public Task<ServiceResult> AssignTechnicianAsync([FromBody] AssignTechnicianRequest request)
-        => _service.AssignTechnicianAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AssignTechnician([FromBody] StaffAssetAssignTechnicianRequest request)
+    {
+        return Ok(await service.AssignTechnicianAsync(request.input));
+    }
+
+    public sealed class StaffAssetAssignTechnicianRequest
+    {
+        public global::HRM.DTOs.Assets.AssetTechnicianAssignInput input { get; set; } = default!;
+    }
 
     [HttpPost("record-maintenance-action")]
-    public Task<ServiceResult> RecordMaintenanceActionAsync([FromBody] RecordMaintenanceActionRequest request)
-        => _service.RecordMaintenanceActionAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RecordMaintenanceAction([FromBody] StaffAssetRecordMaintenanceActionRequest request)
+    {
+        return Ok(await service.RecordMaintenanceActionAsync(request.input));
+    }
+
+    public sealed class StaffAssetRecordMaintenanceActionRequest
+    {
+        public global::HRM.DTOs.Assets.AssetMaintenanceActionInput input { get; set; } = default!;
+    }
 
     [HttpPost("complete-maintenance-job")]
-    public Task<ServiceResult> CompleteMaintenanceJobAsync([FromBody] CompleteMaintenanceJobRequest request)
-        => _service.CompleteMaintenanceJobAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CompleteMaintenanceJob([FromBody] StaffAssetCompleteMaintenanceJobRequest request)
+    {
+        return Ok(await service.CompleteMaintenanceJobAsync(request.input));
+    }
+
+    public sealed class StaffAssetCompleteMaintenanceJobRequest
+    {
+        public global::HRM.DTOs.Assets.AssetMaintenanceJobCompleteInput input { get; set; } = default!;
+    }
 
     [HttpPost("perform-hardware-upgrade")]
-    public Task<ServiceResult> PerformHardwareUpgradeAsync([FromBody] PerformHardwareUpgradeRequest request)
-        => _service.PerformHardwareUpgradeAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> PerformHardwareUpgrade([FromBody] StaffAssetPerformHardwareUpgradeRequest request)
+    {
+        return Ok(await service.PerformHardwareUpgradeAsync(request.input));
+    }
 
-    [HttpPost("issue-loaner-asset")]
-    public Task<ServiceResult> IssueLoanerAssetAsync([FromBody] IssueLoanerAssetRequest request)
-        => _service.IssueLoanerAssetAsync(request.input);
+    public sealed class StaffAssetPerformHardwareUpgradeRequest
+    {
+        public global::HRM.DTOs.Assets.AssetHardwareUpgradeInput input { get; set; } = default!;
+    }
+
+    [HttpPost("query/issue-loaner-asset")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> IssueLoanerAsset([FromBody] StaffAssetIssueLoanerAssetRequest request)
+    {
+        return Ok(await service.IssueLoanerAssetAsync(request.input));
+    }
+
+    public sealed class StaffAssetIssueLoanerAssetRequest
+    {
+        public global::HRM.DTOs.Assets.AssetLoanerIssueInput input { get; set; } = default!;
+    }
 
     [HttpPost("return-loaner-asset")]
-    public Task<ServiceResult> ReturnLoanerAssetAsync([FromBody] ReturnLoanerAssetRequest request)
-        => _service.ReturnLoanerAssetAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ReturnLoanerAsset([FromBody] StaffAssetReturnLoanerAssetRequest request)
+    {
+        return Ok(await service.ReturnLoanerAssetAsync(request.input));
+    }
+
+    public sealed class StaffAssetReturnLoanerAssetRequest
+    {
+        public global::HRM.DTOs.Assets.AssetLoanerReturnInput input { get; set; } = default!;
+    }
 
     [HttpPost("record-replacement-link")]
-    public Task<ServiceResult> RecordReplacementLinkAsync([FromBody] RecordReplacementLinkRequest request)
-        => _service.RecordReplacementLinkAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RecordReplacementLink([FromBody] StaffAssetRecordReplacementLinkRequest request)
+    {
+        return Ok(await service.RecordReplacementLinkAsync(request.input));
+    }
+
+    public sealed class StaffAssetRecordReplacementLinkRequest
+    {
+        public global::HRM.DTOs.Assets.AssetReplacementLinkInput input { get; set; } = default!;
+    }
 
     [HttpPost("acknowledge-service-item")]
-    public Task<ServiceResult> AcknowledgeServiceItemAsync([FromBody] AcknowledgeServiceItemRequest request)
-        => _service.AcknowledgeServiceItemAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AcknowledgeServiceItem([FromBody] StaffAssetAcknowledgeServiceItemRequest request)
+    {
+        return Ok(await service.AcknowledgeServiceItemAsync(request.input));
+    }
+
+    public sealed class StaffAssetAcknowledgeServiceItemRequest
+    {
+        public global::HRM.DTOs.Assets.AssetServiceStaffAcknowledgeInput input { get; set; } = default!;
+    }
 
     [HttpPost("record-inspection")]
-    public Task<ServiceResult> RecordInspectionAsync([FromBody] RecordInspectionRequest request)
-        => _service.RecordInspectionAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RecordInspection([FromBody] StaffAssetRecordInspectionRequest request)
+    {
+        return Ok(await service.RecordInspectionAsync(request.input));
+    }
+
+    public sealed class StaffAssetRecordInspectionRequest
+    {
+        public global::HRM.DTOs.Assets.AssetInspectionInput input { get; set; } = default!;
+    }
 
     [HttpGet("get-asset-configuration-history")]
-    public Task<AssetConfigurationTimelineDto> GetAssetConfigurationHistoryAsync([FromQuery] int assetItemId)
-        => _service.GetAssetConfigurationHistoryAsync(assetItemId);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetConfigurationTimelineDto>> GetAssetConfigurationHistory([FromQuery] global::System.Int32 assetItemId)
+    {
+        return Ok(await service.GetAssetConfigurationHistoryAsync(assetItemId));
+    }
 
-    [HttpGet("check-staff-asset-clearance")]
-    public Task<AssetClearanceCheckDto> CheckStaffAssetClearanceAsync([FromQuery] int individualId, [FromQuery] int? staffTransferId = null)
-        => _service.CheckStaffAssetClearanceAsync(individualId, staffTransferId);
+    [HttpPost("check-staff-asset-clearance")]
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetClearanceCheckDto>> CheckStaffAssetClearance([FromBody] StaffAssetCheckStaffAssetClearanceRequest request)
+    {
+        return Ok(await service.CheckStaffAssetClearanceAsync(request.individualId, request.staffTransferId));
+    }
+
+    public sealed class StaffAssetCheckStaffAssetClearanceRequest
+    {
+        public global::System.Int32 individualId { get; set; }
+        public global::System.Int32? staffTransferId { get; set; } = null;
+    }
 
     [HttpGet("get-service-printable-document")]
-    public Task<AssetServicePrintableDocumentDto> GetServicePrintableDocumentAsync([FromQuery] long documentIdOrRequestId, [FromQuery] string documentType = "ServiceReport")
-        => _service.GetServicePrintableDocumentAsync(documentIdOrRequestId, documentType);
+    public async Task<ActionResult<global::HRM.DTOs.Assets.AssetServicePrintableDocumentDto>> GetServicePrintableDocument([FromQuery] global::System.Int64 documentIdOrRequestId, [FromQuery] global::System.String documentType = "ServiceReport")
+    {
+        return Ok(await service.GetServicePrintableDocumentAsync(documentIdOrRequestId, documentType));
+    }
 
     [HttpPost("save-service-part")]
-    public Task<ServiceResult> SaveServicePartAsync([FromBody] SaveServicePartRequest request)
-        => _service.SaveServicePartAsync(request.input);
-
-    public sealed class SaveCategoryRequest
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveServicePart([FromBody] StaffAssetSaveServicePartRequest request)
     {
-        public AssetCategorySaveInput input { get; set; } = new();
+        return Ok(await service.SaveServicePartAsync(request.input));
     }
 
-    public sealed class SaveAssetItemRequest
+    public sealed class StaffAssetSaveServicePartRequest
     {
-        public AssetItemSaveInput input { get; set; } = new();
+        public global::HRM.DTOs.Assets.AssetServicePartSaveInput input { get; set; } = default!;
     }
 
-    public sealed class SaveIssuanceDraftRequest
-    {
-        public AssetIssuanceDraftInput input { get; set; } = new();
-    }
-
-    public sealed class ReserveIssuanceLinesRequest
-    {
-        public int assetIssuanceId { get; set; }
-    }
-
-    public sealed class VerifyHandoverRequest
-    {
-        public AssetHandoverInput input { get; set; } = new();
-    }
-
-    public sealed class CancelIssuanceRequest
-    {
-        public int assetIssuanceId { get; set; }
-        public string reason { get; set; } = "";
-    }
-
-    public sealed class SubmitStaffDecisionsRequest
-    {
-        public StaffAssetDecisionBatchInput input { get; set; } = new();
-    }
-
-    public sealed class SubmitHrReviewRequest
-    {
-        public AssetHrReviewBatchInput input { get; set; } = new();
-    }
-
-    public sealed class ReplaceIssuanceLineRequest
-    {
-        public AssetReplaceLineInput input { get; set; } = new();
-    }
-
-    public sealed class CreateReturnRequest
-    {
-        public AssetReturnCreateInput input { get; set; } = new();
-    }
-
-    public sealed class InspectReturnRequest
-    {
-        public AssetReturnInspectInput input { get; set; } = new();
-    }
-
-    public sealed class RecordTransferDispositionRequest
-    {
-        public AssetTransferDispositionInput input { get; set; } = new();
-    }
-
-    public sealed class CreateServiceRequestRequest
-    {
-        public AssetServiceRequestCreateInput input { get; set; } = new();
-    }
-
-    public sealed class AssignTechnicianRequest
-    {
-        public AssetTechnicianAssignInput input { get; set; } = new();
-    }
-
-    public sealed class RecordMaintenanceActionRequest
-    {
-        public AssetMaintenanceActionInput input { get; set; } = new();
-    }
-
-    public sealed class CompleteMaintenanceJobRequest
-    {
-        public AssetMaintenanceJobCompleteInput input { get; set; } = new();
-    }
-
-    public sealed class PerformHardwareUpgradeRequest
-    {
-        public AssetHardwareUpgradeInput input { get; set; } = new();
-    }
-
-    public sealed class IssueLoanerAssetRequest
-    {
-        public AssetLoanerIssueInput input { get; set; } = new();
-    }
-
-    public sealed class ReturnLoanerAssetRequest
-    {
-        public AssetLoanerReturnInput input { get; set; } = new();
-    }
-
-    public sealed class RecordReplacementLinkRequest
-    {
-        public AssetReplacementLinkInput input { get; set; } = new();
-    }
-
-    public sealed class AcknowledgeServiceItemRequest
-    {
-        public AssetServiceStaffAcknowledgeInput input { get; set; } = new();
-    }
-
-    public sealed class RecordInspectionRequest
-    {
-        public AssetInspectionInput input { get; set; } = new();
-    }
-
-    public sealed class SaveServicePartRequest
-    {
-        public AssetServicePartSaveInput input { get; set; } = new();
-    }
 }

@@ -12,18 +12,6 @@ public sealed class AttendanceReconciliationController(global::HRM.Services.Atte
         return Ok(await service.ReconcileAsync(request.individualId, request.jobId, request.organisationId, request.workDate, HttpContext.RequestAborted));
     }
 
-    [HttpPost("reconcile-range")]
-    public async Task<ActionResult<global::HRM.DTOs.Attendance.AttendanceBatchReconciliationResult>> ReconcileRange([FromBody] AttendanceReconciliationReconcileRangeRequest request)
-    {
-        return Ok(await service.ReconcileRangeAsync(request.request, HttpContext.RequestAborted));
-    }
-
-    [HttpPost("apply-manual-override")]
-    public async Task<ActionResult<global::HRM.DTOs.Attendance.AttendanceReconciliationResult>> ApplyManualOverride([FromBody] AttendanceReconciliationApplyManualOverrideRequest request)
-    {
-        return Ok(await service.ApplyManualOverrideAsync(request.request, HttpContext.RequestAborted));
-    }
-
     public sealed class AttendanceReconciliationReconcileRequest
     {
         public global::System.Int32 individualId { get; set; }
@@ -32,13 +20,26 @@ public sealed class AttendanceReconciliationController(global::HRM.Services.Atte
         public global::System.DateOnly workDate { get; set; }
     }
 
+    [HttpPost("reconcile-range")]
+    public async Task<ActionResult<global::HRM.DTOs.Attendance.AttendanceBatchReconciliationResult>> ReconcileRange([FromBody] AttendanceReconciliationReconcileRangeRequest request)
+    {
+        return Ok(await service.ReconcileRangeAsync(request.request, HttpContext.RequestAborted));
+    }
+
     public sealed class AttendanceReconciliationReconcileRangeRequest
     {
         public global::HRM.DTOs.Attendance.AttendanceBatchReconciliationRequest request { get; set; } = default!;
+    }
+
+    [HttpPost("apply-manual-override")]
+    public async Task<ActionResult<global::HRM.DTOs.Attendance.AttendanceReconciliationResult>> ApplyManualOverride([FromBody] AttendanceReconciliationApplyManualOverrideRequest request)
+    {
+        return Ok(await service.ApplyManualOverrideAsync(request.request, HttpContext.RequestAborted));
     }
 
     public sealed class AttendanceReconciliationApplyManualOverrideRequest
     {
         public global::HRM.DTOs.Attendance.AttendanceManualOverrideRequest request { get; set; } = default!;
     }
+
 }

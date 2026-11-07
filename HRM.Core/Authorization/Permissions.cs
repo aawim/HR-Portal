@@ -126,5 +126,23 @@ namespace HRM.Authorization
         public const string CertificateApprove = "Certificate.Approve";
         public const string CertificateRevoke = "Certificate.Revoke";
         public const string CertificateGenerate = "Certificate.Generate";
+
+        // =========================
+        // Document & Records Management (DHR-DMS)
+        // =========================
+        public const string DocumentViewMetadata = "Document.ViewMetadata";
+        public const string DocumentPreview = "Document.Preview";
+        public const string DocumentDownload = "Document.Download";
+        public const string DocumentUpload = "Document.Upload";
+        public const string DocumentModifyMetadata = "Document.ModifyMetadata";
+        public const string DocumentAddVersion = "Document.AddVersion";
+        public const string DocumentSubmitApproval = "Document.SubmitApproval";
+        public const string DocumentReview = "Document.Review";
+        public const string DocumentApprove = "Document.Approve";
+        public const string DocumentSign = "Document.Sign";
+        public const string DocumentShare = "Document.Share";
+        public const string DocumentArchive = "Document.Archive";
+        public const string DocumentDispose = "Document.Dispose";
+        public const string DocumentConfigure = "Document.Configure";
     }
 }

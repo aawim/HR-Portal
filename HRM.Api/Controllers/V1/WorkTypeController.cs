@@ -7,9 +7,17 @@ namespace HRM.Api.Controllers.V1;
 public sealed class WorkTypeController(global::HRM.Services.Interfaces.IWorkTypeService service) : HrmApiController
 {
     [HttpGet("can-clock")]
-    public async Task<ActionResult<bool>> CanClock() => Ok(await service.CanClockAsync());
+    public async Task<ActionResult<global::System.Boolean>> CanClock()
+    {
+        return Ok(await service.CanClockAsync());
+    }
+
     [HttpGet("get-eligible-staff")]
-    public async Task<ActionResult<List<global::HRM.DTOs.WorkTypes.WorkTypeStaffOption>>> GetEligibleStaff() => Ok(await service.GetEligibleStaffAsync());
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkTypes.WorkTypeStaffOption>>> GetEligibleStaff()
+    {
+        return Ok(await service.GetEligibleStaffAsync());
+    }
+
     [HttpGet("get-all")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkTypes.WorkTypeDto>>> GetAll([FromQuery] global::System.Boolean includeInactive = false)
     {

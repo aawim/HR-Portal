@@ -253,7 +253,7 @@ namespace HRM.Services
 
                     Education = [],
 
-                    Documents = [],
+                    Documents = await LoadProfileDocumentsAsync(db, individualId, cancellationToken),
 
                     SupervisingTeams = supervisingTeams,
 
@@ -1016,6 +1016,52 @@ namespace HRM.Services
         {
             public int IndividualId { get; init; }
             public string? StaffNo { get; init; }
+        }
+
+        private static async Task<List<ProfileDocumentDto>> LoadProfileDocumentsAsync(HrmTeContext db, int individualId, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var docs = await db.DmsDocuments
+                    .AsNoTracking()
+                    .Include(d => d.Category)
+                    .Include(d => d.DocumentType)
+                    .Include(d => d.Versions)
+                    .Where(d => !d.IsDeleted &&
+                                (d.SubjectIndividualId == individualId ||
+                                 d.Links.Any(l => l.IsActive && l.TargetEntityType == "Staff" && l.TargetEntityId == individualId)))
+                    .OrderByDescending(d => d.CreatedAtUtc)
+                    .Take(50)
+                    .ToListAsync(cancellationToken);
+
+                return docs.Select(d =>
+                {
+                    var cur = d.Versions.FirstOrDefault(v => v.IsCurrentVersion) ?? d.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault();
+                    return new ProfileDocumentDto
+                    {
+                        DocumentId = d.DocumentId,
+                        DocumentNumber = d.DocumentNumber,
+                        Title = d.Title,
+                        CategoryName = d.Category?.Name ?? "General",
+                        DocumentTypeName = d.DocumentType?.Name ?? "Document",
+                        Classification = d.Classification,
+                        Status = d.Status,
+                        CurrentVersionNumber = d.CurrentVersionNumber,
+                        FileName = cur?.OriginalFileName ?? "document.pdf",
+                        FileSizeBytes = cur?.FileSizeBytes ?? 0,
+                        IsVerified = d.IsVerified,
+                        IsOfficialRecord = d.IsOfficialRecord,
+                        CreatedAtUtc = d.CreatedAtUtc
+                    };
+                }).ToList();
+            }
+            catch
+            {
+                return [];
+            }
+        }
+        private sealed class UnusedPlaceholderClass
+        {
 
         }
 

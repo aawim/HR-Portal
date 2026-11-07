@@ -1,111 +1,104 @@
-using HRM.Api.Infrastructure;
-using HRM.DTOs;
-using HRM.DTOs.StaffTransfer;
-using HRM.Enums;
-using HRM.Services.Contracts;
+// Typed endpoints delegate to canonical application services.
 using Microsoft.AspNetCore.Mvc;
-
+using HRM.Api.Infrastructure;
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/staff-transfer")]
-public sealed class StaffTransferController : HrmApiController
+public sealed class StaffTransferController(global::HRM.Services.Contracts.StaffTransferServiceContracts.IOperations service) : HrmApiController
 {
-    private readonly StaffTransferServiceContracts.IOperations _service;
-
-    public StaffTransferController(StaffTransferServiceContracts.IOperations service)
-    {
-        _service = service;
-    }
-
     [HttpGet("load-dashboard")]
-    public Task<StaffTransferDashboardData> LoadDashboardAsync(
-        [FromQuery] int? organisationId = null,
-        [FromQuery] string? statusFilter = null)
-        => _service.LoadDashboardAsync(organisationId, statusFilter);
+    public async Task<ActionResult<global::HRM.DTOs.StaffTransfer.StaffTransferDashboardData>> LoadDashboard([FromQuery] global::System.Int32? organisationId = null, [FromQuery] global::System.String? statusFilter = null)
+    {
+        return Ok(await service.LoadDashboardAsync(organisationId, statusFilter));
+    }
 
     [HttpGet("load-form-lookups")]
-    public Task<StaffTransferFormLookupDto> LoadFormLookupsAsync(
-        [FromQuery] int? organisationId = null,
-        [FromQuery] int? individualId = null,
-        [FromQuery] int? destinationOrganisationId = null)
-        => _service.LoadFormLookupsAsync(organisationId, individualId, destinationOrganisationId);
+    public async Task<ActionResult<global::HRM.DTOs.StaffTransfer.StaffTransferFormLookupDto>> LoadFormLookups([FromQuery] global::System.Int32? organisationId = null, [FromQuery] global::System.Int32? individualId = null, [FromQuery] global::System.Int32? destinationOrganisationId = null)
+    {
+        return Ok(await service.LoadFormLookupsAsync(organisationId, individualId, destinationOrganisationId));
+    }
 
     [HttpGet("load-detail")]
-    public Task<StaffTransferDetailDto> LoadDetailAsync(
-        [FromQuery] int? staffTransferId = null,
-        [FromQuery] int? individualId = null,
-        [FromQuery] int? jobId = null)
-        => _service.LoadDetailAsync(staffTransferId, individualId, jobId);
+    public async Task<ActionResult<global::HRM.DTOs.StaffTransfer.StaffTransferDetailDto>> LoadDetail([FromQuery] global::System.Int32? staffTransferId = null, [FromQuery] global::System.Int32? individualId = null, [FromQuery] global::System.Int32? jobId = null)
+    {
+        return Ok(await service.LoadDetailAsync(staffTransferId, individualId, jobId));
+    }
 
     [HttpPost("save")]
-    public Task<ServiceResult> SaveAsync([FromBody] SaveRequest request)
-        => _service.SaveAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> Save([FromBody] StaffTransferSaveRequest request)
+    {
+        return Ok(await service.SaveAsync(request.input));
+    }
+
+    public sealed class StaffTransferSaveRequest
+    {
+        public global::HRM.DTOs.StaffTransfer.StaffTransferSaveInput input { get; set; } = default!;
+    }
 
     [HttpPost("add-comment")]
-    public Task<ServiceResult> AddCommentAsync([FromBody] AddCommentRequest request)
-        => _service.AddCommentAsync(
-            request.staffTransferId,
-            request.commentKind,
-            request.commentText,
-            request.isVisibleToEmployee);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> AddComment([FromBody] StaffTransferAddCommentRequest request)
+    {
+        return Ok(await service.AddCommentAsync(request.staffTransferId, request.commentKind, request.commentText, request.isVisibleToEmployee));
+    }
+
+    public sealed class StaffTransferAddCommentRequest
+    {
+        public global::System.Int32 staffTransferId { get; set; }
+        public global::System.String commentKind { get; set; } = default!;
+        public global::System.String commentText { get; set; } = default!;
+        public global::System.Boolean isVisibleToEmployee { get; set; } = true;
+    }
 
     [HttpPost("submit-employee-confirmation")]
-    public Task<ServiceResult> SubmitEmployeeConfirmationAsync([FromBody] SubmitEmployeeConfirmationRequest request)
-        => _service.SubmitEmployeeConfirmationAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitEmployeeConfirmation([FromBody] StaffTransferSubmitEmployeeConfirmationRequest request)
+    {
+        return Ok(await service.SubmitEmployeeConfirmationAsync(request.input));
+    }
+
+    public sealed class StaffTransferSubmitEmployeeConfirmationRequest
+    {
+        public global::HRM.DTOs.StaffTransfer.StaffTransferEmployeeConfirmationInput input { get; set; } = default!;
+    }
 
     [HttpPost("submit-receiving-decision")]
-    public Task<ServiceResult> SubmitReceivingDecisionAsync([FromBody] SubmitReceivingDecisionRequest request)
-        => _service.SubmitReceivingDecisionAsync(request.input);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitReceivingDecision([FromBody] StaffTransferSubmitReceivingDecisionRequest request)
+    {
+        return Ok(await service.SubmitReceivingDecisionAsync(request.input));
+    }
+
+    public sealed class StaffTransferSubmitReceivingDecisionRequest
+    {
+        public global::HRM.DTOs.StaffTransfer.StaffTransferDecisionInput input { get; set; } = default!;
+    }
 
     [HttpPost("activate-transfer")]
-    public Task<TransferActivationResult> ActivateTransferAsync([FromBody] ActivateTransferRequest request)
-        => _service.ActivateTransferAsync(request.staffTransferId);
+    public async Task<ActionResult<global::HRM.DTOs.StaffTransfer.TransferActivationResult>> ActivateTransfer([FromBody] StaffTransferActivateTransferRequest request)
+    {
+        return Ok(await service.ActivateTransferAsync(request.staffTransferId));
+    }
+
+    public sealed class StaffTransferActivateTransferRequest
+    {
+        public global::System.Int32 staffTransferId { get; set; }
+    }
 
     [HttpPost("update-door-access-provisioning")]
-    public Task<ServiceResult> UpdateDoorAccessProvisioningAsync([FromBody] UpdateDoorAccessProvisioningRequest request)
-        => _service.UpdateDoorAccessProvisioningAsync(
-            request.staffTransferDoorAccessId,
-            request.provisioningState,
-            request.notes);
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdateDoorAccessProvisioning([FromBody] StaffTransferUpdateDoorAccessProvisioningRequest request)
+    {
+        return Ok(await service.UpdateDoorAccessProvisioningAsync(request.staffTransferDoorAccessId, request.provisioningState, request.notes));
+    }
+
+    public sealed class StaffTransferUpdateDoorAccessProvisioningRequest
+    {
+        public global::System.Int32 staffTransferDoorAccessId { get; set; }
+        public global::System.String provisioningState { get; set; } = default!;
+        public global::System.String? notes { get; set; }
+    }
 
     [HttpGet("get-printable-document")]
-    public Task<StaffTransferPrintableDocumentDto> GetPrintableDocumentAsync(
-        [FromQuery] int staffTransferId,
-        [FromQuery] string variant = StaffTransferDocumentVariants.EmployeeNotice)
-        => _service.GetPrintableDocumentAsync(staffTransferId, variant);
-
-    public sealed class SaveRequest
+    public async Task<ActionResult<global::HRM.DTOs.StaffTransfer.StaffTransferPrintableDocumentDto>> GetPrintableDocument([FromQuery] global::System.Int32 staffTransferId, [FromQuery] global::System.String variant = "EmployeeNotice")
     {
-        public StaffTransferSaveInput input { get; set; } = new();
+        return Ok(await service.GetPrintableDocumentAsync(staffTransferId, variant));
     }
 
-    public sealed class AddCommentRequest
-    {
-        public int staffTransferId { get; set; }
-        public string commentKind { get; set; } = StaffTransferCommentKinds.AdvisoryComment;
-        public string commentText { get; set; } = string.Empty;
-        public bool isVisibleToEmployee { get; set; } = true;
-    }
-
-    public sealed class SubmitEmployeeConfirmationRequest
-    {
-        public StaffTransferEmployeeConfirmationInput input { get; set; } = new();
-    }
-
-    public sealed class SubmitReceivingDecisionRequest
-    {
-        public StaffTransferDecisionInput input { get; set; } = new();
-    }
-
-    public sealed class ActivateTransferRequest
-    {
-        public int staffTransferId { get; set; }
-    }
-
-    public sealed class UpdateDoorAccessProvisioningRequest
-    {
-        public int staffTransferDoorAccessId { get; set; }
-        public string provisioningState { get; set; } = StaffTransferDoorAccessStates.StateProvisioned;
-        public string? notes { get; set; }
-    }
 }

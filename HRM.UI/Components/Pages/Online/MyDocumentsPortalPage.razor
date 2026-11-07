@@ -1,0 +1,600 @@
+@page "/online/documents"
+@namespace HRM.Components.Pages.Online
+@using System.IO
+@using HRM.DTOs.Documents
+@using HRM.Services
+@using HRM.Services.Contracts
+@using HRM.Services.Interfaces
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+
+@inject DocumentManagementServiceContracts.IOperations DmsService
+@inject IUserAccessService Access
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject ILogger<MyDocumentsPortalPage> Logger
+
+<PageTitle>My Documents &amp; Publications - Digital HR</PageTitle>
+
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    <section class="online-dms-page w-full min-w-0 p-2 space-y-4">
+        <!-- Full-Width Sticky Header -->
+        <header class="sticky top-0 z-30 m-0 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-2xl flex flex-wrap items-center justify-between gap-3">
+            <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Employee Document Centre</span>
+                    <span class="text-xs text-slate-400">DHR-DMS Self-Service</span>
+                </div>
+                <h1 class="text-lg font-bold text-slate-900 truncate mt-0.5">My Documents, Official Requests &amp; Organisation Publications</h1>
+                <p class="text-xs text-slate-500 mt-0.5">Access your authorised personal dossier, submit official letter/certificate requests, sign awaiting documents, and browse organisation policies.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Full Width / Shrink View Toggle -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        @onclick="ToggleFullWidth">
+                    @if (isFullWidth)
+                    {
+                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+                        <span>Shrink View</span>
+                    }
+                    else
+                    {
+                        <svg class="w-3.5 h-3.5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5v-4m0 4h-4m4 0l-5-5"/></svg>
+                        <span>Full Width</span>
+                    }
+                </button>
+
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        @onclick="LoadPortalDataAsync">
+                    <span>↻ Refresh</span>
+                </button>
+
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        @onclick="OpenUploadModal">
+                    <span>+ Upload My Credential</span>
+                </button>
+
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                        @onclick="OpenRequestModal">
+                    <span>+ Request Official Document</span>
+                </button>
+            </div>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(errorMessage))
+        {
+            <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+                <span>@errorMessage</span>
+                <button type="button" class="font-bold text-rose-700" @onclick="() => errorMessage = null">✕</button>
+            </div>
+        }
+
+        <!-- Segmented Tab Bar for the 5 Required Online Portal Views -->
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xs">
+            <div class="flex flex-wrap rounded-lg border border-slate-300 p-0.5 bg-slate-50 gap-0.5">
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "my-docs" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchTab("my-docs")'>
+                    My Documents (@myDocuments.Count)
+                </button>
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "my-requests" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchTab("my-requests")'>
+                    My Certificate &amp; Letter Requests (@myRequests.Count)
+                </button>
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "my-issued" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchTab("my-issued")'>
+                    My Issued Official Records (@MyIssuedDocuments.Count)
+                </button>
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "awaiting" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchTab("awaiting")'>
+                    Documents Awaiting My Action (@DocumentsAwaitingMyAction.Count)
+                </button>
+                <button type="button"
+                        class="px-3 py-1.5 rounded-md text-xs font-semibold transition @(activeTab == "publications" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                        @onclick='() => SwitchTab("publications")'>
+                    Organisation Publications (@orgPublications.Count)
+                </button>
+            </div>
+        </div>
+
+        <!-- 2-Panel Grid System -->
+        <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+            <!-- LEFT PANEL: Request Form, Upload Form, or Selected Document Preview & Metadata -->
+            <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                @if (showRequestModal)
+                {
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-800 p-1">Request Official Letter or Certificate</h2>
+                            <p class="text-xs text-slate-500 px-1">HR will review, approve, and issue your requested document using verified HRM records.</p>
+                        </div>
+                        <button type="button" class="text-xs text-slate-500 hover:text-slate-800" @onclick="() => showRequestModal = false">✕ Cancel</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Official Document Template *</label>
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs"
+                                    @bind="requestInput.DocumentTemplateId" @bind:after="OnRequestTemplateChanged">
+                                @foreach (var tpl in requestableTemplates)
+                                {
+                                    <option value="@tpl.DocumentTemplateId">@tpl.Name (v@(tpl.VersionNumber))</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Addressed To *</label>
+                            <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="requestInput.AddressedTo" />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Purpose of Request *</label>
+                        <input type="text"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs"
+                               placeholder="e.g. Bank Housing Loan / Embassy Visa Application / University Admission"
+                               @bind="requestInput.Purpose" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Additional Notes for HR</label>
+                        <textarea rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="requestInput.EmployeeNotes"></textarea>
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700" @onclick="() => showRequestModal = false">Cancel</button>
+                        <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="SubmitOfficialRequestAsync">Submit Request to HR</button>
+                    </div>
+                }
+                else if (showUploadModal)
+                {
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-800 p-1">Upload Personal Qualification, Certificate or ID Document</h2>
+                            <p class="text-xs text-slate-500 px-1">Uploaded files undergo security scanning and are routed to HR for credential verification.</p>
+                        </div>
+                        <button type="button" class="text-xs text-slate-500 hover:text-slate-800" @onclick="() => showUploadModal = false">✕ Cancel</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Document Type *</label>
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" @bind="uploadInput.DmsDocumentTypeId">
+                                @foreach (var dt in employeeUploadableTypes)
+                                {
+                                    <option value="@dt.DmsDocumentTypeId">@dt.Name (@dt.PermittedExtensions)</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-800 p-1">Document Title *</label>
+                            <input type="text" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs" placeholder="e.g. BSc Computer Science Degree" @bind="uploadInput.Title" />
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3 flex flex-col gap-2">
+                        <label class="block text-xs font-bold text-slate-800 p-1">Select File *</label>
+                        <InputFile OnChange="HandleEmployeeFileSelected" class="text-xs text-slate-700" />
+                    </div>
+
+                    <div class="flex justify-end gap-2 pt-2 border-t border-slate-100">
+                        <button type="button" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700" @onclick="() => showUploadModal = false">Cancel</button>
+                        <button type="button" class="rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700" @onclick="SubmitEmployeeUploadAsync">Upload Document</button>
+                    </div>
+                }
+                else if (selectedDetail != null)
+                {
+                    <!-- SELECTED DOCUMENT DETAIL & PREVIEW -->
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@selectedDetail.Summary.DocumentNumber</span>
+                                <span class="rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[11px] font-semibold">@selectedDetail.Summary.Status</span>
+                                @if (selectedDetail.Summary.IsVerified)
+                                {
+                                    <span class="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-[11px] font-semibold">✓ HR Verified</span>
+                                }
+                            </div>
+                            <h2 class="text-base font-bold text-slate-900 mt-1">@selectedDetail.Summary.Title</h2>
+                            <p class="text-xs text-slate-500">@selectedDetail.Summary.CategoryName • @selectedDetail.Summary.DocumentTypeName • v@(selectedDetail.Summary.CurrentVersionNumber).0</p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            @if (selectedDetail.EffectivePermissions.CanPreview)
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                        @onclick="() => PreviewDocAsync(selectedDetail.Summary.DocumentId)">
+                                    👁 Preview
+                                </button>
+                            }
+                            @if (selectedDetail.EffectivePermissions.CanDownload)
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
+                                        @onclick="() => DownloadDocAsync(selectedDetail.Summary.DocumentId)">
+                                    ⬇ Download
+                                </button>
+                            }
+                            @if (selectedDetail.EffectivePermissions.CanSign && selectedDetail.Signatures.All(s => s.SignerUserId != currentUserId))
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700"
+                                        @onclick="AcknowledgeAndSignDocumentAsync">
+                                    ✍ Acknowledge &amp; Sign
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(previewDataUrl))
+                    {
+                        <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-2">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold text-slate-800">Preview: @selectedDetail.Summary.CurrentFileName</span>
+                                <button type="button" class="text-xs text-slate-500 hover:text-slate-900" @onclick="() => previewDataUrl = null">✕ Close</button>
+                            </div>
+                            @if (selectedDetail.Summary.CurrentContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <img src="@previewDataUrl" alt="Document preview" class="max-h-96 mx-auto rounded-lg border border-slate-200" />
+                            }
+                            else if (selectedDetail.Summary.CurrentContentType.Equals("application/pdf", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <iframe src="@previewDataUrl" class="w-full h-96 rounded-lg border border-slate-200 bg-white"></iframe>
+                            }
+                        </div>
+                    }
+
+                    <!-- Version History Table -->
+                    <div class="space-y-1.5">
+                        <h3 class="text-xs font-bold text-slate-800 p-1">Version History (@selectedDetail.Versions.Count)</h3>
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2.5">Version</th>
+                                        <th class="p-2.5">File</th>
+                                        <th class="p-2.5">SHA-256</th>
+                                        <th class="p-2.5">Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var v in selectedDetail.Versions)
+                                    {
+                                        <tr class="hover:bg-slate-50/50">
+                                            <td class="p-2.5 font-mono font-semibold text-blue-700">@v.VersionLabel</td>
+                                            <td class="p-2.5 text-slate-800">@v.OriginalFileName</td>
+                                            <td class="p-2.5 font-mono text-[11px] text-slate-500">@v.Sha256Hash[..Math.Min(14, v.Sha256Hash.Length)]...</td>
+                                            <td class="p-2.5 text-slate-500">@v.CreatedAtUtc.ToString("dd MMM yyyy")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+                        Select a document or request from the right panel to preview, download, or inspect version history.
+                    </div>
+                }
+            </div>
+
+            <!-- RIGHT PANEL: List of Documents or Requests for Active Tab -->
+            <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                @if (activeTab == "my-requests")
+                {
+                    <h3 class="text-xs font-bold text-slate-800 p-1">My Official Document Requests (@myRequests.Count)</h3>
+                    @if (myRequests.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                            You have not submitted any official document requests yet.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2">
+                            @foreach (var req in myRequests)
+                            {
+                                <div class="rounded-xl border border-slate-200 bg-white p-3 text-xs space-y-1.5">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@req.ReferenceNumber</span>
+                                        <span class="rounded-full bg-amber-100 text-amber-800 px-2.5 py-0.5 text-[11px] font-semibold">@req.Status</span>
+                                    </div>
+                                    <div class="font-bold text-slate-900">@req.RequestKind</div>
+                                    <div class="text-slate-600">Purpose: @req.Purpose • Addressed to: @req.AddressedTo</div>
+                                    @if (req.IssuedDocumentId.HasValue)
+                                    {
+                                        <button type="button"
+                                                class="mt-1 inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700"
+                                                @onclick="() => SelectDocAsync(req.IssuedDocumentId.Value)">
+                                            View &amp; Download Issued PDF (@req.IssuedDocumentNumber)
+                                        </button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+                else
+                {
+                    var currentList = GetCurrentDocumentList();
+                    <h3 class="text-xs font-bold text-slate-800 p-1">Documents (@currentList.Count)</h3>
+                    @if (currentList.Count == 0)
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                            No documents available in this view.
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                            @foreach (var doc in currentList)
+                            {
+                                var isSel = selectedDetail?.Summary.DocumentId == doc.DocumentId;
+                                <div class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1 @(isSel ? "border-blue-500 bg-blue-50/70 ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                     @onclick="() => SelectDocAsync(doc.DocumentId)">
+                                    <div class="flex items-center justify-between">
+                                        <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">@doc.DocumentNumber</span>
+                                        <span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[11px] font-medium">@doc.CategoryName</span>
+                                    </div>
+                                    <div class="font-bold text-slate-900 mt-0.5">@doc.Title</div>
+                                    <div class="text-[11px] text-slate-500">@doc.DocumentTypeName • v@(doc.CurrentVersionNumber).0 • @doc.CreatedAtUtc.ToString("dd MMM yyyy")</div>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </aside>
+        </div>
+    </section>
+</div>
+
+@code {
+    private const string FullWidthStorageKey = "hrm.online-dms.full-width";
+    private bool isFullWidth;
+    private string activeTab = "my-docs";
+    private string? errorMessage;
+    private int currentIndividualId;
+    private int currentUserId;
+
+    private List<DmsDocumentSummaryDto> myDocuments = [];
+    private List<DmsDocumentSummaryDto> orgPublications = [];
+    private List<DmsDocumentRequestDto> myRequests = [];
+    private List<DmsDocumentTemplateDto> requestableTemplates = [];
+    private List<DmsDocumentTypeDto> employeeUploadableTypes = [];
+
+    private DmsDocumentDetailDto? selectedDetail;
+    private string? previewDataUrl;
+
+    private bool showRequestModal;
+    private bool showUploadModal;
+    private DmsDocumentRequestSubmitInput requestInput = new();
+    private DmsDocumentUploadInput uploadInput = new();
+
+    private List<DmsDocumentSummaryDto> MyIssuedDocuments =>
+        myDocuments.Where(d => d.IsOfficialRecord || d.Status is "OfficialRecord" or "Published").ToList();
+
+    private List<DmsDocumentSummaryDto> DocumentsAwaitingMyAction =>
+        myDocuments.Where(d => d.Status is "Draft" or "PendingVerification" || (!d.IsOfficialRecord && d.SignaturesCount == 0)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var ctx = await Access.GetContextAsync();
+        currentIndividualId = ctx?.IndividualId ?? 0;
+        currentUserId = ctx?.UserId ?? 0;
+        await LoadPortalDataAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthStorageKey);
+                if (bool.TryParse(saved, out var parsed) && parsed != isFullWidth)
+                {
+                    isFullWidth = parsed;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthStorageKey, isFullWidth.ToString().ToLowerInvariant());
+        }
+        catch { }
+    }
+
+    private async Task LoadPortalDataAsync()
+    {
+        try
+        {
+            errorMessage = null;
+            if (currentIndividualId > 0)
+            {
+                myDocuments = await DmsService.GetStaffDocumentsAsync(currentIndividualId);
+            }
+            orgPublications = await DmsService.GetOrganisationLibraryAsync();
+            myRequests = await DmsService.GetMyDocumentRequestsAsync();
+            var allTemplates = await DmsService.GetTemplatesAsync();
+            requestableTemplates = allTemplates.Where(t => t.IsEmployeeRequestable).ToList();
+            var allTypes = await DmsService.GetDocumentTypesAsync();
+            employeeUploadableTypes = allTypes.Where(t => t.AllowEmployeeUpload && t.IsActive).ToList();
+
+            var list = GetCurrentDocumentList();
+            if (selectedDetail == null && list.Count > 0)
+            {
+                selectedDetail = await DmsService.GetDocumentDetailAsync(list[0].DocumentId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error loading employee DMS portal.");
+            errorMessage = ex.Message;
+        }
+    }
+
+    private void SwitchTab(string tab)
+    {
+        activeTab = tab;
+        showRequestModal = false;
+        showUploadModal = false;
+        previewDataUrl = null;
+    }
+
+    private List<DmsDocumentSummaryDto> GetCurrentDocumentList() => activeTab switch
+    {
+        "my-issued" => MyIssuedDocuments,
+        "awaiting" => DocumentsAwaitingMyAction,
+        "publications" => orgPublications,
+        _ => myDocuments
+    };
+
+    private async Task SelectDocAsync(long documentId)
+    {
+        showRequestModal = false;
+        showUploadModal = false;
+        previewDataUrl = null;
+        selectedDetail = await DmsService.GetDocumentDetailAsync(documentId);
+    }
+
+    private void OpenRequestModal()
+    {
+        showUploadModal = false;
+        requestInput = new DmsDocumentRequestSubmitInput
+        {
+            AddressedTo = "To Whom It May Concern",
+            RequestKind = "EmploymentVerificationLetter"
+        };
+        if (requestableTemplates.Count > 0)
+        {
+            requestInput.DocumentTemplateId = requestableTemplates[0].DocumentTemplateId;
+            requestInput.DmsDocumentTypeId = requestableTemplates[0].DmsDocumentTypeId;
+            requestInput.RequestKind = requestableTemplates[0].Name;
+        }
+        showRequestModal = true;
+    }
+
+    private void OnRequestTemplateChanged()
+    {
+        var tpl = requestableTemplates.FirstOrDefault(t => t.DocumentTemplateId == requestInput.DocumentTemplateId);
+        if (tpl != null)
+        {
+            requestInput.DmsDocumentTypeId = tpl.DmsDocumentTypeId;
+            requestInput.RequestKind = tpl.Name;
+        }
+    }
+
+    private async Task SubmitOfficialRequestAsync()
+    {
+        var res = await DmsService.SubmitDocumentRequestAsync(requestInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showRequestModal = false;
+            activeTab = "my-requests";
+            await LoadPortalDataAsync();
+        }
+        else errorMessage = res.Message;
+    }
+
+    private void OpenUploadModal()
+    {
+        showRequestModal = false;
+        uploadInput = new DmsDocumentUploadInput
+        {
+            SubjectIndividualId = currentIndividualId,
+            DmsDocumentTypeId = employeeUploadableTypes.FirstOrDefault()?.DmsDocumentTypeId ?? 0
+        };
+        showUploadModal = true;
+    }
+
+    private async Task HandleEmployeeFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 15 * 1024 * 1024).CopyToAsync(ms);
+        uploadInput.FileName = file.Name;
+        uploadInput.ContentType = file.ContentType;
+        uploadInput.FileContent = ms.ToArray();
+        if (string.IsNullOrWhiteSpace(uploadInput.Title))
+        {
+            uploadInput.Title = Path.GetFileNameWithoutExtension(file.Name);
+        }
+    }
+
+    private async Task SubmitEmployeeUploadAsync()
+    {
+        var res = await DmsService.UploadDocumentAsync(uploadInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showUploadModal = false;
+            activeTab = "my-docs";
+            await LoadPortalDataAsync();
+        }
+        else errorMessage = res.Message;
+    }
+
+    private async Task PreviewDocAsync(long documentId)
+    {
+        var dl = await DmsService.DownloadDocumentVersionAsync(documentId, null, isPreview: true);
+        if (dl.Success)
+        {
+            previewDataUrl = $"data:{dl.ContentType};base64,{Convert.ToBase64String(dl.Content)}";
+        }
+        else errorMessage = dl.ErrorMessage;
+    }
+
+    private async Task DownloadDocAsync(long documentId)
+    {
+        var dl = await DmsService.DownloadDocumentVersionAsync(documentId, null, isPreview: false);
+        if (!dl.Success)
+        {
+            errorMessage = dl.ErrorMessage;
+            return;
+        }
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+        using var stream = new MemoryStream(dl.Content);
+        using var reference = new DotNetStreamReference(stream);
+        await module.InvokeVoidAsync("download", dl.FileName, dl.ContentType, reference);
+    }
+
+    private async Task AcknowledgeAndSignDocumentAsync()
+    {
+        if (selectedDetail is null) return;
+        var res = await DmsService.ExecuteLifecycleActionAsync(new DmsDocumentLifecycleActionInput
+        {
+            DocumentId = selectedDetail.Summary.DocumentId,
+            Action = "Sign",
+            SignatureRole = "EmployeeAcknowledgement",
+            Comments = "Acknowledged and digitally signed by employee."
+        });
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await SelectDocAsync(selectedDetail.Summary.DocumentId);
+        }
+        else errorMessage = res.Message;
+    }
+}

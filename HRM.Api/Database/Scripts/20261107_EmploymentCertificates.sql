@@ -34,8 +34,8 @@ BEGIN
         UpdatedAt DATETIME2 NULL,
         UpdatedByUserId INT NULL,
         CONSTRAINT PK_EC_CertificateRequests PRIMARY KEY CLUSTERED (CertificateRequestId ASC),
-        CONSTRAINT FK_EC_CertificateRequests_Requests FOREIGN KEY (RequestId) REFERENCES dbo.Requests (RequestId),
-        CONSTRAINT FK_EC_CertificateRequests_Individuals FOREIGN KEY (IndividualId) REFERENCES dbo.Individuals (BusinessEntityID),
+        CONSTRAINT FK_EC_CertificateRequests_Requests FOREIGN KEY (RequestId) REFERENCES dbo.Requests (RequestID),
+        CONSTRAINT FK_EC_CertificateRequests_Individuals FOREIGN KEY (IndividualId) REFERENCES dbo.BE_Individuals (BusinessEntityID),
         CONSTRAINT FK_EC_CertificateRequests_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID)
     );
 
@@ -72,7 +72,7 @@ BEGIN
         CreatedAt DATETIME2 NOT NULL CONSTRAINT DF_EC_IssuedCertificates_CreatedAt DEFAULT (SYSUTCDATETIME()),
         CONSTRAINT PK_EC_IssuedCertificates PRIMARY KEY CLUSTERED (IssuedCertificateId ASC),
         CONSTRAINT FK_EC_IssuedCertificates_Requests FOREIGN KEY (CertificateRequestId) REFERENCES dbo.EC_CertificateRequests (CertificateRequestId),
-        CONSTRAINT FK_EC_IssuedCertificates_Individuals FOREIGN KEY (IndividualId) REFERENCES dbo.Individuals (BusinessEntityID),
+        CONSTRAINT FK_EC_IssuedCertificates_Individuals FOREIGN KEY (IndividualId) REFERENCES dbo.BE_Individuals (BusinessEntityID),
         CONSTRAINT FK_EC_IssuedCertificates_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID),
         CONSTRAINT UQ_EC_IssuedCertificates_CertificateNumber UNIQUE (CertificateNumber),
         CONSTRAINT UQ_EC_IssuedCertificates_VerificationToken UNIQUE (VerificationToken)

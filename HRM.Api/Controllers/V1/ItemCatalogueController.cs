@@ -55,47 +55,64 @@ public sealed class ItemCatalogueController(global::HRM.Services.Contracts.ItemC
     }
 
     [HttpGet("get-staff-requests")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Items.ItemStaffRequestDto>>> GetStaffRequests([FromQuery] int? organisationId = null, [FromQuery] int? individualId = null)
-        => Ok(await service.GetStaffRequestsAsync(organisationId, individualId));
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Items.ItemStaffRequestDto>>> GetStaffRequests([FromQuery] global::System.Int32? organisationId = null, [FromQuery] global::System.Int32? individualId = null)
+    {
+        return Ok(await service.GetStaffRequestsAsync(organisationId, individualId));
+    }
 
     [HttpGet("get-pending-item-approvals")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Items.ItemStaffRequestDto>>> GetPendingItemApprovals()
-        => Ok(await service.GetPendingItemApprovalsAsync());
+    {
+        return Ok(await service.GetPendingItemApprovalsAsync());
+    }
 
     [HttpGet("get-requested-item-names")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<string>>> GetRequestedItemNames([FromQuery] int? individualId = null)
-        => Ok(await service.GetRequestedItemNamesAsync(individualId));
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::System.String>>> GetRequestedItemNames([FromQuery] global::System.Int32? individualId = null)
+    {
+        return Ok(await service.GetRequestedItemNamesAsync(individualId));
+    }
 
     [HttpGet("get-requestable-items")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Items.RequestableItemDto>>> GetRequestableItems([FromQuery] int? organisationId = null)
-        => Ok(await service.GetRequestableItemsAsync(organisationId));
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.Items.RequestableItemDto>>> GetRequestableItems([FromQuery] global::System.Int32? organisationId = null)
+    {
+        return Ok(await service.GetRequestableItemsAsync(organisationId));
+    }
 
     [HttpGet("can-manage-staff-items")]
-    public async Task<ActionResult<bool>> CanManageStaffItems() => Ok(await service.CanManageStaffItemsAsync());
+    public async Task<ActionResult<global::System.Boolean>> CanManageStaffItems()
+    {
+        return Ok(await service.CanManageStaffItemsAsync());
+    }
 
     [HttpPost("submit-staff-request")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitStaffRequest([FromBody] ItemStaffSubmitRequest request)
-        => Ok(await service.SubmitStaffRequestAsync(request.model));
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitStaffRequest([FromBody] ItemCatalogueSubmitStaffRequestRequest request)
+    {
+        return Ok(await service.SubmitStaffRequestAsync(request.model));
+    }
 
-    public sealed class ItemStaffSubmitRequest
+    public sealed class ItemCatalogueSubmitStaffRequestRequest
     {
         public global::HRM.DTOs.Items.ItemStaffRequestInput model { get; set; } = default!;
     }
 
     [HttpPost("act-staff-request")]
-    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ActStaffRequest([FromBody] ItemStaffActionRequest model)
-        => Ok(await service.ActStaffRequestAsync(model.requestId, model.expectedState, model.action, model.comment));
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ActStaffRequest([FromBody] ItemCatalogueActStaffRequestRequest request)
+    {
+        return Ok(await service.ActStaffRequestAsync(request.requestId, request.expectedState, request.action, request.comment));
+    }
+
+    public sealed class ItemCatalogueActStaffRequestRequest
+    {
+        public global::System.Int32 requestId { get; set; }
+        public global::System.Int32 expectedState { get; set; }
+        public global::System.String action { get; set; } = default!;
+        public global::System.String? comment { get; set; }
+    }
 
     [HttpGet("get-staff-clearance-report")]
-    public async Task<ActionResult<global::HRM.DTOs.Items.ItemStaffClearanceReportDto>> GetStaffClearanceReport([FromQuery] int individualId, [FromQuery] int? organisationId = null)
-        => Ok(await service.GetStaffClearanceReportAsync(individualId, organisationId));
-
-    public sealed class ItemStaffActionRequest
+    public async Task<ActionResult<global::HRM.DTOs.Items.ItemStaffClearanceReportDto>> GetStaffClearanceReport([FromQuery] global::System.Int32 individualId, [FromQuery] global::System.Int32? organisationId = null)
     {
-        public int requestId { get; set; }
-        public int expectedState { get; set; }
-        public string action { get; set; } = "";
-        public string? comment { get; set; }
+        return Ok(await service.GetStaffClearanceReportAsync(individualId, organisationId));
     }
 
 }

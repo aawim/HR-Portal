@@ -113,6 +113,9 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.StaffAssetServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffAssetService>());
         services.TryAddScoped<global::HRM.Api.Services.CertificateService>();
         services.TryAddScoped<global::HRM.Services.Contracts.CertificateServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Api.Services.CertificateService>());
+        services.TryAddScoped<global::HRM.Services.Interfaces.IDocumentStorageProvider, global::HRM.Api.Services.PrivateSqlDocumentStorageProvider>();
+        services.TryAddScoped<global::HRM.Api.Services.DocumentManagementService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Api.Services.DocumentManagementService>());
         services.TryAddScoped<global::HRM.Services.UserService>();
         services.TryAddScoped<global::HRM.Services.Contracts.UserServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.UserService>());
         services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(

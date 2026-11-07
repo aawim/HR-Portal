@@ -35,16 +35,16 @@ public sealed class WorkAssignmentManagementController(global::HRM.WorkPlanning.
         return Ok(await service.GetDepartmentStaffAsync(organisationStructureId, HttpContext.RequestAborted));
     }
 
-    [HttpGet("get-group-staff")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkPlanning.EligibleAssignmentStaffDto>>> GetGroupStaff([FromQuery] global::System.Int32 groupId)
-    {
-        return Ok(await service.GetGroupStaffAsync(groupId, HttpContext.RequestAborted));
-    }
-
     [HttpGet("get-assignment-employees")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkPlanning.WorkAssignmentEmployeeDto>>> GetAssignmentEmployees([FromQuery] global::System.Int32 organisationStructureId, [FromQuery] global::System.Int32? workPlanId, [FromQuery] global::System.String assignmentName, [FromQuery] global::System.DateTime scheduledStart, [FromQuery] global::System.DateTime scheduledEnd)
     {
         return Ok(await service.GetAssignmentEmployeesAsync(organisationStructureId, workPlanId, assignmentName, scheduledStart, scheduledEnd, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("get-group-staff")]
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.WorkPlanning.EligibleAssignmentStaffDto>>> GetGroupStaff([FromQuery] global::System.Int32 groupId)
+    {
+        return Ok(await service.GetGroupStaffAsync(groupId, HttpContext.RequestAborted));
     }
 
     [HttpPost("assign-department")]
