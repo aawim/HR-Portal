@@ -32,7 +32,7 @@ namespace HRM.Migrations
                         CreatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_SEP_SeparationTypes_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
                         UpdatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_SEP_SeparationTypes_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
                         CONSTRAINT PK_SEP_SeparationTypes PRIMARY KEY CLUSTERED (SeparationTypeId),
-                        CONSTRAINT FK_SEP_SeparationTypes_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (OrganisationBusinessEntityID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_SeparationTypes_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID)
                     );
 
                     CREATE UNIQUE NONCLUSTERED INDEX UX_SEP_SeparationTypes_Code_Org ON dbo.SEP_SeparationTypes (Code, OrganisationId);
@@ -52,9 +52,9 @@ namespace HRM.Migrations
                         CreatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_SEP_ClearanceTemplates_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
                         UpdatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_SEP_ClearanceTemplates_UpdatedAtUtc DEFAULT (SYSUTCDATETIME()),
                         CONSTRAINT PK_SEP_ClearanceTemplates PRIMARY KEY CLUSTERED (ClearanceTemplateId),
-                        CONSTRAINT FK_SEP_ClearanceTemplates_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (OrganisationBusinessEntityID),
-                        CONSTRAINT FK_SEP_ClearanceTemplates_SeparationTypes FOREIGN KEY (SeparationTypeId) REFERENCES dbo.SEP_SeparationTypes (SeparationTypeId) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_ClearanceTemplates_JobTypes FOREIGN KEY (JobTypeId) REFERENCES dbo.JobTypes (JobTypeID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_ClearanceTemplates_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID),
+                        CONSTRAINT FK_SEP_ClearanceTemplates_SeparationTypes FOREIGN KEY (SeparationTypeId) REFERENCES dbo.SEP_SeparationTypes (SeparationTypeId),
+                        CONSTRAINT FK_SEP_ClearanceTemplates_JobTypes FOREIGN KEY (JobTypeId) REFERENCES dbo.JobTypes (JobTypeID)
                     );
 
                     CREATE INDEX IX_SEP_ClearanceTemplates_Org_Type ON dbo.SEP_ClearanceTemplates (OrganisationId, SeparationTypeId, JobTypeId);
@@ -75,8 +75,8 @@ namespace HRM.Migrations
                         CreatedAtUtc DATETIME2 NOT NULL CONSTRAINT DF_SEP_ClearanceTemplateTasks_CreatedAtUtc DEFAULT (SYSUTCDATETIME()),
                         CONSTRAINT PK_SEP_ClearanceTemplateTasks PRIMARY KEY CLUSTERED (ClearanceTemplateTaskId),
                         CONSTRAINT FK_SEP_ClearanceTemplateTasks_Templates FOREIGN KEY (ClearanceTemplateId) REFERENCES dbo.SEP_ClearanceTemplates (ClearanceTemplateId) ON DELETE CASCADE,
-                        CONSTRAINT FK_SEP_ClearanceTemplateTasks_OrgStructure FOREIGN KEY (AssignedOrganisationStructureId) REFERENCES dbo.OrganisationStructures (OrganisationStructureID) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_ClearanceTemplateTasks_Roles FOREIGN KEY (AssignedRoleId) REFERENCES dbo.Roles (RoleID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_ClearanceTemplateTasks_OrgStructure FOREIGN KEY (AssignedOrganisationStructureId) REFERENCES dbo.OrganisationStructure (OrganisationStructureID),
+                        CONSTRAINT FK_SEP_ClearanceTemplateTasks_Roles FOREIGN KEY (AssignedRoleId) REFERENCES dbo.Roles (RoleID)
                     );
 
                     CREATE INDEX IX_SEP_ClearanceTemplateTasks_TemplateId ON dbo.SEP_ClearanceTemplateTasks (ClearanceTemplateId, SequenceOrder);
@@ -140,8 +140,8 @@ namespace HRM.Migrations
                         CONSTRAINT FK_SEP_StaffSeparations_Requests FOREIGN KEY (RequestId) REFERENCES dbo.Requests (RequestID) ON DELETE SET NULL,
                         CONSTRAINT FK_SEP_StaffSeparations_Individuals FOREIGN KEY (IndividualId) REFERENCES dbo.BE_Individuals (BusinessEntityID),
                         CONSTRAINT FK_SEP_StaffSeparations_Jobs FOREIGN KEY (JobId) REFERENCES dbo.Jobs (JobID),
-                        CONSTRAINT FK_SEP_StaffSeparations_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (OrganisationBusinessEntityID),
-                        CONSTRAINT FK_SEP_StaffSeparations_OrgStructures FOREIGN KEY (OrganisationStructureId) REFERENCES dbo.OrganisationStructures (OrganisationStructureID),
+                        CONSTRAINT FK_SEP_StaffSeparations_Organisations FOREIGN KEY (OrganisationId) REFERENCES dbo.Organisations (BusinessEntityID),
+                        CONSTRAINT FK_SEP_StaffSeparations_OrgStructures FOREIGN KEY (OrganisationStructureId) REFERENCES dbo.OrganisationStructure (OrganisationStructureID),
                         CONSTRAINT FK_SEP_StaffSeparations_Types FOREIGN KEY (SeparationTypeId) REFERENCES dbo.SEP_SeparationTypes (SeparationTypeId),
                         CONSTRAINT FK_SEP_StaffSeparations_Supervisors FOREIGN KEY (SupervisorIndividualId) REFERENCES dbo.BE_Individuals (BusinessEntityID),
                         CONSTRAINT FK_SEP_StaffSeparations_HrReviewer FOREIGN KEY (HrAdminReviewerUserId) REFERENCES dbo.Users (UserID),
@@ -177,10 +177,10 @@ namespace HRM.Migrations
                         RowVersion ROWVERSION NOT NULL,
                         CONSTRAINT PK_SEP_ClearanceTasks PRIMARY KEY CLUSTERED (ClearanceTaskId),
                         CONSTRAINT FK_SEP_ClearanceTasks_Separations FOREIGN KEY (StaffSeparationId) REFERENCES dbo.SEP_StaffSeparations (StaffSeparationId) ON DELETE CASCADE,
-                        CONSTRAINT FK_SEP_ClearanceTasks_Structures FOREIGN KEY (AssignedOrganisationStructureId) REFERENCES dbo.OrganisationStructures (OrganisationStructureID) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_ClearanceTasks_AssignedUsers FOREIGN KEY (AssignedToUserId) REFERENCES dbo.Users (UserID) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_ClearanceTasks_Roles FOREIGN KEY (AssignedToRoleId) REFERENCES dbo.Roles (RoleID) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_ClearanceTasks_ClearedUsers FOREIGN KEY (ClearedByUserId) REFERENCES dbo.Users (UserID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_ClearanceTasks_Structures FOREIGN KEY (AssignedOrganisationStructureId) REFERENCES dbo.OrganisationStructure (OrganisationStructureID),
+                        CONSTRAINT FK_SEP_ClearanceTasks_AssignedUsers FOREIGN KEY (AssignedToUserId) REFERENCES dbo.Users (UserID),
+                        CONSTRAINT FK_SEP_ClearanceTasks_Roles FOREIGN KEY (AssignedToRoleId) REFERENCES dbo.Roles (RoleID),
+                        CONSTRAINT FK_SEP_ClearanceTasks_ClearedUsers FOREIGN KEY (ClearedByUserId) REFERENCES dbo.Users (UserID)
                     );
 
                     CREATE INDEX IX_SEP_ClearanceTasks_Separation_Domain ON dbo.SEP_ClearanceTasks (StaffSeparationId, Domain, Status);
@@ -255,11 +255,11 @@ namespace HRM.Migrations
                         Remarks NVARCHAR(MAX) NULL,
                         CONSTRAINT PK_SEP_AssetClearances PRIMARY KEY CLUSTERED (SeparationAssetClearanceId),
                         CONSTRAINT FK_SEP_AssetClearances_Separations FOREIGN KEY (StaffSeparationId) REFERENCES dbo.SEP_StaffSeparations (StaffSeparationId) ON DELETE CASCADE,
-                        CONSTRAINT FK_SEP_AssetClearances_Custodies FOREIGN KEY (AssetCustodyId) REFERENCES dbo.AM_AssetCustodies (AssetCustodyId) ON DELETE SET NULL,
+                        CONSTRAINT FK_SEP_AssetClearances_Custodies FOREIGN KEY (AssetCustodyId) REFERENCES dbo.AM_AssetCustodies (AssetCustodyId),
                         CONSTRAINT FK_SEP_AssetClearances_Items FOREIGN KEY (AssetItemId) REFERENCES dbo.AM_AssetItems (AssetItemId),
-                        CONSTRAINT FK_SEP_AssetClearances_Returns FOREIGN KEY (AssetReturnId) REFERENCES dbo.AM_AssetReturns (AssetReturnId) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_AssetClearances_Conditions FOREIGN KEY (ConditionOnReturnId) REFERENCES dbo.AM_AssetConditions (AssetConditionId) ON DELETE SET NULL,
-                        CONSTRAINT FK_SEP_AssetClearances_Verifiers FOREIGN KEY (VerifiedByUserId) REFERENCES dbo.Users (UserID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_AssetClearances_Returns FOREIGN KEY (AssetReturnId) REFERENCES dbo.AM_AssetReturns (AssetReturnId),
+                        CONSTRAINT FK_SEP_AssetClearances_Conditions FOREIGN KEY (ConditionOnReturnId) REFERENCES dbo.AM_AssetConditions (AssetConditionId),
+                        CONSTRAINT FK_SEP_AssetClearances_Verifiers FOREIGN KEY (VerifiedByUserId) REFERENCES dbo.Users (UserID)
                     );
 
                     CREATE INDEX IX_SEP_AssetClearances_Separation_Status ON dbo.SEP_AssetClearances (StaffSeparationId, Status);
@@ -281,7 +281,7 @@ namespace HRM.Migrations
                         VerifiedAtUtc DATETIME2 NULL,
                         CONSTRAINT PK_SEP_FinanceItems PRIMARY KEY CLUSTERED (SeparationFinanceItemId),
                         CONSTRAINT FK_SEP_FinanceItems_Separations FOREIGN KEY (StaffSeparationId) REFERENCES dbo.SEP_StaffSeparations (StaffSeparationId) ON DELETE CASCADE,
-                        CONSTRAINT FK_SEP_FinanceItems_Verifiers FOREIGN KEY (VerifiedByUserId) REFERENCES dbo.Users (UserID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_FinanceItems_Verifiers FOREIGN KEY (VerifiedByUserId) REFERENCES dbo.Users (UserID)
                     );
 
                     CREATE INDEX IX_SEP_FinanceItems_Separation_Category ON dbo.SEP_FinanceItems (StaffSeparationId, Category, IsCleared);
@@ -305,7 +305,7 @@ namespace HRM.Migrations
                         ExecutionNotes NVARCHAR(MAX) NULL,
                         CONSTRAINT PK_SEP_AccessRevocations PRIMARY KEY CLUSTERED (SeparationAccessRevocationId),
                         CONSTRAINT FK_SEP_AccessRevocations_Separations FOREIGN KEY (StaffSeparationId) REFERENCES dbo.SEP_StaffSeparations (StaffSeparationId) ON DELETE CASCADE,
-                        CONSTRAINT FK_SEP_AccessRevocations_Verifiers FOREIGN KEY (RevokedByUserId) REFERENCES dbo.Users (UserID) ON DELETE SET NULL
+                        CONSTRAINT FK_SEP_AccessRevocations_Verifiers FOREIGN KEY (RevokedByUserId) REFERENCES dbo.Users (UserID)
                     );
 
                     CREATE INDEX IX_SEP_AccessRevocations_Separation_Status ON dbo.SEP_AccessRevocations (StaffSeparationId, Status);

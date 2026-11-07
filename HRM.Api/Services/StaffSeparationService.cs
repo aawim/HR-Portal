@@ -249,7 +249,23 @@ public sealed class StaffSeparationService(
         if (!isHrOrAdmin && sep.IndividualId != actor.IndividualId && sep.SupervisorIndividualId != actor.IndividualId)
             throw new UnauthorizedAccessException("You do not have permission to view this separation record.");
 
-        var allIndividuals = await db.Individuals.AsNoTracking().ToDictionaryAsync(i => i.BusinessEntityId, FullName);
+        var relevantIndividualIds = new HashSet<int> { sep.IndividualId };
+        if (sep.SupervisorIndividualId.HasValue) relevantIndividualIds.Add(sep.SupervisorIndividualId.Value);
+        if (sep.WorkHandover != null)
+        {
+            relevantIndividualIds.Add(sep.WorkHandover.SupervisorIndividualId);
+            if (sep.WorkHandover.HodIndividualId.HasValue) relevantIndividualIds.Add(sep.WorkHandover.HodIndividualId.Value);
+            foreach (var item in sep.WorkHandover.Items)
+            {
+                relevantIndividualIds.Add(item.RecipientIndividualId);
+                if (item.VerifiedByIndividualId.HasValue) relevantIndividualIds.Add(item.VerifiedByIndividualId.Value);
+            }
+        }
+
+        var allIndividuals = await db.Individuals
+            .AsNoTracking()
+            .Where(i => relevantIndividualIds.Contains(i.BusinessEntityId))
+            .ToDictionaryAsync(i => i.BusinessEntityId, FullName);
 
         var workHandoverDto = sep.WorkHandover == null ? null : new WorkHandoverDetailDto
         {
