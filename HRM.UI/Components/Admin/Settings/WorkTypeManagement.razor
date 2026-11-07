@@ -4,6 +4,7 @@
 @inject HRM.Services.Interfaces.IUserAccessService Access
 @inject ILogger<WorkTypeManagement> Logger
 @inject HRM.Services.Interfaces.Profile.IProfileService Profile
+@implements IDisposable
 
 <section class="w-full p-2 flex flex-col gap-2" aria-busy="@busy">
     <!-- Header -->
@@ -36,9 +37,9 @@
 
     @if (message != null)
     {
-        <div role="status" class="flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-900 shadow-2xs">
+        <div role="status" class="flex items-center justify-between rounded-xl border p-3 text-xs shadow-2xs @(isError ? "border-rose-200 bg-rose-50 text-rose-800" : "border-emerald-200 bg-emerald-50/70 text-emerald-900")">
             <span>@message</span>
-            <button type="button" @onclick="() => message = null" class="font-bold text-emerald-700 hover:text-emerald-900">✕</button>
+            <button type="button" @onclick="() => message = null" class="font-bold @(isError ? "text-rose-700 hover:text-rose-900" : "text-emerald-700 hover:text-emerald-900")">✕</button>
         </div>
     }
 
@@ -313,49 +314,67 @@
     private int selectedStaffJobId;
     private bool assignmentActive = true;
     private IEnumerable<SearchableSelect.Option> typeOptions => types.Where(t => t.IsValid).Select(t => new SearchableSelect.Option(t.WorkTypeId, t.Name));
-    private bool busy, loaded, isSuperAdmin, valid = true;
+    private bool busy, loaded, isSuperAdmin, valid = true, isError;
+    private bool disposed;
     private int editingType, editingAssignment, jobId, typeId;
     private string name = "", location = "";
     private string? message;
     private DateTime from = DateTime.UtcNow.AddHours(5).Date;
     private DateTime? to;
 
+    public void Dispose()
+    {
+        disposed = true;
+    }
+
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
+        if (disposed) return;
         busy = true; loaded = false;
         try
         {
             isSuperAdmin = (await Access.RequireContextAsync()).IsSuperAdministrator;
+            if (disposed) return;
             types = await WorkTypes.GetAllAsync(true);
+            if (disposed) return;
             if (StaffId > 0)
             {
                 var profile = await Profile.GetProfileAsync(StaffId);
+                if (disposed) return;
                 selectedStaffJobId = profile?.ActiveJob?.JobId ?? 0;
                 jobId = selectedStaffJobId;
                 assignments = jobId > 0 ? await WorkTypes.GetAssignmentsAsync(jobId: jobId, includeInactive: true) : [];
             }
             loaded = true;
+            isError = false;
         }
         catch (Exception ex)
         {
+            if (disposed) return;
             Logger.LogWarning(ex, "Loading work types");
+            isError = true;
             message = "Work Types could not be loaded. Check your organisation and WorkTypes.Manage permission.";
         }
         finally
         {
-            busy = false;
+            if (!disposed)
+            {
+                busy = false;
+            }
         }
     }
 
     private async Task Act(Func<Task<HRM.DTOs.ServiceResult>> action)
     {
-        if (busy) return;
+        if (busy || disposed) return;
         busy = true;
         try
         {
             var result = await action();
+            if (disposed) return;
+            isError = !result.Success;
             message = result.Message;
             if (result.Success)
             {
@@ -366,12 +385,17 @@
         }
         catch (Exception ex)
         {
+            if (disposed) return;
             Logger.LogWarning(ex, "Saving work types");
+            isError = true;
             message = "The change could not be saved. Refresh and try again.";
         }
         finally
         {
-            busy = false;
+            if (!disposed)
+            {
+                busy = false;
+            }
         }
     }
 

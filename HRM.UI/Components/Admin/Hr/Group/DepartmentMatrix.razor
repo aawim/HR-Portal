@@ -7,6 +7,7 @@
 @inject HRM.Services.Interfaces.IUserContext UserContext
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
+@implements IDisposable
 
 <section class="department-matrix-page w-full min-w-0 p-2 flex flex-col gap-3">
     <!-- Sticky Header -->
@@ -163,6 +164,12 @@
     private OrganisationWorkspaceData? organisation;
     private bool departmentsOnLeaveOnly = false;
     private bool isLoading = true;
+    private bool disposed;
+
+    public void Dispose()
+    {
+        disposed = true;
+    }
 
     private int TotalDepartmentsCount => DepartmentStatus.Count();
     private int TotalStaffCount => DepartmentStatus.Sum(d => d.TotalValue);
@@ -175,19 +182,25 @@
 
     private async Task LoadData()
     {
+        if (disposed) return;
         isLoading = true;
         try
         {
             var organisationId = await Access.GetCurrentOrganisationIdAsync();
+            if (disposed) return;
             organisation = await Workspace.LoadAsync(organisationId);
         }
         catch
         {
+            if (disposed) return;
             organisation = null;
         }
         finally
         {
-            isLoading = false;
+            if (!disposed)
+            {
+                isLoading = false;
+            }
         }
     }
 

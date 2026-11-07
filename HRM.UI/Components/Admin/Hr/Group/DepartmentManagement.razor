@@ -3,6 +3,7 @@
 @inject IJSRuntime JS
 @inject NavigationManager Navigation
 @using HRM.DTOs.Organisation
+@implements IDisposable
 
 <section class="departments-page w-full min-w-0 p-2 flex flex-col gap-3">
     <!-- Full-Width Sticky Header -->
@@ -532,16 +533,23 @@
             m.Name.Contains(staffSearch, StringComparison.OrdinalIgnoreCase)
         ) ?? [];
 
+    private bool disposed;
+
+    public void Dispose()
+    {
+        disposed = true;
+    }
+
     protected override Task OnInitializedAsync() => Load();
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
+        if (firstRender && !disposed)
         {
             try
             {
                 var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
-                if (bool.TryParse(saved, out var val))
+                if (!disposed && bool.TryParse(saved, out var val))
                 {
                     isFullWidth = val;
                     StateHasChanged();
@@ -595,12 +603,15 @@
 
     private async Task Load()
     {
+        if (disposed) return;
         busy = true;
         error = null;
         try
         {
             orgId = await Access.GetCurrentOrganisationIdAsync();
+            if (disposed) return;
             data = await Settings.GetTeamSettingsAsync(orgId);
+            if (disposed) return;
             organisation = (await Settings.GetTeamOrganisationsAsync()).FirstOrDefault(o => o.Id == orgId)?.Name ?? "";
 
             if (selected != null)
@@ -615,10 +626,17 @@
         }
         catch (Exception ex)
         {
+            if (disposed) return;
             data = null;
             Logger.LogError(ex, "Loading departments");
             error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Departments could not be loaded. Refresh or contact HR.";
         }
-        finally { busy = false; }
+        finally
+        {
+            if (!disposed)
+            {
+                busy = false;
+            }
+        }
     }
 }

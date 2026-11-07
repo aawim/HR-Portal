@@ -476,7 +476,12 @@ namespace HRM.Services
             var actor = await _access.RequireContextAsync();
             var org = await _access.GetCurrentOrganisationIdAsync();
             if (org <= 0 || !await _access.HasOrganisationAccessAsync(org) ||
-                !(actor.IsSuperAdministrator || await _access.HasPermissionAsync("WorkTypes.Manage")))
+                !(actor.IsSuperAdministrator ||
+                  await _access.HasPermissionAsync("WorkTypes.Manage") ||
+                  await _access.HasPermissionAsync("Job.WorkType.Assign") ||
+                  await _access.HasPermissionAsync("Job.WorkType.ViewAssigned") ||
+                  await _access.HasPermissionAsync("Staff.Manage") ||
+                  await _access.HasPermissionAsync("Admin")))
                 throw new UnauthorizedAccessException("Work Type management permission is required in the current organisation.");
             return org;
         }
