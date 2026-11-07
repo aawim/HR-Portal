@@ -76,7 +76,7 @@ public sealed class CertificateServiceTests
 
     private static async Task<(QueryFactory factory, FakeAccess access, int employeeId, int orgId, int hrUserId)> SeedDatabaseAsync()
     {
-        var factory = new QueryFactory();
+        var factory = new QueryFactory(ignoreTransactions: true);
         var orgId = 10;
         var employeeId = 100;
         var hrUserId = 200;

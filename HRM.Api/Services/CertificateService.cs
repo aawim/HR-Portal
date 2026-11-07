@@ -1,9 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using HRM.Authorization;
 using HRM.Constants;
@@ -28,7 +30,103 @@ public sealed class CertificateService(
     ILogger<CertificateService> logger)
     : CertificateServiceContracts.IOperations
 {
+    private static int _schemaInitialized;
     private static DateTime TodayMaldives => DateTime.UtcNow.AddHours(5).Date;
+
+    private async Task<HrmTeContext> OpenDbAsync()
+    {
+        var db = await factory.CreateDbContextAsync();
+        await EnsureSchemaAsync(db);
+        return db;
+    }
+
+    private async Task EnsureSchemaAsync(HrmTeContext db)
+    {
+        if (!db.Database.IsSqlServer())
+            return;
+
+        if (Interlocked.Exchange(ref _schemaInitialized, 1) == 1)
+            return;
+
+        try
+        {
+            using var stream = typeof(CertificateService).Assembly
+                .GetManifestResourceStream("HRM.Database.Scripts.20261107_EmploymentCertificates.sql");
+            if (stream is null)
+                return;
+
+            using var reader = new StreamReader(stream);
+            var sql = await reader.ReadToEndAsync();
+            if (!string.IsNullOrWhiteSpace(sql))
+            {
+                await db.Database.ExecuteSqlRawAsync(sql);
+            }
+        }
+        catch (Exception ex)
+        {
+            Interlocked.Exchange(ref _schemaInitialized, 0);
+            logger.LogWarning(ex, "Could not auto-verify employment certificate schema.");
+        }
+    }
+
+    private static async Task<int> EnsureCertificateRequestTypeAsync(HrmTeContext db)
+    {
+        var reqType = await db.RequestTypes
+            .FirstOrDefaultAsync(t => t.TypeName == CertificateServiceContracts.RequestTypeName
+                                   || t.RequestTypeId == SharedConfig.RequestTypes.EMPLOYMENT_CERTIFICATE_REQUEST);
+
+        if (reqType != null && reqType.SequenceNumberTypeId.HasValue)
+        {
+            return reqType.RequestTypeId;
+        }
+
+        var seqType = await db.SequenceNumberTypes
+            .FirstOrDefaultAsync(s => s.TypeName == "Employment Certificates" || s.Prefix == "ECR");
+
+        if (seqType == null)
+        {
+            seqType = new SequenceNumberType
+            {
+                TypeName = "Employment Certificates",
+                Prefix = "ECR",
+                FormatString = "{PREFIX}-{YEAR}-{NUMBER}",
+                IsResetAnnually = false,
+                StartingNumber = 1,
+                NextNumber = 1
+            };
+            db.SequenceNumberTypes.Add(seqType);
+            await db.SaveChangesAsync();
+        }
+        else if (!seqType.NextNumber.HasValue)
+        {
+            seqType.NextNumber = 1;
+            await db.SaveChangesAsync();
+        }
+
+        if (reqType == null)
+        {
+            reqType = new HRM.Models.Archives.RequestType
+            {
+                TypeName = CertificateServiceContracts.RequestTypeName,
+                SequenceNumberTypeId = seqType.SequenceNumberTypeId,
+                ViewUrl = CertificateServiceContracts.AdminUrl,
+                IsSystemType = true
+            };
+            if (!db.Database.IsSqlServer())
+            {
+                reqType.RequestTypeId = SharedConfig.RequestTypes.EMPLOYMENT_CERTIFICATE_REQUEST;
+            }
+            db.RequestTypes.Add(reqType);
+            await db.SaveChangesAsync();
+        }
+        else if (!reqType.SequenceNumberTypeId.HasValue)
+        {
+            reqType.SequenceNumberTypeId = seqType.SequenceNumberTypeId;
+            await db.SaveChangesAsync();
+        }
+
+        return reqType.RequestTypeId;
+    }
 
     private async Task<(UserContextDto Actor, int Org, bool IsHrOrAdmin)> ScopeAsync(int? selectedOrgId = null)
     {
@@ -57,7 +155,7 @@ public sealed class CertificateService(
         var actor = await access.GetContextAsync();
         if (actor == null || actor.IndividualId <= 0) return [];
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var currentOrg = await access.GetCurrentOrganisationIdAsync();
 
         var rows = await db.CertificateRequests
@@ -77,7 +175,7 @@ public sealed class CertificateService(
         var actor = await access.GetContextAsync();
         if (actor == null || actor.IndividualId <= 0) return [];
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var currentOrg = await access.GetCurrentOrganisationIdAsync();
 
         var rows = await db.IssuedCertificates
@@ -124,7 +222,7 @@ public sealed class CertificateService(
         if (targetIndividualId != actor.IndividualId && !isHrOrAdmin)
             throw new UnauthorizedAccessException("You are not authorised to view employment history for another staff member.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var individual = await db.Individuals
             .AsNoTracking()
@@ -262,7 +360,7 @@ public sealed class CertificateService(
         if (string.IsNullOrWhiteSpace(input.Purpose))
             return ServiceResult.Fail("Purpose of the certificate request is required.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var individual = await db.Individuals
             .AsNoTracking()
@@ -272,13 +370,17 @@ public sealed class CertificateService(
         if (individual == null)
             return ServiceResult.Fail("Staff record not found.");
 
+        var requestTypeId = await EnsureCertificateRequestTypeAsync(db);
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
         // Create unified Request record
         var audit = await logs.CreateAsync(db, SharedConfig.OperationLogActionTypes.REQUESTS_CREATE,
             $"Employment certificate request submitted for staff #{targetIndividualId} ({input.CertificateType}).");
 
         var unifiedReq = await requests.CreateAsync(db, new CreateRequestDto
         {
-            RequestTypeId = SharedConfig.RequestTypes.EMPLOYMENT_CERTIFICATE_REQUEST,
+            RequestTypeId = requestTypeId,
             ApplicantBusinessEntityId = targetIndividualId,
             OrganisationBusinessEntityId = org,
             EffectiveDate = TodayMaldives,
@@ -287,7 +389,10 @@ public sealed class CertificateService(
 
         // Set state to PENDING_HR_VERIFICATION
         unifiedReq.RequestStateId = SharedConfig.RequestStates.PENDING_HR_VERIFICATION;
-        unifiedReq.ReferenceNumber = $"CR-{org}-{unifiedReq.RequestId:D5}";
+        if (string.IsNullOrWhiteSpace(unifiedReq.ReferenceNumber))
+        {
+            unifiedReq.ReferenceNumber = $"CR-{org}-{unifiedReq.RequestId:D5}";
+        }
 
         var certRequest = new CertificateRequest
         {
@@ -330,6 +435,7 @@ public sealed class CertificateService(
         await NotifyHrOfficersAsync(db, org, actor.UserId, $"New {certRequest.CertificateType} request submitted by {FullName(individual)} (#{individual.Staff?.EmployeeNumber ?? targetIndividualId.ToString()}).", $"/admin/hr/requests");
 
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return ServiceResult.Ok("Your certificate request has been submitted successfully for HR review.");
     }
@@ -337,7 +443,7 @@ public sealed class CertificateService(
     public async Task<ServiceResult> CancelCertificateRequestAsync(int certificateRequestId)
     {
         var (actor, org, isHrOrAdmin) = await ScopeAsync();
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var certReq = await db.CertificateRequests
             .Include(r => r.Request)
@@ -385,7 +491,7 @@ public sealed class CertificateService(
         if (!isHrOrAdmin)
             throw new UnauthorizedAccessException("HR administrative access is required to view certificate queues.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var query = db.CertificateRequests
             .AsNoTracking()
@@ -410,7 +516,7 @@ public sealed class CertificateService(
     public async Task<CertificateRequestDetailDto> GetRequestDetailAsync(int certificateRequestId)
     {
         var (actor, org, isHrOrAdmin) = await ScopeAsync();
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var certReq = await db.CertificateRequests
             .AsNoTracking()
@@ -484,7 +590,7 @@ public sealed class CertificateService(
         if (!isHrOrAdmin)
             return ServiceResult.Fail("HR administrative permissions are required to review certificate requests.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var certReq = await db.CertificateRequests
             .Include(r => r.Request)
@@ -682,7 +788,7 @@ public sealed class CertificateService(
         if (string.IsNullOrWhiteSpace(input.Reason))
             return ServiceResult.Fail("Reason for revocation is required.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var cert = await db.IssuedCertificates
             .Include(c => c.CertificateRequest)
@@ -711,11 +817,11 @@ public sealed class CertificateService(
             Timestamp = DateTime.UtcNow
         });
 
-        await db.SaveChangesAsync();
-
         await NotifyEmployeeAsync(db, cert.IndividualId, org, actor.UserId,
             $"Certificate {cert.CertificateNumber} has been officially revoked by HR. Reason: {cert.RevokedReason}",
             "/online/certificates");
+
+        await db.SaveChangesAsync();
 
         return ServiceResult.Ok($"Certificate {cert.CertificateNumber} has been revoked.");
     }
@@ -729,7 +835,7 @@ public sealed class CertificateService(
         if (string.IsNullOrWhiteSpace(input.Reason))
             return ServiceResult.Fail("Reason for reissue / supersession is required.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var oldCert = await db.IssuedCertificates
             .Include(c => c.CertificateRequest)
@@ -798,11 +904,11 @@ public sealed class CertificateService(
             Timestamp = DateTime.UtcNow
         });
 
-        await db.SaveChangesAsync();
-
         await NotifyEmployeeAsync(db, certReq.IndividualId, org, actor.UserId,
             $"A superseded / revised certificate ({newCert.CertificateNumber}) has been issued for you.",
             "/online/certificates");
+
+        await db.SaveChangesAsync();
 
         return ServiceResult.Ok($"New certificate {newCert.CertificateNumber} issued successfully.");
     }
@@ -813,7 +919,7 @@ public sealed class CertificateService(
             return new CertificateVerificationResultDto { IsValid = false, Status = "NotFound" };
 
         var term = tokenOrNumber.Trim();
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
 
         var cert = await db.IssuedCertificates
             .AsNoTracking()
@@ -877,7 +983,7 @@ public sealed class CertificateService(
 
     public async Task<CertificateSnapshotDto> GetCertificateSnapshotAsync(int issuedCertificateId)
     {
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var cert = await db.IssuedCertificates.AsNoTracking()
             .FirstOrDefaultAsync(c => c.IssuedCertificateId == issuedCertificateId)
             ?? throw new InvalidOperationException("Certificate not found.");
@@ -887,7 +993,7 @@ public sealed class CertificateService(
 
     public async Task<byte[]?> GetIssuedCertificatePdfAsync(int issuedCertificateId)
     {
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var cert = await db.IssuedCertificates.AsNoTracking()
             .FirstOrDefaultAsync(c => c.IssuedCertificateId == issuedCertificateId);
 
@@ -899,7 +1005,7 @@ public sealed class CertificateService(
         if (pdfBytes == null || pdfBytes.Length == 0)
             return ServiceResult.Fail("No PDF bytes supplied.");
 
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var cert = await db.IssuedCertificates.FirstOrDefaultAsync(c => c.IssuedCertificateId == issuedCertificateId);
         if (cert == null) return ServiceResult.Fail("Certificate not found.");
 
@@ -912,7 +1018,7 @@ public sealed class CertificateService(
 
     public async Task<List<CertificateAuditLogDto>> GetAuditLogsAsync(int? certificateRequestId = null, int? issuedCertificateId = null)
     {
-        await using var db = await factory.CreateDbContextAsync();
+        await using var db = await OpenDbAsync();
         var query = db.CertificateAuditLogs.AsNoTracking();
 
         if (certificateRequestId.HasValue && certificateRequestId.Value > 0)

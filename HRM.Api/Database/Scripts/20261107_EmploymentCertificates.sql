@@ -128,9 +128,37 @@ BEGIN
     CREATE NONCLUSTERED INDEX IX_EC_CertificateAuditLogs_Org ON dbo.EC_CertificateAuditLogs (OrganisationId, Timestamp DESC);
 END;
 
--- Ensure RequestType row exists for EMPLOYMENT_CERTIFICATE_REQUEST (ID 120 or by TypeName)
-IF NOT EXISTS (SELECT * FROM dbo.RequestTypes WHERE TypeName = 'Employment Certificate Request')
+IF NOT EXISTS (SELECT 1 FROM dbo.RequestTypes WHERE TypeName = N'Employment Certificate Request')
 BEGIN
-    INSERT INTO dbo.RequestTypes (RequestTypeId, TypeName, Descriptions, IsActive)
-    VALUES (120, 'Employment Certificate Request', 'Official Employment & Work Experience Certificate Request', 1);
+    INSERT dbo.SequenceNumberTypes (TypeName, Prefix, FormatString, IsResetAnnually, StartingNumber, NextNumber)
+    VALUES (N'Employment Certificates', N'ECR', N'{PREFIX}-{YEAR}-{NUMBER}', 0, 1, 1);
+
+    DECLARE @CertSequence INT = CONVERT(INT, SCOPE_IDENTITY());
+
+    INSERT dbo.RequestTypes (TypeName, SequenceNumberTypeID, ViewURL, IsSystemType)
+    VALUES (N'Employment Certificate Request', @CertSequence, N'/admin/hr/certificates', 1);
+END;
+
+INSERT dbo.RequestTypesAllowedRequestStateTransitions (RequestTypeID, FromRequestStateID, ToRequestStateID)
+SELECT t.RequestTypeID, f.RequestStateID, s.RequestStateID
+FROM dbo.RequestTypes t
+CROSS JOIN dbo.RequestStates f
+CROSS JOIN dbo.RequestStates s
+WHERE t.TypeName = N'Employment Certificate Request'
+  AND (f.RequestStateID = 1 OR (f.IsProcessingState = 1 AND f.IsFinalState = 0))
+  AND ((s.IsProcessingState = 1 AND s.IsFinalState = 0) OR s.RequestStateID IN (4, 5, 6))
+  AND f.RequestStateID <> s.RequestStateID
+  AND NOT EXISTS (
+      SELECT 1
+      FROM dbo.RequestTypesAllowedRequestStateTransitions x
+      WHERE x.RequestTypeID = t.RequestTypeID
+        AND x.FromRequestStateID = f.RequestStateID
+        AND x.ToRequestStateID = s.RequestStateID
+  );
+
+IF OBJECT_ID(N'dbo.__EFMigrationsHistory', N'U') IS NOT NULL
+   AND NOT EXISTS (SELECT 1 FROM dbo.__EFMigrationsHistory WHERE MigrationId = N'20261107120000_EmploymentCertificates')
+BEGIN
+    INSERT INTO dbo.__EFMigrationsHistory (MigrationId, ProductVersion)
+    VALUES (N'20261107120000_EmploymentCertificates', N'8.0.27');
 END;
