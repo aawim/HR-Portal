@@ -11,11 +11,32 @@
             </div>
             <div>
                 <h1 class="text-lg font-bold text-slate-800 leading-tight">State Budget Configuration &amp; Operations Hub</h1>
-                <p class="text-xs text-slate-500">Maldives Public Finance Act (Law 3/2006) — Manage Allocations, Economic Codes, Virements &amp; Payroll</p>
+                <p class="text-xs text-slate-500">Maldives Public Finance Act (Law 3/2006) — Manage Fiscal Years, Allocations, Economic Codes, Virements &amp; Ledger</p>
             </div>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+            @if (fiscalYears.Count > 0)
+            {
+                <div class="flex items-center gap-1.5">
+                    <label for="hub-fy-select" class="text-xs font-medium text-slate-700 p-1">Fiscal Year:</label>
+                    <select id="hub-fy-select"
+                            class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedFiscalYearId"
+                            @bind:after="OnFiscalYearChangedAsync">
+                        @foreach (var fy in fiscalYears)
+                        {
+                            <option value="@fy.FiscalYearId">FY @fy.YearNumber (@fy.Status)</option>
+                        }
+                    </select>
+                </div>
+            }
+
+            <button type="button" @onclick="() => showAddFiscalYearModal = true" class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition">
+                <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                <span>+ New Fiscal Year</span>
+            </button>
+
             @if (activeTab == "allocations")
             {
                 <button type="button" @onclick="() => showAddAllocationModal = true" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition">
@@ -34,14 +55,7 @@
             {
                 <button type="button" @onclick="() => showAddVirementModal = true" class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-amber-700 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    <span>+ Request Virement</span>
-                </button>
-            }
-            else if (activeTab == "payroll")
-            {
-                <button type="button" @onclick="() => showAddMappingModal = true" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
-                    <span>+ Add Payroll Mapping</span>
+                    <span>+ Record Virement</span>
                 </button>
             }
             else if (activeTab == "transactions")
@@ -71,7 +85,7 @@
     }
 
     <!-- Tab Navigation -->
-    <div class="flex items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 rounded-xl shadow-xs">
+    <div class="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-white px-3 py-2 rounded-xl shadow-xs">
         <button type="button" @onclick="@(() => SetTab("allocations"))"
                 class="px-3.5 py-2 text-xs font-bold rounded-lg transition @(activeTab == "allocations" ? "bg-blue-50 text-blue-700 shadow-2xs" : "text-slate-600 hover:bg-slate-50")">
             🏛️ Allocations (@(allocations?.Count ?? 0))
@@ -84,13 +98,13 @@
                 class="px-3.5 py-2 text-xs font-bold rounded-lg transition @(activeTab == "virements" ? "bg-amber-50 text-amber-700 shadow-2xs" : "text-slate-600 hover:bg-slate-50")">
             🔄 Virements (@(virements?.Count ?? 0))
         </button>
-        <button type="button" @onclick="@(() => SetTab("payroll"))"
-                class="px-3.5 py-2 text-xs font-bold rounded-lg transition @(activeTab == "payroll" ? "bg-emerald-50 text-emerald-700 shadow-2xs" : "text-slate-600 hover:bg-slate-50")">
-            🔗 Payroll Bridge (@(payrollMappings?.Count ?? 0))
-        </button>
         <button type="button" @onclick="@(() => SetTab("transactions"))"
                 class="px-3.5 py-2 text-xs font-bold rounded-lg transition @(activeTab == "transactions" ? "bg-purple-50 text-purple-700 shadow-2xs" : "text-slate-600 hover:bg-slate-50")">
             🧾 Ledger Transactions (@(transactions?.Count ?? 0))
+        </button>
+        <button type="button" @onclick="@(() => SetTab("fiscal-years"))"
+                class="px-3.5 py-2 text-xs font-bold rounded-lg transition @(activeTab == "fiscal-years" ? "bg-teal-50 text-teal-700 shadow-2xs" : "text-slate-600 hover:bg-slate-50")">
+            📅 Fiscal Years (@(fiscalYears?.Count ?? 0))
         </button>
     </div>
 
@@ -216,29 +230,33 @@
             </div>
         </div>
     }
-    else if (activeTab == "payroll")
+    else if (activeTab == "fiscal-years")
     {
         <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse text-xs">
                     <thead>
                         <tr class="bg-slate-50 text-slate-600 font-bold uppercase text-[11px] border-b border-slate-200">
-                            <th class="px-3 py-2.5">Payroll Component</th>
-                            <th class="px-3 py-2.5">Target MoF Economic Code</th>
-                            <th class="px-3 py-2.5">Account Classification</th>
+                            <th class="px-3 py-2.5">Fiscal Year</th>
+                            <th class="px-3 py-2.5">Start Date</th>
+                            <th class="px-3 py-2.5">End Date</th>
+                            <th class="px-3 py-2.5 text-right">Total Approved Ceiling (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Personal Emoluments Ceiling (MVR)</th>
                             <th class="px-3 py-2.5 text-center">Status</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var p in payrollMappings ?? [])
+                        @foreach (var fy in fiscalYears ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
-                                <td class="px-3 py-2.5 font-bold text-slate-800">@p.ComponentName</td>
-                                <td class="px-3 py-2.5 font-mono font-bold text-blue-700">@p.EconomicCode</td>
-                                <td class="px-3 py-2.5 text-slate-700">@p.BudgetItemName</td>
+                                <td class="px-3 py-2.5 font-mono font-bold text-blue-700">FY @fy.YearNumber</td>
+                                <td class="px-3 py-2.5 font-mono text-slate-600">@fy.StartDate.ToString("yyyy-MM-dd")</td>
+                                <td class="px-3 py-2.5 font-mono text-slate-600">@fy.EndDate.ToString("yyyy-MM-dd")</td>
+                                <td class="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">MVR @fy.TotalApprovedBudget.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono font-semibold text-emerald-700">MVR @fy.TotalEmolumentsBudget.ToString("N2")</td>
                                 <td class="px-3 py-2.5 text-center">
                                     <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
-                                        ACTIVE
+                                        @fy.Status
                                     </span>
                                 </td>
                             </tr>
@@ -295,7 +313,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-base font-bold text-slate-800">Add State Budget Allocation</h3>
+                    <h3 class="text-base font-bold text-slate-800">Add State Budget Allocation (FY @SelectedFiscalYearNumber)</h3>
                     <button type="button" @onclick="() => showAddAllocationModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
                 <div class="space-y-3 text-xs">
@@ -317,6 +335,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Ministry of Finance Bandeyri Ref #</label>
                         <input type="text" @bind="newMofRef" class="w-full border border-slate-300 rounded-lg p-2 font-mono" placeholder="e.g. MOF/2026/BUD-0099" />
+                        <p class="text-[11px] text-slate-400 mt-1">Recording an MoF Bandeyri warrant marks the appropriation as Approved.</p>
                     </div>
                 </div>
                 <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
@@ -366,13 +385,13 @@
         </div>
     }
 
-    <!-- MODAL 3: REQUEST VIREMENT -->
+    <!-- MODAL 3: RECORD VIREMENT -->
     @if (showAddVirementModal)
     {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-base font-bold text-slate-800">Request Budget Virement (Transfer)</h3>
+                    <h3 class="text-base font-bold text-slate-800">Record Authorized Budget Virement (FY @SelectedFiscalYearNumber)</h3>
                     <button type="button" @onclick="() => showAddVirementModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
                 <div class="space-y-3 text-xs">
@@ -405,43 +424,53 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">MoF Sanction Authority #</label>
                         <input type="text" @bind="virementMofRef" class="w-full border border-slate-300 rounded-lg p-2 font-mono" placeholder="MOF/VIR/2026/088" />
+                        <p class="text-[11px] text-slate-400 mt-1">Posting with an MoF sanction authority immediately updates vote balances and marks the virement Approved.</p>
                     </div>
                 </div>
                 <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
                     <button type="button" @onclick="() => showAddVirementModal = false" class="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-                    <button type="button" @onclick="SaveVirementAsync" class="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 shadow-xs">Authorize Virement</button>
+                    <button type="button" @onclick="SaveVirementAsync" class="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-xs font-semibold hover:bg-amber-700 shadow-xs">Authorize &amp; Post Virement</button>
                 </div>
             </div>
         </div>
     }
 
-    <!-- MODAL 4: ADD PAYROLL MAPPING -->
-    @if (showAddMappingModal)
+    <!-- MODAL 4: ADD FISCAL YEAR -->
+    @if (showAddFiscalYearModal)
     {
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-base font-bold text-slate-800">Map Payroll Component to MoF Economic Code</h3>
-                    <button type="button" @onclick="() => showAddMappingModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                    <h3 class="text-base font-bold text-slate-800">Configure New Fiscal Year</h3>
+                    <button type="button" @onclick="() => showAddFiscalYearModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
                 <div class="space-y-3 text-xs">
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Payroll / Allowance Component Name</label>
-                        <input type="text" @bind="newMappingComponentName" class="w-full border border-slate-300 rounded-lg p-2" placeholder="e.g. Special Duty Allowance" />
+                        <label class="block font-semibold text-slate-700 mb-1">Fiscal Year Number (e.g. 2027)</label>
+                        <input type="number" min="2000" max="2100" @bind="newFyYearNumber" @bind:after="OnNewFyYearNumberChanged" class="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                    </div>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="block font-semibold text-slate-700 mb-1">Start Date</label>
+                            <input type="date" @bind="newFyStartDate" class="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                        </div>
+                        <div>
+                            <label class="block font-semibold text-slate-700 mb-1">End Date</label>
+                            <input type="date" @bind="newFyEndDate" class="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                        </div>
                     </div>
                     <div>
-                        <label class="block font-semibold text-slate-700 mb-1">Target MoF Economic Code</label>
-                        <select @bind="newMappingBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var item in budgetItems ?? [])
-                            {
-                                <option value="@item.BudgetItemId">@item.DisplayText</option>
-                            }
-                        </select>
+                        <label class="block font-semibold text-slate-700 mb-1">Total Approved Budget Ceiling (MVR)</label>
+                        <input type="number" step="100000" @bind="newFyTotalApproved" class="w-full border border-slate-300 rounded-lg p-2 font-mono" />
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 mb-1">Personal Emoluments (Ch. 21) Ceiling (MVR)</label>
+                        <input type="number" step="100000" @bind="newFyTotalEmoluments" class="w-full border border-slate-300 rounded-lg p-2 font-mono" />
                     </div>
                 </div>
                 <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
-                    <button type="button" @onclick="() => showAddMappingModal = false" class="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
-                    <button type="button" @onclick="SaveMappingAsync" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 shadow-xs">Link Component</button>
+                    <button type="button" @onclick="() => showAddFiscalYearModal = false" class="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <button type="button" @onclick="SaveFiscalYearAsync" class="px-4 py-1.5 bg-teal-600 text-white rounded-lg text-xs font-semibold hover:bg-teal-700 shadow-xs">Create Fiscal Year</button>
                 </div>
             </div>
         </div>
@@ -453,7 +482,7 @@
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
             <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
                 <div class="flex items-center justify-between border-b border-slate-100 pb-3">
-                    <h3 class="text-base font-bold text-slate-800">Record Direct Budget Transaction</h3>
+                    <h3 class="text-base font-bold text-slate-800">Record Direct Budget Transaction (FY @SelectedFiscalYearNumber)</h3>
                     <button type="button" @onclick="() => showAddTransactionModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
                 </div>
                 <div class="space-y-3 text-xs">
@@ -470,9 +499,6 @@
                         <label class="block font-semibold text-slate-700 mb-1">Transaction Type</label>
                         <select @bind="newTxnTypeId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
                             <option value="7">Actual Expenditure (ޚަރަދު ހިނގުން)</option>
-                            <option value="1">Initial Allocation (އަހަރީ ބަޖެޓް ކަނޑައެޅުން)</option>
-                            <option value="4">Supplementary Allocation (އިތުރު ބަޖެޓް)</option>
-                            <option value="8">Reversal (އަނބުރާ ގެނައުން)</option>
                         </select>
                     </div>
                     <div>
@@ -507,18 +533,29 @@
     private string? errorMessage;
     private string? successMessage;
 
+    private List<FiscalYearDto> fiscalYears = new();
+    private int selectedFiscalYearId;
     private List<BudgetAllocationDto> allocations = new();
     private List<BudgetItemDto> budgetItems = new();
     private List<BudgetVirementDto> virements = new();
-    private List<PayrollBudgetMappingDto> payrollMappings = new();
     private List<BudgetTransactionDto> transactions = new();
+
+    private int SelectedFiscalYearNumber =>
+        fiscalYears.FirstOrDefault(x => x.FiscalYearId == selectedFiscalYearId)?.YearNumber ?? DateTime.UtcNow.Year;
 
     // Modal Visibility
     private bool showAddAllocationModal;
     private bool showAddItemModal;
     private bool showAddVirementModal;
-    private bool showAddMappingModal;
+    private bool showAddFiscalYearModal;
     private bool showAddTransactionModal;
+
+    // Form inputs: Fiscal Year
+    private int newFyYearNumber = DateTime.UtcNow.Year + 1;
+    private DateOnly newFyStartDate = new(DateTime.UtcNow.Year + 1, 1, 1);
+    private DateOnly newFyEndDate = new(DateTime.UtcNow.Year + 1, 12, 31);
+    private decimal newFyTotalApproved = 450000000;
+    private decimal newFyTotalEmoluments = 185000000;
 
     // Form inputs: Allocation
     private int selectedBudgetItemId;
@@ -538,10 +575,6 @@
     private string virementJustification = "Reallocation to cover operational priorities under Law 3/2006";
     private string virementMofRef = "MOF/VIR/2026/099";
 
-    // Form inputs: Payroll Mapping
-    private string newMappingComponentName = "";
-    private int newMappingBudgetItemId;
-
     // Form inputs: Transaction
     private int newTxnBudgetItemId;
     private int newTxnTypeId = 7;
@@ -560,6 +593,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await LoadFiscalYearsAsync();
         await LoadAllDataAsync();
     }
 
@@ -570,26 +604,59 @@
         successMessage = null;
     }
 
+    private void OnNewFyYearNumberChanged()
+    {
+        if (newFyYearNumber >= 2000 && newFyYearNumber <= 2100)
+        {
+            newFyStartDate = new DateOnly(newFyYearNumber, 1, 1);
+            newFyEndDate = new DateOnly(newFyYearNumber, 12, 31);
+        }
+    }
+
+    private async Task LoadFiscalYearsAsync()
+    {
+        try
+        {
+            fiscalYears = await BudgetService.GetFiscalYearsAsync();
+            if (selectedFiscalYearId == 0 && fiscalYears.Count > 0)
+            {
+                var active = fiscalYears.FirstOrDefault(x => string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
+                    ?? fiscalYears[0];
+                selectedFiscalYearId = active.FiscalYearId;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Error loading fiscal years: " + ex.Message;
+        }
+    }
+
+    private async Task OnFiscalYearChangedAsync()
+    {
+        errorMessage = null;
+        successMessage = null;
+        await LoadAllDataAsync();
+    }
+
     private async Task LoadAllDataAsync()
     {
         try
         {
-            allocations = await BudgetService.GetAllocationsAsync(2026, 0);
+            var yearNumber = SelectedFiscalYearNumber;
+            allocations = await BudgetService.GetAllocationsAsync(yearNumber, 0);
             budgetItems = await BudgetService.GetBudgetItemsAsync();
-            virements = await BudgetService.GetVirementsAsync(2026, 0);
-            payrollMappings = await BudgetService.GetPayrollMappingsAsync(0);
-            transactions = await BudgetService.GetTransactionsAsync(2026, 0);
+            virements = await BudgetService.GetVirementsAsync(yearNumber, 0);
+            transactions = await BudgetService.GetTransactionsAsync(yearNumber, 0);
 
             if (budgetItems.Count > 0)
             {
                 if (selectedBudgetItemId == 0) selectedBudgetItemId = budgetItems[0].BudgetItemId;
-                if (newMappingBudgetItemId == 0) newMappingBudgetItemId = budgetItems[0].BudgetItemId;
                 if (newTxnBudgetItemId == 0) newTxnBudgetItemId = budgetItems[0].BudgetItemId;
             }
             if (allocations.Count >= 2)
             {
-                if (virementFromId == 0) virementFromId = allocations[0].BudgetItemId;
-                if (virementToId == 0) virementToId = allocations[1].BudgetItemId;
+                virementFromId = allocations[0].BudgetItemId;
+                virementToId = allocations[1].BudgetItemId;
             }
         }
         catch (Exception ex)
@@ -598,8 +665,35 @@
         }
     }
 
+    private async Task SaveFiscalYearAsync()
+    {
+        errorMessage = null;
+        try
+        {
+            var created = await BudgetService.SaveFiscalYearAsync(new CreateFiscalYearRequest
+            {
+                YearNumber = newFyYearNumber,
+                StartDate = newFyStartDate,
+                EndDate = newFyEndDate,
+                TotalApprovedBudget = newFyTotalApproved,
+                TotalEmolumentsBudget = newFyTotalEmoluments
+            });
+            showAddFiscalYearModal = false;
+            await LoadFiscalYearsAsync();
+            selectedFiscalYearId = created.FiscalYearId;
+            activeTab = "fiscal-years";
+            successMessage = $"Fiscal Year {created.YearNumber} created and selected!";
+            await LoadAllDataAsync();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
+        }
+    }
+
     private async Task SaveAllocationAsync()
     {
+        if (selectedFiscalYearId == 0) { errorMessage = "Create or select a Fiscal Year first."; return; }
         if (selectedBudgetItemId == 0) { errorMessage = "Select a valid MoF Economic Code."; return; }
         if (newApprovedAmount <= 0) { errorMessage = "Approved amount must be positive."; return; }
 
@@ -607,14 +701,14 @@
         {
             await BudgetService.SaveAllocationAsync(new CreateBudgetAllocationRequest
             {
-                FiscalYearId = 1,
+                FiscalYearId = selectedFiscalYearId,
                 OrganisationId = 0,
                 BudgetItemId = selectedBudgetItemId,
                 ApprovedAmount = newApprovedAmount,
                 MoFApprovalReference = newMofRef
             });
             showAddAllocationModal = false;
-            successMessage = "Budget allocation successfully created!";
+            successMessage = $"Budget allocation saved for FY {SelectedFiscalYearNumber}!";
             await LoadAllDataAsync();
         }
         catch (Exception ex) { errorMessage = ex.Message; }
@@ -645,6 +739,7 @@
 
     private async Task SaveVirementAsync()
     {
+        if (selectedFiscalYearId == 0) { errorMessage = "Create or select a Fiscal Year first."; return; }
         if (virementFromId == virementToId) { errorMessage = "Source and Target cannot be identical."; return; }
         if (virementAmount <= 0) { errorMessage = "Virement amount must be positive."; return; }
 
@@ -652,7 +747,7 @@
         {
             await BudgetService.RequestVirementAsync(new CreateBudgetVirementRequest
             {
-                FiscalYearId = 1,
+                FiscalYearId = selectedFiscalYearId,
                 OrganisationId = 0,
                 FromBudgetItemId = virementFromId,
                 ToBudgetItemId = virementToId,
@@ -662,28 +757,7 @@
                 MoFReferenceNumber = virementMofRef
             });
             showAddVirementModal = false;
-            successMessage = "Virement transfer successfully processed!";
-            await LoadAllDataAsync();
-        }
-        catch (Exception ex) { errorMessage = ex.Message; }
-    }
-
-    private async Task SaveMappingAsync()
-    {
-        if (string.IsNullOrWhiteSpace(newMappingComponentName)) { errorMessage = "Component Name is required."; return; }
-        if (newMappingBudgetItemId == 0) { errorMessage = "Target MoF code is required."; return; }
-
-        try
-        {
-            await BudgetService.SavePayrollMappingAsync(new CreatePayrollMappingRequest
-            {
-                ComponentName = newMappingComponentName,
-                BudgetItemId = newMappingBudgetItemId,
-                CostCenterOrganisationId = 0
-            });
-            showAddMappingModal = false;
-            successMessage = "Payroll component mapping created!";
-            newMappingComponentName = "";
+            successMessage = "Virement transfer authorized and balances updated!";
             await LoadAllDataAsync();
         }
         catch (Exception ex) { errorMessage = ex.Message; }
@@ -691,6 +765,7 @@
 
     private async Task SaveTransactionAsync()
     {
+        if (selectedFiscalYearId == 0) { errorMessage = "Create or select a Fiscal Year first."; return; }
         if (newTxnBudgetItemId == 0) { errorMessage = "Budget line item is required."; return; }
         if (newTxnAmount <= 0) { errorMessage = "Transaction amount must be positive."; return; }
 
@@ -699,7 +774,7 @@
             await BudgetService.RecordTransactionAsync(new CreateBudgetTransactionRequest
             {
                 BudgetItemId = newTxnBudgetItemId,
-                FiscalYearId = 1,
+                FiscalYearId = selectedFiscalYearId,
                 OrganisationId = 0,
                 TransactionTypeId = newTxnTypeId,
                 Amount = newTxnAmount,

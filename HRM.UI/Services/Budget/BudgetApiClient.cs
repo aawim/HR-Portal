@@ -62,7 +62,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<BudgetItemDto> SaveBudgetItemAsync(CreateBudgetItemRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/items", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<BudgetItemDto>(cancellationToken: ct);
         return result!;
     }
@@ -87,7 +87,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<FiscalYearDto> SaveFiscalYearAsync(CreateFiscalYearRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/fiscal-years", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<FiscalYearDto>(cancellationToken: ct);
         return result!;
     }
@@ -95,7 +95,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<PayrollBudgetMappingDto> SavePayrollMappingAsync(CreatePayrollMappingRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/payroll-mappings", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<PayrollBudgetMappingDto>(cancellationToken: ct);
         return result!;
     }
@@ -103,7 +103,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<BudgetTransactionDto> RecordTransactionAsync(CreateBudgetTransactionRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/transactions", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<BudgetTransactionDto>(cancellationToken: ct);
         return result!;
     }
@@ -143,7 +143,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/allocations", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<BudgetAllocationDto>(cancellationToken: ct);
         return result!;
     }
@@ -165,7 +165,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     public async Task<BudgetVirementDto> RequestVirementAsync(CreateBudgetVirementRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/virements", request, ct);
-        response.EnsureSuccessStatusCode();
+        await EnsureSuccessOrThrowProblemAsync(response, ct);
         var result = await response.Content.ReadFromJsonAsync<BudgetVirementDto>(cancellationToken: ct);
         return result!;
     }
@@ -232,6 +232,17 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
             Console.WriteLine($"[BudgetApiClient] Error validating payroll budget: {ex.Message}");
             return new PayrollBudgetValidationResult { Message = ex.Message };
         }
+    }
+
+    private static async Task EnsureSuccessOrThrowProblemAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode) return;
+        var problemTitle = await TryReadProblemTitleAsync(response, ct);
+        if (!string.IsNullOrWhiteSpace(problemTitle))
+        {
+            throw new InvalidOperationException(problemTitle);
+        }
+        response.EnsureSuccessStatusCode();
     }
 
     private static async Task<string?> TryReadProblemTitleAsync(HttpResponseMessage response, CancellationToken ct)

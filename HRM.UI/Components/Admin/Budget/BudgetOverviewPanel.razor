@@ -20,7 +20,23 @@
         </div>
 
         <!-- Action Buttons -->
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+            @if (fiscalYears.Count > 0)
+            {
+                <div class="flex items-center gap-1.5">
+                    <label for="overview-fy-select" class="text-xs font-medium text-slate-700 p-1">Fiscal Year:</label>
+                    <select id="overview-fy-select"
+                            class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedFiscalYear"
+                            @bind:after="LoadSummaryAsync">
+                        @foreach (var fy in fiscalYears)
+                        {
+                            <option value="@fy.YearNumber">FY @fy.YearNumber (@fy.Status)</option>
+                        }
+                    </select>
+                </div>
+            }
+
             <button type="button"
                     class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
                     @onclick="ExportCsvAsync"
@@ -155,12 +171,29 @@
 </section>
 
 @code {
+    private List<FiscalYearDto> fiscalYears = new();
+    private int selectedFiscalYear = DateTime.UtcNow.Year;
     private BudgetSummaryDto? summary;
     private bool isLoading = true;
     private bool isExporting = false;
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            fiscalYears = await BudgetService.GetFiscalYearsAsync();
+            var activeFy = fiscalYears.FirstOrDefault(x => string.Equals(x.Status, "Active", StringComparison.OrdinalIgnoreCase))
+                ?? fiscalYears.FirstOrDefault();
+            if (activeFy != null)
+            {
+                selectedFiscalYear = activeFy.YearNumber;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading fiscal years: {ex.Message}");
+        }
+
         await LoadSummaryAsync();
     }
 
@@ -169,7 +202,7 @@
         isLoading = true;
         try
         {
-            summary = await BudgetService.GetBudgetSummaryAsync(2026, 0);
+            summary = await BudgetService.GetBudgetSummaryAsync(selectedFiscalYear, 0);
         }
         catch (Exception ex)
         {
@@ -187,7 +220,7 @@
         isExporting = true;
         try
         {
-            var bytes = await BudgetService.ExportBudgetCsvAsync(summary.FiscalYear, 3);
+            var bytes = await BudgetService.ExportBudgetCsvAsync(summary.FiscalYear, 0);
             await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
             using var stream = new MemoryStream(bytes);
             using var reference = new DotNetStreamReference(stream);

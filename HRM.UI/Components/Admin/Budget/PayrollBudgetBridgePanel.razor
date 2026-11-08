@@ -44,6 +44,13 @@
             }
 
             <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="OpenAddMappingModal">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                <span>+ Add Mapping</span>
+            </button>
+
+            <button type="button"
                     class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition"
                     @onclick="RunPrePayrollCheckAsync"
                     disabled="@(isValidating || selectedPayrollRunId <= 0)">
@@ -52,6 +59,21 @@
             </button>
         </div>
     </header>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center justify-between">
+            <span>@errorMessage</span>
+            <button type="button" @onclick="() => errorMessage = null" class="text-rose-500 hover:text-rose-700 font-bold">&times;</button>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(successMessage))
+    {
+        <div class="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-emerald-800 text-xs flex items-center justify-between">
+            <span>@successMessage</span>
+            <button type="button" @onclick="() => successMessage = null" class="text-emerald-500 hover:text-emerald-700 font-bold">&times;</button>
+        </div>
+    }
 
     @if (validationResult != null)
     {
@@ -186,15 +208,52 @@
             </div>
         }
     </div>
+
+    @if (showAddMappingModal)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4">
+            <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <h3 class="text-base font-bold text-slate-800">Map Payroll Component to MoF Economic Code</h3>
+                    <button type="button" @onclick="() => showAddMappingModal = false" class="text-slate-400 hover:text-slate-600 text-lg font-bold">&times;</button>
+                </div>
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Payroll / Allowance Component Name</label>
+                        <input type="text" @bind="newMappingComponentName" class="w-full border border-slate-300 rounded-lg p-2" placeholder="e.g. Basic Salary or Special Duty Allowance" />
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Target MoF Economic Code</label>
+                        <select @bind="newMappingBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
+                            @foreach (var item in budgetItems)
+                            {
+                                <option value="@item.BudgetItemId">@item.DisplayText</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="flex items-center justify-end gap-2 border-t border-slate-100 pt-3">
+                    <button type="button" @onclick="() => showAddMappingModal = false" class="px-3.5 py-1.5 border border-slate-300 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-50">Cancel</button>
+                    <button type="button" @onclick="SaveMappingAsync" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-semibold hover:bg-emerald-700 shadow-xs">Link Component</button>
+                </div>
+            </div>
+        </div>
+    }
 </section>
 
 @code {
     private List<PayrollBudgetMappingDto>? mappings;
+    private List<BudgetItemDto> budgetItems = new();
     private List<PayrollRunSummaryRow>? payrollRuns;
     private int selectedPayrollRunId;
     private PayrollBudgetValidationResult? validationResult;
     private bool isLoading = true;
     private bool isValidating = false;
+    private bool showAddMappingModal = false;
+    private string newMappingComponentName = "";
+    private int newMappingBudgetItemId;
+    private string? errorMessage;
+    private string? successMessage;
 
     protected override async Task OnInitializedAsync()
     {
@@ -202,10 +261,16 @@
         try
         {
             var mappingsTask = BudgetService.GetPayrollMappingsAsync(0);
+            var itemsTask = BudgetService.GetBudgetItemsAsync();
             var runsTask = LoadPayrollRunsSafeAsync();
-            await Task.WhenAll(mappingsTask, runsTask);
+            await Task.WhenAll(mappingsTask, itemsTask, runsTask);
 
             mappings = await mappingsTask;
+            budgetItems = await itemsTask;
+            if (budgetItems.Count > 0 && newMappingBudgetItemId == 0)
+            {
+                newMappingBudgetItemId = budgetItems[0].BudgetItemId;
+            }
             payrollRuns = await runsTask;
             selectedPayrollRunId = payrollRuns
                 .OrderByDescending(r => r.PayrollRunId)
@@ -214,6 +279,45 @@
         finally
         {
             isLoading = false;
+        }
+    }
+
+    private void OpenAddMappingModal()
+    {
+        errorMessage = null;
+        successMessage = null;
+        showAddMappingModal = true;
+    }
+
+    private async Task SaveMappingAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newMappingComponentName))
+        {
+            errorMessage = "Payroll component name is required.";
+            return;
+        }
+        if (newMappingBudgetItemId == 0)
+        {
+            errorMessage = "Target MoF economic code is required.";
+            return;
+        }
+
+        try
+        {
+            await BudgetService.SavePayrollMappingAsync(new CreatePayrollMappingRequest
+            {
+                ComponentName = newMappingComponentName,
+                BudgetItemId = newMappingBudgetItemId,
+                CostCenterOrganisationId = 0
+            });
+            showAddMappingModal = false;
+            newMappingComponentName = "";
+            successMessage = "Payroll component mapping saved.";
+            mappings = await BudgetService.GetPayrollMappingsAsync(0);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.Message;
         }
     }
 
