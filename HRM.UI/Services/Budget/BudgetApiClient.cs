@@ -216,7 +216,15 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
     {
         try
         {
-            var result = await client.GetFromJsonAsync<PayrollBudgetValidationResult>($"/api/budget/validate-payroll/{payrollRunId}?organisationId={organisationId}", ct);
+            using var response = await client.GetAsync($"/api/budget/validate-payroll/{payrollRunId}?organisationId={organisationId}", ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var problemMessage = await TryReadProblemTitleAsync(response, ct)
+                    ?? $"Budget validation failed ({(int)response.StatusCode} {response.ReasonPhrase}).";
+                return new PayrollBudgetValidationResult { Message = problemMessage };
+            }
+
+            var result = await response.Content.ReadFromJsonAsync<PayrollBudgetValidationResult>(cancellationToken: ct);
             return result ?? new PayrollBudgetValidationResult();
         }
         catch (Exception ex)
@@ -224,6 +232,31 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
             Console.WriteLine($"[BudgetApiClient] Error validating payroll budget: {ex.Message}");
             return new PayrollBudgetValidationResult { Message = ex.Message };
         }
+    }
+
+    private static async Task<string?> TryReadProblemTitleAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            if (response.Content is null) return null;
+            await using var stream = await response.Content.ReadAsStreamAsync(ct);
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(stream, cancellationToken: ct);
+            if (doc.RootElement.TryGetProperty("title", out var title) && title.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var value = title.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+            if (doc.RootElement.TryGetProperty("detail", out var detail) && detail.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var value = detail.GetString();
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+        }
+        catch
+        {
+            // Ignore malformed JSON bodies
+        }
+        return null;
     }
 
     public async Task<byte[]> ExportBudgetCsvAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)

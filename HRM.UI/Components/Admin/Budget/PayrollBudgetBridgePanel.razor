@@ -1,6 +1,9 @@
+@using HRM.Application.Contracts.Pages
 @using HRM.Application.DTOs.Budget
 @using HRM.Application.Interfaces.Budget
+@using HRM.Models.Payroll
 @inject IBudgetService BudgetService
+@inject IEnterprisePayroll Payroll
 
 <section class="payroll-budget-bridge w-full min-w-0 p-2 space-y-4">
     <!-- Sticky Header -->
@@ -15,70 +18,125 @@
             </div>
         </div>
 
-        <button type="button"
-                class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 transition"
-                @onclick="RunPrePayrollCheckAsync"
-                disabled="@isValidating">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-            <span>Run Pre-Payroll Budget Check</span>
-        </button>
+        <div class="flex flex-wrap items-center gap-2">
+            @if (payrollRuns is { Count: > 0 })
+            {
+                <div class="flex items-center gap-1.5">
+                    <label for="payroll-run-select" class="text-xs font-medium text-slate-700 p-1">Payroll Run:</label>
+                    <select id="payroll-run-select"
+                            class="rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedPayrollRunId"
+                            @bind:after="OnSelectedRunChanged">
+                        @foreach (var run in payrollRuns)
+                        {
+                            <option value="@run.PayrollRunId">
+                                #@run.PayrollRunId — @run.Title (@FormatRunStatus(run.Status))
+                            </option>
+                        }
+                    </select>
+                </div>
+            }
+            else if (!isLoading)
+            {
+                <span class="rounded-full bg-amber-50 border border-amber-200 px-2.5 py-0.5 text-xs font-semibold text-amber-800">
+                    No Payroll Runs Found
+                </span>
+            }
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-emerald-700 disabled:opacity-50 transition"
+                    @onclick="RunPrePayrollCheckAsync"
+                    disabled="@(isValidating || selectedPayrollRunId <= 0)">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                <span>@(isValidating ? "Checking..." : "Run Pre-Payroll Budget Check")</span>
+            </button>
+        </div>
     </header>
 
     @if (validationResult != null)
     {
+        var hasLines = validationResult.LineChecks.Count > 0;
+        var cardBorderAndBg = validationResult.IsSolvent
+            ? "border-emerald-200 bg-emerald-50/70"
+            : hasLines
+                ? "border-rose-200 bg-rose-50/70"
+                : "border-amber-200 bg-amber-50/70";
+        var headingColor = validationResult.IsSolvent
+            ? "text-emerald-900"
+            : hasLines
+                ? "text-rose-900"
+                : "text-amber-900";
+        var headingTitle = validationResult.IsSolvent
+            ? "Pre-Payroll Budget Check: PASSED"
+            : hasLines
+                ? "Pre-Payroll Budget Check: DEFICIT DETECTED"
+                : "Pre-Payroll Budget Check: CANNOT VALIDATE";
+
         <!-- Pre-Payroll Gate Results Card -->
-        <div class="p-4 rounded-xl border @(validationResult.IsSolvent ? "border-emerald-200 bg-emerald-50/70" : "border-rose-200 bg-rose-50/70") shadow-xs space-y-3">
-            <div class="flex items-center justify-between">
+        <div class="p-4 rounded-xl border @cardBorderAndBg shadow-xs space-y-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
                     <span class="text-xl">@(validationResult.IsSolvent ? "✅" : "⚠️")</span>
-                    <h3 class="text-sm font-bold @(validationResult.IsSolvent ? "text-emerald-900" : "text-rose-900")">
-                        @(validationResult.IsSolvent ? "Pre-Payroll Budget Check: PASSED" : "Pre-Payroll Budget Check: DEFICIT DETECTED")
+                    <h3 class="text-sm font-bold @headingColor">
+                        @headingTitle
                     </h3>
                 </div>
-                <span class="text-xs font-mono font-bold @(validationResult.IsSolvent ? "text-emerald-700" : "text-rose-700")">
-                    Required Emoluments: MVR @validationResult.TotalRequiredEmoluments.ToString("N2") | Available: MVR @validationResult.TotalAvailableEmoluments.ToString("N2")
-                </span>
+                @if (hasLines)
+                {
+                    <span class="text-xs font-mono font-bold @(validationResult.IsSolvent ? "text-emerald-700" : "text-rose-700")">
+                        Required Emoluments: MVR @validationResult.TotalRequiredEmoluments.ToString("N2") | Available: MVR @validationResult.TotalAvailableEmoluments.ToString("N2")
+                    </span>
+                }
             </div>
             <p class="text-xs text-slate-700">@validationResult.Message</p>
 
-            <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-                <table class="w-full text-left border-collapse text-xs">
-                    <thead>
-                        <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
-                            <th class="px-3 py-2">MoF Code</th>
-                            <th class="px-3 py-2">Line Item / Emolument Component</th>
-                            <th class="px-3 py-2 text-right">Batch Requirement</th>
-                            <th class="px-3 py-2 text-right">Available Allocation</th>
-                            <th class="px-3 py-2 text-center">Solvency Status</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        @foreach (var check in validationResult.LineChecks)
-                        {
-                            <tr>
-                                <td class="px-3 py-2 font-mono font-semibold text-slate-700">@check.EconomicCode</td>
-                                <td class="px-3 py-2 font-medium text-slate-800">@check.ComponentName</td>
-                                <td class="px-3 py-2 text-right font-mono font-bold text-slate-800">MVR @check.RequiredAmount.ToString("N2")</td>
-                                <td class="px-3 py-2 text-right font-mono text-slate-700">MVR @check.AvailableBalance.ToString("N2")</td>
-                                <td class="px-3 py-2 text-center">
-                                    @if (check.IsSufficient)
-                                    {
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
-                                            Sufficient
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">
-                                            Deficit: MVR @check.Deficit.ToString("N2")
-                                        </span>
-                                    }
-                                </td>
+            @if (hasLines)
+            {
+                <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 text-[11px]">
+                                <th class="px-3 py-2">MoF Code</th>
+                                <th class="px-3 py-2">Line Item / Emolument Component</th>
+                                <th class="px-3 py-2 text-right">Batch Requirement</th>
+                                <th class="px-3 py-2 text-right">Available Allocation</th>
+                                <th class="px-3 py-2 text-center">Solvency Status</th>
                             </tr>
-                        }
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var check in validationResult.LineChecks)
+                            {
+                                <tr>
+                                    <td class="px-3 py-2 font-mono font-semibold text-slate-700">@check.EconomicCode</td>
+                                    <td class="px-3 py-2 font-medium text-slate-800">@check.ComponentName</td>
+                                    <td class="px-3 py-2 text-right font-mono font-bold text-slate-800">MVR @check.RequiredAmount.ToString("N2")</td>
+                                    <td class="px-3 py-2 text-right font-mono text-slate-700">MVR @check.AvailableBalance.ToString("N2")</td>
+                                    <td class="px-3 py-2 text-center">
+                                        @if (check.IsSufficient && check.BudgetItemId > 0)
+                                        {
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800">
+                                                Sufficient
+                                            </span>
+                                        }
+                                        else if (check.BudgetItemId == 0)
+                                        {
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800">
+                                                Unmapped
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800">
+                                                Deficit: MVR @check.Deficit.ToString("N2")
+                                            </span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
         </div>
     }
 
@@ -132,6 +190,8 @@
 
 @code {
     private List<PayrollBudgetMappingDto>? mappings;
+    private List<PayrollRunSummaryRow>? payrollRuns;
+    private int selectedPayrollRunId;
     private PayrollBudgetValidationResult? validationResult;
     private bool isLoading = true;
     private bool isValidating = false;
@@ -141,7 +201,15 @@
         isLoading = true;
         try
         {
-            mappings = await BudgetService.GetPayrollMappingsAsync(0);
+            var mappingsTask = BudgetService.GetPayrollMappingsAsync(0);
+            var runsTask = LoadPayrollRunsSafeAsync();
+            await Task.WhenAll(mappingsTask, runsTask);
+
+            mappings = await mappingsTask;
+            payrollRuns = await runsTask;
+            selectedPayrollRunId = payrollRuns
+                .OrderByDescending(r => r.PayrollRunId)
+                .FirstOrDefault()?.PayrollRunId ?? 0;
         }
         finally
         {
@@ -149,16 +217,55 @@
         }
     }
 
+    private async Task<List<PayrollRunSummaryRow>> LoadPayrollRunsSafeAsync()
+    {
+        try
+        {
+            var runs = await Payroll.GetRunsAsync();
+            return runs.OrderByDescending(r => r.PayrollRunId).ToList();
+        }
+        catch
+        {
+            return new List<PayrollRunSummaryRow>();
+        }
+    }
+
+    private void OnSelectedRunChanged()
+    {
+        validationResult = null;
+    }
+
     private async Task RunPrePayrollCheckAsync()
     {
+        if (selectedPayrollRunId <= 0)
+        {
+            return;
+        }
+
         isValidating = true;
         try
         {
-            validationResult = await BudgetService.ValidatePayrollRunBudgetAsync(101, 3);
+            validationResult = await BudgetService.ValidatePayrollRunBudgetAsync(selectedPayrollRunId, 0);
         }
         finally
         {
             isValidating = false;
         }
     }
+
+    private static string FormatRunStatus(int status) => (PayrollRunStatus)status switch
+    {
+        PayrollRunStatus.Draft => "Draft",
+        PayrollRunStatus.Queued => "Queued",
+        PayrollRunStatus.Calculating => "Calculating",
+        PayrollRunStatus.Calculated => "Calculated",
+        PayrollRunStatus.ValidationFailed => "Validation Issues",
+        PayrollRunStatus.UnderReview => "Under Review",
+        PayrollRunStatus.Approved => "Approved",
+        PayrollRunStatus.Finalised => "Finalised",
+        PayrollRunStatus.PaymentPrepared => "Payment Prepared",
+        PayrollRunStatus.Paid => "Paid",
+        PayrollRunStatus.Failed => "Failed",
+        _ => ((PayrollRunStatus)status).ToString()
+    };
 }
