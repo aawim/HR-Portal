@@ -863,17 +863,49 @@
                                         @CurrentTeamStaffList.Count assigned personnel · @currentTeamProjects.Count active projects
                                     </p>
                                 </div>
-                                <!-- Subtabs: Members vs Projects -->
-                                <div class="flex rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
+                                <!-- Subtabs: Members, Projects, Attendance, Request, Schedule, Leaves -->
+                                <div class="flex flex-wrap items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 p-0.5 bg-slate-100 dark:bg-slate-800 text-xs">
                                     <button type="button"
                                             class="rounded-md px-3 py-1 font-semibold transition @(teamCenterSubTab == "members" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
-                                            @onclick='() => teamCenterSubTab = "members"'>
+                                            @onclick='() => SetTeamCenterSubTab("members")'>
                                         Members (@CurrentTeamStaffList.Count)
                                     </button>
                                     <button type="button"
                                             class="rounded-md px-3 py-1 font-semibold transition @(teamCenterSubTab == "projects" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
-                                            @onclick='() => teamCenterSubTab = "projects"'>
+                                            @onclick='() => SetTeamCenterSubTab("projects")'>
                                         Projects (@currentTeamProjects.Count)
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab is "attendance" or "attendace" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                            @onclick='() => SetTeamCenterSubTab("attendance")'>
+                                        <span>Attendance</span>
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab is "requests" or "request" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                            @onclick='() => SetTeamCenterSubTab("requests")'>
+                                        <span>Request</span>
+                                        @if (GetTeamPendingRequestsCount() > 0)
+                                        {
+                                            <span class="rounded-full bg-amber-500 text-white px-1.5 py-0.2 text-[10px] font-bold">
+                                                @GetTeamPendingRequestsCount()
+                                            </span>
+                                        }
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab == "schedule" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                            @onclick='() => SetTeamCenterSubTab("schedule")'>
+                                        <span>Schedule</span>
+                                    </button>
+                                    <button type="button"
+                                            class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab is "leaves" or "leave" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                            @onclick='() => SetTeamCenterSubTab("leaves")'>
+                                        <span>Leaves</span>
+                                        @if (GetTeamOnLeaveCount() > 0)
+                                        {
+                                            <span class="rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 px-1.5 py-0.2 text-[10px] font-bold">
+                                                @GetTeamOnLeaveCount()
+                                            </span>
+                                        }
                                     </button>
                                 </div>
                             </div>
@@ -1039,6 +1071,621 @@
                                                         View Details →
                                                     </button>
                                                 </div>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            }
+
+                            <!-- SUB-TAB 3: ATTENDANCE -->
+                            @if (teamCenterSubTab is "attendance" or "attendace")
+                            {
+                                var teamStaffIds = CurrentTeamStaffList.Select(s => s.StaffId).ToHashSet();
+                                var teamAttendance = todayAttendance.Where(a => (selectedTeamId.HasValue && a.TeamID == selectedTeamId.Value) || teamStaffIds.Contains(a.StaffID)).ToList();
+
+                                var pCount = CurrentTeamStaffList.Count(m => (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Present);
+                                var lCount = CurrentTeamStaffList.Count(m => (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Late);
+                                var mcCount = CurrentTeamStaffList.Count(m => (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.MissingCheckout);
+                                var olCount = CurrentTeamStaffList.Count(m => (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave);
+                                var abCount = CurrentTeamStaffList.Count(m => (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Absent);
+
+                                <!-- Attendance Summary Cards -->
+                                <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                                    <button type="button" class="p-2.5 rounded-xl border text-left transition cursor-pointer @(teamAttendanceFilter == "present" ? "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-500" : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100")"
+                                            @onclick='() => teamAttendanceFilter = (teamAttendanceFilter == "present" ? "all" : "present")'>
+                                        <div class="text-lg font-black text-emerald-600 dark:text-emerald-400">@pCount</div>
+                                        <div class="text-[10px] font-semibold text-slate-500">Present</div>
+                                    </button>
+                                    <button type="button" class="p-2.5 rounded-xl border text-left transition cursor-pointer @(teamAttendanceFilter == "late" ? "border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-1 ring-amber-500" : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100")"
+                                            @onclick='() => teamAttendanceFilter = (teamAttendanceFilter == "late" ? "all" : "late")'>
+                                        <div class="text-lg font-black text-amber-600 dark:text-amber-400">@lCount</div>
+                                        <div class="text-[10px] font-semibold text-slate-500">Late</div>
+                                    </button>
+                                    <button type="button" class="p-2.5 rounded-xl border text-left transition cursor-pointer @(teamAttendanceFilter == "missing" ? "border-sky-500 bg-sky-50 dark:bg-sky-950/40 ring-1 ring-sky-500" : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100")"
+                                            @onclick='() => teamAttendanceFilter = (teamAttendanceFilter == "missing" ? "all" : "missing")'>
+                                        <div class="text-lg font-black text-sky-600 dark:text-sky-400">@mcCount</div>
+                                        <div class="text-[10px] font-semibold text-slate-500">Missing Checkout</div>
+                                    </button>
+                                    <button type="button" class="p-2.5 rounded-xl border text-left transition cursor-pointer @(teamAttendanceFilter == "leave" ? "border-purple-500 bg-purple-50 dark:bg-purple-950/40 ring-1 ring-purple-500" : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100")"
+                                            @onclick='() => teamAttendanceFilter = (teamAttendanceFilter == "leave" ? "all" : "leave")'>
+                                        <div class="text-lg font-black text-purple-600 dark:text-purple-400">@olCount</div>
+                                        <div class="text-[10px] font-semibold text-slate-500">On Leave</div>
+                                    </button>
+                                    <button type="button" class="p-2.5 rounded-xl border text-left transition cursor-pointer @(teamAttendanceFilter == "absent" ? "border-rose-500 bg-rose-50 dark:bg-rose-950/40 ring-1 ring-rose-500" : "border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 hover:bg-slate-100")"
+                                            @onclick='() => teamAttendanceFilter = (teamAttendanceFilter == "absent" ? "all" : "absent")'>
+                                        <div class="text-lg font-black text-rose-600 dark:text-rose-400">@abCount</div>
+                                        <div class="text-[10px] font-semibold text-slate-500">Absent</div>
+                                    </button>
+                                </div>
+
+                                <!-- Search & Quick Actions -->
+                                <div class="flex items-center justify-between flex-wrap gap-2 pt-1">
+                                    <div class="relative w-full max-w-xs">
+                                        <input class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+                                               placeholder="Filter members..."
+                                               @bind="teamAttendanceSearch"
+                                               @bind:event="oninput" />
+                                    </div>
+                                    @if (teamAttendanceFilter != "all")
+                                    {
+                                        <button type="button" class="text-xs text-teal-700 dark:text-teal-400 font-semibold hover:underline"
+                                                @onclick='() => teamAttendanceFilter = "all"'>
+                                            Clear Filter (@teamAttendanceFilter)
+                                        </button>
+                                    }
+                                </div>
+
+                                <!-- Attendance Table -->
+                                <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                    <table class="w-full text-left text-xs">
+                                        <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                            <tr>
+                                                <th class="p-2.5">Member</th>
+                                                <th class="p-2.5">Role</th>
+                                                <th class="p-2.5">Clock In</th>
+                                                <th class="p-2.5">Clock Out</th>
+                                                <th class="p-2.5">Status</th>
+                                                <th class="p-2.5 text-right">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                            @foreach (var member in CurrentTeamStaffList.Where(m =>
+                                                (string.IsNullOrWhiteSpace(teamAttendanceSearch) || m.FullName.Contains(teamAttendanceSearch, StringComparison.OrdinalIgnoreCase)) &&
+                                                (teamAttendanceFilter == "all" ||
+                                                 (teamAttendanceFilter == "present" && (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Present) ||
+                                                 (teamAttendanceFilter == "late" && (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Late) ||
+                                                 (teamAttendanceFilter == "missing" && (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.MissingCheckout) ||
+                                                 (teamAttendanceFilter == "leave" && ((teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave)) ||
+                                                 (teamAttendanceFilter == "absent" && (teamAttendance.FirstOrDefault(a => a.StaffID == m.StaffId)?.Status ?? GetTodayAttendance(m.StaffId)?.Status) == AttendanceStatus.Absent)
+                                                )))
+                                            {
+                                                var att = teamAttendance.FirstOrDefault(a => a.StaffID == member.StaffId) ?? GetTodayAttendance(member.StaffId);
+                                                <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                                                    <td class="p-2.5">
+                                                        <div class="flex items-center gap-2">
+                                                            <div class="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-xs shrink-0">
+                                                                @GetInitials(member.FullName)
+                                                            </div>
+                                                            <div>
+                                                                <a href="@($"/admin/my/workspace/staff/{member.StaffId}/overview")"
+                                                                   class="font-bold text-slate-900 dark:text-slate-100 hover:text-teal-600 dark:hover:text-teal-400 hover:underline block"
+                                                                   title="Open Staff Workspace">
+                                                                    @member.FullName
+                                                                </a>
+                                                                <span class="text-[10px] text-slate-500">ID: #@member.StaffId</span>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded px-2 py-0.5 text-[10px] font-semibold @(member.IsSuperVisor ? "bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400")">
+                                                            @(member.IsSuperVisor ? "Supervisor" : "Member")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="font-medium text-slate-800 dark:text-slate-200">
+                                                            @(att?.CheckIn.HasValue == true ? att.CheckIn.Value.ToString("hh:mm tt") : "—")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="font-medium text-slate-800 dark:text-slate-200">
+                                                            @(att?.CheckOut.HasValue == true ? att.CheckOut.Value.ToString("hh:mm tt") : "—")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(att?.Status)">
+                                                            @(att != null ? att.Status.ToString() : "Not Clocked")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <div class="inline-flex items-center gap-1">
+                                                            <button type="button"
+                                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                                                                    @onclick="() => OpenMember360(member.StaffId)">
+                                                                View 360
+                                                            </button>
+                                                            <a href="@($"/admin/my/workspace/staff/{member.StaffId}/attendance")"
+                                                               class="inline-flex items-center gap-1 rounded-lg border border-teal-300 dark:border-teal-700 bg-teal-50 dark:bg-teal-950/50 px-2 py-1 text-[11px] font-semibold text-teal-700 dark:text-teal-300 shadow-2xs hover:bg-teal-100 dark:hover:bg-teal-900/60 transition"
+                                                               title="Open Staff Attendance">
+                                                                Attendance &gt;
+                                                            </a>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+                            }
+
+                            <!-- SUB-TAB 4: REQUEST -->
+                            @if (teamCenterSubTab is "requests" or "request")
+                            {
+                                var teamStaffNames = CurrentTeamStaffList.Select(m => m.FullName.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                var teamStaffIds = CurrentTeamStaffList.Select(m => m.StaffId).ToHashSet();
+
+                                var tLeaves = pendingLeaves.Where(l => teamStaffNames.Contains(l.Applicant?.Trim() ?? "")).ToList();
+                                var tAtt = attendanceRequestsList.Where(a => (a.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Verification", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Approval", StringComparison.OrdinalIgnoreCase)) && teamStaffNames.Contains(a.StaffName?.Trim() ?? "")).ToList();
+                                var tDuties = pendingDutyRequests.Where(d => teamStaffNames.Contains(d.Source?.Trim() ?? "") || teamStaffNames.Contains(d.Target?.Trim() ?? "")).ToList();
+                                var tItems = itemRequestsList.Where(r => (r.Status is "Submitted" or "ReturnRequested") && (teamStaffIds.Contains(r.IndividualId) || teamStaffNames.Contains(r.StaffName?.Trim() ?? ""))).ToList();
+                                var tCerts = certificateRequestsList.Where(c => (c.Status is "Submitted" or "UnderReview") && (teamStaffIds.Contains(c.IndividualId) || teamStaffNames.Contains(c.EmployeeName?.Trim() ?? ""))).ToList();
+
+                                var totalRequests = tLeaves.Count + tAtt.Count + tDuties.Count + tItems.Count + tCerts.Count;
+
+                                <!-- Category Filter Pills -->
+                                <div class="flex flex-wrap items-center gap-1.5 border-b border-slate-100 dark:border-slate-800 pb-2">
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "all" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "all"'>
+                                        All (@totalRequests)
+                                    </button>
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "leaves" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "leaves"'>
+                                        Leaves (@tLeaves.Count)
+                                    </button>
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "attendance" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "attendance"'>
+                                        Attendance (@tAtt.Count)
+                                    </button>
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "items" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "items"'>
+                                        Equipment (@tItems.Count)
+                                    </button>
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "certificates" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "certificates"'>
+                                        Certificates (@tCerts.Count)
+                                    </button>
+                                    <button type="button" class="rounded-lg px-2.5 py-1 text-xs font-bold transition @(teamRequestFilter == "duties" ? "bg-teal-700 text-white shadow-2xs" : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200")"
+                                            @onclick='() => teamRequestFilter = "duties"'>
+                                        Duty Swaps (@tDuties.Count)
+                                    </button>
+                                </div>
+
+                                @if (totalRequests == 0)
+                                {
+                                    <div class="py-10 text-center text-xs text-slate-500">
+                                        No pending requests for members of this team.
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="space-y-2">
+                                        @if (teamRequestFilter is "all" or "leaves")
+                                        {
+                                            @foreach (var req in tLeaves)
+                                            {
+                                                <div @key="@($"leave-{req.RequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">🌴</div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.Applicant</span>
+                                                                <span class="rounded bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 text-[10px] font-semibold">@req.LeaveType</span>
+                                                            </div>
+                                                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                @req.FromDate.ToString("dd MMM yyyy") – @req.ToDate.ToString("dd MMM yyyy") (@req.Duration days) · @req.Reason
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">@req.Status</span>
+                                                        <button type="button"
+                                                                class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs"
+                                                                @onclick="() => ReviewTeamLeave(req)">
+                                                            Review &gt;
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+
+                                        @if (teamRequestFilter is "all" or "attendance")
+                                        {
+                                            @foreach (var req in tAtt)
+                                            {
+                                                <div @key="@($"att-{req.RequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">⏰</div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.StaffName</span>
+                                                                <span class="rounded bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.2 text-[10px] font-semibold">@req.Kind</span>
+                                                            </div>
+                                                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                @req.ClockTime.ToString("dd MMM yyyy, hh:mm tt") (@req.Mode) · Ref: @req.Reference
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">@req.Status</span>
+                                                        <button type="button"
+                                                                class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs"
+                                                                @onclick="() => ReviewTeamAttendance(req)">
+                                                            Review &gt;
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+
+                                        @if (teamRequestFilter is "all" or "items")
+                                        {
+                                            @foreach (var req in tItems)
+                                            {
+                                                var itemSummary = req.Lines.Count > 0 ? string.Join(", ", req.Lines.Select(l => $"{l.Quantity}x {l.ItemName}")) : req.Kind;
+                                                <div @key="@($"item-{req.RequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-emerald-100 text-emerald-700 font-bold flex items-center justify-center text-xs">📦</div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.StaffName</span>
+                                                                <span class="rounded bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 text-[10px] font-semibold">@itemSummary</span>
+                                                            </div>
+                                                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                Purpose: @req.Purpose · Status: @req.Status
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">@req.Status</span>
+                                                        <button type="button"
+                                                                class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs"
+                                                                @onclick="() => ReviewTeamItem(req)">
+                                                            Review &gt;
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+
+                                        @if (teamRequestFilter is "all" or "certificates")
+                                        {
+                                            @foreach (var req in tCerts)
+                                            {
+                                                <div @key="@($"cert-{req.CertificateRequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-xs">📜</div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.EmployeeName</span>
+                                                                <span class="rounded bg-indigo-50 text-indigo-700 border border-indigo-200 px-1.5 py-0.2 text-[10px] font-semibold">@req.CertificateType</span>
+                                                            </div>
+                                                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                Requested: @req.CreatedAt.ToString("dd MMM yyyy") · Purpose: @req.Purpose
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">@req.Status</span>
+                                                        <button type="button"
+                                                                class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs"
+                                                                @onclick="ReviewTeamCertificates">
+                                                            Review &gt;
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+
+                                        @if (teamRequestFilter is "all" or "duties")
+                                        {
+                                            @foreach (var req in tDuties)
+                                            {
+                                                <div @key="@($"duty-{req.RequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                    <div class="flex items-center gap-2.5">
+                                                        <div class="w-8 h-8 rounded-full bg-teal-100 text-teal-700 font-bold flex items-center justify-center text-xs">🔄</div>
+                                                        <div>
+                                                            <div class="flex items-center gap-1.5">
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.Source → @req.Target</span>
+                                                                <span class="rounded bg-teal-50 text-teal-700 border border-teal-200 px-1.5 py-0.2 text-[10px] font-semibold">@req.Kind</span>
+                                                            </div>
+                                                            <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                Ref: @req.Reference · Status: @req.Status
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div class="flex items-center gap-2">
+                                                        <a href="/admin/hr/work-planning/duty-roster?tab=requests"
+                                                           class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs">
+                                                            Manage Roster &gt;
+                                                        </a>
+                                                    </div>
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                }
+                            }
+
+                            <!-- SUB-TAB 5: SCHEDULE -->
+                            @if (teamCenterSubTab == "schedule")
+                            {
+                                @if (selectedTeamScheduleStaffId.HasValue)
+                                {
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                                                    @onclick="() => selectedTeamScheduleStaffId = null">
+                                                ← Back to Team Roster
+                                            </button>
+                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                Individual Staff Schedule
+                                            </span>
+                                        </div>
+                                        <Schedule @key="selectedTeamScheduleStaffId.Value" StaffId="selectedTeamScheduleStaffId.Value" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <!-- Date Navigator Toolbar -->
+                                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                                        <div class="flex items-center gap-1.5">
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                                                    disabled="@loadingTeamSchedule"
+                                                    @onclick="() => ChangeTeamScheduleDateAsync(-1)">
+                                                ‹ Prev Day
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                                                    disabled="@loadingTeamSchedule"
+                                                    @onclick="SetTeamScheduleDateTodayAsync">
+                                                Today
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                                                    disabled="@loadingTeamSchedule"
+                                                    @onclick="() => ChangeTeamScheduleDateAsync(1)">
+                                                Next Day ›
+                                            </button>
+                                            <span class="font-bold text-xs text-slate-900 dark:text-slate-100 ml-1">
+                                                @teamScheduleDate.ToString("dddd, dd MMM yyyy")
+                                            </span>
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition"
+                                                    disabled="@loadingTeamSchedule"
+                                                    @onclick="LoadTeamScheduleAsync">
+                                                <span class="@(loadingTeamSchedule ? "animate-spin" : "")">↻</span>
+                                                <span>Refresh</span>
+                                            </button>
+                                            <a href="/admin/hr/work-planning/duty-roster"
+                                               class="rounded-lg bg-teal-700 hover:bg-teal-800 px-3 py-1 text-xs font-semibold text-white transition shadow-2xs">
+                                                Duty Roster Admin &gt;
+                                            </a>
+                                        </div>
+                                    </div>
+
+                                    @if (loadingTeamSchedule)
+                                    {
+                                        <div class="py-12 text-center text-xs text-slate-500">
+                                            <div class="w-6 h-6 border-2 border-teal-600 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                            Loading team schedule for @teamScheduleDate.ToString("dd MMM yyyy")…
+                                        </div>
+                                    }
+                                    else if (!string.IsNullOrWhiteSpace(teamScheduleError))
+                                    {
+                                        <div class="p-4 rounded-xl border border-amber-200 bg-amber-50 text-xs text-amber-800">
+                                            @teamScheduleError
+                                        </div>
+                                    }
+                                    else if (teamDutyRoster.Count == 0)
+                                    {
+                                        <div class="py-10 text-center text-xs text-slate-500 space-y-2">
+                                            <p>No duty assignments or shifts scheduled for this team on @teamScheduleDate.ToString("dd MMM yyyy").</p>
+                                            <p class="text-[11px] text-slate-400">Click below to view individual schedules or manage duty rosters.</p>
+                                            <div class="flex justify-center gap-2 pt-2">
+                                                <a href="/admin/hr/work-planning/duty-roster" class="text-xs text-teal-700 font-semibold hover:underline">
+                                                    Open Duty Roster Admin →
+                                                </a>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+                                            <table class="w-full text-left text-xs">
+                                                <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                                    <tr>
+                                                        <th class="p-2.5">Member</th>
+                                                        <th class="p-2.5">Duty / Shift</th>
+                                                        <th class="p-2.5">Timing</th>
+                                                        <th class="p-2.5">Attendance</th>
+                                                        <th class="p-2.5 text-right">Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                                    @foreach (var row in teamDutyRoster)
+                                                    {
+                                                        <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/40 transition">
+                                                            <td class="p-2.5 font-bold text-slate-900 dark:text-slate-100">
+                                                                <div class="flex items-center gap-2">
+                                                                    <div class="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs shrink-0">
+                                                                        @GetInitials(row.Staff)
+                                                                    </div>
+                                                                    <div>
+                                                                        <span class="block">@row.Staff</span>
+                                                                        <span class="text-[10px] text-slate-500">@row.Department</span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td class="p-2.5">
+                                                                <span class="rounded bg-teal-50 dark:bg-teal-950/60 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[11px] font-bold">
+                                                                    @row.Duty
+                                                                </span>
+                                                            </td>
+                                                            <td class="p-2.5 whitespace-nowrap text-slate-700 dark:text-slate-300">
+                                                                @row.Start.ToString("HH:mm") – @row.End.ToString("HH:mm")
+                                                            </td>
+                                                            <td class="p-2.5">
+                                                                <span class="text-[10px] font-medium text-slate-600 dark:text-slate-400">
+                                                                    @(row.RequiresAttendance ? "Check-in required" : "Optional")
+                                                                    @(row.RequiresCheckout ? " · Checkout required" : "")
+                                                                </span>
+                                                            </td>
+                                                            <td class="p-2.5 text-right">
+                                                                <button type="button"
+                                                                        class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                                                                        @onclick="() => selectedTeamScheduleStaffId = row.IndividualId">
+                                                                    Full Schedule
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    }
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    }
+                                }
+                            }
+
+                            <!-- SUB-TAB 6: LEAVES -->
+                            @if (teamCenterSubTab is "leaves" or "leave")
+                            {
+                                var teamStaffNames = CurrentTeamStaffList.Select(m => m.FullName.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                                var teamStaffIds = CurrentTeamStaffList.Select(m => m.StaffId).ToHashSet();
+
+                                var membersOnLeave = CurrentTeamStaffList.Where(m =>
+                                {
+                                    var att = todayAttendance.FirstOrDefault(a => a.StaffID == m.StaffId) ?? GetTodayAttendance(m.StaffId);
+                                    return att?.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave;
+                                }).ToList();
+
+                                var teamPendingLeaves = pendingLeaves.Where(l => teamStaffNames.Contains(l.Applicant?.Trim() ?? "")).ToList();
+
+                                if (selectedTeamLeaveStaffId.HasValue)
+                                {
+                                    <div class="space-y-3">
+                                        <div class="flex items-center justify-between">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                                                    @onclick="() => selectedTeamLeaveStaffId = null">
+                                                ← Back to Team Leaves Summary
+                                            </button>
+                                            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">
+                                                Staff Leave Manager
+                                            </span>
+                                        </div>
+                                        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffLeave @key="selectedTeamLeaveStaffId.Value" StaffId="selectedTeamLeaveStaffId.Value" />
+                                    </div>
+                                }
+                                else
+                                {
+                                    <!-- Summary Header -->
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                        <div class="p-3.5 rounded-xl border border-purple-200 dark:border-purple-800/40 bg-purple-50/50 dark:bg-purple-950/20 flex items-center justify-between">
+                                            <div>
+                                                <div class="text-lg font-black text-purple-700 dark:text-purple-300">@membersOnLeave.Count</div>
+                                                <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">On Leave Today</div>
+                                            </div>
+                                            <span class="text-2xl">🌴</span>
+                                        </div>
+                                        <div class="p-3.5 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50/50 dark:bg-amber-950/20 flex items-center justify-between">
+                                            <div>
+                                                <div class="text-lg font-black text-amber-700 dark:text-amber-300">@teamPendingLeaves.Count</div>
+                                                <div class="text-xs font-semibold text-slate-600 dark:text-slate-400">Pending Leave Applications</div>
+                                            </div>
+                                            <span class="text-2xl">📋</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Section 1: Members on Leave Today -->
+                                    <div class="space-y-2 pt-2">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Members on Leave Today</h4>
+                                        @if (membersOnLeave.Count == 0)
+                                        {
+                                            <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-xs text-slate-500 text-center">
+                                                All @CurrentTeamStaffList.Count team members are scheduled to be active today. No one is on leave.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                                @foreach (var m in membersOnLeave)
+                                                {
+                                                    var att = todayAttendance.FirstOrDefault(a => a.StaffID == m.StaffId) ?? GetTodayAttendance(m.StaffId);
+                                                    <div class="p-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between">
+                                                        <div class="flex items-center gap-2">
+                                                            <div class="w-7 h-7 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">
+                                                                @GetInitials(m.FullName)
+                                                            </div>
+                                                            <div>
+                                                                <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@m.FullName</span>
+                                                                <span class="rounded px-1.5 py-0.2 text-[10px] font-bold @GetAttendanceBadgeClass(att?.Status)">
+                                                                    @(att?.Status.ToString() ?? "On Leave")
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button"
+                                                                class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-[11px] font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 transition"
+                                                                @onclick="() => selectedTeamLeaveStaffId = m.StaffId">
+                                                            Leave History
+                                                        </button>
+                                                    </div>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+
+                                    <!-- Section 2: Pending Leave Requests -->
+                                    <div class="space-y-2 pt-2">
+                                        <div class="flex items-center justify-between">
+                                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">Pending Leave Requests (@teamPendingLeaves.Count)</h4>
+                                        </div>
+                                        @if (teamPendingLeaves.Count == 0)
+                                        {
+                                            <div class="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 text-xs text-slate-500 text-center">
+                                                No pending leave applications for this team.
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="space-y-2">
+                                                @foreach (var req in teamPendingLeaves)
+                                                {
+                                                    <div @key="@($"tleave-{req.RequestId}")" class="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-2xs flex items-center justify-between flex-wrap gap-2 hover:border-teal-400 transition">
+                                                        <div class="flex items-center gap-2.5">
+                                                            <div class="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">🌴</div>
+                                                            <div>
+                                                                <div class="flex items-center gap-1.5">
+                                                                    <span class="font-bold text-xs text-slate-900 dark:text-slate-100">@req.Applicant</span>
+                                                                    <span class="rounded bg-purple-50 text-purple-700 border border-purple-200 px-1.5 py-0.2 text-[10px] font-semibold">@req.LeaveType</span>
+                                                                </div>
+                                                                <p class="text-[11px] text-slate-500 mt-0.5">
+                                                                    @req.FromDate.ToString("dd MMM yyyy") – @req.ToDate.ToString("dd MMM yyyy") (@req.Duration days) · @req.Reason
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-[10px] font-bold">@req.Status</span>
+                                                            <button type="button"
+                                                                    class="rounded-lg bg-teal-700 hover:bg-teal-800 px-2.5 py-1 text-xs font-semibold text-white transition shadow-2xs"
+                                                                    @onclick="() => ReviewTeamLeave(req)">
+                                                                Review &gt;
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                }
                                             </div>
                                         }
                                     </div>
@@ -2332,11 +2979,24 @@
     [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
     [SupplyParameterFromQuery(Name = "entityType")] public string? EntityTypeQuery { get; set; }
     [SupplyParameterFromQuery(Name = "entityId")] public int? EntityIdQuery { get; set; }
+    [SupplyParameterFromQuery(Name = "subtab")] public string? QuerySubTab { get; set; }
+    [SupplyParameterFromQuery(Name = "teamTab")] public string? QueryTeamTab { get; set; }
 
     // Tab state: "Home", "MyTeam", "Calendar", "Request", "Onboarding", "LeaveLog", "Attendance", "TimeChange", "OrgDaily"
     private string activeWorkspaceTab = "Home";
     private string activeReqSubTab = "leave";
     private string teamCenterSubTab = "members";
+
+    // Selected Team Subtab Filter States
+    private string teamAttendanceFilter = "all";
+    private string teamAttendanceSearch = "";
+    private string teamRequestFilter = "all";
+    private DateTime teamScheduleDate = DateTime.Today;
+    private List<DutyRosterRow> teamDutyRoster = new();
+    private bool loadingTeamSchedule;
+    private string? teamScheduleError;
+    private int? selectedTeamScheduleStaffId;
+    private int? selectedTeamLeaveStaffId;
 
     // Teams & Staff data
     private List<TeamDto> myTeams = new();
@@ -2750,6 +3410,20 @@
             selectedTeamId = QueryTeamId.Value;
         }
 
+        var requestedSubTab = (QueryTeamTab ?? QuerySubTab)?.ToLowerInvariant();
+        if (!string.IsNullOrWhiteSpace(requestedSubTab))
+        {
+            teamCenterSubTab = requestedSubTab switch
+            {
+                "attendance" or "attendace" => "attendance",
+                "request" or "requests" => "requests",
+                "schedule" or "schedules" => "schedule",
+                "leave" or "leaves" => "leaves",
+                "project" or "projects" => "projects",
+                _ => "members"
+            };
+        }
+
         if (QueryProjectId.HasValue && QueryProjectId.Value > 0)
         {
             selectedProjectId = QueryProjectId.Value;
@@ -2792,6 +3466,10 @@
         if (activeWorkspaceTab == "MyTeam" && selectedTeamId.HasValue)
         {
             uri += $"&teamId={selectedTeamId.Value}";
+            if (!string.IsNullOrWhiteSpace(teamCenterSubTab) && teamCenterSubTab != "members")
+            {
+                uri += $"&teamTab={teamCenterSubTab}";
+            }
         }
         if (activeWorkspaceTab == "MyTeam" && selectedProjectId.HasValue && activeRightPanel == RightPanelType.ProjectDetails)
         {
@@ -3283,16 +3961,119 @@
     private async Task NavigateToSpecificTeam(int teamId)
     {
         selectedTeamId = teamId;
+        selectedTeamScheduleStaffId = null;
+        selectedTeamLeaveStaffId = null;
         activeWorkspaceTab = "MyTeam";
         UpdateUrl();
         await LoadTeamProjectsAsync(teamId);
+        if (teamCenterSubTab == "schedule")
+        {
+            await LoadTeamScheduleAsync();
+        }
     }
 
     private async Task SelectTeamAsync(int teamId)
     {
         selectedTeamId = teamId;
+        selectedTeamScheduleStaffId = null;
+        selectedTeamLeaveStaffId = null;
         UpdateUrl();
         await LoadTeamProjectsAsync(teamId);
+        if (teamCenterSubTab == "schedule")
+        {
+            await LoadTeamScheduleAsync();
+        }
+    }
+
+    private void SetTeamCenterSubTab(string subtab)
+    {
+        teamCenterSubTab = subtab;
+        if (subtab == "schedule" && teamDutyRoster.Count == 0 && !loadingTeamSchedule)
+        {
+            _ = LoadTeamScheduleAsync();
+        }
+        UpdateUrl();
+    }
+
+    private async Task LoadTeamScheduleAsync()
+    {
+        if (!selectedTeamId.HasValue) return;
+        loadingTeamSchedule = true;
+        teamScheduleError = null;
+        try
+        {
+            var roster = await Duties.GetRosterAsync(teamScheduleDate);
+            var teamStaffIds = CurrentTeamStaffList.Select(s => s.StaffId).ToHashSet();
+            teamDutyRoster = roster.Where(r => teamStaffIds.Contains(r.IndividualId)).ToList();
+        }
+        catch (Exception ex)
+        {
+            teamScheduleError = "Unable to load schedule for this team.";
+            Logger.LogError(ex, "Loading team schedule for team {TeamId}", selectedTeamId);
+        }
+        finally
+        {
+            loadingTeamSchedule = false;
+        }
+    }
+
+    private async Task ChangeTeamScheduleDateAsync(int dayOffset)
+    {
+        teamScheduleDate = teamScheduleDate.AddDays(dayOffset);
+        await LoadTeamScheduleAsync();
+    }
+
+    private async Task SetTeamScheduleDateTodayAsync()
+    {
+        teamScheduleDate = DateTime.Today;
+        await LoadTeamScheduleAsync();
+    }
+
+    private int GetTeamPendingRequestsCount()
+    {
+        if (CurrentTeamStaffList.Count == 0) return 0;
+        var teamStaffNames = CurrentTeamStaffList.Select(m => m.FullName.Trim()).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var teamStaffIds = CurrentTeamStaffList.Select(m => m.StaffId).ToHashSet();
+
+        return pendingLeaves.Count(l => teamStaffNames.Contains(l.Applicant?.Trim() ?? ""))
+            + attendanceRequestsList.Count(a => (a.Status.Contains("Pending", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Submitted", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Verification", StringComparison.OrdinalIgnoreCase) || a.Status.Contains("Approval", StringComparison.OrdinalIgnoreCase)) && teamStaffNames.Contains(a.StaffName?.Trim() ?? ""))
+            + pendingDutyRequests.Count(d => teamStaffNames.Contains(d.Source?.Trim() ?? "") || teamStaffNames.Contains(d.Target?.Trim() ?? ""))
+            + itemRequestsList.Count(r => (r.Status is "Submitted" or "ReturnRequested") && (teamStaffIds.Contains(r.IndividualId) || teamStaffNames.Contains(r.StaffName?.Trim() ?? "")))
+            + certificateRequestsList.Count(c => (c.Status is "Submitted" or "UnderReview") && (teamStaffIds.Contains(c.IndividualId) || teamStaffNames.Contains(c.EmployeeName?.Trim() ?? "")));
+    }
+
+    private int GetTeamOnLeaveCount()
+    {
+        if (CurrentTeamStaffList.Count == 0) return 0;
+        var teamStaffIds = CurrentTeamStaffList.Select(m => m.StaffId).ToHashSet();
+        return todayAttendance.Count(a => teamStaffIds.Contains(a.StaffID) && a.Status is AttendanceStatus.Leave or AttendanceStatus.SickLeave or AttendanceStatus.FamilyLeave);
+    }
+
+    private void ReviewTeamLeave(PendingLeaveRequestDto req)
+    {
+        selectedLeave = req;
+        activeWorkspaceTab = "Request";
+        SetReqSubTab("leave");
+    }
+
+    private void ReviewTeamAttendance(AttendanceRequestRow req)
+    {
+        selectedAttendanceRequest = req;
+        activeWorkspaceTab = "Request";
+        SetReqSubTab(req.Kind == "Uneven-log correction" ? "uneven-log" : "attendance");
+    }
+
+    private void ReviewTeamItem(ItemStaffRequestDto req)
+    {
+        selectedItemRequest = req;
+        activeWorkspaceTab = "Request";
+        SetReqSubTab(req.Purpose == "Job related" ? "job-items" : "personal-items");
+    }
+
+    private void ReviewTeamCertificates()
+    {
+        activeWorkspaceTab = "Request";
+        SetReqSubTab("certificates");
     }
 
     private async Task HandleSearchTeamSelected(int teamId)
