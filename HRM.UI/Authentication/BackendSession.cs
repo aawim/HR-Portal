@@ -61,7 +61,10 @@ public sealed class BackendSession(HttpClient upstream, Uri origin, ILogger<Back
     private async Task<HttpResponseMessage> SendCoreAsync(HttpRequestMessage request, CancellationToken ct)
     {
         var uri = request.RequestUri?.IsAbsoluteUri == true ? request.RequestUri : new Uri(origin, request.RequestUri!);
-        if (uri.Scheme != origin.Scheme || uri.Authority != origin.Authority || !uri.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal))
+        // BudgetController exposes explicit routes outside the versioned operation API.
+        var permittedPath = uri.AbsolutePath.StartsWith("/api/v1/", StringComparison.Ordinal) ||
+            uri.AbsolutePath.StartsWith("/api/budget/", StringComparison.Ordinal);
+        if (uri.Scheme != origin.Scheme || uri.Authority != origin.Authority || !permittedPath)
             throw new InvalidOperationException("The backend destination is not permitted.");
         using var outbound = await CloneForBackendAsync(request, uri, ct);
         outbound.Headers.Remove("Cookie");
