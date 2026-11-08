@@ -164,4 +164,58 @@ public record BudgetItemDto
     public string DhivehiName { get; init; } = string.Empty;
     public string EnglishName { get; init; } = string.Empty;
     public string ChapterCode { get; init; } = "21";
+    public string DisplayText => !string.IsNullOrWhiteSpace(EnglishName) 
+        ? $"{EconomicCode} - {DhivehiName} ({EnglishName})" 
+        : $"{EconomicCode} - {DhivehiName}";
+}
+
+public record CreateBudgetItemRequest
+{
+    public string EconomicCode { get; init; } = string.Empty;
+    public string DhivehiName { get; init; } = string.Empty;
+    public string EnglishName { get; init; } = string.Empty;
+    public string ChapterCode { get; init; } = "21";
+    public string AccountType { get; init; } = "Expenditure";
+    public int? ParentBudgetItemId { get; init; }
+}
+
+public record FiscalYearDto
+{
+    public int FiscalYearId { get; init; }
+    public int YearNumber { get; init; }
+    public DateOnly StartDate { get; init; }
+    public DateOnly EndDate { get; init; }
+    public decimal TotalApprovedBudget { get; init; }
+    public decimal TotalEmolumentsBudget { get; init; }
+    public string Status { get; init; } = "Active";
+}
+
+public record CreateFiscalYearRequest
+{
+    public int YearNumber { get; init; }
+    public DateOnly StartDate { get; init; }
+    public DateOnly EndDate { get; init; }
+    public decimal TotalApprovedBudget { get; init; }
+    public decimal TotalEmolumentsBudget { get; init; }
+}
+
+public record CreatePayrollMappingRequest
+{
+    public int BudgetItemId { get; init; }
+    public string ComponentName { get; init; } = string.Empty;
+    public int? SalaryComponentId { get; init; }
+    public int? AllowanceTypeId { get; init; }
+    public int? CostCenterOrganisationId { get; init; }
+}
+
+public record CreateBudgetTransactionRequest
+{
+    public int BudgetItemId { get; init; }
+    public int FiscalYearId { get; init; } = 1;
+    public int OrganisationId { get; init; } = 3;
+    public int TransactionTypeId { get; init; } = 7; // ActualExpenditure
+    public decimal Amount { get; init; }
+    public string ReferenceNumber { get; init; } = string.Empty;
+    public string? BandeyriReferenceNumber { get; init; }
+    public string Details { get; init; } = string.Empty;
 }

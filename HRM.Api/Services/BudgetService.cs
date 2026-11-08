@@ -107,6 +107,157 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }).ToList();
     }
 
+    public async Task<BudgetItemDto> SaveBudgetItemAsync(CreateBudgetItemRequest request, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        int.TryParse(request.EconomicCode, out var codeInt);
+        var item = new BudgetItem
+        {
+            Code = codeInt > 0 ? codeInt : null,
+            EconomicCode = request.EconomicCode,
+            DhivehiName = request.DhivehiName,
+            EnglishName = request.EnglishName,
+            ChapterCode = request.ChapterCode,
+            AccountType = request.AccountType,
+            ParentBudgetItemID = request.ParentBudgetItemId,
+            IsActive = true,
+            BudgetYear = 2026
+        };
+        db.BudgetItems.Add(item);
+        await db.SaveChangesAsync(ct);
+        return new BudgetItemDto
+        {
+            BudgetItemId = item.BudgetItemID,
+            EconomicCode = item.EconomicCode,
+            DhivehiName = item.DhivehiName,
+            EnglishName = item.EnglishName,
+            ChapterCode = item.ChapterCode
+        };
+    }
+
+    public async Task<List<FiscalYearDto>> GetFiscalYearsAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var raw = await db.FiscalYears.AsNoTracking().OrderByDescending(x => x.YearNumber).ToListAsync(ct);
+        return raw.Select(x => new FiscalYearDto
+        {
+            FiscalYearId = x.FiscalYearId,
+            YearNumber = x.YearNumber,
+            StartDate = x.StartDate,
+            EndDate = x.EndDate,
+            TotalApprovedBudget = x.TotalApprovedBudget,
+            TotalEmolumentsBudget = x.TotalEmolumentsBudget,
+            Status = x.Status
+        }).ToList();
+    }
+
+    public async Task<FiscalYearDto> SaveFiscalYearAsync(CreateFiscalYearRequest request, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var fy = new FiscalYear
+        {
+            YearNumber = request.YearNumber,
+            StartDate = request.StartDate,
+            EndDate = request.EndDate,
+            TotalApprovedBudget = request.TotalApprovedBudget,
+            TotalEmolumentsBudget = request.TotalEmolumentsBudget,
+            Status = "Active",
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.FiscalYears.Add(fy);
+        await db.SaveChangesAsync(ct);
+        return new FiscalYearDto
+        {
+            FiscalYearId = fy.FiscalYearId,
+            YearNumber = fy.YearNumber,
+            StartDate = fy.StartDate,
+            EndDate = fy.EndDate,
+            TotalApprovedBudget = fy.TotalApprovedBudget,
+            TotalEmolumentsBudget = fy.TotalEmolumentsBudget,
+            Status = fy.Status
+        };
+    }
+
+    public async Task<PayrollBudgetMappingDto> SavePayrollMappingAsync(CreatePayrollMappingRequest request, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var mapping = new PayrollBudgetMapping
+        {
+            BudgetItemId = request.BudgetItemId,
+            ComponentName = request.ComponentName,
+            SalaryComponentId = request.SalaryComponentId,
+            AllowanceTypeId = request.AllowanceTypeId,
+            CostCenterOrganisationId = request.CostCenterOrganisationId,
+            IsActive = true,
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.PayrollBudgetMappings.Add(mapping);
+        await db.SaveChangesAsync(ct);
+        var item = await db.BudgetItems.FindAsync(new object[] { request.BudgetItemId }, ct);
+        return new PayrollBudgetMappingDto
+        {
+            MappingId = mapping.MappingId,
+            BudgetItemId = mapping.BudgetItemId,
+            EconomicCode = item?.EconomicCode ?? item?.Code?.ToString() ?? "",
+            BudgetItemName = item?.DhivehiName ?? "",
+            ComponentName = mapping.ComponentName,
+            SalaryComponentId = mapping.SalaryComponentId,
+            AllowanceTypeId = mapping.AllowanceTypeId,
+            CostCenterOrganisationId = mapping.CostCenterOrganisationId,
+            IsActive = true
+        };
+    }
+
+    public async Task<BudgetTransactionDto> RecordTransactionAsync(CreateBudgetTransactionRequest request, CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var txn = new BudgetTransaction
+        {
+            BudgetItemID = request.BudgetItemId,
+            FiscalYearID = request.FiscalYearId,
+            OrganisationID = request.OrganisationId,
+            TransactionTypeID = request.TransactionTypeId,
+            Date = DateOnly.FromDateTime(DateTime.UtcNow),
+            ReferenceNumber = string.IsNullOrWhiteSpace(request.ReferenceNumber) ? $"TXN-{DateTime.UtcNow.Ticks % 1000000:D6}" : request.ReferenceNumber,
+            BandeyriReferenceNumber = request.BandeyriReferenceNumber,
+            Details = request.Details,
+            Amount = request.Amount,
+            SourceDocumentType = "ManualEntry",
+            Status = "Posted",
+            CreatedAtUtc = DateTime.UtcNow
+        };
+        db.BudgetTransactions.Add(txn);
+
+        var alloc = await db.BudgetAllocations.FirstOrDefaultAsync(x => x.BudgetItemId == request.BudgetItemId && x.FiscalYearId == request.FiscalYearId && x.OrganisationId == request.OrganisationId, ct);
+        if (alloc != null)
+        {
+            alloc.ExpendedAmount += request.Amount;
+            alloc.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        await db.SaveChangesAsync(ct);
+        var item = await db.BudgetItems.FindAsync(new object[] { request.BudgetItemId }, ct);
+        var type = await db.BudgetTransactionTypes.FindAsync(new object[] { request.TransactionTypeId }, ct);
+        return new BudgetTransactionDto
+        {
+            BudgetTransactionID = txn.BudgetTransactionID,
+            BudgetItemID = txn.BudgetItemID,
+            EconomicCode = item?.EconomicCode ?? item?.Code?.ToString() ?? "",
+            ItemName = item?.DhivehiName ?? "",
+            OrganisationID = txn.OrganisationID,
+            TransactionTypeID = txn.TransactionTypeID,
+            TransactionTypeName = type?.DhivehiTypeName ?? type?.TypeName ?? "Transaction",
+            Date = txn.Date,
+            ReferenceNumber = txn.ReferenceNumber,
+            BandeyriReferenceNumber = txn.BandeyriReferenceNumber,
+            Details = txn.Details,
+            Amount = txn.Amount,
+            SourceDocumentType = txn.SourceDocumentType,
+            Status = txn.Status
+        };
+    }
+
     public async Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);

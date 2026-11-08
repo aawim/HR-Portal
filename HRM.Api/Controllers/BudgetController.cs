@@ -34,6 +34,41 @@ public class BudgetController(IBudgetService budgetService) : ControllerBase
         return Ok(items);
     }
 
+    [HttpPost("items")]
+    public async Task<ActionResult<BudgetItemDto>> SaveItem([FromBody] CreateBudgetItemRequest request, CancellationToken ct = default)
+    {
+        var item = await budgetService.SaveBudgetItemAsync(request, ct);
+        return Ok(item);
+    }
+
+    [HttpGet("fiscal-years")]
+    public async Task<ActionResult<List<FiscalYearDto>>> GetFiscalYears(CancellationToken ct = default)
+    {
+        var list = await budgetService.GetFiscalYearsAsync(ct);
+        return Ok(list);
+    }
+
+    [HttpPost("fiscal-years")]
+    public async Task<ActionResult<FiscalYearDto>> SaveFiscalYear([FromBody] CreateFiscalYearRequest request, CancellationToken ct = default)
+    {
+        var fy = await budgetService.SaveFiscalYearAsync(request, ct);
+        return Ok(fy);
+    }
+
+    [HttpPost("payroll-mappings")]
+    public async Task<ActionResult<PayrollBudgetMappingDto>> SavePayrollMapping([FromBody] CreatePayrollMappingRequest request, CancellationToken ct = default)
+    {
+        var mapping = await budgetService.SavePayrollMappingAsync(request, ct);
+        return Ok(mapping);
+    }
+
+    [HttpPost("transactions")]
+    public async Task<ActionResult<BudgetTransactionDto>> RecordTransaction([FromBody] CreateBudgetTransactionRequest request, CancellationToken ct = default)
+    {
+        var txn = await budgetService.RecordTransactionAsync(request, ct);
+        return Ok(txn);
+    }
+
     [HttpPost("allocations")]
     public async Task<ActionResult<BudgetAllocationDto>> SaveAllocation([FromBody] CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {

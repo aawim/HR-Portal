@@ -10,7 +10,12 @@ public interface IBudgetService
     Task<BudgetSummaryDto> GetBudgetSummaryAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default);
     Task<List<BudgetAllocationDto>> GetAllocationsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default);
     Task<List<BudgetItemDto>> GetBudgetItemsAsync(CancellationToken ct = default);
+    Task<BudgetItemDto> SaveBudgetItemAsync(CreateBudgetItemRequest request, CancellationToken ct = default);
     Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default);
+    Task<List<FiscalYearDto>> GetFiscalYearsAsync(CancellationToken ct = default);
+    Task<FiscalYearDto> SaveFiscalYearAsync(CreateFiscalYearRequest request, CancellationToken ct = default);
+    Task<PayrollBudgetMappingDto> SavePayrollMappingAsync(CreatePayrollMappingRequest request, CancellationToken ct = default);
+    Task<BudgetTransactionDto> RecordTransactionAsync(CreateBudgetTransactionRequest request, CancellationToken ct = default);
     Task<List<BudgetVirementDto>> GetVirementsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default);
     Task<BudgetVirementDto> RequestVirementAsync(CreateBudgetVirementRequest request, CancellationToken ct = default);
     Task<List<BudgetCommitmentDto>> GetCommitmentsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default);
