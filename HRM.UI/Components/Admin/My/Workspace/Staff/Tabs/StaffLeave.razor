@@ -52,6 +52,18 @@
                 <HRM.Components.Pages.Online.Leave.NewLeave @key="jobId" LeaveState="state" HideHeader="true" />
             }
         }
+        else if (selected == "Assign Leave Type")
+        {
+            @if (!StaffId.HasValue)
+            {
+                <p class="my-3 text-sm text-slate-500">Select the staff member you are assigning leave types for.</p>
+                <HRM.Components.Admin.My.Workspace.WorkspaceSearch StaffOnly="true" OnSelected="SelectStaff" />
+            }
+            else
+            {
+                <LeaveAssignmentManager @key="StaffId.Value" StaffId="StaffId.Value" />
+            }
+        }
         else
         {
             <p role="status" class="mt-4 text-sm text-slate-500">This administration form is not available yet.</p>
@@ -61,18 +73,61 @@
 
 @code {
     [Parameter] public int? StaffId { get; set; }
+    [Parameter] public string? Action { get; set; }
     private List<HRM.DTOs.Leave.LeaveApplicantJob> jobs = [];
     private HRM.Services.State.LeaveApplicationState state = new();
     private int jobId;
     private int? loadedStaffId;
     private bool loading;
     private string? error;
+
+    protected override void OnInitialized()
+    {
+        ResolveActionFromUri();
+    }
+
     protected override async Task OnParametersSetAsync()
     {
+        ResolveActionFromUri();
         if (StaffId == loadedStaffId) return;
         loadedStaffId = StaffId;
         await LoadAsync();
     }
+
+    private void ResolveActionFromUri()
+    {
+        if (!string.IsNullOrWhiteSpace(Action))
+        {
+            var matchedParam = Actions.FirstOrDefault(a => string.Equals(a.Title, Action, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(matchedParam.Title))
+            {
+                selected = matchedParam.Title;
+                return;
+            }
+        }
+
+        try
+        {
+            var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("action", out var actionVal))
+            {
+                var match = Actions.FirstOrDefault(a =>
+                    string.Equals(a.Title, actionVal, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Title.Replace(" ", "-"), actionVal, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Title.Replace(" ", ""), actionVal, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(match.Title))
+                {
+                    selected = match.Title;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore in test or non-standard URI contexts
+        }
+    }
+
     private async Task LoadAsync()
     {
         jobs = []; error = null;
@@ -93,12 +148,20 @@
         ApplicantJobId = jobId,
         Model = new HRM.DTOs.Leave.LeaveApplicationDto { JobId = jobId, FromDate = DateTime.UtcNow.AddHours(5).Date, Duration = 1 }
     };
-    private void SelectStaff(HRM.DTOs.WorkspaceSearchResult staff) =>
-        Navigation.NavigateTo($"/admin/my/workspace/staff/{staff.Id}/leave");
+    private void SelectStaff(HRM.DTOs.WorkspaceSearchResult staff)
+    {
+        var targetUrl = $"/admin/my/workspace/staff/{staff.Id}/leave";
+        if (selected == "Assign Leave Type")
+        {
+            targetUrl += "?action=assign-leave-type";
+        }
+        Navigation.NavigateTo(targetUrl);
+    }
     private string selected = "New Leave Application";
     private static readonly (string Title, string Description)[] Actions =
     [
         ("New Leave Application", "Apply for standard annual, casual, or special leave."),
+        ("Assign Leave Type", "Assign and manage leave entitlements for this staff member."),
         ("Sick Leave Lodge", "Submit medical certificates and lodge sick leave."),
         ("Family Leave Lodge", "Apply for maternity, paternity, or family responsibility leave.")
     ];
