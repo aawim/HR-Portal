@@ -8,13 +8,15 @@ using HRM.DTOs.AttendanceDeductions;
 using HRM.Models.AttendanceDeductions;
 using HRM.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/attendance-deductions")]
 public sealed class AttendanceDeductionController(
     IAttendanceDeductionService service,
-    IUserAccessService access) : HrmApiController
+    IUserAccessService access,
+    ILogger<AttendanceDeductionController> logger) : HrmApiController
 {
     private async Task<int> ResolveOrganisationIdAsync(int organisationId)
     {
@@ -37,10 +39,18 @@ public sealed class AttendanceDeductionController(
         [FromQuery] int organisationId = 0,
         [FromQuery] DateOnly? effectiveDate = null)
     {
-        var orgId = await ResolveOrganisationIdAsync(organisationId);
-        var date = effectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
-        var policy = await service.GetEffectivePolicyAsync(orgId, date);
-        return Ok(policy);
+        try
+        {
+            var orgId = await ResolveOrganisationIdAsync(organisationId);
+            var date = effectiveDate ?? DateOnly.FromDateTime(DateTime.UtcNow);
+            var policy = await service.GetEffectivePolicyAsync(orgId, date);
+            return Ok(policy);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load effective attendance deduction policy for OrganisationId={OrgId}", organisationId);
+            return StatusCode(500, new { message = ex.Message });
+        }
     }
 
     [HttpGet("policies")]
@@ -100,14 +110,22 @@ public sealed class AttendanceDeductionController(
         [FromQuery] string? verificationStatus = null,
         [FromQuery] string? payrollStatus = null)
     {
-        var orgId = await ResolveOrganisationIdAsync(organisationId);
-        var list = await service.GetAdjustmentsAsync(
-            orgId,
-            startDate,
-            endDate,
-            verificationStatus,
-            payrollStatus);
-        return Ok(list);
+        try
+        {
+            var orgId = await ResolveOrganisationIdAsync(organisationId);
+            var list = await service.GetAdjustmentsAsync(
+                orgId,
+                startDate,
+                endDate,
+                verificationStatus,
+                payrollStatus);
+            return Ok(list);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to load attendance adjustments for OrganisationId={OrgId}", organisationId);
+            return StatusCode(500, new { message = ex.Message });
+        }
     }
 
     [HttpPost("verify")]

@@ -407,15 +407,26 @@ public sealed class AttendanceDeductionService : IAttendanceDeductionService
             .Take(500)
             .ToListAsync();
 
+        if (rows.Count == 0)
+        {
+            return new List<AttendanceAdjustmentDto>();
+        }
+
         var indIds = rows.Select(r => r.IndividualId).Distinct().ToList();
-        var individuals = await db.Individuals.AsNoTracking()
-            .Where(i => indIds.Contains(i.BusinessEntityId))
-            .ToDictionaryAsync(i => i.BusinessEntityId, i => $"{i.FirstNameEnglish} {i.LastNameEnglish}".Trim());
+        var individuals = indIds.Count > 0
+            ? await db.Individuals.AsNoTracking()
+                .Where(i => indIds.Contains(i.BusinessEntityId))
+                .Select(i => new { i.BusinessEntityId, FullName = (i.FirstNameEnglish + " " + i.LastNameEnglish).Trim() })
+                .ToDictionaryAsync(i => i.BusinessEntityId, i => i.FullName)
+            : new Dictionary<int, string>();
 
         var userIds = rows.Where(r => r.VerifiedByUserId.HasValue).Select(r => r.VerifiedByUserId!.Value).Distinct().ToList();
-        var users = await db.Users.AsNoTracking()
-            .Where(u => userIds.Contains(u.UserId))
-            .ToDictionaryAsync(u => u.UserId, u => u.FullName ?? u.Username);
+        var users = userIds.Count > 0
+            ? await db.Users.AsNoTracking()
+                .Where(u => userIds.Contains(u.UserId))
+                .Select(u => new { u.UserId, FullName = u.FullName ?? u.Username })
+                .ToDictionaryAsync(u => u.UserId, u => u.FullName)
+            : new Dictionary<int, string>();
 
         return rows.Select(r => new AttendanceAdjustmentDto(
             AttendanceAdjustmentId: r.AttendanceAdjustmentId,
