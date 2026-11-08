@@ -150,6 +150,11 @@
                 @onclick="@(() => activeTab = "periods")">
             Periods &amp; Configurations
         </button>
+        <button type="button"
+                class="px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors @(activeTab == "attendance" ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100")"
+                @onclick="@(() => activeTab = "attendance")">
+            Attendance Deductions
+        </button>
     </div>
 
     <!-- TAB 1: RUNS & CALCULATION ENGINE -->
@@ -711,6 +716,12 @@
                 </div>
             </div>
         </div>
+    }
+
+    <!-- TAB 5: ATTENDANCE DEDUCTIONS -->
+    @if (activeTab == "attendance")
+    {
+        <AttendanceDeductionAdminPanel OrganisationId="@(selectedPeriod?.OrganisationId ?? 0)" />
     }
 
 </section>

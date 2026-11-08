@@ -193,7 +193,23 @@ public sealed record EmployeePayrollInputItem(
     List<InputOvertimeItem> OvertimeClaims,
     List<InputLeaveDeductionItem> UnpaidLeaves,
     List<InputDeductionAgreementItem> Deductions,
-    List<InputAdjustmentItem> Adjustments
+    List<InputAdjustmentItem> Adjustments,
+    List<InputAttendanceDeductionItem>? AttendanceDeductions = null
+);
+
+public sealed record InputAttendanceDeductionItem(
+    long AttendanceAdjustmentId,
+    string SourceReference,
+    DateOnly WorkDate,
+    string DeductionType,
+    int ScheduledMinutes,
+    int ActualMinutes,
+    int DeductibleMinutes,
+    decimal DeductionAmount,
+    bool AffectsBasicSalary,
+    bool AffectsServiceAllowance,
+    string PolicyCode,
+    string LegalReference
 );
 
 public sealed record InputAllowanceItem(

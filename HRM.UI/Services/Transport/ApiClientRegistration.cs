@@ -37,6 +37,19 @@ public static class ApiClientRegistration
         services.AddScoped<HRM.Services.Stores.LeaveStore>();
         services.AddScoped<HRM.Helpers.NavigationTrail>(p => new(p.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri));
         services.AddScoped<HRM.Services.PortalContext>();
+        services.AddScoped<HRM.UI.Services.AttendanceDeductions.AttendanceDeductionClient>(provider =>
+        {
+            var origins = provider.GetRequiredService<BackendOrigins>();
+            var handler = new CircuitBackendHandler(
+                provider.GetRequiredService<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider>(),
+                provider.GetRequiredService<BackendSessionStore>(),
+                provider.GetRequiredService<IHttpClientFactory>(),
+                origins,
+                provider.GetRequiredService<Microsoft.AspNetCore.DataProtection.IDataProtectionProvider>(),
+                provider.GetRequiredService<ILogger<BackendSession>>());
+            var client = new HttpClient(handler) { BaseAddress = origins.Api };
+            return new HRM.UI.Services.AttendanceDeductions.AttendanceDeductionClient(client);
+        });
         return services;
     }
 }

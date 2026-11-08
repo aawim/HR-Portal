@@ -127,6 +127,15 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .Where(adj => adj.OrganisationId == organisationId && jobIds.Contains(adj.JobId) && (adj.PayrollRunId == null || adj.PayrollRunId == payrollRunId))
             .ToListAsync();
 
+        // 9. Verified Attendance Deductions (Maldives Civil Service lateness, full-day absence, partial/early absence)
+        var attendanceAdjustments = await db.AttendanceAdjustments
+            .Where(a => a.OrganisationId == organisationId &&
+                        jobIds.Contains(a.JobId) &&
+                        a.WorkDate >= periodStart && a.WorkDate <= periodEnd &&
+                        a.VerificationStatus == "Verified" &&
+                        (a.PayrollProcessingStatus == "Pending" || a.PayrollRunId == payrollRunId))
+            .ToListAsync();
+
         var inputItems = new List<EmployeePayrollInputItem>();
         var snapshotsToSave = new List<PayrollInputSnapshot>();
 
@@ -229,6 +238,31 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 ));
             }
 
+            // Attendance Deductions
+            var empAttDeductions = new List<InputAttendanceDeductionItem>();
+            foreach (var att in attendanceAdjustments.Where(x => x.JobId == job.JobId))
+            {
+                bool isService = att.AdjustmentType == "FullDayAbsence_ServiceAllowance";
+                empAttDeductions.Add(new InputAttendanceDeductionItem(
+                    AttendanceAdjustmentId: att.AttendanceAdjustmentId,
+                    SourceReference: att.SourceAttendanceReference,
+                    WorkDate: att.WorkDate,
+                    DeductibleMinutes: att.DeductibleMinutes,
+                    ScheduledMinutes: att.ScheduledMinutes,
+                    ActualMinutes: att.ActualMinutes,
+                    DeductionType: att.AdjustmentType,
+                    DeductionAmount: att.EstimatedDeductionAmount,
+                    AffectsBasicSalary: !isService,
+                    AffectsServiceAllowance: isService,
+                    PolicyCode: att.PolicyCode,
+                    LegalReference: att.RegulatorySource
+                ));
+
+                att.PayrollProcessingStatus = "Ingested";
+                att.PayrollRunId = payrollRunId;
+                att.UpdatedAtUtc = DateTime.UtcNow;
+            }
+
             var inputItem = new EmployeePayrollInputItem(
                 JobId: job.JobId,
                 IndividualId: job.IndividualID,
@@ -250,7 +284,8 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 OvertimeClaims: empOt,
                 UnpaidLeaves: empLeaves,
                 Deductions: empDeductions,
-                Adjustments: empAdjustments
+                Adjustments: empAdjustments,
+                AttendanceDeductions: empAttDeductions
             );
 
             inputItems.Add(inputItem);

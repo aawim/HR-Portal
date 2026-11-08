@@ -173,8 +173,74 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         // Gross Earnings
         decimal grossEarnings = proratedBasic + totalAllowances + totalOvertime + totalAdditionAdjustments;
 
-        // 5. Deductions: Pension
-        decimal pensionBase = proratedBasic + pensionableAllowances;
+        // 4b. Deductions: Attendance Lateness & Absence Deductions (Civil Service Reg Art 149 & 160)
+        decimal totalAttendanceBasicDeductions = 0m;
+        decimal totalAttendanceServiceDeductions = 0m;
+        decimal totalAttendanceOtherDeductions = 0m;
+
+        if (input.AttendanceDeductions != null)
+        {
+            foreach (var att in input.AttendanceDeductions)
+            {
+                if (att.DeductionAmount <= 0) continue;
+
+                var compCode = att.DeductionType switch
+                {
+                    "LateArrival" => "DED_ATT_LATE",
+                    "FullDayAbsence" when att.AffectsServiceAllowance => "DED_ATT_ABSENCE_SERV",
+                    "FullDayAbsence_ServiceAllowance" => "DED_ATT_ABSENCE_SERV",
+                    "FullDayAbsence" => "DED_ATT_ABSENCE_BASIC",
+                    "PartialDayAbsence" => "DED_ATT_PARTIAL",
+                    "EarlyDeparture" => "DED_ATT_EARLY",
+                    _ => "DED_ATT_OTHER"
+                };
+
+                var compName = att.DeductionType switch
+                {
+                    "LateArrival" => $"Late Attendance Deduction ({att.DeductibleMinutes} mins on {att.WorkDate:dd MMM})",
+                    "FullDayAbsence" when att.AffectsServiceAllowance => $"Unauthorised Absence - Service Allowance ({att.WorkDate:dd MMM})",
+                    "FullDayAbsence" => $"Unauthorised Absence - Basic Salary ({att.WorkDate:dd MMM})",
+                    "PartialDayAbsence" => $"Partial-Day Absence ({att.DeductibleMinutes} mins on {att.WorkDate:dd MMM})",
+                    "EarlyDeparture" => $"Early Departure ({att.DeductibleMinutes} mins on {att.WorkDate:dd MMM})",
+                    _ => $"Attendance Deduction ({att.WorkDate:dd MMM})"
+                };
+
+                var compType = att.DeductionType == "LateArrival"
+                    ? SalaryComponentType.AttendanceLatenessDeduction
+                    : SalaryComponentType.AttendanceAbsenceDeduction;
+
+                lines.Add(new PayrollLineDto(
+                    0,
+                    0,
+                    compCode,
+                    compName,
+                    compType,
+                    att.DeductionAmount,
+                    1.0m,
+                    att.DeductionAmount,
+                    IsTaxable: false,
+                    IsPensionable: att.AffectsBasicSalary,
+                    SourceReference: $"{att.SourceReference} ({att.PolicyCode})"
+                ));
+
+                if (att.AffectsBasicSalary)
+                {
+                    totalAttendanceBasicDeductions += att.DeductionAmount;
+                }
+                else if (att.AffectsServiceAllowance)
+                {
+                    totalAttendanceServiceDeductions += att.DeductionAmount;
+                }
+                else
+                {
+                    totalAttendanceOtherDeductions += att.DeductionAmount;
+                }
+            }
+        }
+
+        // 5. Deductions: Pension (Maldives Pension Office Reg 2021/R-27: Qualifying basic attendance deductions reduce pensionable base)
+        decimal adjustedBasicSalary = Math.Max(0m, proratedBasic - totalAttendanceBasicDeductions);
+        decimal pensionBase = adjustedBasicSalary + pensionableAllowances;
         decimal employeePension = decimal.Round(pensionBase * employeePensionRate, 2, MidpointRounding.AwayFromZero);
         decimal employerPension = decimal.Round(pensionBase * employerPensionRate, 2, MidpointRounding.AwayFromZero);
 
@@ -278,8 +344,9 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         }
 
         // 9. Withholding Tax (Income Tax)
-        // Taxable base = Taxable earnings - Employee Pension
-        decimal taxableBase = proratedBasic + taxableAllowances + totalOvertime + totalAdditionAdjustments - employeePension;
+        // Taxable base = Taxable earnings (net of qualifying attendance deductions) - Employee Pension
+        decimal totalAttendanceDeductions = totalAttendanceBasicDeductions + totalAttendanceServiceDeductions + totalAttendanceOtherDeductions;
+        decimal taxableBase = Math.Max(0m, (proratedBasic - totalAttendanceBasicDeductions) + (taxableAllowances - totalAttendanceServiceDeductions) + totalOvertime + totalAdditionAdjustments - employeePension);
         decimal employeeTax = 0m;
         if (taxableBase > taxThreshold)
         {
@@ -300,7 +367,7 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
             ));
         }
 
-        decimal totalEmployeeDeductions = employeePension + employeeTax + totalUnpaidLeaveDeductions + totalAgreementDeductions + totalDeductionAdjustments;
+        decimal totalEmployeeDeductions = employeePension + employeeTax + totalUnpaidLeaveDeductions + totalAgreementDeductions + totalDeductionAdjustments + totalAttendanceDeductions;
         decimal netSalary = grossEarnings - totalEmployeeDeductions;
 
         if (netSalary < 0)

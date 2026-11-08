@@ -67,7 +67,9 @@ public enum SalaryComponentType
     LoanDeduction = 13,
     OtherDeduction = 14,
     EmployerPension = 15,
-    EmployerStatutory = 16
+    EmployerStatutory = 16,
+    AttendanceLatenessDeduction = 17,
+    AttendanceAbsenceDeduction = 18
 }
 
 public enum CalculationMethodType

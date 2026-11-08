@@ -257,6 +257,9 @@ public static class BackendServiceRegistration
         services.AddScoped<HRM.Application.Features.Payroll.IPayslipService, HRM.Services.Payroll.PayslipService>();
         services.AddScoped<HRM.Application.Contracts.Pages.IEnterprisePayroll, HRM.Services.Payroll.EnterprisePayrollService>();
 
+        // Attendance Deduction Service (Maldives Civil Service Regulation & Payroll Integration)
+        services.AddScoped<HRM.Services.Interfaces.IAttendanceDeductionService, HRM.Services.Attendance.Deductions.AttendanceDeductionService>();
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 
