@@ -51,6 +51,8 @@ public static class BackendServiceRegistration
         services.AddHttpContextAccessor();
         services.AddScoped<Microsoft.AspNetCore.Components.Authorization.AuthenticationStateProvider, HRM.Api.Authentication.ApiAuthenticationStateProvider>();
         services.AddScoped<Microsoft.AspNetCore.Components.NavigationManager, HRM.Api.Authentication.ApiNavigationManager>();
+        services.AddScoped<HRM.Application.Interfaces.Budget.IBudgetService, HRM.Services.BudgetService>();
+        services.AddScoped<HRM.Services.BudgetService>();
         services.AddScoped<WorkingHoursSettingsService>();
         services.AddScoped<JobTypeOvertimeSettingsService>();
         services.AddScoped<ScopeScheduleSettingsService>();

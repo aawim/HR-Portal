@@ -5,10 +5,22 @@ using HRM.Models.LeaveTypes;
 using HRM.Models.Workflow;
 using HRM.Models.WorkPlanning;
 using Microsoft.EntityFrameworkCore;
+using HRM.Models.Budget;
 namespace HRM.Models;
 
 public partial class HrmTeContext : DbContext
 {
+    public virtual DbSet<FiscalYear> FiscalYears { get; set; }
+    public virtual DbSet<BudgetCategory> BudgetCategories { get; set; }
+    public virtual DbSet<BudgetItem> BudgetItems { get; set; }
+    public virtual DbSet<BudgetTransactionType> BudgetTransactionTypes { get; set; }
+    public virtual DbSet<BudgetAllocation> BudgetAllocations { get; set; }
+    public virtual DbSet<BudgetVirement> BudgetVirements { get; set; }
+    public virtual DbSet<BudgetCommitment> BudgetCommitments { get; set; }
+    public virtual DbSet<BudgetTransaction> BudgetTransactions { get; set; }
+    public virtual DbSet<PayrollBudgetMapping> PayrollBudgetMappings { get; set; }
+    public virtual DbSet<BudgetAuditEvent> BudgetAuditEvents { get; set; }
+
     public DbSet<RequestNotification> RequestNotifications => Set<RequestNotification>();
     public DbSet<JobTypeLeaveAccrualRule> JobTypeLeaveAccrualRules => Set<JobTypeLeaveAccrualRule>();
     public DbSet<LeaveAccrualPosting> LeaveAccrualPostings => Set<LeaveAccrualPosting>();

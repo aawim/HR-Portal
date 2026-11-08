@@ -160,41 +160,34 @@
     private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
     {
         "overview" => new() {
-            new("Search", "🔍", "Find existing individual profiles in the system.", typeof(IndividualSearchGrid)),
-            new("Add New", "➕", "Register a new individual profile.", null),
-    },
+            new("Budget Overview", "📊", "High-level summary of budget allocations, personal emoluments, and remaining balances.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel)),
+            new("Allocations Config", "🏛️", "Annual approved appropriations, line ceilings, and Bandeyri references.", typeof(HRM.Components.Admin.Budget.BudgetAllocationsPanel))
+        },
 
         "transactions" => new() {
-            new("Search", "🔍", "Find registered organisations and units.", null),
-            new("Structure", "🏗️", "Manage hierarchy, departments, and reporting lines.", null),
-            new("Add New", "🏢", "Register a new organisation or department.", null)
-    },
+            new("Ledger Entries", "🧾", "Double-entry budget transaction ledger with Bandeyri authority tracking.", typeof(HRM.Components.Admin.Budget.BudgetTransactionsPanel)),
+            new("Virements & Transfers", "🔄", "Statutory budget transfers and re-appropriations under Section 5.", typeof(HRM.Components.Admin.Budget.BudgetVirementsPanel))
+        },
 
         "import" => new() {
-            new("Search", "🔍", "Find active and past employee records.", null),
-            new("Add New Job", "💼", "Assign a new job role or contract to an individual.", null),
-            new("Manage Key Holders", "🔑", "Assign and track physical or system access keys.", null),
-            new("Fetch From CSC Viuga", "🔄", "Sync and import employee data directly from the CSC network.", null),
-            new("Employee Bulk Upload", "📤", "Import multiple employee records using a spreadsheet.", null)
-    },
+            new("Payroll Bridge", "🔗", "Pre-payroll budget encumbrance check and MoF COA component mappings.", typeof(HRM.Components.Admin.Budget.PayrollBudgetBridgePanel)),
+            new("Allocations", "🏛️", "Appropriation ceilings and Ministry of Finance warrants.", typeof(HRM.Components.Admin.Budget.BudgetAllocationsPanel))
+        },
 
         "reports" => new() {
-            new("Manage Groups", "👥", "Create and manage committees, teams, or operational groups.", null),
-            new("Manage Group Types", "🏷️", "Define categories and permissions for different group types.", null),
-    },
+            new("Execution Statement", "📄", "Official budget execution and payroll reconciliation PDF & CSV exports.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel)),
+            new("Transaction Ledger", "🧾", "Complete transaction audit ledger with Bandeyri references.", typeof(HRM.Components.Admin.Budget.BudgetTransactionsPanel))
+        },
 
         "manage" => new() {
-            new("Staff Fetch", "🔄", "Synchronize staff data with the central Civil Service database.", null),
-            new("Classifications", "🗂️", "Map and manage official Civil Service classifications.", null),
-            new("Designations", "🎖️", "Manage official job titles and rank designations.", null),
-            new("Job Types", "📝", "Define employment types (e.g., Permanent, Contract, Wage).", null),
-            new("Offices", "🏛️", "Sync official government office locations and details.", null)
-    },
- 
+            new("Allocations Config", "🏛️", "Annual approved appropriations, line ceilings, and Bandeyri references.", typeof(HRM.Components.Admin.Budget.BudgetAllocationsPanel)),
+            new("Payroll Bridge", "🔗", "Pre-payroll budget encumbrance check and MoF COA component mappings.", typeof(HRM.Components.Admin.Budget.PayrollBudgetBridgePanel)),
+            new("Virements & Transfers", "🔄", "Statutory budget transfers and re-appropriations under Section 5.", typeof(HRM.Components.Admin.Budget.BudgetVirementsPanel))
+        },
 
         _ => new() {
-        new("General Configuration", "🔧", "System-level management and core settings.", null)
-    }
+            new("Budget Overview", "📊", "System-level budget management and core settings.", typeof(HRM.Components.Admin.Budget.BudgetOverviewPanel))
+        }
     };
 
     // --- Authentication and Service Logic ---

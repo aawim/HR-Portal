@@ -1,0 +1,227 @@
+@using System.IO
+@using HRM.Application.DTOs.Budget
+@using HRM.Application.Interfaces.Budget
+@using HRM.Services.Exports
+@using Microsoft.JSInterop
+@inject IBudgetService BudgetService
+@inject IJSRuntime JS
+
+<section class="budget-overview w-full min-w-0 p-2 space-y-4">
+    <!-- Sticky Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-xl shadow-xs">
+                📊
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800 leading-tight">State Budget Execution &amp; Personal Emoluments</h1>
+                <p class="text-xs text-slate-500">Maldives Public Finance Act (Law No. 3/2006) &amp; MoF Bandeyri Reconciled</p>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                    @onclick="ExportCsvAsync"
+                    disabled="@isExporting">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>Export MoF CSV</span>
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                    @onclick="ExportPdfAsync"
+                    disabled="@isExporting">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                <span>Export Official PDF</span>
+            </button>
+        </div>
+    </header>
+
+    @if (isLoading)
+    {
+        <div class="flex items-center justify-center p-12 text-slate-400">
+            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path></svg>
+            <span>Loading budget ledger data...</span>
+        </div>
+    }
+    else if (summary != null)
+    {
+        <!-- Executive KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs flex flex-col gap-1">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Approved Budget</span>
+                <span class="text-xl font-extrabold text-slate-800">MVR @summary.TotalApprovedBudget.ToString("N2")</span>
+                <span class="text-[11px] text-slate-400">Appropriated via People's Majlis</span>
+            </div>
+
+            <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs flex flex-col gap-1">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Revised Budget (Net Virements)</span>
+                <span class="text-xl font-extrabold text-blue-700">MVR @summary.TotalRevisedBudget.ToString("N2")</span>
+                <span class="text-[11px] text-blue-500">Net: @((summary.TotalVirementsIn - summary.TotalVirementsOut) >= 0 ? $"+{summary.TotalVirementsIn - summary.TotalVirementsOut:N2}" : $"{summary.TotalVirementsIn - summary.TotalVirementsOut:N2}") MVR</span>
+            </div>
+
+            <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs flex flex-col gap-1">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Expended (Personal Emoluments)</span>
+                <span class="text-xl font-extrabold text-emerald-700">MVR @summary.TotalExpended.ToString("N2")</span>
+                <div class="flex items-center gap-2 mt-1">
+                    <div class="flex-grow bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                        <div class="bg-emerald-500 h-1.5 rounded-full" style="width: @Math.Min(100, summary.OverallBurnRatePercentage)%"></div>
+                    </div>
+                    <span class="text-[11px] font-bold text-slate-600">@summary.OverallBurnRatePercentage%</span>
+                </div>
+            </div>
+
+            <div class="p-4 rounded-xl border border-slate-200 bg-white shadow-xs flex flex-col gap-1">
+                <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">Available Unencumbered Balance</span>
+                <span class="text-xl font-extrabold @(summary.TotalAvailableBalance < 0 ? "text-rose-600" : "text-slate-800")">
+                    MVR @summary.TotalAvailableBalance.ToString("N2")
+                </span>
+                <span class="text-[11px] text-slate-400">Committed: MVR @summary.TotalCommitted.ToString("N2")</span>
+            </div>
+        </div>
+
+        <!-- Breakdown Table Card -->
+        <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-800">Ministry of Finance Economic Classification (Chapter 21 Emoluments)</h3>
+                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                    Fiscal Year @summary.FiscalYear
+                </span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                            <th class="px-3 py-2.5">MoF Code</th>
+                            <th class="px-3 py-2.5">Economic Line Item</th>
+                            <th class="px-3 py-2.5 text-right">Approved (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Net Virement</th>
+                            <th class="px-3 py-2.5 text-right">Revised (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Committed</th>
+                            <th class="px-3 py-2.5 text-right">Expended (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Available (MVR)</th>
+                            <th class="px-3 py-2.5 text-center">% Util</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach (var row in summary.Allocations)
+                        {
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-3 py-2.5 font-mono font-semibold text-slate-700">@row.EconomicCode</td>
+                                <td class="px-3 py-2.5">
+                                    <div class="font-semibold text-slate-800">@row.DhivehiName</div>
+                                    @if (!string.IsNullOrWhiteSpace(row.EnglishName))
+                                    {
+                                        <div class="text-[11px] text-slate-400">@row.EnglishName</div>
+                                    }
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono text-slate-700">@row.ApprovedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono @(row.NetVirement >= 0 ? "text-blue-600" : "text-amber-600")">
+                                    @(row.NetVirement >= 0 ? $"+{row.NetVirement:N2}" : row.NetVirement.ToString("N2"))
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono font-semibold text-slate-800">@row.CurrentBudget.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-amber-700">@row.CommittedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-emerald-700 font-semibold">@row.ExpendedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold @(row.AvailableBalance < 0 ? "text-rose-600" : "text-slate-800")">
+                                    @row.AvailableBalance.ToString("N2")
+                                </td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold @(row.UtilizationPercentage >= 90 ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700")">
+                                        @row.UtilizationPercentage%
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-slate-100/80 font-bold border-t border-slate-300 text-slate-800">
+                            <td class="px-3 py-2.5 text-center" colspan="2">TOTAL</td>
+                            <td class="px-3 py-2.5 text-right font-mono">@summary.TotalApprovedBudget.ToString("N2")</td>
+                            <td class="px-3 py-2.5 text-right font-mono">@((summary.TotalVirementsIn - summary.TotalVirementsOut) >= 0 ? $"+{summary.TotalVirementsIn - summary.TotalVirementsOut:N2}" : $"{summary.TotalVirementsIn - summary.TotalVirementsOut:N2}")</td>
+                            <td class="px-3 py-2.5 text-right font-mono">@summary.TotalRevisedBudget.ToString("N2")</td>
+                            <td class="px-3 py-2.5 text-right font-mono">@summary.TotalCommitted.ToString("N2")</td>
+                            <td class="px-3 py-2.5 text-right font-mono text-emerald-800">@summary.TotalExpended.ToString("N2")</td>
+                            <td class="px-3 py-2.5 text-right font-mono text-blue-900">@summary.TotalAvailableBalance.ToString("N2")</td>
+                            <td class="px-3 py-2.5 text-center">@summary.OverallBurnRatePercentage%</td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private BudgetSummaryDto? summary;
+    private bool isLoading = true;
+    private bool isExporting = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSummaryAsync();
+    }
+
+    private async Task LoadSummaryAsync()
+    {
+        isLoading = true;
+        try
+        {
+            summary = await BudgetService.GetBudgetSummaryAsync(2026, 3);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading budget: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (summary == null || isExporting) return;
+        isExporting = true;
+        try
+        {
+            var bytes = await BudgetService.ExportBudgetCsvAsync(summary.FiscalYear, 3);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(bytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"Maldives_Budget_Execution_{summary.FiscalYear}.csv", "text/csv;charset=utf-8", reference);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"CSV export error: {ex.Message}");
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        if (summary == null || isExporting) return;
+        isExporting = true;
+        try
+        {
+            var bytes = BudgetPdfGenerator.GenerateBudgetExecutionPdf(summary);
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(bytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"Maldives_State_Budget_Execution_{summary.FiscalYear}.pdf", "application/pdf", reference);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"PDF export error: {ex.Message}");
+        }
+        finally
+        {
+            isExporting = false;
+        }
+    }
+}

@@ -1,0 +1,107 @@
+@using HRM.Application.DTOs.Budget
+@using HRM.Application.Interfaces.Budget
+@inject IBudgetService BudgetService
+
+<section class="budget-allocations w-full min-w-0 p-2 space-y-4">
+    <!-- Sticky Header -->
+    <header class="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-4 py-3 shadow-xs rounded-xl flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-xl shadow-xs">
+                ⚙️
+            </div>
+            <div>
+                <h1 class="text-lg font-bold text-slate-800 leading-tight">Budget Allocation &amp; Appropriations Configurator</h1>
+                <p class="text-xs text-slate-500">Authorized State Budget Line Ceilings &amp; Bandeyri Gazette Warrants</p>
+            </div>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-xs flex items-center justify-between">
+            <span>@errorMessage</span>
+            <button type="button" @onclick="() => errorMessage = null" class="text-amber-500 hover:text-amber-700 font-bold">&times;</button>
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="p-8 text-center text-slate-400">Loading budget allocations...</div>
+    }
+    else
+    {
+        <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
+                <h3 class="text-sm font-bold text-slate-800">Organisation Budget Allocations — Fiscal Year 2026</h3>
+                <span class="text-xs font-mono text-slate-500">Active Organisation: National Centre for Information Technology</span>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-50/80 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[11px]">
+                            <th class="px-3 py-2.5">MoF Code</th>
+                            <th class="px-3 py-2.5">Economic Classification</th>
+                            <th class="px-3 py-2.5 text-right">Approved Amount (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Revised Amount (MVR)</th>
+                            <th class="px-3 py-2.5 text-right">Committed</th>
+                            <th class="px-3 py-2.5 text-right">Expended</th>
+                            <th class="px-3 py-2.5 text-right">Available</th>
+                            <th class="px-3 py-2.5">MoF Approval Reference</th>
+                            <th class="px-3 py-2.5 text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @foreach (var a in allocations)
+                        {
+                            <tr class="hover:bg-slate-50/80 transition-colors">
+                                <td class="px-3 py-2.5 font-mono font-bold text-slate-700">@a.EconomicCode</td>
+                                <td class="px-3 py-2.5">
+                                    <div class="font-semibold text-slate-800">@a.DhivehiName</div>
+                                    <div class="text-[10px] text-slate-400">@a.EnglishName</div>
+                                </td>
+                                <td class="px-3 py-2.5 text-right font-mono text-slate-800 font-semibold">@a.ApprovedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-blue-700 font-semibold">@a.CurrentBudget.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-amber-700">@a.CommittedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono text-emerald-700 font-semibold">@a.ExpendedAmount.ToString("N2")</td>
+                                <td class="px-3 py-2.5 text-right font-mono font-bold @(a.AvailableBalance < 0 ? "text-rose-600" : "text-slate-800")">
+                                    @a.AvailableBalance.ToString("N2")
+                                </td>
+                                <td class="px-3 py-2.5 font-mono text-slate-600">@(a.MoFApprovalReference ?? "MOF/2026/BUD-0042")</td>
+                                <td class="px-3 py-2.5 text-center">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-100 text-blue-800">
+                                        @a.Status
+                                    </span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private List<BudgetAllocationDto> allocations = new();
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            allocations = await BudgetService.GetAllocationsAsync(2026, 3);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "Unable to load allocations: " + ex.Message;
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
