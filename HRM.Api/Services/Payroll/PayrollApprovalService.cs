@@ -114,6 +114,16 @@ public sealed class PayrollApprovalService : IPayrollApprovalService
         run.FinalisedByUserId = userId;
         run.FinalisedAtUtc = DateTime.UtcNow;
 
+        var attendanceAdjustments = await db.AttendanceAdjustments
+            .Where(a => a.PayrollRunId == payrollRunId && a.OrganisationId == organisationId &&
+                        (a.PayrollProcessingStatus == "Ingested" || a.PayrollProcessingStatus == "Calculated"))
+            .ToListAsync();
+        foreach (var adjustment in attendanceAdjustments)
+        {
+            adjustment.PayrollProcessingStatus = "Locked";
+            adjustment.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
         db.PayrollAuditEvents.Add(new PayrollAuditEvent
         {
             OrganisationId = organisationId,
@@ -145,6 +155,17 @@ public sealed class PayrollApprovalService : IPayrollApprovalService
         var oldState = run.Status.ToString();
         run.Status = PayrollRunStatus.ValidationFailed;
         run.Description = $"Rejected: {reason}";
+
+        var attendanceAdjustments = await db.AttendanceAdjustments
+            .Where(a => a.PayrollRunId == payrollRunId && a.OrganisationId == organisationId &&
+                        (a.PayrollProcessingStatus == "Ingested" || a.PayrollProcessingStatus == "Calculated"))
+            .ToListAsync();
+        foreach (var adjustment in attendanceAdjustments)
+        {
+            adjustment.PayrollProcessingStatus = "Pending";
+            adjustment.PayrollRunId = null;
+            adjustment.UpdatedAtUtc = DateTime.UtcNow;
+        }
 
         db.PayrollAuditEvents.Add(new PayrollAuditEvent
         {

@@ -13,6 +13,7 @@ using Microsoft.Extensions.Logging;
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/attendance-deductions")]
+[ApiPermission("Attendance.View")]
 public sealed class AttendanceDeductionController(
     IAttendanceDeductionService service,
     IUserAccessService access,
@@ -20,19 +21,17 @@ public sealed class AttendanceDeductionController(
 {
     private async Task<int> ResolveOrganisationIdAsync(int organisationId)
     {
-        if (organisationId > 0) return organisationId;
-        try
-        {
-            var currentOrg = await access.GetCurrentOrganisationIdAsync();
-            if (currentOrg > 0) return currentOrg;
-        }
-        catch { }
-
-        var context = await access.GetContextAsync();
-        return context?.Organisation?.OrganisationBusinessEntityId
-            ?? context?.ActiveJob?.OrganisationId
-            ?? 1;
+        var context = await access.RequireContextAsync();
+        var currentOrg = context.Organisation?.OrganisationBusinessEntityId
+            ?? context.ActiveJob?.OrganisationId
+            ?? await access.GetCurrentOrganisationIdAsync();
+        if (currentOrg <= 0) throw new UnauthorizedAccessException("An active organisation is required.");
+        if (organisationId <= 0 || organisationId == currentOrg) return currentOrg;
+        if (context.IsSuperAdministrator || await access.HasPermissionAsync("Admin")) return organisationId;
+        throw new UnauthorizedAccessException("The requested organisation is outside your active organisation scope.");
     }
+
+    private async Task<int> CurrentUserIdAsync() => (await access.RequireContextAsync()).UserId;
 
     [HttpGet("policy")]
     public async Task<ActionResult<AttendanceDeductionPolicy>> GetEffectivePolicy(
@@ -62,16 +61,18 @@ public sealed class AttendanceDeductionController(
     }
 
     [HttpPost("save-policy")]
+    [ApiPermission("Payroll.Configure", "Attendance.Approve")]
     public async Task<ActionResult<ServiceResult>> SavePolicy(
         [FromBody] SavePolicyRequest request)
     {
         var orgId = await ResolveOrganisationIdAsync(request.Policy.OrganisationId);
         request.Policy.OrganisationId = orgId;
-        var result = await service.SavePolicyAsync(request.Policy, request.UserId);
+        var result = await service.SavePolicyAsync(request.Policy, await CurrentUserIdAsync());
         return Ok(result);
     }
 
     [HttpPost("evaluate-day")]
+    [ApiPermission("Attendance.Approve")]
     public async Task<ActionResult<AttendanceAdjustment?>> EvaluateDay(
         [FromBody] EvaluateDayRequest request,
         CancellationToken ct = default)
@@ -87,6 +88,7 @@ public sealed class AttendanceDeductionController(
     }
 
     [HttpPost("evaluate-range")]
+    [ApiPermission("Attendance.Approve")]
     public async Task<ActionResult<List<AttendanceAdjustment>>> EvaluateRange(
         [FromBody] EvaluateRangeRequest request,
         CancellationToken ct = default)
@@ -129,23 +131,26 @@ public sealed class AttendanceDeductionController(
     }
 
     [HttpPost("verify")]
+    [ApiPermission("Attendance.Approve")]
     public async Task<ActionResult<ServiceResult>> Verify([FromBody] ActionAdjustmentRequest request)
     {
-        var result = await service.VerifyAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
+        var result = await service.VerifyAdjustmentAsync(request.AdjustmentId, await CurrentUserIdAsync(), request.Note ?? string.Empty);
         return Ok(result);
     }
 
     [HttpPost("excuse")]
+    [ApiPermission("Attendance.Approve")]
     public async Task<ActionResult<ServiceResult>> Excuse([FromBody] ActionAdjustmentRequest request)
     {
-        var result = await service.ExcuseAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
+        var result = await service.ExcuseAdjustmentAsync(request.AdjustmentId, await CurrentUserIdAsync(), request.Note ?? string.Empty);
         return Ok(result);
     }
 
     [HttpPost("reject")]
+    [ApiPermission("Attendance.Approve")]
     public async Task<ActionResult<ServiceResult>> Reject([FromBody] ActionAdjustmentRequest request)
     {
-        var result = await service.RejectAdjustmentAsync(request.AdjustmentId, request.UserId, request.Note ?? string.Empty);
+        var result = await service.RejectAdjustmentAsync(request.AdjustmentId, await CurrentUserIdAsync(), request.Note ?? string.Empty);
         return Ok(result);
     }
 

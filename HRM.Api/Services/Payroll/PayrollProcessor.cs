@@ -142,6 +142,15 @@ public sealed class PayrollProcessor : IPayrollProcessor
             run.TotalEmployerContributions = calculatedEmployees.Sum(e => e.EmployerContributions);
             run.TotalNetPayable = calculatedEmployees.Sum(e => e.NetSalary);
 
+            var attendanceAdjustments = await db.AttendanceAdjustments
+                .Where(a => a.PayrollRunId == payrollRunId && a.OrganisationId == organisationId && a.PayrollProcessingStatus == "Ingested")
+                .ToListAsync(cancellationToken);
+            foreach (var adjustment in attendanceAdjustments)
+            {
+                adjustment.PayrollProcessingStatus = "Calculated";
+                adjustment.UpdatedAtUtc = DateTime.UtcNow;
+            }
+
             bool hasErrors = await db.PayrollExceptions.AnyAsync(e => e.PayrollRunId == payrollRunId && e.Severity == PayrollIssueSeverity.Blocking, cancellationToken);
             run.Status = hasErrors ? PayrollRunStatus.ValidationFailed : PayrollRunStatus.Calculated;
 
@@ -210,11 +219,8 @@ public sealed class PayrollProcessor : IPayrollProcessor
 
         var eePensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_EE");
         var erPensionRule = rules.FirstOrDefault(r => r.RuleCode == "PENSION_ER");
-        var otRule = rules.FirstOrDefault(r => r.RuleCode == "OT_STANDARD");
-
         decimal eePensionRate = eePensionRule != null && eePensionRule.PercentageValue >= 0 ? eePensionRule.PercentageValue / 100m : 0.07m;
         decimal erPensionRate = erPensionRule != null && erPensionRule.PercentageValue >= 0 ? erPensionRule.PercentageValue / 100m : 0.07m;
-        decimal otMultiplier = otRule != null && otRule.PercentageValue > 0 ? otRule.PercentageValue : 1.50m;
 
         try
         {
@@ -230,9 +236,8 @@ public sealed class PayrollProcessor : IPayrollProcessor
                     empInput,
                     run.PayrollPeriod!.PeriodStartDate,
                     run.PayrollPeriod.PeriodEndDate,
-                    eePensionRate,
-                    erPensionRate,
-                    otMultiplier
+                    employeePensionRate: eePensionRate,
+                    employerPensionRate: erPensionRate
                 );
 
                 var empEntity = new PayrollEmployee

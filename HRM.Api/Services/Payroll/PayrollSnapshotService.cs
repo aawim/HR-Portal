@@ -101,11 +101,22 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             .Where(t => t.OrganisationId == organisationId)
             .ToDictionaryAsync(t => t.Id, t => t.Name);
 
+        var overtimeMultiplier = await db.CalculationRules.AsNoTracking()
+            .Where(r => r.OrganisationId == organisationId && r.IsActive && r.RuleCode == "OT_STANDARD" &&
+                        r.EffectiveFrom <= periodEnd && (!r.EffectiveTo.HasValue || r.EffectiveTo.Value >= periodStart))
+            .OrderByDescending(r => r.EffectiveFrom)
+            .Select(r => (decimal?)r.PercentageValue)
+            .FirstOrDefaultAsync() ?? 1.50m;
+        if (overtimeMultiplier <= 0) overtimeMultiplier = 1.50m;
+
         // 5. Approved Overtime
         var overtimeClaims = await db.OvertimeRequests
             .AsNoTracking()
             .Include(o => o.Request)
-            .Where(o => o.OrganisationId == organisationId && jobIds.Contains(o.JobId) && o.Request.RequestStateId == 4 && !o.PaidAtUtc.HasValue)
+            .Where(o => o.OrganisationId == organisationId && jobIds.Contains(o.JobId) &&
+                        o.Request.RequestStateId == 4 && !o.PaidAtUtc.HasValue &&
+                        o.WorkDate >= periodStartDt && o.WorkDate <= periodEndDt &&
+                        !db.OvertimePayrollItems.Any(i => i.RequestId == o.RequestId))
             .ToListAsync();
 
         // 6. Unpaid Leave
@@ -120,6 +131,14 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                                  join a in db.DeductionAgreements.AsNoTracking() on i.AgreementId equals a.Id
                                  where a.OrganisationId == organisationId && jobIds.Contains(a.JobId) && !i.IsSuperseded && i.DueDate <= periodEndDt
                                  select new { Instalment = i, Agreement = a }).ToListAsync();
+        var instalmentIds = instalments.Select(x => x.Instalment.Id).ToList();
+        var allocatedAmounts = instalmentIds.Count == 0
+            ? new Dictionary<long, decimal>()
+            : await db.DeductionPaymentAllocations.AsNoTracking()
+                .Where(x => instalmentIds.Contains(x.InstalmentId))
+                .GroupBy(x => x.InstalmentId)
+                .Select(g => new { InstalmentId = g.Key, Amount = g.Sum(x => x.Amount) })
+                .ToDictionaryAsync(x => x.InstalmentId, x => x.Amount);
 
         // 8. Adjustments
         var adjustments = await db.PayrollAdjustments
@@ -178,7 +197,7 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             var empOt = new List<InputOvertimeItem>();
             foreach (var ot in overtimeClaims.Where(x => x.JobId == job.JobId))
             {
-                decimal hourlyRate = basicSalary > 0 ? (basicSalary / 160m) * 1.5m : 0m;
+                decimal hourlyRate = basicSalary > 0 ? (basicSalary / 160m) * overtimeMultiplier : 0m;
                 decimal otAmount = decimal.Round(hourlyRate * ((decimal)ot.Minutes / 60m), 2, MidpointRounding.AwayFromZero);
                 empOt.Add(new InputOvertimeItem(
                     RequestId: ot.RequestId,
@@ -216,12 +235,14 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             var empDeductions = new List<InputDeductionAgreementItem>();
             foreach (var inst in instalments.Where(x => x.Agreement.JobId == job.JobId))
             {
+                var outstanding = inst.Instalment.Amount - allocatedAmounts.GetValueOrDefault(inst.Instalment.Id);
+                if (outstanding <= 0) continue;
                 empDeductions.Add(new InputDeductionAgreementItem(
                     InstalmentId: inst.Instalment.Id,
                     AgreementId: inst.Agreement.Id,
                     Reference: inst.Agreement.Reference,
                     Category: inst.Agreement.Category,
-                    DueAmount: inst.Instalment.Amount
+                    DueAmount: outstanding
                 ));
             }
 
@@ -242,21 +263,38 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
             var empAttDeductions = new List<InputAttendanceDeductionItem>();
             foreach (var att in attendanceAdjustments.Where(x => x.JobId == job.JobId))
             {
-                bool isService = att.AdjustmentType == "FullDayAbsence_ServiceAllowance";
-                empAttDeductions.Add(new InputAttendanceDeductionItem(
-                    AttendanceAdjustmentId: att.AttendanceAdjustmentId,
-                    SourceReference: att.SourceAttendanceReference,
-                    WorkDate: att.WorkDate,
-                    DeductibleMinutes: att.DeductibleMinutes,
-                    ScheduledMinutes: att.ScheduledMinutes,
-                    ActualMinutes: att.ActualMinutes,
-                    DeductionType: att.AdjustmentType,
-                    DeductionAmount: att.EstimatedDeductionAmount,
-                    AffectsBasicSalary: !isService,
-                    AffectsServiceAllowance: isService,
-                    PolicyCode: att.PolicyCode,
-                    LegalReference: att.RegulatorySource
-                ));
+                if (att.BasicSalaryDeductionAmount > 0)
+                {
+                    empAttDeductions.Add(new InputAttendanceDeductionItem(
+                        AttendanceAdjustmentId: att.AttendanceAdjustmentId,
+                        SourceReference: att.SourceAttendanceReference,
+                        WorkDate: att.WorkDate,
+                        DeductibleMinutes: att.DeductibleMinutes,
+                        ScheduledMinutes: att.ScheduledMinutes,
+                        ActualMinutes: att.ActualMinutes,
+                        DeductionType: att.AdjustmentType,
+                        DeductionAmount: att.BasicSalaryDeductionAmount,
+                        AffectsBasicSalary: true,
+                        AffectsServiceAllowance: false,
+                        PolicyCode: att.PolicyCode,
+                        LegalReference: att.RegulatorySource));
+                }
+                if (att.ServiceAllowanceDeductionAmount > 0)
+                {
+                    empAttDeductions.Add(new InputAttendanceDeductionItem(
+                        AttendanceAdjustmentId: att.AttendanceAdjustmentId,
+                        SourceReference: att.SourceAttendanceReference,
+                        WorkDate: att.WorkDate,
+                        DeductibleMinutes: att.DeductibleMinutes,
+                        ScheduledMinutes: att.ScheduledMinutes,
+                        ActualMinutes: att.ActualMinutes,
+                        DeductionType: "FullDayAbsence_ServiceAllowance",
+                        DeductionAmount: att.ServiceAllowanceDeductionAmount,
+                        AffectsBasicSalary: false,
+                        AffectsServiceAllowance: true,
+                        PolicyCode: att.PolicyCode,
+                        LegalReference: att.RegulatorySource));
+                }
 
                 att.PayrollProcessingStatus = "Ingested";
                 att.PayrollRunId = payrollRunId;

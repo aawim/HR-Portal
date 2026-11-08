@@ -43,7 +43,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var t in transactions)
+                        @foreach (var t in transactions ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-3 py-2.5 font-mono text-slate-600">@t.Date.ToString("yyyy-MM-dd")</td>
@@ -83,7 +83,7 @@
         isLoading = true;
         try
         {
-            transactions = await BudgetService.GetTransactionsAsync(2026, 3);
+            transactions = await BudgetService.GetTransactionsAsync(2026, 0);
         }
         finally
         {

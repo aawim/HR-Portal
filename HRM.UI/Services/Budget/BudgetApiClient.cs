@@ -12,7 +12,7 @@ namespace HRM.UI.Services.Budget;
 
 public sealed class BudgetApiClient(HttpClient client) : IBudgetService
 {
-    public async Task<BudgetSummaryDto> GetBudgetSummaryAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<BudgetSummaryDto> GetBudgetSummaryAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -26,7 +26,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
-    public async Task<List<BudgetAllocationDto>> GetAllocationsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetAllocationDto>> GetAllocationsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -148,7 +148,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         return result!;
     }
 
-    public async Task<List<BudgetVirementDto>> GetVirementsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetVirementDto>> GetVirementsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -170,7 +170,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         return result!;
     }
 
-    public async Task<List<BudgetCommitmentDto>> GetCommitmentsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetCommitmentDto>> GetCommitmentsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -184,7 +184,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
-    public async Task<List<BudgetTransactionDto>> GetTransactionsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetTransactionDto>> GetTransactionsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -198,7 +198,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
-    public async Task<List<PayrollBudgetMappingDto>> GetPayrollMappingsAsync(int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<PayrollBudgetMappingDto>> GetPayrollMappingsAsync(int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -212,7 +212,7 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
-    public async Task<PayrollBudgetValidationResult> ValidatePayrollRunBudgetAsync(int payrollRunId, int organisationId = 3, CancellationToken ct = default)
+    public async Task<PayrollBudgetValidationResult> ValidatePayrollRunBudgetAsync(int payrollRunId, int organisationId = 0, CancellationToken ct = default)
     {
         try
         {
@@ -226,14 +226,14 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
-    public async Task<byte[]> ExportBudgetCsvAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<byte[]> ExportBudgetCsvAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         var response = await client.GetAsync($"/api/budget/export/csv?fiscalYear={fiscalYear}&organisationId={organisationId}", ct);
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
-    public async Task<byte[]> GeneratePdfReportAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<byte[]> GeneratePdfReportAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         var summary = await GetBudgetSummaryAsync(fiscalYear, organisationId, ct);
         return BudgetPdfGenerator.GenerateBudgetExecutionPdf(summary);

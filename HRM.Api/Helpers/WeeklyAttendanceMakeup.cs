@@ -7,6 +7,24 @@ public sealed record WeeklyAttendanceMakeupResult(decimal ShortfallHours, decima
 
 public static class WeeklyAttendanceMakeup
 {
+    public static async Task<WeeklyAttendanceMakeupResult> LoadLateArrivalAsync(HrmTeContext db, int person, int org,
+        DateTime weekStart, DateTime weekEndExclusive, int arrivalBufferMinutes, CancellationToken ct = default)
+    {
+        var facts = await AttendanceScheduleFacts.LoadAsync(db, person, weekStart, weekEndExclusive.AddDays(-1), org, ct);
+        var official = facts.Where(f => f.RequiresAttendance && f.Purpose == "Official" && !f.IsShiftOrDuty).ToList();
+        var eligibleLateMinutes = official
+            .Where(f => f.CheckIn.HasValue && f.LateMinutes > 0 && f.LateMinutes <= arrivalBufferMinutes)
+            .Sum(f => f.LateMinutes);
+        if (eligibleLateMinutes <= 0) return new(0, 0, 0);
+
+        var planned = official.Select(f => Clip(f.ScheduledStart, f.ScheduledEnd, weekStart, weekEndExclusive)).ToList();
+        var worked = facts.Where(f => f.RequiresAttendance && f.CheckIn.HasValue && f.CheckOut.HasValue && f.CheckOut > f.CheckIn)
+            .Select(f => Clip(f.CheckIn!.Value, f.CheckOut!.Value, weekStart, weekEndExclusive)).ToList();
+        var extra = WorkHourCoverage.Calculate(planned, worked).PotentialOvertimeMinutes;
+        var completed = Math.Min(eligibleLateMinutes, extra);
+        return new(eligibleLateMinutes / 60m, completed / 60m, Math.Max(0, eligibleLateMinutes - completed) / 60m);
+    }
+
     public static async Task<WeeklyAttendanceMakeupResult> LoadAsync(HrmTeContext db, int person, int org,
         DateTime weekStart, DateTime weekEndExclusive, CancellationToken ct = default, bool includeDuty = true)
     {

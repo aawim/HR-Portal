@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HRM.Application.Features.Payroll;
 using HRM.Models;
@@ -186,6 +187,39 @@ public sealed class PayrollPaymentService : IPayrollPaymentService
         if (run != null)
         {
             run.Status = PayrollRunStatus.Paid;
+        }
+
+        var attendanceAdjustments = await db.AttendanceAdjustments
+            .Where(a => a.PayrollRunId == batch.PayrollRunId && a.OrganisationId == organisationId)
+            .ToListAsync();
+        foreach (var adjustment in attendanceAdjustments)
+        {
+            adjustment.PayrollProcessingStatus = "Paid";
+            adjustment.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        var snapshotJson = await db.PayrollInputSnapshots.AsNoTracking()
+            .Where(s => s.PayrollRunId == batch.PayrollRunId)
+            .Select(s => s.SnapshotJson)
+            .ToListAsync();
+        var overtimeRequestIds = snapshotJson
+            .Select(json => JsonSerializer.Deserialize<EmployeePayrollInputItem>(json))
+            .Where(input => input != null)
+            .SelectMany(input => input!.OvertimeClaims)
+            .Select(claim => claim.RequestId)
+            .Distinct()
+            .ToList();
+        if (overtimeRequestIds.Count > 0)
+        {
+            var overtimeClaims = await db.OvertimeRequests
+                .Where(o => o.OrganisationId == organisationId && overtimeRequestIds.Contains(o.RequestId) && !o.PaidAtUtc.HasValue)
+                .ToListAsync();
+            foreach (var claim in overtimeClaims)
+            {
+                claim.PaidAtUtc = DateTime.UtcNow;
+                claim.PaidByUserId = userId;
+                claim.PaymentReference = reference;
+            }
         }
 
         db.PayrollAuditEvents.Add(new PayrollAuditEvent

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HRM.Application.Features.Payroll;
 using HRM.Models;
 using HRM.Models.Payroll;
+using HRM.Models.AttendanceDeductions;
 using HRM.Services.Payroll;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -148,6 +149,35 @@ public sealed class EnterprisePayrollTests
     }
 
     [Fact]
+    public void CalculationEngine_ProratesAllowanceByItsOwnEffectiveDates()
+    {
+        var engine = new PayrollCalculationEngine();
+        var start = new DateOnly(2026, 11, 1);
+        var end = new DateOnly(2026, 11, 30);
+        var input = BasicInput(allowances:
+        [
+            new InputAllowanceItem(1, "ALLW_1", "Service Allowance", SalaryComponentType.FixedAllowance,
+                3000m, true, false, true, new DateOnly(2026, 11, 16), null)
+        ]);
+
+        var outcome = engine.CalculateEmployee(input, start, end, employeePensionRate: 0m, employerPensionRate: 0m);
+
+        Assert.Equal(31500m, outcome.GrossEarnings);
+        Assert.Equal(1500m, outcome.Lines.Single(x => x.ComponentCode == "ALLW_1").CalculatedAmount);
+        Assert.Empty(outcome.Errors);
+    }
+
+    [Fact]
+    public void CalculationEngine_RejectsCrossMonthPeriodInsteadOfMiscountingDays()
+    {
+        var outcome = new PayrollCalculationEngine().CalculateEmployee(
+            BasicInput(), new DateOnly(2026, 11, 15), new DateOnly(2026, 12, 14));
+
+        Assert.Contains(outcome.Errors, x => x.Contains("same calendar month", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(0m, outcome.NetSalary);
+    }
+
+    [Fact]
     public async Task PayrollQueueService_AtomicClaiming_IncrementsFencingToken_AndPreventsDuplicateClaim()
     {
         var options = CreateDbOptions();
@@ -238,6 +268,18 @@ public sealed class EnterprisePayrollTests
                 PreparedAtUtc = DateTime.UtcNow
             };
             db.PayrollRuns.Add(run);
+            db.AttendanceAdjustments.Add(new AttendanceAdjustment
+            {
+                AttendanceAdjustmentId = 10,
+                OrganisationId = orgId,
+                IndividualId = 100,
+                JobId = 200,
+                WorkDate = new DateOnly(2026, 11, 5),
+                AdjustmentType = AttendanceDeductionTypes.LateArrival,
+                VerificationStatus = AttendanceAdjustmentVerificationStatuses.Verified,
+                PayrollProcessingStatus = AttendanceAdjustmentPayrollStatuses.Calculated,
+                PayrollRunId = 1
+            });
             await db.SaveChangesAsync();
         }
 
@@ -268,6 +310,8 @@ public sealed class EnterprisePayrollTests
         {
             var updated = await db.PayrollRuns.SingleAsync(r => r.PayrollRunId == 1);
             Assert.Equal(PayrollRunStatus.Finalised, updated.Status);
+            var adjustment = await db.AttendanceAdjustments.SingleAsync(a => a.AttendanceAdjustmentId == 10);
+            Assert.Equal(AttendanceAdjustmentPayrollStatuses.Locked, adjustment.PayrollProcessingStatus);
         }
 
         // 5. Finalised run cannot be rejected or modified
@@ -275,4 +319,27 @@ public sealed class EnterprisePayrollTests
             service.RejectPayrollAsync(orgId, 1, approverUserId, "Reject finalised"));
         Assert.Contains("Cannot reject finalised", rejectEx.Message);
     }
+
+    private static EmployeePayrollInputItem BasicInput(List<InputAllowanceItem>? allowances = null) => new(
+        JobId: 1,
+        IndividualId: 1,
+        EmployeeNumber: "EMP-1",
+        EmployeeName: "Test Employee",
+        DepartmentName: "Finance",
+        PositionTitle: "Officer",
+        GradeCode: null,
+        StepNumber: null,
+        BasicSalary: 30000m,
+        CurrencyTypeId: 1,
+        BankName: "BML",
+        BankBranch: "Male",
+        BankAccountNumber: "7701000001",
+        AccountHolderName: "Test Employee",
+        JoinedDate: new DateOnly(2020, 1, 1),
+        TerminatedDate: null,
+        Allowances: allowances ?? [],
+        OvertimeClaims: [],
+        UnpaidLeaves: [],
+        Deductions: [],
+        Adjustments: []);
 }

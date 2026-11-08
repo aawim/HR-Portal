@@ -114,7 +114,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var a in allocations)
+                        @foreach (var a in allocations ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-3 py-2.5 font-mono font-bold text-slate-700">@a.EconomicCode</td>
@@ -138,7 +138,6 @@
             </div>
         </div>
     }
-    @* TAB 2: MOF ECONOMIC CODES (CHART OF ACCOUNTS) *@
     else if (activeTab == "items")
     {
         <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden space-y-3 p-3">
@@ -179,7 +178,6 @@
             </div>
         </div>
     }
-    @* TAB 3: VIREMENTS *@
     else if (activeTab == "virements")
     {
         <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
@@ -197,7 +195,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var v in virements)
+                        @foreach (var v in virements ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-3 py-2.5 font-mono font-bold text-blue-700">@v.VirementNumber</td>
@@ -218,7 +216,6 @@
             </div>
         </div>
     }
-    @* TAB 4: PAYROLL BRIDGE *@
     else if (activeTab == "payroll")
     {
         <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
@@ -233,7 +230,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var p in payrollMappings)
+                        @foreach (var p in payrollMappings ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-3 py-2.5 font-bold text-slate-800">@p.ComponentName</td>
@@ -251,7 +248,6 @@
             </div>
         </div>
     }
-    @* TAB 5: TRANSACTIONS *@
     else if (activeTab == "transactions")
     {
         <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
@@ -270,7 +266,7 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100">
-                        @foreach (var t in transactions)
+                        @foreach (var t in transactions ?? [])
                         {
                             <tr class="hover:bg-slate-50/80 transition-colors">
                                 <td class="px-3 py-2.5 font-mono text-slate-600">@t.Date.ToString("yyyy-MM-dd")</td>
@@ -306,7 +302,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Select MoF Economic Code</label>
                         <select @bind="selectedBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var item in budgetItems)
+                            @foreach (var item in budgetItems ?? [])
                             {
                                 <option value="@item.BudgetItemId">
                                     @item.DisplayText
@@ -383,7 +379,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Source Vote (From)</label>
                         <select @bind="virementFromId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var a in allocations)
+                            @foreach (var a in allocations ?? [])
                             {
                                 <option value="@a.BudgetItemId">[@a.EconomicCode] @a.DhivehiName (Avail: MVR @a.AvailableBalance.ToString("N2"))</option>
                             }
@@ -392,7 +388,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Target Vote (To)</label>
                         <select @bind="virementToId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var a in allocations)
+                            @foreach (var a in allocations ?? [])
                             {
                                 <option value="@a.BudgetItemId">[@a.EconomicCode] @a.DhivehiName (Current: MVR @a.CurrentBudget.ToString("N2"))</option>
                             }
@@ -436,7 +432,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Target MoF Economic Code</label>
                         <select @bind="newMappingBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var item in budgetItems)
+                            @foreach (var item in budgetItems ?? [])
                             {
                                 <option value="@item.BudgetItemId">@item.DisplayText</option>
                             }
@@ -464,7 +460,7 @@
                     <div>
                         <label class="block font-semibold text-slate-700 mb-1">Budget Line Item</label>
                         <select @bind="newTxnBudgetItemId" class="w-full border border-slate-300 rounded-lg p-2 bg-white">
-                            @foreach (var item in budgetItems)
+                            @foreach (var item in budgetItems ?? [])
                             {
                                 <option value="@item.BudgetItemId">@item.DisplayText</option>
                             }
@@ -578,11 +574,11 @@
     {
         try
         {
-            allocations = await BudgetService.GetAllocationsAsync(2026, 3);
+            allocations = await BudgetService.GetAllocationsAsync(2026, 0);
             budgetItems = await BudgetService.GetBudgetItemsAsync();
-            virements = await BudgetService.GetVirementsAsync(2026, 3);
-            payrollMappings = await BudgetService.GetPayrollMappingsAsync(3);
-            transactions = await BudgetService.GetTransactionsAsync(2026, 3);
+            virements = await BudgetService.GetVirementsAsync(2026, 0);
+            payrollMappings = await BudgetService.GetPayrollMappingsAsync(0);
+            transactions = await BudgetService.GetTransactionsAsync(2026, 0);
 
             if (budgetItems.Count > 0)
             {
@@ -612,7 +608,7 @@
             await BudgetService.SaveAllocationAsync(new CreateBudgetAllocationRequest
             {
                 FiscalYearId = 1,
-                OrganisationId = 3,
+                OrganisationId = 0,
                 BudgetItemId = selectedBudgetItemId,
                 ApprovedAmount = newApprovedAmount,
                 MoFApprovalReference = newMofRef
@@ -657,7 +653,7 @@
             await BudgetService.RequestVirementAsync(new CreateBudgetVirementRequest
             {
                 FiscalYearId = 1,
-                OrganisationId = 3,
+                OrganisationId = 0,
                 FromBudgetItemId = virementFromId,
                 ToBudgetItemId = virementToId,
                 Amount = virementAmount,
@@ -683,7 +679,7 @@
             {
                 ComponentName = newMappingComponentName,
                 BudgetItemId = newMappingBudgetItemId,
-                CostCenterOrganisationId = 3
+                CostCenterOrganisationId = 0
             });
             showAddMappingModal = false;
             successMessage = "Payroll component mapping created!";
@@ -704,7 +700,7 @@
             {
                 BudgetItemId = newTxnBudgetItemId,
                 FiscalYearId = 1,
-                OrganisationId = 3,
+                OrganisationId = 0,
                 TransactionTypeId = newTxnTypeId,
                 Amount = newTxnAmount,
                 ReferenceNumber = newTxnRef,

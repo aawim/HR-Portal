@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -8,13 +9,14 @@ using HRM.Application.DTOs.Budget;
 using HRM.Application.Interfaces.Budget;
 using HRM.Models;
 using HRM.Models.Budget;
+using HRM.Models.Payroll;
 using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
 public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBudgetService
 {
-    public async Task<BudgetSummaryDto> GetBudgetSummaryAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<BudgetSummaryDto> GetBudgetSummaryAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
 
@@ -49,7 +51,7 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         };
     }
 
-    public async Task<List<BudgetAllocationDto>> GetAllocationsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetAllocationDto>> GetAllocationsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
 
@@ -110,18 +112,22 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<BudgetItemDto> SaveBudgetItemAsync(CreateBudgetItemRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (string.IsNullOrWhiteSpace(request.EconomicCode) || string.IsNullOrWhiteSpace(request.DhivehiName))
+            throw new InvalidOperationException("Economic code and item name are required.");
+        if (await db.BudgetItems.AnyAsync(x => x.EconomicCode == request.EconomicCode.Trim(), ct))
+            throw new InvalidOperationException("This economic code already exists.");
         int.TryParse(request.EconomicCode, out var codeInt);
         var item = new BudgetItem
         {
             Code = codeInt > 0 ? codeInt : null,
-            EconomicCode = request.EconomicCode,
-            DhivehiName = request.DhivehiName,
-            EnglishName = request.EnglishName,
+            EconomicCode = request.EconomicCode.Trim(),
+            DhivehiName = request.DhivehiName.Trim(),
+            EnglishName = request.EnglishName.Trim(),
             ChapterCode = request.ChapterCode,
             AccountType = request.AccountType,
             ParentBudgetItemID = request.ParentBudgetItemId,
             IsActive = true,
-            BudgetYear = 2026
+            BudgetYear = DateTime.UtcNow.Year
         };
         db.BudgetItems.Add(item);
         await db.SaveChangesAsync(ct);
@@ -154,6 +160,12 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<FiscalYearDto> SaveFiscalYearAsync(CreateFiscalYearRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (request.YearNumber < 2000 || request.YearNumber > 2100 || request.EndDate < request.StartDate ||
+            request.TotalApprovedBudget < 0 || request.TotalEmolumentsBudget < 0 ||
+            request.TotalEmolumentsBudget > request.TotalApprovedBudget)
+            throw new InvalidOperationException("Enter a valid fiscal year, date range and non-negative budget totals.");
+        if (await db.FiscalYears.AnyAsync(x => x.YearNumber == request.YearNumber, ct))
+            throw new InvalidOperationException("This fiscal year already exists.");
         var fy = new FiscalYear
         {
             YearNumber = request.YearNumber,
@@ -182,10 +194,19 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<PayrollBudgetMappingDto> SavePayrollMappingAsync(CreatePayrollMappingRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (request.BudgetItemId <= 0 || string.IsNullOrWhiteSpace(request.ComponentName) ||
+            (request.SalaryComponentId.HasValue && request.AllowanceTypeId.HasValue))
+            throw new InvalidOperationException("Enter a component name and select no more than one salary component or allowance type.");
+        if (!await db.BudgetItems.AnyAsync(x => x.BudgetItemID == request.BudgetItemId && x.IsActive, ct))
+            throw new InvalidOperationException("The selected budget item is unavailable.");
+        if (await db.PayrollBudgetMappings.AnyAsync(x => x.IsActive && x.BudgetItemId == request.BudgetItemId &&
+            x.SalaryComponentId == request.SalaryComponentId && x.AllowanceTypeId == request.AllowanceTypeId &&
+            x.CostCenterOrganisationId == request.CostCenterOrganisationId, ct))
+            throw new InvalidOperationException("This payroll budget mapping already exists.");
         var mapping = new PayrollBudgetMapping
         {
             BudgetItemId = request.BudgetItemId,
-            ComponentName = request.ComponentName,
+            ComponentName = request.ComponentName.Trim(),
             SalaryComponentId = request.SalaryComponentId,
             AllowanceTypeId = request.AllowanceTypeId,
             CostCenterOrganisationId = request.CostCenterOrganisationId,
@@ -212,6 +233,15 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<BudgetTransactionDto> RecordTransactionAsync(CreateBudgetTransactionRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (request.Amount <= 0) throw new InvalidOperationException("Transaction amount must be greater than zero.");
+        var type = await db.BudgetTransactionTypes.FindAsync(new object[] { request.TransactionTypeId }, ct)
+            ?? throw new InvalidOperationException("Transaction type is unavailable.");
+        if (type.TypeName != "ActualExpenditure")
+            throw new InvalidOperationException("Manual posting is limited to actual expenditure transactions.");
+        var alloc = await db.BudgetAllocations.FirstOrDefaultAsync(x => x.BudgetItemId == request.BudgetItemId && x.FiscalYearId == request.FiscalYearId && x.OrganisationId == request.OrganisationId, ct)
+            ?? throw new InvalidOperationException("A matching budget allocation is required.");
+        if (alloc.AvailableBalance < request.Amount)
+            throw new InvalidOperationException("The transaction exceeds the available budget balance.");
         var txn = new BudgetTransaction
         {
             BudgetItemID = request.BudgetItemId,
@@ -229,16 +259,11 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         };
         db.BudgetTransactions.Add(txn);
 
-        var alloc = await db.BudgetAllocations.FirstOrDefaultAsync(x => x.BudgetItemId == request.BudgetItemId && x.FiscalYearId == request.FiscalYearId && x.OrganisationId == request.OrganisationId, ct);
-        if (alloc != null)
-        {
-            alloc.ExpendedAmount += request.Amount;
-            alloc.UpdatedAtUtc = DateTime.UtcNow;
-        }
+        alloc.ExpendedAmount += request.Amount;
+        alloc.UpdatedAtUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
         var item = await db.BudgetItems.FindAsync(new object[] { request.BudgetItemId }, ct);
-        var type = await db.BudgetTransactionTypes.FindAsync(new object[] { request.TransactionTypeId }, ct);
         return new BudgetTransactionDto
         {
             BudgetTransactionID = txn.BudgetTransactionID,
@@ -261,6 +286,11 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        if (request.ApprovedAmount < 0) throw new InvalidOperationException("Approved amount cannot be negative.");
+        var fiscalYear = await db.FiscalYears.AsNoTracking().SingleOrDefaultAsync(x => x.FiscalYearId == request.FiscalYearId, ct)
+            ?? throw new InvalidOperationException("Fiscal year not found.");
+        if (!await db.BudgetItems.AnyAsync(x => x.BudgetItemID == request.BudgetItemId && x.IsActive, ct))
+            throw new InvalidOperationException("Budget item not found.");
 
         var existing = await db.BudgetAllocations.FirstOrDefaultAsync(x =>
             x.FiscalYearId == request.FiscalYearId &&
@@ -292,11 +322,11 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }
 
         await db.SaveChangesAsync(ct);
-        var items = await GetAllocationsAsync(2026, request.OrganisationId, ct);
+        var items = await GetAllocationsAsync(fiscalYear.YearNumber, request.OrganisationId, ct);
         return items.First(x => x.BudgetItemId == request.BudgetItemId);
     }
 
-    public async Task<List<BudgetVirementDto>> GetVirementsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetVirementDto>> GetVirementsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
 
@@ -337,6 +367,13 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
     public async Task<BudgetVirementDto> RequestVirementAsync(CreateBudgetVirementRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        if (request.Amount <= 0) throw new InvalidOperationException("Virement amount must be greater than zero.");
+        if (request.FromBudgetItemId == request.ToBudgetItemId) throw new InvalidOperationException("Source and target budget items must be different.");
+        if (string.IsNullOrWhiteSpace(request.Justification) || string.IsNullOrWhiteSpace(request.LegalBasis))
+            throw new InvalidOperationException("Justification and legal basis are required.");
+        var fiscalYear = await db.FiscalYears.AsNoTracking().SingleOrDefaultAsync(x => x.FiscalYearId == request.FiscalYearId, ct)
+            ?? throw new InvalidOperationException("Fiscal year not found.");
 
         // Law 3/2006 Rule: Validate from allocation has enough available balance
         var fromAlloc = await db.BudgetAllocations.FirstOrDefaultAsync(x =>
@@ -358,8 +395,8 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         if (toAlloc == null)
             throw new InvalidOperationException("Target budget allocation does not exist.");
 
-        var count = await db.BudgetVirements.CountAsync(ct) + 1;
-        var virementNumber = $"VIR-2026-{count:D4}";
+        var count = await db.BudgetVirements.CountAsync(x => x.FiscalYearId == request.FiscalYearId, ct) + 1;
+        var virementNumber = $"VIR-{fiscalYear.YearNumber}-{count:D4}";
 
         var virement = new BudgetVirement
         {
@@ -424,19 +461,22 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         });
 
         await db.SaveChangesAsync(ct);
+        await tx.CommitAsync(ct);
 
-        var list = await GetVirementsAsync(2026, request.OrganisationId, ct);
+        var list = await GetVirementsAsync(fiscalYear.YearNumber, request.OrganisationId, ct);
         return list.First(x => x.VirementNumber == virementNumber);
     }
 
-    public async Task<List<BudgetCommitmentDto>> GetCommitmentsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetCommitmentDto>> GetCommitmentsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        var fiscalYearId = await db.FiscalYears.AsNoTracking().Where(x => x.YearNumber == fiscalYear).Select(x => (int?)x.FiscalYearId).SingleOrDefaultAsync(ct);
+        if (!fiscalYearId.HasValue) return [];
 
         var raw = await db.BudgetCommitments
             .AsNoTracking()
             .Include(x => x.BudgetItem)
-            .Where(x => x.OrganisationId == organisationId)
+            .Where(x => x.OrganisationId == organisationId && x.FiscalYearId == fiscalYearId.Value)
             .OrderByDescending(x => x.CreatedAtUtc)
             .ToListAsync(ct);
 
@@ -458,15 +498,17 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }).ToList();
     }
 
-    public async Task<List<BudgetTransactionDto>> GetTransactionsAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<BudgetTransactionDto>> GetTransactionsAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
+        var fiscalYearId = await db.FiscalYears.AsNoTracking().Where(x => x.YearNumber == fiscalYear).Select(x => (int?)x.FiscalYearId).SingleOrDefaultAsync(ct);
+        if (!fiscalYearId.HasValue) return [];
 
         var raw = await db.BudgetTransactions
             .AsNoTracking()
             .Include(x => x.BudgetItem)
             .Include(x => x.TransactionType)
-            .Where(x => x.OrganisationID == organisationId)
+            .Where(x => x.OrganisationID == organisationId && x.FiscalYearID == fiscalYearId.Value)
             .OrderByDescending(x => x.Date)
             .ThenByDescending(x => x.BudgetTransactionID)
             .ToListAsync(ct);
@@ -490,14 +532,14 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }).ToList();
     }
 
-    public async Task<List<PayrollBudgetMappingDto>> GetPayrollMappingsAsync(int organisationId = 3, CancellationToken ct = default)
+    public async Task<List<PayrollBudgetMappingDto>> GetPayrollMappingsAsync(int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
 
         var raw = await db.PayrollBudgetMappings
             .AsNoTracking()
             .Include(x => x.BudgetItem)
-            .Where(x => x.CostCenterOrganisationId == null || x.CostCenterOrganisationId == organisationId)
+            .Where(x => x.IsActive && (x.CostCenterOrganisationId == null || x.CostCenterOrganisationId == organisationId))
             .ToListAsync(ct);
 
         return raw.Select(x => new PayrollBudgetMappingDto
@@ -514,43 +556,88 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }).ToList();
     }
 
-    public async Task<PayrollBudgetValidationResult> ValidatePayrollRunBudgetAsync(int payrollRunId, int organisationId = 3, CancellationToken ct = default)
+    public async Task<PayrollBudgetValidationResult> ValidatePayrollRunBudgetAsync(int payrollRunId, int organisationId = 0, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
 
-        var allocations = await GetAllocationsAsync(2026, organisationId, ct);
+        var run = await db.PayrollRuns.AsNoTracking().Include(x => x.PayrollPeriod)
+            .SingleOrDefaultAsync(x => x.PayrollRunId == payrollRunId && x.OrganisationId == organisationId, ct)
+            ?? throw new InvalidOperationException("Payroll run not found in this organisation.");
+        var fiscalYear = run.PayrollPeriod?.PeriodYear
+            ?? throw new InvalidOperationException("Payroll run has no payroll period.");
+        var allocations = await GetAllocationsAsync(fiscalYear, organisationId, ct);
+        var allocationByItem = allocations.ToDictionary(x => x.BudgetItemId);
         var mappings = await GetPayrollMappingsAsync(organisationId, ct);
+        var salaryComponentCodes = await db.SalaryComponents.AsNoTracking()
+            .Where(x => x.OrganisationId == organisationId && x.IsActive)
+            .ToDictionaryAsync(x => x.SalaryComponentId, x => x.ComponentCode, ct);
+        var payrollLines = await db.PayrollLines.AsNoTracking()
+            .Where(x => x.PayrollRunId == payrollRunId && x.CalculatedAmount > 0)
+            .ToListAsync(ct);
 
-        // Calculate line checks against current allocations
-        var checks = new List<PayrollBudgetLineCheck>();
-        var totalReq = 0m;
-        var totalAvail = allocations.Sum(x => x.AvailableBalance);
+        static bool IsEmployerCost(SalaryComponentType type) => type is
+            SalaryComponentType.BasicSalary or SalaryComponentType.FixedAllowance or SalaryComponentType.VariableAllowance or
+            SalaryComponentType.DutyAllowance or SalaryComponentType.ShiftAllowance or SalaryComponentType.Overtime or
+            SalaryComponentType.Bonus or SalaryComponentType.Reimbursement or SalaryComponentType.EmployerPension or
+            SalaryComponentType.EmployerStatutory;
 
-        foreach (var alloc in allocations)
+        var mappedAmounts = new Dictionary<int, decimal>();
+        var mappedNames = new Dictionary<int, HashSet<string>>();
+        var unmapped = new List<PayrollLine>();
+        foreach (var line in payrollLines.Where(x => IsEmployerCost(x.ComponentType)))
         {
-            // Simulation requirement based on commitment amount or active baseline
-            var req = alloc.CommittedAmount > 0 ? alloc.CommittedAmount : (alloc.CurrentBudget * 0.08m);
-            totalReq += req;
-
-            checks.Add(new PayrollBudgetLineCheck
+            var mapping = mappings.FirstOrDefault(m =>
+                (m.SalaryComponentId.HasValue && salaryComponentCodes.GetValueOrDefault(m.SalaryComponentId.Value) == line.ComponentCode) ||
+                (m.AllowanceTypeId.HasValue && line.ComponentCode == $"ALLW_{m.AllowanceTypeId.Value}") ||
+                (!m.SalaryComponentId.HasValue && !m.AllowanceTypeId.HasValue &&
+                 (string.Equals(m.ComponentName, line.ComponentCode, StringComparison.OrdinalIgnoreCase) ||
+                  string.Equals(m.ComponentName, line.ComponentName, StringComparison.OrdinalIgnoreCase))));
+            if (mapping == null)
             {
-                BudgetItemId = alloc.BudgetItemId,
-                EconomicCode = alloc.EconomicCode,
-                ComponentName = alloc.DhivehiName,
-                RequiredAmount = req,
-                AvailableBalance = alloc.AvailableBalance
-            });
+                unmapped.Add(line);
+                continue;
+            }
+            mappedAmounts[mapping.BudgetItemId] = mappedAmounts.GetValueOrDefault(mapping.BudgetItemId) + line.CalculatedAmount;
+            if (!mappedNames.TryGetValue(mapping.BudgetItemId, out var names)) mappedNames[mapping.BudgetItemId] = names = [];
+            names.Add(line.ComponentName);
         }
 
-        var isSolvent = checks.All(x => x.IsSufficient);
-        var msg = isSolvent
-            ? "Pre-payroll budget verification successful. All personal emolument line items have sufficient appropriations under Law 3/2006."
-            : "Pre-payroll budget verification failed: Deficit detected in one or more budget lines. Virement or supplementary allocation required.";
+        var checks = mappedAmounts.Select(pair =>
+        {
+            allocationByItem.TryGetValue(pair.Key, out var allocation);
+            return new PayrollBudgetLineCheck
+            {
+                BudgetItemId = pair.Key,
+                EconomicCode = allocation?.EconomicCode ?? "UNALLOCATED",
+                ComponentName = string.Join(", ", mappedNames[pair.Key].OrderBy(x => x)),
+                RequiredAmount = pair.Value,
+                AvailableBalance = allocation?.AvailableBalance ?? 0m
+            };
+        }).ToList();
+        checks.AddRange(unmapped.GroupBy(x => new { x.ComponentCode, x.ComponentName }).Select(group => new PayrollBudgetLineCheck
+        {
+            BudgetItemId = 0,
+            EconomicCode = "UNMAPPED",
+            ComponentName = $"{group.Key.ComponentCode} - {group.Key.ComponentName}",
+            RequiredAmount = group.Sum(x => x.CalculatedAmount),
+            AvailableBalance = 0m
+        }));
+
+        var totalReq = checks.Sum(x => x.RequiredAmount);
+        var totalAvail = checks.Where(x => x.BudgetItemId > 0).Sum(x => x.AvailableBalance);
+        var isSolvent = checks.Count > 0 && checks.All(x => x.BudgetItemId > 0 && x.IsSufficient);
+        var msg = checks.Count == 0
+            ? "Payroll has no calculated employer-cost lines. Calculate the run before budget validation."
+            : unmapped.Count > 0
+                ? "Pre-payroll budget verification failed: one or more payroll components have no active budget mapping."
+                : isSolvent
+                    ? "Pre-payroll budget verification successful. Actual calculated payroll costs are fully covered by available appropriations."
+                    : "Pre-payroll budget verification failed: actual calculated payroll costs exceed one or more available budget balances.";
 
         return new PayrollBudgetValidationResult
         {
             IsSolvent = isSolvent,
-            FiscalYear = 2026,
+            FiscalYear = fiscalYear,
             OrganisationId = organisationId,
             TotalRequiredEmoluments = totalReq,
             TotalAvailableEmoluments = totalAvail,
@@ -559,7 +646,7 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         };
     }
 
-    public async Task<byte[]> ExportBudgetCsvAsync(int fiscalYear = 2026, int organisationId = 3, CancellationToken ct = default)
+    public async Task<byte[]> ExportBudgetCsvAsync(int fiscalYear = 2026, int organisationId = 0, CancellationToken ct = default)
     {
         var allocations = await GetAllocationsAsync(fiscalYear, organisationId, ct);
         var sb = new StringBuilder();
