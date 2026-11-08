@@ -1,0 +1,27 @@
+@using HRM.Services
+@inject HRM.Services.Contracts.FormerStaffServiceContracts.IOperations Records
+@inject ILogger<FormerStaffRecord> Logger
+<section class="space-y-3 p-3">
+    @if(error!=null){<p role="alert">@error</p>}
+    else if(report==null){<p role="status">Loading former staff record…</p>}
+    else
+    {
+        <h2 class="text-xl font-semibold">@report.Title</h2>
+        <p class="rounded border p-3 text-sm">Former staff records are read-only. Changes are not permitted, including for superadministrators.</p>
+        <nav class="flex flex-wrap gap-2" aria-label="Former staff record"><button class="@(attendance?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>attendance=false">Staff information</button><button class="@(attendance?"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors":"inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors")" @onclick="()=>attendance=true">Attendance</button><a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="/admin/hr/staff/former-staff">Former staff search</a></nav>
+        @if(attendance){<HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffAttendance StaffId="StaffId" StaffName="@report.Title" ShowOverview="false" ReadOnly="true" />}
+        else
+        {
+            <HRM.Components.Shared.AttendanceExportButtons CreateReport="()=>report" />
+            @foreach(var table in report.Tables)
+            {
+                <details class="rounded-lg border" open="@(table.Name=="Personal information")"><summary class="cursor-pointer p-3 text-sm font-semibold">@table.Name (@table.Rows.Count)</summary><div class="overflow-x-auto p-3"><table class="w-full text-left text-sm"><thead><tr>@foreach(var head in table.Headers){<th class="whitespace-nowrap border-b p-2">@head</th>}</tr></thead><tbody>@foreach(var row in table.Rows){<tr class="border-b">@foreach(var cell in row){<td class="max-w-md p-2">@cell</td>}</tr>}@if(table.Rows.Count==0){<tr><td colspan="@table.Headers.Length" class="p-2">No records.</td></tr>}</tbody></table></div></details>
+            }
+        }
+    }
+</section>
+@code {
+    [Parameter]public int StaffId {get;set;}
+    private AttendanceExportReport? report;private string? error;private bool attendance;private int version;
+    protected override async Task OnParametersSetAsync(){var current=++version;report=null;error=null;try{var result=await Records.DetailAsync(StaffId);if(current==version)report=AttendanceReportExport.FromDto(result);}catch(Exception ex){if(current==version){Logger.LogError(ex,"Former staff record");error=ex is UnauthorizedAccessException or InvalidOperationException?ex.Message:"Staff information could not be loaded.";}}}
+}

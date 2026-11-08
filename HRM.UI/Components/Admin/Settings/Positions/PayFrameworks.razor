@@ -1,0 +1,640 @@
+@using HRM.Application.Contracts.Pages
+@inject IPositionManagement Service
+@inject HRM.Services.ToastService Toasts
+
+<section class="pay-frameworks space-y-4 w-full min-w-0 p-2">
+    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">Pay Frameworks &amp; Job Matrices</h2>
+                <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                    @(tab == "frameworks" ? "Frameworks" : "Job Matrices")
+                </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Manage shared compensation frameworks, Job Matrices, titles, steps and allowances.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="async () => { busy = true; try { data = await Service.LoadPayFrameworksAsync(); } finally { busy = false; } }">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+        </div>
+    </header>
+
+    <div class="flex items-center gap-2">
+        <button type="button"
+                class="rounded-lg py-1.5 px-3.5 text-xs font-semibold transition shadow-xs @(tab == "frameworks" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-0")"
+                @onclick='() => tab = "frameworks"'>
+            Frameworks
+        </button>
+        <button type="button"
+                class="rounded-lg py-1.5 px-3.5 text-xs font-semibold transition shadow-xs @(tab == "matrices" ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200 border-0")"
+                @onclick='() => tab = "matrices"'>
+            Job Matrices
+        </button>
+    </div>
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    @if (data != null)
+    {
+        @if (tab == "frameworks")
+        {
+            @if (data.CanManageFrameworks)
+            {
+                <fieldset disabled="@busy" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                    <div class="border-b border-slate-100 pb-3">
+                        <h3 class="text-sm font-bold text-slate-900">@(frameworkId == 0 ? "New Framework" : "Edit Framework")</h3>
+                        <p class="text-xs text-slate-500">Define top-level compensation frameworks (e.g. Civil Service, Judiciary, Custom).</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Code <span class="text-rose-500">*</span></label>
+                            <input @bind="frameworkCode" maxlength="30" disabled="@(frameworkId != 0)" placeholder="e.g. LEGACY or NEW_PAY" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 disabled:bg-slate-100 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-medium text-slate-700 p-1">Name <span class="text-rose-500">*</span></label>
+                            <input @bind="frameworkName" maxlength="150" placeholder="Framework Display Name" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div class="pb-2">
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" @bind="frameworkActive" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                <span>Active</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                @onclick="SaveFramework">
+                            <span>💾</span>
+                            <span>Save Framework</span>
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                @onclick="ClearFramework">
+                            <span>✕</span>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+                </fieldset>
+            }
+
+            <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                <div class="border-b border-slate-100 pb-3">
+                    <h3 class="text-sm font-bold text-slate-900">Configured Frameworks (@data.Frameworks.Count)</h3>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                            <tr>
+                                <th class="px-3 py-2.5">Code</th>
+                                <th class="px-3 py-2.5">Framework Name</th>
+                                <th class="px-3 py-2.5">Status</th>
+                                <th class="px-3 py-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var f in data.Frameworks)
+                            {
+                                <tr class="hover:bg-slate-50/50 transition">
+                                    <td class="px-3 py-2.5 font-mono font-semibold text-blue-700">@f.Code</td>
+                                    <td class="px-3 py-2.5 font-medium text-slate-900">@f.Name</td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @(f.Active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                            @(f.Active ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-right">
+                                        @if (data.CanManageFrameworks)
+                                        {
+                                            <button type="button"
+                                                    class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                                                    @onclick="() => EditFramework(f)">
+                                                Edit
+                                            </button>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else
+        {
+            @if (data.CanManageFrameworks)
+            {
+                <fieldset disabled="@busy" class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                    <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">@(matrixId == 0 ? "New Job Matrix" : "Edit Unused Job Matrix")</h3>
+                            <p class="text-xs text-slate-500">Configure salary scales, allowances, rank requirements and titles.</p>
+                        </div>
+                        @if (matrixId > 0)
+                        {
+                            <span class="rounded bg-blue-50 px-2 py-0.5 font-mono text-xs font-semibold text-blue-700">
+                                Editing #@matrixId
+                            </span>
+                        }
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-800 p-1">Job Family</label>
+                        <div class="family-picker mt-1" role="group" aria-label="Job families">
+                            @foreach (var family in data.JobFamilies)
+                            {
+                                <button type="button"
+                                        class="family-choice rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex items-center gap-2.5 @(profile.JobFamilyId == family.Id ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                        aria-pressed="@(profile.JobFamilyId == family.Id)"
+                                        @onclick="() => SelectFamily(family.Id)">
+                                    <JobFamilyIcon Family="@family.Name" />
+                                    <span class="font-medium text-slate-800">@family.Name</span>
+                                </button>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Framework <span class="text-rose-500">*</span></label>
+                            <select @bind="matrixFramework" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="0">Select Framework</option>
+                                @foreach (var f in data.Frameworks.Where(x => x.Active))
+                                {
+                                    <option value="@f.Id">@f.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Matrix Code <span class="text-rose-500">*</span></label>
+                            <input @bind="matrixCode" maxlength="60" placeholder="e.g. AD-01" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Profession / Occupation <span class="text-rose-500">*</span></label>
+                            <select @bind="profile.ProfessionId" @bind:after="ChangeProfession" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">Select Profession</option>
+                                @foreach (var p in data.Professions.Where(x => x.FamilyId == profile.JobFamilyId))
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Currency</label>
+                            <select @bind="currency" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="0">Select Currency</option>
+                                @foreach (var c in data.Currencies)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Basic Salary <span class="text-rose-500">*</span></label>
+                            <input type="number" min="0" step="0.01" @bind="basicSalary" placeholder="0.00" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div class="flex items-center gap-3 pt-6">
+                            <label class="inline-flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                                <input type="checkbox" @bind="matrixActive" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                <span>Active</span>
+                            </label>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Effective From</label>
+                            <input type="date" @bind="from" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Effective Through</label>
+                            <input type="date" @bind="to" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Public Service Rank</label>
+                            <input maxlength="50" @bind="profile.PublicServiceRank" @bind:after="ApplySourceRequirements" list="profession-pay-ranks" placeholder="e.g. 5" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                            <datalist id="profession-pay-ranks">
+                                @foreach (var rank in data.RequirementTemplates.Where(x => x.ProfessionId == profile.ProfessionId))
+                                {
+                                    <option value="@rank.Rank"></option>
+                                }
+                            </datalist>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Institutional Category</label>
+                            <select @bind="profile.InstitutionalCategory" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                                <option value="">Select Category</option>
+                                <option value="1">Category 1</option>
+                                <option value="2">Category 2</option>
+                                <option value="3">Category 3</option>
+                                @if (!string.IsNullOrWhiteSpace(profile.InstitutionalCategory) && profile.InstitutionalCategory is not ("1" or "2" or "3"))
+                                {
+                                    <option value="@profile.InstitutionalCategory">@profile.InstitutionalCategory (existing)</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Grade Code</label>
+                            <input maxlength="50" @bind="profile.GradeCode" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Core Duties</label>
+                            <textarea maxlength="20000" rows="3" @bind="profile.Duties" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Qualifications / Experience Notes</label>
+                            <textarea maxlength="20000" rows="3" @bind="profile.Qualifications" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"></textarea>
+                        </div>
+                    </div>
+
+                    @if (SelectedRequirements != null)
+                    {
+                        <div class="flex flex-wrap items-center gap-2 rounded-xl border border-blue-200 bg-blue-50/50 p-3 text-xs text-blue-900">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 hover:bg-blue-50 transition"
+                                    @onclick="ApplySourceRequirements">
+                                Fill blank requirements from source
+                            </button>
+                            <span>Source Job Matrix · Rank @SelectedRequirements.Rank · source-linked working transcription</span>
+                        </div>
+                    }
+
+                    <JobMatrixRequirementsEditor Profile="profile" />
+
+                    <!-- Allowed Titles -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 class="text-xs font-bold text-slate-800">Allowed Titles</h4>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                    @onclick="() => titles.Add(new())">
+                                ＋ Add Title
+                            </button>
+                        </div>
+                        <div class="space-y-2">
+                            @foreach (var t in titles)
+                            {
+                                <div @key="t" class="flex items-center gap-2">
+                                    <input aria-label="Allowed title" @bind="t.Name" maxlength="250" placeholder="Title name" class="flex-1 rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none" />
+                                    <button type="button"
+                                            class="rounded-lg border border-rose-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50 transition"
+                                            @onclick="() => titles.Remove(t)">
+                                        Remove
+                                    </button>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Pay Steps -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 class="text-xs font-bold text-slate-800">Pay Steps</h4>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                    @onclick="() => steps.Add(new() { Number = steps.Count + 1 })">
+                                ＋ Add Step
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                                    <tr>
+                                        <th class="px-3 py-2">Step</th>
+                                        <th class="px-3 py-2">Basic Salary Override (Optional)</th>
+                                        <th class="px-3 py-2">Job Allowance</th>
+                                        <th class="px-3 py-2">Active</th>
+                                        <th class="px-3 py-2 text-right"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var s in steps)
+                                    {
+                                        <tr @key="s" class="hover:bg-slate-50/50">
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Step number" type="number" min="1" @bind="s.Number" class="w-16 rounded border border-slate-300 p-1 text-xs" />
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Basic salary override" type="number" min="0" step="0.01" @bind="s.Salary" placeholder="Default" class="w-32 rounded border border-slate-300 p-1 text-xs" />
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Step job allowance" type="number" min="0" step="0.01" @bind="s.Allowance" class="w-32 rounded border border-slate-300 p-1 text-xs" />
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Step active" type="checkbox" @bind="s.Active" class="h-4 w-4 rounded border-slate-300 text-blue-600" />
+                                            </td>
+                                            <td class="px-3 py-2 text-right">
+                                                <button type="button"
+                                                        class="rounded border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                                        @onclick="() => steps.Remove(s)">
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Benefits / Allowances -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 space-y-3">
+                        <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                            <h4 class="text-xs font-bold text-slate-800">Matrix Allowances / Benefits</h4>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                    @onclick="() => benefits.Add(new())">
+                                ＋ Add Allowance
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+                            <table class="w-full text-left text-xs">
+                                <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                                    <tr>
+                                        <th class="px-3 py-2">Allowance</th>
+                                        <th class="px-3 py-2">Amount (Optional)</th>
+                                        <th class="px-3 py-2">Frequency</th>
+                                        <th class="px-3 py-2 text-right"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var b in benefits)
+                                    {
+                                        <tr @key="b" class="hover:bg-slate-50/50">
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Allowance name" @bind="b.Name" maxlength="200" placeholder="e.g. Special Duty Allowance" class="w-48 rounded border border-slate-300 p-1 text-xs" />
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                <input aria-label="Allowance amount" type="number" min="0" step="0.01" @bind="b.Amount" placeholder="Non-cash" class="w-32 rounded border border-slate-300 p-1 text-xs" />
+                                            </td>
+                                            <td class="px-3 py-2">
+                                                <select aria-label="Allowance frequency" @bind="b.Frequency" class="rounded border border-slate-300 p-1 text-xs">
+                                                    <option>Monthly</option>
+                                                    <option value="SixMonthly">Six-monthly</option>
+                                                    <option>Annually</option>
+                                                </select>
+                                            </td>
+                                            <td class="px-3 py-2 text-right">
+                                                <button type="button"
+                                                        class="rounded border border-rose-300 bg-white px-2 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+                                                        @onclick="() => benefits.Remove(b)">
+                                                    Remove
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="flex items-center gap-2 pt-2 border-t border-slate-100">
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                @onclick="SaveMatrix">
+                            <span>💾</span>
+                            <span>Save Job Matrix</span>
+                        </button>
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                @onclick="ClearMatrix">
+                            <span>✕</span>
+                            <span>Clear</span>
+                        </button>
+                    </div>
+                </fieldset>
+            }
+
+            <div class="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                <div class="border-b border-slate-100 pb-3">
+                    <h3 class="text-sm font-bold text-slate-900">Job Matrices Directory (@data.Matrices.Count)</h3>
+                </div>
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase text-slate-500">
+                            <tr>
+                                <th class="px-3 py-2.5">Framework / Matrix</th>
+                                <th class="px-3 py-2.5">Basic Salary</th>
+                                <th class="px-3 py-2.5">Titles &amp; Steps</th>
+                                <th class="px-3 py-2.5">Status</th>
+                                <th class="px-3 py-2.5 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @foreach (var m in data.Matrices)
+                            {
+                                <tr class="hover:bg-slate-50/50 transition">
+                                    <td class="px-3 py-2.5 font-medium text-slate-900">
+                                        <div class="text-[11px] text-slate-500 font-medium">@data.Frameworks.FirstOrDefault(x => x.Id == m.FrameworkId)?.Name</div>
+                                        <div class="font-bold text-slate-900 font-mono">@m.Code · @m.Name</div>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="font-mono font-bold text-slate-900">@m.BasicSalary.ToString("N2")</span>
+                                        <span class="text-[11px] text-slate-500 ml-1">@data.Currencies.FirstOrDefault(x => x.Id == m.CurrencyId)?.Name</span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-slate-600">
+                                        <details class="cursor-pointer">
+                                            <summary class="font-semibold text-blue-600 hover:underline">
+                                                @m.Titles.Count titles · @m.Steps.Count steps
+                                            </summary>
+                                            <div class="mt-2 space-y-1.5 rounded-lg border border-slate-200 bg-slate-50/70 p-2.5 text-[11px]">
+                                                <JobMatrixProfileView Profile="m.Profile" />
+                                                <div class="font-bold text-slate-800 pt-1">Titles:</div>
+                                                @foreach (var t in m.Titles)
+                                                {
+                                                    <div class="text-slate-700">· @t.Name</div>
+                                                }
+                                                <div class="font-bold text-slate-800 pt-1">Steps:</div>
+                                                @foreach (var s in m.Steps)
+                                                {
+                                                    <div class="text-slate-700">· Step @s.Number: Basic @s.BasicSalary.ToString("N2"), Allowance @s.JobAllowance.ToString("N2")</div>
+                                                }
+                                                @if (m.Benefits.Any())
+                                                {
+                                                    <div class="font-bold text-slate-800 pt-1">Benefits:</div>
+                                                    @foreach (var b in m.Benefits)
+                                                    {
+                                                        <div class="text-slate-700">· @b.Name: @(b.Amount?.ToString("N2") ?? "Non-cash") (@b.Frequency)</div>
+                                                    }
+                                                }
+                                            </div>
+                                        </details>
+                                    </td>
+                                    <td class="px-3 py-2.5">
+                                        <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @(m.Active ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-600")">
+                                            @(m.Active ? "Active" : "Inactive")
+                                        </span>
+                                    </td>
+                                    <td class="px-3 py-2.5 text-right">
+                                        <div class="inline-flex items-center gap-1.5 justify-end">
+                                            @if (data.CanManageFrameworks && !m.InUse)
+                                            {
+                                                <button type="button"
+                                                        class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition"
+                                                        @onclick="() => EditMatrix(m)">
+                                                    Edit
+                                                </button>
+                                            }
+                                            else if (m.InUse)
+                                            {
+                                                <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600">In Use</span>
+                                            }
+                                            @if (data.CanManageFrameworks)
+                                            {
+                                                <button type="button"
+                                                        class="rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                                                        @onclick="() => CopyMatrix(m)">
+                                                    Copy Version
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+    }
+</section>
+
+@code {
+    private PayFrameworkData? data;
+    private bool busy;
+    private string? error;
+    private string tab = "frameworks";
+    private int frameworkId;
+    private string frameworkCode = "", frameworkName = "";
+    private bool frameworkActive = true;
+    private string studyFieldChoice = "";
+    private ProfessionRequirementOption? SelectedRequirements => int.TryParse(profile.PublicServiceRank, out var rank) ? data?.RequirementTemplates.FirstOrDefault(x => x.ProfessionId == profile.ProfessionId && x.Rank == rank) : null;
+    private JobMatrixProfile? presetBefore, presetAfter;
+    private void ApplySourceRequirements()
+    {
+        if (presetBefore != null && presetAfter != null) HRM.Application.Presentation.MatrixRequirementPresets.RestoreUnmodified(profile, presetBefore, presetAfter);
+        presetBefore = HRM.Application.Presentation.MatrixRequirementPresets.Snapshot(profile);
+        if (SelectedRequirements is { } source) HRM.Application.Presentation.MatrixRequirementPresets.FillBlank(profile, source.Profile);
+        presetAfter = HRM.Application.Presentation.MatrixRequirementPresets.Snapshot(profile);
+    }
+    private string experienceAreaChoice = "";
+    private void AddExperienceArea()
+    {
+        var area = data?.ExperienceAreas.FirstOrDefault(x => x.Id.ToString() == experienceAreaChoice && (!x.FamilyId.HasValue || x.FamilyId == profile.JobFamilyId));
+        if (area != null)
+        {
+            var value = $"{area.Sector} — {area.Name}: {area.Description}";
+            var lines = (profile.ExperienceAreas ?? "").Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            if (!lines.Contains(value, StringComparer.OrdinalIgnoreCase)) profile.ExperienceAreas = string.IsNullOrWhiteSpace(profile.ExperienceAreas) ? value : profile.ExperienceAreas.TrimEnd() + Environment.NewLine + value;
+        }
+        experienceAreaChoice = "";
+    }
+    private void AddStudyField()
+    {
+        if (string.IsNullOrWhiteSpace(studyFieldChoice)) return;
+        var fields = (profile.FieldsOfStudy ?? "").Split(new[] { '\r', '\n', ';' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (!fields.Contains(studyFieldChoice, StringComparer.OrdinalIgnoreCase)) profile.FieldsOfStudy = string.IsNullOrWhiteSpace(profile.FieldsOfStudy) ? studyFieldChoice : profile.FieldsOfStudy.TrimEnd() + Environment.NewLine + studyFieldChoice;
+        studyFieldChoice = "";
+    }
+    private void SelectFamily(int id) { if (profile.JobFamilyId == id) return; profile.JobFamilyId = id; ChangeFamily(); }
+    private int matrixId, matrixFramework, currency;
+    private string matrixCode = "", matrixName = "";
+    private decimal basicSalary;
+    private DateTime from = DateTime.UtcNow.AddHours(5).Date;
+    private DateTime? to;
+    private bool matrixActive = true;
+    private JobMatrixProfile profile = new();
+    private ProfessionOption? SelectedProfession => data?.Professions.FirstOrDefault(x => x.Id == profile.ProfessionId);
+    private void ChangeFamily() { profile.ProfessionId = null; profile.MisscoCode = ""; matrixName = ""; ApplySourceRequirements(); }
+    private void ChangeProfession()
+    {
+        var p = SelectedProfession;
+        if (p == null) return;
+        matrixName = p.Name;
+        profile.JobFamily = data?.JobFamilies.FirstOrDefault(x => x.Id == p.FamilyId)?.Name ?? "";
+        profile.Description = p.Tasks;
+        profile.Duties = p.Tasks;
+        profile.MisscoCode = p.MisscoCodes.FirstOrDefault() ?? "";
+        titles = p.Titles.Select(x => new TitleDraft { Name = x }).ToList();
+        ApplySourceRequirements();
+    }
+    private List<TitleDraft> titles = [new()];
+    private List<StepDraft> steps = [new()];
+    private List<BenefitDraft> benefits = [];
+    private sealed class TitleDraft { public string Name { get; set; } = ""; }
+    private sealed class StepDraft { public int Number { get; set; } = 1; public decimal? Salary { get; set; } public decimal Allowance { get; set; } public bool Active { get; set; } = true; }
+    private sealed class BenefitDraft { public string Name { get; set; } = ""; public decimal? Amount { get; set; } public string Frequency { get; set; } = "Monthly"; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { data = await Service.LoadPayFrameworksAsync(); }
+        catch (Exception) { error = "Pay frameworks could not be loaded."; }
+    }
+
+    private void ClearFramework() { frameworkId = 0; frameworkCode = ""; frameworkName = ""; frameworkActive = true; }
+    private void EditFramework(PositionFrameworkOption f) { frameworkId = f.Id; frameworkCode = f.Code; frameworkName = f.Name; frameworkActive = f.Active; }
+    private void ClearMatrix() { presetBefore = null; presetAfter = null; profile = new(); matrixId = 0; matrixFramework = 0; currency = 0; matrixCode = ""; matrixName = ""; basicSalary = 0; from = DateTime.UtcNow.AddHours(5).Date; to = null; matrixActive = true; titles = [new()]; steps = [new()]; benefits = []; }
+    private void EditMatrix(JobMatrixRow m)
+    {
+        presetBefore = null; presetAfter = null;
+        profile = m.Profile with
+        {
+            CredentialRequirements = m.Profile.CredentialRequirements.Select(x => x with { }).ToList(),
+            QualificationPathways = m.Profile.QualificationPathways.Select(x => x with { Qualifications = x.Qualifications.Select(q => q with { }).ToList() }).ToList()
+        };
+        matrixId = m.Id; matrixFramework = m.FrameworkId; currency = m.CurrencyId; matrixCode = m.Code; matrixName = m.Name; basicSalary = m.BasicSalary; from = m.From; to = m.To; matrixActive = m.Active;
+        titles = m.Titles.Select(x => new TitleDraft { Name = x.Name }).ToList();
+        steps = m.Steps.Select(x => new StepDraft { Number = x.Number, Salary = x.BasicSalary == m.BasicSalary ? null : x.BasicSalary, Allowance = x.JobAllowance, Active = x.Active }).ToList();
+        benefits = m.Benefits.Select(x => new BenefitDraft { Name = x.Name, Amount = x.Amount, Frequency = x.Frequency }).ToList();
+    }
+    private void CopyMatrix(JobMatrixRow m)
+    {
+        EditMatrix(m); matrixId = 0; matrixCode = ""; profile.RequirementsVersion = "";
+        foreach (var c in profile.CredentialRequirements) c.Id = 0;
+        foreach (var p in profile.QualificationPathways) { p.Id = 0; foreach (var q in p.Qualifications) q.Id = 0; }
+    }
+    private Task SaveFramework() => Run(() => Service.SaveFrameworkAsync(new(frameworkId, frameworkCode, frameworkName, frameworkActive)), ClearFramework);
+    private Task SaveMatrix() => Run(() => Service.SaveJobMatrixAsync(new(matrixId, matrixFramework, matrixCode, matrixName, currency, basicSalary, from, to, matrixActive, titles.Select(x => x.Name).ToList(), steps.Select(x => new MatrixStepInput(x.Number, x.Allowance, x.Salary, x.Active)).ToList(), benefits.Select(x => new MatrixBenefitInput(x.Name, x.Amount, x.Frequency)).ToList()) { Profile = profile }), ClearMatrix);
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> save, Action clear)
+    {
+        if (busy) return;
+        busy = true; error = null;
+        try
+        {
+            var result = await save();
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                clear();
+                data = await Service.LoadPayFrameworksAsync();
+            }
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "The configuration could not be saved. Please try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

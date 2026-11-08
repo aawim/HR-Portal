@@ -1,0 +1,14 @@
+namespace HRM.Enum
+{
+    public enum AttendancePlanResolutionState
+    {
+        Resolved = 1,
+        NoWorkPlan = 2,
+        NoSegment = 3,
+        OutsideResolutionWindow = 4,
+        Unresolved = 5,
+        Conflict = 6,
+        DuplicatePunch = 7,
+        PartiallyResolved = 8,
+    }
+}

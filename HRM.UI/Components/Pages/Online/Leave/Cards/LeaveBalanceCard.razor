@@ -1,0 +1,311 @@
+@using HRM.DTOs.Leave
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.Leave
+@using HRM.Services.State
+
+@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject ToastService ToastService
+
+<section class="w-full rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs flex flex-col overflow-hidden transition-colors"
+         aria-label="Leave Balances and Entitlements">
+
+    <!-- Card Header -->
+    <header class="p-3.5 border-b border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex flex-col gap-2.5">
+        <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center shrink-0 shadow-2xs">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        Leave Balance
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Available quotas &amp; entitlements
+                    </p>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                @if (jobTypes.Any())
+                {
+                    <span class="inline-flex items-center rounded-full bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800/60 px-2.5 py-0.5 text-xs font-extrabold">
+                        @TotalRemainingDays Days Total
+                    </span>
+                }
+                <button type="button"
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                        title="Reload latest leave balances"
+                        @onclick="RefreshBalancesAsync">
+                    <svg class="w-4 h-4 @(isLoading ? "animate-spin" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+
+        @if (jobTypes.Count > 3)
+        {
+            <div class="relative w-full">
+                <input type="text"
+                       @bind="searchQuery"
+                       @bind:event="oninput"
+                       placeholder="Filter leave types..."
+                       class="w-full pl-8 pr-3 py-1.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-teal-500 text-slate-800 dark:text-slate-200" />
+                <span class="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                @if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    <button type="button" class="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer" @onclick="() => searchQuery = string.Empty">✕</button>
+                }
+            </div>
+        }
+    </header>
+
+    <!-- Balances List -->
+    <div class="overflow-y-auto max-h-[580px] p-2 flex flex-col gap-2">
+        @if (isLoading)
+        {
+            <div class="py-12 text-center text-xs text-slate-400 animate-pulse flex flex-col items-center justify-center gap-2">
+                <div class="w-8 h-8 rounded-full border-2 border-teal-600 border-t-transparent animate-spin"></div>
+                <span>Loading staff leave balances...</span>
+            </div>
+        }
+        else if (FilteredJobTypes.Any())
+        {
+            @foreach (var leave in FilteredJobTypes)
+            {
+                var isSelected = LeaveState?.Model?.JobLeaveTypeId == leave.JobLeaveTypeId;
+                var (_, _, iconBg, emoji) = GetLeaveVisuals(leave.LeaveTypeName);
+
+                <div class="w-full text-left rounded-xl p-3 border transition-all @(isSelected ? "border-teal-500 bg-teal-50/70 dark:bg-teal-950/40 ring-1 ring-teal-500 shadow-xs" : "border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/60 dark:hover:bg-slate-800/40")">
+                    
+                    <div class="flex items-start justify-between gap-3">
+                        <!-- Icon & Leave Details -->
+                        <div class="flex items-center gap-2.5 min-w-0">
+                            <div class="w-10 h-10 rounded-xl @iconBg flex items-center justify-center shrink-0 text-base shadow-2xs">
+                                @emoji
+                            </div>
+
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-1.5 flex-wrap">
+                                    <h4 class="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
+                                        @(string.IsNullOrWhiteSpace(leave.LeaveTypeName) ? "Leave Type" : leave.LeaveTypeName)
+                                    </h4>
+                                    @if (isSelected)
+                                    {
+                                        <span class="inline-flex items-center gap-0.5 rounded-full bg-teal-100 dark:bg-teal-900 text-teal-800 dark:text-teal-200 px-1.5 py-0.2 text-[9px] font-bold">
+                                            ✓ Active
+                                        </span>
+                                    }
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(leave.LeaveTypeNameDv))
+                                {
+                                    <p class="text-[11px] text-slate-500 dark:text-slate-400 font-dhivehi" dir="rtl">
+                                        @leave.LeaveTypeNameDv
+                                    </p>
+                                }
+
+                                <div class="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                                    @if (leave.RenewedDate.HasValue)
+                                    {
+                                        <span>Renewed: @leave.RenewedDate.Value.ToString("dd MMM yyyy")</span>
+                                    }
+                                    else if (leave.LastLeaveTakenDate.HasValue)
+                                    {
+                                        <span>Last taken: @leave.LastLeaveTakenDate.Value.ToString("dd MMM yyyy")</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Annual entitlement</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Remaining Days Metric & Action -->
+                        <div class="flex flex-col items-end gap-1.5 shrink-0">
+                            <div class="flex items-baseline gap-1">
+                                <span class="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                                    @leave.RemainingDays
+                                </span>
+                                <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                                    @(leave.RemainingDays == 1 ? "day" : "days")
+                                </span>
+                            </div>
+
+                            @if (leave.RemainingDays > 0 && leave.IsLeaveInfoUpdated == true)
+                            {
+                                @if (isSelected)
+                                {
+                                    <span class="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-bold text-white bg-teal-700 rounded-lg shadow-xs">
+                                        ✓ Selected
+                                    </span>
+                                }
+                                else
+                                {
+                                    <button type="button"
+                                            @onclick="() => ApplyLeaveType(leave)"
+                                            class="inline-flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold text-white bg-teal-700 hover:bg-teal-800 active:bg-teal-900 rounded-lg shadow-xs transition-all cursor-pointer">
+                                        <span>Apply</span>
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                                        </svg>
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <span class="inline-flex items-center px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 dark:bg-rose-950/60 text-rose-700 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                                    Exhausted
+                                </span>
+                            }
+                        </div>
+                    </div>
+
+                    <!-- Mini Quota Progress Indicator -->
+                    <div class="mt-2 w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all duration-300 @(leave.RemainingDays > 0 ? "bg-teal-600 dark:bg-teal-500" : "bg-rose-400")"
+                             style="width: @(leave.RemainingDays > 0 ? Math.Min(100, Math.Max(10, leave.RemainingDays * 5)) : 0)%">
+                        </div>
+                    </div>
+                </div>
+            }
+        }
+        else
+        {
+            <div class="p-8 text-center text-xs text-slate-500 dark:text-slate-400 flex flex-col items-center justify-center gap-2">
+                <span class="text-2xl">📋</span>
+                <p>No leave balances found for this employment record.</p>
+                @if (!string.IsNullOrWhiteSpace(searchQuery))
+                {
+                    <button type="button" class="text-teal-700 dark:text-teal-400 font-semibold hover:underline cursor-pointer" @onclick="() => searchQuery = string.Empty">Clear search filter</button>
+                }
+            </div>
+        }
+    </div>
+
+    <!-- Card Summary Footer -->
+    @if (jobTypes.Any())
+    {
+        <footer class="p-3 border-t border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+            <span class="font-medium">
+                @jobTypes.Count Entitlement @(jobTypes.Count == 1 ? "Category" : "Categories")
+            </span>
+            <span class="font-bold text-slate-800 dark:text-slate-200">
+                @TotalRemainingDays Days Available
+            </span>
+        </footer>
+    }
+</section>
+
+@code {
+    [Parameter]
+    public EventCallback OnLeaveTypeSelected { get; set; }
+
+    [Parameter]
+    public LeaveApplicationState LeaveState { get; set; } = default!;
+
+    [Parameter] public int RefreshKey { get; set; }
+
+    private int? lastRefresh;
+    private List<HRM.DTOs.Leave.JobLeaveTypeDto> jobTypes = new();
+    private List<ProcessingLeaveDto> processingLeaves = new();
+    private bool isLoading;
+    private string searchQuery = string.Empty;
+
+    private decimal TotalRemainingDays => jobTypes.Sum(x => x.RemainingDays);
+
+    private IEnumerable<JobLeaveTypeDto> FilteredJobTypes =>
+        string.IsNullOrWhiteSpace(searchQuery)
+            ? jobTypes
+            : jobTypes.Where(j => (j.LeaveTypeName?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false) ||
+                                  (j.LeaveTypeNameDv?.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ?? false));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (lastRefresh == RefreshKey) return;
+        lastRefresh = RefreshKey;
+        await LoadBalancesAsync();
+    }
+
+    private async Task RefreshBalancesAsync()
+    {
+        lastRefresh = null;
+        await LoadBalancesAsync();
+    }
+
+    private async Task LoadBalancesAsync()
+    {
+        try
+        {
+            isLoading = true;
+            jobTypes = LeaveState.ApplicantJobId.HasValue
+                ? await LeaveService.GetApplicantLeaveBalancesAsync(LeaveState.ApplicantJobId.Value)
+                : await LeaveService.GetMyLeaveBalancesAsync();
+
+            if (LeaveState.Model.JobLeaveTypeId.HasValue)
+            {
+                LeaveState.RemainingDays = jobTypes.FirstOrDefault(x => x.JobLeaveTypeId == LeaveState.Model.JobLeaveTypeId)?.RemainingDays ?? 0;
+            }
+        }
+        catch (Exception ex)
+        {
+            ToastService.Warning("Could not load latest leave balances.");
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyLeaveType(HRM.DTOs.Leave.JobLeaveTypeDto leave)
+    {
+        var applicationType = await LeaveService.GetApplicationLeaveTypeAsync(leave.JobLeaveTypeId, LeaveState.ApplicantJobId);
+        if (applicationType == null)
+        {
+            ToastService.Warning("This leave type is unavailable. Please refresh or contact HR.");
+            return;
+        }
+
+        LeaveState.Model.JobLeaveTypeId = applicationType.JobLeaveTypeId;
+        LeaveState.Model.LeaveTypeId = applicationType.LeaveTypeId;
+        LeaveState.RemainingDays = applicationType.RemainingDays;
+        LeaveState.IncludeHolidays = applicationType.IncludeHolidays;
+        LeaveState.Reasons = applicationType.Reasons;
+        LeaveState.Model.LeaveReasonId = 0;
+        LeaveState.Model.MedicalCertificateNo = null;
+        LeaveState.Model.HospitalName = null;
+        LeaveState.Model.Destination = null;
+        LeaveState.Model.Purpose = null;
+        LeaveState.ResolveForm(applicationType.LeaveTypeName);
+
+        // Notify parent
+        await OnLeaveTypeSelected.InvokeAsync();
+    }
+
+    private static (string bgClass, string textClass, string iconBg, string emoji) GetLeaveVisuals(string? leaveName)
+    {
+        if (string.IsNullOrWhiteSpace(leaveName))
+            return ("bg-slate-50", "text-slate-700", "bg-slate-100 text-slate-700", "📋");
+
+        var lower = leaveName.ToLowerInvariant();
+        if (lower.Contains("annual"))
+            return ("bg-emerald-50", "text-emerald-700", "bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300", "🏖️");
+        if (lower.Contains("sick") || lower.Contains("medical"))
+            return ("bg-rose-50", "text-rose-700", "bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300", "🩺");
+        if (lower.Contains("casual") || lower.Contains("short"))
+            return ("bg-amber-50", "text-amber-700", "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300", "☕");
+        if (lower.Contains("family") || lower.Contains("maternity") || lower.Contains("paternity"))
+            return ("bg-purple-50", "text-purple-700", "bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-300", "👨‍👩‍👧");
+        if (lower.Contains("special") || lower.Contains("study") || lower.Contains("hajj"))
+            return ("bg-blue-50", "text-blue-700", "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300", "✈️");
+
+        return ("bg-teal-50", "text-teal-700", "bg-teal-100 dark:bg-teal-950 text-teal-800 dark:text-teal-300", "📋");
+    }
+}

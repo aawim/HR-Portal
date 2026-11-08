@@ -1,0 +1,746 @@
+using HRM.Components.Shared;
+using HRM.DTOs.UserContext;
+using HRM.Enum;
+using HRM.Models;
+using HRM.Services.Interfaces;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.EntityFrameworkCore;
+using System.Linq.Expressions;
+
+namespace HRM.Services
+{
+    public class UserContextBuilder : IUserContextBuilder
+    {
+        private readonly IDbContextFactory<HrmTeContext> _dbFactory;
+        private readonly AuthenticationStateProvider _authenticationStateProvider;
+        private readonly IRoleService _roleService;
+        private IEffectivePermissionService _effectivePermissionService;
+
+        public UserContextBuilder(
+            IDbContextFactory<HrmTeContext> dbFactory,
+            AuthenticationStateProvider authenticationStateProvider,
+            IRoleService roleService,
+            IEffectivePermissionService effectivePermissionService)
+        {
+            _dbFactory = dbFactory;
+            _authenticationStateProvider = authenticationStateProvider;
+            _roleService = roleService;
+            _effectivePermissionService = effectivePermissionService;
+
+            
+        }
+
+        public async Task<UserContextDto?> BuildAsync(int userId)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var user = await LoadUserByIdAsync(db, userId);
+
+            if (user == null)
+                return null;
+
+            return await BuildContextAsync(db, user);
+        }
+
+        public async Task<UserContextDto?> BuildByUsernameAsync(string username)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var user = await LoadUserByUsernameAsync(db, username);
+
+            if (user == null)
+                return null;
+
+            return await BuildContextAsync(db, user);
+        }
+
+        public async Task<UserContextDto?> BuildByBusinessEntityAsync(int businessEntityId)
+        {
+            using var db = await _dbFactory.CreateDbContextAsync();
+
+            var user = await LoadUserByBusinessEntityAsync(db, businessEntityId);
+
+            if (user == null)
+                return null;
+
+            return await BuildContextAsync(db, user);
+        }
+
+        public async Task<UserContextDto?> BuildCurrentUserAsync()
+        {
+            var authState = await _authenticationStateProvider.GetAuthenticationStateAsync();
+            if (authState.User.Identity?.IsAuthenticated != true) return null;
+
+            var username = authState.User.FindFirst("idnumber")?.Value;
+
+            if (string.IsNullOrWhiteSpace(username))
+                return null;
+
+            return await BuildByUsernameAsync(username);
+        }
+
+     
+
+        private Task<User?> LoadUserByIdAsync(HrmTeContext db, int userId)
+               => LoadUserAsync(db, u => u.UserId == userId);
+
+        private Task<User?> LoadUserByUsernameAsync(HrmTeContext db, string username)
+            => LoadUserAsync(db, u => u.Username == username);
+
+        private Task<User?> LoadUserByBusinessEntityAsync(HrmTeContext db, int businessEntityId)
+            => LoadUserAsync(db, u => u.BusinessEntityID == businessEntityId);
+
+
+        private async Task<User?> LoadUserAsync(HrmTeContext db,Expression<Func<User, bool>> predicate)
+        {
+            return await db.Users
+                .AsNoTracking()
+                .Where(x => x.IsActive && x.LocalUserStateId == 1)
+                .SingleOrDefaultAsync(predicate);
+        }
+
+
+
+        private async Task<UserContextDto> BuildContextAsync(
+         HrmTeContext db,
+         User user)
+        {
+            var context = await BuildBasicContextAsync(db, user);
+
+
+            await PopulateJobAsync(context);
+
+
+            await PopulateOrganisationAsync(db, context);
+
+
+            await PopulateRoleGroupsAsync(db, context);
+
+
+            await PopulatePermissionsAsync(db, context);
+            context.IsSuperAdministrator = await HRM.Helpers.PlatformAdministratorAccess.HasAsync(db, context.UserId);
+
+
+            // Permissions and groups above are resolved with current organisation scope.
+
+
+            await PopulateOrganisationAccessAsync(db, context);
+
+            // Determine status
+            context.Status = DetermineStatus(context);
+
+            // Validate eligibility
+            context.Validation = EvaluateUserState(context);
+
+
+            return context;
+        }
+
+        private async Task PopulateOrganisationAccessAsync(
+    HrmTeContext db,
+    UserContextDto context)
+        {
+            context.OrganisationAccess =
+                await db.UserOrganisations
+                    .AsNoTracking()
+                    .Where(x =>
+                        x.Users.Any(u =>
+                            u.UserId == context.UserId))
+                    .Select(x => new UserOrganisationAccessDto
+                    {
+                        UserOrganisationID =
+                            x.UserOrganisationID,
+
+                        BusinessEntityID =
+                            x.BusinessEntityID,
+
+                        OrganisationName =
+                            x.Organisation.OrganisationName
+                    })
+                    .ToListAsync();
+        }
+
+
+        private async Task PopulateSecurityAsync(
+            UserContextDto context)
+                {
+                    context.UserGroups =
+                        await _roleService
+                        .GetUserRoleGroupsAsync(
+                            context.UserId);
+
+
+                    context.Permissions =
+                        await _roleService.GetUserPermissionsAsync(context.UserId);
+                }
+
+
+        private UserValidationResultDto EvaluateUserState(UserContextDto context)
+        {
+            var result = new UserValidationResultDto();
+
+            // 1. User exists
+            if (context.UserId == 0)
+            {
+                result.Eligibility = UserEligibility.UserNotFound;
+
+                result.Errors.Add(
+                    "User record not found.");
+
+                return result;
+            }
+
+            // 2. Account status
+            if (context.Status == UserStatus.Suspended ||
+                context.Status == UserStatus.Inactive)
+            {
+                result.Eligibility =
+                    UserEligibility.UserInactive;
+
+                result.Errors.Add(
+                    "User account is not active.");
+
+                return result;
+            }
+
+            // 3. Individual exists
+            if (context.IndividualId == 0)
+            {
+                result.Eligibility =
+                    UserEligibility.NoIndividual;
+
+                result.Errors.Add(
+                    "No individual profile linked.");
+
+                return result;
+            }
+
+            // 4. Active job
+            if (context.ActiveJob == null)
+            {
+                result.Eligibility =
+                    UserEligibility.NoActiveJob;
+
+                result.Errors.Add(
+                    "No active job found.");
+
+                return result;
+            }
+
+            // 5. Organisation
+            if (context.Organisation == null)
+            {
+                result.Eligibility =
+                    UserEligibility.NoOrganisation;
+
+                result.Errors.Add(
+                    "No organisation assigned.");
+
+                return result;
+            }
+
+            // 6. Role Groups
+            if (!context.UserGroups.Any())
+            {
+                result.Eligibility =
+                    UserEligibility.NoRoleGroup;
+
+                result.Errors.Add(
+                    "No role group assigned.");
+
+                return result;
+            }
+
+            // 7. Permissions
+            if (!context.Permissions.Any())
+            {
+                result.Eligibility =
+                    UserEligibility.NoPermission;
+
+                result.Errors.Add(
+                    "No permissions assigned.");
+
+                return result;
+            }
+
+            // Everything is valid
+            result.Eligibility =
+                UserEligibility.Eligible;
+
+            return result;
+        }
+
+        private UserStatus DetermineStatus(
+    UserContextDto context)
+        {
+            if (context.UserId == 0)
+                return UserStatus.Unknown;
+
+            if (context.ActiveJob == null)
+                return UserStatus.Terminated;
+
+            return UserStatus.Active;
+        }
+
+
+
+
+        private async Task<UserContextDto> BuildBasicContextAsync(
+       HrmTeContext db,
+       User user)
+        {
+            var individual = await db.Individuals
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x =>
+                    x.BusinessEntityId == user.BusinessEntityID);
+
+
+            return new UserContextDto
+            {
+                UserId = user.UserId,
+                UserOrganisationId = user.UserOrganisationId,
+
+                BusinessEntityId = user.BusinessEntityID,
+
+                IndividualId = individual?.BusinessEntityId ?? 0,
+
+                Username = user.Username,
+
+                FullName = individual == null
+                    ? user.Username
+                    : $"{individual.FirstNameEnglish} {individual.MiddleNameEnglish} {individual.LastNameEnglish}"
+                        .Replace("  ", " ")
+                        .Trim()
+            };
+        }
+
+        private async Task PopulateJobAsync(UserContextDto context)
+        {
+            if (context.IndividualId == 0)
+            {
+                context.ActiveJob = null;
+                return;
+            }
+
+            context.ActiveJob = await GetActiveJobAsync(context.IndividualId);
+        }
+
+
+
+
+        private async Task<ActiveJobDto?> GetActiveJobAsync(
+       int individualId,
+       CancellationToken cancellationToken = default)
+        {
+            if (individualId <= 0)
+            {
+                return null;
+            }
+
+            await using var db =
+                await _dbFactory.CreateDbContextAsync(cancellationToken);
+
+            var approvedStateId =
+                SharedConfig.JobStates.APPROVED;
+
+            var today =
+                DateTime.Today;
+
+            return await
+            (
+                from job in db.Jobs.AsNoTracking()
+
+                join organisation in db.Organisations.AsNoTracking()
+                    on job.OrganisationID equals organisation.BusinessEntityID
+                    into organisationGroup
+
+                from organisation in organisationGroup.DefaultIfEmpty()
+
+                join structure in db.OrganisationStructures.AsNoTracking()
+                    on job.OrganisationStructureId equals
+                        structure.OrganisationStructureId
+                    into structureGroup
+
+                from structure in structureGroup.DefaultIfEmpty()
+
+                join jobType in db.JobTypes.AsNoTracking()
+                    on job.JobTypeId equals jobType.JobTypeId
+                    into jobTypeGroup
+
+                from jobType in jobTypeGroup.DefaultIfEmpty()
+
+                where
+                    job.IndividualID == individualId &&
+                    job.JobStateId == approvedStateId &&
+                    job.TerminatedDate == null && job.JoinedDate <= today &&
+                    db.Users.Any(u => u.BusinessEntityID == individualId &&
+                        db.UserOrganisations.Any(o => o.UserOrganisationID == u.UserOrganisationId && o.BusinessEntityID == job.OrganisationID))
+
+                let activePosition =
+                    (
+                        from jobPosition in db.JobPositions.AsNoTracking()
+
+                        join position in db.Positions.AsNoTracking()
+                            on jobPosition.PositionId equals position.PositionId
+
+                        where
+                            jobPosition.JobId == job.JobId &&
+                            jobPosition.FromDate <= today &&
+                            (
+                                jobPosition.ToDate == null ||
+                                jobPosition.ToDate > today
+                            )
+
+                        orderby
+                            jobPosition.FromDate descending,
+                            jobPosition.JobPositionId descending
+
+                        select new
+                        {
+                            JobPositionId =
+                                jobPosition.JobPositionId,
+
+                            PositionId =
+                                position.PositionId,
+
+                            PositionName =
+                                position.Name
+                        }
+                    )
+                    .FirstOrDefault()
+
+                orderby
+                    job.JoinedDate descending,
+                    job.JobId descending
+
+                select new ActiveJobDto
+                {
+                    JobId =
+                        job.JobId,
+
+                    IndividualId =
+                        job.IndividualID,
+
+                    OrganisationId =
+                        job.OrganisationID,
+
+                    OrganisationName =
+                        organisation != null
+                            ? organisation.OrganisationName ?? string.Empty
+                            : string.Empty,
+
+                    OrganisationStructureId =
+                        job.OrganisationStructureId,
+
+                    OrganisationStructureName =
+                        structure != null
+                            ? structure.Name ?? string.Empty
+                            : string.Empty,
+
+                    JobStateId =
+                        job.JobStateId,
+
+                    JobStateName =
+                        job.JobState != null
+                            ? job.JobState.StateName ?? string.Empty
+                            : string.Empty,
+
+                    JobTypeId =
+                        job.JobTypeId,
+
+                    JobTypeName =
+                        jobType != null
+                            ? jobType.TypeName ?? string.Empty
+                            : string.Empty,
+
+                    PositionId =
+                        activePosition != null
+                            ? activePosition.PositionId
+                            : null,
+
+                    PositionName =
+                        activePosition != null
+                            ? activePosition.PositionName ?? string.Empty
+                            : string.Empty,
+
+                    EmployeeNumber =
+                        job.Staff != null
+                            ? job.Staff.EmployeeNumber ?? string.Empty
+                            : string.Empty,
+
+                    BasicSalary =
+                        job.BasicSalary,
+
+                    SAPNumber =
+                        job.Sapnumber,
+
+                    JoinedDate =
+                        job.JoinedDate,
+
+                    TerminatedDate =
+                        job.TerminatedDate,
+
+                    IsActive =
+                        true
+                }
+            )
+            .FirstOrDefaultAsync(cancellationToken);
+        }
+
+
+
+
+
+
+
+        private static async Task PopulateOrganisationAsync(HrmTeContext db,
+          UserContextDto context)
+        {
+            if (context.BusinessEntityId == 0)
+            {
+                context.Organisation = null;
+                return;
+            }
+
+            context.Organisation = await (from user in db.Users.AsNoTracking()
+                join assignment in db.UserOrganisations on user.UserOrganisationId equals assignment.UserOrganisationID
+                join organisation in db.Organisations on assignment.BusinessEntityID equals organisation.BusinessEntityID
+                where user.UserId == context.UserId && user.IsActive && user.LocalUserStateId == 1
+                select new UserOrganisationDto
+                {
+                    OrganisationBusinessEntityId = organisation.BusinessEntityID,
+                    OrganisationName = organisation.OrganisationName,
+                    OrganisationNameDhivehi = organisation.OrganisationNameDhivehi ?? "",
+                    ParentOrganisationBusinessEntityId = organisation.ParentOrganisationBusinessEntityId
+                }).SingleOrDefaultAsync();
+        }
+
+
+        private async Task<List<UserGroupDto>> LoadUserGroupsAsync(HrmTeContext db, int userId)
+        {
+            return await db.UserAssignedUserGroups
+                .AsNoTracking()
+                .Where(x => x.UserId == userId && (x.UserGroup.IsGlobal || x.UserGroup.UserOrganisationId == x.User.UserOrganisationId))
+                .Select(x => new UserGroupDto
+                {
+                    UserGroupID = x.UserGroupId,
+
+                    GroupName =
+                        x.UserGroup.GroupName,
+
+                    UserOrganisationID =
+                        x.UserGroup.UserOrganisationId,
+
+                    ParentUserGroupID =
+                        x.UserGroup.ParentUserGroupId,
+
+                    IsGlobal =
+                        x.UserGroup.IsGlobal
+                })
+                .ToListAsync();
+        }
+
+
+
+        private async Task PopulateRoleGroupsAsync(
+            HrmTeContext db,
+            UserContextDto context)
+                {
+                    context.UserGroups = await LoadUserGroupsAsync(db,context.UserId);
+        }
+
+
+        private async Task PopulatePermissionsAsync(HrmTeContext db,UserContextDto context)
+        {
+            //var permissions = new List<UserPermissionDto>();
+
+            //// 1. Permissions from Role Groups
+            //var groupPermissions = await LoadGroupPermissionsAsync(db,context.UserGroups);
+
+            //permissions.AddRange(groupPermissions);
+
+
+            //// 2. Direct user permissions
+            //var directPermissions = await LoadDirectPermissionsAsync(db,context.UserId);
+
+            //permissions.AddRange(directPermissions);
+
+            //context.Permissions =
+            //    permissions
+            //        .GroupBy(x => x.RoleID)
+            //        .Select(x => x.First())
+            //        .ToList();
+
+            context.PermissionSources = await _effectivePermissionService.GetPermissionSourcesAsync(context.UserId);
+
+
+            context.Permissions =await _effectivePermissionService.GetEffectivePermissionsAsync(context.UserId);
+        }
+
+
+        private async Task<List<UserPermissionDto>> LoadGroupPermissionsAsync(
+    HrmTeContext db,
+    List<UserGroupDto> roleGroups)
+        {
+            var groupIds = roleGroups
+                .Select(x => x.UserGroupID)
+                .ToList();
+
+
+            return await db.UserGroupRoles
+                .AsNoTracking()
+                .Where(x =>
+                    groupIds.Contains(x.UserGroupId) &&
+                    x.IsActive)
+                .Select(x => new UserPermissionDto
+                {
+                    RoleID = x.RoleId,
+
+                    RoleKey = x.Role.RoleKey,
+
+                    Name = x.Role.Name,
+
+                    Description = x.Role.Description,
+
+                    ModuleID = x.Role.ModuleId,
+
+                    IsSystemRole = x.Role.IsSystemRole == true
+                })
+                .ToListAsync();
+        }
+
+
+        private async Task<List<UserPermissionDto>> LoadDirectPermissionsAsync(
+       HrmTeContext db,
+       int userId)
+        {
+            return await db.UserRoles
+                .AsNoTracking()
+                .Where(x =>
+                    x.UserId == userId &&
+                    x.IsActive)
+                .Select(x => new UserPermissionDto
+                {
+                    RoleID = x.RoleId,
+
+                    RoleKey = x.Role.RoleKey,
+
+                    Name = x.Role.Name,
+
+                    Description = x.Role.Description,
+
+                    ModuleID = x.Role.ModuleId,
+
+                    IsSystemRole = x.Role.IsSystemRole == true
+                })
+                .ToListAsync();
+        }
+
+
+
+
+
+
+
+
+
+
+        //private async Task PopulatePermissionsAsync(
+        //HrmTeContext db,
+        //UserContextDto context)
+        //{
+        //    if (!context.RoleGroups.Any())
+        //    {
+        //        context.Permissions = new();
+
+        //        return;
+        //    }
+
+
+        //    var userGroupIds = context.RoleGroups
+        //        .Select(x => x.UserGroupID)
+        //        .ToList();
+
+
+        //    var permissions = await db.UserGroupRoles
+        //        .AsNoTracking()
+        //        .Where(x =>
+        //            userGroupIds.Contains(x.UserGroupId) &&
+        //            x.IsActive)
+        //        .Select(x => new UserPermissionDto
+        //        {
+        //            RoleID = x.RoleId,
+
+        //            RoleKey = x.Role.RoleKey,
+
+        //            Name = x.Role.Name,
+
+        //            Description = x.Role.Description,
+
+        //            ModuleID = x.Role.ModuleId,
+
+        //            IsSystemRole =
+        //                x.Role.IsSystemRole == true,
+
+        //            UserGroupID =
+        //                x.UserGroupId,
+
+        //            UserGroupName =
+        //                x.UserGroup.GroupName
+        //        })
+        //        .ToListAsync();
+
+
+        //    context.Permissions = permissions
+        //        .GroupBy(x => x.RoleID)
+        //        .Select(x => x.First())
+        //        .ToList();
+        //}
+
+
+        //private async Task<List<UserPermissionDto>> LoadDirectOrganisationPermissionsAsync(
+        //HrmTeContext db,
+        //int userId)
+        //    {
+        //        return await db.UserRoles
+        //            .AsNoTracking()
+        //            .Where(x =>
+        //                x.UserId == userId &&
+        //                x.IsActive &&
+        //                x.UserOrganisationId != null)
+        //            .Select(x => new UserPermissionDto
+        //            {
+        //                RoleID = x.RoleId,
+
+        //                RoleKey = x.Role.RoleKey,
+
+        //                Name = x.Role.Name,
+
+        //                Description = x.Role.Description,
+
+        //                ModuleID = x.Role.ModuleId,
+
+        //                IsSystemRole = x.Role.IsSystemRole == true
+        //            })
+        //            .ToListAsync();
+        //}
+
+
+
+
+
+
+
+
+        // To be implemented
+
+        //    return await db.Users
+        //.AsNoTracking()
+        //.Where(u => u.Username == username)
+        //.OrderByDescending(u => u.UserID)
+        //.FirstOrDefaultAsync();
+
+
+
+    }
+}

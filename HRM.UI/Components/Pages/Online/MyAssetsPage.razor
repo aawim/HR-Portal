@@ -1,0 +1,1236 @@
+@page "/online/my-assets"
+@namespace HRM.Components.Pages.Online
+@using HRM.Components.Admin.Hr.Items
+@using HRM.DTOs
+@using HRM.DTOs.Assets
+@using HRM.Enums
+@using HRM.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject HRM.Services.Contracts.StaffAssetServiceContracts.IOperations AssetService
+@inject ToastService Toasts
+@inject IJSRuntime JS
+
+<PageTitle>My Assets & Equipment - Employee Portal</PageTitle>
+
+<div class="mx-auto max-w-full min-w-7xl space-y-6 px-4 py-6">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-2 pt-[-2]">
+        <div>
+            <h1 class="mt-1 text-2xl font-extrabold text-slate-900">My Assets & Official Property</h1>
+            <p class="text-sm text-slate-500">
+                Acknowledge physical receipt of organizational property, view active custody, track historical issuances, and report returns or damages.
+            </p>
+        </div>
+
+        @if (portalData?.ActiveCustodies.Count > 0)
+        {
+            <button type="button"
+                    @onclick="OpenInitiateReturnModal"
+                    class="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-800 shadow-sm hover:bg-slate-50">
+                <svg class="h-4 w-4 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 15v-1a4 4 0 00-4-4H8m0 0l3 3m-3-3l3-3m9 14V5a2 2 0 00-2-2H6a2 2 0 00-2 2v16l4-2 4 2 4-2 4 2z" />
+                </svg>
+                <span>Initiate Return / Report Issue</span>
+            </button>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="flex min-h-[350px] items-center justify-center">
+            <div class="flex flex-col items-center gap-2">
+                <div class="h-8 w-8 animate-spin rounded-full border-4 border-teal-600 border-t-transparent"></div>
+                <p class="text-xs text-slate-500">Loading your property & equipment records...</p>
+            </div>
+        </div>
+    }
+    else if (portalData is not null)
+    {
+        <!-- Pending Issuance Notification Alert Banner -->
+        @if (portalData.PendingIssuances.Count > 0)
+        {
+            <div class="rounded-2xl border border-amber-300 bg-amber-50 p-4 shadow-sm">
+                <div class="flex items-start justify-between">
+                    <div class="flex items-start gap-3">
+                        <span class="text-2xl">📦</span>
+                        <div>
+                            <h3 class="text-sm font-bold text-amber-900">
+                                You have @portalData.PendingIssuances.Count issuance request(s) awaiting your acknowledgement
+                            </h3>
+                            <p class="mt-0.5 text-xs text-amber-800">
+                                Please physically inspect each item listed below. Accept each verified item or reject with remarks if defective or not received.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+ 
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-slate-200">
+            <nav class="-mb-px flex space-x-6 text-xs font-semibold">
+                <button type="button"
+                        @onclick='() => activeTab = "pending"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "pending" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Pending Acknowledgements (@portalData.PendingIssuances.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "current"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "current" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    My Current Assets (@portalData.ActiveCustodies.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "history"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "history" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Custody History & Returns (@portalData.CustodyHistory.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "documents"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "documents" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Handover Records & Documents (@portalData.ApprovedDocuments.Count)
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "service"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "service" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    Repairs & Upgrades
+                </button>
+
+                <button type="button"
+                        @onclick='() => activeTab = "clearance"'
+                        class="whitespace-nowrap border-b-2 py-3 px-1 transition @(activeTab == "clearance" ? "border-teal-600 text-teal-600 font-bold" : "border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700")">
+                    My Asset Clearance Status
+                </button>
+            </nav>
+        </div>
+
+        <!-- TAB 1: Pending Acknowledgements -->
+        @if (activeTab == "pending")
+        {
+            <div class="space-y-6">
+                @if (portalData.PendingIssuances.Count == 0)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-400">
+                        <div class="text-4xl mb-2">✓</div>
+                        <div class="font-bold text-slate-700">No Pending Asset Issuances</div>
+                        <p class="text-xs text-slate-500 mt-1">All handed-over items have been acknowledged.</p>
+                    </div>
+                }
+
+                @foreach (var issuance in portalData.PendingIssuances)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                            <div>
+                                <span class="font-mono text-xs font-bold text-teal-700">@issuance.ReferenceNumber</span>
+                                <h2 class="text-base font-extrabold text-slate-900">Equipment Handover from @issuance.OrganisationName</h2>
+                                <p class="text-xs text-slate-500">Purpose: @issuance.Reason</p>
+                            </div>
+                            <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                                Awaiting Employee Review
+                            </span>
+                        </div>
+
+                        <!-- Items to Review -->
+                        <div class="space-y-3">
+                            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Items Handed Over for Custody</h3>
+                            @foreach (var line in issuance.Lines.Where(l => l.Status == AssetIssuanceLineStatuses.HandedOver))
+                            {
+                                var decision = GetOrCreateDraftDecision(issuance.AssetIssuanceId, line.AssetIssuanceItemId, line.Version);
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-3 text-xs">
+                                    <div class="flex flex-wrap items-start justify-between gap-2">
+                                        <div>
+                                            <div class="font-mono font-bold text-slate-900">@line.AssetCode</div>
+                                            <div class="text-sm font-bold text-slate-800">@line.ItemName</div>
+                                            <div class="text-slate-500 text-[11px]">
+                                                Category: @line.CategoryName • S/N: <span class="font-mono">@(line.SerialNumber ?? "None")</span>
+                                                @(string.IsNullOrWhiteSpace(line.Brand) ? "" : $" • {line.Brand} {line.Model}")
+                                            </div>
+                                        </div>
+
+                                        <div class="text-right">
+                                            <div class="rounded bg-white px-2 py-1 text-[11px] font-medium text-slate-700 border border-slate-200">
+                                                Condition: <span class="font-bold">@line.ConditionName</span>
+                                            </div>
+                                            <div class="mt-1 text-[10px] text-slate-400">
+                                                Handed over: @line.HandedOverAtLocal?.ToString("dd MMM yyyy HH:mm")
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    @if (!string.IsNullOrWhiteSpace(line.Accessories))
+                                    {
+                                        <div class="rounded bg-white p-2 border border-slate-200 text-[11px] text-slate-700">
+                                            <span class="font-semibold text-slate-900">Bundled Accessories:</span> @line.Accessories
+                                        </div>
+                                    }
+
+                                    <!-- Decision Radio Toggle -->
+                                    <div class="border-t border-slate-200 pt-3">
+                                        <div class="flex items-center gap-4">
+                                            <label class="inline-flex items-center gap-2 font-semibold cursor-pointer @(decision.Decision == AssetStaffDecisions.Accepted ? "text-emerald-700" : "text-slate-600")">
+                                                <input type="radio"
+                                                       name="@($"dec_{line.AssetIssuanceItemId}")"
+                                                       value="@AssetStaffDecisions.Accepted"
+                                                       checked="@(decision.Decision == AssetStaffDecisions.Accepted)"
+                                                       @onchange='() => decision.Decision = AssetStaffDecisions.Accepted'
+                                                       class="text-emerald-600 focus:ring-emerald-500" />
+                                                <span>✓ Accept Item (Received in Good Condition)</span>
+                                            </label>
+
+                                            <label class="inline-flex items-center gap-2 font-semibold cursor-pointer @(decision.Decision == AssetStaffDecisions.Rejected ? "text-rose-700" : "text-slate-600")">
+                                                <input type="radio"
+                                                       name="@($"dec_{line.AssetIssuanceItemId}")"
+                                                       value="@AssetStaffDecisions.Rejected"
+                                                       checked="@(decision.Decision == AssetStaffDecisions.Rejected)"
+                                                       @onchange='() => decision.Decision = AssetStaffDecisions.Rejected'
+                                                       class="text-rose-600 focus:ring-rose-500" />
+                                                <span>✕ Reject Item</span>
+                                            </label>
+                                        </div>
+
+                                        <!-- If Rejected: Mandatory Reason & Remarks -->
+                                        @if (decision.Decision == AssetStaffDecisions.Rejected)
+                                        {
+                                            <div class="mt-3 rounded-lg border border-rose-200 bg-rose-50/60 p-3 space-y-2">
+                                                <div class="grid grid-cols-2 gap-2">
+                                                    <div>
+                                                        <label class="block font-semibold text-rose-900 text-[11px]">Reason for Rejection *</label>
+                                                        <select @bind="decision.RejectionReasonCode" class="mt-1 w-full rounded border border-rose-300 bg-white p-1.5 text-xs text-slate-800">
+                                                            <option value="@AssetRejectionReasons.NotPhysicallyReceived">Not physically received</option>
+                                                            <option value="@AssetRejectionReasons.DamagedOrDefective">Damaged or defective item</option>
+                                                            <option value="@AssetRejectionReasons.WrongSerialOrModel">Wrong serial number or model</option>
+                                                            <option value="@AssetRejectionReasons.MissingAccessories">Missing listed accessories</option>
+                                                            <option value="@AssetRejectionReasons.NotRequiredForRole">Not required for assigned role</option>
+                                                            <option value="@AssetRejectionReasons.Other">Other reason</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div>
+                                                        <label class="block font-semibold text-rose-900 text-[11px]">Specific Remarks / Evidence *</label>
+                                                        <input type="text"
+                                                               @bind="decision.Remarks"
+                                                               placeholder="Detail defects, missing cables, or non-delivery..."
+                                                               class="mt-1 w-full rounded border border-rose-300 bg-white p-1.5 text-xs" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="mt-2">
+                                                <input type="text"
+                                                       @bind="decision.Remarks"
+                                                       placeholder="Optional remarks (e.g. noted minor scratch on casing)..."
+                                                       class="w-full rounded border border-slate-300 bg-white p-1.5 text-xs text-slate-700" />
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <!-- Undertaking / Statement Checkbox -->
+                        <div class="rounded-xl border border-teal-200 bg-teal-50/50 p-4 space-y-3 text-xs">
+                            <div class="flex items-start gap-3">
+                                <input type="checkbox"
+                                       id="@($"stmt_{issuance.AssetIssuanceId}")"
+                                       @bind="statementConfirmedMap[issuance.AssetIssuanceId]"
+                                       class="mt-0.5 rounded border-slate-300 text-teal-600 focus:ring-teal-500" />
+                                <label for="@($"stmt_{issuance.AssetIssuanceId}")" class="text-slate-800 leading-relaxed cursor-pointer font-medium">
+                                    I confirm that I have physically reviewed the items listed above. For each accepted item, I acknowledge physical receipt and take full custody and responsibility in accordance with organizational property regulations.
+                                </label>
+                            </div>
+                            <div class="text-[10px] text-slate-500 italic">
+                                Note: This is an internal electronic staff acknowledgement recorded with your authenticated user identity and timestamp; it is not a statutory qualified digital signature.
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="flex justify-end pt-2">
+                            <button type="button"
+                                    @onclick="() => SubmitStaffDecisionBatchAsync(issuance.AssetIssuanceId)"
+                                    class="rounded-xl bg-teal-600 px-5 py-2.5 text-xs font-bold text-white shadow-sm hover:bg-teal-700 transition">
+                                Submit Decision for Issuance @issuance.ReferenceNumber
+                            </button>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- TAB 2: Current Assets (Active Custody) -->
+        @if (activeTab == "current")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Currently in Your Custody</h2>
+                    <span class="text-xs text-slate-500">@portalData.ActiveCustodies.Count active asset(s)</span>
+                </div>
+
+                @if (portalData.ActiveCustodies.Count == 0)
+                {
+                    <div class="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-400">
+                        <div class="text-4xl mb-2">🛡️</div>
+                        <div class="font-bold text-slate-700">No Active Property Assigned</div>
+                        <p class="text-xs text-slate-500 mt-1">You currently have no physical assets registered under your custody.</p>
+                    </div>
+                }
+                else
+                {
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                        @foreach (var c in portalData.ActiveCustodies)
+                        {
+                            <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3 flex flex-col justify-between">
+                                <div class="space-y-2">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <span class="font-mono text-xs font-bold text-teal-700">@c.AssetCode</span>
+                                            <h3 class="text-sm font-bold text-slate-900">@c.ItemName</h3>
+                                        </div>
+                                        <span class="rounded bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                            ACTIVE
+                                        </span>
+                                    </div>
+
+                                    <div class="text-xs text-slate-600 space-y-1">
+                                        <div>Category: <span class="font-medium text-slate-800">@c.CategoryName</span></div>
+                                        <div>Serial: <span class="font-mono font-medium text-slate-800">@(c.SerialNumber ?? "None")</span></div>
+                                        <div>Condition: <span class="font-medium text-slate-800">@c.ConditionAtIssueName</span></div>
+                                        @if (!string.IsNullOrWhiteSpace(c.Accessories))
+                                        {
+                                            <div class="text-[11px] text-slate-500">Accessories: @c.Accessories</div>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="border-t border-slate-100 pt-3 text-[11px] text-slate-500 space-y-1">
+                                    <div>Received: <span class="text-slate-800 font-medium">@c.CustodyFromLocal.ToString("dd MMM yyyy")</span></div>
+                                    @if (c.ExpectedReturnDate.HasValue)
+                                    {
+                                        <div>Return Due: <span class="@(c.IsOverdueReturn ? "text-rose-600 font-bold" : "text-slate-800 font-medium")">@c.ExpectedReturnDate.Value.ToString("dd MMM yyyy")</span></div>
+                                    }
+                                    <div class="pt-2 flex flex-wrap items-center justify-between gap-1 border-t border-slate-100">
+                                        <button type="button"
+                                                @onclick="() => ViewConfigurationHistoryAsync(c.AssetItemId)"
+                                                class="rounded px-2 py-1 text-[11px] font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200">
+                                            ⚙ Specs
+                                        </button>
+                                        <button type="button"
+                                                @onclick="() => OpenFaultReportModal(c)"
+                                                class="rounded px-2 py-1 text-[11px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100">
+                                            ⚠ Report Fault
+                                        </button>
+                                        <button type="button"
+                                                @onclick="() => OpenUpgradeRequestModal(c)"
+                                                class="rounded px-2 py-1 text-[11px] font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100">
+                                            ▲ Upgrade
+                                        </button>
+                                        <button type="button"
+                                                @onclick="() => RequestReturnForCustody(c)"
+                                                class="rounded px-2 py-1 text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100">
+                                            ↩ Return
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+
+        <!-- TAB 3: Custody History & Returns -->
+        @if (activeTab == "history")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Past Property Custody & Return History</h2>
+                    <span class="text-xs text-slate-500">@portalData.CustodyHistory.Count historical record(s)</span>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <table class="w-full text-left text-xs text-slate-700">
+                        <thead class="border-b border-slate-200 bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                            <tr>
+                                <th class="px-4 py-3">Asset Code / Serial</th>
+                                <th class="px-4 py-3">Item Description</th>
+                                <th class="px-4 py-3">Custody Period</th>
+                                <th class="px-4 py-3">Outcome / Reason</th>
+                                <th class="px-4 py-3">Final Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!portalData.CustodyHistory.Any())
+                            {
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-slate-400">
+                                        No past custody records found.
+                                    </td>
+                                </tr>
+                            }
+                            @foreach (var h in portalData.CustodyHistory)
+                            {
+                                <tr class="hover:bg-slate-50 transition">
+                                    <td class="px-4 py-3 font-mono font-bold text-slate-900">
+                                        @h.AssetCode
+                                        <div class="text-[10px] font-normal text-slate-400">S/N: @(h.SerialNumber ?? "None")</div>
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <div class="font-semibold text-slate-800">@h.ItemName</div>
+                                        <div class="text-[11px] text-slate-500">@h.CategoryName</div>
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @h.CustodyFromLocal.ToString("dd/MM/yyyy") — @(h.CustodyToLocal?.ToString("dd/MM/yyyy") ?? "Present")
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-600">
+                                        @(h.ClosedReason ?? "Standard return / transfer")
+                                    </td>
+                                    <td class="px-4 py-3">
+                                        <span class="rounded bg-slate-100 px-2 py-0.5 text-[10px] font-bold text-slate-700">
+                                            @h.Status
+                                        </span>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+
+        <!-- TAB 4: Handover Records & Documents -->
+        @if (activeTab == "documents")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Approved Handover Sheets (A4 Printable)</h2>
+                    <span class="text-xs text-slate-500">@portalData.ApprovedDocuments.Count document(s)</span>
+                </div>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    @foreach (var doc in portalData.ApprovedDocuments)
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3">
+                            <div class="flex items-start justify-between">
+                                <div>
+                                    <span class="font-mono text-xs font-bold text-blue-600">@doc.DocumentNumber</span>
+                                    <h4 class="text-xs font-bold text-slate-800">Asset Handover Record</h4>
+                                </div>
+                                <span class="rounded bg-blue-50 px-2 py-0.5 text-[10px] font-bold text-blue-800">v@doc.DocumentVersion</span>
+                            </div>
+                            <div class="text-[11px] text-slate-500 font-mono truncate">
+                                SHA-256: @doc.Sha256Hash
+                            </div>
+                            <div class="flex items-center justify-between border-t border-slate-100 pt-2">
+                                <span class="text-[10px] text-slate-400">@doc.GeneratedAtLocal.ToString("dd MMM yyyy HH:mm")</span>
+                                <button type="button"
+                                        @onclick="() => ViewPrintableDocumentAsync(doc.AssetIssuanceId)"
+                                        class="rounded-lg bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-800">
+                                    View / Print A4 Sheet
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- TAB 5: Repairs & Upgrades -->
+        @if (activeTab == "service")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Repairs, Maintenance & Hardware Upgrades</h2>
+                        <p class="text-xs text-slate-500">Report hardware faults, request memory/storage upgrades, and track bench repair status.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                @onclick="() => OpenFaultReportModal()"
+                                class="rounded-xl bg-amber-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-amber-700">
+                            + Report Equipment Fault
+                        </button>
+                        <button type="button"
+                                @onclick="() => OpenUpgradeRequestModal()"
+                                class="rounded-xl bg-blue-600 px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-blue-700">
+                            + Request Hardware Upgrade
+                        </button>
+                    </div>
+                </div>
+
+                <div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+                    <div class="flex items-center gap-3">
+                        <div class="rounded-xl bg-teal-50 p-3 text-teal-700 text-xl">🛠</div>
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-900">Equipment Lifecycle Maintenance Services</h3>
+                            <p class="text-xs text-slate-500">
+                                All repair and upgrade requests are tracked with technician assignment, bench diagnostics (MemTest, S.M.A.R.T., thermal testing), and require staff handover acknowledgement.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-800">Fault Reporting & Corrective Service</div>
+                            <p class="text-[11px] text-slate-500">
+                                Report hardware defects (screen flicker, battery degradation, overheating, broken ports, keyboard failure). IT technicians perform diagnosis, parts replacement, and bench testing.
+                            </p>
+                            <button type="button"
+                                    @onclick="() => OpenFaultReportModal()"
+                                    class="text-xs font-bold text-amber-700 hover:text-amber-800">
+                                Submit Fault Report →
+                            </button>
+                        </div>
+
+                        <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-4 space-y-2">
+                            <div class="text-xs font-bold text-slate-800">Hardware Upgrades (RAM, Storage, Battery)</div>
+                            <p class="text-[11px] text-slate-500">
+                                Upgrade memory (e.g. 8GB to 16GB) or high-speed NVMe storage. Your active asset custody and Asset ID are strictly preserved, while modular component serial numbers and specs are logged.
+                            </p>
+                            <button type="button"
+                                    @onclick="() => OpenUpgradeRequestModal()"
+                                    class="text-xs font-bold text-blue-700 hover:text-blue-800">
+                                Request Component Upgrade →
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <!-- TAB 6: Asset Clearance Status -->
+        @if (activeTab == "clearance")
+        {
+            <div class="space-y-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Asset Clearance & Transfer Eligibility</h2>
+                        <p class="text-xs text-slate-500">Real-time verification of custody, loaners, and service requests for internal transfers or offboarding.</p>
+                    </div>
+                    <button type="button"
+                            @onclick="LoadClearanceStatusAsync"
+                            class="rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-xs font-bold text-slate-700 shadow-sm hover:bg-slate-50">
+                        🔄 Refresh Clearance Check
+                    </button>
+                </div>
+
+                @if (clearanceCheck is not null)
+                {
+                    <div class="rounded-2xl border @(clearanceCheck.IsEligibleForClearance ? "border-emerald-300 bg-emerald-50/50" : "border-rose-300 bg-rose-50/50") p-6 shadow-sm space-y-4">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start gap-3">
+                                <span class="text-3xl">@(clearanceCheck.IsEligibleForClearance ? "✅" : "⚠️")</span>
+                                <div>
+                                    <h3 class="text-base font-extrabold @(clearanceCheck.IsEligibleForClearance ? "text-emerald-900" : "text-rose-900")">
+                                        @(clearanceCheck.IsEligibleForClearance ? "Asset Clearance Granted - Eligible for Transfer / Offboarding" : "Asset Clearance Blocked - Outstanding Liabilities")
+                                    </h3>
+                                    <p class="mt-1 text-xs @(clearanceCheck.IsEligibleForClearance ? "text-emerald-800" : "text-rose-800")">
+                                        @clearanceCheck.ClearanceSummary
+                                    </p>
+                                </div>
+                            </div>
+
+                            <span class="rounded-full px-3 py-1 text-xs font-bold @(clearanceCheck.IsEligibleForClearance ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">
+                                @(clearanceCheck.IsEligibleForClearance ? "CLEARED" : "BLOCKED")
+                            </span>
+                        </div>
+
+                        <!-- Details Grid -->
+                        <div class="grid grid-cols-1 gap-3 sm:grid-cols-3 text-xs">
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Active Custodies</div>
+                                <div class="text-xl font-black text-slate-900">@clearanceCheck.ActiveCustodiesCount</div>
+                                <div class="text-[11px] text-slate-500">Unreturned assigned items</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Active Loaners</div>
+                                <div class="text-xl font-black text-slate-900">@clearanceCheck.ActiveLoanersCount</div>
+                                <div class="text-[11px] text-slate-500">Temporary loaner devices</div>
+                            </div>
+                            <div class="rounded-xl border border-slate-200 bg-white p-3">
+                                <div class="text-[10px] font-semibold uppercase text-slate-400">Open Service Requests</div>
+                                <div class="text-xl font-black text-slate-900">@clearanceCheck.OpenServiceRequestsCount</div>
+                                <div class="text-[11px] text-slate-500">In-progress repairs / upgrades</div>
+                            </div>
+                        </div>
+
+                        @if (clearanceCheck.IsEligibleForClearance)
+                        {
+                            <div class="border-t border-emerald-200 pt-3 flex justify-end">
+                                <button type="button"
+                                        @onclick='() => ViewServicePrintableDocumentAsync(clearanceCheck.IndividualId, "TransferClearanceReport")'
+                                        class="rounded-xl bg-emerald-700 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-800">
+                                    Print Official Clearance Certificate (SHA-256)
+                                </button>
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    }
+</div>
+
+<!-- Modal: Initiate Return -->
+@if (showReturnModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Initiate Return or Report Issue</h3>
+                <button type="button" @onclick="() => showReturnModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Select Item in Your Custody *</label>
+                    <select @bind="selectedCustodyIdToReturn" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        @foreach (var c in portalData?.ActiveCustodies ?? [])
+                        {
+                            <option value="@c.AssetCustodyId">[@c.AssetCode] @c.ItemName (S/N: @(c.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Transaction Type *</label>
+                    <select @bind="returnType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="@AssetReturnTypes.StandardReturn">Standard Return to Store</option>
+                        <option value="@AssetReturnTypes.DamageReport">Report Damage / Fault</option>
+                        <option value="@AssetReturnTypes.LossReport">Report Lost / Stolen Item</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Reason / Details *</label>
+                    <textarea @bind="returnNotes" rows="3" placeholder="Provide reason for return or describe defect/loss..." class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showReturnModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitReturnRequestAsync" class="rounded-lg bg-teal-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-teal-700 shadow-sm">
+                    Submit Return
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Printable Document Preview -->
+@if (showPrintModal && printableDoc is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 flex items-center justify-center">
+        <div class="w-full max-w-5xl rounded-2xl bg-white p-6 shadow-2xl">
+            <StaffAssetPrintableView Document="printableDoc"
+                                    AllowVariantSwitch="false"
+                                    OnClose="() => showPrintModal = false" />
+        </div>
+    </div>
+}
+
+<!-- Modal: Report Equipment Fault -->
+@if (showFaultModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Report Equipment Fault / Request Repair</h3>
+                <button type="button" @onclick="() => showFaultModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Affected Asset in Your Custody *</label>
+                    <select @bind="faultCustodyId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        @foreach (var c in portalData?.ActiveCustodies ?? [])
+                        {
+                            <option value="@c.AssetCustodyId">[@c.AssetCode] @c.ItemName (S/N: @(c.SerialNumber ?? "None"))</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Priority Level</label>
+                    <select @bind="faultPriority" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="Low">Low - Minor cosmetic or non-blocking</option>
+                        <option value="Standard">Standard - Normal business operation</option>
+                        <option value="Urgent">Urgent - Work impeded</option>
+                        <option value="Critical">Critical - Complete work stoppage</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Issue Summary / Title *</label>
+                    <input type="text"
+                           @bind="faultTitle"
+                           placeholder="e.g. Laptop battery draining rapidly or blue screen error"
+                           class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs" />
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Detailed Problem Description & Symptoms *</label>
+                    <textarea @bind="faultDescription"
+                              rows="3"
+                              placeholder="Describe when the issue occurs, error messages, broken keys, display flicker, etc."
+                              class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showFaultModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitFaultReportAsync" class="rounded-lg bg-amber-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-amber-700 shadow-sm">
+                    Submit Fault Report
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Request Hardware Upgrade -->
+@if (showUpgradeModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-extrabold text-slate-900">Request Hardware Upgrade</h3>
+                <button type="button" @onclick="() => showUpgradeModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div>
+                    <label class="block font-medium text-slate-700">Select Equipment to Upgrade *</label>
+                    <select @bind="upgradeCustodyId" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        @foreach (var c in portalData?.ActiveCustodies ?? [])
+                        {
+                            <option value="@c.AssetCustodyId">[@c.AssetCode] @c.ItemName</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Component Type *</label>
+                    <select @bind="upgradeComponentType" class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs">
+                        <option value="@AssetComponentTypes.RAM">RAM (Memory Module)</option>
+                        <option value="@AssetComponentTypes.StorageDrive">Storage Drive (SSD / NVMe)</option>
+                        <option value="@AssetComponentTypes.Battery">Battery Replacement / Extended Cell</option>
+                        <option value="@AssetComponentTypes.DisplayPanel">Display / Screen</option>
+                        <option value="@AssetComponentTypes.Accessory">Accessory / Docking Station</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-slate-700">Required Upgrade Specification & Justification *</label>
+                    <textarea @bind="upgradeRequirement"
+                              rows="3"
+                              placeholder="e.g. Upgrade from 8GB RAM to 16GB DDR4 RAM for running developer toolchain and database containers."
+                              class="mt-1 w-full rounded-lg border border-slate-300 p-2 text-xs"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showUpgradeModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Cancel
+                </button>
+                <button type="button" @onclick="SubmitUpgradeRequestAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 shadow-sm">
+                    Submit Upgrade Request
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Hardware Specifications & Configuration History -->
+@if (showConfigModal && configTimeline is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 flex items-center justify-center">
+        <div class="w-full max-w-4xl rounded-2xl bg-white p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                    <span class="font-mono text-xs font-bold text-teal-700">@configTimeline.AssetCode</span>
+                    <h3 class="text-base font-extrabold text-slate-900">@configTimeline.Name (S/N: @configTimeline.SerialNumber)</h3>
+                </div>
+                <button type="button" @onclick="() => showConfigModal = false" class="text-slate-400 hover:text-slate-600">✕</button>
+            </div>
+
+            <!-- Current Spec Summary -->
+            <div class="grid grid-cols-2 gap-3 sm:grid-cols-4 rounded-xl border border-slate-200 bg-slate-50 p-4 text-xs">
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase text-[10px]">Current Memory (RAM)</span>
+                    <div class="font-bold text-slate-900">@configTimeline.CurrentRamSummary</div>
+                </div>
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase text-[10px]">Current Storage</span>
+                    <div class="font-bold text-slate-900">@configTimeline.CurrentStorageSummary</div>
+                </div>
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase text-[10px]">Processor / Platform</span>
+                    <div class="font-medium text-slate-800">@(configTimeline.CurrentProcessorSpec ?? "Standard OEM")</div>
+                </div>
+                <div>
+                    <span class="text-slate-400 font-semibold uppercase text-[10px]">Battery Health</span>
+                    <div class="font-medium text-slate-800">@(configTimeline.CurrentBatteryHealth.HasValue ? $"{configTimeline.CurrentBatteryHealth}%" : "Good")</div>
+                </div>
+            </div>
+
+            <!-- Active Components -->
+            <div class="space-y-2">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Installed Modular Hardware Components</h4>
+                <div class="overflow-x-auto rounded-xl border border-slate-200">
+                    <table class="w-full text-left text-xs">
+                        <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[11px]">
+                            <tr>
+                                <th class="p-2.5">Component</th>
+                                <th class="p-2.5">Brand / Model</th>
+                                <th class="p-2.5">Specification</th>
+                                <th class="p-2.5">Serial Number</th>
+                                <th class="p-2.5">Slot / Port</th>
+                                <th class="p-2.5">Installed</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (configTimeline.ActiveComponents.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="6" class="p-4 text-center text-slate-400">Default factory baseline configuration.</td>
+                                </tr>
+                            }
+                            @foreach (var comp in configTimeline.ActiveComponents)
+                            {
+                                <tr>
+                                    <td class="p-2.5 font-bold text-slate-800">@comp.ComponentType</td>
+                                    <td class="p-2.5 text-slate-700">@comp.Brand @comp.Model</td>
+                                    <td class="p-2.5 font-mono text-slate-900">@comp.Specification</td>
+                                    <td class="p-2.5 font-mono text-slate-600">@(comp.SerialNumber ?? "N/A")</td>
+                                    <td class="p-2.5 text-slate-600">@(comp.SlotOrPortLocation ?? "Internal")</td>
+                                    <td class="p-2.5 text-slate-500">@comp.InstalledAtUtc?.ToString("dd MMM yyyy")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Historical Snapshots & Upgrades -->
+            @if (configTimeline.Snapshots.Count > 0)
+            {
+                <div class="space-y-2">
+                    <h4 class="text-xs font-bold uppercase tracking-wider text-slate-700">Hardware Upgrade & Audit Timeline</h4>
+                    <div class="space-y-2 max-h-48 overflow-y-auto">
+                        @foreach (var snap in configTimeline.Snapshots)
+                        {
+                            <div class="rounded-xl border border-slate-200 p-3 text-xs bg-white space-y-1">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-800">@snap.TriggerEvent</span>
+                                    <span class="text-slate-400 text-[10px]">@snap.CapturedAtUtc.ToString("dd MMM yyyy HH:mm")</span>
+                                </div>
+                                <div class="text-[11px] text-slate-600">
+                                    RAM: <span class="font-medium text-slate-800">@snap.RamSummary</span> | Storage: <span class="font-medium text-slate-800">@snap.StorageSummary</span>
+                                </div>
+                                <div class="text-[10px] text-slate-400">Captured by: @snap.CapturedByName</div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="flex justify-end border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showConfigModal = false" class="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Modal: Service Printable Document Preview -->
+@if (showServicePrintModal && servicePrintDoc is not null)
+{
+    <div class="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 p-4 flex items-center justify-center">
+        <div class="w-full max-w-5xl rounded-2xl bg-white p-6 shadow-2xl">
+            <StaffAssetServicePrintableView Document="servicePrintDoc"
+                                            OnClose="() => showServicePrintModal = false" />
+        </div>
+    </div>
+}
+
+@code {
+    private bool loading = true;
+    private MyAssetsPortalData? portalData;
+    private string activeTab = "pending";
+
+    // Draft decisions per issuance and line: issuanceId -> lineId -> decision object
+    private Dictionary<string, StaffAssetLineDecisionInput> draftDecisions = new();
+    private Dictionary<int, bool> statementConfirmedMap = new();
+
+    // Modals
+    private bool showReturnModal;
+    private int selectedCustodyIdToReturn;
+    private string returnType = AssetReturnTypes.StandardReturn;
+    private string returnNotes = "";
+
+    private bool showPrintModal;
+    private AssetPrintableDocumentDto? printableDoc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPortalDataAsync();
+    }
+
+    private async Task LoadPortalDataAsync()
+    {
+        loading = true;
+        try
+        {
+            portalData = await AssetService.LoadMyAssetsPortalAsync();
+            if (portalData.PendingIssuances.Count == 0 && portalData.ActiveCustodies.Count > 0)
+            {
+                activeTab = "current";
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load employee property: {ex.Message}");
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private StaffAssetLineDecisionInput GetOrCreateDraftDecision(int issuanceId, int lineId, int version)
+    {
+        var key = $"{issuanceId}_{lineId}";
+        if (!draftDecisions.TryGetValue(key, out var decision))
+        {
+            decision = new StaffAssetLineDecisionInput
+            {
+                AssetIssuanceItemId = lineId,
+                ExpectedVersion = version,
+                Decision = AssetStaffDecisions.Accepted,
+                RejectionReasonCode = AssetRejectionReasons.NotPhysicallyReceived
+            };
+            draftDecisions[key] = decision;
+        }
+        return decision;
+    }
+
+    private async Task SubmitStaffDecisionBatchAsync(int issuanceId)
+    {
+        if (!statementConfirmedMap.TryGetValue(issuanceId, out var confirmed) || !confirmed)
+        {
+            Toasts.Error("You must check the confirmation statement to acknowledge receipt of property.");
+            return;
+        }
+
+        var issuance = portalData?.PendingIssuances.FirstOrDefault(i => i.AssetIssuanceId == issuanceId);
+        if (issuance == null) return;
+
+        var lineDecisions = new List<StaffAssetLineDecisionInput>();
+        foreach (var line in issuance.Lines.Where(l => l.Status == AssetIssuanceLineStatuses.HandedOver))
+        {
+            var key = $"{issuanceId}_{line.AssetIssuanceItemId}";
+            if (draftDecisions.TryGetValue(key, out var dec))
+            {
+                lineDecisions.Add(dec);
+            }
+        }
+
+        var batch = new StaffAssetDecisionBatchInput
+        {
+            AssetIssuanceId = issuanceId,
+            ExplicitStatementConfirmed = true,
+            Decisions = lineDecisions
+        };
+
+        try
+        {
+            var res = await AssetService.SubmitStaffDecisionsAsync(batch);
+            if (res.Success)
+            {
+                Toasts.Success("Your asset acknowledgement has been recorded successfully.");
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private void OpenInitiateReturnModal()
+    {
+        selectedCustodyIdToReturn = portalData?.ActiveCustodies.FirstOrDefault()?.AssetCustodyId ?? 0;
+        returnType = AssetReturnTypes.StandardReturn;
+        returnNotes = "";
+        showReturnModal = true;
+    }
+
+    private void RequestReturnForCustody(AssetCustodyRowDto c)
+    {
+        selectedCustodyIdToReturn = c.AssetCustodyId;
+        returnType = AssetReturnTypes.StandardReturn;
+        returnNotes = "";
+        showReturnModal = true;
+    }
+
+    private async Task SubmitReturnRequestAsync()
+    {
+        if (selectedCustodyIdToReturn <= 0)
+        {
+            Toasts.Error("Select an item to return.");
+            return;
+        }
+
+        var input = new AssetReturnCreateInput
+        {
+            OrganisationId = portalData?.ActiveCustodies.FirstOrDefault(c => c.AssetCustodyId == selectedCustodyIdToReturn)?.OrganisationId ?? 0,
+            ReturnType = returnType,
+            Notes = returnNotes,
+            AssetCustodyIds = [selectedCustodyIdToReturn]
+        };
+
+        try
+        {
+            var res = await AssetService.CreateReturnAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Return request submitted. Please hand over the physical equipment to the asset officer.");
+                showReturnModal = false;
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task ViewPrintableDocumentAsync(int assetIssuanceId)
+    {
+        try
+        {
+            printableDoc = await AssetService.GetPrintableDocumentAsync(assetIssuanceId, AssetDocumentVariants.StandardHandoverRecord);
+            showPrintModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load document: {ex.Message}");
+        }
+    }
+
+    // Lifecycle Modals & State
+    private bool showFaultModal;
+    private int faultCustodyId;
+    private string faultTitle = "";
+    private string faultDescription = "";
+    private string faultPriority = "Standard";
+
+    private bool showUpgradeModal;
+    private int upgradeCustodyId;
+    private string upgradeComponentType = AssetComponentTypes.RAM;
+    private string upgradeRequirement = "";
+
+    private bool showConfigModal;
+    private AssetConfigurationTimelineDto? configTimeline;
+
+    private AssetClearanceCheckDto? clearanceCheck;
+    private bool showServicePrintModal;
+    private AssetServicePrintableDocumentDto? servicePrintDoc;
+
+    private void OpenFaultReportModal(AssetCustodyRowDto? c = null)
+    {
+        faultCustodyId = c?.AssetCustodyId ?? portalData?.ActiveCustodies.FirstOrDefault()?.AssetCustodyId ?? 0;
+        faultTitle = "";
+        faultDescription = "";
+        faultPriority = "Standard";
+        showFaultModal = true;
+    }
+
+    private async Task SubmitFaultReportAsync()
+    {
+        var custody = portalData?.ActiveCustodies.FirstOrDefault(c => c.AssetCustodyId == faultCustodyId);
+        if (custody == null)
+        {
+            Toasts.Error("Select an asset to report.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(faultTitle) || string.IsNullOrWhiteSpace(faultDescription))
+        {
+            Toasts.Error("Provide a title and detailed description of the equipment fault.");
+            return;
+        }
+
+        var input = new AssetServiceRequestCreateInput
+        {
+            IndividualId = custody.IndividualId,
+            JobId = custody.JobId,
+            OrganisationId = custody.OrganisationId,
+            StructureId = custody.StructureId,
+            RequestType = AssetServiceRequestTypes.FaultCorrective,
+            Priority = faultPriority,
+            Title = faultTitle.Trim(),
+            Description = faultDescription.Trim(),
+            Items =
+            [
+                new AssetServiceRequestItemInput
+                {
+                    AssetItemId = custody.AssetItemId,
+                    AssetCustodyId = custody.AssetCustodyId,
+                    ItemRequestType = AssetServiceRequestTypes.FaultCorrective,
+                    ReportedFaultOrRequirement = faultDescription.Trim()
+                }
+            ]
+        };
+
+        try
+        {
+            var res = await AssetService.CreateServiceRequestAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Equipment fault reported. The IT workshop will triage and assign a technician.");
+                showFaultModal = false;
+                activeTab = "service";
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private void OpenUpgradeRequestModal(AssetCustodyRowDto? c = null)
+    {
+        upgradeCustodyId = c?.AssetCustodyId ?? portalData?.ActiveCustodies.FirstOrDefault()?.AssetCustodyId ?? 0;
+        upgradeComponentType = AssetComponentTypes.RAM;
+        upgradeRequirement = "";
+        showUpgradeModal = true;
+    }
+
+    private async Task SubmitUpgradeRequestAsync()
+    {
+        var custody = portalData?.ActiveCustodies.FirstOrDefault(c => c.AssetCustodyId == upgradeCustodyId);
+        if (custody == null)
+        {
+            Toasts.Error("Select an asset to upgrade.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(upgradeRequirement))
+        {
+            Toasts.Error("Please specify the upgrade requirement (e.g. 16GB DDR4 RAM or 1TB NVMe SSD).");
+            return;
+        }
+
+        var input = new AssetServiceRequestCreateInput
+        {
+            IndividualId = custody.IndividualId,
+            JobId = custody.JobId,
+            OrganisationId = custody.OrganisationId,
+            StructureId = custody.StructureId,
+            RequestType = AssetServiceRequestTypes.HardwareUpgrade,
+            Priority = "Standard",
+            Title = $"Hardware Upgrade Request: {upgradeComponentType} for {custody.AssetCode}",
+            Description = upgradeRequirement.Trim(),
+            Items =
+            [
+                new AssetServiceRequestItemInput
+                {
+                    AssetItemId = custody.AssetItemId,
+                    AssetCustodyId = custody.AssetCustodyId,
+                    ItemRequestType = AssetServiceRequestTypes.HardwareUpgrade,
+                    ReportedFaultOrRequirement = upgradeRequirement.Trim(),
+                    TargetComponentCategory = upgradeComponentType,
+                    TargetSpecification = upgradeRequirement.Trim()
+                }
+            ]
+        };
+
+        try
+        {
+            var res = await AssetService.CreateServiceRequestAsync(input);
+            if (res.Success)
+            {
+                Toasts.Success("Hardware upgrade requested. Active custody will be preserved while parts are installed.");
+                showUpgradeModal = false;
+                activeTab = "service";
+                await LoadPortalDataAsync();
+            }
+            else
+            {
+                Toasts.Error(res.Message);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+    }
+
+    private async Task ViewConfigurationHistoryAsync(int assetItemId)
+    {
+        try
+        {
+            configTimeline = await AssetService.GetAssetConfigurationHistoryAsync(assetItemId);
+            showConfigModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load configuration history: {ex.Message}");
+        }
+    }
+
+    private async Task LoadClearanceStatusAsync()
+    {
+        try
+        {
+            var indId = portalData?.ActiveCustodies.FirstOrDefault()?.IndividualId ?? 0;
+            if (indId > 0)
+            {
+                clearanceCheck = await AssetService.CheckStaffAssetClearanceAsync(indId);
+            }
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to evaluate clearance: {ex.Message}");
+        }
+    }
+
+    private async Task ViewServicePrintableDocumentAsync(long id, string type)
+    {
+        try
+        {
+            servicePrintDoc = await AssetService.GetServicePrintableDocumentAsync(id, type);
+            showServicePrintModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load document: {ex.Message}");
+        }
+    }
+}

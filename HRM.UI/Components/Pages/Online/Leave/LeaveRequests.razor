@@ -1,0 +1,171 @@
+@page "/online/leaves"
+@page "/online/leaves/{Page}"
+@using HRM.DTOs.Leave
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.Leave
+@using HRM.Services.State
+@using HRM.Services.Stores
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject NavigationManager Navigation
+@inject IUserAccessService _access
+@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject LeaveStore LeaveStore
+@inject LeaveApplicationState LeaveState
+
+@rendermode RenderMode.InteractiveServer
+
+<PageTitle>Leave Management - HR Portal</PageTitle>
+<AuthorizeView>
+    <Authorized>
+        <div class="leave-page min-w-0 w-full mx-auto">
+            <div class="leave-page-shell">
+                <!-- LEFT: Collapsible Navigation Rail -->
+                <div class="leave-page-nav @(isSidebarExpanded ? "" : "leave-page-nav--collapsed")">
+
+                    <div class="leave-navigation-heading flex items-center @(isSidebarExpanded ? "justify-between" : "justify-center") px-1 mb-2">
+                        <h2 class="text-lg font-bold text-slate-800 capitalize truncate transition-opacity duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                            Manage Requests
+                        </h2>
+
+                        <button @onclick="ToggleSidebar" type="button"
+                                class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-blue-600 transition-colors flex-shrink-0"
+                                title="@(isSidebarExpanded ? "Collapse Sidebar" : "Expand Sidebar")">
+                            <svg class="w-5 h-5 transition-transform duration-300 @(isSidebarExpanded ? "rotate-180" : "")" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h7"></path>
+                            </svg>
+                        </button>
+                    </div>
+
+                    @foreach (var item in GetSubItems(CategoryName))
+                    {
+                        var isActive = activeItem?.Title == item.Title;
+                        <button type="button"
+                                @onclick="() => SelectItem(item)"
+                                title="@(!isSidebarExpanded ? item.Title : null)"
+                                class="leave-nav-item group @(isActive ? "leave-nav-item--active" : "")">
+                            <div class="leave-nav-item__icon mx-auto">
+                                @item.Icon
+                            </div>
+
+                            <div class="flex-grow min-w-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 w-auto" : "opacity-0 w-0 hidden")">
+                                <h3 class="leave-nav-item__title mb-0.5 truncate">
+                                    @item.Title
+                                </h3>
+                                <p class="text-slate-500 text-xs leading-tight line-clamp-2">
+                                    @item.Description
+                                </p>
+                            </div>
+
+                            <div class="leave-nav-item__chevron flex-shrink-0 transition-all duration-300 @(isSidebarExpanded ? "opacity-100 block" : "opacity-0 hidden")">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                                </svg>
+                            </div>
+                        </button>
+                    }
+                </div>
+
+                <!-- RIGHT: Dynamic Content Panel -->
+                <div class="leave-page-content min-w-0 w-full bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5">
+                    @if (activeItem == null)
+                    {
+                        <div class="h-full flex flex-col items-center justify-center text-slate-400 opacity-60 min-h-[400px]">
+                            <div class="text-6xl mb-4">👈</div>
+                            <p class="text-lg font-medium">Select an item from the menu to view data.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div>
+                            @if (activeItem.ComponentType != null)
+                            {
+                                <DynamicComponent Type="@activeItem.ComponentType" Parameters="@FormParameters" />
+                            }
+                            else
+                            {
+                                <div class="bg-slate-50 border border-slate-100 rounded-xl p-8 text-center text-slate-500">
+                                    <p>Component not yet assigned for <strong>@activeItem.Title</strong>.</p>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </Authorized>
+
+    <NotAuthorized>
+        <div class="p-6 text-center mt-12">
+            <p class="text-slate-500 text-lg">
+                Please log in to view the leave management dashboard.
+            </p>
+        </div>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter] public string? Page { get; set; }
+    [Parameter] public string CategoryName { get; set; } = "leaves";
+
+    private Dictionary<string, object> FormParameters =>
+        new()
+        {
+            ["LeaveState"] = LeaveState
+        };
+
+    private bool isSidebarExpanded = true;
+
+    private void ToggleSidebar()
+    {
+        isSidebarExpanded = !isSidebarExpanded;
+    }
+
+    private record SubItem(string Title, string Route, string Icon, string Description, Type? ComponentType = null);
+
+    private SubItem? activeItem;
+
+    private void SelectItem(SubItem item)
+    {
+        activeItem = item;
+        Navigation.NavigateTo($"/online/{CategoryName}/{item.Route}");
+    }
+
+    protected override void OnParametersSet()
+    {
+        var items = GetSubItems(CategoryName);
+
+        activeItem = items.FirstOrDefault(x =>
+            x.Route.Equals(Page, StringComparison.OrdinalIgnoreCase));
+
+        activeItem ??= items.First();
+    }
+
+    private List<SubItem> GetSubItems(string cat) => cat.ToLower() switch
+    {
+        "leaves" => new()
+        {
+            new("Leave Applications", "search", "📋", "Browse applications in a datatable, inspect details, and view the leave chit.", typeof(MyLeaveApplications)),
+            new("New Leave Application", "new-leave-application", "📝", "Apply for standard annual, casual, or special leave.", typeof(NewLeave)),
+            new("Leave Change Request", "leave-change-request", "🔄", "Request an early return or extension to approved leave.", typeof(LeaveChangeRequests)),
+        },
+        _ => new() { new("General Configuration", "leave", "🔧", "System level management.", null) }
+    };
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private List<HRM.DTOs.Leave.JobLeaveTypeDto>? leaveBalances;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var context = await _access.RequireContextAsync();
+        if (context == null)
+            return;
+
+        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync(context.IndividualId);
+        await LeaveStore.LoadAsync();
+    }
+}

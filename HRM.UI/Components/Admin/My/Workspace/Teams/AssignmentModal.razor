@@ -1,0 +1,425 @@
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@inject ITeam TeamService
+@inject ILogger<AssignmentModal> Logger
+@inject HRM.Services.ToastService ToastService
+
+@if (Visible)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+         role="dialog" aria-modal="true" aria-labelledby="assign-modal-title"
+         @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="fixed inset-0" @onclick="CloseAsync" aria-hidden="true"></div>
+
+        <div class="relative w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto z-10"
+             @onclick:stopPropagation>
+            <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-3">
+                <h3 id="assign-modal-title" class="text-base font-bold text-slate-900 dark:text-slate-100">
+                    @(Mode == AssignmentMode.Project ? "Assign Project" : "Assign Task")
+                </h3>
+                <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        @onclick="CloseAsync" aria-label="Close dialog">✕</button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300" role="alert">@error</div>
+            }
+
+            <!-- Employee -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Employee</label>
+                    @if (StaffId.HasValue)
+                    {
+                        <input type="text" readonly value="@StaffName" class="@ReadonlyInput" />
+                    }
+                    else
+                    {
+                        <select class="@Input" @bind="selectedStaffId" @bind:after="OnStaffChangedAsync">
+                            <option value="0">Select employee…</option>
+                            @foreach (var s in StaffOptions)
+                            {
+                                <option value="@s.StaffId">@s.FullName</option>
+                            }
+                        </select>
+                    }
+                </div>
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Designation</label>
+                    <input type="text" readonly value="@(designation ?? "—")" class="@ReadonlyInput" />
+                </div>
+            </div>
+
+            @if (Mode == AssignmentMode.Project)
+            {
+                <!-- Searchable project selector -->
+                <div>
+                    <label for="assign-project-search" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Project <span class="text-red-500">*</span></label>
+                    @if (selectedProject == null)
+                    {
+                        <div class="relative w-full">
+                            <span class="pointer-events-none absolute inset-y-0 left-3 flex items-center text-slate-400">🔍</span>
+                            <input id="assign-project-search" type="search" autocomplete="off" placeholder="Search project name or reference…"
+                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 py-2 pl-10 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                   value="@projectQuery" @oninput="OnProjectQueryAsync" />
+                        </div>
+                        <div class="mt-1 max-h-44 overflow-y-auto rounded-lg border border-slate-200 dark:border-slate-700 divide-y divide-slate-100 dark:divide-slate-800">
+                            @if (searching)
+                            {
+                                <p class="p-2 text-xs text-slate-500">Searching…</p>
+                            }
+                            else if (projectResults.Count == 0)
+                            {
+                                <p class="p-2 text-xs text-slate-500 italic">No assignable projects found.</p>
+                            }
+                            else
+                            {
+                                @foreach (var p in projectResults)
+                                {
+                                    <button type="button" class="w-full text-left px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 transition" @onclick="() => SelectProject(p)">
+                                        <span class="block text-xs font-semibold text-slate-900 dark:text-slate-100 truncate">@p.Name</span>
+                                        <span class="block text-[10px] text-slate-500 truncate">@p.Reference · @p.TeamName</span>
+                                    </button>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs space-y-1">
+                            <div class="flex items-start justify-between gap-2">
+                                <div class="min-w-0">
+                                    <span class="font-bold text-slate-900 dark:text-slate-100 break-words">@selectedProject.Name</span>
+                                    <span class="ml-1 font-mono text-[10px] text-blue-700 dark:text-blue-400">@selectedProject.Reference</span>
+                                </div>
+                                @if (!ProjectId.HasValue)
+                                {
+                                    <button type="button" class="text-[11px] font-semibold text-blue-600 hover:underline" @onclick="ClearProject">Change</button>
+                                }
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(selectedProject.Description))
+                            {
+                                <p class="text-slate-600 dark:text-slate-400">@selectedProject.Description</p>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="assign-role" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Assignment role <span class="text-red-500">*</span></label>
+                        <select id="assign-role" class="@Input" @bind="role">
+                            @foreach (var r in Roles)
+                            {
+                                <option value="@r">@r</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="assign-start" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Start date <span class="text-red-500">*</span></label>
+                        <input id="assign-start" type="date" class="@Input" @bind="startDate" />
+                    </div>
+                    <div>
+                        <label for="assign-end" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Expected end date</label>
+                        <input id="assign-end" type="date" class="@Input" @bind="endDate" />
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label for="assign-task-project" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Project <span class="text-red-500">*</span></label>
+                        <select id="assign-task-project" class="@Input" @bind="taskProjectId" @bind:after="OnTaskProjectChangedAsync" disabled="@ProjectId.HasValue">
+                            <option value="0">Select project…</option>
+                            @foreach (var p in staffProjects)
+                            {
+                                <option value="@p.ProjectId">@p.ProjectName</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="assign-task" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Task <span class="text-red-500">*</span></label>
+                        <select id="assign-task" class="@Input" @bind="taskId" @bind:after="OnTaskChanged" disabled="@(taskProjectId == 0)">
+                            <option value="0">Select task…</option>
+                            @foreach (var t in projectTasks)
+                            {
+                                <option value="@t.TaskId">@t.TaskReference · @t.Title</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                @if (selectedTask != null)
+                {
+                    <div class="rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/40 p-3 text-xs space-y-1">
+                        <span class="block font-bold text-slate-900 dark:text-slate-100 break-words">@selectedTask.Title</span>
+                        @if (!string.IsNullOrWhiteSpace(selectedTask.Description))
+                        {
+                            <p class="text-slate-600 dark:text-slate-400">@selectedTask.Description</p>
+                        }
+                        @if (selectedTask.AssignedStaffId.HasValue && selectedTask.AssignedStaffId != EffectiveStaffId)
+                        {
+                            <p class="font-medium text-amber-700 dark:text-amber-400">Currently assigned to @selectedTask.AssignedStaffName. Saving will reassign it.</p>
+                        }
+                    </div>
+                }
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                        <label for="assign-priority" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Priority <span class="text-red-500">*</span></label>
+                        <select id="assign-priority" class="@Input" @bind="priority">
+                            @foreach (var p in Priorities)
+                            {
+                                <option value="@p">@p</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label for="assign-task-start" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Start date</label>
+                        <input id="assign-task-start" type="date" class="@Input" @bind="startDate" />
+                    </div>
+                    <div>
+                        <label for="assign-task-due" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Due date</label>
+                        <input id="assign-task-due" type="date" class="@Input" @bind="endDate" />
+                    </div>
+                </div>
+            }
+
+            <div>
+                <label for="assign-remarks" class="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Remarks</label>
+                <textarea id="assign-remarks" rows="2" maxlength="1000" class="@Input" @bind="remarks" @bind:event="oninput"></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+                <button type="button" class="inline-flex items-center rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition disabled:opacity-50"
+                        @onclick="CloseAsync" disabled="@saving">Cancel</button>
+                <button type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition disabled:opacity-50"
+                        @onclick="SaveAsync" disabled="@saving">
+                    @if (saving)
+                    {
+                        <span class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    }
+                    @(Mode == AssignmentMode.Project ? "Assign Project" : "Assign Task")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    public enum AssignmentMode { Project, Task }
+
+    private const string Input = "w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-900 dark:text-slate-100 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:opacity-60 disabled:cursor-not-allowed";
+    private const string ReadonlyInput = "w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 px-3 py-2 text-sm text-slate-700 dark:text-slate-300 cursor-default";
+    private static readonly string[] Roles = ["Member", "Lead", "Coordinator", "Contributor", "Reviewer"];
+    private static readonly string[] Priorities = ["Low", "Medium", "High", "Critical"];
+
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public AssignmentMode Mode { get; set; }
+    /// <summary>Fixed employee (Teams tab). When null, the employee is chosen from <see cref="StaffOptions"/>.</summary>
+    [Parameter] public int? StaffId { get; set; }
+    [Parameter] public string? StaffName { get; set; }
+    /// <summary>Preselected project (Project Details panel).</summary>
+    [Parameter] public int? ProjectId { get; set; }
+    [Parameter] public List<TeamStaffDto> StaffOptions { get; set; } = new();
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool wasVisible;
+    private bool saving, searching;
+    private string? error, designation;
+    private int selectedStaffId, taskProjectId, taskId;
+    private string role = "Member", priority = "Medium", remarks = "", projectQuery = "";
+    private DateTime? startDate, endDate;
+    private ProjectLookupDto? selectedProject;
+    private List<ProjectLookupDto> projectResults = new();
+    private List<StaffProjectAssignmentDto> staffProjects = new();
+    private List<TeamProjectTaskDto> projectTasks = new();
+    private TeamProjectTaskDto? selectedTask;
+    private CancellationTokenSource? searchCts;
+
+    private int EffectiveStaffId => StaffId ?? selectedStaffId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Visible && !wasVisible) await ResetAsync();
+        wasVisible = Visible;
+    }
+
+    private async Task ResetAsync()
+    {
+        error = null; saving = false; role = "Member"; priority = "Medium"; remarks = ""; projectQuery = "";
+        startDate = Mode == AssignmentMode.Project ? DateTime.Today : null; endDate = null;
+        selectedProject = null; projectResults = new(); staffProjects = new(); projectTasks = new(); selectedTask = null;
+        selectedStaffId = 0; taskProjectId = 0; taskId = 0; designation = null;
+
+        if (Mode == AssignmentMode.Project)
+        {
+            if (ProjectId.HasValue)
+            {
+                var details = await SafeAsync(() => TeamService.GetProjectDetailsAsync(ProjectId.Value));
+                if (details != null) selectedProject = new ProjectLookupDto { ProjectId = details.ProjectId, Reference = details.Reference, Name = details.Name, Description = details.Description, Status = details.Status, TeamName = details.TeamName };
+            }
+            else await SearchProjectsAsync("", CancellationToken.None);
+        }
+        if (StaffId.HasValue) await LoadStaffContextAsync();
+        else if (Mode == AssignmentMode.Task && ProjectId.HasValue)
+        {
+            taskProjectId = ProjectId.Value;
+            await LoadProjectTasksAsync();
+        }
+    }
+
+    private async Task LoadStaffContextAsync()
+    {
+        var staff = EffectiveStaffId;
+        if (staff <= 0) { designation = null; staffProjects = new(); return; }
+        var summary = await SafeAsync(() => TeamService.GetStaff360Async(staff));
+        designation = !string.IsNullOrWhiteSpace(summary?.Designation) ? summary.Designation : "Team Member";
+        staffProjects = summary?.ProjectAssignments.Where(a => a.IsActive).ToList() ?? new();
+
+        if (Mode == AssignmentMode.Task && staffProjects.Count == 0)
+        {
+            var assignable = await SafeAsync(() => TeamService.SearchAssignableProjectsAsync("", CancellationToken.None));
+            if (assignable != null)
+            {
+                staffProjects = assignable.Select(p => new StaffProjectAssignmentDto
+                {
+                    ProjectId = p.ProjectId,
+                    ProjectReference = p.Reference,
+                    ProjectName = p.Name,
+                    ProjectStatus = p.Status,
+                    IsActive = true,
+                    CanManage = true
+                }).ToList();
+            }
+        }
+
+        if (Mode == AssignmentMode.Task && ProjectId.HasValue)
+        {
+            taskProjectId = ProjectId.Value;
+            await LoadProjectTasksAsync();
+        }
+    }
+
+    private async Task OnStaffChangedAsync() => await LoadStaffContextAsync();
+
+    private async Task OnProjectQueryAsync(ChangeEventArgs e)
+    {
+        projectQuery = e.Value?.ToString() ?? "";
+        searchCts?.Cancel();
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+        try
+        {
+            await Task.Delay(300, token);
+            await SearchProjectsAsync(projectQuery, token);
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task SearchProjectsAsync(string query, CancellationToken token)
+    {
+        searching = true; StateHasChanged();
+        try
+        {
+            var results = await TeamService.SearchAssignableProjectsAsync(query, token);
+            if (!token.IsCancellationRequested) projectResults = results; // ignore stale results
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { Logger.LogError(ex, "Project search failed"); error = "Projects could not be loaded."; }
+        finally { if (!token.IsCancellationRequested) searching = false; }
+    }
+
+    private void SelectProject(ProjectLookupDto p) { selectedProject = p; error = null; }
+    private async Task ClearProject() { selectedProject = null; await SearchProjectsAsync(projectQuery, CancellationToken.None); }
+
+    private async Task OnTaskProjectChangedAsync() { taskId = 0; selectedTask = null; await LoadProjectTasksAsync(); }
+
+    private async Task LoadProjectTasksAsync()
+    {
+        projectTasks = new();
+        if (taskProjectId <= 0) return;
+        var project = await SafeAsync(() => TeamService.GetProjectDetailsAsync(taskProjectId));
+        projectTasks = project?.Tasks.Where(t => t.Status != "Completed").OrderBy(t => t.TaskReference).ToList() ?? new();
+        if (project != null && !staffProjects.Any(p => p.ProjectId == project.ProjectId) && ProjectId.HasValue)
+            staffProjects.Add(new StaffProjectAssignmentDto { ProjectId = project.ProjectId, ProjectName = project.Name });
+    }
+
+    private void OnTaskChanged()
+    {
+        selectedTask = projectTasks.FirstOrDefault(t => t.TaskId == taskId);
+        if (selectedTask != null)
+        {
+            priority = selectedTask.Priority;
+            startDate = selectedTask.StartDate;
+            endDate = selectedTask.ExpectedEndDate;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        var staff = EffectiveStaffId;
+        if (staff <= 0) { error = "Select an employee."; return; }
+        if (endDate.HasValue && startDate.HasValue && endDate.Value.Date < startDate.Value.Date)
+        {
+            error = Mode == AssignmentMode.Project ? "Expected end date cannot be before the start date." : "Due date cannot be before the start date.";
+            return;
+        }
+        saving = true;
+        try
+        {
+            if (Mode == AssignmentMode.Project)
+            {
+                if (selectedProject == null) { error = "Select a project."; saving = false; return; }
+                if (!startDate.HasValue) { error = "Enter the assignment start date."; saving = false; return; }
+                await TeamService.AssignStaffToProjectAsync(new AssignProjectRequestDto
+                {
+                    ProjectId = selectedProject.ProjectId, StaffId = staff, Role = role,
+                    StartDate = startDate.Value, ExpectedEndDate = endDate, Remarks = remarks
+                });
+                ToastService.Success("Employee assigned to the project.");
+            }
+            else
+            {
+                if (taskId <= 0) { error = "Select a task."; saving = false; return; }
+                await TeamService.AssignTaskAsync(new AssignTaskRequestDto
+                {
+                    TaskId = taskId, StaffId = staff, Priority = priority,
+                    StartDate = startDate, DueDate = endDate, Remarks = remarks
+                });
+                ToastService.Success("Task assigned.");
+            }
+            await OnSaved.InvokeAsync();
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Assignment failed");
+            error = ex is UnauthorizedAccessException ? "You are not authorised to make this assignment." : ex.Message;
+        }
+        finally { saving = false; }
+    }
+
+    private async Task<T?> SafeAsync<T>(Func<Task<T?>> action, bool reportError = false)
+    {
+        try { return await action(); }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Assignment lookup failed");
+            if (reportError)
+            {
+                error = ex is UnauthorizedAccessException ? "You are not authorised to view this information." : ex.Message;
+            }
+            return default;
+        }
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+
+    private async Task CloseAsync() => await OnClose.InvokeAsync();
+}

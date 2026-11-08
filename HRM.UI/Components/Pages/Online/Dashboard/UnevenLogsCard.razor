@@ -1,0 +1,53 @@
+@using HRM.DTOs.Attendance
+@using HRM.Services.Interfaces
+@using HRM.Enum
+@inject IAttendanceService AttendanceService
+@inject ILogger<UnevenLogsCard> Logger
+
+<section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Uneven Attendance">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+        <div><h3 class="font-semibold">Uneven Attendance</h3><p class="mt-1 text-xs text-slate-500">Attendance exceptions for the current salary period</p></div>
+    </div>
+    <div class="space-y-2 px-4 py-2">
+        @if(isLoading){<p role="status" class="text-sm text-slate-500">Loading attendance...</p>}
+        else if(error != null){<p role="alert">@error <button type="button" class="underline" @onclick="LoadAsync">Retry</button></p>}
+        else if(Logs.Count==0){<p class="text-sm text-slate-500">No attendance exceptions found for this salary period.</p>}
+        else
+        {
+            <div class="max-h-[520px] divide-y space-y-2 overflow-y-auto">
+                @foreach(var day in Logs.OrderByDescending(l=>l.Date).GroupBy(l=>l.Date.Date))
+                {
+                    <section class="pt-2 first:pt-0" aria-label="@day.Key.ToString("dd MMM yyyy")">
+                        <h4 class="text-sm font-semibold">@day.Key.ToString("ddd, dd MMM yyyy")</h4>
+                        <ol class="mt-1 divide-y">
+                            @foreach(var log in day)
+                            {
+                                <AttendanceEventRow Timestamp="log.Date" Event="@EventName(log)" Condition="@Condition(log)"
+                                    Tone="@(log.ResolvedClockType==AttendanceClockType.Ignored?"muted":"late")" Description="@log.SegmentName" />
+                            }
+                        </ol>
+                    </section>
+                }
+            </div>
+            <p class="border-t pt-2 text-xs text-slate-500">@Logs.Count @(Logs.Count==1?"exception":"exceptions") · Current salary period</p>
+        }
+    </div>
+</section>
+@code {
+    private List<AttendanceLogDto> Logs=[];
+    private bool isLoading=true;
+    private string? error;
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        isLoading=true; error=null;
+        try { Logs=await AttendanceService.GetMyUnevenLogsAsync()??[]; }
+        catch(Exception ex) { Logger.LogError(ex,"Loading uneven attendance"); error="Attendance exceptions could not be loaded."; }
+        finally { isLoading=false; }
+    }
+    private static string EventName(AttendanceLogDto log)=>log.ResolvedClockType switch {
+        AttendanceClockType.CheckIn=>"Clock in",AttendanceClockType.CheckOut=>"Clock out",_=>"Clock event" };
+    private static string Condition(AttendanceLogDto log)=>!string.IsNullOrWhiteSpace(log.ResolutionStatusName) &&
+        !log.ResolutionStatusName.Equals("Resolved",StringComparison.OrdinalIgnoreCase)?log.ResolutionStatusName:
+        log.ResolvedClockType switch {AttendanceClockType.CheckIn or AttendanceClockType.CheckOut=>"Needs review",AttendanceClockType.Ignored=>"Ignored",_=>"Unresolved"};
+}

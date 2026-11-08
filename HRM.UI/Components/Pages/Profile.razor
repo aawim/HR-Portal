@@ -1,0 +1,240 @@
+@page "/profile"
+@rendermode RenderMode.InteractiveServer
+
+@using HRM.Services
+@using HRM.Models
+@using HRM.DTOs.UserContext
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Components.Shared
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+@attribute [Authorize]
+@inject HRM.Services.Interfaces.IUserService UserService
+@inject HRM.Services.Interfaces.IUserAccessService UserAccess
+
+<PageTitle>My Profile - HR Portal</PageTitle>
+
+@if (isLoading)
+{
+    <div class="flex justify-center items-center h-64">
+        <p class="text-slate-500 font-medium">Loading profile data from database...</p>
+    </div>
+}
+else if (userProfile == null)
+{
+    <div class="bg-rose-50 border border-rose-200 p-6 rounded-xl mt-6">
+        <p class="text-rose-600 font-medium">Error: User record not found in the database.</p>
+        <p class="text-rose-500 text-sm mt-1">Please contact the IT department to link your eFaas account.</p>
+    </div>
+}
+else
+{
+
+    @if (isLoading)
+{
+    <div class="flex flex-col justify-center items-center h-64 space-y-4">
+        <!-- Tailwind SVG Spinner -->
+        <svg class="animate-spin h-10 w-10 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <p class="text-slate-500 font-medium animate-pulse">Loading profile data...</p>
+    </div>
+}
+
+
+    <!-- Fetch ONLY the job that is currently "Approved" -->
+    var approvedJob =
+    userProfile.ActiveJob?.JobStateID == SharedConfig.JobStates.APPROVED? userProfile.ActiveJob: null;
+   
+
+
+    <div class="max-w-7xl mx-auto pb-10">
+
+        <!-- PAGE HEADER -->
+        <div class="flex justify-between items-end mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-800">My Profile</h1>
+                <p class="text-slate-500 text-sm mt-1">View and manage your employee information.</p>
+            </div>
+
+            @if (canManageAccount)
+            {
+                <a href="@($"/admin/settings/user/account?userId={userProfile.UserId}")" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Manage account</a>
+            }
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- ========================================== -->
+            <!-- LEFT COLUMN: Identity & Quick Contact      -->
+            <!-- ========================================== -->
+            <div class="col-span-1 space-y-6">
+
+                <!-- Profile Identity Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6 flex flex-col items-center relative overflow-hidden">
+                    <div class="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-500 to-blue-700 opacity-10"></div>
+
+                    <!-- Avatar placeholder -->
+                    <div class="w-24 h-24 rounded-full border-4 border-white shadow-md z-10 bg-blue-100 flex items-center justify-center text-blue-500 font-bold text-3xl uppercase">
+                        @(userProfile.FullName?.FirstOrDefault().ToString() ?? "?")
+                    </div>
+
+                    <h2 class="text-xl font-bold text-slate-800 mt-4 text-center">@(userProfile.FullName ?? "Name Not Provided")</h2>
+                    <p class="text-sm text-blue-600 font-medium mb-1 text-center">@(approvedJob?.OrganisationStructureName ?? "Department Not Set")</p>
+
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 mb-6">
+                        @(approvedJob?.JobStateName ?? "No Active Job")
+                    </span>
+
+                    <div class="w-full space-y-3 text-sm border-t border-slate-100 pt-4">
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">SAP Number</span>
+                            <span class="font-medium text-slate-800">@(approvedJob?.SAPNumber ?? "N/A")</span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-slate-500">NID / Passport</span>
+                            <span class="font-medium text-slate-800">@(userProfile.Username ?? "N/A")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Contact Card -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                    <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Contact Details</h3>
+
+                        <ul class="space-y-3 text-sm">
+                            <li class="flex items-center gap-3">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+                                <span class="text-slate-700">@(userProfile.Email ?? "N/A")</span>
+                            </li>
+                            <li class="flex items-center gap-3">
+                                <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                <span class="text-slate-700">Mobile: @(userProfile.Mobile ?? "N/A")</span>
+                            </li>
+                        </ul>
+                </div>
+            </div>
+
+            <!-- ========================================== -->
+            <!-- RIGHT COLUMN: Detailed Info & Tables       -->
+            <!-- ========================================== -->
+            <div class="col-span-1 lg:col-span-2 space-y-6">
+
+                <!-- Job Information (Approved Job Only) -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                    <h2 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Active Job</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-y-4 gap-x-6 text-sm">
+                        <div>
+                            <p class="text-slate-500 mb-1">Organisation</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.OrganisationName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Department</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.OrganisationStructureName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Job State</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.JobStateName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Basic Salary</p>
+                            <p class="font-medium text-emerald-600">
+                                MVR @(approvedJob?.BasicSalary?.ToString("N2") ?? "0.00")
+                            </p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Job Type</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.JobTypeName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Joined Date</p>
+                            <p class="font-medium text-slate-800">@(approvedJob?.JoinedDate.ToString("dd MMM yyyy") ?? "N/A")</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Personal Information -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 p-6">
+                    <h3 class="font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Personal Information</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-y-4 gap-x-8 text-sm">
+                        <div>
+                            <p class="text-slate-500 mb-1">Full Name</p>
+                            <p class="font-medium text-slate-800">@(userProfile.FullName ?? "N/A")</p>
+                        </div>
+                        <div>
+                            <p class="text-slate-500 mb-1">Username / ID</p>
+                            <p class="font-medium text-slate-800">@(userProfile.Username ?? "N/A")</p>
+                        </div>
+                    </div>
+                </div>
+
+                <HRM.Components.Profile.Employment.EmploymentHistoryTable Jobs="@userProfile.JobHistory" />
+
+                <!-- Leave History Table -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
+                    <div class="p-3 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+                        <h3 class="font-semibold text-slate-800">Leave History</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse text-sm">
+                            <thead>
+                                <tr class="bg-white border-b border-slate-200">
+                                    <th class="py-3 px-5 font-medium text-slate-500">Leave Type</th>
+                                    <th class="py-3 px-5 font-medium text-slate-500">Duration (Days)</th>
+                                    <th class="py-3 px-5 font-medium text-slate-500">From Date</th>
+                                    <th class="py-3 px-5 font-medium text-slate-500">To Date</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                          @*       @if (approvedJob != null && approvedJob.Leaves != null && approvedJob.Leaves.Any())
+                                {
+                                    foreach (var leave in approvedJob.Leaves.OrderByDescending(l => l.FromDate))
+                                    {
+                                        <tr class="hover:bg-slate-50 transition-colors border-b border-slate-100">
+                                            <td class="py-3 px-5 text-slate-800 font-medium">@(leave.LeaveType?.Name ?? "N/A")</td>
+
+                                            <!-- Cleaned up Duration syntax -->
+                                            <td class="py-3 px-5 text-slate-600">@leave.Duration</td>
+
+                                            <!-- Cleaned up Date syntax -->
+                                            <td class="py-3 px-5 text-slate-600">@(leave.FromDate.ToString("dd-MMM-yyyy") ?? "N/A")</td>
+                                            <td class="py-3 px-5 text-slate-600">@(leave.ToDate.ToString("dd-MMM-yyyy") ?? "N/A")</td>
+                                        </tr>
+                                    }
+                                }
+                                else
+                                {
+                                    <tr>
+                                        <td colspan="4" class="py-6 px-5 text-center text-slate-400 italic">No leave records found for active job.</td>
+                                    </tr>
+                                } *@
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+
+    private UserProfileDto? userProfile;
+    private bool isLoading = true;
+    private bool canManageAccount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        userProfile = await UserService.GetMyProfileAsync();
+        var context = await UserAccess.GetContextAsync();
+        canManageAccount = context?.IsSuperAdministrator == true || await UserAccess.HasPermissionAsync("Admin") ||
+            await UserAccess.HasPermissionAsync("Users.Edit") && await UserAccess.HasPermissionAsync("Users.View");
+        isLoading = false;
+    }
+
+}
+

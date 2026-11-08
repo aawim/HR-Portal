@@ -1,0 +1,207 @@
+@using HRM.Application.Contracts.Pages
+@inject IStaffFinance Finance
+@inject HRM.Services.ToastService Toasts
+
+<div class="space-y-4 text-xs w-full min-w-0">
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-200">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800 dark:text-rose-400">✕</button>
+        </div>
+    }
+
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+
+        <!-- Left Column: Allowance Types Management -->
+        <div class="lg:col-span-5 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+            <div class="border-b border-slate-200 dark:border-slate-800 pb-2">
+                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Allowance Types</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Define organization allowance categories and statuses.</p>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Existing Type</label>
+                    <select @bind="typeId" @bind:after="SelectType"
+                            class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                        <option value="0">Add new allowance type</option>
+                        @foreach (var t in Config.TypeDefinitions)
+                        {
+                            <option value="@t.Id">@t.Name @(t.IsActive ? "" : "(Inactive)")</option>
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Type Name</label>
+                    <input @bind="name" maxlength="150" placeholder="e.g. Travel, Housing, Mobile"
+                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="allowanceActiveCheck" @bind="active"
+                           class="rounded text-emerald-600 focus:ring-emerald-500" />
+                    <label for="allowanceActiveCheck" class="text-xs font-medium text-slate-700 dark:text-slate-300">Active Allowance</label>
+                </div>
+
+                <div class="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                            disabled="@busy"
+                            @onclick="SaveType">
+                        ✓ Save Allowance Type
+                    </button>
+                    <a class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-3 py-2 text-xs font-semibold text-emerald-800 dark:text-emerald-200 hover:bg-emerald-100 transition"
+                       href="/admin/settings/positions/position-allowances">
+                        Position Allowances →
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Deduction Limits & Policy Configuration -->
+        <div class="lg:col-span-7 min-w-0 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs space-y-4">
+            <div class="border-b border-slate-200 dark:border-slate-800 pb-2">
+                <h3 class="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-wider">Deduction Limits &amp; Policies</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">
+                    Percentage and minimum take-home use the basic salary in the selected currency. Limits apply across all active agreements.
+                </p>
+            </div>
+
+            <fieldset disabled="@busy" class="space-y-3">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Currency</label>
+                        <select @bind="policyCurrency"
+                                class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                            <option value="0">Select currency</option>
+                            @foreach (var c in Config.Currencies)
+                            {
+                                <option value="@c.Id">@c.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Max Monthly Amount</label>
+                        <InputNumber @bind-Value="maxMonthly" min="0.01" step="0.01"
+                                     class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Max % of Basic Salary</label>
+                        <InputNumber @bind-Value="percent" min="1" max="100"
+                                     class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Minimum Take-Home</label>
+                        <InputNumber @bind-Value="minimum" min="0" step="0.01"
+                                     class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Max Outstanding Balance</label>
+                        <InputNumber @bind-Value="outstanding" min="0.01" step="0.01"
+                                     class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-0.5">Effective From</label>
+                        <InputDate @bind-Value="policyFrom"
+                                   class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-2.5 py-1.5 text-xs text-slate-900 dark:text-slate-100 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 px-4 py-2 text-xs font-semibold text-white shadow-xs disabled:opacity-50 transition"
+                            @onclick="SavePolicy">
+                        + Add Policy Version
+                    </button>
+                </div>
+            </fieldset>
+
+            <!-- Configured Policy Versions Table -->
+            <div class="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 mt-3">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                        <tr>
+                            <th class="p-2">From Date</th>
+                            <th class="p-2">Currency</th>
+                            <th class="p-2 text-right">Max Monthly</th>
+                            <th class="p-2 text-right">Max %</th>
+                            <th class="p-2 text-right">Min Take-Home</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                        @foreach (var p in Config.Policies)
+                        {
+                            <tr class="hover:bg-slate-50/50 dark:hover:bg-slate-800/50">
+                                <td class="p-2 font-mono">@p.FromDate.ToString("dd MMM yyyy")</td>
+                                <td class="p-2">@Config.Currencies.FirstOrDefault(x => x.Id == p.CurrencyTypeId)?.Name</td>
+                                <td class="p-2 text-right font-mono font-bold">@p.MaximumPerMonth.ToString("N2")</td>
+                                <td class="p-2 text-right font-mono font-bold">@p.MaximumPercentOfBasic%</td>
+                                <td class="p-2 text-right font-mono font-bold text-emerald-700 dark:text-emerald-400">@p.MinimumTakeHome.ToString("N2")</td>
+                            </tr>
+                        }
+                        @if (Config.Policies.Count == 0)
+                        {
+                            <tr>
+                                <td colspan="5" class="p-4 text-center text-slate-500">No deduction policies defined yet.</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+</div>
+
+@code {
+    [Parameter, EditorRequired] public FinanceConfiguration Config { get; set; } = default!;
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    private bool busy, active = true;
+    private string? error;
+    private long typeId;
+    private string name = "";
+    private int policyCurrency, maxAgreements = 3;
+    private decimal maxMonthly, percent, minimum, outstanding;
+    private DateTime policyFrom = DateTime.UtcNow.AddHours(5).Date;
+
+    private async Task Run(Func<Task<HRM.DTOs.ServiceResult>> action)
+    {
+        if (busy) return;
+        busy = true;
+        error = null;
+        try
+        {
+            var result = await action();
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                await OnSaved.InvokeAsync();
+            }
+            else error = result.Message;
+        }
+        catch (Exception)
+        {
+            error = "Configuration could not be saved. Refresh and try again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task SaveType() => Run(() => Finance.SaveAllowanceTypeAsync(new(typeId, name, active)));
+
+    private void SelectType()
+    {
+        var row = Config.TypeDefinitions.FirstOrDefault(x => x.Id == typeId);
+        name = row?.Name ?? "";
+        active = row?.IsActive ?? true;
+    }
+
+    private Task SavePolicy() => Run(() => Finance.AddDeductionPolicyAsync(new(policyCurrency, maxMonthly, percent, minimum, outstanding, maxAgreements, policyFrom)));
+}

@@ -1,0 +1,379 @@
+@using HRM.DTOs.Attendance
+@using HRM.Enum
+@using HRM.Services.Attendance.Abstraction
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccessService
+@inject IAttendanceService AttendanceService
+
+<section class="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <header class="border-b border-slate-100 px-5 py-4">
+        <h2 class="text-base font-semibold text-slate-800">Today's Attendance</h2>
+        <p class="mt-1 text-xs text-slate-500">@DateTime.Today.ToString("dddd, dd MMM yyyy")</p>
+    </header>
+    <div class="space-y-4 p-4">
+        @if (_isLoading)
+        {
+            <p role="status" class="py-6 text-center text-sm text-slate-500">Loading attendance...</p>
+        }
+        else if (!string.IsNullOrWhiteSpace(_errorMessage))
+        {
+            <p role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-700">@_errorMessage</p>
+        }
+        else if (_evaluation is not null)
+        {
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-sm text-slate-500">Official schedule status</span>
+                <span class="@(_attendanceDay?.IsLate == true ? "rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700" : GetStatusClass(_evaluation.Status))">@(_evaluation.OfficialState is AttendanceObligationState.OnBreak ? "On Break" : _evaluation.OfficialState is AttendanceObligationState.MissingClockOut ? "Missing Official Check-Out" : _attendanceDay != null ? HRM.Helpers.AttendancePresentation.Status(_attendanceDay) : GetStatusText(_evaluation.Status))</span>
+            </div>
+            <dl class="space-y-3 text-sm">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <dt class="text-slate-500">Official schedule</dt>
+                    <dd class="m-0 font-medium tabular-nums text-slate-800">
+                        @if (_evaluation.RequiresAttendance)
+                        {
+                            <span>@FormatTime(_evaluation.PlannedStart) – @FormatTime(_evaluation.PlannedEnd)</span>
+                        }
+                        else { <span>Not required</span> }
+                    </dd>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div class="min-w-0 rounded-lg bg-slate-50 p-3">
+                        <dt class="text-xs text-slate-500">Official check in</dt>
+                        <dd class="mb-0 mt-2 font-semibold tabular-nums text-slate-800">@FormatTime(_evaluation.FirstCheckIn)</dd>
+                    </div>
+                    <div class="min-w-0 rounded-lg bg-slate-50 p-3">
+                        <dt class="text-xs text-slate-500">Official check out</dt>
+                        <dd class="mb-0 mt-2 font-semibold tabular-nums text-slate-800">@FormatTime(_evaluation.LastCheckOut)</dd>
+                    </div>
+                </div>
+                @{
+                    var officialOb = _evaluation.Obligations.FirstOrDefault(o => o.ObligationType == "Official");
+                }
+                @if (officialOb?.BreakOutDateTime != null || officialOb?.BreakInDateTime != null || _evaluation.OfficialBreakMinutes > 0)
+                {
+                    <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2 text-xs">
+                        <span class="text-slate-500">Official break / lunch</span>
+                        <span class="font-medium tabular-nums text-slate-700">
+                            @(officialOb?.BreakOutDateTime?.ToString("HH:mm") ?? "--") – @(officialOb?.BreakInDateTime?.ToString("HH:mm") ?? "Pending return")
+                            @if (_evaluation.OfficialBreakMinutes > 0)
+                            {
+                                <span> · @FormatMinutes(_evaluation.OfficialBreakMinutes)</span>
+                            }
+                        </span>
+                    </div>
+                }
+                @{
+                    var dutyObs = _evaluation.Obligations.Where(o => o.ObligationType == "Duty").ToList();
+                }
+                @if (dutyObs.Count > 0)
+                {
+                    <div class="space-y-2 border-t border-slate-100 pt-3">
+                        <div class="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            <span>Additional duties (@dutyObs.Count)</span>
+                            <span>Credited: @FormatMinutes(_evaluation.CreditedDutyMinutes) / @FormatMinutes(_evaluation.PlannedDutyMinutes)</span>
+                        </div>
+                        @foreach (var duty in dutyObs)
+                        {
+                            <div class="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5 text-xs space-y-1">
+                                <div class="flex flex-wrap items-center justify-between gap-2">
+                                    <span class="font-semibold text-slate-800">@duty.ScheduleName (@duty.ScheduledStart.ToString("HH:mm")–@duty.ScheduledEnd.ToString("HH:mm"))</span>
+                                    <span class="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-700">@duty.State</span>
+                                </div>
+                                <div class="flex flex-wrap items-center justify-between gap-2 text-slate-600 tabular-nums">
+                                    <span>In: @(duty.ActualStartDateTime?.ToString("HH:mm") ?? "--") · Out: @(duty.ActualEndDateTime?.ToString("HH:mm") ?? "--")</span>
+                                    <span>Actual @FormatMinutes(duty.ActualPresenceMinutes) · Credited @FormatMinutes(duty.CreditedWorkedMinutes)</span>
+                                </div>
+                                @if (duty.SharesStartEvent || duty.SharesEndEvent)
+                                {
+                                    <p class="m-0 text-[11px] text-indigo-700">Shares physical punch with Official schedule</p>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+                <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
+                    <dt class="text-slate-500">Official time worked</dt>
+                    <dd class="m-0 text-xl font-semibold tabular-nums text-slate-900">@FormatMinutes(_evaluation.WorkedMinutes)</dd>
+                </div>
+                @if (_evaluation.TotalCreditedPayableMinutes > 0 || _evaluation.SharedEventCount > 0)
+                {
+                    <div class="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+                        <span>Total payable (no double count): <strong class="text-slate-800">@FormatMinutes(_evaluation.TotalCreditedPayableMinutes)</strong></span>
+                        @if (_evaluation.SharedEventCount > 0)
+                        {
+                            <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700 border border-indigo-200">@_evaluation.SharedEventCount shared @(_evaluation.SharedEventCount == 1 ? "event" : "events")</span>
+                        }
+                    </div>
+                }
+            </dl>
+            @if (ArrivalLateMinutes > 0 || _evaluation.EarlyDepartureMinutes > 0)
+            {
+                <div class="flex flex-wrap gap-2">
+                    @if (ArrivalLateMinutes > 0) { <span class="rounded-full bg-amber-100 px-2.5 py-1 text-xs text-amber-700">Late @ArrivalLateMinutes min</span> }
+                    @if (_evaluation.EarlyDepartureMinutes > 0) { <span class="rounded-full bg-orange-100 px-2.5 py-1 text-xs text-orange-700">Early @_evaluation.EarlyDepartureMinutes min</span> }
+                </div>
+            }
+            @if (_evaluation.Issues.Count > 0)
+            {
+                <ul class="m-0 space-y-2 p-0">
+                    @foreach (var issue in _evaluation.Issues)
+                    {
+                        <li class="flex items-start gap-2 text-xs leading-5 text-slate-600">
+                            <span aria-hidden="true" class="@GetIssueDotClass(issue.Severity)"></span><span>@issue.Message</span>
+                        </li>
+                    }
+                </ul>
+            }
+        }
+        else { <p class="py-4 text-sm text-slate-500">Attendance evaluation is not available.</p> }
+    </div>
+</section>
+@code {
+
+    // ==============================================================
+    // PARAMETERS
+    // ==============================================================
+
+    [Parameter]
+    public int RefreshKey { get; set; }
+
+
+    // ==============================================================
+    // STATE
+    // ==============================================================
+ 
+
+    private AttendanceDailyEvaluationDto? _evaluation;
+
+
+    private bool _isLoading = true;
+    private YearlyAttendanceDayDto? _attendanceDay;
+    private int ArrivalLateMinutes => _attendanceDay?.LateMinutes ?? _evaluation?.LateMinutes ?? 0;
+
+    private string? _errorMessage;
+
+    private int _lastRefreshKey = -1;
+
+
+    // ==============================================================
+    // COMPONENT LIFECYCLE
+    //
+    // Do NOT also load in OnInitializedAsync.
+    //
+    // OnParametersSetAsync runs during the initial render and whenever
+    // RefreshKey changes.
+    // ==============================================================
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_lastRefreshKey == RefreshKey)
+            return;
+
+        _lastRefreshKey = RefreshKey;
+
+        await LoadAttendanceAsync();
+    }
+
+
+    // ==============================================================
+    // LOAD TODAY'S ATTENDANCE
+    // ==============================================================
+
+    private async Task LoadAttendanceAsync()
+    {
+        try
+        {
+            _isLoading = true;
+            _errorMessage = null;
+
+            var context = await UserAccessService.RequireContextAsync();
+            if (context.ActiveJob == null)
+            {
+                _evaluation = null;
+                _errorMessage = "No active job is available for today's attendance.";
+                return;
+            }
+
+            /*
+            * This card represents TODAY.
+                 *
+            * Do not use the TimeClockCard test timestamp here.
+                 * The TimeClockCard is responsible for creating clock events.
+                 * This component only displays today's attendance.
+            */
+                            var attendanceTime = DateTime.UtcNow.AddHours(5);
+
+      
+
+            // Evaluated attendance state
+            var evaluation =
+                                await AttendanceService.GetEvaluationAsync(
+                                    context.IndividualId,
+                                    context.ActiveJob.JobId,
+                                    context.ActiveJob.OrganisationId,
+                                    attendanceTime.Date);
+
+
+ 
+            _evaluation = evaluation;
+            _attendanceDay = (await AttendanceService.GetStaffAttendanceRangeAsync(context.IndividualId, attendanceTime.Date, attendanceTime.Date)).FirstOrDefault();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+ 
+
+             _evaluation = null;
+
+
+            _errorMessage =
+                "Today's attendance could not be loaded. Please refresh or contact HR.";
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+ 
+
+
+    private static string FormatTime(DateTime? value)
+    {
+        return value.HasValue
+            ? value.Value.ToString("hh:mm tt")
+            : "--";
+    }
+
+
+    private static string FormatMinutes(int minutes)
+    {
+        if (minutes <= 0)
+            return "--";
+
+        var hours =
+            minutes / 60;
+
+        var remainingMinutes =
+            minutes % 60;
+
+        if (hours == 0)
+            return $"{remainingMinutes}m";
+
+        if (remainingMinutes == 0)
+            return $"{hours}h";
+
+        return $"{hours}h {remainingMinutes}m";
+    }
+
+
+    private static string GetStatusText(
+        AttendanceDailyStatus status)
+    {
+        return status switch
+        {
+            AttendanceDailyStatus.NoActiveSchedule => "No active schedule found",
+            AttendanceDailyStatus.BeforePositionApproval => "Awaiting job position approval",
+            AttendanceDailyStatus.Present =>
+                "Present",
+
+            AttendanceDailyStatus.Absent =>
+                "Absent",
+
+            AttendanceDailyStatus.InProgress =>
+                "In Progress",
+
+            AttendanceDailyStatus.Incomplete =>
+                "Incomplete",
+
+            AttendanceDailyStatus.Partial =>
+                "Partial",
+
+            AttendanceDailyStatus.RestDay =>
+                "Rest Day",
+
+            AttendanceDailyStatus.Leave =>
+                "On Leave",
+
+            AttendanceDailyStatus.Holiday =>
+                "Holiday",
+
+            AttendanceDailyStatus.Future =>
+                "Upcoming",
+
+            _ =>
+                "Unknown"
+        };
+    }
+
+
+    private static string GetStatusClass(
+        AttendanceDailyStatus status)
+    {
+        const string baseClass =
+            "inline-flex items-center rounded-full px-2.5 py-1 " +
+            "text-xs font-medium ";
+
+        return status switch
+        {
+            AttendanceDailyStatus.Present =>
+                baseClass +
+                "bg-green-100 text-green-700",
+
+            AttendanceDailyStatus.InProgress =>
+                baseClass +
+                "bg-blue-100 text-blue-700",
+
+            AttendanceDailyStatus.Absent =>
+                baseClass +
+                "bg-red-100 text-red-700",
+
+            AttendanceDailyStatus.Incomplete =>
+                baseClass +
+                "bg-amber-100 text-amber-700",
+
+            AttendanceDailyStatus.Partial =>
+                baseClass +
+                "bg-amber-100 text-amber-700",
+
+            AttendanceDailyStatus.RestDay =>
+                baseClass +
+                "bg-slate-100 text-slate-600",
+
+            AttendanceDailyStatus.Leave =>
+                baseClass +
+                "bg-blue-100 text-blue-700",
+
+            AttendanceDailyStatus.Holiday =>
+                baseClass +
+                "bg-purple-100 text-purple-700",
+
+            AttendanceDailyStatus.Future =>
+                baseClass +
+                "bg-slate-100 text-slate-500",
+
+            _ =>
+                baseClass +
+                "bg-slate-100 text-slate-600"
+        };
+    }
+
+        private static string GetIssueDotClass(
+        AttendanceEvaluationIssueSeverity severity)
+        {
+            const string baseClass =
+            "mt-1 h-2 w-2 shrink-0 rounded-full ";
+
+            return severity switch
+            {
+                AttendanceEvaluationIssueSeverity.Error =>
+                baseClass + "bg-red-500",
+
+                AttendanceEvaluationIssueSeverity.Warning =>
+                baseClass + "bg-amber-500",
+
+                _ =>
+                baseClass + "bg-blue-500"
+            };
+        }
+}

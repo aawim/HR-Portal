@@ -1,0 +1,452 @@
+@page "/online"
+@page "/"
+
+
+
+
+@using HRM.DTOs
+@using HRM.Models
+@using HRM.Services
+@using HRM.DTOs.Attendance
+@using HRM.DTOs.UserContext
+@using HRM.Services.Interfaces
+@using HRM.Services.Interfaces.AppovalWF
+@using HRM.Services.Interfaces.Leave
+@using HRM.Components.Pages.Online.Dashboard
+@using HRM.Services.Attendance.AttendancePlan
+@using Microsoft.AspNetCore.Components.Authorization
+
+@inject IJSRuntime JS
+@inject IJobService JobService
+@inject IIndividual _individual
+@inject IUserAccessService _access
+@inject HRM.Application.Contracts.Pages.ILeaveApplications LeaveService
+@inject IAttendanceService AttendanceService
+@inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject IAttendancePlanService AttendancePlanService
+@inject ILogger<Index> Logger
+@inject IWorkTypeService WorkTypes
+
+
+<PageTitle>Dashboard</PageTitle>
+
+
+
+<AuthorizeView>
+
+    <Authorized>
+        @if (loading)
+        {
+            <div class="flex items-center justify-center ">
+                <div class="text-center">
+
+                    <div class="w-14 h-14 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+
+                    <p class="mt-4 text-slate-500">
+                        Loading Dashboard...
+                    </p>
+
+                </div>
+            </div>
+        }
+        else if (contextUnavailable)
+        {
+            <div role="alert" class="rounded-xl border bg-white p-4">
+                <p class="font-semibold">Your employee session is unavailable.</p>
+                <p class="mt-1 text-sm">Please sign in again. If this continues, contact your organisation administrator to check your account access.</p>
+                <a href="/Online/Auth/NoAccessLogout" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors mt-3">Sign in again</a>
+            </div>
+        }
+        else
+        {
+            <div class="dashboard-layout w-full space-y-2 p-2">
+                <!-- Header -->
+                 <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h2 class="text-lg font-bold text-slate-900">
+
+                                User Dashboard
+                            </h2>
+                    
+                        </div>
+                
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2">
+                        <!-- Full Page Width Toggle Button -->
+                        <button type="button"
+                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                                title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                                @onclick="ToggleFullWidth">
+                            @if (isFullWidth)
+                            {
+                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                                </svg>
+                                <span>Shrink View</span>
+                            }
+                            else
+                            {
+                                <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                                </svg>
+                                <span>Full Width</span>
+                            }
+                        </button>
+
+              
+
+              
+                    </div>
+                </header>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                <!-- GRID -->
+
+                <div class="grid grid-cols-1 items-start xl:grid-cols-12 gap-2">
+                    <!-- LEFT -->
+                    <div class="xl:col-span-2 min-w-0 space-y-2">
+                        <ProfileCard UserName="@UserName" />
+
+                        <TimeClockCard
+
+                             OnClock="RefreshAttendanceAfterClock" />
+
+                        @if (allowTestClock)
+                        {
+                        <TestTimeClockCard
+                            TodayCheckIn="TodayCheckIn"
+                            TodayCheckOut="TodayCheckOut"
+                            OnClock="RefreshAttendanceAfterClock" />
+                        }
+
+                        <TodaysAttendanceLogCard RefreshKey="attendanceRefreshKey" />
+                        <UnevenLogsCard />
+                    </div>
+
+                    <!-- CENTER -->
+
+                    <div class="xl:col-span-7 min-w-0 space-y-2">
+                        @if (attendanceLoadFailed)
+                        {
+                            <p role="alert" class="rounded border p-3">Some attendance information could not be loaded. <button type="button" class="underline" @onclick="RetryAttendanceAsync">Retry</button></p>
+                        }
+
+                            <YearlyAttendanceGridCard
+                                ShowExports="false"
+                                Days="yearlyAttendanceDays"
+                                IsLoading="loadingYearlyAttendance"
+                                YearChanged="LoadYearlyAttendance" />
+
+
+
+                        <AttendanceSummaryCard WeeklyLogs="weeklyLogs" Days="yearlyAttendanceDays" ShowExports="false" />
+
+                        <RecentLeaveRequestsCard />
+
+                    </div>
+
+                     <!-- RIGHT -->
+
+                    <div class="xl:col-span-3 min-w-0 space-y-2">
+                        <HRM.Components.Pages.Online.Leave.Cards.LeaveCalendarCard IncludeTeam="true" />
+                        <TodaysWorkPlanCard RefreshKey="attendanceRefreshKey" />
+
+                        <WeeklyWorkedHoursCard RefreshKey="attendanceRefreshKey" />
+
+                        <WorkHandoverInboxCard />
+                        <LeaveBalanceCard />
+
+                    </div>
+
+                </div>
+
+            </div>
+
+        }
+
+    </Authorized>
+
+    <NotAuthorized>
+
+        <section class="welcome-shell" aria-labelledby="welcome-title">
+            <div class="welcome-hero">
+                <div class="welcome-brand">
+                    <span class="welcome-mark" aria-hidden="true">HR</span>
+                    <span><strong>Government HR Platform</strong><small>Secure workforce services</small></span>
+                </div>
+
+                <div class="welcome-copy">
+                    <span class="welcome-eyebrow">Enterprise human resource management</span>
+                    <h1 id="welcome-title">One trusted workspace for every government organisation.</h1>
+                    <p>Manage people, attendance, leave, work schedules and approvals through a tenant-aware platform designed for accountable public service.</p>
+                </div>
+
+                <div class="welcome-trust-row" aria-label="Platform characteristics">
+                    <span>Organisation isolated</span><span>Role based access</span><span>Auditable workflows</span>
+                </div>
+            </div>
+
+            <aside class="welcome-signin" aria-labelledby="signin-title">
+                <div class="welcome-secure"><span aria-hidden="true"></span>Government digital identity</div>
+                <h2 id="signin-title">Access your organisation</h2>
+                <p>Use your eFaas account to verify your identity and open the HR workspace assigned by your organisation.</p>
+                <a class="welcome-efaas-button" href="/Online/Auth/login">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 5 6v5c0 4.6 2.9 8.1 7 10 4.1-1.9 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+                    <span>Continue with eFaas<small>National Digital Identity</small></span>
+                    <svg class="welcome-arrow" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 18 6-6-6-6"/></svg>
+                </a>
+                <div class="welcome-help">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z"/><path d="M9.1 9a3 3 0 1 1 5.8 1c0 2-2.9 2-2.9 4M12 18h.01"/></svg>
+                    <p><strong>HR access is assigned by your organisation.</strong> If eFaas sign-in succeeds but no workspace is available, contact your organisation's HR team.</p>
+                </div>
+            </aside>
+
+            <div class="welcome-capabilities" aria-label="HR platform capabilities">
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span><div><h3>Workforce administration</h3><p>Staff records, positions, organisational structures and controlled administrative access.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h3>Time and attendance</h3><p>Official schedules, duty rosters, clock events, corrections and attendance reporting.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v15H3V6a2 2 0 0 1 2-2Z"/><path d="m8 16 2 2 5-5"/></svg></span><div><h3>Leave and employee services</h3><p>Entitlements, applications, handovers, receipts and configurable approval journeys.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3 4 7v5c0 5 3.4 8 8 9 4.6-1 8-4 8-9V7l-8-4Z"/><path d="M9 12h6M12 9v6"/></svg></span><div><h3>Governance by design</h3><p>Tenant configuration, permission limits, state transitions and traceable decisions.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h10M7 13h4M15 13h2M7 17h3"/></svg></span><div><h3>Payroll administration</h3><p>Payroll preparation, approved overtime, allowances and controlled processing records.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="9" cy="7" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2M16 11h5M18.5 8.5v5"/></svg></span><div><h3>Recruitment and onboarding</h3><p>Candidate intake, appointment requests and structured employee onboarding workflows.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 5h10a2 2 0 0 1 2 2v12H9M5 5h.01M5 12h.01M5 19h.01"/><path d="m12 10 2 2 4-4"/></svg></span><div><h3>Task management</h3><p>Assign responsibilities, coordinate work handovers and track accountable completion.</p></div></article>
+                <article><span class="welcome-icon"><svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/><path d="m4 7 5-4 6 6 6-6"/></svg></span><div><h3>Employee performance</h3><p>Goals, reviews and performance insights aligned with organisational responsibilities.</p></div></article>
+            </div>
+
+            <footer class="welcome-footer"><span>Government HR Platform</span><span>Secure access through eFaas</span></footer>
+        </section>
+
+
+    </NotAuthorized>
+
+</AuthorizeView>
+
+
+
+@code{
+
+
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthState { get; set; }
+    private AttendanceLogDto? TodayCheckIn;
+    private AttendanceLogDto? TodayCheckOut;
+
+    private int attendanceRefreshKey = 0;
+    private bool isFullWidth = false;
+    private const string FullWidthSettingKey = "hrm.item-management.full-width";
+
+    private bool loading = true;
+    private bool contextUnavailable;
+
+
+    private string UserName = "";
+
+    private List<YearlyAttendanceDayDto> yearlyAttendanceDays = [];
+
+    private bool loadingYearlyAttendance;
+    private int selectedAttendanceYear = DateTime.Today.Year;
+
+
+
+    private List<HRM.DTOs.Leave.JobLeaveTypeDto>? leaveBalances;
+
+    private List<AttendanceLogDto>? weeklyLogs;
+
+    private List<AttendanceLogDto>? unevenLogs;
+
+    private List<JobDto>? jobHistory;
+
+    private ActiveJobDto? activeJob;
+
+    private List<HRM.DTOs.Contracts.LeafDto>? leaveRequests;
+
+
+    private bool allowTestClock;
+    private bool attendanceLoadFailed;
+    private async Task RetryAttendanceAsync()
+    {
+        attendanceLoadFailed = false;
+        await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(selectedAttendanceYear));
+    }
+    protected override async Task OnInitializedAsync()
+    {
+
+
+         
+          
+        // var workflowInstanceId = await WorkFlowEngine.StartAsync(23600, 915);
+
+
+
+        if (AuthState == null) { ClearDashboardContext(); return; }
+        var auth = await AuthState;
+
+        if (!auth.User.Identity?.IsAuthenticated ?? true)
+        {
+            // User isn't authenticated yet.
+            return;
+        }
+        try
+        {
+            await LoadDisplayNameAsync();
+            if (contextUnavailable) return;
+            // Mount independent cards immediately; annual attendance must not block the shell.
+            loading = false;
+            await InvokeAsync(StateHasChanged);
+            await Task.WhenAll(LoadAttendance(), LoadYearlyAttendance(DateTime.Today.Year), LoadTestClockPermissionAsync());
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        finally { loading = false; }
+    }
+
+    private async Task LoadTestClockPermissionAsync()
+    {
+        try { allowTestClock = await WorkTypes.CanClockAsync() && await AttendanceLogService.CanUseTestClockAsync(); }
+        catch (Exception ex) { Logger.LogWarning(ex, "Could not load development clock permission"); }
+    }
+
+
+    private async Task LoadYearlyAttendance(int year)
+    {
+        selectedAttendanceYear = year;
+        try
+        {
+            loadingYearlyAttendance = true;
+
+            yearlyAttendanceDays =
+                await AttendanceService
+                    .GetMyYearlyAttendanceAsync(year);
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        catch (Exception ex) { attendanceLoadFailed = true; Logger.LogError(ex, "Could not load dashboard annual attendance"); }
+        finally
+        {
+            loadingYearlyAttendance = false;
+        }
+   
+
+
+    }
+    private async Task RefreshAttendanceAfterClock()
+    {
+        await LoadAttendance();
+        if (contextUnavailable) return;
+        await LoadYearlyAttendance(selectedAttendanceYear);
+
+        attendanceRefreshKey++;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task RefreshDashboardAsync()
+    {
+        if (AuthState == null)
+            return;
+
+        var auth = await AuthState;
+
+        if (auth.User.Identity?.IsAuthenticated != true)
+            return;
+
+        await LoadDisplayNameAsync();
+        if (contextUnavailable) return;
+
+        try
+        {
+            await LoadAttendance();
+            if (contextUnavailable) return;
+            await Task.WhenAll(LoadLeaveBalances(), LoadJobHistory());
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadDisplayNameAsync()
+    {
+        var context = await _access.GetContextAsync();
+        if (context == null) { ClearDashboardContext(); return; }
+        contextUnavailable = false;
+        UserName = !string.IsNullOrWhiteSpace(context.FullName) ? context.FullName.Trim()
+            : !string.IsNullOrWhiteSpace(context.Username) ? context.Username.Trim() : "Employee";
+    }
+
+    private void ClearDashboardContext()
+    {
+        contextUnavailable = true; loading = false; UserName = "";
+        weeklyLogs = []; yearlyAttendanceDays = []; leaveBalances = []; jobHistory = []; leaveRequests = []; unevenLogs = [];
+        TodayCheckIn = null; TodayCheckOut = null; activeJob = null;
+    }
+
+    private async Task LoadAttendance()
+    {
+        try
+        {
+        weeklyLogs = await AttendanceService.GetMyWeeklyAttendanceAsync() ?? [];
+
+        StateHasChanged(); // IMPORTANT
+        }
+        catch (UnauthorizedAccessException) { ClearDashboardContext(); }
+        catch (Exception ex) { attendanceLoadFailed = true; Logger.LogError(ex, "Could not load dashboard weekly attendance"); }
+
+    }
+
+    private async Task LoadLeaveBalances()
+    {
+        leaveBalances = await LeaveService.GetMyLeaveBalancesAsync();
+    }
+ 
+
+    private async Task LoadJobHistory()
+    {
+
+        jobHistory = await JobService.GetMyJobHistoryAsync();
+    }
+
+    private async Task LoadActiveJob()
+    {
+
+        activeJob = await JobService.GetMyActiveJobAsync();
+    }
+
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
+
+}

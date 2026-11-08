@@ -1,0 +1,614 @@
+@using HRM.DTOs
+@namespace HRM.Components.Admin.Hr.Staff
+@using HRM.Services
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+@inject HRM.Services.Contracts.StaffOnboardingServiceContracts.IOperations Onboarding
+@inject NavigationManager Navigation
+@inject ToastService Toasts
+@inject ILogger<StaffOnboardingPage> Logger
+@inject PortalContext Portal
+
+<PageTitle>Staff Onboarding - HR Portal</PageTitle>
+
+<section class="staff-onboarding-page w-full min-w-0 p-2 space-y-4">
+    <!-- Sticky Header -->
+    <header class="sticky top-0 z-20 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">Staff Onboarding &amp; Appointment</h2>
+                @if (data != null && !string.IsNullOrWhiteSpace(data.Organisation))
+                {
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">
+                        @data.Organisation
+                    </span>
+                }
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">Manage candidate intake, structured appointment workflows, and position vacancy reviews.</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="LoadAsync">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+            <a href="/admin/settings/config/approval-flows"
+               class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors">
+                <span>⚙️</span>
+                <span>Approval Flows</span>
+            </a>
+        </div>
+    </header>
+
+    @if (message != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800 shadow-xs">
+            <div class="flex items-center gap-2">
+                <span class="text-base">⚠️</span>
+                <span>@message</span>
+            </div>
+            <button type="button" @onclick="() => message = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    @if (loading)
+    {
+        <div class="flex items-center justify-center py-12">
+            <div class="text-center">
+                <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto"></div>
+                <p class="mt-3 text-xs text-slate-500">Loading onboarding data…</p>
+            </div>
+        </div>
+    }
+    else if (data != null)
+    {
+        @if (IndividualId.HasValue && data.CanSubmit && !string.IsNullOrEmpty(data.Individual))
+        {
+            <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+                <div class="border-b border-slate-100 pb-3">
+                    <h3 class="text-sm font-bold text-slate-900">Add @data.Individual as Staff</h3>
+                    <p class="text-xs text-slate-500">This submits a Job Position Request. No employee account is created before final approval.</p>
+                </div>
+
+                <div class="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Structure Type</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="structureTypeId"
+                                @bind:after="StructureTypeChanged"
+                                disabled="@busy">
+                            <option value="0">All structure types</option>
+                            @foreach (var item in data.StructureTypes)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Department <span class="text-rose-500">*</span></label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="form.OrganisationStructureId"
+                                disabled="@busy">
+                            <option value="0">Select department</option>
+                            @foreach (var item in data.Departments.Where(x => structureTypeId == 0 || x.StructureTypeId == structureTypeId))
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Job Type <span class="text-rose-500">*</span></label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="form.JobTypeId"
+                                disabled="@busy">
+                            <option value="0">Select Job Type</option>
+                            @foreach (var item in data.JobTypes)
+                            {
+                                <option value="@item.Id">@item.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Joining Date <span class="text-rose-500">*</span></label>
+                        <input type="date"
+                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="form.JoinedDate"
+                               disabled="@busy" />
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-medium text-slate-700 p-1">Vacant Position (Optional)</label>
+                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                @bind="form.PositionId"
+                                @bind:after="() => form.JobMatrixStepId = null"
+                                disabled="@busy">
+                            <option value="">Assign later</option>
+                            @foreach (var item in data.Positions)
+                            {
+                                <option value="@item.Id">@item.Name · #@item.Id</option>
+                            }
+                        </select>
+                    </div>
+
+                    @if (data.Positions.FirstOrDefault(x => x.Id == form.PositionId)?.Pay is { } payDefinition)
+                    {
+                        <div>
+                            <label class="block text-xs font-medium text-slate-700 p-1">Employee Job Pay Step</label>
+                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                    @bind="form.JobMatrixStepId"
+                                    disabled="@busy">
+                                <option value="">Select pay step</option>
+                                @foreach (var s in payDefinition.Steps)
+                                {
+                                    <option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDefinition.Currency</option>
+                                }
+                            </select>
+                        </div>
+                    }
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 p-1">Appointment Remarks</label>
+                    <textarea class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                              rows="2"
+                              maxlength="1000"
+                              placeholder="Add optional notes regarding this appointment…"
+                              @bind="form.Remarks"
+                              disabled="@busy"></textarea>
+                </div>
+
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-100">
+                    <p class="text-xs text-slate-500">Selected position: <strong class="text-slate-800">@SelectedPositionName</strong></p>
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                            disabled="@(busy || form.JobTypeId <= 0 || form.OrganisationStructureId <= 0)"
+                            @onclick="SubmitAsync">
+                        <span>＋</span>
+                        <span>@(busy ? "Processing…" : "Submit For Approval")</span>
+                    </button>
+                </div>
+            </section>
+        }
+
+        <!-- Onboarding Requests List -->
+        <section class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-4">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <h3 class="text-sm font-bold text-slate-900">Onboarding Requests</h3>
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                        @rows.Count
+                    </span>
+                </div>
+                <label class="flex items-center gap-2 text-xs font-medium text-slate-700 cursor-pointer">
+                    <input type="checkbox"
+                           class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                           @bind="pendingOnly"
+                           @bind:after="LoadRequestsAsync" />
+                    <span>Pending Only</span>
+                </label>
+            </div>
+
+            @if (rows.Count == 0)
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-xs text-slate-500">
+                    No onboarding requests available for the current filter.
+                </div>
+            }
+
+            <div class="space-y-4">
+                @foreach (var row in rows)
+                {
+                    var isTargetRequest = RequestId.HasValue && RequestId.Value == row.RequestId;
+                    <article @key="row.RequestId"
+                             class="rounded-xl border p-4 space-y-3 transition-all @(isTargetRequest ? "border-blue-500 ring-2 ring-blue-500/20 bg-blue-50/10 shadow-xs" : "border-slate-200 bg-white hover:border-slate-300")">
+                        
+                        <div class="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h4 class="text-sm font-bold text-slate-900">@row.Individual</h4>
+                                    <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                        @row.Reference
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-500 mt-0.5">
+                                    @row.Department · @row.JobType
+                                </p>
+                            </div>
+                            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @GetStatusBadge(row.Status)">
+                                @row.Status
+                            </span>
+                        </div>
+
+                        <!-- Current Position & Joined Date Pill Bar -->
+                        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 p-2.5 border border-slate-200">
+                            <div class="text-xs text-slate-700 flex flex-wrap items-center gap-1.5">
+                                <span class="text-slate-500">Joining Date:</span>
+                                <strong>@row.JoinedDate.ToString("dd MMM yyyy")</strong>
+                                <span class="mx-1.5 text-slate-300">|</span>
+                                <span class="text-slate-500">Assigned Position:</span>
+                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                    @row.Position
+                                </span>
+                            </div>
+
+                            @if (row.IsOpen && (row.CanApprove || data.CanSubmit))
+                            {
+                                <button type="button"
+                                        class="inline-flex items-center gap-1.5 rounded-lg border border-blue-300 bg-white px-2.5 py-1 text-xs font-semibold text-blue-700 shadow-xs hover:bg-blue-50 transition"
+                                        @onclick="() => ToggleEditPosition(row)">
+                                    <span>✏️</span>
+                                    <span>@(editingPositionRequestId == row.RequestId ? "Close Editor" : "Change Position")</span>
+                                </button>
+                            }
+                        </div>
+
+                        <!-- POSITION EDIT PANEL -->
+                        @if (editingPositionRequestId == row.RequestId)
+                        {
+                            <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-4 space-y-3 shadow-xs">
+                                <div class="flex items-center justify-between border-b border-blue-200/60 pb-2">
+                                    <div>
+                                        <h4 class="text-xs font-bold text-slate-900">💼 Edit Position Assignment</h4>
+                                        <p class="text-[11px] text-slate-500">
+                                            Select an active vacant position for <strong>@row.Individual</strong> starting <strong>@row.JoinedDate.ToString("dd MMM yyyy")</strong> to resolve vacancy conflicts.
+                                        </p>
+                                    </div>
+                                    @if (selectedNewPositionId.HasValue && selectedNewPositionId > 0)
+                                    {
+                                        <span class="rounded bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
+                                            Vacant in @data.Organisation
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-medium text-slate-700 p-1">Available Vacant Position</label>
+                                        <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                                @bind="selectedNewPositionId"
+                                                @bind:after="() => selectedNewJobMatrixStepId = null"
+                                                disabled="@savingPosition">
+                                            <option value="">Assign later (no position)</option>
+                                            @foreach (var p in data.Positions)
+                                            {
+                                                <option value="@p.Id">@p.Name · #@p.Id</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    @if (data.Positions.FirstOrDefault(x => x.Id == selectedNewPositionId)?.Pay is { } payDef)
+                                    {
+                                        <div>
+                                            <label class="block text-xs font-medium text-slate-700 p-1">Job Matrix Pay Step</label>
+                                            <select class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                                    @bind="selectedNewJobMatrixStepId"
+                                                    disabled="@savingPosition">
+                                                <option value="">Select pay step</option>
+                                                @foreach (var s in payDef.Steps)
+                                                {
+                                                    <option value="@s.Id">Step @s.Number · @s.JobAllowance.ToString("N2") @payDef.Currency</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    }
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-blue-200/60">
+                                    <span class="text-[11px] text-slate-500">
+                                        Saving the vacant position resolves the assignment error, enabling immediate approval.
+                                    </span>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                                disabled="@savingPosition"
+                                                @onclick="() => editingPositionRequestId = null">
+                                            Cancel
+                                        </button>
+                                        <button type="button"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                                disabled="@savingPosition"
+                                                @onclick="() => SavePositionAsync(row)">
+                                            <span>💾</span>
+                                            <span>@(savingPosition ? "Saving Position…" : "Save Position")</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        @if (row.IsOpen && row.Stage != null)
+                        {
+                            <div class="text-xs text-slate-600">
+                                Current stage: <strong class="text-slate-900">@row.Stage</strong>
+                            </div>
+                        }
+
+                        @if (row.ApprovalInformation != null)
+                        {
+                            <div class="rounded-lg bg-amber-50 p-2.5 text-xs text-amber-800 border border-amber-200">
+                                @row.ApprovalInformation
+                            </div>
+                        }
+
+                        @if (!string.IsNullOrEmpty(row.Remarks))
+                        {
+                            <div class="text-xs text-slate-600 bg-slate-50/60 p-2.5 rounded-lg border border-slate-100">
+                                <span class="font-semibold text-slate-700">Remarks:</span> @row.Remarks
+                            </div>
+                        }
+
+                        <div class="text-[11px] text-slate-400">
+                            @row.AccountStatus
+                        </div>
+
+                        @if (row.History.Count > 0)
+                        {
+                            <details class="text-xs text-slate-600">
+                                <summary class="font-semibold text-blue-600 hover:underline cursor-pointer">
+                                    Request history (@row.History.Count events)
+                                </summary>
+                                <ul class="mt-2 list-inside list-disc space-y-1 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                    @foreach (var item in row.History)
+                                    {
+                                        <li>@item</li>
+                                    }
+                                </ul>
+                            </details>
+                        }
+
+                        @if (row.CanApprove || row.CanCancel)
+                        {
+                            <div class="space-y-3 pt-2 border-t border-slate-100">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-700 p-1">Action Comment</label>
+                                    <textarea aria-label="Action comment for @row.Reference"
+                                              class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs text-slate-900 focus:border-blue-500 focus:outline-none"
+                                              rows="2"
+                                              maxlength="2000"
+                                              placeholder="Enter optional approval or required rejection reason…"
+                                              disabled="@busy"
+                                              value="@Comment(row.RequestId)"
+                                              @oninput="e => comments[row.RequestId] = e.Value?.ToString() ?? string.Empty"></textarea>
+                                </div>
+
+                                <div class="flex flex-wrap items-center gap-2">
+                                    @if (row.CanApprove)
+                                    {
+                                        <button type="button"
+                                                disabled="@busy"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                                                @onclick='() => ActAsync(row, "Approve")'>
+                                            <span>✓</span>
+                                            <span>Approve Stage</span>
+                                        </button>
+                                        <button type="button"
+                                                disabled="@busy"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 bg-white px-3.5 py-2 text-xs font-semibold text-rose-700 shadow-xs hover:bg-rose-50 disabled:opacity-50 transition-colors"
+                                                @onclick='() => ActAsync(row, "Reject")'>
+                                            <span>✕</span>
+                                            <span>Reject</span>
+                                        </button>
+                                    }
+                                    @if (row.CanCancel)
+                                    {
+                                        <button type="button"
+                                                disabled="@busy"
+                                                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                                                @onclick='() => ActAsync(row, "Cancel")'>
+                                            <span>Cancel Request</span>
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+
+            <p class="text-xs text-slate-400 pt-2">Showing up to 100 requests in @data.Organisation.</p>
+        </section>
+    }
+</section>
+
+@code {
+    [Parameter] public int? IndividualId { get; set; }
+    [Parameter] public int? RequestId { get; set; }
+
+    private StaffOnboardingData? data;
+    private StaffOnboardingForm form = new();
+    private List<StaffOnboardingRow> rows = [];
+    private readonly Dictionary<int, string> comments = [];
+    private bool loading = true, busy, pendingOnly;
+    private int structureTypeId;
+    private bool parametersLoaded;
+    private int? loadedIndividualId, loadedRequestId, loadedOrganisationId;
+
+    private int? editingPositionRequestId;
+    private int? selectedNewPositionId;
+    private int? selectedNewJobMatrixStepId;
+    private bool savingPosition;
+
+    private string SelectedPositionName => form.PositionId.HasValue
+        ? data?.Positions.FirstOrDefault(x => x.Id == form.PositionId.Value)?.Name ?? "Selected position is unavailable; select it again"
+        : "Assign later";
+
+    private void StructureTypeChanged() => form.OrganisationStructureId = 0;
+    private string? message;
+    private string Comment(int id) => comments.GetValueOrDefault(id, "");
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var organisationId = Portal.CurrentOrganisationId;
+        if (parametersLoaded && loadedIndividualId == IndividualId && loadedRequestId == RequestId && loadedOrganisationId == organisationId)
+            return;
+        parametersLoaded = true;
+        loadedIndividualId = IndividualId;
+        loadedRequestId = RequestId;
+        loadedOrganisationId = organisationId;
+        form = new() { IndividualId = IndividualId ?? 0 };
+        structureTypeId = 0;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true; message = null; data = null; rows = [];
+        try
+        {
+            data = await Onboarding.LoadAsync(IndividualId);
+            await LoadRequestsAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or UnauthorizedAccessException)
+        {
+            message = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load staff onboarding");
+            message = "Onboarding could not be loaded. Please try again.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadRequestsAsync()
+    {
+        try
+        {
+            rows = await Onboarding.GetRequestsAsync(RequestId, pendingOnly);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to load onboarding requests");
+            message = "Onboarding requests could not be loaded. Please refresh.";
+            rows = [];
+        }
+    }
+
+    private void ToggleEditPosition(StaffOnboardingRow row)
+    {
+        if (editingPositionRequestId == row.RequestId)
+        {
+            editingPositionRequestId = null;
+        }
+        else
+        {
+            editingPositionRequestId = row.RequestId;
+            selectedNewPositionId = row.PositionId;
+            selectedNewJobMatrixStepId = row.JobMatrixStepId;
+        }
+    }
+
+    private async Task SavePositionAsync(StaffOnboardingRow row)
+    {
+        if (savingPosition) return;
+        savingPosition = true; message = null;
+        try
+        {
+            var result = await Onboarding.UpdatePositionAsync(row.RequestId, selectedNewPositionId, selectedNewJobMatrixStepId);
+            if (!result.Success)
+            {
+                message = result.Message;
+                return;
+            }
+            Toasts.Success(result.Message);
+            editingPositionRequestId = null;
+            await LoadRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to update position for onboarding {RequestId}", row.RequestId);
+            message = "Unable to update position. Please refresh and try again.";
+        }
+        finally
+        {
+            savingPosition = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (busy) return;
+        var submitted = new StaffOnboardingForm
+        {
+            IndividualId = form.IndividualId,
+            OrganisationStructureId = form.OrganisationStructureId,
+            JobTypeId = form.JobTypeId,
+            PositionId = form.PositionId,
+            JobMatrixStepId = form.JobMatrixStepId,
+            JoinedDate = form.JoinedDate,
+            Remarks = form.Remarks
+        };
+        busy = true; message = null;
+        try
+        {
+            var result = await Onboarding.SubmitAsync(submitted);
+            if (!result.Success)
+            {
+                message = result.Message;
+                return;
+            }
+            Toasts.Success(result.Message);
+            Navigation.NavigateTo(HRM.Services.Contracts.StaffOnboardingServiceContracts.PageUrl);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to submit onboarding");
+            message = "The request could not be submitted. Please refresh before trying again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ActAsync(StaffOnboardingRow row, string action)
+    {
+        if (busy) return;
+        busy = true; message = null;
+        try
+        {
+            var result = await Onboarding.ActAsync(row.RequestId, row.StateId, action, Comment(row.RequestId));
+            if (!result.Success)
+            {
+                message = result.Message;
+                if (result.Message.Contains("position", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Automatically open the Position Edit Panel for this request!
+                    editingPositionRequestId = row.RequestId;
+                    selectedNewPositionId = row.PositionId;
+                    selectedNewJobMatrixStepId = row.JobMatrixStepId;
+                }
+                return;
+            }
+            Toasts.Success(result.Message);
+            comments.Remove(row.RequestId);
+            editingPositionRequestId = null;
+            await LoadRequestsAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Unable to process onboarding {RequestId}", row.RequestId);
+            message = "The action could not be completed. Refresh the request before trying again.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string GetStatusBadge(string status) => status switch
+    {
+        _ when status.Contains("Approved", StringComparison.OrdinalIgnoreCase) => "bg-emerald-100 text-emerald-800",
+        _ when status.Contains("Processing", StringComparison.OrdinalIgnoreCase) => "bg-amber-100 text-amber-800",
+        _ when status.Contains("Reject", StringComparison.OrdinalIgnoreCase) || status.Contains("Cancel", StringComparison.OrdinalIgnoreCase) => "bg-rose-100 text-rose-800",
+        _ => "bg-slate-100 text-slate-700"
+    };
+}

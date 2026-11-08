@@ -1,0 +1,1026 @@
+@page "/online/attendance/attendance-request"
+@using HRM.Components.Shared
+@page "/online/attendance/attendance-request/{TabSection}"
+@using HRM.DTOs
+@using HRM.DTOs.Attendance
+@using HRM.DTOs.Leave
+@using HRM.Helpers
+@using HRM.Services.Interfaces.Leave
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@rendermode RenderMode.InteractiveServer
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries RequestQueries
+@inject HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries WorkflowQueries
+@inject IUserAccessService SessionAccess
+@inject IOrganisationService OrganisationService
+@inject IIndividual _individual
+@inject IAttendanceRequestService AttendanceRequests
+@inject IAttendanceService Attendance
+@inject ILeaveChangeService LeaveChanges
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestReview ReviewService
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<AttendanceRequestGrid> Logger
+
+<PageTitle>Attendance Requests - HR Portal</PageTitle>
+<BackButton Url="/online/attendance" Text="Back to Attendance Hub" />
+
+<div class="w-full min-w-0 p-2 flex flex-col gap-3">
+    <!-- HORIZONTAL TABS (REPLACING CATEGORY RAIL) -->
+    <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Attendance Request Tabs">
+        @foreach (var tab in RequestTabs)
+        {
+            var isActive = activeTab == tab.Key;
+            <a href="@($"/online/attendance/attendance-request/{tab.Key}")"
+               class="rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(isActive ? "bg-emerald-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50")">
+                <span>@tab.Icon</span>
+                <span>@tab.Label</span>
+            </a>
+        }
+    </nav>
+
+    <!-- MAIN CONTENT PANEL -->
+    <div class="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs p-4 sm:p-5 space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b border-slate-100 pb-3 gap-3">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800">@CurrentTabMetadata.Label</h2>
+                    <p class="text-sm text-slate-500 mt-0.5">@CurrentTabMetadata.Description</p>
+                </div>
+                @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
+                {
+                    <button type="button" @onclick="OpenAddPanel" class="portal-action-btn portal-action-btn--primary">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        <span>Add Request</span>
+                    </button>
+                }
+            </div>
+
+            @if (activeTab == "late-check-in")
+            {
+                <LateCheckInRequests @key="activeTab" />
+            }
+            @if (activeTab == "weekly-hours-exception")
+            {
+                <HRM.Components.Shared.WeeklyHoursExceptions />
+            }
+            @if (activeTab == "early-check-out")
+            {
+                <LateCheckInRequests @key="activeTab" Kind="EarlyCheckOut" />
+            }
+
+            @if (!string.IsNullOrWhiteSpace(requestSuccess))
+            {
+                <div role="status" class="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-800">
+                    @requestSuccess
+                    @if (submittedLeaveChange)
+                    {
+                        <a class="ml-2 underline font-semibold" href="/online/leaves/leave-change-request">View leave change requests</a>
+                    }
+                </div>
+            }
+
+            @if (activeTab is not ("late-check-in" or "early-check-out" or "weekly-hours-exception"))
+            {
+                <!-- TWO-COLUMN GRID (like /online/ot): Left = Uneven-Log Actions & Selected Request Detail/Chit, Right = Filterable DataTable -->
+                <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                    <!-- LEFT COLUMN (2fr): Uneven-log correction actions + Selected Request Detail + Request Chit -->
+                    <div class="min-w-0 space-y-4">
+                        @if (activeTab == "uneven-log-correction")
+                        {
+                            <section class="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Uneven-log corrections">
+                                <div class="mb-3 flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                                    <div>
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Clock Event Correction</span>
+                                        <h3 class="mt-0.5 text-base font-bold text-slate-800">Uneven-log corrections</h3>
+                                        <p class="mt-0.5 text-xs text-slate-500">Request a correction to an uneven clock event. Your original event stays unchanged while the request is pending.</p>
+                                    </div>
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-600">
+                                        @unevenLogs.Count event(s)
+                                    </span>
+                                </div>
+
+                                @if (unevenLogs.Count == 0)
+                                {
+                                    <p class="rounded-md border border-dashed border-slate-200 bg-slate-50/70 p-3 text-sm text-slate-500">
+                                        No uneven clock events in the current salary period.
+                                    </p>
+                                }
+                                else
+                                {
+                                    <div class="max-h-72 divide-y divide-slate-100 overflow-y-auto pr-1">
+                                        @foreach (var log in unevenLogs)
+                                        {
+                                            <div class="flex flex-wrap items-center justify-between gap-3 py-2.5">
+                                                <div>
+                                                    <span class="block text-sm font-semibold text-slate-800">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</span>
+                                                    <span class="text-xs text-slate-500">@log.Date.ToString("dddd") · Log #@log.AttendanceLogID</span>
+                                                </div>
+                                                @if (CanRequestCorrection(log.AttendanceLogID))
+                                                {
+                                                    <button type="button" class="portal-action-btn portal-action-btn--compact portal-action-btn--primary" @onclick="() => OpenCorrection(log)">Request correction</button>
+                                                }
+                                                else
+                                                {
+                                                    <span class="max-w-xs text-right text-xs text-slate-500">@(correctionEligibility.GetValueOrDefault(log.AttendanceLogID)?.Message ?? "Correction unavailable")</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </section>
+                        }
+
+                        @if (SelectedRequest == null)
+                        {
+                            <div class="detail-panel-card text-center py-10 text-slate-500">
+                                <p class="font-semibold text-slate-700 mb-1">No Request Selected</p>
+                                <p class="text-xs text-slate-500">Select a request from the datatable on the right (or click Search) to view its details and attendance request chit.</p>
+                            </div>
+                        }
+                        else
+                        {
+                            <!-- 1. Attendance Request Detail Card -->
+                            <section class="detail-panel-card space-y-4" aria-label="Selected attendance request details">
+                                <div class="flex flex-wrap items-start justify-between gap-2 pb-3 border-b border-slate-100">
+                                    <div>
+                                        <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Request Detail</span>
+                                        <h3 class="text-base font-bold text-slate-800 mt-0.5">@SelectedRequest.ReferenceNo · @SelectedRequest.Kind</h3>
+                                    </div>
+                                    <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(SelectedRequest.RequestState)">
+                                        @SelectedRequest.RequestState
+                                    </span>
+                                </div>
+
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 bg-slate-50 rounded-lg p-3 border border-slate-100 text-xs">
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Date</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.LogDate.ToString("dd MMM yyyy")</strong>
+                                    </div>
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Time</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.LogTime</strong>
+                                    </div>
+                                    <div>
+                                        <span class="block text-slate-500 font-medium">Clock Mode</span>
+                                        <strong class="text-slate-800 text-sm">@SelectedRequest.Mode</strong>
+                                    </div>
+                                </div>
+
+                                <dl class="leave-chit-grid">
+                                    <div>
+                                        <dt>Staff Member</dt>
+                                        <dd>@DisplayText(SelectedRequest.StaffName)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Organisation</dt>
+                                        <dd>@DisplayText(SelectedRequest.OrganisationName)</dd>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <dt>Reason / Comments</dt>
+                                        <dd class="whitespace-pre-wrap">@DisplayText(SelectedRequest.Comments)</dd>
+                                    </div>
+                                </dl>
+                            </section>
+
+                            <!-- 2. Attendance Request Chit Card -->
+                            @if (review != null && (review.CanApprove || review.CanCancel))
+                            {
+                                <section class="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 p-4 space-y-3" aria-label="Approval Decision and Actions">
+                                    <div class="flex items-center justify-between">
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                            Approval Decision &amp; Action
+                                        </h4>
+                                        @if (acting) { <span class="text-xs text-emerald-600 font-semibold animate-pulse">Processing...</span> }
+                                    </div>
+                                    @if (reviewError != null)
+                                    {
+                                        <div role="alert" class="rounded-lg border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">@reviewError</div>
+                                    }
+                                    <div class="space-y-1">
+                                        <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300">Action Comment</label>
+                                        <textarea @bind="actionComment" rows="2" maxlength="2000" disabled="@acting" placeholder="Enter optional decision remarks..." class="w-full p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg resize-none"></textarea>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        @if (review.CanApprove)
+                                        {
+                                            <button type="button" class="portal-action-btn portal-action-btn--primary" disabled="@acting" @onclick='() => Act("Approve")'>@review.ActionLabel</button>
+                                            <button type="button" class="portal-action-btn" disabled="@acting" @onclick='() => Act("Reject")'>Reject</button>
+                                        }
+                                        @if (review.CanCancel)
+                                        {
+                                            <button type="button" class="portal-action-btn" disabled="@acting" @onclick='() => Act("Cancel")'>Cancel request</button>
+                                        }
+                                    </div>
+                                </section>
+                            }
+
+                            <article class="leave-chit-card" aria-label="Attendance request chit">
+                                <div class="leave-chit-header">
+                                    <div>
+                                        <div class="text-xs font-bold uppercase tracking-wider text-blue-700">
+                                            @(string.IsNullOrWhiteSpace(SelectedRequest.OrganisationName) ? "Human Resources · Attendance Chit" : SelectedRequest.OrganisationName)
+                                        </div>
+                                        <h4 class="text-sm font-bold text-slate-900 mt-0.5">Attendance Modification Chit</h4>
+                                        <p class="text-xs text-slate-500">Ref: @SelectedRequest.ReferenceNo</p>
+                                    </div>
+                                    <span class="leave-chit-stamp @GetStateColorClass(SelectedRequest.RequestState)">
+                                        @SelectedRequest.RequestState
+                                    </span>
+                                </div>
+
+                                <dl class="leave-chit-grid">
+                                    <div>
+                                        <dt>Applicant</dt>
+                                        <dd>@DisplayText(SelectedRequest.StaffName)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Request Type</dt>
+                                        <dd>@DisplayText(SelectedRequest.Kind)</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested Date</dt>
+                                        <dd>@SelectedRequest.LogDate.ToString("dd MMM yyyy")</dd>
+                                    </div>
+                                    <div>
+                                        <dt>Requested Time & Mode</dt>
+                                        <dd>@SelectedRequest.LogTime · @SelectedRequest.Mode</dd>
+                                    </div>
+                                    <div class="col-span-2">
+                                        <dt>Justification</dt>
+                                        <dd class="whitespace-pre-wrap">@DisplayText(SelectedRequest.Comments)</dd>
+                                    </div>
+                                </dl>
+
+                                <footer class="leave-chit-footer">
+                                    Attendance Request Chit · Reconciled into official attendance records once approved.
+                                </footer>
+                            </article>
+                        }
+                    </div>
+
+                    <!-- RIGHT COLUMN (3fr): Filter Controls + Attendance Requests DataTable -->
+                    <aside class="min-w-0 space-y-4">
+                        <section class="datatable-panel-card" aria-label="Attendance requests datatable">
+                            <div class="border-b border-slate-200 bg-slate-50/70 p-4">
+                                <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <h3 class="text-base font-bold text-slate-800">
+                                            @(activeTab == "uneven-log-correction" ? "Uneven-Log Correction Requests" : "Attendance Requests")
+                                        </h3>
+                                        <p class="text-xs text-slate-500">Filter by date range, status, or reference and select a row to inspect its detail &amp; chit on the left.</p>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                                        <span class="px-2.5 py-0.5 rounded-full bg-white border border-slate-200 font-semibold text-slate-700">
+                                            Total: @VisibleRequests.Count()
+                                        </span>
+                                        @foreach (var stat in stateStatistics)
+                                        {
+                                            <span class="px-2.5 py-0.5 rounded-full font-semibold @GetStateColorClass(stat.Key)">
+                                                @stat.Key: @stat.Value
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+
+                                <div class="grid grid-cols-12 gap-3 mb-3">
+                                    @if (activeTab != "uneven-log-correction")
+                                    {
+                                        <div class="col-span-12 md:col-span-5">
+                                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Organisation</label>
+                                            <select @bind="selectedOrgId" disabled class="w-full h-9 px-3 text-sm text-slate-700 bg-slate-100 border border-slate-200 rounded-md focus:outline-none cursor-not-allowed opacity-80">
+                                                <option value="0">-- All Organisations --</option>
+                                                @foreach (var org in organisations)
+                                                {
+                                                    <option value="@org.Id">@org.Name</option>
+                                                }
+                                            </select>
+                                        </div>
+                                    }
+                                    <div class="col-span-12 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-3")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Request Status</label>
+                                        <select @bind="selectedStatusId" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 cursor-pointer">
+                                            <option value="0">-- All Statuses --</option>
+                                            @foreach (var state in requestStates)
+                                            {
+                                                <option value="@state.Id">@state.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+
+                                    <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-2")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">From</label>
+                                        <input type="date" @bind="startDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                                    </div>
+
+                                    <div class="col-span-6 @(activeTab == "uneven-log-correction" ? "md:col-span-4" : "md:col-span-2")">
+                                        <label class="block text-xs font-bold text-slate-500 uppercase mb-1">To</label>
+                                        <input type="date" @bind="endDate" class="w-full h-9 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500" />
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/80">
+                                    <input type="search"
+                                           value="@tableSearch"
+                                           @oninput="OnTableSearchInput"
+                                           placeholder="Filter datatable by reference, staff, mode, status…"
+                                           aria-label="Filter attendance requests datatable"
+                                           class="h-9 px-3 text-xs sm:text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 flex-1 min-w-[180px]" />
+
+                                    <div class="flex flex-wrap items-center gap-2">
+                                        <label class="flex items-center gap-1.5 text-xs text-slate-600">
+                                            <span>Rows:</span>
+                                            <select value="@pageSize"
+                                                    @onchange="OnPageSizeChanged"
+                                                    class="h-9 px-2 text-xs bg-white border border-slate-200 rounded-md">
+                                                <option value="10">10</option>
+                                                <option value="25">25</option>
+                                                <option value="50">50</option>
+                                            </select>
+                                        </label>
+                                        <button type="button" @onclick="ResetFilters" class="portal-action-btn">
+                                            Reset
+                                        </button>
+                                        <button type="button" @onclick="ExecuteSearch" disabled="@isLoading" class="portal-action-btn portal-action-btn--primary">
+                                            @if (isLoading)
+                                            {
+                                                <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                                <span>Searching...</span>
+                                            }
+                                            else
+                                            {
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                                <span>Search</span>
+                                            }
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            @if (FilteredRequests.Count > 0)
+                            {
+                                <div class="overflow-x-auto">
+                                    <table class="min-w-full divide-y divide-slate-200 text-sm text-left text-slate-600">
+                                        <thead class="text-xs text-slate-500 uppercase bg-slate-50 border-b border-slate-200">
+                                            <tr>
+                                                <th scope="col" class="px-4 py-3">Ref No</th>
+                                                <th scope="col" class="px-4 py-3">Staff</th>
+                                                <th scope="col" class="px-4 py-3">Date & Time</th>
+                                                <th scope="col" class="px-4 py-3">Request / Mode</th>
+                                                <th scope="col" class="px-4 py-3 text-center">Status</th>
+                                                <th scope="col" class="px-4 py-3 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100 bg-white">
+                                            @foreach (var req in PagedRequests)
+                                            {
+                                                var isSelected = SelectedRequest?.RequestId == req.RequestId && SelectedRequest?.ReferenceNo == req.ReferenceNo;
+                                                <tr @key="req.RequestId"
+                                                    @onclick="() => SelectRequest(req)"
+                                                    class="datatable-row @(isSelected ? "datatable-row--selected" : "")">
+                                                    <td class="px-4 py-3 font-semibold text-slate-900 whitespace-nowrap">@req.ReferenceNo</td>
+                                                    <td class="px-4 py-3">@req.StaffName</td>
+                                                    <td class="px-4 py-3 whitespace-nowrap">
+                                                        <div class="font-medium text-slate-700">@req.LogDate.ToString("dd MMM yyyy")</div>
+                                                        <div class="text-xs text-slate-500">@req.LogTime</div>
+                                                    </td>
+                                                    <td class="px-4 py-3 font-medium">
+                                                        <div>@req.Kind</div>
+                                                        <div class="text-xs text-slate-500">@req.Mode</div>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-center whitespace-nowrap">
+                                                        <span class="px-2.5 py-1 text-xs font-semibold rounded-full @GetStateColorClass(req.RequestState)">
+                                                            @req.RequestState
+                                                        </span>
+                                                    </td>
+                                                    <td class="px-4 py-3 text-right whitespace-nowrap" @onclick:stopPropagation="true">
+                                                        <button type="button"
+                                                                class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
+                                                                @onclick="() => SelectRequest(req)">
+                                                            View
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                <div class="datatable-footer">
+                                    <span>
+                                        Showing @(FilteredRequests.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredRequests.Count) of @FilteredRequests.Count request(s)
+                                    </span>
+                                    <div class="flex items-center gap-1.5">
+                                        <button type="button"
+                                                class="portal-action-btn portal-action-btn--compact"
+                                                disabled="@(currentPage <= 1)"
+                                                @onclick="PrevPage">
+                                            Previous
+                                        </button>
+                                        <span class="px-2 font-semibold text-slate-700">Page @currentPage of @TotalPages</span>
+                                        <button type="button"
+                                                class="portal-action-btn portal-action-btn--compact"
+                                                disabled="@(currentPage >= TotalPages)"
+                                                @onclick="NextPage">
+                                            Next
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="p-10 text-center flex flex-col items-center justify-center">
+                                    <svg class="w-12 h-12 text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    <h3 class="text-base font-semibold text-slate-800">@(isDataLoaded ? "No requests found" : "Ready to search")</h3>
+                                    <p class="text-xs text-slate-500 mt-1">Adjust your date range or status filter and click Search.</p>
+                                </div>
+                            }
+                        </section>
+                    </aside>
+                </div>
+            }
+        </div>
+</div>
+
+<div class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40 transition-opacity duration-300 ease-in-out @(showAddPanel ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none")"
+     @onclick="CloseAddPanel"></div>
+
+<div class="fixed inset-y-0 right-0 z-50 w-full max-w-md bg-white shadow-2xl flex flex-col transition-transform duration-300 ease-in-out transform @(showAddPanel ? "translate-x-0" : "translate-x-full")">
+
+    <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+        <h3 class="text-lg font-bold text-slate-800">@(isLeaveChange ? "New Leave Change Request" : isCorrection ? "New Uneven Log Correction Request" : "New Attendance Request")</h3>
+        <button @onclick="CloseAddPanel" class="text-slate-400 hover:text-slate-600 transition-colors bg-white hover:bg-slate-100 rounded-full p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-6 space-y-5">
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Staff Member <span class="text-rose-500">*</span></label>
+            <select disabled class="w-full h-10 px-3 text-sm text-slate-700 bg-slate-50 border border-slate-200 rounded-md">
+                <option>Myself</option>
+            </select>
+        </div>
+
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Request type</label>
+            <select @bind="requestKind" @bind:after="RequestKindChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                @if (activeTab == "uneven-log-correction")
+                {
+                    <option value="correction">Uneven-log correction</option>
+                }
+                else
+                {
+                    <option value="attendance">Missing attendance</option>
+                    <option value="leave">Leave change</option>
+                }
+            </select>
+        </div>
+        @if (isLeaveChange)
+        {
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Approved leave</label>
+                <select @bind="leaveChange.LeaveId" @bind:after="LeaveSelectionChanged" disabled="@(isSubmitting || loadingLeaves)" class="w-full border rounded-md p-2">
+                    <option value="0">Select leave</option>
+                    @foreach (var leave in approvedLeaves)
+                    {
+                        <option value="@leave.LeaveId" disabled="@leave.HasPendingChange">
+                            @leave.LeaveType: @leave.FromDate.ToString("dd MMM yyyy") – @leave.ToDate.ToString("dd MMM yyyy") (@leave.Duration days) @(leave.HasPendingChange ? "— change pending" : "")
+                        </option>
+                    }
+                </select>
+                @if (loadingLeaves) { <p class="mt-2 text-sm text-slate-500">Loading approved leave...</p> }
+                else if (approvedLeaves.Count == 0) { <p class="mt-2 text-sm text-slate-500">You have no approved leave to change.</p> }
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Change type</label>
+                <select @bind="leaveChange.Kind" @bind:after="LeaveSelectionChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                    <option value="@LeaveChangeKind.Extension">Extension</option>
+                    <option value="@LeaveChangeKind.EarlyReturn">Early return</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">@(leaveChange.Kind == LeaveChangeKind.Extension ? "New leave end date" : "Return-to-work date")</label>
+                <input type="date" @bind="leaveChange.Date" disabled="@isSubmitting" class="w-full border rounded-md p-2" />
+            </div>
+            @if (SelectedLeave != null)
+            {
+                <div role="status" class="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">
+                    @if (LeavePreviewError != null) { <p>@LeavePreviewError</p> }
+                    else
+                    {
+                        var preview = LeaveChangePreview;
+                        @if (preview.Duration == 0) { <p>The full leave period will be cancelled upon approval.</p> }
+                        else { <p>Requested leave: @SelectedLeave.FromDate.ToString("dd MMM yyyy") – @preview.EndDate.ToString("dd MMM yyyy") (@preview.Duration days).</p> }
+                        <p>@(preview.BalanceAdjustment >= 0 ? $"{preview.BalanceAdjustment} unused leave days will return to your balance after approval." : $"{-preview.BalanceAdjustment} additional leave days will be deducted from your balance after approval.")</p>
+                    }
+                </div>
+            }
+        }
+        @if (isCorrection)
+        {
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Uneven clock event</label>
+                <select @bind="newRequest.OriginalLogId" @bind:after="OriginalLogChanged" disabled="@isSubmitting" class="w-full border rounded-md p-2">
+                    <option value="">Select a clock event</option>
+                    @foreach (var log in unevenLogs.Where(x => CanRequestCorrection(x.AttendanceLogID)))
+                    {
+                        <option value="@log.AttendanceLogID">@log.Date.ToString("dd MMM yyyy HH:mm:ss")</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (!isLeaveChange)
+        {
+            <div>
+                <label class="block text-xs font-bold text-slate-700 uppercase mb-2">In/Out Mode <span class="text-rose-500">*</span></label>
+                <select @bind="newRequest.InOutModeId" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
+                    <option value="0">-- Select Mode --</option>
+                    <option value="1">Clock In</option>
+                    <option value="2">Clock Out</option>
+                    <option value="3">Break Out</option>
+                    <option value="4">Break In</option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    @if (isCorrection)
+                    {
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Clock event date</label>
+                        <p class="flex h-10 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-sm text-slate-700">
+                            @(newRequest.OriginalLogId.HasValue ? newRequest.Date.ToString("dd MMM yyyy") : "Select an uneven clock event above")
+                        </p>
+                    }
+                    else
+                    {
+                        <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Date <span class="text-rose-500">*</span></label>
+                        <input type="date" @bind="newRequest.Date" @bind:after="RefreshDateInfo" disabled="@isSubmitting" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                    }
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Time <span class="text-rose-500">*</span></label>
+                    <input type="time" @bind="newRequest.Time" disabled="@(isSubmitting || requestDateInfo?.IsEarlyReturn == true)" class="w-full h-10 px-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20" />
+                </div>
+            </div>
+        }
+
+        <div>
+            <label class="block text-xs font-bold text-slate-700 uppercase mb-2">Comments / Reason</label>
+            <textarea @bind="newRequest.Comments" rows="4" maxlength="250" disabled="@isSubmitting" placeholder="Explain the reason for your request (required)..." class="w-full p-3 text-sm text-slate-700 bg-white border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 resize-none"></textarea>
+        </div>
+        @if (!isLeaveChange && checkingDate) { <p class="text-sm text-slate-500">Checking leave for this date...</p> }
+        @if (!isLeaveChange && !string.IsNullOrWhiteSpace(requestDateInfo?.Message))
+        {
+            <div role="status" class="rounded-lg bg-blue-50 p-3 text-sm text-blue-900">@requestDateInfo.Message</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(requestError))
+        {
+            <div role="alert" class="rounded-lg bg-red-50 p-3 text-sm text-red-800">@requestError</div>
+        }
+    </div>
+
+    <div class="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+        <button @onclick="CloseAddPanel" class="portal-action-btn">
+            Cancel
+        </button>
+        <button @onclick="SubmitNewRequest" disabled="@(isSubmitting || (isLeaveChange ? loadingLeaves || LeavePreviewError != null : checkingDate || requestDateInfo?.CanSubmit != true || (isCorrection && !newRequest.OriginalLogId.HasValue)))" class="portal-action-btn portal-action-btn--primary disabled:opacity-50">
+            @(isSubmitting ? "Submitting..." : isLeaveChange ? leaveChange.Kind == LeaveChangeKind.Extension ? "Request extension" : "Request early return" : requestDateInfo?.IsEarlyReturn == true ? "Request early return" : "Submit request")
+        </button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string? TabSection { get; set; }
+    private string activeTab = "attendance";
+    private bool isSidebarExpanded = true;
+
+    private void ToggleSidebar() => isSidebarExpanded = !isSidebarExpanded;
+
+    private sealed record RequestTabItem(string Key, string Label, string Icon, string Description);
+
+    private static readonly RequestTabItem[] RequestTabs =
+    [
+        new("attendance", "Attendance Requests", "🕒", "Review and submit missing attendance or leave-change requests."),
+        new("weekly-hours-exception", "Weekly hours exception", "📅", "Request approval to excuse a weekly working-hours shortfall."),
+        new("late-check-in", "Late check in request", "⏰", "Request a scheduled start-time adjustment before or after check-in."),
+        new("early-check-out", "Early check out request", "🏃", "Request an early departure with same-week make-up hours."),
+        new("uneven-log-correction", "Uneven log correction request", "🔧", "Correct an unmatched or uneven clock event from the salary period.")
+    ];
+
+    private RequestTabItem CurrentTabMetadata =>
+        RequestTabs.FirstOrDefault(t => t.Key == activeTab) ?? RequestTabs[0];
+
+    private IEnumerable<AttendanceRequestDto> VisibleRequests =>
+        requestsList.Where(r => activeTab == "uneven-log-correction" ? r.Kind == "Uneven-log correction" : r.Kind == "Attendance");
+
+    // DataTable & Selection state
+    private AttendanceRequestDto? selectedRequest;
+    private string tableSearch = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    private List<AttendanceRequestDto> FilteredRequests =>
+        VisibleRequests.Where(r =>
+            string.IsNullOrWhiteSpace(tableSearch) ||
+            r.ReferenceNo.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.StaffName.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Kind.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Mode.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.RequestState.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            (r.Comments?.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredRequests.Count / (double)pageSize));
+
+    private IEnumerable<AttendanceRequestDto> PagedRequests =>
+        FilteredRequests.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private AttendanceRequestDto? SelectedRequest =>
+        selectedRequest != null && FilteredRequests.Any(r => r.RequestId == selectedRequest.RequestId && r.ReferenceNo == selectedRequest.ReferenceNo)
+            ? selectedRequest
+            : FilteredRequests.FirstOrDefault();
+
+    private HRM.Application.Contracts.Pages.AttendanceReview? review;
+    private string? reviewError, actionComment;
+    private bool acting;
+
+    private async Task SelectRequest(AttendanceRequestDto req)
+    {
+        selectedRequest = req;
+        review = null;
+        reviewError = null;
+        actionComment = null;
+        try { review = await ReviewService.GetAsync(req.RequestId); }
+        catch (Exception ex) { Logger.LogError(ex, "Failed to load review for request {RequestId}", req.RequestId); }
+    }
+
+    private async Task Act(string action)
+    {
+        if (acting || review == null) return;
+        acting = true;
+        reviewError = null;
+        var id = review.RequestId;
+        try
+        {
+            var result = await ReviewService.ActAsync(id, review.StateId, action, actionComment);
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                await ExecuteSearch();
+                var row = requestsList.FirstOrDefault(x => x.RequestId == id);
+                if (row != null) await SelectRequest(row);
+            }
+            else { reviewError = result.Message; }
+        }
+        catch (Exception ex) { Logger.LogError(ex, "Attendance request {RequestId} action failed", id); reviewError = "This action could not be completed. Refresh before trying again."; }
+        finally { acting = false; }
+    }
+
+    private void OnTableSearchInput(ChangeEventArgs e)
+    {
+        tableSearch = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+            currentPage = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    private static string DisplayText(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? "Not provided" : value;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        activeTab = RequestTabs.Any(t => t.Key == TabSection) ? TabSection! : "attendance";
+        showAddPanel = false;
+        currentPage = 1;
+        selectedRequest = FilteredRequests.FirstOrDefault();
+            if (selectedRequest != null) await SelectRequest(selectedRequest);
+    }
+
+    // Filter Bindings
+    private int selectedOrgId = 0;
+    private int selectedStatusId = 0;
+    private DateTime startDate;
+    private DateTime endDate;
+
+    // UI State
+    private bool isDataLoaded = false;
+    private bool isLoading = false;
+
+    // Data Collections
+    private List<DropdownItem> organisations = new();
+    private List<AttendanceRequestDto> requestsList = new();
+    private List<HRM.Application.Contracts.Pages.RequestStateOption> requestStates = new();
+    private Dictionary<string, int> stateStatistics = new();
+    private string activeCardFilter = string.Empty;
+
+    // --- Panel State ---
+    private bool showAddPanel = false;
+    private AttendanceRequestApplicationDto newRequest = new();
+    private List<AttendanceLogDto> unevenLogs = [];
+    private readonly Dictionary<int, AttendanceRequestDateInfoDto> correctionEligibility = [];
+    private bool CanRequestCorrection(int logId) => correctionEligibility.TryGetValue(logId, out var info) && info.CanSubmit && !info.IsEarlyReturn;
+    private AttendanceRequestDateInfoDto? requestDateInfo;
+    private bool isSubmitting, checkingDate, submittedLeaveChange, loadingLeaves;
+    private List<LeaveChangeLeaveDto> approvedLeaves = [];
+    private LeaveChangeApplicationDto leaveChange = new();
+    private bool isLeaveChange => requestKind == "leave";
+    private LeaveChangeLeaveDto? SelectedLeave => approvedLeaves.FirstOrDefault(x => x.LeaveId == leaveChange.LeaveId);
+    private (DateTime EndDate, int Duration, int BalanceAdjustment) LeaveChangePreview => LeaveChangeRules.Calculate(
+        SelectedLeave!.FromDate, SelectedLeave.ToDate, SelectedLeave.Duration, leaveChange.Kind, leaveChange.Date, SelectedLeave.IncludeHolidays);
+    private string? LeavePreviewError
+    {
+        get
+        {
+            if (SelectedLeave == null) return "Select an approved leave.";
+            if (SelectedLeave.HasPendingChange) return "This leave already has a pending change request.";
+            if (leaveChange.Kind == LeaveChangeKind.EarlyReturn && leaveChange.Date.Date <= DateTime.Today)
+                return "Choose a future return-to-work date.";
+            try { _ = LeaveChangePreview; return null; }
+            catch (InvalidOperationException ex) { return ex.Message; }
+        }
+    }
+    private string requestKind = "attendance";
+    private bool isCorrection
+    {
+        get => requestKind == "correction";
+        set => requestKind = value ? "correction" : "attendance";
+    }
+    private int dateCheckVersion;
+    private string? requestError, requestSuccess;
+
+    // --- Panel Methods ---
+    private async Task OpenAddPanel()
+    {
+        newRequest = new();
+        leaveChange = new();
+        isCorrection = activeTab == "uneven-log-correction";
+        requestError = null;
+        showAddPanel = true;
+        await RefreshDateInfo();
+    }
+
+    private async Task OpenCorrection(AttendanceLogDto log)
+    {
+        if (!CanRequestCorrection(log.AttendanceLogID)) return;
+        newRequest = new() { OriginalLogId = log.AttendanceLogID, Date = DateOnly.FromDateTime(log.Date), Time = TimeOnly.FromDateTime(log.Date) };
+        isCorrection = true;
+        requestError = null;
+        showAddPanel = true;
+        await RefreshDateInfo();
+    }
+
+    private async Task RequestKindChanged()
+    {
+        newRequest.OriginalLogId = null;
+        requestError = null;
+        if (isLeaveChange)
+        {
+            dateCheckVersion++;
+            checkingDate = false;
+            requestDateInfo = null;
+            loadingLeaves = true;
+            try { approvedLeaves = await LeaveChanges.GetMyLeavesAsync(); }
+            catch { approvedLeaves = []; requestError = "Approved leave could not be loaded. Please try again."; }
+            finally { loadingLeaves = false; }
+            return;
+        }
+        await RefreshDateInfo();
+    }
+
+    private void LeaveSelectionChanged()
+    {
+        requestError = null;
+        if (SelectedLeave == null) return;
+        leaveChange.Date = leaveChange.Kind == LeaveChangeKind.Extension
+            ? (SelectedLeave.ToDate.Date >= DateTime.Today ? SelectedLeave.ToDate.Date.AddDays(1) : DateTime.Today)
+            : (SelectedLeave.FromDate.Date > DateTime.Today ? SelectedLeave.FromDate.Date : DateTime.Today.AddDays(1));
+    }
+
+    private async Task OriginalLogChanged()
+    {
+        var log = unevenLogs.FirstOrDefault(x => x.AttendanceLogID == newRequest.OriginalLogId && CanRequestCorrection(x.AttendanceLogID));
+        if (log == null)
+        {
+            newRequest.OriginalLogId = null;
+            requestDateInfo = null;
+            requestError = "Select a clock event that is eligible for correction.";
+            return;
+        }
+        if (log != null)
+        {
+            newRequest.Date = DateOnly.FromDateTime(log.Date);
+            newRequest.Time = TimeOnly.FromDateTime(log.Date);
+        }
+        await RefreshDateInfo();
+    }
+
+    private async Task RefreshDateInfo()
+    {
+        var date = newRequest.Date;
+        var version = ++dateCheckVersion;
+        checkingDate = true;
+        requestDateInfo = null;
+        requestError = null;
+        try
+        {
+            var info = await AttendanceRequests.GetDateInfoAsync(date, isCorrection ? newRequest.OriginalLogId : null);
+            if (version == dateCheckVersion)
+            {
+                if (isCorrection && info.IsEarlyReturn)
+                {
+                    info.CanSubmit = false;
+                    info.IsEarlyReturn = false;
+                    info.Message = "An uneven-log correction cannot move an event onto approved leave. Choose Missing attendance to request a future early return.";
+                }
+                requestDateInfo = info;
+            }
+        }
+        catch { if (version == dateCheckVersion) requestError = "Leave availability could not be checked. Please try again."; }
+        finally { if (version == dateCheckVersion) checkingDate = false; }
+    }
+
+    private void CloseAddPanel()
+    {
+        if (isSubmitting) return;
+        showAddPanel = false;
+    }
+
+    private async Task SubmitNewRequest()
+    {
+        if (isSubmitting || (isLeaveChange ? loadingLeaves : checkingDate)) return;
+        if (isLeaveChange && LeavePreviewError != null) { requestError = LeavePreviewError; return; }
+        if (isCorrection && !newRequest.OriginalLogId.HasValue) { requestError = "Select an uneven clock event."; return; }
+        isSubmitting = true;
+        requestError = null;
+        try
+        {
+            var result = isLeaveChange
+                ? await LeaveChanges.SubmitAsync(new LeaveChangeApplicationDto
+                {
+                    LeaveId = leaveChange.LeaveId, Kind = leaveChange.Kind, Date = leaveChange.Date, Reason = newRequest.Comments
+                })
+                : await AttendanceRequests.SubmitAsync(newRequest);
+            if (!result.Success) { requestError = result.Message; return; }
+            requestSuccess = result.Message;
+            submittedLeaveChange = isLeaveChange || requestDateInfo?.IsEarlyReturn == true;
+            showAddPanel = false;
+            try
+            {
+                if (submittedLeaveChange) approvedLeaves = await LeaveChanges.GetMyLeavesAsync();
+                else
+                {
+                    await RefreshUnevenLogs();
+                    await ExecuteSearch();
+                }
+            }
+            catch { requestSuccess += " The request was saved, but the list could not refresh. Use Search to reload it."; }
+        }
+        catch { requestError = "The request could not be submitted. Please try again."; }
+        finally { isSubmitting = false; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        activeCardFilter = string.Empty;
+
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+        requestStates = await WorkflowQueries.GetStatesAsync();
+
+        await SetDefaultOrganisationAsync();
+        await RefreshUnevenLogs();
+        await ExecuteSearch();
+    }
+
+    private async Task RefreshUnevenLogs()
+    {
+        unevenLogs = await Attendance.GetMyUnevenLogsAsync();
+        await LoadCorrectionEligibility();
+    }
+
+    private async Task LoadCorrectionEligibility()
+    {
+        correctionEligibility.Clear();
+        foreach (var group in unevenLogs.GroupBy(x => x.Date.Date))
+        {
+            AttendanceRequestDateInfoDto info;
+            try
+            {
+                info = await AttendanceRequests.GetDateInfoAsync(DateOnly.FromDateTime(group.Key), group.First().AttendanceLogID);
+                if (info.IsEarlyReturn) info.Message = "Use a leave change request for this future leave date.";
+            }
+            catch
+            {
+                info = new() { CanSubmit = false, Message = "Correction availability could not be checked. Reload the page to try again." };
+            }
+            foreach (var log in group) correctionEligibility[log.AttendanceLogID] = info;
+        }
+    }
+
+    private void FilterByCard(string status)
+    {
+        activeCardFilter = status;
+    }
+
+    private async Task SetDefaultOrganisationAsync()
+    {
+        selectedOrgId = await SessionAccess.GetCurrentOrganisationIdAsync();
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task ExecuteSearch()
+    {
+        isLoading = true;
+        isDataLoaded = false;
+        requestsList.Clear();
+        try
+        {
+            var page = await RequestQueries.GetMineAsync(new(DateOnly.FromDateTime(startDate), DateOnly.FromDateTime(endDate),
+                selectedStatusId > 0 ? selectedStatusId : null, selectedOrgId > 0 ? selectedOrgId : null));
+            requestStates = page.States;
+            requestsList = page.Requests.Select(r => new AttendanceRequestDto
+            {
+                RequestId = r.RequestId, ReferenceNo = r.Reference, Kind = r.Kind,
+                LogDate = r.ClockTime, LogTime = r.ClockTime.ToString("HH:mm"), OrganisationName = r.OrganisationName,
+                StaffName = r.StaffName, Mode = r.Mode, Comments = r.Comments, RequestState = r.Status
+            }).ToList();
+            stateStatistics = requestsList.GroupBy(r => r.RequestState).ToDictionary(g => g.Key, g => g.Count());
+            currentPage = 1;
+            selectedRequest = FilteredRequests.FirstOrDefault();
+            isDataLoaded = true;
+        }
+        finally { isLoading = false; }
+    }
+
+    private async Task ResetFilters()
+    {
+        selectedStatusId = 0;
+        tableSearch = "";
+        currentPage = 1;
+        SetCurrentSalaryPeriod();
+        await SetDefaultOrganisationAsync();
+        await ExecuteSearch();
+    }
+
+    // --- DTO for Table Rows ---
+    public class AttendanceRequestDto
+    {
+        public int RequestId { get; set; }
+        public string ReferenceNo { get; set; } = string.Empty;
+        public string Kind { get; set; } = string.Empty;
+        public DateTime LogDate { get; set; }
+        public string LogTime { get; set; } = string.Empty;
+        public string OrganisationName { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string Mode { get; set; } = string.Empty;
+        public string? Comments { get; set; }
+        public string RequestState { get; set; } = string.Empty;
+    }
+
+    // Helpers
+    private string GetStateColorClass(string state)
+    {
+        if (string.IsNullOrEmpty(state)) return "bg-slate-100 text-slate-600";
+
+        return state.Trim().ToLower() switch
+        {
+            "approved" => "bg-emerald-100 text-emerald-800",
+            "rejected" => "bg-rose-100 text-rose-800",
+            "pending verification" => "bg-amber-100 text-amber-800",
+            "pending approval" => "bg-blue-100 text-blue-800",
+            "incomplete" => "bg-orange-100 text-orange-800",
+            "pending" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-600"
+        };
+    }
+}

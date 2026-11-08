@@ -1,0 +1,133 @@
+@*
+@page "/admin/my/workspace/staff" *@
+@using HRM.Components.Admin.My.Workspace.Staff.Tabs
+@using HRM.Enum
+@using HRM.Models
+
+@using HRM.DTOs
+@inject HRM.Services.Interfaces.IWorkspaceDirectoryService Directory
+@inject HRM.Services.Interfaces.IUserAccessService Access
+
+<div class="min-w-0 w-full flex flex-col gap-2">
+
+    @if (Loading)
+    {
+        <div class="p-2 gap-2 flex flex-col">
+            Loading staff information...
+        </div>
+    }
+    else if (Staff == null)
+    {
+        <div class="p-2 gap-2 flex flex-col text-red-500">
+            Staff not found.
+        </div>
+    }
+    else if(former)
+    {
+        <HRM.Components.Admin.Hr.Staff.FormerStaffRecord StaffId="StaffId" />
+    }
+    else
+    {
+        <div class="w-full flex flex-col gap-2">
+
+                    @if (ActiveTab == WorkspaceTab.Overview)
+                    {
+                       <StaffOverview StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Performance)
+                    {
+                       <StaffPerformance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Leave)
+                    {
+                        <StaffLeave @key="StaffId" StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.OT)
+                    {
+                        <StaffOvertime StaffId="StaffId" StaffName="@Staff.Name" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.JobRelatedItems)
+                    {
+                        <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"job-{StaffId}")" IndividualId="StaffId" JobRelatedOnly="true" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.PersonalItems)
+                    {
+                        <HRM.Components.Admin.Hr.Items.StaffItemRequestPanel @key="@($"personal-{StaffId}")" IndividualId="StaffId" PersonalItemsOnly="true" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Attendance)
+                    {
+                        <StaffAttendance @key="StaffId" StaffId="StaffId" StaffName="@Staff.Name" ShowOverview="false" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Position)
+                    {
+                        <StaffPositions @key="StaffId" StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Documents)
+                    {
+                        <StaffDocuments StaffId="StaffId" />
+                    }
+
+                    else if (ActiveTab == WorkspaceTab.LeaveType)
+                    {
+                    <LeaveAssignmentManager @key="StaffId" StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Schedule)
+                    {
+                        <Schedule StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.WorkTypes)
+                    {
+                        <HRM.Components.Admin.Settings.WorkTypeManagement @key="StaffId" StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Finance)
+                    {
+                        <HRM.Components.Shared.StaffFinancePanel @key="StaffId" StaffId="StaffId" AdminMode="true" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.StaffTransfer)
+                    {
+                        <HRM.Components.Admin.Hr.Transfers.StaffTransferManagementPage @key="StaffId" StaffId="StaffId" />
+                    }
+                    else if (ActiveTab == WorkspaceTab.Certificates)
+                    {
+                        <HRM.Components.Admin.My.Workspace.Staff.Tabs.StaffCertificatesTab @key="StaffId" StaffId="StaffId" OnChanged="OnRequestsChanged" />
+                    }
+                   
+
+        </div>
+    }
+</div>
+
+
+@code {
+    private bool Loading;
+    private bool former;
+
+    private StaffWorkspaceIdentity? Staff;
+     
+    [Parameter]
+    public int StaffId { get; set; }
+
+    [Parameter]
+    public WorkspaceTab ActiveTab { get; set; }
+
+    [Parameter]
+    public EventCallback OnRequestsChanged { get; set; }
+
+    private int? loadedStaffId;
+    private int? loadedOrganisationId;
+    protected override async Task OnParametersSetAsync()
+    {
+        var org=await Access.GetCurrentOrganisationIdAsync();
+        if (loadedStaffId == StaffId && loadedOrganisationId==org) return;
+        loadedOrganisationId=org;
+        var staffId = StaffId;
+        loadedStaffId = staffId;
+        Loading = true;
+        var staff = await Directory.GetStaffIdentityAsync(staffId);
+        if (loadedStaffId != staffId || loadedOrganisationId!=org) return;
+        Staff = staff;
+        former = staff?.IsFormer == true;
+        Loading = false;
+    }
+
+}

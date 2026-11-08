@@ -1,0 +1,131 @@
+@using HRM.DTOs.Attendance
+@using HRM.Services.Interfaces
+@using HRM.Services.Attendance.AttendancePlan
+@inject IUserAccessService UserAccess
+@inject IAttendancePlanService Plans
+@inject IAttendanceService Attendance
+@inject ILogger<TodaysWorkPlanCard> Logger
+@implements IDisposable
+
+<section class="min-w-0 overflow-hidden rounded-xl border bg-white shadow-sm" aria-label="Today's Work Plan">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2">
+        <div><h3 class="font-semibold">Today's Work Plan</h3><p class="mt-1 text-xs text-slate-500">@today.ToString("dd MMM yyyy")</p></div>
+        <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@loading" @onclick="LoadAsync" aria-label="Refresh today's work plan"><i class="fas fa-sync" aria-hidden="true"></i></button>
+    </div>
+    <div class="space-y-2 px-4 py-2">
+        <a href="/online/duty-roster" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">Today's duty roster</a>
+        @if (loading) { <p role="status" class="text-sm text-slate-500">Loading today's work plan...</p> }
+        else if (error != null) { <p role="alert" class="text-sm text-amber-700">@error</p> }
+        else if (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)) { <p class="text-sm text-slate-500">@scheduleMessage</p> }
+        else
+        {
+            @if (plan.TemporaryWorkingHoursMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.TemporaryWorkingHoursMessage</p> }
+            @if (plan.ScheduleAmendmentMessage != null) { <p role="status" class="rounded-lg border p-3 text-sm">@plan.ScheduleAmendmentMessage</p> }
+            @foreach (var assignment in plan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime))
+            {
+                <section class="border-t pt-2" aria-label="@assignment.Name">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h4 class="break-words text-sm font-semibold">@assignment.Name</h4>
+                        <span class="rounded-full px-2 py-0.5 text-[11px] font-medium @(assignment.SchedulePurpose == "Official" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200")">
+                            @(assignment.SchedulePurpose == "Official" ? "Primary · Official" : $"Additional · {assignment.SchedulePurpose}") (@Time(assignment.StartDateTime)–@Time(assignment.EndDateTime))
+                        </span>
+                    </div>
+                    <ol class="mt-1 divide-y">
+                        @foreach(var item in EventsFor(assignment))
+                        {
+                            <AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)"
+                                Condition="@EventCondition(item)" Tone="@(IsClockEvent(item.Name) && item.IsMandatory && item.RequiresAttendance ? "info" : "muted")" />
+                        }
+                    </ol>
+                </section>
+            }
+            @if (!plan.Assignments.Any(x=>x.IsValid) && plan.Segments.Count>0)
+            {
+                <ol class="divide-y">@foreach(var item in plan.Segments.OrderBy(x=>x.StartDateTime).ThenBy(x=>x.SequenceNumber))
+                {<AttendanceEventRow Timestamp="item.StartDateTime" Event="@EventName(item.Name)" Condition="@EventCondition(item)" />}</ol>
+            }
+            @if (plan.Segments.Count == 0) { <p class="text-sm text-slate-500">No events are configured for this plan.</p> }
+        }
+    </div>
+</section>
+
+@code {
+    private string scheduleMessage = "No active schedule found";
+    [Parameter] public int RefreshKey { get; set; }
+    private int loadedKey = int.MinValue;
+    private DateTime today = DateTime.UtcNow.AddHours(5).Date;
+    private bool loading;
+    private string? error;
+    private AttendanceWorkPlanDto? plan;
+    private CancellationTokenSource? loadCancellation;
+    private bool disposed;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedKey == RefreshKey) return;
+        loadedKey = RefreshKey;
+        await LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        if(disposed)return;
+        loadCancellation?.Cancel();
+        var cancellation=new CancellationTokenSource();loadCancellation=cancellation;
+        using var ownedCancellation=cancellation;
+        loading = true; error = null; today = DateTime.UtcNow.AddHours(5).Date;
+        try
+        {
+            var context = await UserAccess.RequireContextAsync();
+            AttendanceWorkPlanDto? loaded=null;
+            if(context.ActiveJob!=null)
+            {
+                for(var attempt=0;;attempt++)
+                {
+                    try{loaded=await Plans.GetOrGenerateAsync(context.IndividualId,context.ActiveJob.JobId,context.ActiveJob.OrganisationId,today,cancellation.Token);break;}
+                    catch(HRM.UI.Services.Transport.ApiOperationException ex) when(ex.Code=="503"&&attempt==0)
+                    {await Task.Delay(300,cancellation.Token);}
+                }
+            }
+            if(cancellation.IsCancellationRequested||disposed)return;
+            plan=loaded;
+            scheduleMessage = "No active schedule found";
+            if (context.ActiveJob != null && (plan == null || (plan.Assignments.Count == 0 && plan.Segments.Count == 0)))
+            {
+                var evaluation = await Attendance.GetEvaluationAsync(context.IndividualId, context.ActiveJob.JobId, context.ActiveJob.OrganisationId, today);
+                if(cancellation.IsCancellationRequested||disposed)return;
+                scheduleMessage = evaluation.Status switch
+                {
+                    HRM.Enum.AttendanceDailyStatus.RestDay => "No scheduled work today (rest day)",
+                    HRM.Enum.AttendanceDailyStatus.BeforePositionApproval => "Attendance starts from job position approval",
+                    HRM.Enum.AttendanceDailyStatus.NoActiveSchedule => "No active schedule found",
+                    _ => "No work plan found for the active schedule"
+                };
+            }
+        }
+        catch(OperationCanceledException) when(cancellation.IsCancellationRequested){ }
+        catch (Exception ex) { if(!cancellation.IsCancellationRequested&&!disposed){Logger.LogError(ex, "Loading today's work plan"); error = ex is HRM.UI.Services.Transport.ApiOperationException {Code:"503"}?"The server is temporarily busy. Please refresh shortly.":"Today's work plan could not be loaded. Please try refreshing.";plan=null;} }
+        finally { if(ReferenceEquals(loadCancellation,cancellation)){loadCancellation=null;loading=false;} }
+    }
+    public void Dispose(){disposed=true;loadCancellation?.Cancel();}
+    private static string Time(DateTime value) => value.ToString("HH:mm");
+    private IEnumerable<AttendanceWorkSegmentDto> EventsFor(AttendanceWorkAssignmentDto assignment)
+    {
+        var matching=plan!.Segments.Where(s=>s.WorkAssignmentId==assignment.WorkAssignmentId).ToList();
+        if(matching.Count==0)
+            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.Name.Contains(" · ",StringComparison.Ordinal) &&
+                s.Name[..s.Name.LastIndexOf(" · ",StringComparison.Ordinal)]==assignment.Name && plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && a.Name==assignment.Name)==1).ToList();
+        if(matching.Count==0)
+            matching=plan.Segments.Where(s=>!s.WorkAssignmentId.HasValue && s.SchedulePurpose==assignment.SchedulePurpose && s.StartDateTime>=assignment.StartDateTime && s.StartDateTime<=assignment.EndDateTime &&
+                plan.Assignments.Count(a=>a.IsValid && a.SchedulePurpose==s.SchedulePurpose && s.StartDateTime>=a.StartDateTime && s.StartDateTime<=a.EndDateTime)==1).ToList();
+        return matching.OrderBy(s=>s.StartDateTime).ThenBy(s=>s.SequenceNumber);
+    }
+    private static string? EventCondition(AttendanceWorkSegmentDto item)=>IsClockEvent(item.Name)
+        ? item.IsMandatory && item.RequiresAttendance ? "Required" : "Optional"
+        : item.EndDateTime>item.StartDateTime ? $"Until {Time(item.EndDateTime)}" : null;
+    private static string EventName(string value)
+    {
+        var name = value.Split(" · ").Last();
+        var normalized = string.Concat(name.Where(char.IsLetterOrDigit)).ToUpperInvariant();
+        return normalized switch { "CHECKIN" or "CLOCKIN" or "DUTYCHECKIN" => "Clock in", "CHECKOUT" or "CLOCKOUT" or "DUTYCHECKOUT" => "Clock out", _ => name };
+    }
+    private static bool IsClockEvent(string value) => EventName(value) is "Clock in" or "Clock out";
+}

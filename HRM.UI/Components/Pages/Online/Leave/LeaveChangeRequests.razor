@@ -1,0 +1,453 @@
+@using HRM.DTOs.Leave
+@using HRM.Helpers
+@using HRM.Services
+@using HRM.Services.State
+@using HRM.Services.Interfaces.Leave
+@using HRM.Components.Shared
+@inject ILeaveChangeService Changes
+@inject ToastService ToastService
+
+<section class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div>
+            <h2 class="text-xl font-bold text-slate-800">Leave Change Request</h2>
+            <p class="text-sm text-slate-500">Request an early return or an extension to approved leave. Dates and balances change only after final approval.</p>
+        </div>
+        <button type="button" class="portal-action-btn" disabled="@(loading || busy)" @onclick="ReloadAsync">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Refresh</span>
+        </button>
+    </div>
+
+    @if (loading)
+    {
+        <p class="text-slate-500 text-sm py-6" role="status">Loading leave requests...</p>
+    }
+    else
+    {
+        <!-- Two-Column Grid like /online/ot: Left = Form + Selected Detail/Chit, Right = Filterable & Paginated DataTable -->
+        <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+            <!-- LEFT PANEL: New Change Request Form + Selected Change Request Detail & Chit -->
+            <div class="min-w-0 space-y-4">
+                @if (leaves.Count == 0)
+                {
+                    <div class="detail-panel-card bg-slate-50 text-sm text-slate-600">
+                        You have no approved leave available to change.
+                    </div>
+                }
+                else
+                {
+                    <EditForm Model="model" OnValidSubmit="SubmitAsync" class="detail-panel-card space-y-4">
+                        <div class="border-b border-slate-100 pb-2">
+                            <h3 class="text-sm font-bold text-slate-800">Submit Leave Change Request</h3>
+                            <p class="text-xs text-slate-500">Select an approved leave and specify your revised date.</p>
+                        </div>
+                        <DataAnnotationsValidator />
+                        <ValidationSummary />
+                        <div>
+                            <label for="change-leave" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Approved leave *</label>
+                            <InputSelect id="change-leave" class="w-full border border-slate-200 rounded-md p-2 text-sm" @bind-Value="model.LeaveId" @bind-Value:after="SelectionChanged">
+                                <option value="0">Select leave</option>
+                                @foreach (var leave in leaves)
+                                {
+                                    <option value="@leave.LeaveId" disabled="@leave.HasPendingChange">
+                                        @leave.LeaveType: @leave.FromDate.ToString("dd MMM yyyy") – @leave.ToDate.ToString("dd MMM yyyy") (@leave.Duration days) @(leave.HasPendingChange ? "— change pending" : "")
+                                    </option>
+                                }
+                            </InputSelect>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="change-kind" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Change type *</label>
+                                <InputSelect id="change-kind" class="w-full border border-slate-200 rounded-md p-2 text-sm" @bind-Value="model.Kind" @bind-Value:after="SelectionChanged">
+                                    <option value="@LeaveChangeKind.Extension">Leave extension</option>
+                                    <option value="@LeaveChangeKind.EarlyReturn">Early return</option>
+                                </InputSelect>
+                            </div>
+                            <div>
+                                <label for="change-date" class="block text-xs font-semibold uppercase text-slate-600 mb-1">@(model.Kind == LeaveChangeKind.EarlyReturn ? "Return-to-work date *" : "New leave end date *")</label>
+                                <InputDate id="change-date" class="w-full border border-slate-200 rounded-md p-2 text-sm" @bind-Value="model.Date" />
+                            </div>
+                        </div>
+                        @if (SelectedLeave != null)
+                        {
+                            <div class="bg-blue-50 border border-blue-100 rounded-lg p-3 text-xs sm:text-sm text-blue-900 space-y-1">
+                                @if (PreviewError != null)
+                                {
+                                    <span>@PreviewError</span>
+                                }
+                                else
+                                {
+                                    @if (Preview.Duration == 0)
+                                    {
+                                        <p>The full leave period will be cancelled upon approval.</p>
+                                    }
+                                    else
+                                    {
+                                        <p>Requested leave: <strong>@SelectedLeave.FromDate.ToString("dd MMM yyyy") – @Preview.EndDate.ToString("dd MMM yyyy")</strong> (@Preview.Duration days).</p>
+                                    }
+                                    <p>Upon approval: <strong>@(Preview.BalanceAdjustment >= 0 ? $"{Preview.BalanceAdjustment} days returned to your balance." : $"{-Preview.BalanceAdjustment} additional days deducted from your balance.")</strong></p>
+                                }
+                            </div>
+                        }
+                        <div>
+                            <label for="change-reason" class="block text-xs font-semibold uppercase text-slate-600 mb-1">Reason *</label>
+                            <InputTextArea id="change-reason" class="w-full border border-slate-200 rounded-md p-2 text-sm" rows="3" maxlength="250" @bind-Value="model.Reason" />
+                        </div>
+                        <button type="submit" disabled="@(busy || SelectedLeave == null || PreviewError != null)" class="portal-action-btn portal-action-btn--primary disabled:opacity-50">
+                            @(busy ? "Submitting..." : "Submit Change Request")
+                        </button>
+                    </EditForm>
+                }
+
+                <!-- Selected Leave Change Request Detail & Chit -->
+                @if (SelectedHistoryItem != null)
+                {
+                    <article class="leave-chit-card" aria-label="Selected leave change request detail">
+                        <div class="leave-chit-header">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wider text-blue-700">Leave Change Chit &amp; Detail</div>
+                                <h3 class="text-sm font-bold text-slate-900 mt-0.5">@SelectedHistoryItem.Reference · @SelectedHistoryItem.LeaveType</h3>
+                                <p class="text-xs text-slate-500">@SelectedHistoryItem.ChangeType</p>
+                            </div>
+                            <span class="leave-chit-stamp @GetStatusClass(SelectedHistoryItem.Status)">
+                                @SelectedHistoryItem.Status
+                            </span>
+                        </div>
+
+                        <dl class="leave-chit-grid">
+                            <div>
+                                <dt>Leave Type</dt>
+                                <dd>@SelectedHistoryItem.LeaveType</dd>
+                            </div>
+                            <div>
+                                <dt>Change Type</dt>
+                                <dd>@SelectedHistoryItem.ChangeType</dd>
+                            </div>
+                            <div>
+                                <dt>Current Leave Period</dt>
+                                <dd>@SelectedHistoryItem.FromDate.ToString("dd MMM yyyy") – @SelectedHistoryItem.CurrentEndDate.ToString("dd MMM yyyy")</dd>
+                            </div>
+                            <div>
+                                <dt>Requested End Date</dt>
+                                <dd>@SelectedHistoryItem.RequestedEndDate.ToString("dd MMM yyyy")</dd>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(SelectedHistoryItem.CurrentStage) || SelectedHistoryItem.PendingApprovers.Count > 0)
+                            {
+                                <div class="col-span-2">
+                                    <dt>Current Workflow Stage</dt>
+                                    <dd>
+                                        @SelectedHistoryItem.CurrentStage
+                                        @if (SelectedHistoryItem.PendingApprovers.Count > 0)
+                                        {
+                                            <span class="text-xs font-normal text-slate-500"> · Awaiting @string.Join(", ", SelectedHistoryItem.PendingApprovers)</span>
+                                        }
+                                    </dd>
+                                </div>
+                            }
+                            <div class="col-span-2">
+                                <dt>Reason</dt>
+                                <dd class="whitespace-pre-wrap">@(string.IsNullOrWhiteSpace(SelectedHistoryItem.Reason) ? "Not provided" : SelectedHistoryItem.Reason)</dd>
+                            </div>
+                        </dl>
+
+                        @if (SelectedHistoryItem.Actions.Count > 0)
+                        {
+                            <div class="mt-3 pt-3 border-t border-slate-200">
+                                <RequestActionButtons Actions="SelectedHistoryItem.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(SelectedHistoryItem.RequestId, action)" />
+                            </div>
+                        }
+
+                        <footer class="leave-chit-footer">
+                            Leave Change Request Chit · Leave dates and balances update after final approval.
+                        </footer>
+                    </article>
+                }
+            </div>
+
+            <!-- RIGHT PANEL: All Leave Change Requests DataTable (like /online/ot) -->
+            <aside class="min-w-0 space-y-4" aria-label="Leave change request history">
+                <section class="datatable-panel-card">
+                    <div class="p-3.5 border-b border-slate-200 bg-slate-50/70 space-y-3">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="text-sm font-bold text-slate-800">My Change Requests</h3>
+                            <span class="text-xs font-semibold text-slate-500">@FilteredHistory.Count request(s)</span>
+                        </div>
+
+                        <div class="grid gap-2.5 sm:grid-cols-2">
+                            <label class="text-xs font-semibold text-slate-600">
+                                Requested date from
+                                <input type="date" @bind="filterFrom" @bind:after="ResetPage" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                            </label>
+                            <label class="text-xs font-semibold text-slate-600">
+                                Requested date to
+                                <input type="date" @bind="filterTo" @bind:after="ResetPage" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                            </label>
+                            <label class="text-xs font-semibold text-slate-600">
+                                Status
+                                <select @bind="filterStatus" @bind:after="ResetPage" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700">
+                                    <option value="">All statuses</option>
+                                    @foreach (var st in history.Select(x => x.Status).Where(s => !string.IsNullOrWhiteSpace(s)).Distinct())
+                                    {
+                                        <option value="@st">@st</option>
+                                    }
+                                </select>
+                            </label>
+                            <label class="text-xs font-semibold text-slate-600">
+                                Reference / leave type
+                                <input type="search" value="@searchText" @oninput="OnSearchInput" placeholder="Search reference, type…" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                            </label>
+                        </div>
+
+                        <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                            <button type="button" class="portal-action-btn portal-action-btn--compact" @onclick="ResetFilters">
+                                Reset filters
+                            </button>
+
+                            <label class="flex items-center gap-1.5 text-xs text-slate-600">
+                                <span>Rows:</span>
+                                <select @bind="pageSize" @bind:after="ResetPage" class="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-200 text-sm text-left">
+                            <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                                <tr>
+                                    <th scope="col" class="px-3 py-3">Reference</th>
+                                    <th scope="col" class="px-3 py-3">Leave / Change</th>
+                                    <th scope="col" class="px-3 py-3">Requested End Date</th>
+                                    <th scope="col" class="px-3 py-3">Status</th>
+                                    <th scope="col" class="px-3 py-3 text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 bg-white">
+                                @if (FilteredHistory.Count == 0)
+                                {
+                                    <tr>
+                                        <td colspan="5" class="px-4 py-8 text-center text-slate-500 text-sm">
+                                            @(history.Count == 0 ? "No leave change requests found." : "No leave change requests match these filters.")
+                                        </td>
+                                    </tr>
+                                }
+                                else
+                                {
+                                    @foreach (var item in PagedHistory)
+                                    {
+                                        var isSelected = SelectedHistoryItem?.RequestId == item.RequestId;
+                                        <tr @key="item.RequestId"
+                                            @onclick="() => SelectHistory(item)"
+                                            class="datatable-row @(isSelected ? "datatable-row--selected" : "")">
+                                            <td class="px-3 py-3 font-semibold text-slate-800 whitespace-nowrap">@item.Reference</td>
+                                            <td class="px-3 py-3">
+                                                <div class="font-medium text-slate-800">@item.LeaveType</div>
+                                                <div class="text-xs text-slate-500">@item.ChangeType</div>
+                                            </td>
+                                            <td class="px-3 py-3 whitespace-nowrap text-slate-700">@item.RequestedEndDate.ToString("dd MMM yyyy")</td>
+                                            <td class="px-3 py-3">
+                                                <span class="px-2 py-0.5 rounded-full text-xs font-semibold @GetStatusClass(item.Status)">@item.Status</span>
+                                                @if (item.PendingApprovers.Count > 0)
+                                                {
+                                                    <p class="mt-1 text-xs text-slate-500">@item.CurrentStage · Awaiting @string.Join(", ", item.PendingApprovers)</p>
+                                                }
+                                            </td>
+                                            <td class="px-3 py-3 text-right" @onclick:stopPropagation="true">
+                                                <div class="flex flex-wrap items-center justify-end gap-1.5">
+                                                    <button type="button"
+                                                            class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
+                                                            @onclick="() => SelectHistory(item)">
+                                                        View
+                                                    </button>
+                                                    <RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="datatable-footer">
+                        <span>
+                            Showing @(FilteredHistory.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredHistory.Count) of @FilteredHistory.Count request(s)
+                        </span>
+                        <div class="flex items-center gap-1.5">
+                            <button type="button" class="portal-action-btn portal-action-btn--compact" disabled="@(currentPage <= 1)" @onclick="() => currentPage--">Previous</button>
+                            <span class="px-2 font-semibold text-slate-700">Page @currentPage of @TotalPages</span>
+                            <button type="button" class="portal-action-btn portal-action-btn--compact" disabled="@(currentPage >= TotalPages)" @onclick="() => currentPage++">Next</button>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Changes Awaiting My Approval -->
+                <section class="detail-panel-card space-y-3">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <h3 class="text-sm font-bold text-slate-800">Changes Awaiting My Approval</h3>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">@assigned.Count</span>
+                    </div>
+                    @if (assigned.Count == 0)
+                    {
+                        <p class="text-sm text-slate-500">No leave changes are assigned to you.</p>
+                    }
+                    @foreach (var item in assigned)
+                    {
+                        <div class="border border-slate-200 rounded-xl p-3.5 space-y-2 bg-slate-50/50">
+                            <div class="flex flex-wrap items-center justify-between gap-2">
+                                <p class="font-semibold text-sm text-slate-800">@item.Reference — @item.LeaveType — @item.ChangeType</p>
+                                <span class="px-2 py-0.5 rounded-full text-xs font-semibold @GetStatusClass(item.Status)">@item.Status</span>
+                            </div>
+                            @if (item.PendingApprovers.Count > 0)
+                            {
+                                <p class="text-xs text-slate-600">@item.CurrentStage · Awaiting @string.Join(", ", item.PendingApprovers)</p>
+                            }
+                            <p class="text-xs text-slate-700">
+                                Current leave: <strong>@item.FromDate.ToString("dd MMM yyyy") – @item.CurrentEndDate.ToString("dd MMM yyyy")</strong> ·
+                                Requested end date: <strong>@item.RequestedEndDate.ToString("dd MMM yyyy")</strong>
+                            </p>
+                            <p class="text-xs text-slate-600 whitespace-pre-wrap">@item.Reason</p>
+                            <RequestActionButtons Actions="item.Actions" Disabled="busy" OnExecute="action => ExecuteAsync(item.RequestId, action)" />
+                        </div>
+                    }
+                </section>
+            </aside>
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter] public LeaveApplicationState LeaveState { get; set; } = default!;
+    private LeaveChangeApplicationDto model = new();
+    private List<LeaveChangeLeaveDto> leaves = new();
+    private List<LeaveChangeRequestDto> history = new(), assigned = new();
+    private LeaveChangeRequestDto? selectedHistory;
+    private bool loading = true, busy;
+
+    // Filter & Pagination State
+    private DateTime? filterFrom;
+    private DateTime? filterTo;
+    private string filterStatus = "";
+    private string searchText = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    private List<LeaveChangeRequestDto> FilteredHistory =>
+        history.Where(x =>
+            (!filterFrom.HasValue || x.RequestedEndDate.Date >= filterFrom.Value.Date) &&
+            (!filterTo.HasValue || x.RequestedEndDate.Date <= filterTo.Value.Date) &&
+            (string.IsNullOrWhiteSpace(filterStatus) || x.Status.Equals(filterStatus, StringComparison.OrdinalIgnoreCase)) &&
+            (string.IsNullOrWhiteSpace(searchText) ||
+             (x.Reference + " " + x.LeaveType + " " + x.ChangeType + " " + x.Reason).Contains(searchText.Trim(), StringComparison.OrdinalIgnoreCase)))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (FilteredHistory.Count + pageSize - 1) / pageSize);
+
+    private IEnumerable<LeaveChangeRequestDto> PagedHistory =>
+        FilteredHistory.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private LeaveChangeRequestDto? SelectedHistoryItem =>
+        selectedHistory != null && FilteredHistory.Any(x => x.RequestId == selectedHistory.RequestId)
+            ? selectedHistory
+            : FilteredHistory.FirstOrDefault() ?? assigned.FirstOrDefault();
+
+    private void SelectHistory(LeaveChangeRequestDto item) => selectedHistory = item;
+
+    private void ResetPage() => currentPage = 1;
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void ResetFilters()
+    {
+        filterFrom = filterTo = null;
+        filterStatus = "";
+        searchText = "";
+        currentPage = 1;
+    }
+
+    private static string GetStatusClass(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return "bg-slate-100 text-slate-700";
+        var s = status.Trim().ToLowerInvariant();
+        if (s.Contains("approv")) return "bg-emerald-100 text-emerald-800";
+        if (s.Contains("reject") || s.Contains("decline")) return "bg-rose-100 text-rose-800";
+        if (s.Contains("incomplet") || s.Contains("return")) return "bg-amber-100 text-amber-800";
+        return "bg-blue-100 text-blue-800";
+    }
+
+    private LeaveChangeLeaveDto? SelectedLeave => leaves.FirstOrDefault(x => x.LeaveId == model.LeaveId);
+    private (DateTime EndDate, int Duration, int BalanceAdjustment) Preview => LeaveChangeRules.Calculate(
+        SelectedLeave!.FromDate, SelectedLeave.ToDate, SelectedLeave.Duration, model.Kind, model.Date, SelectedLeave.IncludeHolidays);
+    private string? PreviewError
+    {
+        get
+        {
+            if (SelectedLeave == null) return "Select an approved leave.";
+            try { _ = Preview; return null; }
+            catch (InvalidOperationException ex) { return ex.Message; }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { await ReloadAsync(); }
+        finally { loading = false; }
+    }
+
+    private async Task ReloadAsync()
+    {
+        leaves = await Changes.GetMyLeavesAsync();
+        history = await Changes.GetMyRequestsAsync();
+        assigned = await Changes.GetAssignedRequestsAsync();
+        if (selectedHistory != null)
+            selectedHistory = history.FirstOrDefault(x => x.RequestId == selectedHistory.RequestId) ?? history.FirstOrDefault();
+        else
+            selectedHistory = history.FirstOrDefault();
+    }
+
+    private void SelectionChanged()
+    {
+        if (SelectedLeave == null) return;
+        model.Date = model.Kind == LeaveChangeKind.Extension ? SelectedLeave.ToDate.AddDays(1) : SelectedLeave.ToDate;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Changes.SubmitAsync(model);
+            if (!result.Success) { ToastService.Warning(result.Message); return; }
+            ToastService.Success(result.Message);
+            model = new();
+            await ReloadAsync();
+        }
+        catch { ToastService.Error("The change request could not be submitted. Please try again."); }
+        finally { busy = false; }
+    }
+
+    private async Task ExecuteAsync(int requestId, RequestActionSubmissionDto action)
+    {
+        if (busy) return;
+        busy = true;
+        try
+        {
+            var result = await Changes.ExecuteActionAsync(requestId, action);
+            if (result.Success) ToastService.Success(result.Message); else ToastService.Warning(result.Message);
+            await ReloadAsync();
+        }
+        catch { ToastService.Error("The approval could not be saved. No changes were applied."); }
+        finally { busy = false; }
+    }
+}

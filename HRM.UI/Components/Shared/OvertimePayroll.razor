@@ -1,0 +1,153 @@
+@inject HRM.Services.Contracts.OvertimeRequestServiceContracts.IOperations Requests
+@inject HRM.Services.ToastService Toasts
+
+<div class="flex flex-col gap-3 text-xs">
+    <!-- Filter Header -->
+    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2.5">
+        <div class="font-bold text-slate-800 p-1">Filter Eligible Claims</div>
+        <div class="grid gap-2.5 sm:grid-cols-3">
+            <div>
+                <label class="block font-medium text-slate-700 p-1">Work from</label>
+                <input type="date" @bind="from" @bind:after="ClearSelection" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div>
+                <label class="block font-medium text-slate-700 p-1">Work to</label>
+                <input type="date" @bind="to" @bind:after="ClearSelection" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            </div>
+            <div>
+                <label class="block font-medium text-slate-700 p-1">Payroll status</label>
+                <select @bind="status" @bind:after="ClearSelection" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                    <option value="">All</option>
+                    <option value="Ready">Awaiting payroll</option>
+                    <option value="Processed">Payroll processed</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if(Rows.Any(r=>r.CanPay))
+    {
+        <fieldset disabled="@busy" class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2.5">
+            <div class="font-bold text-slate-800 p-1">Process Payroll Batch</div>
+            <div class="grid gap-2.5 sm:grid-cols-2">
+                <div>
+                    <label class="block font-medium text-slate-700 p-1">Payroll Month</label>
+                    <input type="month" value="@month" @onchange="MonthChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+                <div>
+                    <label class="block font-medium text-slate-700 p-1">Payroll Reference</label>
+                    <input @bind="reference" maxlength="200" placeholder="Optional batch reference" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 pt-1">
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        @onclick="SelectReady">
+                    Select All Eligible
+                </button>
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                        disabled="@(selected.Count == 0)"
+                        @onclick="Process">
+                    <span>Process Payroll</span>
+                    <span class="rounded-full bg-blue-500 px-1.5 py-0.2 text-[10px]">@selected.Count</span>
+                </button>
+            </div>
+        </fieldset>
+    }
+
+    @if(error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    <!-- Table -->
+    <div class="overflow-x-auto rounded-xl border border-slate-200">
+        <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                <tr>
+                    <th class="p-2.5 w-10">Select</th>
+                    <th class="p-2.5">Staff / Reference</th>
+                    <th class="p-2.5">Work Date</th>
+                    <th class="p-2.5">Hours</th>
+                    <th class="p-2.5">Payroll Status</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+            @foreach(var row in Visible)
+            {
+                <tr @key="row.Id" class="hover:bg-slate-50/60 transition-colors">
+                    <td class="p-2.5 align-middle">
+                        @if(row.CanPay)
+                        {
+                            <input type="checkbox" aria-label="Select @row.Reference" checked="@selected.Contains(row.Id)" disabled="@busy" @onchange="e=>Select(row.Id,e.Value is true)" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500 h-4 w-4" />
+                        }
+                    </td>
+                    <td class="p-2.5 align-top">
+                        <div class="font-medium text-slate-900">@row.Staff</div>
+                        <span class="font-mono text-[11px] text-slate-500">@row.Reference</span>
+                    </td>
+                    <td class="p-2.5 align-top font-medium text-slate-800">@row.Date.ToString("dd MMM yyyy")</td>
+                    <td class="p-2.5 align-top">
+                        <span class="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+                            @((row.Minutes/60m).ToString("0.##")) hrs
+                        </span>
+                    </td>
+                    <td class="p-2.5 align-top text-[11px]">
+                        @if (row.PayrollProcessed)
+                        {
+                            <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700 border border-emerald-200">
+                                Processed · @row.PayrollMonth?.ToString("MMMM yyyy")
+                            </span>
+                            @if (!string.IsNullOrEmpty(row.PayrollReference) || !string.IsNullOrEmpty(row.PaymentReference))
+                            {
+                                <div class="font-mono text-[10px] text-slate-500 mt-0.5">@(row.PayrollReference ?? row.PaymentReference)</div>
+                            }
+                        }
+                        else
+                        {
+                            <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 font-medium text-amber-700 border border-amber-200">
+                                Awaiting payroll
+                            </span>
+                        }
+                    </td>
+                </tr>
+            }
+            @if(!Visible.Any())
+            {
+                <tr>
+                    <td colspan="5" class="p-6 text-center text-xs text-slate-500">
+                        No approved overtime claims in this work period.
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
+
+@code {
+    [Parameter]public List<HRM.Services.OvertimeRow> Rows {get;set;}=[];
+    [Parameter]public EventCallback OnProcessed {get;set;}
+    private DateTime from=new(DateTime.UtcNow.AddHours(5).Year,DateTime.UtcNow.AddHours(5).Month,1),to=DateTime.UtcNow.AddHours(5).Date;
+    private string month=DateTime.UtcNow.AddHours(5).ToString("yyyy-MM"),reference="",status="";
+    private bool busy;private string? error;private Guid batchId=Guid.NewGuid();private HashSet<int> selected=[];
+    private IEnumerable<HRM.Services.OvertimeRow> Visible=>Rows.Where(r=>r.StateId==4&&r.Date.Date>=from.Date&&r.Date.Date<=to.Date&&(status==""||r.PayrollProcessed==(status=="Processed")));
+    private void ClearSelection(){selected.Clear();}
+    private void MonthChanged(ChangeEventArgs e){month=e.Value?.ToString()??"";}
+    private void Select(int id,bool value){if(value)selected.Add(id);else selected.Remove(id);}
+    private void SelectReady(){selected=Visible.Where(r=>r.CanPay).Select(r=>r.Id).ToHashSet();}
+    private async Task Process()
+    {
+        if(busy)return;error=null;
+        if(!DateTime.TryParseExact(month+"-01","yyyy-MM-dd",System.Globalization.CultureInfo.InvariantCulture,System.Globalization.DateTimeStyles.None,out var date)){error="Select a payroll month.";return;}
+        busy=true;
+        try{var result=await Requests.ProcessPayrollAsync(selected.ToArray(),date,reference,batchId);if(result.Success){Toasts.Success(result.Message);selected.Clear();batchId=Guid.NewGuid();await OnProcessed.InvokeAsync();}else{error=result.Message;batchId=Guid.NewGuid();}}
+        catch(UnauthorizedAccessException ex){error=ex.Message;}
+        catch(Exception){error="Payroll could not be processed. Refresh and check the selected claims before retrying.";}
+        finally{busy=false;}
+    }
+}

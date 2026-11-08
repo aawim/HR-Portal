@@ -1,0 +1,1287 @@
+@using HRM.DTOs.Items
+@inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Items
+@inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
+
+<section class="staff-items-page w-full min-w-0 p-2 flex flex-col gap-2">
+
+    <header class="staff-items-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-200  px-3 py-3 shadow-sm">
+        <div>
+            <div class="flex items-center gap-2">
+                <h2 class="text-lg font-bold text-slate-900">
+                    @(InitialItemsMode ? "Initial Staff Equipment & Items" :
+                        PersonalItemsOnly ? "Personal Items & Consumables" :
+                        JobRelatedOnly ? "Job-Related Equipment & Assets" :
+                        IndividualId > 0 ? "Staff Items & Assigned Equipment" :
+                        "Item Requisitions & Custody")
+                </h2>
+                @if (PersonalItemsOnly)
+                {
+                    <span class="rounded-full bg-purple-100 px-2.5 py-0.5 text-xs font-semibold text-purple-800">Personal Items</span>
+                }
+                else if (JobRelatedOnly)
+                {
+                    <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">Job Related</span>
+                }
+            </div>
+            <p class="text-xs text-slate-500 mt-0.5">
+                @(PersonalItemsOnly
+                    ? "Manage office supplies, consumables, and personal items requested or issued to staff."
+                    : JobRelatedOnly
+                    ? "Assign and track job-related physical items, hardware, and inventory assets issued to staff."
+                    : IndividualId > 0
+                    ? "Manage equipment assignments, serialized inventory assets, and requisitions for this staff member."
+                    : "Submit item requisitions, track issued inventory assets, and review approval workflows.")
+            </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Page Width Toggle Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-colors"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <!-- Complete History & Clearance Report Note Button -->
+            @if (EffectiveIndividualId > 0 && !PersonalItemsOnly)
+            {
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 shadow-sm hover:bg-indigo-100 transition-colors"
+                        disabled="@busy"
+                        @onclick="OpenClearanceReport">
+                    <svg class="h-4 w-4 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Release Note / History</span>
+                </button>
+            }
+
+            <button class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="Load">
+                <span>↻</span>
+                <span>Refresh</span>
+            </button>
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+                    disabled="@busy"
+                    @onclick="AddNew">
+                <span>+</span>
+                <span>@(IsHrAssign ? "Assign New Items" : "New Request")</span>
+            </button>
+        </div>
+    </header>
+    
+   
+
+    @if (error != null)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800">
+            <span>@error</span>
+            <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+        </div>
+    }
+
+    <!-- Clearance Report Modal Overlay -->
+    @if (showClearanceModal && clearanceReport is not null)
+    {
+        <div class="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-slate-900/60 p-4 backdrop-blur-xs">
+            <div class="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
+                <StaffItemClearancePrintableView Report="clearanceReport" OnClose="() => showClearanceModal = false" />
+            </div>
+        </div>
+    }
+
+    <!-- 2-Panel Professional Layout:
+         LEFT: Operations, Workflow Actions & Request/Assignment Details
+         RIGHT: Item Inventory & Request List Overview
+    -->
+
+    <div class="staff-items-panels @(isFullWidth ? "staff-items-panels-full" : "staff-items-panels-standard")">
+
+
+
+        <!-- LEFT PANEL: Operations & Form / Request Details -->
+        <div class="staff-items-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm flex flex-col gap-3">
+
+            @if (selectedRequestId.HasValue && SelectedRequest is { } row)
+            {
+                <!-- Selected Request Detail & Operations View -->
+                <div class="flex flex-col gap-3 text-xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 transition"
+                                    @onclick="AddNew">
+                                <span>← Back to Form</span>
+                            </button>
+                            <span class="text-slate-400">|</span>
+                            <span class="font-mono text-sm font-bold text-slate-900">@row.Reference</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @StatusBadgeClass(row.Status, false)">
+                                @StatusLabel(row.Status)
+                            </span>
+                            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700 font-medium text-[11px]">
+                                @row.Kind
+                            </span>
+                            <span class="rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 font-medium text-[11px]">
+                                @row.Purpose
+                            </span>
+                            <button type="button"
+                                    class="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 shadow-2xs transition"
+                                    @onclick="AddNew">
+                                <span>+ New</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Metadata Header -->
+                    <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                        <div class="flex flex-wrap items-start justify-between gap-2">
+                            <div>
+                                <p class="text-xs text-slate-600 font-medium">Assigned to: <strong class="text-slate-900 text-sm">@row.StaffName</strong></p>
+                            </div>
+                            <div class="text-right text-[11px] text-slate-500 space-y-0.5">
+                                <div>Requested: @row.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                @if (row.IssuedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-emerald-700">Issued: @row.IssuedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                                @if (row.AcceptedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-blue-700">Accepted: @row.AcceptedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                                @if (row.ReturnedAtUtc.HasValue)
+                                {
+                                    <div class="font-medium text-purple-700">Returned: @row.ReturnedAtUtc.Value.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                }
+                            </div>
+                        </div>
+
+                        <div>
+                            <span class="font-medium text-slate-700">Purpose / Justification:</span>
+                            <p class="mt-1 text-slate-800 bg-white rounded-lg p-2.5 border border-slate-200">@row.Reason</p>
+                        </div>
+                    </div>
+
+                    <!-- Line Items Table -->
+                    <div class="flex flex-col gap-1.5">
+                        <div class="flex items-center justify-between">
+                            <h4 class="font-bold text-slate-900 text-sm">Assigned & Requested Lines (@row.Lines.Count)</h4>
+                            <span class="text-[11px] text-slate-500">Total units: @row.Lines.Sum(l => l.Quantity)</span>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-xl border border-slate-200">
+                            <table class="w-full text-left text-xs">
+                                <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                    <tr>
+                                        <th class="p-2.5">Item Name</th>
+                                        <th class="p-2.5">Qty</th>
+                                        <th class="p-2.5">Inventory #</th>
+                                        <th class="p-2.5">Serial #</th>
+                                        <th class="p-2.5">Item State</th>
+                                        <th class="p-2.5">Remarks / Accessories</th>
+                                        <th class="p-2.5">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-slate-100">
+                                    @foreach (var line in row.Lines)
+                                    {
+                                        <tr class="hover:bg-slate-50/50">
+                                            <td class="p-2.5 font-medium text-slate-900">@line.ItemName</td>
+                                            <td class="p-2.5 font-semibold">@line.Quantity</td>
+                                            <td class="p-2.5">
+                                                @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-blue-50 px-2 py-0.5 font-mono text-[11px] font-semibold text-blue-700 border border-blue-200">
+                                                        #@line.InventoryNumber
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-slate-400">—</span>
+                                                }
+                                            </td>
+                                            <td class="p-2.5 font-mono text-[11px] text-slate-600">@(line.SerialNumber ?? "—")</td>
+                                            <td class="p-2.5">
+                                                @if (!string.IsNullOrWhiteSpace(line.Condition))
+                                                {
+                                                    <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">@line.Condition</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="text-slate-400">—</span>
+                                                }
+                                            </td>
+                                            <td class="p-2.5 text-slate-600 max-w-xs truncate" title="@line.Remarks">@(line.Remarks ?? "—")</td>
+                                            <td class="p-2.5">
+                                                @if (row.ReturnedAtUtc.HasValue)
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-purple-50 px-2 py-0.5 text-[11px] font-medium text-purple-700 border border-purple-200">Returned</span>
+                                                }
+                                                else if (line.IssuedAtUtc.HasValue && row.Status is "PendingAcceptance")
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 border border-sky-200">Awaiting acceptance</span>
+                                                }
+                                                else if (line.IssuedAtUtc.HasValue && row.Status is "Declined")
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 border border-rose-200">Declined</span>
+                                                }
+                                                else if (line.IssuedAtUtc.HasValue)
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 border border-emerald-200">
+                                                        @(row.Purpose == "Job related" ? "In Use" : "Received")
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="inline-flex items-center rounded-md bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 border border-amber-200">Pending</span>
+                                                }
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Lifecycle & Operations Action Controls -->
+                    <div class="border-t border-slate-200 pt-3 flex flex-col gap-3">
+                        @if (row.ReplacesRequestId.HasValue)
+                        {
+                            <div class="rounded-lg border border-indigo-200 bg-indigo-50 p-2 text-indigo-800 flex items-center justify-between">
+                                <span>This request is an <strong>@row.Kind</strong> replacing prior asset:</span>
+                                <button type="button" class="font-mono font-semibold underline text-indigo-900" @onclick="() => ViewDetail(row.ReplacesRequestId.Value)">
+                                    @row.ReplacesReference
+                                </button>
+                            </div>
+                        }
+
+                        @if (row.ReturnCondition != null)
+                        {
+                            <div class="rounded-lg border p-2.5 @(row.ReturnCondition is "Good" or "Fair" ? "border-emerald-200 bg-emerald-50 text-emerald-800" : "border-rose-200 bg-rose-50 text-rose-800")">
+                                <div class="font-bold">Inspection Result on Return: @row.ReturnCondition</div>
+                                @if (!string.IsNullOrWhiteSpace(row.ReturnNotes))
+                                {
+                                    <p class="mt-1 text-slate-700">Notes: @row.ReturnNotes</p>
+                                }
+                            </div>
+                        }
+
+                        @if (row.Actions.Count > 0)
+                        {
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5">
+                                <span class="font-bold text-slate-800 px-1 py-0.5">@ActionHeading(row)</span>
+
+                                @if (row.Actions.Contains("ConfirmReturn"))
+                                {
+                                    <div class="grid gap-2 sm:grid-cols-2 bg-white p-2.5 rounded-lg border border-slate-200">
+                                        <div>
+                                            <label class="block font-medium text-slate-700 p-1 mb-1">Return Condition (Inspected by HR) *</label>
+                                            <select class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs" @bind="returnCondition">
+                                                <option value="Good">Good (Ready for Reissue)</option>
+                                                <option value="Fair">Fair / Normal Wear</option>
+                                                <option value="Damaged">Damaged (Requires Repair)</option>
+                                                <option value="Unusable">Unusable / Broken</option>
+                                                <option value="Lost">Lost / Unreturned</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label class="block font-medium text-slate-700 p-1 mb-1">Damage / Inspection Notes</label>
+                                            <input class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs"
+                                                   maxlength="1000"
+                                                   placeholder="Specify damages or observations..."
+                                                   @bind="comments[row.RequestId]" />
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <input class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs"
+                                           maxlength="1000"
+                                           placeholder="Action comment or reason (required for reject/decline)..."
+                                           @bind="comments[row.RequestId]" />
+                                }
+
+                                <div class="flex flex-wrap items-center gap-2 pt-1">
+                                    @foreach (var a in row.Actions)
+                                    {
+                                        var code = a;
+                                        <button class="inline-flex items-center gap-1.5 rounded-lg px-3.5 py-2 text-xs font-semibold shadow-sm transition disabled:opacity-50 @ActionClass(code)"
+                                                disabled="@busy"
+                                                @onclick="() => OnAction(row, code)">
+                                            @ActionLabel(code)
+                                        </button>
+                                    }
+                                </div>
+                            </div>
+                        }
+
+                        <!-- History Timeline -->
+                        <div class="flex flex-col gap-1.5 pt-2">
+                            <h4 class="font-bold text-slate-900 text-sm">Custody Event History (@row.History.Count)</h4>
+                            <ol class="relative border-l border-slate-200 ml-2 space-y-2 mt-1">
+                                @foreach (var h in row.History)
+                                {
+                                    <li class="ml-3">
+                                        <span class="absolute -left-1.5 mt-1 h-3 w-3 rounded-full border border-white @StatusBadgeClass(h.ToStatus, false)"></span>
+                                        <div class="flex flex-wrap items-center gap-1.5">
+                                            <strong class="text-slate-900">@h.Action</strong>
+                                            <span class="text-slate-500">→ @StatusLabel(h.ToStatus)</span>
+                                            @if (h.Condition != null)
+                                            {
+                                                <span class="rounded bg-rose-50 px-1.5 text-rose-700 font-medium">@h.Condition</span>
+                                            }
+                                        </div>
+                                        <div class="text-[11px] text-slate-500">@h.ActorName · @h.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy, HH:mm")</div>
+                                        @if (!string.IsNullOrWhiteSpace(h.Comment))
+                                        {
+                                            <p class="text-[11px] text-slate-700 italic bg-slate-50 p-1.5 rounded mt-0.5 border border-slate-100">@h.Comment</p>
+                                        }
+                                    </li>
+                                }
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <!-- Operations: Request / Direct Assignment Form -->
+                <fieldset disabled="@busy" class="flex flex-col gap-3 text-xs">
+                    <div class="flex items-center justify-between border-b border-slate-200 pb-2">
+                        <div>
+                            <legend class="text-sm font-bold text-slate-800">
+                                @(form.Kind is "Replacement" or "Upgrade" ? $"Request {form.Kind} for {replacingReference}" :
+                                    form.Kind == "Issue" ? "Direct Item / Asset Assignment (HR)" :
+                                    PersonalItemsOnly ? "Request Personal / Consumable Items" :
+                                    "New Item Request")
+                            </legend>
+                            <p class="text-[11px] text-slate-500">
+                                @(form.Kind == "Replacement"
+                                    ? "HR will assign the replacement asset. Once accepted, the previous equipment will be returned to HR."
+                                    : form.Kind == "Upgrade"
+                                    ? "Request a hardware component upgrade (RAM, Storage, etc.). Your active equipment custody will be preserved."
+                                    : form.Kind == "Issue"
+                                    ? "Assign serialized assets with Inventory and Serial numbers. Handover condition is not required at issuance."
+                                    : "Staff members request job equipment (like monitor) or personal consumables. HR will assign physical inventory.")
+                            </p>
+                        </div>
+                        @if (form.Kind is "Replacement" or "Upgrade")
+                        {
+                            <button type="button" class="text-xs font-semibold text-rose-600 hover:underline" @onclick="ResetForm">Cancel @form.Kind</button>
+                        }
+                    </div>
+
+                    <!-- Header Options: Purpose & Source -->
+                    <div class="grid gap-2.5 sm:grid-cols-2">
+                        @if (!JobRelatedOnly && !PersonalItemsOnly && form.Kind == "Requisition")
+                        {
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Request Purpose *</label>
+                                <select class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs bg-white text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @bind="form.Purpose">
+                                    <option value="Common">Personal Use (Notebook, Diary, Tissues…)</option>
+                                    <option value="Job related">Job-Related Item / Asset (Monitor, Hardware…)</option>
+                                </select>
+                            </div>
+                        }
+
+                        <div class="@(JobRelatedOnly || PersonalItemsOnly || form.Kind != "Requisition" ? "sm:col-span-2" : "")">
+                            <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Item Catalogue Source</label>
+                            <div class="flex rounded-md border border-slate-300 p-0.5 bg-slate-50">
+                                <button type="button"
+                                        @onclick='() => itemSource = "catalogue"'
+                                        class="flex-1 rounded py-1 text-xs font-semibold transition @(itemSource == "catalogue" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")">
+                                    From Catalogue
+                                </button>
+                                <button type="button"
+                                        @onclick='() => itemSource = "custom"'
+                                        class="flex-1 rounded py-1 text-xs font-semibold transition @(itemSource == "custom" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")">
+                                    Custom / Manual Entry
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Add Line Item Fields sitting flat on main card -->
+                    <div class="space-y-2.5 pt-0.5">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-1.5">
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-slate-700">Add Line Item</span>
+                            @if (IsHrAssign)
+                            {
+                                <span class="text-[11px] text-blue-600 font-mono font-medium">HR Direct Assignment</span>
+                            }
+                        </div>
+
+                        @if (itemSource == "catalogue")
+                        {
+                            <div class="grid gap-2.5 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Select Item *</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            value="@selectedCatalogueItemId"
+                                            @onchange="OnCatalogueItemChanged">
+                                        <option value="0">Choose from active catalogue...</option>
+                                        @foreach (var catGroup in DisplayCatalogueItems.GroupBy(i => i.Kind))
+                                        {
+                                            <optgroup label="@(catGroup.Key == "Asset" ? "Assets / Hardware" : "Consumables / Supplies")">
+                                                @foreach (var item in catGroup)
+                                                {
+                                                    <option value="@item.ItemId">
+                                                        @item.Name (@item.Kind · @item.Available @item.UnitOfMeasure available)
+                                                    </option>
+                                                }
+                                            </optgroup>
+                                        }
+                                    </select>
+                                </div>
+
+                                @if (IsHrAssign && availableUnits.Count > 0)
+                                {
+                                    <div>
+                                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Registered Asset Unit</label>
+                                        <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                                value="@selectedItemUnitId"
+                                                @onchange="OnUnitChanged">
+                                            <option value="0">Choose registered inventory unit...</option>
+                                            @foreach (var u in availableUnits)
+                                            {
+                                                <option value="@u.ItemUnitId">
+                                                    [@u.InventoryNumber] @(u.SerialNumber != null ? $"S/N: {u.SerialNumber} · " : "")@u.Condition
+                                                </option>
+                                            }
+                                        </select>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="grid gap-2.5 sm:grid-cols-2">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Previously Requested Item</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                            @bind="selectedName">
+                                        <option value="">Select previously used item name...</option>
+                                        @foreach (var name in previousNames)
+                                        {
+                                            <option value="@name">@name</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">New Item Name *</label>
+                                    <input class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                           maxlength="200"
+                                           @bind="newName"
+                                           placeholder="@NewItemPlaceholder" />
+                                </div>
+                            </div>
+                        }
+
+                        @if (IsHrAssign && !PersonalItemsOnly)
+                        {
+                            <div class="grid gap-2.5 sm:grid-cols-3">
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                        Inventory Number <span class="font-normal text-slate-400 lowercase">(optional)</span>
+                                    </label>
+                                    <input type="text"
+                                           class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                           maxlength="100"
+                                           @bind="lineInventoryNumber"
+                                           placeholder="e.g. INV-2026-0042" />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                        Serial Number <span class="font-normal text-slate-400 lowercase">(optional)</span>
+                                    </label>
+                                    <input type="text"
+                                           class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs font-mono text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                           maxlength="120"
+                                           @bind="lineSerialNumber"
+                                           placeholder="e.g. SN-8849204A" />
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Item State at Issue</label>
+                                    <select class="w-full rounded-md border border-slate-300 bg-white py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500" @bind="lineCondition">
+                                        <option value="Brand New">Brand New</option>
+                                        <option value="Good">Good / Like New</option>
+                                        <option value="Used">Used / Refurbished</option>
+                                        <option value="Fair">Fair</option>
+                                    </select>
+                                </div>
+                            </div>
+                        }
+
+                        <!-- Quantity and Accessories / Remarks -->
+                        <div class="grid gap-2.5 sm:grid-cols-2">
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Quantity</label>
+                                <input type="number"
+                                       min="1"
+                                       max="1000"
+                                       class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                       @bind="lineQuantity" />
+                            </div>
+                            <div>
+                                <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                                    Accessories / Remarks <span class="font-normal text-slate-400 lowercase">(optional)</span>
+                                </label>
+                                <input type="text"
+                                       class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                       maxlength="500"
+                                       @bind="lineRemarks"
+                                       placeholder="e.g. 65W charger, carry sleeve, special specs" />
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-0.5">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900 transition shadow-xs"
+                                    @onclick="AddLine">
+                                <span>+ Add Item</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Drafted Lines Review -->
+                    @if (form.Lines.Count > 0)
+                    {
+                        <div class="space-y-1.5 pt-1.5 border-t border-slate-100">
+                            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                <span>Items in this @(form.Kind == "Issue" ? "Assignment" : "Requisition") (@form.Lines.Count)</span>
+                                <span class="text-[11px] font-normal normal-case text-slate-500">Total units: @form.Lines.Sum(l => l.Quantity)</span>
+                            </div>
+                            <div class="overflow-x-auto rounded-lg border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                                        <tr>
+                                            <th class="py-1.5 px-2.5">Item</th>
+                                            <th class="py-1.5 px-2 text-center">Qty</th>
+                                            <th class="py-1.5 px-2.5">Allocation / State</th>
+                                            <th class="py-1.5 px-2.5">Remarks</th>
+                                            <th class="py-1.5 px-2.5 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var line in form.Lines.ToList())
+                                        {
+                                            <tr class="hover:bg-slate-50/50" @key="line">
+                                                <td class="py-1.5 px-2.5 font-semibold text-slate-800">@line.ItemName</td>
+                                                <td class="py-1.5 px-2 text-center font-medium">@line.Quantity</td>
+                                                <td class="py-1.5 px-2.5">
+                                                    @if (!string.IsNullOrWhiteSpace(line.InventoryNumber))
+                                                    {
+                                                        <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-blue-700">
+                                                            #@line.InventoryNumber
+                                                        </span>
+                                                    }
+                                                    @if (IsHrAssign && !string.IsNullOrWhiteSpace(line.Condition))
+                                                    {
+                                                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600 ml-1">@line.Condition</span>
+                                                    }
+                                                </td>
+                                                <td class="py-1.5 px-2.5 text-slate-600 truncate max-w-xs">@(line.Remarks ?? "—")</td>
+                                                <td class="py-1.5 px-2.5 text-right">
+                                                    <button type="button"
+                                                            class="text-rose-600 hover:text-rose-800 font-semibold text-[11px]"
+                                                            @onclick="() => RemoveLine(line)">
+                                                        ✕ Remove
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- Reason / Justification -->
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">
+                            Business Justification / Reason *
+                        </label>
+                        <textarea class="w-full rounded-md border border-slate-300 py-1.5 px-2 text-xs text-slate-700 placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  maxlength="1000"
+                                  rows="2"
+                                  placeholder="Provide the purpose or justification for this request..."
+                                  @bind="form.Reason"></textarea>
+                    </div>
+
+                    <!-- Action Row (Footer Strip) -->
+                    <div class="flex flex-wrap items-center justify-end gap-2.5 border-t border-slate-200 bg-slate-50 px-4 py-2.5 -mx-4 -mb-4 rounded-b-2xl">
+                        <button type="button"
+                                class="rounded-lg border border-slate-300 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                @onclick="ResetForm">
+                            Reset Form
+                        </button>
+                        <button type="button"
+                                class="rounded-lg bg-emerald-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-2xs hover:bg-emerald-700 disabled:opacity-50 transition"
+                                disabled="@(form.Lines.Count == 0 || string.IsNullOrWhiteSpace(form.Reason))"
+                                @onclick="Submit">
+                            <span>✓</span>
+                            <span>@(form.Kind == "Issue" ? "Assign to Staff" : form.Kind is "Replacement" or "Upgrade" ? $"Submit {form.Kind} Request" : "Submit to HR")</span>
+                        </button>
+                    </div>
+                </fieldset>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Items Overview, Filtering & Request History -->
+        <aside class="staff-items-right min-w-0 rounded-2xl border border-slate-200/90 bg-slate-50/70 p-2.5 flex flex-col gap-2.5" aria-label="Item requests">
+
+            <!-- Header Card -->
+            <div class="flex items-center justify-between rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs">
+                <div>
+                    <h3 class="font-bold text-slate-800 text-xs uppercase tracking-wider">
+                        @(PersonalItemsOnly ? "Personal Items & Supplies" : JobRelatedOnly ? "Assigned Equipment & Assets" : "Item & Asset Registry")
+                    </h3>
+                    <span class="text-[11px] text-slate-500">@ListRows.Count record@(ListRows.Count == 1 ? "" : "s")</span>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">@ListRows.Count</span>
+                    @if (selectedRequestId.HasValue)
+                    {
+                        <button type="button" class="text-xs text-blue-600 hover:underline font-semibold" @onclick="AddNew">
+                            + New
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Search & Filters Container -->
+            <div class="rounded-xl border border-slate-200/80 bg-white p-2.5 shadow-2xs flex flex-col gap-2">
+                <input type="text"
+                       class="w-full rounded-lg border border-slate-300 bg-slate-50/50 p-1 text-xs placeholder:text-slate-400 focus:border-blue-500 focus:bg-white focus:ring-1 focus:ring-blue-500"
+                       placeholder="Search reference, item, inv #..."
+                       @bind="searchTerm"
+                       @bind:event="oninput" />
+
+                <!-- Filter Status Pills -->
+                <div class="flex flex-wrap gap-1 text-[11px]">
+                    <button type="button"
+                            @onclick='() => filterStatus = "all"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "all" ? "bg-slate-900 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        All
+                    </button>
+                    <button type="button"
+                            @onclick='() => filterStatus = "inuse"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "inuse" ? "bg-emerald-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        In Use / Received
+                    </button>
+                    <button type="button"
+                            @onclick='() => filterStatus = "pending"'
+                            class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "pending" ? "bg-amber-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                        Pending
+                    </button>
+                    @if (!PersonalItemsOnly)
+                    {
+                        <button type="button"
+                                @onclick='() => filterStatus = "returned"'
+                                class="rounded-lg px-2.5 py-1 font-medium transition @(filterStatus == "returned" ? "bg-purple-600 text-white shadow-2xs" : "bg-slate-100 text-slate-600 hover:bg-slate-200")">
+                            Returned
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- List of Request Cards -->
+            @if (!ListRows.Any())
+            {
+                <div class="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-xs text-slate-500">
+                    @EmptyStateMessage
+                </div>
+            }
+            <div class="flex flex-col gap-2 max-h-[42rem] overflow-y-auto pr-0.5">
+                @foreach (var r in ListRows)
+                {
+                    <article class="rounded-xl border p-2.5 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-1.5 @(SelectedRequest?.RequestId == r.RequestId ? "border-emerald-600 bg-emerald-50/70 shadow-2xs ring-1 ring-emerald-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                             @key="r.RequestId"
+                             @onclick="() => ViewDetail(r.RequestId)">
+                        <div class="flex items-center justify-between gap-1.5">
+                            <span class="font-mono font-bold text-slate-900 text-xs truncate">@r.Reference</span>
+                            <span class="rounded-full px-2 py-0.5 font-semibold text-[10px] @StatusBadgeClass(r.Status, false)">
+                                @StatusLabel(r.Status)
+                            </span>
+                        </div>
+
+                        @if (IndividualId == 0)
+                        {
+                            <div class="text-[11px] font-medium text-slate-700 truncate">Staff: @r.StaffName</div>
+                        }
+
+                        <div class="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                            <span class="rounded bg-slate-100 px-1.5 py-0.5 font-medium text-slate-700">@r.Purpose</span>
+                            <span>·</span>
+                            <span>@r.Kind</span>
+                            <span>·</span>
+                            <span>@r.Lines.Count line@(r.Lines.Count == 1 ? "" : "s")</span>
+                        </div>
+
+                        <!-- Items Summary with Inventory Badges -->
+                        <div class="text-[11px] text-slate-700 font-medium truncate">
+                            @string.Join(", ", r.Lines.Select(l => l.Quantity > 1 ? $"{l.ItemName} (×{l.Quantity})" : l.ItemName))
+                        </div>
+
+                        @if (r.Lines.Any(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)))
+                        {
+                            <div class="flex flex-wrap gap-1">
+                                @foreach (var inv in r.Lines.Where(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)).Take(2))
+                                {
+                                    <span class="rounded bg-blue-50 border border-blue-200 px-1.5 py-0.5 font-mono text-[10px] text-blue-700 font-semibold">
+                                        #@inv.InventoryNumber
+                                    </span>
+                                }
+                                @if (r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) > 2)
+                                {
+                                    <span class="text-[10px] text-slate-400 self-center">+@(r.Lines.Count(l => !string.IsNullOrWhiteSpace(l.InventoryNumber)) - 2) more</span>
+                                }
+                            </div>
+                        }
+
+                        <div class="flex items-center justify-between text-[10px] text-slate-400 border-t border-slate-100 pt-1 mt-0.5">
+                            <span>@r.CreatedAtUtc.ToLocalTime().ToString("dd MMM yyyy")</span>
+                            <span class="text-blue-600 font-semibold hover:underline">
+                                @(SelectedRequest?.RequestId == r.RequestId ? "Selected" : "View Details →")
+                            </span>
+                        </div>
+                    </article>
+                }
+            </div>
+        </aside>
+    </div>
+</section>
+
+
+<style>
+    /* Header is full-width and independent of the Full Width toggle. */
+    .staff-items-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .staff-items-header {
+        width: 100%;
+        padding: 0;
+        margin: 0;
+    }
+
+    /* Explicit layout rules avoid reliance on generated Tailwind col-span utilities. */
+    .staff-items-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .staff-items-panels-standard {
+        max-width: 80rem;
+    }
+
+    .staff-items-panels-full {
+        max-width: none;
+    }
+
+    .staff-items-left, .staff-items-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .staff-items-panels {
+            grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+        }
+    }
+</style>
+
+@code {
+    [Parameter] public int IndividualId { get; set; }
+    [Parameter] public bool InitialItemsMode { get; set; }
+    [Parameter] public bool JobRelatedOnly { get; set; }
+    [Parameter] public bool PersonalItemsOnly { get; set; }
+
+    [Parameter]
+    [SupplyParameterFromQuery(Name = "requestId")]
+    public int? RequestId { get; set; }
+
+    private List<string> previousNames = [];
+    private List<ItemStaffRequestDto> rows = [];
+    private List<ItemStaffRequestDto> approvalRows = [];
+    private List<RequestableItemDto> catalogueItems = [];
+    private List<ItemUnitDto> availableUnits = [];
+    private bool canManageStaffItems;
+    private readonly Dictionary<int, string> comments = [];
+    private ItemStaffRequestInput form = new();
+
+    private string itemSource = "catalogue";
+    private int selectedCatalogueItemId;
+    private int selectedItemUnitId;
+    private string selectedName = "";
+    private string newName = "";
+    private string lineInventoryNumber = "";
+    private string lineSerialNumber = "";
+    private string lineCondition = "Brand New";
+    private DateOnly? lineExpectedReturnDate;
+    private string lineRemarks = "";
+    private int lineQuantity = 1;
+
+    private string searchTerm = "";
+    private string filterStatus = "all";
+    private string? error;
+    private bool busy;
+    private int? selectedRequestId;
+    private int loadedIndividualId = -1;
+    private bool? loadedJobRelatedOnly;
+    private bool? loadedPersonalItemsOnly;
+
+    private IEnumerable<RequestableItemDto> DisplayCatalogueItems =>
+        PersonalItemsOnly
+            ? catalogueItems.Where(i => i.Kind != "Asset")
+            : catalogueItems;
+
+    private string NewItemPlaceholder => PersonalItemsOnly
+        ? "e.g. Spiral Notebook, A4 Paper, Ballpoint Pens, Sticky Notes"
+        : "e.g. Dell Latitude 5420, 27-inch 4K Monitor, Ergonomic Keyboard";
+
+    private string EmptyStateMessage => PersonalItemsOnly
+        ? "No personal items, consumables, or stationery records found for this staff member."
+        : JobRelatedOnly
+        ? "No job-related equipment, hardware, or inventory assets assigned to this staff member."
+        : "No matching item records found.";
+
+    // Full-page width toggle saved to browser localStorage user setting
+    private bool isFullWidth = false;
+    private const string FullWidthSettingKey = "hrm.item-management.full-width";
+
+    // Clearance and Release Note
+    private bool showClearanceModal = false;
+    private ItemStaffClearanceReportDto? clearanceReport;
+
+    private int EffectiveIndividualId => IndividualId > 0 ? IndividualId : (SelectedRequest?.IndividualId ?? 0);
+
+    private IEnumerable<ItemStaffRequestDto> FilteredRows
+    {
+        get
+        {
+            var baseRows = JobRelatedOnly
+                ? rows.Where(r => r.Purpose == "Job related")
+                : PersonalItemsOnly
+                ? rows.Where(r => r.Purpose != "Job related")
+                : rows;
+
+            var combined = baseRows.Concat(IndividualId == 0 ? approvalRows : []).DistinctBy(r => r.RequestId);
+
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var q = searchTerm.Trim();
+                combined = combined.Where(r =>
+                    r.Reference.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.StaffName.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.Reason.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                    r.Lines.Any(l => l.ItemName.Contains(q, StringComparison.OrdinalIgnoreCase)
+                        || (l.InventoryNumber != null && l.InventoryNumber.Contains(q, StringComparison.OrdinalIgnoreCase))
+                        || (l.SerialNumber != null && l.SerialNumber.Contains(q, StringComparison.OrdinalIgnoreCase))));
+            }
+
+            if (filterStatus == "inuse")
+                combined = combined.Where(r => r.Status is "InUse" or "Received");
+            else if (filterStatus == "pending")
+                combined = combined.Where(r => r.Status is "Submitted" or "PendingAcceptance" or "ReturnRequested");
+            else if (filterStatus == "returned")
+                combined = combined.Where(r => r.Status == "Returned");
+
+            return combined.OrderByDescending(r => r.Actions.Count > 0).ThenByDescending(r => r.CreatedAtUtc);
+        }
+    }
+
+    private bool IsHrAssign => canManageStaffItems && IndividualId > 0;
+    private string returnCondition = "Good";
+    private string? replacingReference;
+
+    private List<ItemStaffRequestDto> ListRows => FilteredRows.ToList();
+    private ItemStaffRequestDto? SelectedRequest => rows.Concat(approvalRows).FirstOrDefault(r => r.RequestId == selectedRequestId);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (bool.TryParse(saved, out var val))
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (RequestId.HasValue && RequestId.Value > 0)
+        {
+            selectedRequestId = RequestId.Value;
+        }
+
+        if (loadedIndividualId == IndividualId && loadedJobRelatedOnly == JobRelatedOnly && loadedPersonalItemsOnly == PersonalItemsOnly)
+            return;
+
+        loadedIndividualId = IndividualId;
+        loadedJobRelatedOnly = JobRelatedOnly;
+        loadedPersonalItemsOnly = PersonalItemsOnly;
+        ResetForm();
+        await Load();
+    }
+
+    private void AddNew()
+    {
+        ResetForm();
+        ResetLineInputs();
+        selectedRequestId = null;
+        error = null;
+    }
+
+    private void ViewDetail(int reqId)
+    {
+        selectedRequestId = reqId;
+        error = null;
+    }
+
+    private void ResetForm()
+    {
+        form = new ItemStaffRequestInput
+            {
+                IndividualId = IndividualId,
+                Kind = IsHrAssign ? "Issue" : "Requisition",
+                Purpose = PersonalItemsOnly ? "Common" : (IsHrAssign || JobRelatedOnly ? "Job related" : "Common")
+            };
+        replacingReference = null;
+        ResetLineInputs();
+        error = null;
+    }
+
+    private void ResetLineInputs()
+    {
+        selectedCatalogueItemId = 0;
+        selectedItemUnitId = 0;
+        selectedName = "";
+        newName = "";
+        lineInventoryNumber = "";
+        lineSerialNumber = "";
+        lineCondition = "Brand New";
+        lineExpectedReturnDate = null;
+        lineRemarks = "";
+        lineQuantity = 1;
+        availableUnits.Clear();
+    }
+
+    private async Task Load()
+    {
+        busy = true; error = null;
+        try
+        {
+            var selected = IndividualId > 0 ? IndividualId : (int?)null;
+            rows = await Items.GetStaffRequestsAsync(null, selected);
+            previousNames = await Items.GetRequestedItemNamesAsync(selected);
+            approvalRows = IndividualId == 0 ? await Items.GetPendingItemApprovalsAsync() : [];
+            try
+            {
+                catalogueItems = await Items.GetRequestableItemsAsync();
+            }
+            catch { catalogueItems = []; }
+
+            try
+            {
+                canManageStaffItems = await Items.CanManageStaffItemsAsync();
+            }
+            catch { canManageStaffItems = IndividualId > 0; }
+
+            foreach (var r in rows.Concat(approvalRows)) comments.TryAdd(r.RequestId, "");
+            if (RequestId.HasValue && RequestId.Value > 0)
+            {
+                selectedRequestId = RequestId.Value;
+            }
+            else if (selectedRequestId.HasValue && SelectedRequest is null)
+            {
+                selectedRequestId = null;
+            }
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task OnCatalogueItemChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
+        {
+            selectedCatalogueItemId = id;
+            var item = catalogueItems.FirstOrDefault(i => i.ItemId == id);
+            if (item != null)
+            {
+                selectedName = item.Name;
+                lineQuantity = 1;
+                selectedItemUnitId = 0;
+                lineInventoryNumber = "";
+                lineSerialNumber = "";
+                availableUnits.Clear();
+                if (item.Kind == "Asset" && IsHrAssign)
+                {
+                    try
+                    {
+                        var units = await Items.GetItemUnitsAsync(id);
+                        availableUnits = units.Where(u => u.Status == "Available").ToList();
+                    }
+                    catch { availableUnits.Clear(); }
+                }
+            }
+        }
+        else
+        {
+            selectedCatalogueItemId = 0;
+            selectedItemUnitId = 0;
+            availableUnits.Clear();
+        }
+    }
+
+    private void OnUnitChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var unitId) && unitId > 0)
+        {
+            selectedItemUnitId = unitId;
+            var unit = availableUnits.FirstOrDefault(u => u.ItemUnitId == unitId);
+            if (unit != null)
+            {
+                lineInventoryNumber = unit.InventoryNumber;
+                lineSerialNumber = unit.SerialNumber ?? "";
+                lineCondition = unit.Condition;
+                lineQuantity = 1;
+            }
+        }
+        else
+        {
+            selectedItemUnitId = 0;
+        }
+    }
+
+    private void AddLine()
+    {
+        var name = itemSource == "catalogue" && selectedCatalogueItemId > 0
+            ? (catalogueItems.FirstOrDefault(i => i.ItemId == selectedCatalogueItemId)?.Name ?? "")
+            : (!string.IsNullOrWhiteSpace(newName) ? newName.Trim() : selectedName.Trim());
+
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 200)
+        {
+            error = "Please specify an item name of up to 200 characters.";
+            return;
+        }
+
+        if (form.Lines.Count >= 30)
+        {
+            error = "A request can contain up to 30 item lines.";
+            return;
+        }
+
+        var inv = IsHrAssign && !string.IsNullOrWhiteSpace(lineInventoryNumber) ? lineInventoryNumber.Trim() : null;
+        var sn = IsHrAssign && !string.IsNullOrWhiteSpace(lineSerialNumber) ? lineSerialNumber.Trim() : null;
+        var cond = IsHrAssign && !string.IsNullOrWhiteSpace(lineCondition) ? lineCondition.Trim() : null;
+
+        if (form.Lines.Any(l => l.ItemName.Equals(name, StringComparison.OrdinalIgnoreCase)
+            && (l.InventoryNumber ?? "").Equals(inv ?? "", StringComparison.OrdinalIgnoreCase)
+            && (l.SerialNumber ?? "").Equals(sn ?? "", StringComparison.OrdinalIgnoreCase)))
+        {
+            error = "This item is already added to the list.";
+            return;
+        }
+
+        form.Lines.Add(new ItemStaffRequestLineInput
+            {
+                ItemId = selectedCatalogueItemId > 0 ? selectedCatalogueItemId : null,
+                ItemUnitId = selectedItemUnitId > 0 ? selectedItemUnitId : null,
+                ItemName = name,
+                InventoryNumber = inv,
+                SerialNumber = sn,
+                Condition = cond,
+                ExpectedReturnDate = lineExpectedReturnDate,
+                Remarks = string.IsNullOrWhiteSpace(lineRemarks) ? null : lineRemarks.Trim(),
+                Quantity = Math.Max(1, lineQuantity)
+            });
+
+        ResetLineInputs();
+        error = null;
+    }
+
+    private void RemoveLine(ItemStaffRequestLineInput line) => form.Lines.Remove(line);
+
+    private async Task Submit()
+    {
+        busy = true; error = null;
+        try
+        {
+            var result = await Items.SubmitStaffRequestAsync(form);
+            if (!result.Success) { error = result.Message; return; }
+            Toasts.Success(result.Message);
+            ResetForm();
+            selectedRequestId = null;
+            await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task Act(ItemStaffRequestDto r, string action)
+    {
+        busy = true; error = null;
+        try
+        {
+            comments.TryGetValue(r.RequestId, out var comment);
+            var result = await Items.ActStaffRequestAsync(r.RequestId, r.StateId, action, comment);
+            if (!result.Success) { error = result.Message; return; }
+            Toasts.Success(result.Message);
+            comments[r.RequestId] = "";
+            returnCondition = "Good";
+            await Load();
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task OnAction(ItemStaffRequestDto r, string code)
+    {
+        if (code is "RequestReplacement" or "RequestUpgrade")
+        {
+            var kind = code == "RequestReplacement" ? "Replacement" : "Upgrade";
+            form = new ItemStaffRequestInput
+                {
+                    IndividualId = IndividualId,
+                    Kind = kind,
+                    Purpose = "Job related",
+                    ReplacesRequestId = r.RequestId,
+                    Reason = comments.GetValueOrDefault(r.RequestId) ?? "",
+                    Lines = r.Lines.Select(l => new ItemStaffRequestLineInput
+                    {
+                        ItemId = l.ItemId,
+                        ItemName = l.ItemName,
+                        Quantity = l.Quantity,
+                        Remarks = kind == "Replacement" ? $"Replaces #{l.InventoryNumber ?? l.ItemName}" : $"Upgrade of #{l.InventoryNumber ?? l.ItemName}"
+                    }).ToList()
+                };
+            replacingReference = r.Reference;
+            selectedRequestId = null;
+            error = null;
+            return;
+        }
+        await Act(r, code == "ConfirmReturn" ? $"ConfirmReturn:{returnCondition}" : code);
+    }
+
+    private async Task OpenClearanceReport()
+    {
+        var id = EffectiveIndividualId;
+        if (id <= 0) return;
+        busy = true;
+        try
+        {
+            clearanceReport = await Items.GetStaffClearanceReportAsync(id);
+            showClearanceModal = true;
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error(ex.Message);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string ActionLabel(string code) => code switch
+    {
+        "Approve" => "✓ Approve & Issue",
+        "Reject" => "✕ Reject",
+        "Cancel" => "Cancel Request",
+        "Accept" => "✓ Accept Items",
+        "Decline" => "✕ Decline",
+        "RequestReturn" => "↩ Return / Handover Items",
+        "ConfirmReturn" => "✓ Confirm Return & Check In",
+        "RequestReplacement" => "Request Replacement (Damaged)",
+        "RequestUpgrade" => "Request Upgrade",
+        _ => code
+    };
+
+    private static string ActionClass(string code) => code switch
+    {
+        "Approve" or "Accept" or "ConfirmReturn" => "bg-emerald-600 text-white hover:bg-emerald-700",
+        "Reject" or "Decline" => "border border-rose-300 bg-white text-rose-700 hover:bg-rose-50",
+        "RequestReturn" => "bg-purple-600 text-white hover:bg-purple-700",
+        "RequestReplacement" or "RequestUpgrade" => "border border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-50",
+        _ => "border border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+    };
+
+    private static string ActionHeading(ItemStaffRequestDto r) => r.Status switch
+    {
+        "Submitted" => "Action Required: Waiting for HR Decision",
+        "PendingAcceptance" => "Action Required: Please Confirm Receipt of Items",
+        "InUse" => "Active Custody Operations",
+        "ReturnRequested" => "Handover Pending: HR Inspection & Check In",
+        _ => "Operations & Lifecycle Actions"
+    };
+
+    private static string StatusLabel(string status) => status switch
+    {
+        "Submitted" => "Pending HR",
+        "PendingAcceptance" => "Awaiting Acceptance",
+        "InUse" => "In Use",
+        "Received" => "Received",
+        "ReturnRequested" => "Handover Pending",
+        "Returned" => "Returned & Checked",
+        _ => status
+    };
+
+    private static string StatusBadgeClass(string status, bool isReturned)
+    {
+        if (isReturned) return "bg-purple-100 text-purple-800";
+        return status switch
+        {
+            "InUse" or "Received" or "Approved" or "Issued" => "bg-emerald-100 text-emerald-800",
+            "Rejected" or "Cancelled" or "Declined" => "bg-rose-100 text-rose-800",
+            "Submitted" or "PendingAcceptance" or "ReturnRequested" or "Pending" => "bg-amber-100 text-amber-800",
+            "Returned" => "bg-purple-100 text-purple-800",
+            _ => "bg-slate-100 text-slate-700"
+        };
+    }
+}

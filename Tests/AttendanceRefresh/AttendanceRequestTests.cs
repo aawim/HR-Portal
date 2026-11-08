@@ -379,7 +379,9 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
             typeof(AttendanceLog), typeof(AttendanceLogResolution), typeof(AttendanceLogRequest), typeof(AttendanceLogChangeRequest),
             typeof(LeaveChangeRequest), typeof(LeavePolicy), typeof(LeaveHandoverRule), typeof(LeaveHandoverRuleType),
             typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment), typeof(JobWorkTemplate), typeof(HRM.Models.WorkPlanning.WorkPlan), typeof(HRM.Models.WorkPlanning.WorkAssignment),
-            typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule), typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting), typeof(HRM.Models.LeaveTypes.LeaveCarryForward)];
+            typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule), typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting), typeof(HRM.Models.LeaveTypes.LeaveCarryForward),
+            typeof(HRM.Models.LeaveTypes.LeaveSubtype), typeof(HRM.Models.LeaveTypes.LeaveSubtypeUsage),
+            typeof(HRM.Models.Archives.RequestJob)];
         types = types.Concat(ScheduleTestModel.EligibilityTypes).Distinct().ToArray();
         var navigations = new HashSet<(Type, string)>
         {
@@ -395,8 +397,13 @@ sealed class RequestTestContext(DbContextOptions<HrmTeContext> options) : HrmTeC
             if (!types.Contains(type)) builder.Ignore(type);
         foreach (var type in types)
         {
-            builder.Entity(type).HasKey(type == typeof(LeaveHandoverRule) || type == typeof(LeaveHandoverRuleType) || type == typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule) || type == typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting) || type == typeof(HRM.Models.LeaveTypes.LeaveCarryForward)
-                ? "Id" : type == typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment) ? "JobWorkTemplateAssignmentID" : type == typeof(Leaf) ? "LeaveId" : type == typeof(AttendanceLogChangeRequest) ? "RequestId" : type.Name + "Id");
+            string[] keys = type == typeof(HRM.Models.Archives.RequestJob) ? new[] { "RequestId", "JobId" }
+                : new[] { (type == typeof(LeaveHandoverRule) || type == typeof(LeaveHandoverRuleType) || type == typeof(HRM.Models.LeaveTypes.JobTypeLeaveAccrualRule) || type == typeof(HRM.Models.LeaveTypes.LeaveAccrualPosting) || type == typeof(HRM.Models.LeaveTypes.LeaveCarryForward) || type == typeof(HRM.Models.LeaveTypes.LeaveSubtype)) ? "Id"
+                : type == typeof(HRM.Models.WorkPlanning.JobWorkTemplateAssignment) ? "JobWorkTemplateAssignmentID"
+                : (type == typeof(Leaf) || type == typeof(HRM.Models.LeaveTypes.LeaveSubtypeUsage)) ? "LeaveId"
+                : type == typeof(AttendanceLogChangeRequest) ? "RequestId"
+                : type.Name + "Id" };
+            builder.Entity(type).HasKey(keys);
             foreach (var property in type.GetProperties().Where(x => !x.PropertyType.IsValueType && x.PropertyType != typeof(string) && x.PropertyType != typeof(byte[])))
                 if (!navigations.Contains((type, property.Name)) && !ScheduleTestModel.Navigation(type, property.Name)) builder.Entity(type).Ignore(property.Name);
         }

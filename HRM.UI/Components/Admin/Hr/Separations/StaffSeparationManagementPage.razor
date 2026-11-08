@@ -1,0 +1,1502 @@
+@page "/admin/hr/separations"
+@namespace HRM.Components.Admin.Hr.Separations
+@using HRM.DTOs
+@using HRM.DTOs.Separation
+@using HRM.Enums
+@using HRM.Services
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.JSInterop
+@attribute [Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject HRM.Services.Contracts.StaffSeparationServiceContracts.IOperations Separations
+@inject ToastService Toasts
+@inject IJSRuntime JS
+@inject ILogger<StaffSeparationManagementPage> Logger
+
+<PageTitle>Enterprise Staff Separation & Offboarding - HR Portal</PageTitle>
+
+<div class="mx-auto w-full @(isFullWidth ? "w-full" : "max-w-7xl") p-2 flex flex-col gap-2">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="rounded-md bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-xs font-semibold text-blue-700">
+                    Enterprise Offboarding
+                </span>
+                <span class="text-xs text-slate-400">Clearance, Handover &amp; Deprovisioning</span>
+            </div>
+            <h1 class="mt-1 text-2xl font-bold text-slate-900">Staff Separation &amp; Offboarding</h1>
+            <p class="text-sm text-slate-500">
+                End-to-end employee exit management: notice periods, supervisor handover, asset recovery, finance settlement, IT deprovisioning, and legal termination.
+            </p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+            <!-- Full Page Width Toggle Button -->
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                    @onclick="ToggleFullWidth">
+                @if (isFullWidth)
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                    </svg>
+                    <span>Shrink View</span>
+                }
+                else
+                {
+                    <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                    </svg>
+                    <span>Full Width</span>
+                }
+            </button>
+
+            <button type="button"
+                    @onclick="OpenNewSeparationModal"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition">
+                <span>＋</span>
+                <span>Initiate Separation</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Solid-Color KPI Summary Cards -->
+    @if (dashboard is not null)
+    {
+        <div class="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync("All")'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == "All" ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Total Exits</span>
+                    <span class="h-2 w-2 rounded-full bg-slate-400"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-slate-900">@dashboard.TotalCount</span>
+                    <span class="text-[11px] text-slate-400">All Time</span>
+                </div>
+            </button>
+
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync(StaffSeparationStatuses.HandoverInProgress)'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == StaffSeparationStatuses.HandoverInProgress ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Handover</span>
+                    <span class="h-2 w-2 rounded-full bg-amber-500"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-amber-700">@dashboard.PendingHandoverCount</span>
+                    <span class="text-[11px] text-amber-600">Pending</span>
+                </div>
+            </button>
+
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync(StaffSeparationStatuses.ClearanceInProgress)'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == StaffSeparationStatuses.ClearanceInProgress ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Clearances</span>
+                    <span class="h-2 w-2 rounded-full bg-blue-500"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-blue-700">@dashboard.PendingClearanceCount</span>
+                    <span class="text-[11px] text-blue-600">In Progress</span>
+                </div>
+            </button>
+
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync(StaffSeparationStatuses.FinalReviewPending)'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == StaffSeparationStatuses.FinalReviewPending ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">HR Review</span>
+                    <span class="h-2 w-2 rounded-full bg-purple-500"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-purple-700">@dashboard.PendingFinalReviewCount</span>
+                    <span class="text-[11px] text-purple-600">Ready</span>
+                </div>
+            </button>
+
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync(StaffSeparationStatuses.Terminated)'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == StaffSeparationStatuses.Terminated ? "border-blue-600 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Terminated</span>
+                    <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-emerald-700">@dashboard.TerminatedCount</span>
+                    <span class="text-[11px] text-emerald-600">Executed</span>
+                </div>
+            </button>
+
+            <button type="button"
+                    @onclick='() => FilterByStatusAsync("Unresolved")'
+                    class="flex flex-col justify-between rounded-xl border bg-white p-3 text-left shadow-xs transition-all @(selectedStatusFilter == "Unresolved" ? "border-rose-600 ring-2 ring-rose-500/20" : "border-slate-200 hover:border-slate-300 hover:bg-slate-50/60")">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-xs font-medium text-slate-500">Liabilities</span>
+                    <span class="h-2 w-2 rounded-full bg-rose-500"></span>
+                </div>
+                <div class="mt-2 flex items-baseline justify-between">
+                    <span class="text-xl font-bold text-rose-700">@dashboard.UnresolvedObligationsCount</span>
+                    <span class="text-[11px] text-rose-600">Unresolved</span>
+                </div>
+            </button>
+        </div>
+    }
+
+    <!-- 2-Panel Grid System -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start w-full mt-2">
+        <!-- LEFT PANEL: Operations, Tabs & Selected Separation Details (7fr / 7 cols) -->
+        <div class="lg:col-span-7 flex flex-col gap-4">
+            @if (activeDetail is not null)
+            {
+                <!-- Active Item Banner -->
+                <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    <div class="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md">
+                                    #SEP-@activeDetail.StaffSeparationId
+                                </span>
+                                <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold @GetStatusBadgeClass(activeDetail.Status)">
+                                    @activeDetail.Status
+                                </span>
+                                @if (activeDetail.HasUnresolvedObligations)
+                                {
+                                    <span class="rounded-full bg-rose-100 text-rose-800 px-2.5 py-0.5 text-[11px] font-semibold">
+                                        ⚠ Unresolved Obligations
+                                    </span>
+                                }
+                            </div>
+                            <h2 class="text-lg font-bold text-slate-900 mt-1">@activeDetail.FullNameSnapshot</h2>
+                            <p class="text-xs text-slate-500">
+                                @activeDetail.PositionTitleSnapshot · @activeDetail.DepartmentNameSnapshot · Staff ID: @activeDetail.EmployeeNumberSnapshot
+                            </p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button type="button"
+                                    @onclick='() => GenerateDocAsync(StaffSeparationDocumentVariants.ExitClearanceCertificate)'
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50">
+                                <span>📄</span>
+                                <span>Clearance Certificate</span>
+                            </button>
+                            <button type="button"
+                                    @onclick='() => GenerateDocAsync(StaffSeparationDocumentVariants.ServiceCertificate)'
+                                    class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50">
+                                <span>📜</span>
+                                <span>Service Certificate</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs -->
+                    <div class="flex flex-wrap gap-1 border-b border-slate-200 pt-2 text-xs font-semibold">
+                        <button type="button"
+                                @onclick='() => activeTab = "Overview"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Overview" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Overview &amp; Notice
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Handover"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Handover" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Work Handover (@(activeDetail.WorkHandover?.Items.Count ?? 0))
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Assets"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Assets" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Assets (@activeDetail.AssetClearances.Count)
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Finance"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Finance" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Finance &amp; Settlement (@activeDetail.FinanceItems.Count)
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Security"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Security" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            IT &amp; Access Revocation (@activeDetail.AccessRevocations.Count)
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Clearance"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Clearance" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Checklist Tasks (@activeDetail.ClearanceTasks.Count)
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Review"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Review" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Final HR Execution
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Documents"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Documents" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Documents (@activeDetail.Documents.Count)
+                        </button>
+                        <button type="button"
+                                @onclick='() => activeTab = "Audit"'
+                                class="px-3 py-2 border-b-2 transition-colors @(activeTab == "Audit" ? "border-blue-600 text-blue-600" : "border-transparent text-slate-600 hover:text-slate-900")">
+                            Audit Trail (@activeDetail.Events.Count)
+                        </button>
+                    </div>
+
+                    <!-- TAB 1: OVERVIEW & NOTICE -->
+                    @if (activeTab == "Overview")
+                    {
+                        <div class="flex flex-col gap-4 py-2">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                                    <h3 class="font-bold text-slate-800 text-xs">Separation Classification</h3>
+                                    <div class="text-xs space-y-1 text-slate-700">
+                                        <div><span class="text-slate-400">Category:</span> @activeDetail.ReasonCategory</div>
+                                        <div><span class="text-slate-400">Type Policy:</span> @activeDetail.SeparationTypeName</div>
+                                        <div><span class="text-slate-400">Initiated By:</span> @activeDetail.InitiationSource</div>
+                                        <div><span class="text-slate-400">Date Joined:</span> @activeDetail.DateJoinedSnapshot.ToString("dd-MMM-yyyy")</div>
+                                        <div><span class="text-slate-400">Basic Salary:</span> @(activeDetail.BasicSalarySnapshot?.ToString("N2") ?? "-") MVR</div>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-xl border border-slate-200 bg-slate-50/70 p-3 flex flex-col gap-2">
+                                    <h3 class="font-bold text-slate-800 text-xs">Notice &amp; Departure Dates</h3>
+                                    <div class="text-xs space-y-1 text-slate-700">
+                                        <div><span class="text-slate-400">Notice Tendered:</span> @activeDetail.RequestedNoticeDate.ToString("dd-MMM-yyyy")</div>
+                                        <div><span class="text-slate-400">Contractual Notice:</span> @activeDetail.ContractualNoticeDays days</div>
+                                        <div><span class="text-slate-400">Last Working Date:</span> <strong class="text-slate-900">@activeDetail.LastWorkingDate.ToString("dd-MMM-yyyy")</strong></div>
+                                        <div><span class="text-slate-400">Effective Separation Date:</span> <strong class="text-slate-900">@activeDetail.EffectiveSeparationDate.ToString("dd-MMM-yyyy")</strong></div>
+                                        @if (activeDetail.NoticeShortfallDays > 0)
+                                        {
+                                            <div class="text-rose-700 font-semibold">
+                                                Notice Shortfall: @activeDetail.NoticeShortfallDays days (Penalty: @activeDetail.NoticeShortfallPenaltyAmount.ToString("N2") MVR)
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="rounded-xl border border-slate-200 bg-white p-3.5 flex flex-col gap-2">
+                                <h3 class="font-bold text-slate-800 text-xs">Formal Reason / Justification</h3>
+                                <p class="text-xs text-slate-700 whitespace-pre-wrap">@activeDetail.ReasonDetails</p>
+                            </div>
+
+                            <div class="rounded-xl border border-blue-200 bg-blue-50/40 p-3.5 flex flex-col gap-2">
+                                <h3 class="font-bold text-blue-900 text-xs">Employee Exit Acknowledgement</h3>
+                                <div class="text-xs space-y-1 text-slate-700">
+                                    <div><span class="text-slate-500">Status:</span> <span class="font-semibold text-blue-800">@activeDetail.EmployeeAcknowledgementStatus</span> (@(activeDetail.EmployeeAcknowledgedAtUtc?.ToString("dd-MMM-yyyy HH:mm") ?? "Pending employee signature"))</div>
+                                    <div><span class="text-slate-500">Personal Phone:</span> @(activeDetail.PersonalContactNumber ?? "Not provided")</div>
+                                    <div><span class="text-slate-500">Personal Email:</span> @(activeDetail.PersonalEmail ?? "Not provided")</div>
+                                    <div><span class="text-slate-500">Forwarding Address:</span> @(activeDetail.ForwardingAddress ?? "Not provided")</div>
+                                    @if (!string.IsNullOrWhiteSpace(activeDetail.EmployeeExitComments))
+                                    {
+                                        <div class="mt-2 text-slate-800 italic">"@activeDetail.EmployeeExitComments"</div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 2: WORK HANDOVER -->
+                    @if (activeTab == "Handover")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-slate-800 text-xs">Operational Handover &amp; Reassignments</h3>
+                                <button type="button"
+                                        @onclick="OpenAddHandoverItemModal"
+                                        class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700">
+                                    <span>＋</span> Add Handover Item
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-2.5">Item Type</th>
+                                            <th class="p-2.5">Title / Assignment</th>
+                                            <th class="p-2.5">Recipient</th>
+                                            <th class="p-2.5">Target Date</th>
+                                            <th class="p-2.5">Status</th>
+                                            <th class="p-2.5 text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @if (activeDetail.WorkHandover?.Items.Any() == true)
+                                        {
+                                            @foreach (var item in activeDetail.WorkHandover.Items)
+                                            {
+                                                <tr class="hover:bg-slate-50/50">
+                                                    <td class="p-2.5 font-medium text-slate-800">@item.ItemType</td>
+                                                    <td class="p-2.5">
+                                                        <div class="font-semibold text-slate-900">@item.ItemTitle</div>
+                                                        <div class="text-[11px] text-slate-500">@item.Details</div>
+                                                    </td>
+                                                    <td class="p-2.5 text-slate-700">@item.RecipientName</td>
+                                                    <td class="p-2.5 text-slate-600">@item.TargetCompletionDate.ToString("dd-MMM-yyyy")</td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(item.Status == "Verified" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                                            @item.Status
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5 text-right space-x-1">
+                                                        @if (item.Status != "Verified")
+                                                        {
+                                                            <button type="button"
+                                                                    @onclick="() => VerifyHandoverItemAsync(item.WorkHandoverItemId)"
+                                                                    class="rounded-md border border-emerald-300 bg-white px-2 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-50">
+                                                                ✓ Verify
+                                                            </button>
+                                                        }
+                                                        <button type="button"
+                                                                @onclick="() => DeleteHandoverItemAsync(item.WorkHandoverItemId)"
+                                                                class="rounded-md border border-rose-300 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="p-6 text-center text-slate-500">No handover tasks created yet.</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Supervisor Sign-Off Box -->
+                            <div class="rounded-xl border border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2 mt-2">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="font-bold text-slate-800 text-xs">Supervisor / HOD Sign-Off</h4>
+                                    <span class="rounded-full px-2 py-0.5 text-xs font-semibold @(activeDetail.WorkHandover?.SupervisorStatus == "Approved" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                        @(activeDetail.WorkHandover?.SupervisorStatus ?? "Pending")
+                                    </span>
+                                </div>
+                                <p class="text-xs text-slate-600">
+                                    Reviewing Supervisor: <strong>@(activeDetail.WorkHandover?.SupervisorName ?? "Supervisor")</strong>
+                                    @(activeDetail.WorkHandover?.SupervisorReviewedAtUtc.HasValue == true ? $"· Reviewed {activeDetail.WorkHandover.SupervisorReviewedAtUtc:dd-MMM-yyyy HH:mm}" : "")
+                                </p>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <input type="text"
+                                           @bind="supervisorReviewComment"
+                                           placeholder="Supervisor review remarks or completion feedback..."
+                                           class="w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900" />
+                                    <button type="button"
+                                            @onclick='() => SubmitSupervisorReviewAsync("Approved")'
+                                            class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+                                        Approve
+                                    </button>
+                                    <button type="button"
+                                            @onclick='() => SubmitSupervisorReviewAsync("ChangesRequested")'
+                                            class="rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-50">
+                                        Reject
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 3: ASSET CLEARANCE -->
+                    @if (activeTab == "Assets")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-slate-800 text-xs">Assigned Assets &amp; Hardware Return Verification</h3>
+                                <span class="text-xs text-slate-500">Integrated with Asset Custody Register</span>
+                            </div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-2.5">Asset Code</th>
+                                            <th class="p-2.5">Item Description</th>
+                                            <th class="p-2.5">Disposal / Condition</th>
+                                            <th class="p-2.5">Assessed Damage</th>
+                                            <th class="p-2.5">Status</th>
+                                            <th class="p-2.5 text-right">Inspect</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @if (activeDetail.AssetClearances.Any())
+                                        {
+                                            @foreach (var asset in activeDetail.AssetClearances)
+                                            {
+                                                <tr class="hover:bg-slate-50/50">
+                                                    <td class="p-2.5 font-mono text-xs font-semibold text-blue-700">@asset.AssetCode</td>
+                                                    <td class="p-2.5">
+                                                        <div class="font-semibold text-slate-900">@asset.AssetName</div>
+                                                        <div class="text-[11px] text-slate-500">S/N: @(asset.SerialNumber ?? "N/A")</div>
+                                                    </td>
+                                                    <td class="p-2.5 text-slate-700">@asset.DisposalAction</td>
+                                                    <td class="p-2.5 font-medium @(asset.AssessedDamageCost > 0 ? "text-rose-700" : "text-slate-600")">
+                                                        @(asset.AssessedDamageCost?.ToString("N2") ?? "-") MVR
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(asset.Status == "Cleared" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                                            @asset.Status
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <button type="button"
+                                                                @onclick="() => OpenInspectAssetModal(asset)"
+                                                                class="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
+                                                            Inspect
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="p-6 text-center text-slate-500">No active physical assets in custody for this employee.</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 4: FINANCE & FINAL SETTLEMENT -->
+                    @if (activeTab == "Finance")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <h3 class="font-bold text-slate-800 text-xs">Final Settlement &amp; Payout Statement</h3>
+                                    <p class="text-[11px] text-slate-500">Leave encashment, salary arrears, loan recoveries, notice penalty</p>
+                                </div>
+                                <button type="button"
+                                        @onclick="OpenAddFinanceItemModal"
+                                        class="inline-flex items-center gap-1 rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700">
+                                    <span>＋</span> Add Financial Line
+                                </button>
+                            </div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-2.5">Category</th>
+                                            <th class="p-2.5">Description</th>
+                                            <th class="p-2.5">Type</th>
+                                            <th class="p-2.5 text-right">Amount (MVR)</th>
+                                            <th class="p-2.5">Cleared</th>
+                                            <th class="p-2.5 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @if (activeDetail.FinanceItems.Any())
+                                        {
+                                            @foreach (var fin in activeDetail.FinanceItems)
+                                            {
+                                                <tr class="hover:bg-slate-50/50">
+                                                    <td class="p-2.5 font-medium text-slate-800">@fin.Category</td>
+                                                    <td class="p-2.5 text-slate-900">@fin.Description</td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(fin.IsCredit ? "bg-emerald-100 text-emerald-800" : "bg-rose-100 text-rose-800")">
+                                                            @(fin.IsCredit ? "Payable to Staff" : "Deduction")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5 text-right font-mono font-bold @(fin.IsCredit ? "text-emerald-700" : "text-rose-700")">
+                                                        @fin.Amount.ToString("N2")
+                                                    </td>
+                                                    <td class="p-2.5">
+                                                        <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(fin.IsCleared ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                                            @(fin.IsCleared ? "Cleared" : "Pending")
+                                                        </span>
+                                                    </td>
+                                                    <td class="p-2.5 text-right">
+                                                        <button type="button"
+                                                                @onclick="() => DeleteFinanceItemAsync(fin.SeparationFinanceItemId)"
+                                                                class="rounded-md border border-rose-300 bg-white px-2 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <tr>
+                                                <td colspan="6" class="p-6 text-center text-slate-500">No financial settlement items recorded yet.</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Financial Summary Breakdown -->
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                                <div>
+                                    <div class="text-[11px] text-slate-500">Total Credits (Payable)</div>
+                                    <div class="text-base font-bold text-emerald-700">@activeDetail.TotalPayableAmount.ToString("N2") MVR</div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-slate-500">Total Debits (Deductions)</div>
+                                    <div class="text-base font-bold text-rose-700">@activeDetail.TotalDeductionAmount.ToString("N2") MVR</div>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-slate-500">Net Final Settlement</div>
+                                    <div class="text-base font-bold @(activeDetail.NetSettlementAmount >= 0 ? "text-blue-700" : "text-rose-700")">
+                                        @activeDetail.NetSettlementAmount.ToString("N2") MVR
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 5: SECURITY & IT REVOCATION -->
+                    @if (activeTab == "Security")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-slate-800 text-xs">Application Accounts, eFaas Link &amp; Door Cards</h3>
+                                <span class="text-xs text-slate-500">Physical &amp; Cyber Access Deprovisioning</span>
+                            </div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-200">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-2.5">System / Resource</th>
+                                            <th class="p-2.5">Account / Card ID</th>
+                                            <th class="p-2.5">Action</th>
+                                            <th class="p-2.5">Scheduled Date</th>
+                                            <th class="p-2.5">Status</th>
+                                            <th class="p-2.5 text-right">Revoke</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        @foreach (var rev in activeDetail.AccessRevocations)
+                                        {
+                                            <tr class="hover:bg-slate-50/50">
+                                                <td class="p-2.5">
+                                                    <div class="font-semibold text-slate-900">@rev.SystemName</div>
+                                                    <div class="text-[11px] text-slate-500">@rev.SystemType</div>
+                                                </td>
+                                                <td class="p-2.5 font-mono text-xs text-slate-700">@rev.AccountIdentifier</td>
+                                                <td class="p-2.5 text-slate-700">@rev.RevocationAction</td>
+                                                <td class="p-2.5 text-slate-600">@rev.ScheduledRevocationDate.ToString("dd-MMM-yyyy")</td>
+                                                <td class="p-2.5">
+                                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(rev.Status == "Revoked" || rev.Status == "CardCollected" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                                        @rev.Status
+                                                    </span>
+                                                </td>
+                                                <td class="p-2.5 text-right">
+                                                    @if (rev.Status != "Revoked" && rev.Status != "CardCollected")
+                                                    {
+                                                        <button type="button"
+                                                                @onclick='() => ProcessRevocationAsync(rev.SeparationAccessRevocationId, rev.SystemType == "DoorAccessCard" ? "CardCollected" : "Revoked")'
+                                                                class="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50">
+                                                            Revoke
+                                                        </button>
+                                                    }
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 6: CHECKLIST TASKS -->
+                    @if (activeTab == "Clearance")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <h3 class="font-bold text-slate-800 text-xs">Multi-Domain Departmental Clearance Tasks</h3>
+
+                            <div class="space-y-2">
+                                @foreach (var task in activeDetail.ClearanceTasks)
+                                {
+                                    <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-2 hover:border-slate-300 transition">
+                                        <div class="flex flex-wrap items-center justify-between gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                                                    @task.Domain
+                                                </span>
+                                                <h4 class="font-bold text-slate-900 text-xs">@task.TaskName</h4>
+                                                @if (task.IsMandatory)
+                                                {
+                                                    <span class="text-rose-600 font-bold text-[11px]">* Mandatory</span>
+                                                }
+                                            </div>
+
+                                            <div class="flex items-center gap-2">
+                                                <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(task.Status == "Cleared" ? "bg-emerald-100 text-emerald-800" : task.Status == "Waived" ? "bg-purple-100 text-purple-800" : "bg-amber-100 text-amber-800")">
+                                                    @task.Status
+                                                </span>
+
+                                                @if (task.Status != "Cleared")
+                                                {
+                                                    <button type="button"
+                                                            @onclick='() => ClearTaskAsync(task.ClearanceTaskId, "Cleared")'
+                                                            class="rounded-md bg-emerald-600 px-2 py-1 text-[11px] font-semibold text-white hover:bg-emerald-700">
+                                                        ✓ Clear
+                                                    </button>
+                                                    <button type="button"
+                                                            @onclick='() => ClearTaskAsync(task.ClearanceTaskId, "Waived")'
+                                                            class="rounded-md border border-purple-300 bg-white px-2 py-1 text-[11px] font-semibold text-purple-700 hover:bg-purple-50">
+                                                        Waive
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+
+                                        <p class="text-xs text-slate-600">@task.TaskDescription</p>
+                                        @if (!string.IsNullOrWhiteSpace(task.Remarks))
+                                        {
+                                            <div class="text-[11px] text-slate-500 italic">Notes: @task.Remarks</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(task.WaiverReason))
+                                        {
+                                            <div class="text-[11px] text-purple-700 italic">Waiver Justification: @task.WaiverReason</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 7: FINAL HR REVIEW & EXECUTION -->
+                    @if (activeTab == "Review")
+                    {
+                        <div class="flex flex-col gap-4 py-2">
+                            <div class="rounded-xl border border-slate-200 bg-white p-4 flex flex-col gap-3">
+                                <h3 class="font-bold text-slate-900 text-xs">Exit Interview &amp; HR Administrative Verification</h3>
+
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-700 p-1">Exit Interview Conducted</label>
+                                        <div class="mt-1 flex items-center gap-2">
+                                            <input type="checkbox"
+                                                   @bind="finalReviewInput.ExitInterviewCompleted"
+                                                   class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                                            <span class="text-xs text-slate-700">Completed with Employee</span>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs font-semibold text-slate-700 p-1">Interview Date</label>
+                                        <input type="date"
+                                               @bind="finalReviewInput.ExitInterviewDate"
+                                               class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900" />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 p-1">Exit Interview Notes / Feedback</label>
+                                    <textarea @bind="finalReviewInput.ExitInterviewNotes"
+                                              rows="2"
+                                              placeholder="Summary of reasons, organizational feedback, or departure notes..."
+                                              class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900"></textarea>
+                                </div>
+
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-700 p-1">Final HR Administrative Remarks</label>
+                                    <textarea @bind="finalReviewInput.HrReviewRemarks"
+                                              rows="2"
+                                              placeholder="Official authorization observations and sign-off comments..."
+                                              class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900"></textarea>
+                                </div>
+
+                                <div class="rounded-xl border border-amber-200 bg-amber-50/60 p-3 flex flex-col gap-1.5 text-xs text-amber-900">
+                                    <div class="font-bold flex items-center gap-1.5">
+                                        <span>⚡</span>
+                                        <span>Idempotent Termination Execution Rules:</span>
+                                    </div>
+                                    <ul class="list-disc list-inside space-y-0.5 text-[11px]">
+                                        <li>Updates Job termination date to @activeDetail.EffectiveSeparationDate.ToString("dd-MMM-yyyy").</li>
+                                        <li>Ends active JobPositions and revokes organizational access roles.</li>
+                                        <li>National eFaas citizen identity is preserved without account deletion.</li>
+                                        <li>Automatically creates signed Clearance Certificate &amp; Service Certificate.</li>
+                                    </ul>
+                                </div>
+
+                                <div class="flex items-center justify-end gap-2 pt-2 border-t border-slate-200">
+                                    <button type="button"
+                                            @onclick='() => ExecuteFinalApprovalAsync(false)'
+                                            class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                                        Save Review (Pending Execution)
+                                    </button>
+                                    <button type="button"
+                                            @onclick='() => ExecuteFinalApprovalAsync(true)'
+                                            disabled="@(activeDetail.Status == StaffSeparationStatuses.Terminated)"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-rose-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-rose-700 shadow-xs disabled:opacity-50">
+                                        <span>🔒</span>
+                                        <span>Execute Employment Termination</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 8: DOCUMENTS -->
+                    @if (activeTab == "Documents")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <div class="flex items-center justify-between">
+                                <h3 class="font-bold text-slate-800 text-xs">Official Departure Documents &amp; Certificates</h3>
+                            </div>
+
+                            <div class="space-y-2">
+                                @if (activeDetail.Documents.Any())
+                                {
+                                    @foreach (var doc in activeDetail.Documents)
+                                    {
+                                        <div class="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between hover:border-slate-300 transition">
+                                            <div>
+                                                <div class="font-bold text-slate-900 text-xs">@doc.Title</div>
+                                                <div class="text-[11px] text-slate-500 font-mono">@doc.DocumentNumber · SHA: @doc.Sha256Hash[..12]... · @doc.GeneratedAtUtc.ToString("dd-MMM-yyyy HH:mm")</div>
+                                            </div>
+                                            <button type="button"
+                                                    @onclick="() => OpenDocumentModal(doc)"
+                                                    class="rounded-lg border border-blue-300 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100">
+                                                Print / View
+                                            </button>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="rounded-xl border border-dashed border-slate-300 p-6 text-center text-xs text-slate-500">
+                                        No documents generated yet. Use the header buttons to generate official certificates.
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+
+                    <!-- TAB 9: AUDIT TRAIL -->
+                    @if (activeTab == "Audit")
+                    {
+                        <div class="flex flex-col gap-3 py-2">
+                            <h3 class="font-bold text-slate-800 text-xs">Immutable Audit Log</h3>
+                            <div class="space-y-2">
+                                @foreach (var ev in activeDetail.Events)
+                                {
+                                    <div class="rounded-xl border border-slate-200 bg-white p-3 flex flex-col gap-1">
+                                        <div class="flex items-center justify-between">
+                                            <span class="font-semibold text-slate-900 text-xs">@ev.EventTitle</span>
+                                            <span class="text-[11px] text-slate-400">@ev.OccurredAtUtc.ToString("dd-MMM-yyyy HH:mm") UTC</span>
+                                        </div>
+                                        <div class="text-[11px] text-slate-500">Actor: <strong>@ev.ActorName</strong> · Event: @ev.EventType</div>
+                                        @if (!string.IsNullOrWhiteSpace(ev.DetailsJson))
+                                        {
+                                            <div class="text-[10px] font-mono text-slate-400 bg-slate-50 p-1.5 rounded overflow-x-auto">@ev.DetailsJson</div>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="rounded-2xl border border-dashed border-slate-300 bg-white p-12 text-center text-slate-500">
+                    <p class="text-sm font-semibold text-slate-700">Select an offboarding record from the register</p>
+                    <p class="text-xs text-slate-400 mt-1">Or click 'Initiate Separation' above to begin a new employee exit workflow.</p>
+                </div>
+            }
+        </div>
+
+        <!-- RIGHT PANEL: Separation Register, Filters & History (5fr / 5 cols) -->
+        <div class="lg:col-span-5 flex flex-col gap-3">
+            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                <div class="flex items-center justify-between">
+                    <h3 class="font-bold text-slate-900 text-xs">Separation Register</h3>
+                    <span class="text-[11px] font-semibold text-slate-400">@(dashboard?.Separations.Count ?? 0) Listed</span>
+                </div>
+
+                <!-- Search Input -->
+                <div class="relative">
+                    <input type="text"
+                           @bind="searchTerm"
+                           @bind:event="oninput"
+                           @bind:after="OnSearchChangedAsync"
+                           placeholder="Search by staff name, ID, position..."
+                           class="w-full rounded-lg border border-slate-300 bg-white p-1.5 pl-8 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                    <span class="absolute left-2.5 top-2 text-slate-400 text-xs">🔍</span>
+                </div>
+
+                <!-- Separation Register List -->
+                <div class="flex flex-col gap-2 max-h-[700px] overflow-y-auto pr-1">
+                    @if (dashboard?.Separations.Any() == true)
+                    {
+                        @foreach (var item in dashboard.Separations)
+                        {
+                            var isSelected = activeDetail?.StaffSeparationId == item.StaffSeparationId;
+                            <div @onclick="() => SelectSeparationAsync(item.StaffSeparationId)"
+                                 class="rounded-xl border p-3 text-xs transition-all cursor-pointer flex flex-col gap-1.5 @(isSelected ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs")">
+                                <div class="flex items-center justify-between">
+                                    <span class="font-bold text-slate-900">@item.FullName</span>
+                                    <span class="rounded-full px-2 py-0.5 text-[10px] font-semibold @GetStatusBadgeClass(item.Status)">
+                                        @item.Status
+                                    </span>
+                                </div>
+
+                                <div class="text-[11px] text-slate-500">
+                                    @item.PositionTitle · @item.DepartmentName
+                                </div>
+
+                                <div class="flex items-center justify-between text-[11px] text-slate-600 mt-1">
+                                    <span>LWD: @item.LastWorkingDate.ToString("dd-MMM-yyyy")</span>
+                                    <span>Effective: @item.EffectiveSeparationDate.ToString("dd-MMM-yyyy")</span>
+                                </div>
+
+                                <div class="flex items-center justify-between pt-1 border-t border-slate-100 text-[10px] text-slate-400">
+                                    <span>Type: @item.SeparationTypeName</span>
+                                    <span>Clearance: @item.ClearedTasksCount / @item.TotalTasksCount</span>
+                                </div>
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-200 p-8 text-center text-xs text-slate-400">
+                            No separations found matching the selected filters.
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- INITIATE SEPARATION MODAL -->
+@if (showInitiateModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-xl rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Initiate Staff Separation</h3>
+                <button type="button" @onclick="() => showInitiateModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-3 text-xs max-h-[500px] overflow-y-auto pr-1">
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Select Employee</label>
+                    <select @bind="initiateInput.IndividualId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="0">-- Select Staff --</option>
+                        @if (formLookups?.ActiveStaff is not null)
+                        {
+                            @foreach (var staff in formLookups.ActiveStaff)
+                            {
+                                <option value="@staff.Id">@staff.Text (@staff.SecondaryText)</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Separation Category / Type</label>
+                    <select @bind="initiateInput.SeparationTypeId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="0">-- Select Type --</option>
+                        @if (formLookups?.SeparationTypes is not null)
+                        {
+                            @foreach (var type in formLookups.SeparationTypes)
+                            {
+                                <option value="@type.SeparationTypeId">@type.Name (Default Notice: @type.DefaultNoticeDays days)</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Notice Tendered Date</label>
+                        <input type="date" @bind="initiateInput.RequestedNoticeDate" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-slate-700 p-1">Last Working Day</label>
+                        <input type="date" @bind="initiateInput.LastWorkingDate" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Effective Separation Date</label>
+                    <input type="date" @bind="initiateInput.EffectiveSeparationDate" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div class="rounded-xl border border-slate-200 bg-slate-50 p-3 flex flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" @bind="initiateInput.NoticeWaiverRequested" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                        <span class="font-semibold text-slate-800 text-xs">Request Notice Period Waiver</span>
+                    </div>
+                    @if (initiateInput.NoticeWaiverRequested)
+                    {
+                        <div>
+                            <label class="block font-medium text-slate-600 p-1">Approved Waived Days</label>
+                            <input type="number" @bind="initiateInput.NoticeWaiverDays" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900" />
+                        </div>
+                    }
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Reason &amp; Detailed Explanation</label>
+                    <textarea @bind="initiateInput.ReasonDetails" rows="3" placeholder="Provide formal separation rationale..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showInitiateModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" @onclick="SubmitInitiateSeparationAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Submit Separation</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD HANDOVER ITEM MODAL -->
+@if (showAddHandoverModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Add Handover Task / Assignment</h3>
+                <button type="button" @onclick="() => showAddHandoverModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Item Type</label>
+                    <select @bind="handoverInput.ItemType" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="ProjectAssignment">Project Assignment</option>
+                        <option value="OperationalDuty">Operational Duty</option>
+                        <option value="FileOrDocument">Files &amp; Document Archive</option>
+                        <option value="OpenWorkflowTask">Open Workflow Task Delegation</option>
+                        <option value="SystemAdminRole">System Admin Role Reassignment</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Task Title</label>
+                    <input type="text" @bind="handoverInput.ItemTitle" placeholder="e.g. Migration pipeline handover..." class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Recipient Colleague</label>
+                    <select @bind="handoverInput.RecipientIndividualId" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="0">-- Select Colleague --</option>
+                        @if (formLookups?.ActiveStaff is not null)
+                        {
+                            @foreach (var staff in formLookups.ActiveStaff)
+                            {
+                                <option value="@staff.Id">@staff.Text</option>
+                            }
+                        }
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Target Completion Date</label>
+                    <input type="date" @bind="handoverInput.TargetCompletionDate" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Handover Instructions / Notes</label>
+                    <textarea @bind="handoverInput.Details" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showAddHandoverModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" @onclick="SubmitSaveHandoverItemAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Save Item</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- INSPECT ASSET MODAL -->
+@if (showInspectAssetModal && inspectingAsset is not null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Inspect Asset: @inspectingAsset.AssetCode</h3>
+                <button type="button" @onclick="() => showInspectAssetModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-3 text-xs">
+                <div>
+                    <span class="font-semibold text-slate-700">Item:</span> @inspectingAsset.AssetName
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Disposal / Condition Outcome</label>
+                    <select @bind="inspectAssetInput.DisposalAction" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="ReturnedInGoodOrder">Returned in Good Order</option>
+                        <option value="ReturnedDamaged">Returned Damaged</option>
+                        <option value="ReportedLost">Reported Lost</option>
+                        <option value="KeptBuyout">Kept by Employee (Buyout)</option>
+                        <option value="Waived">Waived by Management</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Assessed Damage / Replacement Cost (MVR)</label>
+                    <input type="number" @bind="inspectAssetInput.AssessedDamageCost" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" @bind="inspectAssetInput.DeductionFromFinalSettlement" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                    <span class="font-semibold text-slate-700 text-xs">Debit amount from employee final settlement</span>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Inspection Notes / Serial Check</label>
+                    <textarea @bind="inspectAssetInput.Remarks" rows="2" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900"></textarea>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showInspectAssetModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" @onclick="SubmitAssetInspectionAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Save Inspection</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- ADD FINANCE ITEM MODAL -->
+@if (showAddFinanceModal)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-4">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <h3 class="text-base font-bold text-slate-900">Add Settlement Financial Line</h3>
+                <button type="button" @onclick="() => showAddFinanceModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <div class="flex flex-col gap-3 text-xs">
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Category</label>
+                    <select @bind="financeInput.Category" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900">
+                        <option value="SalaryArrears">Salary Arrears</option>
+                        <option value="UnusedLeaveEncashment">Unused Leave Encashment</option>
+                        <option value="Gratuity">Gratuity</option>
+                        <option value="Severance">Severance Pay</option>
+                        <option value="LoanDeduction">Loan Recovery</option>
+                        <option value="AdvanceRecovery">Salary Advance Recovery</option>
+                        <option value="NoticePenaltyDeduction">Notice Shortfall Penalty</option>
+                        <option value="OtherAdjustment">Other Adjustment</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Description</label>
+                    <input type="text" @bind="financeInput.Description" placeholder="e.g. Encashment of 12 unutilized annual leave days" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-1.5">
+                        <input type="radio" name="finType" checked="@financeInput.IsCredit" @onchange="() => financeInput.IsCredit = true" />
+                        <span class="font-semibold text-emerald-800">Payable to Employee (Credit)</span>
+                    </label>
+                    <label class="flex items-center gap-1.5">
+                        <input type="radio" name="finType" checked="@(!financeInput.IsCredit)" @onchange="() => financeInput.IsCredit = false" />
+                        <span class="font-semibold text-rose-800">Deduction (Debit)</span>
+                    </label>
+                </div>
+
+                <div>
+                    <label class="block font-semibold text-slate-700 p-1">Amount (MVR)</label>
+                    <input type="number" step="0.01" @bind="financeInput.Amount" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs text-slate-900" />
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" @bind="financeInput.IsCleared" class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
+                    <span class="font-semibold text-slate-700 text-xs">Mark Cleared &amp; Settled in Payroll</span>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 border-t border-slate-200 pt-3">
+                <button type="button" @onclick="() => showAddFinanceModal = false" class="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
+                <button type="button" @onclick="SubmitFinanceItemAsync" class="rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">Save Line Item</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- PRINTABLE DOCUMENT VIEW MODAL -->
+@if (showDocModal && viewingDoc is not null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4 backdrop-blur-xs">
+        <div class="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-xl flex flex-col gap-4 max-h-[90vh]">
+            <div class="flex items-center justify-between border-b border-slate-200 pb-3">
+                <div>
+                    <h3 class="text-base font-bold text-slate-900">@viewingDoc.Title</h3>
+                    <p class="text-xs text-slate-400 font-mono">Ref: @viewingDoc.DocumentNumber</p>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" @onclick="PrintDocument" class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                        🖨 Print / Export PDF
+                    </button>
+                    <button type="button" @onclick="() => showDocModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+                </div>
+            </div>
+
+            <div class="overflow-y-auto p-4 border border-slate-200 rounded-xl bg-slate-50/50">
+                @if (!string.IsNullOrWhiteSpace(viewingDoc.Base64Data))
+                {
+                    var decoded = System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(viewingDoc.Base64Data));
+                    <div>@((MarkupString)decoded)</div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isFullWidth;
+    private string selectedStatusFilter = "All";
+    private string searchTerm = "";
+    private string activeTab = "Overview";
+
+    private StaffSeparationDashboardData? dashboard;
+    private StaffSeparationDetailDto? activeDetail;
+    private StaffSeparationFormLookupsDto? formLookups;
+
+    // Modals & sub-forms
+    private bool showInitiateModal;
+    private StaffSeparationInitiateInput initiateInput = new();
+
+    private bool showAddHandoverModal;
+    private StaffSeparationHandoverItemInput handoverInput = new();
+    private string supervisorReviewComment = "";
+
+    private bool showInspectAssetModal;
+    private AssetClearanceDto? inspectingAsset;
+    private StaffSeparationAssetInspectionInput inspectAssetInput = new();
+
+    private bool showAddFinanceModal;
+    private StaffSeparationFinanceItemInput financeInput = new();
+
+    private StaffSeparationFinalReviewInput finalReviewInput = new();
+
+    private bool showDocModal;
+    private SeparationDocumentDto? viewingDoc;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDashboardDataAsync();
+        formLookups = await Separations.LoadFormLookupsAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var saved = await JS.InvokeAsync<string?>("localStorage.getItem", "hrm.staff-separation.full-width");
+            if (bool.TryParse(saved, out var val))
+            {
+                isFullWidth = val;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        await JS.InvokeVoidAsync("localStorage.setItem", "hrm.staff-separation.full-width", isFullWidth.ToString().ToLower());
+    }
+
+    private async Task LoadDashboardDataAsync()
+    {
+        dashboard = await Separations.LoadDashboardAsync(null, selectedStatusFilter, searchTerm);
+        if (activeDetail == null && dashboard?.Separations.Any() == true)
+        {
+            await SelectSeparationAsync(dashboard.Separations.First().StaffSeparationId);
+        }
+    }
+
+    private async Task FilterByStatusAsync(string status)
+    {
+        selectedStatusFilter = status;
+        await LoadDashboardDataAsync();
+    }
+
+    private async Task OnSearchChangedAsync()
+    {
+        await LoadDashboardDataAsync();
+    }
+
+    private async Task SelectSeparationAsync(int id)
+    {
+        try
+        {
+            activeDetail = await Separations.LoadDetailAsync(id);
+            finalReviewInput = new StaffSeparationFinalReviewInput
+            {
+                StaffSeparationId = activeDetail.StaffSeparationId,
+                ExitInterviewCompleted = activeDetail.ExitInterviewCompleted,
+                ExitInterviewDate = activeDetail.ExitInterviewDate,
+                ExitInterviewNotes = activeDetail.ExitInterviewNotes,
+                HrReviewRemarks = activeDetail.HrReviewRemarks
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to load separation detail {Id}", id);
+            Toasts.Error("Failed to load separation details.");
+        }
+    }
+
+    private void OpenNewSeparationModal()
+    {
+        initiateInput = new StaffSeparationInitiateInput
+        {
+            RequestedNoticeDate = DateTime.Today,
+            LastWorkingDate = DateTime.Today.AddDays(30),
+            EffectiveSeparationDate = DateTime.Today.AddDays(30)
+        };
+        showInitiateModal = true;
+    }
+
+    private async Task SubmitInitiateSeparationAsync()
+    {
+        if (initiateInput.IndividualId <= 0 || initiateInput.SeparationTypeId <= 0)
+        {
+            Toasts.Error("Please select both an employee and a separation category.");
+            return;
+        }
+
+        var result = await Separations.InitiateSeparationAsync(initiateInput);
+        if (result.Success)
+        {
+            Toasts.Success(result.Message);
+            showInitiateModal = false;
+            await LoadDashboardDataAsync();
+        }
+        else
+        {
+            Toasts.Error(result.Message);
+        }
+    }
+
+    private void OpenAddHandoverItemModal()
+    {
+        if (activeDetail == null) return;
+        handoverInput = new StaffSeparationHandoverItemInput
+        {
+            StaffSeparationId = activeDetail.StaffSeparationId,
+            TargetCompletionDate = activeDetail.LastWorkingDate
+        };
+        showAddHandoverModal = true;
+    }
+
+    private async Task SubmitSaveHandoverItemAsync()
+    {
+        if (string.IsNullOrWhiteSpace(handoverInput.ItemTitle) || handoverInput.RecipientIndividualId <= 0)
+        {
+            Toasts.Error("Please provide an item title and select a recipient colleague.");
+            return;
+        }
+
+        var res = await Separations.SaveHandoverItemAsync(handoverInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showAddHandoverModal = false;
+            await RefreshActiveDetailAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private async Task VerifyHandoverItemAsync(int itemId)
+    {
+        var existing = activeDetail?.WorkHandover?.Items.FirstOrDefault(i => i.WorkHandoverItemId == itemId);
+        var input = new StaffSeparationHandoverItemInput
+        {
+            WorkHandoverItemId = itemId,
+            StaffSeparationId = activeDetail!.StaffSeparationId,
+            ItemType = existing?.ItemType ?? "ProjectAssignment",
+            ItemTitle = existing?.ItemTitle ?? "",
+            RecipientIndividualId = existing?.RecipientIndividualId ?? 0,
+            TargetCompletionDate = existing?.TargetCompletionDate ?? DateTime.UtcNow.Date,
+            Status = StaffSeparationWorkHandoverItemStatuses.Verified
+        };
+        var res = await Separations.SaveHandoverItemAsync(input);
+        if (res.Success)
+        {
+            Toasts.Success("Handover item verified.");
+            await RefreshActiveDetailAsync();
+        }
+        else
+        {
+            Toasts.Error(res.Message);
+        }
+    }
+
+    private async Task DeleteHandoverItemAsync(int itemId)
+    {
+        var res = await Separations.DeleteHandoverItemAsync(itemId);
+        if (res.Success) await RefreshActiveDetailAsync();
+    }
+
+    private async Task SubmitSupervisorReviewAsync(string decision)
+    {
+        if (activeDetail == null) return;
+        var res = await Separations.ReviewHandoverAsync(new StaffSeparationHandoverReviewInput
+        {
+            StaffSeparationId = activeDetail.StaffSeparationId,
+            IsSupervisor = true,
+            Decision = decision,
+            Comments = supervisorReviewComment
+        });
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await RefreshActiveDetailAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private void OpenInspectAssetModal(AssetClearanceDto asset)
+    {
+        inspectingAsset = asset;
+        inspectAssetInput = new StaffSeparationAssetInspectionInput
+        {
+            SeparationAssetClearanceId = asset.SeparationAssetClearanceId,
+            DisposalAction = asset.DisposalAction,
+            AssessedDamageCost = asset.AssessedDamageCost,
+            DeductionFromFinalSettlement = asset.DeductionFromFinalSettlement,
+            Status = "Cleared",
+            Remarks = asset.Remarks
+        };
+        showInspectAssetModal = true;
+    }
+
+    private async Task SubmitAssetInspectionAsync()
+    {
+        var res = await Separations.InspectAssetClearanceAsync(inspectAssetInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showInspectAssetModal = false;
+            await RefreshActiveDetailAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private void OpenAddFinanceItemModal()
+    {
+        if (activeDetail == null) return;
+        financeInput = new StaffSeparationFinanceItemInput
+        {
+            StaffSeparationId = activeDetail.StaffSeparationId,
+            IsCredit = true,
+            Amount = 0
+        };
+        showAddFinanceModal = true;
+    }
+
+    private async Task SubmitFinanceItemAsync()
+    {
+        if (string.IsNullOrWhiteSpace(financeInput.Description) || financeInput.Amount <= 0)
+        {
+            Toasts.Error("Please provide a description and positive amount.");
+            return;
+        }
+
+        var res = await Separations.SaveFinanceItemAsync(financeInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            showAddFinanceModal = false;
+            await RefreshActiveDetailAsync();
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private async Task DeleteFinanceItemAsync(int finId)
+    {
+        var res = await Separations.DeleteFinanceItemAsync(finId);
+        if (res.Success) await RefreshActiveDetailAsync();
+    }
+
+    private async Task ProcessRevocationAsync(int revId, string status)
+    {
+        var res = await Separations.ProcessAccessRevocationAsync(new StaffSeparationAccessRevocationActionInput
+        {
+            SeparationAccessRevocationId = revId,
+            Status = status
+        });
+        if (res.Success) await RefreshActiveDetailAsync();
+    }
+
+    private async Task ClearTaskAsync(int taskId, string status)
+    {
+        var res = await Separations.ProcessClearanceTaskAsync(new StaffSeparationClearanceTaskActionInput
+        {
+            ClearanceTaskId = taskId,
+            Status = status
+        });
+        if (res.Success) await RefreshActiveDetailAsync();
+    }
+
+    private async Task ExecuteFinalApprovalAsync(bool executeNow)
+    {
+        if (activeDetail == null) return;
+        finalReviewInput.ExecuteTerminationNow = executeNow;
+
+        var res = await Separations.FinalReviewAndExecuteAsync(finalReviewInput);
+        if (res.Success)
+        {
+            Toasts.Success(res.Message);
+            await LoadDashboardDataAsync();
+            await SelectSeparationAsync(activeDetail.StaffSeparationId);
+        }
+        else Toasts.Error(res.Message);
+    }
+
+    private async Task GenerateDocAsync(string variant)
+    {
+        if (activeDetail == null) return;
+        try
+        {
+            var doc = await Separations.GenerateDocumentAsync(activeDetail.StaffSeparationId, variant);
+            OpenDocumentModal(doc);
+            await RefreshActiveDetailAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to generate document {Variant}", variant);
+            Toasts.Error("Failed to generate document.");
+        }
+    }
+
+    private void OpenDocumentModal(SeparationDocumentDto doc)
+    {
+        viewingDoc = doc;
+        showDocModal = true;
+    }
+
+    private async Task PrintDocument()
+    {
+        await JS.InvokeVoidAsync("window.print");
+    }
+
+    private async Task RefreshActiveDetailAsync()
+    {
+        if (activeDetail != null)
+        {
+            await SelectSeparationAsync(activeDetail.StaffSeparationId);
+        }
+    }
+
+    private static string GetStatusBadgeClass(string status) => status switch
+    {
+        StaffSeparationStatuses.Terminated => "bg-emerald-100 text-emerald-800",
+        StaffSeparationStatuses.Approved => "bg-blue-100 text-blue-800",
+        StaffSeparationStatuses.ClearanceInProgress => "bg-blue-50 text-blue-700",
+        StaffSeparationStatuses.HandoverInProgress or StaffSeparationStatuses.Submitted => "bg-amber-100 text-amber-800",
+        StaffSeparationStatuses.Cancelled or StaffSeparationStatuses.Rejected => "bg-rose-100 text-rose-800",
+        _ => "bg-slate-100 text-slate-700"
+    };
+}

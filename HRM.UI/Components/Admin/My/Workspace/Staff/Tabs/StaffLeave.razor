@@ -1,0 +1,169 @@
+@inject HRM.Application.Contracts.Pages.ILeaveApplications Leaves
+@inject NavigationManager Navigation
+@inject ILogger<StaffLeave> Logger
+
+<section class="w-full p-2 flex flex-col gap-2" aria-label="Leave">
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div>
+            <h3 class="text-base font-bold text-slate-800">@selected</h3>
+            <p class="text-xs text-slate-500 mt-0.5">@Actions.First(a => a.Title == selected).Description</p>
+        </div>
+        <div class="flex flex-wrap gap-2" role="tablist" aria-label="Leave actions">
+            @foreach (var action in Actions)
+            {
+                <button type="button" role="tab" aria-selected="@(selected == action.Title)"
+                        class="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-all @(selected == action.Title ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-2xs" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-800")"
+                        @onclick="() => selected = action.Title">@action.Title</button>
+            }
+        </div>
+    </div>
+    <div role="tabpanel" class="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs">
+        @if (selected == "New Leave Application")
+        {
+            @if (!StaffId.HasValue)
+            {
+                <p class="my-3 text-sm text-slate-500">Select the staff member you are applying for.</p>
+                <HRM.Components.Admin.My.Workspace.WorkspaceSearch StaffOnly="true" OnSelected="SelectStaff" />
+            }
+            else if (loading)
+            {
+                <p role="status" class="mt-3 text-sm text-slate-500">Loading staff leave information…</p>
+            }
+            else if (error != null)
+            {
+                <p role="alert" class="mt-3 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">@error</p>
+                <button type="button" class="inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-1.5 text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 shadow-2xs transition-colors mt-2" @onclick="LoadAsync">Retry</button>
+            }
+            else if (jobs.Count == 0)
+            {
+                <p role="status" class="mt-3 text-sm text-slate-500">No active employment record is available for this staff member in the current organisation.</p>
+            }
+            else
+            {
+                @if (jobs.Count > 1)
+                {
+                    <div class="mb-3 flex items-center gap-2 text-xs">
+                        <span class="font-medium text-slate-600">Employment:</span>
+                        <select class="rounded-lg border border-slate-200 p-1 text-xs" @bind="jobId" @bind:after="ChooseJob" disabled="@state.IsSubmitting">
+                            @foreach (var job in jobs) { <option value="@job.JobId">@job.Department · @job.JobType · Job @job.JobId</option> }
+                        </select>
+                    </div>
+                }
+                <HRM.Components.Pages.Online.Leave.NewLeave @key="jobId" LeaveState="state" HideHeader="true" />
+            }
+        }
+        else if (selected == "Assign Leave Type")
+        {
+            @if (!StaffId.HasValue)
+            {
+                <p class="my-3 text-sm text-slate-500">Select the staff member you are assigning leave types for.</p>
+                <HRM.Components.Admin.My.Workspace.WorkspaceSearch StaffOnly="true" OnSelected="SelectStaff" />
+            }
+            else
+            {
+                <LeaveAssignmentManager @key="StaffId.Value" StaffId="StaffId.Value" />
+            }
+        }
+        else
+        {
+            <p role="status" class="mt-4 text-sm text-slate-500">This administration form is not available yet.</p>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter] public int? StaffId { get; set; }
+    [Parameter] public string? Action { get; set; }
+    private List<HRM.DTOs.Leave.LeaveApplicantJob> jobs = [];
+    private HRM.Services.State.LeaveApplicationState state = new();
+    private int jobId;
+    private int? loadedStaffId;
+    private bool loading;
+    private string? error;
+
+    protected override void OnInitialized()
+    {
+        ResolveActionFromUri();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        ResolveActionFromUri();
+        if (StaffId == loadedStaffId) return;
+        loadedStaffId = StaffId;
+        await LoadAsync();
+    }
+
+    private void ResolveActionFromUri()
+    {
+        if (!string.IsNullOrWhiteSpace(Action))
+        {
+            var matchedParam = Actions.FirstOrDefault(a => string.Equals(a.Title, Action, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrEmpty(matchedParam.Title))
+            {
+                selected = matchedParam.Title;
+                return;
+            }
+        }
+
+        try
+        {
+            var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+            var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
+            if (query.TryGetValue("action", out var actionVal))
+            {
+                var match = Actions.FirstOrDefault(a =>
+                    string.Equals(a.Title, actionVal, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Title.Replace(" ", "-"), actionVal, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(a.Title.Replace(" ", ""), actionVal, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrEmpty(match.Title))
+                {
+                    selected = match.Title;
+                }
+            }
+        }
+        catch
+        {
+            // Ignore in test or non-standard URI contexts
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        jobs = []; error = null;
+        if (!StaffId.HasValue) return;
+        loading = true;
+        try
+        {
+            jobs = await Leaves.GetLeaveApplicantJobsAsync(StaffId.Value);
+            jobId = jobs.FirstOrDefault()?.JobId ?? 0;
+            ChooseJob();
+        }
+        catch (UnauthorizedAccessException ex) { error = ex.Message; }
+        catch (Exception ex) { error = "Staff leave information could not be loaded. Please try again."; Logger.LogError(ex, "Loading delegated leave applicant {StaffId}", StaffId); }
+        finally { loading = false; }
+    }
+    private void ChooseJob() => state = new HRM.Services.State.LeaveApplicationState
+    {
+        ApplicantJobId = jobId,
+        Model = new HRM.DTOs.Leave.LeaveApplicationDto { JobId = jobId, FromDate = DateTime.UtcNow.AddHours(5).Date, Duration = 1 }
+    };
+    private void SelectStaff(HRM.DTOs.WorkspaceSearchResult staff)
+    {
+        var targetUrl = $"/admin/my/workspace/staff/{staff.Id}/leave";
+        if (selected == "Assign Leave Type")
+        {
+            targetUrl += "?action=assign-leave-type";
+        }
+        Navigation.NavigateTo(targetUrl);
+    }
+    private string selected = "New Leave Application";
+    private static readonly (string Title, string Description)[] Actions =
+    [
+        ("New Leave Application", "Apply for standard annual, casual, or special leave."),
+        ("Assign Leave Type", "Assign and manage leave entitlements for this staff member."),
+        ("Sick Leave Lodge", "Submit medical certificates and lodge sick leave."),
+        ("Family Leave Lodge", "Apply for maternity, paternity, or family responsibility leave.")
+    ];
+
+}

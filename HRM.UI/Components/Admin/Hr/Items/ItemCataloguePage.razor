@@ -1,0 +1,397 @@
+@using HRM.DTOs
+@using HRM.DTOs.Items
+@using HRM.DTOs.Staff
+@inject HRM.Services.Contracts.ItemCatalogueServiceContracts.IOperations Catalogue
+@inject HRM.Services.Interfaces.IStaffService Staff
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<ItemCataloguePage> Logger
+
+<section class="space-y-4">
+    <header class="flex flex-wrap items-start justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-semibold text-slate-800">Item catalogue</h2>
+            <p class="text-sm text-slate-500">@(data?.OrganisationName ?? "Loading organisation…")</p>
+            <p class="text-xs text-slate-500">Assets are tracked by inventory number; consumables use stock on hand.</p>
+        </div>
+        <div class="flex flex-wrap gap-2">
+            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="LoadAsync">Refresh</button>
+            @if (data?.CanEdit == true)
+            {
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="NewCategory">New category</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || !data.Categories.Any())" @onclick="NewItem">New item</button>
+            }
+        </div>
+    </header>
+
+    @if (error != null)
+    {
+        <p role="alert" class="rounded border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">@error</p>
+    }
+    @if (confirmMessage != null)
+    {
+        <div role="alert" class="flex flex-wrap items-center justify-between gap-2 rounded border border-amber-200 bg-amber-50 p-3 text-sm">
+            <span>@confirmMessage</span>
+            <span class="flex gap-2">
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="RunConfirmed">Confirm</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="CancelConfirm">Cancel</button>
+            </span>
+        </div>
+    }
+
+    @if (categoryForm != null)
+    {
+        <fieldset disabled="@busy" class="space-y-3 rounded-xl border border-slate-200 p-3">
+            <legend class="px-1 text-sm font-semibold">@(categoryForm.ItemCategoryId == 0 ? "New category" : "Edit category")</legend>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block text-sm">Name<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="200" @bind="categoryForm.Name" /></label>
+                <label class="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" @bind="categoryForm.IsActive" /> Active</label>
+            </div>
+            <label class="block text-sm">Description<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="1000" @bind="categoryForm.Description"></textarea></label>
+            <div class="flex gap-2">
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || string.IsNullOrWhiteSpace(categoryForm.Name))" @onclick="SaveCategory">Save category</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => categoryForm = null">Cancel</button>
+            </div>
+        </fieldset>
+    }
+
+    @if (itemForm != null)
+    {
+        <fieldset disabled="@busy" class="space-y-3 rounded-xl border border-slate-200 p-3">
+            <legend class="px-1 text-sm font-semibold">@(itemForm.ItemId == 0 ? "New item" : "Edit item")</legend>
+            <div class="grid gap-3 sm:grid-cols-2">
+                <label class="block text-sm">Category
+                    <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="itemForm.ItemCategoryId">
+                        @foreach (var category in data?.Categories ?? [])
+                        {
+                            <option value="@category.ItemCategoryId">@category.Name</option>
+                        }
+                    </select>
+                </label>
+                <label class="block text-sm">Name<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="200" @bind="itemForm.Name" /></label>
+                <label class="block text-sm">Kind
+                    <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="itemForm.Kind">
+                        <option value="Consumable">Consumable</option>
+                        <option value="Asset">Asset (inventory tracked)</option>
+                    </select>
+                </label>
+                <label class="block text-sm">Unit of measure<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="50" @bind="itemForm.UnitOfMeasure" /></label>
+                <label class="block text-sm">Brand<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="120" @bind="itemForm.Brand" /></label>
+                <label class="block text-sm">Model<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="120" @bind="itemForm.Model" /></label>
+                @if (itemForm.Kind == "Asset")
+                {
+                    <p class="self-end pb-2 text-xs text-slate-500">Stock is derived from the inventory units registered for this asset.</p>
+                }
+                else
+                {
+                    <label class="block text-sm">Stock on hand<input type="number" min="0" class="mt-1 w-full rounded border bg-transparent p-2" @bind="itemForm.QuantityOnHand" /></label>
+                    <label class="block text-sm">Reorder level<input type="number" min="0" class="mt-1 w-full rounded border bg-transparent p-2" @bind="itemForm.ReorderLevel" /></label>
+                }
+                <label class="flex items-end gap-2 pb-2 text-sm"><input type="checkbox" @bind="itemForm.IsActive" /> Active</label>
+            </div>
+            <label class="block text-sm">Description<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="1000" @bind="itemForm.Description"></textarea></label>
+            <div class="flex gap-2">
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || string.IsNullOrWhiteSpace(itemForm.Name) || itemForm.ItemCategoryId == 0)" @onclick="SaveItem">Save item</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => itemForm = null">Cancel</button>
+            </div>
+        </fieldset>
+    }
+
+    <div class="grid gap-4 lg:grid-cols-3">
+        <div class="rounded-xl border border-slate-200 p-3">
+            <h3 class="mb-2 text-sm font-semibold">Categories</h3>
+            @if (data == null)
+            {
+                <p class="text-sm text-slate-500">Loading…</p>
+            }
+            else if (!data.Categories.Any())
+            {
+                <p class="text-sm text-slate-500">No categories yet.</p>
+            }
+            else
+            {
+                <ul class="space-y-2">
+                    @foreach (var category in data.Categories)
+                    {
+                        <li class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-sm" @key="category.ItemCategoryId">
+                            <span>
+                                <strong class="font-medium">@category.Name</strong>
+                                <span class="ml-1 text-xs text-slate-500">@category.ItemCount item(s)</span>
+                                @if (!category.IsActive) { <span class="ml-1 rounded bg-slate-100 px-1 text-xs">Inactive</span> }
+                            </span>
+                            @if (data.CanEdit)
+                            {
+                                <span class="flex gap-1">
+                                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => EditCategory(category)">Edit</button>
+                                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => ConfirmDeleteCategory(category)">Delete</button>
+                                </span>
+                            }
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+
+        <div class="rounded-xl border border-slate-200 p-3 lg:col-span-2">
+            <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h3 class="text-sm font-semibold">Items</h3>
+                <input type="search" class="rounded border bg-transparent p-2 text-sm" placeholder="Search items…" @bind="search" @bind:event="oninput" />
+            </div>
+            @if (data != null)
+            {
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm">
+                        <thead><tr><th class="px-2 py-2">Item</th><th class="px-2 py-2">Category</th><th class="px-2 py-2">Kind</th><th class="px-2 py-2">Stock</th><th class="px-2 py-2">Actions</th></tr></thead>
+                        <tbody>
+                            @foreach (var item in FilteredItems)
+                            {
+                                <tr class="border-t border-slate-100" @key="item.ItemId">
+                                    <td class="px-2 py-2">
+                                        <strong class="font-medium">@item.Name</strong>
+                                        @if (!item.IsActive) { <span class="ml-1 rounded bg-slate-100 px-1 text-xs">Inactive</span> }
+                                        @if (!string.IsNullOrWhiteSpace(item.Description)) { <div class="text-xs text-slate-500">@item.Description</div> }
+                                    </td>
+                                    <td class="px-2 py-2">@item.CategoryName</td>
+                                    <td class="px-2 py-2">@item.Kind</td>
+                                    <td class="px-2 py-2">
+                                        @if (item.Kind == "Asset")
+                                        {
+                                            <span>@item.AvailableUnitCount of @item.UnitCount available</span>
+                                        }
+                                        else
+                                        {
+                                            <span>@item.QuantityOnHand @item.UnitOfMeasure</span>
+                                            @if (item.QuantityOnHand <= item.ReorderLevel) { <span class="ml-1 rounded bg-amber-100 px-1 text-xs text-amber-800">Reorder</span> }
+                                        }
+                                    </td>
+                                    <td class="px-2 py-2">
+                                        <div class="flex flex-wrap gap-1">
+                                            @if (item.Kind == "Asset")
+                                            {
+                                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => OpenUnits(item)">Units</button>
+                                            }
+                                            @if (data.CanEdit)
+                                            {
+                                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => EditItem(item)">Edit</button>
+                                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => ConfirmDeleteItem(item)">Delete</button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                    @if (!FilteredItems.Any()) { <p class="p-2 text-sm text-slate-500">No matching items.</p> }
+                </div>
+            }
+            else
+            {
+                <p class="text-sm text-slate-500">Loading…</p>
+            }
+        </div>
+    </div>
+
+    @if (selectedItem != null)
+    {
+        <div class="space-y-3 rounded-xl border border-slate-200 p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                    <h3 class="text-sm font-semibold">Inventory units · @selectedItem.Name</h3>
+                    <p class="text-xs text-slate-500">Each asset unit carries its own inventory number, condition and holder.</p>
+                </div>
+                <div class="flex flex-wrap gap-2">
+                    @if (data?.CanEdit == true)
+                    {
+                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="NewUnit">New unit</button>
+                    }
+                    <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="CloseUnits">Close</button>
+                </div>
+            </div>
+            @if (unitError != null) { <p role="alert" class="text-sm text-rose-700">@unitError</p> }
+
+            @if (unitForm != null)
+            {
+                <fieldset disabled="@busy" class="space-y-3 rounded border border-slate-200 p-3">
+                    <legend class="px-1 text-sm font-semibold">@(unitForm.ItemUnitId == 0 ? "Register unit" : "Edit unit")</legend>
+                    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <label class="block text-sm">Inventory number<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="100" @bind="unitForm.InventoryNumber" /></label>
+                        <label class="block text-sm">Serial number<input class="mt-1 w-full rounded border bg-transparent p-2" maxlength="100" @bind="unitForm.SerialNumber" /></label>
+                        <label class="block text-sm">Status
+                            <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="unitForm.Status">
+                                <option value="Available">Available</option>
+                                <option value="Issued">Issued</option>
+                                <option value="Returned">Returned</option>
+                                <option value="Damaged">Damaged</option>
+                                <option value="Lost">Lost</option>
+                                <option value="Retired">Retired</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">Condition
+                            <select class="mt-1 w-full rounded border bg-transparent p-2" @bind="unitForm.Condition">
+                                <option value="Good">Good</option>
+                                <option value="Fair">Fair</option>
+                                <option value="Damaged">Damaged</option>
+                                <option value="Unusable">Unusable</option>
+                            </select>
+                        </label>
+                        <label class="block text-sm">Issued date<InputDate class="mt-1 w-full rounded border bg-transparent p-2" @bind-Value="unitForm.IssuedDate" /></label>
+                        <label class="block text-sm">Collected date<InputDate class="mt-1 w-full rounded border bg-transparent p-2" @bind-Value="unitForm.CollectedDate" /></label>
+                    </div>
+                    @if (unitForm.Status != "Available")
+                    {
+                        <div class="rounded border border-slate-200 p-2">
+                            <p class="text-sm">Holder: <strong>@(staffSelectionName ?? "Not selected")</strong></p>
+                            <div class="mt-1 flex flex-wrap gap-2">
+                                <input type="search" class="rounded border bg-transparent p-2 text-sm" placeholder="Search staff by name…" @bind="staffSearch" @bind:event="oninput" @onkeydown="OnStaffKeyDown" />
+                                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="SearchStaff">Search</button>
+                            </div>
+                            @if (staffResults.Count > 0)
+                            {
+                                <ul class="mt-2 max-h-40 overflow-y-auto text-sm">
+                                    @foreach (var person in staffResults)
+                                    {
+                                        <li class="border-t border-slate-100 py-1">
+                                            <button class="text-left text-blue-700 hover:underline" @onclick="() => PickStaff(person)">
+                                                @person.FullName <span class="text-xs text-slate-500">@person.Organisation</span>
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
+                    <label class="block text-sm">Notes<textarea class="mt-1 w-full rounded border bg-transparent p-2" rows="2" maxlength="1000" @bind="unitForm.Notes"></textarea></label>
+                    <div class="flex gap-2">
+                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(busy || string.IsNullOrWhiteSpace(unitForm.InventoryNumber))" @onclick="SaveUnit">Save unit</button>
+                        <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => unitForm = null">Cancel</button>
+                    </div>
+                </fieldset>
+            }
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead><tr><th class="px-2 py-2">Inventory</th><th class="px-2 py-2">Serial</th><th class="px-2 py-2">Status</th><th class="px-2 py-2">Condition</th><th class="px-2 py-2">Holder</th><th class="px-2 py-2">Issued</th><th class="px-2 py-2">Collected</th><th class="px-2 py-2">Actions</th></tr></thead>
+                    <tbody>
+                        @foreach (var unit in units)
+                        {
+                            <tr class="border-t border-slate-100" @key="unit.ItemUnitId">
+                                <td class="px-2 py-2 font-medium">@unit.InventoryNumber</td>
+                                <td class="px-2 py-2">@unit.SerialNumber</td>
+                                <td class="px-2 py-2">@unit.Status</td>
+                                <td class="px-2 py-2">@unit.Condition</td>
+                                <td class="px-2 py-2">@unit.IssuedToName</td>
+                                <td class="px-2 py-2">@unit.IssuedDate?.ToString("dd MMM yyyy")</td>
+                                <td class="px-2 py-2">@unit.CollectedDate?.ToString("dd MMM yyyy")</td>
+                                <td class="px-2 py-2">
+                                    @if (data?.CanEdit == true)
+                                    {
+                                        <div class="flex flex-wrap gap-1">
+                                            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => EditUnit(unit)">Edit</button>
+                                            <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@busy" @onclick="() => ConfirmDeleteUnit(unit)">Delete</button>
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+                @if (units.Count == 0) { <p class="p-2 text-sm text-slate-500">No inventory units registered.</p> }
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private ItemCatalogueData? data;
+    private List<ItemUnitDto> units = [];
+    private ItemDto? selectedItem;
+    private ItemCategoryInput? categoryForm;
+    private ItemInput? itemForm;
+    private ItemUnitInput? unitForm;
+    private string search = "";
+    private string staffSearch = "";
+    private string? staffSelectionName;
+    private List<IndividualResultDto> staffResults = [];
+    private string? error;
+    private string? unitError;
+    private string? confirmMessage;
+    private Func<Task>? confirmAction;
+    private bool busy;
+
+    private IEnumerable<ItemDto> FilteredItems => (data?.Items ?? []).Where(i =>
+        string.IsNullOrWhiteSpace(search) ||
+        i.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+        i.CategoryName.Contains(search, StringComparison.OrdinalIgnoreCase));
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        busy = true; error = null;
+        try { data = await Catalogue.LoadAsync(); }
+        catch (Exception ex) { data = null; Fail(ex, "The item catalogue could not be loaded."); }
+        finally { busy = false; }
+    }
+
+    private void NewCategory() { if (data == null) return; categoryForm = new() { OrganisationId = data.OrganisationId, IsActive = true }; itemForm = null; }
+    private void EditCategory(ItemCategoryDto category) { if (data == null) return; categoryForm = new() { ItemCategoryId = category.ItemCategoryId, OrganisationId = data.OrganisationId, Name = category.Name, Description = category.Description, IsActive = category.IsActive, Version = category.Version }; itemForm = null; }
+    private void ConfirmDeleteCategory(ItemCategoryDto category) { if (data == null) return; var org = data.OrganisationId; Confirm($"Delete category “{category.Name}”?", () => Act(() => Catalogue.SaveCategoryAsync(new() { ItemCategoryId = category.ItemCategoryId, OrganisationId = org, Version = category.Version }, true), "Category deleted.")); }
+
+    private void NewItem() { if (data == null) return; itemForm = new() { OrganisationId = data.OrganisationId, ItemCategoryId = data.Categories.FirstOrDefault()?.ItemCategoryId ?? 0, Kind = "Consumable", UnitOfMeasure = "Each", IsActive = true }; categoryForm = null; }
+    private void EditItem(ItemDto item) { if (data == null) return; itemForm = new() { ItemId = item.ItemId, OrganisationId = data.OrganisationId, ItemCategoryId = item.ItemCategoryId, Name = item.Name, Description = item.Description, Kind = item.Kind, UnitOfMeasure = item.UnitOfMeasure, Brand = item.Brand, Model = item.Model, QuantityOnHand = item.QuantityOnHand, ReorderLevel = item.ReorderLevel, IsActive = item.IsActive, Version = item.Version }; categoryForm = null; }
+    private void ConfirmDeleteItem(ItemDto item) { if (data == null) return; var org = data.OrganisationId; Confirm($"Delete item “{item.Name}”?", () => Act(() => Catalogue.SaveItemAsync(new() { ItemId = item.ItemId, OrganisationId = org, Version = item.Version }, true), "Item deleted.")); }
+
+    private async Task OpenUnits(ItemDto item)
+    {
+        selectedItem = item; unitForm = null; unitError = null; busy = true;
+        try { units = await Catalogue.GetItemUnitsAsync(item.ItemId); }
+        catch (Exception ex) { units = []; unitError = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Inventory units could not be loaded."; Logger.LogError(ex, "Loading item units"); }
+        finally { busy = false; }
+    }
+    private void CloseUnits() { selectedItem = null; units = []; unitForm = null; unitError = null; staffResults = []; }
+    private void NewUnit() { if (data == null || selectedItem == null) return; unitForm = new() { OrganisationId = data.OrganisationId, ItemId = selectedItem.ItemId, Status = "Available", Condition = "Good" }; staffSelectionName = null; staffResults = []; unitError = null; }
+    private void EditUnit(ItemUnitDto unit) { if (data == null || selectedItem == null) return; unitForm = new() { ItemUnitId = unit.ItemUnitId, OrganisationId = data.OrganisationId, ItemId = selectedItem.ItemId, InventoryNumber = unit.InventoryNumber, SerialNumber = unit.SerialNumber, Status = unit.Status, Condition = unit.Condition, IssuedToIndividualId = unit.IssuedToIndividualId, IssuedDate = unit.IssuedDate, CollectedDate = unit.CollectedDate, Notes = unit.Notes, Version = unit.Version }; staffSelectionName = unit.IssuedToName; staffResults = []; unitError = null; }
+    private void ConfirmDeleteUnit(ItemUnitDto unit) { if (data == null || selectedItem == null) return; var org = data.OrganisationId; var itemId = selectedItem.ItemId; Confirm($"Delete inventory unit “{unit.InventoryNumber}”?", () => ActUnit(() => Catalogue.SaveUnitAsync(new() { ItemUnitId = unit.ItemUnitId, OrganisationId = org, ItemId = itemId, Version = unit.Version }, true), "Inventory unit deleted.")); }
+
+    private Task SaveCategory() => categoryForm == null ? Task.CompletedTask : Act(() => Catalogue.SaveCategoryAsync(categoryForm), "Category saved.");
+    private Task SaveItem() => itemForm == null ? Task.CompletedTask : Act(() => Catalogue.SaveItemAsync(itemForm), "Item saved.");
+    private Task SaveUnit() => unitForm == null ? Task.CompletedTask : ActUnit(() => Catalogue.SaveUnitAsync(unitForm), "Inventory unit saved.");
+
+    private async Task Act(Func<Task<ServiceResult>> action, string message)
+    {
+        if (busy) return; busy = true; error = null; var saved = false;
+        try { var result = await action(); saved = result.Success; if (saved) { categoryForm = null; itemForm = null; Toasts.Success(result.Message.Length > 0 ? result.Message : message); } else error = result.Message; }
+        catch (Exception ex) { Fail(ex, "The catalogue could not be saved."); }
+        finally { busy = false; }
+        if (saved) await LoadAsync();
+    }
+
+    private async Task ActUnit(Func<Task<ServiceResult>> action, string message)
+    {
+        if (busy || selectedItem == null) return; busy = true; unitError = null; var saved = false;
+        try { var result = await action(); saved = result.Success; if (saved) { unitForm = null; Toasts.Success(result.Message.Length > 0 ? result.Message : message); } else unitError = result.Message; }
+        catch (Exception ex) { unitError = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "The inventory unit could not be saved."; Logger.LogError(ex, "Saving inventory unit"); }
+        finally { busy = false; }
+        if (saved) await OpenUnits(selectedItem);
+    }
+
+    private async Task SearchStaff()
+    {
+        if (data == null || string.IsNullOrWhiteSpace(staffSearch)) { staffResults = []; return; }
+        busy = true; unitError = null;
+        try { staffResults = (await Staff.SearchStaffAsync(staffSearch.Trim(), "name", data.OrganisationId)).Take(10).ToList(); }
+        catch (Exception ex) { staffResults = []; unitError = "Staff could not be searched."; Logger.LogError(ex, "Searching staff for item unit"); }
+        finally { busy = false; }
+    }
+    private void OnStaffKeyDown(KeyboardEventArgs args) { if (args.Key == "Enter") _ = SearchStaff(); }
+    private void PickStaff(IndividualResultDto person) { if (unitForm == null) return; unitForm.IssuedToIndividualId = person.BusinessEntityId; staffSelectionName = person.FullName; staffResults = []; }
+
+    private void Confirm(string message, Func<Task> action) { confirmMessage = message; confirmAction = action; }
+    private void CancelConfirm() { confirmMessage = null; confirmAction = null; }
+    private async Task RunConfirmed() { var action = confirmAction; CancelConfirm(); if (action != null) await action(); }
+
+    private void Fail(Exception ex, string message)
+    {
+        Logger.LogError(ex, "Item catalogue");
+        error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : message;
+    }
+}

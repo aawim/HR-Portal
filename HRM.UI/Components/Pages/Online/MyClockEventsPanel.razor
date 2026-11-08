@@ -1,0 +1,651 @@
+@page "/online/attendance/my-clock-events"
+@using HRM.Components.Pages.Online.Dashboard
+@using HRM.Components.Shared
+@using HRM.DTOs.Attendance
+@using HRM.Enum
+@using HRM.Services.Attendance.AttendancePlan
+@using HRM.Services.Interfaces
+@inject IUserAccessService UserAccess
+@inject IAttendanceService AttendanceService
+@inject IAttendancePlanService PlanService
+@inject HRM.Services.Contracts.AttendanceLogServiceContracts.IOperations AttendanceLogService
+@inject IIndividual IndividualService
+@inject ILogger<MyClockEventsPanel> Logger
+
+@rendermode RenderMode.InteractiveServer
+
+<div class="space-y-4">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+        <div>
+            <h2 class="text-lg font-bold text-slate-800">My Clock Events</h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+                Select a date from the right-hand datatable to inspect all scheduled segments and physical clock events on the left.
+            </p>
+        </div>
+        <button type="button" class="portal-action-btn" disabled="@isLoading" @onclick="SearchPeriodAsync">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+            <span>Refresh</span>
+        </button>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(errorMessage))
+    {
+        <p role="alert" class="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">@errorMessage</p>
+    }
+
+    <!-- TWO-COLUMN GRID LIKE /online/ot: Left = Segments & Clock Events Detail, Right = Daily Check-In/Out DataTable -->
+    <div class="grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <!-- LEFT PANEL (Detail): All Segments and Clock Events for Selected Date -->
+        <div class="min-w-0 space-y-4">
+            @if (selectedRow == null)
+            {
+                <section class="detail-panel-card text-center py-12 text-slate-500">
+                    <p class="font-semibold text-slate-700 mb-1">No Date Selected</p>
+                    <p class="text-xs text-slate-500">Click any date row in the right panel to view its work plan segments and recorded clock events.</p>
+                </section>
+            }
+            else
+            {
+                <!-- Selected Date Overview Card -->
+                <section class="detail-panel-card space-y-3" aria-label="Selected date summary">
+                    <div class="flex flex-wrap items-start justify-between gap-2 pb-2.5 border-b border-slate-100">
+                        <div>
+                            <span class="text-xs font-semibold uppercase tracking-wide text-blue-600">Selected Work Date</span>
+                            <h3 class="text-base font-bold text-slate-800 mt-0.5">
+                                @selectedRow.Date.ToString("dd MMM yyyy") · @selectedRow.DayName
+                            </h3>
+                        </div>
+                        <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold @GetDayStatusClass(selectedRow)">
+                            @selectedRow.Status
+                        </span>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 bg-slate-50 rounded-lg p-3 border border-slate-100 text-xs">
+                        <div>
+                            <span class="block text-slate-500 font-medium">Check In</span>
+                            <strong class="text-sm @(selectedRow.CheckIn == "--:--" ? "text-slate-400" : "text-emerald-700")">@selectedRow.CheckIn</strong>
+                        </div>
+                        <div>
+                            <span class="block text-slate-500 font-medium">Check Out</span>
+                            <strong class="text-sm @(selectedRow.CheckOut == "--:--" ? "text-slate-400" : "text-rose-700")">@selectedRow.CheckOut</strong>
+                        </div>
+                        <div>
+                            <span class="block text-slate-500 font-medium">Segments</span>
+                            <strong class="text-sm text-slate-800">@(selectedPlan?.Segments.Count ?? 0)</strong>
+                        </div>
+                        <div>
+                            <span class="block text-slate-500 font-medium">Clock Events</span>
+                            <strong class="text-sm text-slate-800">@selectedDayLogs.Count</strong>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- All Scheduled Segments Card -->
+                <section class="detail-panel-card space-y-3" aria-label="Work plan segments">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">Scheduled Work Plan &amp; Segments</h3>
+                            <p class="text-xs text-slate-500">Official working schedule and additional duty segments for @selectedRow.Date.ToString("dd MMM yyyy")</p>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700">
+                            @(selectedPlan?.Segments.Count ?? 0) segment(s)
+                        </span>
+                    </div>
+
+                    @if (isLoadingDetail)
+                    {
+                        <p class="text-xs text-slate-500 py-4" role="status">Loading segments for @selectedRow.Date.ToString("dd MMM yyyy")…</p>
+                    }
+                    else if (selectedPlan == null || (selectedPlan.Assignments.Count == 0 && selectedPlan.Segments.Count == 0))
+                    {
+                        <p class="text-xs text-slate-500 py-3">@selectedDayScheduleMessage</p>
+                    }
+                    else
+                    {
+                        @if (!string.IsNullOrWhiteSpace(selectedPlan.TemporaryWorkingHoursMessage))
+                        {
+                            <p class="rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-900">@selectedPlan.TemporaryWorkingHoursMessage</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(selectedPlan.ScheduleAmendmentMessage))
+                        {
+                            <p class="rounded-lg border border-blue-200 bg-blue-50 p-2.5 text-xs text-blue-900">@selectedPlan.ScheduleAmendmentMessage</p>
+                        }
+
+                        <div class="space-y-3">
+                            @foreach (var assignment in selectedPlan.Assignments.Where(x => x.IsValid).OrderBy(x => x.SchedulePurpose == "Official" ? 0 : 1).ThenBy(x => x.StartDateTime))
+                            {
+                                <div class="rounded-lg border border-slate-200 p-3 space-y-2">
+                                    <div class="flex flex-wrap items-center justify-between gap-2">
+                                        <h4 class="text-xs font-bold text-slate-800">@assignment.Name</h4>
+                                        <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @(assignment.SchedulePurpose == "Official" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-blue-50 text-blue-700 border border-blue-200")">
+                                            @(assignment.SchedulePurpose == "Official" ? "Primary · Official" : $"Additional · {assignment.SchedulePurpose}") (@assignment.StartDateTime.ToString("HH:mm")–@assignment.EndDateTime.ToString("HH:mm"))
+                                        </span>
+                                    </div>
+                                    <ol class="divide-y divide-slate-100">
+                                        @foreach (var seg in EventsForAssignment(assignment))
+                                        {
+                                            <AttendanceEventRow Timestamp="seg.StartDateTime"
+                                                                Event="@FormatSegmentName(seg.Name)"
+                                                                Condition="@FormatSegmentCondition(seg)"
+                                                                Tone="@(IsCheckBoundary(seg.Name) && seg.IsMandatory && seg.RequiresAttendance ? "info" : "muted")" />
+                                        }
+                                    </ol>
+                                </div>
+                            }
+
+                            @if (!selectedPlan.Assignments.Any(x => x.IsValid) && selectedPlan.Segments.Count > 0)
+                            {
+                                <ol class="divide-y divide-slate-100 rounded-lg border border-slate-200 p-3">
+                                    @foreach (var seg in selectedPlan.Segments.OrderBy(x => x.StartDateTime).ThenBy(x => x.SequenceNumber))
+                                    {
+                                        <AttendanceEventRow Timestamp="seg.StartDateTime"
+                                                            Event="@FormatSegmentName(seg.Name)"
+                                                            Condition="@FormatSegmentCondition(seg)" />
+                                    }
+                                </ol>
+                            }
+                        </div>
+                    }
+                </section>
+
+                <!-- All Recorded Clock Events Card -->
+                <section class="detail-panel-card space-y-3" aria-label="Recorded clock events">
+                    <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                        <div>
+                            <h3 class="text-sm font-bold text-slate-800">Recorded Clock Events</h3>
+                            <p class="text-xs text-slate-500">All physical punches and resolved schedule associations for @selectedRow.Date.ToString("dd MMM yyyy")</p>
+                        </div>
+                        <span class="px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-blue-700">
+                            @selectedDayLogs.Count event(s)
+                        </span>
+                    </div>
+
+                    @if (isLoadingDetail)
+                    {
+                        <p class="text-xs text-slate-500 py-4" role="status">Loading clock events…</p>
+                    }
+                    else if (selectedDayLogs.Count == 0)
+                    {
+                        <p class="text-xs text-slate-500 py-3">No physical clock events recorded on @selectedRow.Date.ToString("dd MMM yyyy").</p>
+                    }
+                    else
+                    {
+                        <div class="divide-y divide-slate-100 space-y-2">
+                            @foreach (var group in selectedDayLogs
+                                .GroupBy(x => new { Purpose = x.SchedulePurpose ?? "Unassigned", x.WorkAssignmentId, x.ScheduleName })
+                                .OrderBy(g => g.Key.Purpose == "Official" ? 0 : g.Key.Purpose == "Duty" ? 1 : 2)
+                                .ThenBy(g => g.Min(x => x.ScheduledStart ?? x.LogDateTime)))
+                            {
+                                <div class="pt-2 first:pt-0">
+                                    <div class="flex items-center justify-between gap-2 mb-1">
+                                        <h4 class="text-xs font-bold text-slate-700">
+                                            @(group.Key.ScheduleName ?? (group.Key.Purpose == "Unassigned" ? "Unmatched / Raw Events" : group.Key.Purpose))
+                                        </h4>
+                                        <span class="text-[11px] font-medium text-slate-400">@group.Key.Purpose</span>
+                                    </div>
+                                    <ol class="divide-y divide-slate-100">
+                                        @foreach (var log in group.OrderBy(x => x.LogDateTime))
+                                        {
+                                            <AttendanceEventRow Timestamp="log.LogDateTime"
+                                                                Event="@ClockEventName(log)"
+                                                                Condition="@ClockCondition(log)"
+                                                                Tone="@ClockTone(log)"
+                                                                Badge="@(log.IsSharedAcrossSchedules ? $"Shared #{log.AttendanceLogId}" : null)"
+                                                                SharedSummary="@(log.IsSharedAcrossSchedules ? log.SharedScheduleSummary : null)"
+                                                                Description="@(log.MatchReason ?? log.ResolutionMessage)" />
+                                        }
+                                    </ol>
+                                </div>
+                            }
+                        </div>
+                    }
+                </section>
+            }
+        </div>
+
+        <!-- RIGHT PANEL (List): Date Range Search + Paginated DataTable (Date, Day, Check In, Check Out) -->
+        <aside class="min-w-0 space-y-3" aria-label="My clock events daily list">
+            <section class="datatable-panel-card">
+                <!-- Date Range Search & Filter Header (Same style as /online/ot) -->
+                <div class="p-3.5 border-b border-slate-200 bg-slate-50/70 space-y-3">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <h3 class="text-sm font-bold text-slate-800">Daily Attendance &amp; Clock Summary</h3>
+                        <span class="text-xs font-semibold text-slate-500">
+                            @fromDate.ToString("dd MMM yyyy") – @toDate.ToString("dd MMM yyyy") (@FilteredRows.Count days)
+                        </span>
+                    </div>
+
+                    <div class="grid gap-2.5 sm:grid-cols-3">
+                        <label class="text-xs font-semibold text-slate-600">
+                            From date
+                            <input type="date" @bind="fromDate" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                        </label>
+                        <label class="text-xs font-semibold text-slate-600">
+                            To date
+                            <input type="date" @bind="toDate" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                        </label>
+                        <label class="text-xs font-semibold text-slate-600">
+                            Search day / status
+                            <input type="search" value="@searchText" @oninput="OnSearchChanged" placeholder="e.g. Monday, Present…" class="mt-1 block w-full h-9 rounded-md border border-slate-200 bg-white px-2.5 text-xs sm:text-sm text-slate-700" />
+                        </label>
+                    </div>
+
+                    <div class="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" class="portal-action-btn portal-action-btn--primary portal-action-btn--compact" disabled="@isLoading" @onclick="SearchPeriodAsync">
+                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                <span>Search</span>
+                            </button>
+                            <button type="button" class="portal-action-btn portal-action-btn--compact" disabled="@isLoading" @onclick="ResetToDefaultSalaryPeriodAsync">
+                                Reset (15th – 16th)
+                            </button>
+                        </div>
+
+                        <label class="flex items-center gap-1.5 text-xs text-slate-600">
+                            <span>Rows:</span>
+                            <select value="@pageSize" @onchange="OnPageSizeChanged" class="h-8 rounded-md border border-slate-200 bg-white px-2 text-xs">
+                                <option value="10">10</option>
+                                <option value="16">16</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- DataTable: Date, Day, Check In, Check Out -->
+                <div class="overflow-x-auto" aria-busy="@isLoading">
+                    <table class="min-w-full divide-y divide-slate-200 text-sm text-left">
+                        <thead class="bg-slate-50 text-xs font-semibold uppercase text-slate-500">
+                            <tr>
+                                <th scope="col" class="px-4 py-3">Date</th>
+                                <th scope="col" class="px-4 py-3">Day</th>
+                                <th scope="col" class="px-4 py-3">Check In</th>
+                                <th scope="col" class="px-4 py-3">Check Out</th>
+                                <th scope="col" class="px-4 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 bg-white">
+                            @if (isLoading)
+                            {
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-slate-500 text-sm">Loading clock events for the selected period…</td>
+                                </tr>
+                            }
+                            else if (FilteredRows.Count == 0)
+                            {
+                                <tr>
+                                    <td colspan="5" class="px-4 py-8 text-center text-slate-500 text-sm">No dates match the selected range or filter.</td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var row in PagedRows)
+                                {
+                                    var isSelected = selectedRow?.Date.Date == row.Date.Date;
+                                    <tr @key="row.Date"
+                                        @onclick="() => SelectDayAsync(row)"
+                                        class="datatable-row @(isSelected ? "datatable-row--selected" : "")">
+                                        <td class="whitespace-nowrap px-4 py-3 font-semibold text-slate-800">
+                                            @row.Date.ToString("dd MMM yyyy")
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-slate-600">
+                                            <div class="flex items-center gap-2">
+                                                <span>@row.DayName</span>
+                                                <span class="px-2 py-0.5 rounded-full text-[10px] font-semibold @GetDayStatusClass(row)">
+                                                    @row.Status
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 font-semibold @(row.CheckIn == "--:--" ? "text-slate-300" : "text-emerald-600")">
+                                            @row.CheckIn
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 font-semibold @(row.CheckOut == "--:--" ? "text-slate-300" : "text-rose-600")">
+                                            @row.CheckOut
+                                        </td>
+                                        <td class="whitespace-nowrap px-4 py-3 text-right" @onclick:stopPropagation="true">
+                                            <button type="button"
+                                                    class="portal-action-btn portal-action-btn--compact @(isSelected ? "portal-action-btn--primary" : "")"
+                                                    @onclick="() => SelectDayAsync(row)">
+                                                View
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination Footer -->
+                <div class="datatable-footer">
+                    <span>
+                        Showing @(FilteredRows.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredRows.Count) of @FilteredRows.Count day(s)
+                    </span>
+                    <div class="flex items-center gap-1.5">
+                        <button type="button"
+                                class="portal-action-btn portal-action-btn--compact"
+                                disabled="@(currentPage <= 1)"
+                                @onclick="PrevPage">
+                            Previous
+                        </button>
+                        <span class="px-2 font-semibold text-slate-700">Page @currentPage of @TotalPages</span>
+                        <button type="button"
+                                class="portal-action-btn portal-action-btn--compact"
+                                disabled="@(currentPage >= TotalPages)"
+                                @onclick="NextPage">
+                            Next
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </aside>
+    </div>
+</div>
+
+@code {
+    private DateTime fromDate;
+    private DateTime toDate;
+    private string searchText = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+    private bool isLoading;
+    private bool isLoadingDetail;
+    private string? errorMessage;
+
+    private int currentIndividualId;
+    private int currentJobId;
+    private int currentOrgId;
+
+    private List<ClockEventDayRow> allRows = [];
+    private ClockEventDayRow? selectedRow;
+    private AttendanceWorkPlanDto? selectedPlan;
+    private List<AttendanceRawLogDto> selectedDayLogs = [];
+    private string selectedDayScheduleMessage = "No active schedule found for this date.";
+
+    private List<ClockEventDayRow> FilteredRows =>
+        allRows.Where(r =>
+            string.IsNullOrWhiteSpace(searchText) ||
+            r.Date.ToString("dd MMM yyyy").Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            r.DayName.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            r.Status.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            r.CheckIn.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+            r.CheckOut.Contains(searchText, StringComparison.OrdinalIgnoreCase))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredRows.Count / (double)pageSize));
+
+    private IEnumerable<ClockEventDayRow> PagedRows =>
+        FilteredRows.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetDefaultSalaryPeriod();
+        await SearchPeriodAsync();
+    }
+
+    private void SetDefaultSalaryPeriod()
+    {
+        // Default: 15th of current/previous month to 16th of next month
+        var today = DateTime.UtcNow.AddHours(5).Date;
+        fromDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        toDate = fromDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task ResetToDefaultSalaryPeriodAsync()
+    {
+        SetDefaultSalaryPeriod();
+        searchText = "";
+        currentPage = 1;
+        await SearchPeriodAsync();
+    }
+
+    private async Task SearchPeriodAsync()
+    {
+        if (isLoading) return;
+        if (fromDate.Date > toDate.Date)
+        {
+            errorMessage = "From date must be on or before To date.";
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+        try
+        {
+            var context = await UserAccess.RequireContextAsync();
+            currentIndividualId = context.IndividualId > 0 ? context.IndividualId : await IndividualService.GetIndividualID();
+            currentJobId = context.ActiveJob?.JobId ?? 0;
+            currentOrgId = context.ActiveJob?.OrganisationId ?? 0;
+
+            var overviewDays = await AttendanceService.GetStaffAttendanceRangeAsync(currentIndividualId, fromDate.Date, toDate.Date);
+            var rawLogs = await AttendanceLogService.GetAttendanceLogsAsync(currentIndividualId, fromDate.Date, toDate.Date.AddDays(1));
+
+            var rows = new List<ClockEventDayRow>();
+            var today = DateTime.UtcNow.AddHours(5).Date;
+
+            for (var day = fromDate.Date; day <= toDate.Date; day = day.AddDays(1))
+            {
+                var dayLogs = rawLogs.Where(l => l.Date.Date == day.Date).OrderBy(l => l.Date).ToList();
+                var overview = overviewDays.FirstOrDefault(d => d.Date.Date == day.Date);
+
+                var checkInLog = dayLogs.FirstOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 1 && !string.Equals(r.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase) && r.LogicalEventType != "OfficialBreakIn") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 1))
+                    ?? dayLogs.FirstOrDefault();
+
+                var checkOutLog = dayLogs.LastOrDefault(l =>
+                    l.AttendanceLogResolutions.Any(r => r.IsValid && r.AttendanceClockTypeId == 2 && !string.Equals(r.SchedulePurpose, "Duty", StringComparison.OrdinalIgnoreCase) && r.LogicalEventType != "OfficialBreakOut") ||
+                    (!l.AttendanceLogResolutions.Any(r => r.IsValid) && l.InOutModeId == 2 && l.AttendanceLogId != checkInLog?.AttendanceLogId));
+
+                string checkIn = overview?.FirstCheckIn?.ToString("HH:mm")
+                    ?? (checkInLog != null ? checkInLog.Date.ToString("HH:mm") : "--:--");
+                string checkOut = overview?.LastCheckOut?.ToString("HH:mm")
+                    ?? (checkOutLog != null ? checkOutLog.Date.ToString("HH:mm") : "--:--");
+
+                string status = overview != null
+                    ? (overview.IsOnLeave ? "Leave" : HRM.Helpers.AttendancePresentation.Status(overview))
+                    : dayLogs.Count > 0 ? "Present" : (day > today ? "Upcoming" : "No Events");
+
+                rows.Add(new ClockEventDayRow
+                {
+                    Date = day,
+                    DayName = day.ToString("dddd"),
+                    CheckIn = checkIn,
+                    CheckOut = checkOut,
+                    Status = status,
+                    IsPresent = overview?.IsPresent ?? dayLogs.Count > 0,
+                    IsLate = overview is { IsPresent: true, IsLate: true }
+                });
+            }
+
+            allRows = rows.OrderByDescending(r => r.Date).ToList();
+            currentPage = 1;
+
+            var preferred = allRows.FirstOrDefault(r => r.Date.Date == today)
+                            ?? allRows.FirstOrDefault(r => r.CheckIn != "--:--" || r.CheckOut != "--:--")
+                            ?? allRows.FirstOrDefault();
+
+            if (preferred != null)
+            {
+                await SelectDayAsync(preferred);
+            }
+            else
+            {
+                selectedRow = null;
+                selectedPlan = null;
+                selectedDayLogs = [];
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not load My Clock Events period {From} to {To}.", fromDate, toDate);
+            errorMessage = "Clock events could not be loaded. Please try again.";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SelectDayAsync(ClockEventDayRow row)
+    {
+        selectedRow = row;
+        selectedPlan = null;
+        selectedDayLogs = [];
+        selectedDayScheduleMessage = "No active schedule found for this date.";
+
+        if (currentIndividualId <= 0)
+            return;
+
+        isLoadingDetail = true;
+        try
+        {
+            if (currentJobId > 0 && currentOrgId > 0)
+            {
+                selectedPlan = await PlanService.GetOrGenerateAsync(
+                    currentIndividualId,
+                    currentJobId,
+                    currentOrgId,
+                    row.Date);
+            }
+
+            if (currentJobId > 0)
+            {
+                var logs = await AttendanceService.GetLogsAsync(currentIndividualId, currentJobId, row.Date);
+                selectedDayLogs = logs
+                    .Where(l => l.LogDateTime.Date == row.Date.Date)
+                    .OrderBy(l => l.LogDateTime)
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not load detailed segments/logs for {Date}.", row.Date);
+        }
+        finally
+        {
+            isLoadingDetail = false;
+        }
+    }
+
+    private void OnSearchChanged(ChangeEventArgs e)
+    {
+        searchText = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+            currentPage = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    private IEnumerable<AttendanceWorkSegmentDto> EventsForAssignment(AttendanceWorkAssignmentDto assignment)
+    {
+        if (selectedPlan == null) return [];
+        var matching = selectedPlan.Segments.Where(s => s.WorkAssignmentId == assignment.WorkAssignmentId).ToList();
+        if (matching.Count == 0)
+        {
+            matching = selectedPlan.Segments
+                .Where(s => !s.WorkAssignmentId.HasValue && s.SchedulePurpose == assignment.SchedulePurpose &&
+                            s.StartDateTime >= assignment.StartDateTime && s.StartDateTime <= assignment.EndDateTime)
+                .ToList();
+        }
+        return matching.OrderBy(s => s.StartDateTime).ThenBy(s => s.SequenceNumber);
+    }
+
+    private static bool IsCheckBoundary(string name)
+    {
+        var label = FormatSegmentName(name);
+        return label.Equals("Check In", StringComparison.OrdinalIgnoreCase) ||
+               label.Equals("Check Out", StringComparison.OrdinalIgnoreCase) ||
+               label.Equals("Duty Check In", StringComparison.OrdinalIgnoreCase) ||
+               label.Equals("Duty Check Out", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatSegmentName(string name)
+    {
+        var idx = name.LastIndexOf(" · ", StringComparison.Ordinal);
+        return idx >= 0 ? name[(idx + 3)..] : name;
+    }
+
+    private static string FormatSegmentCondition(AttendanceWorkSegmentDto item) =>
+        IsCheckBoundary(item.Name)
+            ? (!item.RequiresAttendance ? "Attendance not required" : item.IsMandatory ? "Mandatory" : "Optional")
+            : $"To {item.EndDateTime:HH:mm}";
+
+    private static string ClockEventName(AttendanceRawLogDto log) => log.LogicalEventType switch
+    {
+        "OfficialCheckIn" => "Official clock in",
+        "OfficialCheckOut" => "Official clock out",
+        "OfficialBreakOut" => "Official lunch / break out",
+        "OfficialBreakIn" => "Official lunch / break in",
+        "DutyCheckIn" => "Duty clock in",
+        "DutyCheckOut" => "Duty clock out",
+        "DuplicateIgnored" => "Duplicate punch (ignored)",
+        _ => log.ClockType switch
+        {
+            AttendanceClockType.CheckIn => "Clock in",
+            AttendanceClockType.CheckOut => "Clock out",
+            AttendanceClockType.BreakOut => "Break out",
+            AttendanceClockType.BreakIn => "Break in",
+            AttendanceClockType.Ignored => "Duplicate (ignored)",
+            _ => "Clock event"
+        }
+    };
+
+    private static string ClockCondition(AttendanceRawLogDto log) => log.ClockType switch
+    {
+        AttendanceClockType.CheckIn when log.LateMinutes > 0 => $"Late by {log.LateMinutes} {(log.LateMinutes == 1 ? "minute" : "minutes")}",
+        AttendanceClockType.CheckIn when log.ScheduledStart.HasValue => "On time",
+        AttendanceClockType.CheckIn or AttendanceClockType.CheckOut or AttendanceClockType.BreakOut or AttendanceClockType.BreakIn => "Recorded",
+        AttendanceClockType.Ignored => "Ignored",
+        _ => "Unresolved"
+    };
+
+    private static string ClockTone(AttendanceRawLogDto log) => log.ClockType switch
+    {
+        AttendanceClockType.CheckIn when log.LateMinutes > 0 => "late",
+        AttendanceClockType.CheckIn or AttendanceClockType.BreakIn => "success",
+        AttendanceClockType.CheckOut or AttendanceClockType.BreakOut => "info",
+        _ => "muted"
+    };
+
+    private static string GetDayStatusClass(ClockEventDayRow row)
+    {
+        if (row.IsLate && row.IsPresent) return "bg-amber-100 text-amber-800";
+        if (row.IsPresent) return "bg-emerald-100 text-emerald-800";
+        if (row.Status.Equals("Absent", StringComparison.OrdinalIgnoreCase)) return "bg-rose-100 text-rose-800";
+        if (row.Status.Equals("Leave", StringComparison.OrdinalIgnoreCase)) return "bg-blue-100 text-blue-800";
+        return "bg-slate-100 text-slate-600";
+    }
+
+    private sealed class ClockEventDayRow
+    {
+        public DateTime Date { get; set; }
+        public string DayName { get; set; } = "";
+        public string CheckIn { get; set; } = "--:--";
+        public string CheckOut { get; set; } = "--:--";
+        public string Status { get; set; } = "";
+        public bool IsPresent { get; set; }
+        public bool IsLate { get; set; }
+    }
+}

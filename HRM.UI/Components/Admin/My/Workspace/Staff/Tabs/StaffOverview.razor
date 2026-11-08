@@ -1,0 +1,853 @@
+@page "/admin/my/workspace/profile/{IndividualId:int}"
+
+@using HRM.DTOs.JobPosition
+@using HRM.DTOs.Profile
+@using HRM.DTOs.Profile.ProfileAccess
+@using HRM.DTOs.StaffTransfer
+@using HRM.DTOs.UserContext
+@using HRM.Enum
+@using Services.Interfaces.Profile
+
+@inject NavigationManager NavigationManager
+@inject IProfileService ProfileService
+@inject HRM.Services.Contracts.StaffTransferServiceContracts.IOperations Transfers
+@inject IJSRuntime JS
+
+<PageTitle>@(_profile?.FullName ?? "Staff Profile") · Official Personnel Dossier</PageTitle>
+
+<style>
+    @@media print {
+        @@page {
+            size: A4 portrait;
+            margin: 10mm 12mm 10mm 12mm;
+        }
+
+        /* Strict Removals: Completely strip out all web application chrome */
+        html, body {
+            background: #ffffff !important;
+            color: #000000 !important;
+            font-size: 10pt !important;
+            line-height: 1.35 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+        }
+
+        /* Hide all outer layout chrome, headers, tabs, navigation and buttons */
+        .app-shell > aside,
+        .app-shell-sidebar,
+        .app-shell-content > header,
+        .app-shell-footer,
+        .topbar,
+        .sidebar,
+        nav,
+        .my-workspace-header,
+        .my-workspace-tabs,
+        .staff-workspace-header,
+        .staff-workspace-tabs,
+        .staff-overview-no-print,
+        button,
+        a[href] {
+            display: none !important;
+        }
+
+        .app-shell,
+        .app-shell-content,
+        .app-shell-main,
+        .my-workspace-page,
+        .staff-overview-container {
+            overflow: visible !important;
+            height: auto !important;
+            display: block !important;
+            background: #ffffff !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+        }
+
+        .staff-overview-doc {
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            max-width: 100% !important;
+            width: 100% !important;
+            background: #ffffff !important;
+            color: #000000 !important;
+        }
+
+        .print-break-avoid {
+            break-inside: avoid !important;
+            page-break-inside: avoid !important;
+        }
+    }
+</style>
+
+<div class="staff-overview-container w-full flex flex-col gap-3">
+
+    @if (_loading)
+    {
+        <div class="max-w-4xl mx-auto w-full p-8 bg-white border border-slate-200 shadow-sm animate-pulse space-y-4">
+            <div class="h-8 bg-slate-200 w-3/4"></div>
+            <div class="h-4 bg-slate-100 w-1/2"></div>
+            <div class="h-32 bg-slate-100 w-full mt-4"></div>
+            <div class="h-48 bg-slate-100 w-full"></div>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="max-w-4xl mx-auto w-full p-6 bg-white border border-rose-300 shadow-sm text-xs text-rose-800 space-y-3">
+            <h3 class="font-bold text-sm">Unable to load employee profile</h3>
+            <p>@_errorMessage</p>
+            <button type="button" class="px-3 py-1.5 bg-rose-700 text-white font-semibold rounded-none cursor-pointer" @onclick="LoadProfileAsync">
+                ↻ Try Again
+            </button>
+        </div>
+    }
+    else if (_profile is null)
+    {
+        <div class="max-w-4xl mx-auto w-full p-8 bg-white border border-dashed border-slate-300 text-center text-xs text-slate-500">
+            Personnel record not found.
+        </div>
+    }
+    else
+    {
+        <!-- Action Toolbar: Web UI helper to trigger PDF Export (Hidden on Print) -->
+        <header class="staff-overview-no-print max-w-4xl mx-auto w-full flex flex-wrap items-center justify-between gap-2 p-3 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 shadow-xs">
+            <div class="flex items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 px-3 py-1 text-xs font-semibold">
+                    <span>📄</span>
+                    <span>Staff Personnel Dossier</span>
+                </span>
+                <span class="text-xs font-mono text-slate-500">
+                    REF: DOC-EMP-@EffectiveStaffId.ToString("D5")
+                </span>
+            </div>
+
+            <div class="flex items-center gap-2">
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-700 hover:bg-emerald-800 active:bg-emerald-900 px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer"
+                        title="Export this dossier to PDF or print"
+                        @onclick="PrintProfile">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>Export to PDF</span>
+                </button>
+
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition cursor-pointer"
+                        title="Reload latest staff data"
+                        @onclick="LoadProfileAsync">
+                    <span>↻ Refresh</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- ======================================================== -->
+        <!-- STATIC A4 PRINT-READY DOCUMENT: STAFF PERSONNEL DOSSIER  -->
+        <!-- Formal paper layout matching a Microsoft Word document   -->
+        <!-- ======================================================== -->
+        <article class="staff-overview-doc max-w-4xl mx-auto w-full bg-white text-slate-900 border border-slate-300 p-8 sm:p-12 shadow-md rounded-none print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none">
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 1. OFFICIAL HEADER BOX                               -->
+            <!-- ---------------------------------------------------- -->
+            <header class="border-b-2 border-black pb-4 mb-5">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <!-- Title & Subtitle -->
+                    <div class="space-y-1">
+                        <h2 class="text-xs font-bold uppercase tracking-widest text-slate-700 font-mono">
+                            @(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationName) ? _profile.ActiveJob.OrganisationName : "NATIONAL CENTRE FOR INFORMATION TECHNOLOGY")
+                        </h2>
+                        <h1 class="text-xl sm:text-2xl font-black uppercase tracking-tight text-black">
+                            STAFF PERSONNEL DOSSIER &amp; EMPLOYMENT RECORD
+                        </h1>
+                        <p class="text-[11px] text-slate-600">
+                            Official personnel record extract issued under Government Human Resource governance.
+                        </p>
+                    </div>
+
+                    <!-- Meta Details (Boxed / Right-Aligned) -->
+                    <div class="border border-black p-2.5 text-xs font-mono shrink-0 bg-slate-50/60 sm:min-w-[250px]">
+                        <div class="flex justify-between gap-2 border-b border-slate-300 pb-0.5">
+                            <span class="text-slate-600 font-bold text-[10px]">DOCUMENT NO:</span>
+                            <span class="font-bold text-black">DOC-EMP-@EffectiveStaffId.ToString("D5")</span>
+                        </div>
+                        <div class="flex justify-between gap-2 border-b border-slate-300 py-0.5 text-[11px]">
+                            <span class="text-slate-600 text-[10px]">RECORD DATE:</span>
+                            <span class="text-black">@DateTime.Today.ToString("dd MMMM yyyy")</span>
+                        </div>
+                        <div class="flex justify-between gap-2 border-b border-slate-300 py-0.5 text-[10px] font-bold text-red-800">
+                            <span>CLASSIFICATION:</span>
+                            <span>OFFICIAL &amp; CONFIDENTIAL</span>
+                        </div>
+                        <div class="flex justify-between gap-2 border-b border-slate-300 py-0.5 text-[11px]">
+                            <span class="text-slate-600 text-[10px]">RECORD STATUS:</span>
+                            <span class="font-bold text-black uppercase">@(_profile.ActiveJob?.JobStateName ?? "ACTIVE")</span>
+                        </div>
+                        <div class="flex justify-between gap-2 border-b border-slate-300 py-0.5 text-[11px]">
+                            <span class="text-slate-600 text-[10px]">EMPLOYEE NO:</span>
+                            <span class="font-bold text-black">#@(!string.IsNullOrEmpty(_profile.ActiveJob?.EmployeeNumber) ? _profile.ActiveJob.EmployeeNumber : EffectiveStaffId.ToString())</span>
+                        </div>
+                        <div class="flex justify-between gap-2 border-b border-slate-300 py-0.5 text-[11px]">
+                            <span class="text-slate-600 text-[10px]">SYSTEM ID:</span>
+                            <span class="font-bold text-black">#@EffectiveStaffId</span>
+                        </div>
+                        <div class="flex justify-between gap-2 pt-0.5 text-[11px]">
+                            <span class="text-slate-600 text-[10px]">SERVICE LENGTH:</span>
+                            <span class="font-bold text-black">@(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.ServiceDurationText) ? _profile.ActiveJob.ServiceDurationText : "—")</span>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 2. EMPLOYEE IDENTITY BLOCK                           -->
+            <!-- ---------------------------------------------------- -->
+            <section class="border border-black p-4 mb-5 flex flex-col sm:flex-row items-start gap-5 print-break-avoid bg-slate-50/30">
+                <!-- Formal Passport-Sized Photo Placeholder (Left) -->
+                <div class="w-28 h-36 border-2 border-black bg-slate-100 flex flex-col items-center justify-center shrink-0 rounded-none overflow-hidden">
+                    @if (!string.IsNullOrWhiteSpace(_profile.ImageUrl))
+                    {
+                        <img src="@_profile.ImageUrl" alt="@_profile.FullName" class="w-full h-full object-cover rounded-none" />
+                    }
+                    else
+                    {
+                        <div class="flex flex-col items-center justify-center text-center p-2 text-slate-500 font-mono text-[10px]">
+                            <span class="text-2xl mb-1 text-slate-400">👤</span>
+                            <span class="font-bold uppercase tracking-wider text-[9px]">PASSPORT</span>
+                            <span class="font-bold uppercase tracking-wider text-[9px]">PHOTO</span>
+                        </div>
+                    }
+                </div>
+
+                <!-- Identity Details (Right) -->
+                <div class="flex-1 space-y-2 min-w-0">
+                    <div>
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">EMPLOYEE IDENTITY</span>
+                        <h2 class="text-xl sm:text-2xl font-black text-black uppercase tracking-tight">
+                            @_profile.FullName
+                        </h2>
+                        @if (!string.IsNullOrWhiteSpace(_profile.FullNameDhivehi))
+                        {
+                            <p class="text-base text-slate-800 font-dhivehi pt-0.5" dir="rtl">
+                                @_profile.FullNameDhivehi
+                            </p>
+                        }
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5 text-xs pt-1 border-t border-slate-300">
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">National Identity Card (NID)</span>
+                            <span class="font-bold text-black font-mono text-sm">@(!string.IsNullOrWhiteSpace(_profile.IdentityCardNumber) ? _profile.IdentityCardNumber : "—")</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Primary Designation</span>
+                            <span class="font-bold text-black">@(_profile.ActiveJob?.PositionName ?? "No Position Assigned")</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Employing Organisation</span>
+                            <span class="font-bold text-black">@(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationName) ? _profile.ActiveJob.OrganisationName : "NATIONAL CENTRE FOR INFORMATION TECHNOLOGY")</span>
+                        </div>
+                        <div>
+                            <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Department / Structure</span>
+                            <span class="font-semibold text-slate-800">@(!string.IsNullOrEmpty(_profile.ActiveJob?.OrganisationStructureName) ? _profile.ActiveJob.OrganisationStructureName : (!string.IsNullOrEmpty(_profile.ActiveJob?.DepartmentName) ? _profile.ActiveJob.DepartmentName : "—"))</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 01 EMPLOYMENT SPECIFICATION & ASSIGNMENT             -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        01 EMPLOYMENT SPECIFICATION &amp; ASSIGNMENT
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Official Terms</span>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-4 border-t border-l border-slate-400 text-xs">
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Employing Organisation</span>
+                        <span class="font-bold text-black block truncate">@(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.OrganisationName) ? _profile.ActiveJob.OrganisationName : "NATIONAL CENTRE FOR INFORMATION TECHNOLOGY")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Department / Division</span>
+                        <span class="font-semibold text-black block truncate">@(!string.IsNullOrEmpty(_profile.ActiveJob?.OrganisationStructureName) ? _profile.ActiveJob.OrganisationStructureName : (!string.IsNullOrEmpty(_profile.ActiveJob?.DepartmentName) ? _profile.ActiveJob.DepartmentName : "—"))</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Designation</span>
+                        <span class="font-bold text-black block truncate">@(_profile.ActiveJob?.PositionName ?? "—")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Terms of Employment</span>
+                        <span class="font-semibold text-black block truncate">@(_profile.ActiveJob?.JobTypeName ?? _profile.ActiveJob?.EmploymentType ?? "Permanent Staff")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Date Joined</span>
+                        <span class="font-mono font-bold text-black block">@(_profile.ActiveJob is { JoinedDate: var jd } && jd != default ? jd.ToString("dd MMM yyyy") : "—")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Total Service Tenure</span>
+                        <span class="font-semibold text-black block">@(!string.IsNullOrWhiteSpace(_profile.ActiveJob?.ServiceDurationText) ? _profile.ActiveJob.ServiceDurationText : "—")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Confirmation Status</span>
+                        <span class="font-semibold text-black block">@(_profile.ActiveJob?.ConfirmedDate.HasValue == true ? $"Confirmed on {_profile.ActiveJob.ConfirmedDate.Value:dd MMM yyyy}" : "Probation / Active")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Contract Status</span>
+                        <span class="font-bold text-black block">@(_profile.ActiveJob?.IsActive == true ? "ACTIVE CONTRACT" : "INACTIVE")</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 02 REPORTING HIERARCHY & STAFF SUPERVISION           -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        02 REPORTING HIERARCHY &amp; STAFF SUPERVISION
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Institutional Governance</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 border border-slate-400 divide-y md:divide-y-0 md:divide-x divide-slate-400 text-xs">
+                    <!-- Direct Supervisor Block -->
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">DIRECT SUPERVISOR</span>
+                        <h4 class="text-sm font-bold text-black">@GetSupervisorDisplay()</h4>
+                        <p class="text-[11px] text-slate-600 leading-normal">
+                            Primary supervisory authority for work planning, attendance verification, leave certification, and performance appraisal.
+                        </p>
+                    </div>
+
+                    <!-- Head of Department Block -->
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">HEAD OF DEPARTMENT (HOD)</span>
+                        <h4 class="text-sm font-bold text-black">@GetHodDisplay()</h4>
+                        <p class="text-[11px] text-slate-600 leading-normal">
+                            Departmental executive authority responsible for organisational governance, departmental oversight, and administrative escalations.
+                        </p>
+                    </div>
+                </div>
+
+                @if (_profile.SupervisingTeams.Count > 0)
+                {
+                    <div class="mt-2 border border-slate-400 p-2.5 bg-slate-50/50 text-xs">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-600 font-mono block mb-1">
+                            SUBORDINATE TEAMS SUPERVISED (@_profile.SupervisingTeams.Count)
+                        </span>
+                        <p class="text-slate-800 font-medium">
+                            @string.Join(" • ", _profile.SupervisingTeams.Select(t => t.TeamName))
+                        </p>
+                    </div>
+                }
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 03 PERSONAL & DEMOGRAPHIC IDENTITY                   -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        03 PERSONAL &amp; DEMOGRAPHIC IDENTITY
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Civil Registry</span>
+                </div>
+
+                <div class="grid grid-cols-2 md:grid-cols-3 border-t border-l border-slate-400 text-xs">
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Legal Name (English)</span>
+                        <span class="font-bold text-black block">@_profile.FullName</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Name in Dhivehi</span>
+                        <span class="font-semibold text-black font-dhivehi block" dir="rtl">@(!string.IsNullOrWhiteSpace(_profile.FullNameDhivehi) ? _profile.FullNameDhivehi : "—")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">National Identity Card (NID)</span>
+                        <span class="font-mono font-bold text-black block">@(!string.IsNullOrWhiteSpace(_profile.IdentityCardNumber) ? _profile.IdentityCardNumber : "—")</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Date of Birth &amp; Age</span>
+                        <span class="font-semibold text-black block">@GetDateOfBirthText(_profile.DateOfBirth)</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Gender</span>
+                        <span class="font-semibold text-black block">@GetGenderText(_profile.GenderId)</span>
+                    </div>
+                    <div class="border-b border-r border-slate-400 p-2">
+                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">Nationality</span>
+                        <span class="font-semibold text-black block">@(!string.IsNullOrWhiteSpace(_profile.NationalityName) ? _profile.NationalityName : "Maldivian")</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 04 APPOINTED POSITIONS & RESPONSIBILITIES            -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        04 APPOINTED POSITIONS &amp; RESPONSIBILITIES
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Active Designations (@_profile.ActivePositions.Count)</span>
+                </div>
+
+                @if (_profile.ActivePositions.Count > 0)
+                {
+                    <table class="w-full border-collapse border border-black text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-black text-slate-900 font-bold text-left text-[11px]">
+                                <th class="border border-black p-2">Designation</th>
+                                <th class="border border-black p-2">Organisation</th>
+                                <th class="border border-black p-2">Effective Period</th>
+                                <th class="border border-black p-2 text-center">Nature</th>
+                                <th class="border border-black p-2 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var pos in _profile.ActivePositions)
+                            {
+                                <tr class="border-b border-slate-400">
+                                    <td class="border border-slate-400 p-2 font-bold text-black">@pos.PositionName</td>
+                                    <td class="border border-slate-400 p-2 text-slate-800">@pos.OrganisationStructureName</td>
+                                    <td class="border border-slate-400 p-2 font-mono text-[11px] text-black">
+                                        @pos.FromDate.ToString("dd MMM yyyy") – @(pos.ToDate?.ToString("dd MMM yyyy") ?? "Present")
+                                    </td>
+                                    <td class="border border-slate-400 p-2 text-center font-bold text-[11px]">
+                                        @(pos.IsCurrent ? "PRIMARY" : "SECONDARY")
+                                    </td>
+                                    <td class="border border-slate-400 p-2 text-center font-bold text-[11px] text-black">
+                                        ACTIVE
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="border border-slate-400 p-3 text-center text-xs text-slate-500 italic">
+                        No secondary positions registered. Standard primary assignment applies.
+                    </div>
+                }
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 05 CONTACT & RESIDENCY DIRECTORY                     -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        05 CONTACT &amp; RESIDENCY DIRECTORY
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Communications</span>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 border border-slate-400 divide-y md:divide-y-0 md:divide-x divide-slate-400 text-xs">
+                    <!-- Direct Contact Numbers & Email -->
+                    <div class="p-3 space-y-1.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">
+                            DIRECT CONTACT NUMBERS &amp; EMAIL
+                        </span>
+                        @if (_profile.Contacts.Count > 0)
+                        {
+                            <div class="space-y-1">
+                                @foreach (var contact in _profile.Contacts)
+                                {
+                                    <div class="flex justify-between gap-2 border-b border-slate-200 py-1">
+                                        <span class="text-slate-500 text-[11px] font-mono">@contact.ContactTypeName:</span>
+                                        <span class="font-bold text-black font-mono">@contact.Value</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500 italic">No contact details registered on file.</p>
+                        }
+                    </div>
+
+                    <!-- Residential Addresses -->
+                    <div class="p-3 space-y-1.5">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">
+                            RESIDENTIAL &amp; PERMANENT ADDRESSES
+                        </span>
+                        @if (_profile.Addresses.Count > 0)
+                        {
+                            <div class="space-y-1.5">
+                                @foreach (var addr in _profile.Addresses)
+                                {
+                                    <div class="border-b border-slate-200 pb-1">
+                                        <span class="text-[10px] font-bold text-slate-500 uppercase font-mono block">
+                                            @(!string.IsNullOrEmpty(addr.AddressTypeName) ? addr.AddressTypeName : "Address") @(addr.IsPrimary ? "(Primary)" : "")
+                                        </span>
+                                        <span class="font-bold text-black block">@addr.AddressLine1 @addr.AddressLine2</span>
+                                        <span class="text-[11px] text-slate-600 block">@addr.IslandName @addr.AtollName @addr.CountryName</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500 italic">No address records registered on file.</p>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 06 GOVERNANCE, ROLES & SYSTEM ACCESS                 -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        06 GOVERNANCE, ROLES &amp; SYSTEM ACCESS
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Institutional Privileges</span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-3 border border-slate-400 divide-y sm:divide-y-0 sm:divide-x divide-slate-400 text-xs">
+                    <!-- Security Roles -->
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">
+                            SECURITY ROLES (@_profile.Access.Roles.Count)
+                        </span>
+                        @if (_profile.Access.Roles.Count > 0)
+                        {
+                            <ul class="list-disc list-inside space-y-0.5 text-slate-800">
+                                @foreach (var r in _profile.Access.Roles)
+                                {
+                                    <li><span class="font-semibold text-black">@r.RoleName</span></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500 italic">Standard employee access privileges.</p>
+                        }
+                    </div>
+
+                    <!-- Working Teams -->
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">
+                            WORKING TEAMS (@_profile.Access.Teams.Count)
+                        </span>
+                        @if (_profile.Access.Teams.Count > 0)
+                        {
+                            <ul class="list-disc list-inside space-y-0.5 text-slate-800">
+                                @foreach (var t in _profile.Access.Teams)
+                                {
+                                    <li><span class="font-semibold text-black">@t.TeamName</span></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500 italic">No operational working teams assigned.</p>
+                        }
+                    </div>
+
+                    <!-- Functional Groups -->
+                    <div class="p-3 space-y-1">
+                        <span class="text-[10px] font-bold uppercase tracking-wider text-slate-500 font-mono block">
+                            FUNCTIONAL GROUPS (@_profile.Access.Groups.Count)
+                        </span>
+                        @if (_profile.Access.Groups.Count > 0)
+                        {
+                            <ul class="list-disc list-inside space-y-0.5 text-slate-800">
+                                @foreach (var g in _profile.Access.Groups)
+                                {
+                                    <li><span class="font-semibold text-black">@g.GroupName</span></li>
+                                }
+                            </ul>
+                        }
+                        else
+                        {
+                            <p class="text-slate-500 italic">No functional groups memberships.</p>
+                        }
+                    </div>
+                </div>
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 07 POSITION & CAREER PROGRESSION HISTORY             -->
+            <!-- ---------------------------------------------------- -->
+            <section class="mb-5 print-break-avoid">
+                <div class="border-b-2 border-black pb-1 mb-2 flex items-center justify-between">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        07 POSITION &amp; CAREER PROGRESSION HISTORY
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-500 uppercase">Historical Designations (@_profile.PositionHistory.Count)</span>
+                </div>
+
+                @if (_profile.PositionHistory.Count > 0)
+                {
+                    <table class="w-full border-collapse border border-black text-xs">
+                        <thead>
+                            <tr class="bg-slate-100 border-b border-black text-slate-900 font-bold text-left text-[11px]">
+                                <th class="border border-black p-2">Position Title</th>
+                                <th class="border border-black p-2">Organisation &amp; Unit</th>
+                                <th class="border border-black p-2">Tenure / Period</th>
+                                <th class="border border-black p-2 text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var hist in _profile.PositionHistory.OrderByDescending(x => x.FromDate))
+                            {
+                                <tr class="border-b border-slate-400">
+                                    <td class="border border-slate-400 p-2 font-bold text-black">@hist.PositionName</td>
+                                    <td class="border border-slate-400 p-2 text-slate-800">
+                                        @hist.OrganisationName @(!string.IsNullOrEmpty(hist.OrganisationStructureName) ? $"· {hist.OrganisationStructureName}" : "")
+                                    </td>
+                                    <td class="border border-slate-400 p-2 font-mono text-[11px] text-black">
+                                        @hist.FromDate.ToString("MMM yyyy") – @(hist.ToDate.HasValue ? hist.ToDate.Value.ToString("MMM yyyy") : "Present")
+                                    </td>
+                                    <td class="border border-slate-400 p-2 text-center font-bold text-[11px]">
+                                        @(!string.IsNullOrWhiteSpace(hist.JobPositionStateName) ? hist.JobPositionStateName.ToUpperInvariant() : "COMPLETED")
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    <div class="border border-slate-400 p-3 text-center text-xs text-slate-500 italic">
+                        No historical designation records archived for this individual.
+                    </div>
+                }
+            </section>
+
+            <!-- ---------------------------------------------------- -->
+            <!-- 08 DOCUMENT VERIFICATION & HR ATTESTATION            -->
+            <!-- ---------------------------------------------------- -->
+            <footer class="border-t-2 border-black pt-4 mt-6 print-break-avoid">
+                <div class="flex items-center justify-between pb-2">
+                    <h3 class="text-xs font-bold uppercase tracking-wider text-black">
+                        08 DOCUMENT VERIFICATION &amp; HR ATTESTATION
+                    </h3>
+                    <span class="text-[10px] font-mono text-slate-600 font-bold">
+                        REF: #DOC-EMP-@EffectiveStaffId.ToString("D5")
+                    </span>
+                </div>
+
+                <p class="text-[11px] text-slate-700 leading-normal pb-3 border-b border-slate-300">
+                    This document represents an official certified personnel dossier extract issued under institutional authority.
+                    All records, assignments, and reporting hierarchy contained herein reflect the verified active records in the Government Human Resource Management Information System.
+                </p>
+
+                <!-- Signatures & Stamp Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3">
+                    <!-- Signature 1: HR Officer -->
+                    <div class="border border-black p-3 flex flex-col justify-between h-32 text-xs">
+                        <div>
+                            <span class="text-[9px] font-bold uppercase font-mono text-slate-500 block">PREPARED &amp; VERIFIED BY</span>
+                            <span class="font-bold text-black text-[11px]">HR Operations Division</span>
+                        </div>
+                        <div class="border-t border-slate-400 pt-1 text-[10px] text-slate-600 flex justify-between font-mono">
+                            <span>Sign: _________</span>
+                            <span>Date: @DateTime.Today.ToString("dd/MM/yy")</span>
+                        </div>
+                    </div>
+
+                    <!-- Signature 2: Supervisor Endorsement -->
+                    <div class="border border-black p-3 flex flex-col justify-between h-32 text-xs">
+                        <div>
+                            <span class="text-[9px] font-bold uppercase font-mono text-slate-500 block">SUPERVISOR ENDORSEMENT</span>
+                            <span class="font-bold text-black text-[11px] truncate block">@GetSupervisorDisplay()</span>
+                        </div>
+                        <div class="border-t border-slate-400 pt-1 text-[10px] text-slate-600 flex justify-between font-mono">
+                            <span>Sign: _________</span>
+                            <span>Date: ___/___/___</span>
+                        </div>
+                    </div>
+
+                    <!-- Signature 3: Staff Member Acknowledgment -->
+                    <div class="border border-black p-3 flex flex-col justify-between h-32 text-xs">
+                        <div>
+                            <span class="text-[9px] font-bold uppercase font-mono text-slate-500 block">STAFF ACKNOWLEDGMENT</span>
+                            <span class="font-bold text-black text-[11px] truncate block">@_profile.FullName</span>
+                        </div>
+                        <div class="border-t border-slate-400 pt-1 text-[10px] text-slate-600 flex justify-between font-mono">
+                            <span>Sign: _________</span>
+                            <span>Date: ___/___/___</span>
+                        </div>
+                    </div>
+
+                    <!-- Official Stamp Box -->
+                    <div class="border-2 border-dashed border-slate-400 p-2 flex flex-col items-center justify-center h-32 text-center text-slate-400 font-mono">
+                        <span class="text-base mb-1">🏛️</span>
+                        <span class="text-[9px] font-bold uppercase tracking-wider">OFFICIAL HR STAMP</span>
+                        <span class="text-[8px] mt-0.5">MALDIVES DIGITAL SERVICE</span>
+                    </div>
+                </div>
+
+                <!-- Footer Text Required: "Government HR Platform, Maldives Digital Service. REF: #DOC-EMP-00811" -->
+                <div class="pt-3 mt-3 border-t border-black flex flex-wrap items-center justify-between text-[10px] font-mono text-slate-600">
+                    <span>Government HR Platform, Maldives Digital Service. REF: #DOC-EMP-@EffectiveStaffId.ToString("D5")</span>
+                    <span>Electronic Document Hash: @(EffectiveStaffId.GetHashCode().ToString("X8")) · Confidential</span>
+                </div>
+            </footer>
+
+        </article>
+    }
+
+</div>
+
+@code {
+    [Parameter] public int IndividualId { get; set; }
+    [Parameter] public int StaffId { get; set; }
+
+    private int EffectiveStaffId => StaffId > 0 ? StaffId : IndividualId;
+
+    private ProfileOverviewDto? _profile;
+    private bool _loading = true;
+    private string? _errorMessage;
+    private int _loadedStaffId;
+
+    private string? _supervisorName;
+    private string? _hodName;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var targetId = EffectiveStaffId;
+        if (targetId <= 0)
+        {
+            _profile = null;
+            _loading = false;
+            _errorMessage = "A valid staff or individual ID is required.";
+            return;
+        }
+
+        if (_loadedStaffId == targetId && _profile is not null)
+            return;
+
+        _loadedStaffId = targetId;
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        try
+        {
+            _loading = true;
+            _errorMessage = null;
+            _profile = null;
+            _supervisorName = null;
+            _hodName = null;
+
+            var profileTask = ProfileService.GetProfileAsync(EffectiveStaffId);
+
+            Task<StaffTransferDetailDto>? transferTask = null;
+            try
+            {
+                transferTask = Transfers.LoadDetailAsync(null, EffectiveStaffId, null);
+            }
+            catch
+            {
+                // Non-blocking if transfers service is unavailable for this individual
+            }
+
+            _profile = await profileTask;
+
+            if (transferTask is not null)
+            {
+                try
+                {
+                    var detail = await transferTask;
+                    if (detail?.Staff is not null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(detail.Staff.CurrentSupervisorName))
+                        {
+                            _supervisorName = detail.Staff.CurrentSupervisorName;
+                        }
+                        if (!string.IsNullOrWhiteSpace(detail.Staff.CurrentHodName))
+                        {
+                            _hodName = detail.Staff.CurrentHodName;
+                        }
+                    }
+                }
+                catch
+                {
+                    // Non-blocking fallback
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(_supervisorName) && !string.IsNullOrWhiteSpace(_profile?.ActiveJob?.SupervisorName))
+            {
+                _supervisorName = _profile.ActiveJob.SupervisorName;
+            }
+        }
+        catch (Exception ex)
+        {
+            _profile = null;
+            _errorMessage = "An unexpected error occurred while loading the employee profile.";
+            Console.Error.WriteLine(ex);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private string GetSupervisorDisplay()
+    {
+        if (!string.IsNullOrWhiteSpace(_supervisorName))
+            return _supervisorName;
+        if (!string.IsNullOrWhiteSpace(_profile?.ActiveJob?.SupervisorName))
+            return _profile.ActiveJob.SupervisorName;
+        return "Not Assigned";
+    }
+
+    private string GetHodDisplay()
+    {
+        if (!string.IsNullOrWhiteSpace(_hodName))
+            return _hodName;
+        return "General Administration";
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "ST";
+        var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0].Length >= 2 ? parts[0][..2].ToUpperInvariant() : parts[0].ToUpperInvariant();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private static string GetDateOfBirthText(DateTime dob)
+    {
+        if (dob == default || dob.Year < 1900) return "Not recorded";
+        var today = DateTime.Today;
+        var age = today.Year - dob.Year;
+        if (dob.Date > today.AddYears(-age)) age--;
+        return $"{dob:dd MMM yyyy} ({age} years)";
+    }
+
+    private static string GetGenderText(int genderId) => genderId switch
+    {
+        1 => "Male",
+        2 => "Female",
+        _ => "Not specified"
+    };
+
+    private async Task PrintProfile()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("window.print");
+        }
+        catch { }
+    }
+}

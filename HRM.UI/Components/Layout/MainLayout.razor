@@ -1,0 +1,153 @@
+@inherits LayoutComponentBase
+@implements IDisposable
+
+
+@using HRM.DTOs
+@using Microsoft.AspNetCore.Components.Authorization
+@using HRM.Services
+@using HRM.Components.Shared
+@using HRM.Services.Interfaces
+@using HRM.Enum
+
+@inject ToastService ToastService
+@inject NavigationManager Navigation
+
+@inject IUserContext UserContext
+@inject PortalContext PortalContext
+@inject AuthenticationStateProvider AuthenticationProvider
+@inject IUserContextService EmployeeContext
+
+<div class="app-shell flex h-screen bg-slate-50 @ShellContextClass">
+
+    <Sidebar HasSystemAccess="HasSystemAccess"
+             CanAccessAdminPortal="CanAccessAdminPortal"
+             CanAccessDeveloperPortal="CanAccessDeveloperPortal"
+             CanAccessAuditPortal="CanAccessAuditPortal"
+             MobileOpen="mobileNavOpen"
+             OnMobileClose="CloseMobileNav" />
+
+    <div class="app-shell-content flex flex-col flex-1 overflow-hidden">
+
+        <Topbar HasSystemAccess="HasSystemAccess" OnMobileMenu="OpenMobileNav" />
+
+        <main class="app-shell-main flex-1 overflow-x-hidden overflow-y-auto  @(!_isAuthenticated ? "welcome-main" : null)">
+            @if (_isAuthenticated) { <SettingsHistoryBack /> }
+
+            @if (_checkingAccess)
+            {
+                <p role="status" class="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-card">Checking account access…</p>
+            }
+            else if (_isAuthenticated && !HasSystemAccess)
+            {
+                <section role="alert" class="rounded-xl border border-slate-200 bg-white p-6 space-y-3 shadow-card">
+                    <h1 class="text-lg font-semibold text-slate-900">HRM access is not enabled for your account.</h1>
+                    <p class="text-sm text-slate-600">You have signed in successfully through eFaas. Please contact your organisation's HR team to set up or activate your employee account and grant the appropriate access.</p>
+                    <p class="text-sm text-slate-500">The employee menu will remain disabled until your HRM access is enabled.</p>
+                    <a href="/Online/Auth/NoAccessLogout" class="inline-flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700 underline">Sign out</a>
+                </section>
+            }
+            else if (IsAdminPortal && _session?.CanAccessAdminPortal != true)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Admin portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+            }
+            else if (IsDeveloperPortal && _session?.CanAccessDeveloperPortal != true)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Developer portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+            }
+            else if (IsAuditPortal && _session?.CanAccessAuditPortal != true)
+            {
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm"><p role="alert" class="font-medium">You do not have access to the Audit portal.</p><a href="/online" class="mt-2 inline-block font-semibold text-blue-700 underline">Return to employee portal</a></div>
+            }
+            else
+            {
+
+                @Body
+            }
+        </main>
+        <footer class="app-shell-footer">Government HR Platform, Maldives Digital Service.</footer>
+    </div>
+</div>
+
+@code {
+
+    private UserSessionDto? _session;
+    private bool _checkingAccess = true;
+    private bool _isAuthenticated;
+    private bool mobileNavOpen;
+    private int _accessLoadVersion;
+    private bool HasSystemAccess => !_checkingAccess && _session?.CanAccessSystem == true;
+    private bool CanAccessAdminPortal => HasSystemAccess && _session?.CanAccessAdminPortal == true;
+    private bool CanAccessDeveloperPortal => HasSystemAccess && _session?.CanAccessDeveloperPortal == true;
+    private bool CanAccessAuditPortal => HasSystemAccess && _session?.CanAccessAuditPortal == true;
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    private bool IsAdminPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("admin", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsDeveloperPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("developer", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsAuditPortal =>
+     new Uri(Navigation.Uri).AbsolutePath
+         .Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.Equals("audit", StringComparison.OrdinalIgnoreCase) == true;
+
+    private bool IsOnlinePortal
+    {
+        get
+        {
+            var path = new Uri(Navigation.Uri).AbsolutePath;
+            return _isAuthenticated && (path == "/" || path.Equals("/online", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/online/", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    private string ShellContextClass => IsAdminPortal ? "portal-admin" :
+        IsDeveloperPortal ? "portal-developer" :
+        IsAuditPortal ? "portal-audit" :
+        IsOnlinePortal ? "portal-online" : "portal-public";
+
+    private void OpenMobileNav() => mobileNavOpen = true;
+    private Task CloseMobileNav() { mobileNavOpen = false; return InvokeAsync(StateHasChanged); }
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args)
+    {
+        mobileNavOpen = false;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var version = ++_accessLoadVersion;
+        _checkingAccess = _session == null;
+        var authentication = await (AuthenticationState ?? AuthenticationProvider.GetAuthenticationStateAsync());
+        if (version != _accessLoadVersion) return;
+        _isAuthenticated = authentication.User.Identity?.IsAuthenticated == true;
+        // Register the eFaas identity as an Individual even when HRM access is not enabled.
+        // This does not create a User, employment record, or permission grant.
+        var session = _isAuthenticated ? await UserContext.GetSessionAsync() : null;
+        if (version != _accessLoadVersion) return;
+        if (_isAuthenticated && session == null)
+            await EmployeeContext.GetCurrentAsync();
+        if (version != _accessLoadVersion) return;
+        _session = session;
+        PortalContext.Initialize(_session?.OrganisationId, _session?.OrganisationName ?? "",
+            _session?.CanAccessAdminPortal == true,
+            _session?.CanAccessDeveloperPortal == true,
+            _session?.CanAccessAuditPortal == true);
+
+        if (IsAdminPortal) PortalContext.SwitchToAdmin();
+        else if (IsDeveloperPortal) PortalContext.SwitchToDeveloper();
+        else if (IsAuditPortal) PortalContext.SwitchToAudit();
+        else PortalContext.SwitchToEmployee();
+
+        _checkingAccess = false;
+    }
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+
+
+}

@@ -1,0 +1,762 @@
+@page "/admin/attendance/manage-attendance/attendance-requests"
+@attribute [Authorize]
+@using HRM.Components.Shared
+@using HRM.DTOs
+@using HRM.Models
+@using HRM.Models.Archives
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@rendermode RenderMode.InteractiveServer
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries RequestQueries
+@inject HRM.Application.Contracts.Pages.IAttendanceRequestReview ReviewService
+@inject HRM.Services.ToastService Toasts
+@inject ILogger<AttendanceRequestGrid> Logger
+@inject HRM.Application.Contracts.Pages.ILeaveRequestWorkflowQueries WorkflowQueries
+@inject IUserAccessService SessionAccess
+@inject IOrganisationService OrganisationService
+@inject HRM.Services.Contracts.UserServiceContracts.IOperations UserService
+@inject IIndividual _individual;
+
+<PageTitle>Attendance Requests &amp; Approvals - HR Portal</PageTitle>
+
+<div class="w-full p-2 flex flex-col gap-3">
+
+    <!-- PAGE HEADER -->
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 dark:border-slate-800 pb-3">
+        <div>
+            <div class="flex items-center gap-2">
+                <span class="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-white font-bold text-sm shadow-xs">
+                    ✉️
+                </span>
+                <div>
+                    <h1 class="text-xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                        Attendance Requests &amp; Approvals
+                    </h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400">
+                        Review, verify, and approve manual attendance entries, missed clock-ins, and uneven log corrections.
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-700 transition cursor-pointer"
+                    disabled="@isLoading"
+                    @onclick="ExecuteSearch">
+                <span>↻ Refresh Requests</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- HORIZONTAL TABS (SEPARATING ATTENDANCE AND UNEVEN LOGS) -->
+    <nav class="flex flex-wrap items-center gap-1.5 border-b border-slate-200 dark:border-slate-800 pb-2" aria-label="Request Types">
+        <button type="button"
+                class="rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeTab == "attendance" ? "bg-emerald-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50")"
+                @onclick='() => SetActiveTab("attendance")'>
+            <span>🕒 Attendance Requests</span>
+            <span class="rounded-full px-2 py-0.2 text-[10px] font-bold @(activeTab == "attendance" ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300")">
+                @AttendanceCount
+            </span>
+        </button>
+
+        <button type="button"
+                class="rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeTab == "uneven-log" ? "bg-emerald-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50")"
+                @onclick='() => SetActiveTab("uneven-log")'>
+            <span>⚠️ Uneven Log Requests</span>
+            <span class="rounded-full px-2 py-0.2 text-[10px] font-bold @(activeTab == "uneven-log" ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300")">
+                @UnevenLogCount
+            </span>
+        </button>
+
+        <button type="button"
+                class="rounded-xl px-4 py-2 text-xs font-bold transition flex items-center gap-2 cursor-pointer @(activeTab == "all" ? "bg-emerald-600 text-white shadow-xs" : "bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:bg-slate-50")"
+                @onclick='() => SetActiveTab("all")'>
+            <span>📋 All Requests</span>
+            <span class="rounded-full px-2 py-0.2 text-[10px] font-bold @(activeTab == "all" ? "bg-white/20 text-white" : "bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300")">
+                @AllCount
+            </span>
+        </button>
+    </nav>
+
+    <!-- TWO-COLUMN MAIN WORKSPACE -->
+    <!-- LEFT PANEL: Form to Approve & Selected Request Details -->
+    <!-- RIGHT PANEL: Filter Controls & Requests DataTable     -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start w-full">
+
+        <!-- ======================================================== -->
+        <!-- LEFT PANEL (5 cols): FORM TO APPROVE & DETAILS           -->
+        <!-- ======================================================== -->
+        <aside class="col-span-12 xl:col-span-5 flex flex-col gap-4">
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-5 flex flex-col gap-4 sticky top-4"
+                     aria-label="Attendance Request Details and Approval Form">
+
+                @if (detail == null)
+                {
+                    <div class="text-center py-16 px-4 flex flex-col items-center justify-center text-slate-400">
+                        <div class="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-2xl mb-3">
+                            📋
+                        </div>
+                        <h3 class="text-sm font-bold text-slate-800 dark:text-slate-200">No Request Selected</h3>
+                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-xs">
+                            Select a request from the list on the right to inspect its clock event details, review justification, and perform approval actions.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    <!-- DETAIL HEADER -->
+                    <div class="flex flex-wrap items-start justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                        <div class="space-y-0.5 min-w-0">
+                            <div class="flex items-center gap-2">
+                                <span class="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">#@detail.ReferenceNo</span>
+                                @if (detail.Kind == "Uneven-log correction")
+                                {
+                                    <span class="rounded-full bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-[10px] font-bold px-2 py-0.2">
+                                        ⚠️ Uneven-Log Correction
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 text-[10px] font-bold px-2 py-0.2">
+                                        🕒 Attendance Log
+                                    </span>
+                                }
+                            </div>
+                            <h3 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">
+                                @detail.StaffName
+                            </h3>
+                        </div>
+
+                        <span class="px-2.5 py-1 text-xs font-bold rounded-full @GetStateColorClass(detail.RequestState)">
+                            @detail.RequestState
+                        </span>
+                    </div>
+
+                    <!-- CLOCK EVENT METADATA -->
+                    <div class="grid grid-cols-2 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-800 text-xs">
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Date</span>
+                            <strong class="text-slate-800 dark:text-slate-200 font-semibold block">
+                                @detail.LogDate.ToString("dd MMM yyyy (ddd)")
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Time</span>
+                            <strong class="text-slate-800 dark:text-slate-200 font-mono font-bold block">
+                                @detail.LogTime
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Mode</span>
+                            <span class="inline-block bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 px-1.5 py-0.5 rounded text-[11px] font-bold">
+                                @detail.Mode
+                            </span>
+                        </div>
+
+                        <div>
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block">Organisation</span>
+                            <span class="text-slate-700 dark:text-slate-300 truncate block" title="@detail.OrganisationName">
+                                @detail.OrganisationName
+                            </span>
+                        </div>
+
+                        <div class="col-span-2 pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                            <span class="text-[10px] font-semibold uppercase tracking-wider text-slate-400 block mb-0.5">Applicant Justification</span>
+                            <p class="text-xs text-slate-700 dark:text-slate-300 whitespace-pre-wrap leading-relaxed">
+                                @(string.IsNullOrWhiteSpace(detail.Comments) ? "No remarks or explanation provided." : detail.Comments)
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- WORKFLOW STAGE STATUS -->
+                    @if (review != null)
+                    {
+                        <div class="p-3 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 text-xs flex items-center justify-between gap-2">
+                            <div>
+                                <span class="text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400 block">Current Workflow Stage</span>
+                                <span class="font-bold text-slate-900 dark:text-slate-100">@review.Stage</span>
+                            </div>
+                            @if (!string.IsNullOrWhiteSpace(review.Message))
+                            {
+                                <span class="text-[11px] text-slate-500 dark:text-slate-400 text-right">@review.Message</span>
+                            }
+                        </div>
+                    }
+
+                    <!-- APPROVAL DECISION FORM -->
+                    <div class="border-t border-slate-100 dark:border-slate-800 pt-3 flex flex-col gap-3">
+                        <div class="flex items-center justify-between">
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-800 dark:text-slate-200">
+                                Approval Decision &amp; Action
+                            </h4>
+                            @if (acting)
+                            {
+                                <span class="text-xs text-emerald-600 font-semibold animate-pulse">Processing...</span>
+                            }
+                        </div>
+
+                        @if (reviewError != null)
+                        {
+                            <div role="alert" class="rounded-xl border border-rose-200 bg-rose-50 dark:bg-rose-950/40 dark:border-rose-900 p-3 text-xs text-rose-800 dark:text-rose-200">
+                                @reviewError
+                            </div>
+                        }
+
+                        @if (review != null && (review.CanApprove || review.CanCancel))
+                        {
+                            <div class="space-y-1.5">
+                                <label for="actionComment" class="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                                    Action Comments / Remarks
+                                </label>
+                                <textarea id="actionComment"
+                                          @bind="actionComment"
+                                          maxlength="2000"
+                                          rows="3"
+                                          disabled="@acting"
+                                          placeholder="Enter optional comments, decision notes, or justification..."
+                                          class="w-full p-2.5 text-xs text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 resize-none"></textarea>
+                            </div>
+
+                            <div class="flex flex-wrap items-center gap-2 pt-1">
+                                @if (review.CanApprove)
+                                {
+                                    <button type="button"
+                                            class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 px-4 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                            disabled="@acting"
+                                            @onclick='() => Act("Approve")'>
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        <span>@review.ActionLabel</span>
+                                    </button>
+
+                                    <button type="button"
+                                            class="inline-flex items-center justify-center gap-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:bg-rose-800 px-3.5 py-2 text-xs font-bold text-white shadow-xs transition cursor-pointer disabled:opacity-50"
+                                            disabled="@acting"
+                                            @onclick='() => Act("Reject")'>
+                                        <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                        </svg>
+                                        <span>Reject</span>
+                                    </button>
+                                }
+
+                                @if (review.CanCancel)
+                                {
+                                    <button type="button"
+                                            class="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition cursor-pointer disabled:opacity-50"
+                                            disabled="@acting"
+                                            @onclick='() => Act("Cancel")'>
+                                        <span>Cancel Request</span>
+                                    </button>
+                                }
+                            </div>
+                        }
+                        else if (review != null && !review.CanApprove && !review.CanCancel)
+                        {
+                            <div class="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-600 dark:text-slate-400">
+                                @(string.IsNullOrWhiteSpace(review.Message) ? "This request is not awaiting your approval action." : review.Message)
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 p-3 text-xs text-slate-500">
+                                Loading approval workflow status...
+                            </div>
+                        }
+                    </div>
+                }
+
+            </section>
+        </aside>
+
+        <!-- ======================================================== -->
+        <!-- RIGHT PANEL (7 cols): REQUESTS LIST & SEARCH FILTERS     -->
+        <!-- ======================================================== -->
+        <main class="col-span-12 xl:col-span-7 flex flex-col gap-4">
+
+            <!-- SEARCH & FILTER CARD -->
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs p-4 sm:p-5 space-y-4">
+                <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                        <h2 class="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                            Filter Requests Queue
+                        </h2>
+                        <p class="text-xs text-slate-500 dark:text-slate-400">Refine by organisation, workflow status, date range, or staff name.</p>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                        <span class="rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-0.5 font-bold text-slate-700 dark:text-slate-300">
+                            Total: @VisibleRequests.Count()
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Input Grid -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Organisation</label>
+                        <select @bind="selectedOrgId"
+                                class="w-full h-9 px-3 text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 cursor-pointer">
+                            <option value="0">-- All Organisations --</option>
+                            @foreach (var org in organisations)
+                            {
+                                <option value="@org.Id">@org.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">Request Status</label>
+                        <select @bind="selectedStatusId"
+                                class="w-full h-9 px-3 text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 cursor-pointer">
+                            <option value="0">-- All Statuses --</option>
+                            @foreach (var state in requestStates)
+                            {
+                                <option value="@state.Id">@state.Name</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">From Date</label>
+                        <input type="date"
+                               @bind="startDate"
+                               class="w-full h-9 px-3 text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-bold text-slate-500 uppercase mb-1">To Date</label>
+                        <input type="date"
+                               @bind="endDate"
+                               class="w-full h-9 px-3 text-xs text-slate-700 dark:text-slate-200 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500" />
+                    </div>
+                </div>
+
+                <!-- Search Input & Action Row -->
+                <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                    <input type="search"
+                           value="@tableSearch"
+                           @oninput="OnTableSearchInput"
+                           placeholder="Filter by ref, employee name, mode, comments..."
+                           class="h-9 px-3 text-xs text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:border-emerald-500 flex-1 min-w-[200px]" />
+
+                    <div class="flex items-center gap-2">
+                        <button type="button"
+                                @onclick="ResetFilters"
+                                class="h-9 px-3.5 rounded-xl border border-slate-300 dark:border-slate-700 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-50 transition cursor-pointer">
+                            Reset
+                        </button>
+                        <button type="button"
+                                @onclick="ExecuteSearch"
+                                disabled="@isLoading"
+                                class="h-9 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-xs font-bold text-white shadow-xs transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50">
+                            @if (isLoading)
+                            {
+                                <svg class="animate-spin h-3.5 w-3.5 text-white" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                <span>Searching...</span>
+                            }
+                            else
+                            {
+                                <span>Search</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- REQUESTS DATATABLE CARD -->
+            <section class="rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs overflow-hidden">
+                @if (FilteredRequests.Count > 0)
+                {
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-slate-50 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-200 dark:border-slate-700">
+                                <tr>
+                                    <th class="p-3">Ref No</th>
+                                    <th class="p-3">Staff Member</th>
+                                    <th class="p-3">Date &amp; Time</th>
+                                    <th class="p-3">Type &amp; Mode</th>
+                                    <th class="p-3 text-center">Status</th>
+                                    <th class="p-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+                                @foreach (var req in PagedRequests)
+                                {
+                                    var isSelected = detail?.RequestId == req.RequestId;
+                                    <tr @key="req.RequestId"
+                                        @onclick="() => SelectRequest(req)"
+                                        class="cursor-pointer transition-colors hover:bg-slate-50/70 dark:hover:bg-slate-800/50 @(isSelected ? "bg-emerald-50/70 dark:bg-emerald-950/40 border-l-4 border-emerald-500" : "")">
+                                        <td class="p-3 font-mono font-bold text-slate-900 dark:text-slate-100 whitespace-nowrap">
+                                            @req.ReferenceNo
+                                        </td>
+                                        <td class="p-3">
+                                            <div class="font-bold text-slate-800 dark:text-slate-200">@req.StaffName</div>
+                                            <div class="text-[10px] text-slate-400 truncate max-w-[150px]">@req.OrganisationName</div>
+                                        </td>
+                                        <td class="p-3 whitespace-nowrap">
+                                            <div class="font-medium text-slate-700 dark:text-slate-300">@req.LogDate.ToString("dd MMM yyyy")</div>
+                                            <div class="text-[11px] font-mono text-slate-400">@req.LogTime</div>
+                                        </td>
+                                        <td class="p-3 whitespace-nowrap">
+                                            @if (req.Kind == "Uneven-log correction")
+                                            {
+                                                <span class="rounded bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 px-1.5 py-0.5 text-[10px] font-bold block w-fit mb-0.5">
+                                                    Uneven Log
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="rounded bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 text-[10px] font-bold block w-fit mb-0.5">
+                                                    Attendance
+                                                </span>
+                                            }
+                                            <span class="text-[11px] text-slate-500 font-semibold">@req.Mode</span>
+                                        </td>
+                                        <td class="p-3 text-center whitespace-nowrap">
+                                            <span class="px-2 py-0.5 text-[10px] font-bold rounded-full @GetStateColorClass(req.RequestState)">
+                                                @req.RequestState
+                                            </span>
+                                        </td>
+                                        <td class="p-3 text-right whitespace-nowrap" @onclick:stopPropagation="true">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-bold transition @(isSelected ? "bg-emerald-600 text-white" : "border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100")"
+                                                    @onclick="() => SelectRequest(req)">
+                                                <span>@(isSelected ? "Selected" : "Review")</span>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- DATATABLE FOOTER & PAGINATION -->
+                    <footer class="flex flex-wrap items-center justify-between gap-3 p-3 bg-slate-50/70 dark:bg-slate-800/40 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-500">
+                        <div>
+                            Showing @(FilteredRequests.Count == 0 ? 0 : (currentPage - 1) * pageSize + 1)–@Math.Min(currentPage * pageSize, FilteredRequests.Count) of @FilteredRequests.Count request(s)
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="flex items-center gap-1">
+                                <span>Rows:</span>
+                                <select value="@pageSize"
+                                        @onchange="OnPageSizeChanged"
+                                        class="h-7 px-1.5 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md">
+                                    <option value="10">10</option>
+                                    <option value="25">25</option>
+                                    <option value="50">50</option>
+                                </select>
+                            </label>
+
+                            <button type="button"
+                                    class="h-7 px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 cursor-pointer"
+                                    disabled="@(currentPage <= 1)"
+                                    @onclick="PrevPage">
+                                Prev
+                            </button>
+                            <span class="font-bold text-slate-700 dark:text-slate-300">@currentPage / @TotalPages</span>
+                            <button type="button"
+                                    class="h-7 px-2.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 disabled:opacity-40 cursor-pointer"
+                                    disabled="@(currentPage >= TotalPages)"
+                                    @onclick="NextPage">
+                                Next
+                            </button>
+                        </div>
+                    </footer>
+                }
+                else
+                {
+                    <div class="p-12 text-center flex flex-col items-center justify-center text-slate-400">
+                        <div class="text-3xl mb-2">🔍</div>
+                        <h3 class="text-sm font-bold text-slate-700 dark:text-slate-300">
+                            @(isDataLoaded ? "No requests found for this filter" : "Ready to Search")
+                        </h3>
+                        <p class="text-xs text-slate-500 mt-1 max-w-sm">
+                            Try switching tabs above, modifying the date range, or resetting status filters.
+                        </p>
+                    </div>
+                }
+            </section>
+
+        </main>
+    </div>
+
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "requestId")] public int? NotificationRequestId { get; set; }
+    private int? loadedNotificationId;
+
+    private string activeTab = "attendance";
+
+    private AttendanceRequestDto? detail;
+    private HRM.Application.Contracts.Pages.AttendanceReview? review;
+    private string? reviewError, actionComment;
+    private bool acting;
+
+    // Filter Bindings
+    private int selectedOrgId = 0;
+    private int selectedStatusId = 0;
+    private DateTime startDate;
+    private DateTime endDate;
+    private string tableSearch = "";
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    // UI State
+    private bool isDataLoaded = false;
+    private bool isLoading = false;
+
+    // Collections
+    private List<DropdownItem> organisations = new();
+    private List<AttendanceRequestDto> requestsList = new();
+    private List<HRM.Application.Contracts.Pages.RequestStateOption> requestStates = new();
+    private Dictionary<string, int> stateStatistics = new();
+
+    // Tab Counts
+    private int AttendanceCount => requestsList.Count(r => r.Kind == "Attendance");
+    private int UnevenLogCount => requestsList.Count(r => r.Kind == "Uneven-log correction");
+    private int AllCount => requestsList.Count;
+
+    private IEnumerable<AttendanceRequestDto> VisibleRequests =>
+        activeTab switch
+        {
+            "attendance" => requestsList.Where(r => r.Kind == "Attendance"),
+            "uneven-log" => requestsList.Where(r => r.Kind == "Uneven-log correction"),
+            _ => requestsList
+        };
+
+    private List<AttendanceRequestDto> FilteredRequests =>
+        VisibleRequests.Where(r =>
+            string.IsNullOrWhiteSpace(tableSearch) ||
+            r.ReferenceNo.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.StaffName.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Kind.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.Mode.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            r.RequestState.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ||
+            (r.Comments?.Contains(tableSearch, StringComparison.OrdinalIgnoreCase) ?? false))
+        .ToList();
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(FilteredRequests.Count / (double)pageSize));
+
+    private IEnumerable<AttendanceRequestDto> PagedRequests =>
+        FilteredRequests.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private void SetActiveTab(string tab)
+    {
+        activeTab = tab;
+        currentPage = 1;
+        detail = FilteredRequests.FirstOrDefault();
+        if (detail != null)
+        {
+            _ = OpenDetails(detail);
+        }
+        else
+        {
+            review = null;
+        }
+    }
+
+    private void SelectRequest(AttendanceRequestDto req)
+    {
+        _ = OpenDetails(req);
+    }
+
+    private void OnTableSearchInput(ChangeEventArgs e)
+    {
+        tableSearch = e.Value?.ToString() ?? "";
+        currentPage = 1;
+    }
+
+    private void OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size) && size > 0)
+        {
+            pageSize = size;
+            currentPage = 1;
+        }
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        SetCurrentSalaryPeriod();
+        organisations = await OrganisationService.GetAllOrganisationsAsync();
+        requestStates = await WorkflowQueries.GetStatesAsync();
+        await SetDefaultOrganisationAsync();
+        await ExecuteSearch();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (NotificationRequestId == loadedNotificationId) return;
+        loadedNotificationId = NotificationRequestId;
+        await ExecuteSearch();
+    }
+
+    private async Task OpenDetails(AttendanceRequestDto row)
+    {
+        detail = row;
+        review = null;
+        reviewError = null;
+        actionComment = null;
+        try
+        {
+            var result = await ReviewService.GetAsync(row.RequestId);
+            if (detail?.RequestId == row.RequestId) review = result;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Attendance request {RequestId} review actions failed to load", row.RequestId);
+            if (detail?.RequestId == row.RequestId) reviewError = "Review actions could not be loaded. Refresh or contact HR.";
+        }
+    }
+
+    private async Task Act(string action)
+    {
+        if (acting || review == null) return;
+        acting = true;
+        reviewError = null;
+        var id = review.RequestId;
+        try
+        {
+            var result = await ReviewService.ActAsync(id, review.StateId, action, actionComment);
+            if (result.Success)
+            {
+                Toasts.Success(result.Message);
+                await ExecuteSearch();
+                var row = requestsList.FirstOrDefault(x => x.RequestId == id);
+                if (row != null) await OpenDetails(row);
+            }
+            else
+            {
+                reviewError = result.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Attendance request {RequestId} action failed", id);
+            reviewError = "This action could not be completed. Refresh before trying again.";
+        }
+        finally
+        {
+            acting = false;
+        }
+    }
+
+    private async Task SetDefaultOrganisationAsync()
+    {
+        selectedOrgId = await SessionAccess.GetCurrentOrganisationIdAsync();
+    }
+
+    private void SetCurrentSalaryPeriod()
+    {
+        DateTime today = DateTime.Today;
+        startDate = today.Day >= 15
+            ? new DateTime(today.Year, today.Month, 15)
+            : new DateTime(today.Year, today.Month, 15).AddMonths(-1);
+        endDate = startDate.AddMonths(1).AddDays(1);
+    }
+
+    private async Task ExecuteSearch()
+    {
+        isLoading = true;
+        isDataLoaded = false;
+        requestsList.Clear();
+        try
+        {
+            var page = await RequestQueries.GetReceivedAsync(new(DateOnly.FromDateTime(startDate), DateOnly.FromDateTime(endDate),
+                selectedStatusId > 0 ? selectedStatusId : null, selectedOrgId > 0 ? selectedOrgId : null,
+                RequestId: NotificationRequestId));
+            requestStates = page.States;
+            requestsList = page.Requests.Select(r => new AttendanceRequestDto
+            {
+                RequestId = r.RequestId,
+                ReferenceNo = r.Reference,
+                Kind = r.Kind,
+                LogDate = r.ClockTime,
+                LogTime = r.ClockTime.ToString("HH:mm"),
+                OrganisationName = r.OrganisationName,
+                StaffName = r.StaffName,
+                Mode = r.Mode,
+                Comments = r.Comments,
+                RequestState = r.Status
+            }).ToList();
+            stateStatistics = requestsList.GroupBy(r => r.RequestState).ToDictionary(g => g.Key, g => g.Count());
+            isDataLoaded = true;
+
+            // Select notification request or first request in the active tab
+            detail = NotificationRequestId.HasValue
+                ? requestsList.FirstOrDefault(x => x.RequestId == NotificationRequestId.Value)
+                : FilteredRequests.FirstOrDefault();
+
+            if (detail != null)
+            {
+                await OpenDetails(detail);
+            }
+            else
+            {
+                review = null;
+            }
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ResetFilters()
+    {
+        selectedStatusId = 0;
+        tableSearch = "";
+        currentPage = 1;
+        SetCurrentSalaryPeriod();
+        await SetDefaultOrganisationAsync();
+        await ExecuteSearch();
+    }
+
+    // --- DTO for Table Rows ---
+    public class AttendanceRequestDto
+    {
+        public int RequestId { get; set; }
+        public string ReferenceNo { get; set; } = string.Empty;
+        public string Kind { get; set; } = string.Empty;
+        public DateTime LogDate { get; set; }
+        public string LogTime { get; set; } = string.Empty;
+        public string OrganisationName { get; set; } = string.Empty;
+        public string StaffName { get; set; } = string.Empty;
+        public string Mode { get; set; } = string.Empty;
+        public string? Comments { get; set; }
+        public string RequestState { get; set; } = string.Empty;
+    }
+
+    private static string GetStateColorClass(string state)
+    {
+        if (string.IsNullOrEmpty(state)) return "bg-slate-100 text-slate-600";
+
+        return state.Trim().ToLower() switch
+        {
+            "approved" => "bg-emerald-100 text-emerald-800",
+            "rejected" => "bg-rose-100 text-rose-800",
+            "pending verification" => "bg-amber-100 text-amber-800",
+            "pending approval" => "bg-blue-100 text-blue-800",
+            "incomplete" => "bg-orange-100 text-orange-800",
+            "pending" => "bg-amber-100 text-amber-800",
+            _ => "bg-slate-100 text-slate-600"
+        };
+    }
+}

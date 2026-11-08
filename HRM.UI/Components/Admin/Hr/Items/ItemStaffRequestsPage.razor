@@ -1,0 +1,64 @@
+@page "/online/item-requests"
+@page "/admin/hr/items/staff-items"
+@page "/admin/hr/items/item-requests"
+@page "/admin/hr/items/requests"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode RenderMode.InteractiveServer
+@inject NavigationManager Navigation
+@inject HRM.Services.Interfaces.IUserAccessService AccessService
+
+<PageTitle>@(IsAdminRoute ? "Staff Item Requisitions & Assignments - HR Portal" : "My Item Requisitions & Requests - Staff Portal")</PageTitle>
+
+<div class="mx-auto  min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    @if (IsAdminRoute)
+    {
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2">
+            <nav class="flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
+                <a href="/admin/hr" class="hover:text-blue-600 transition">HR</a>
+                <span>/</span>
+                <a href="/admin/hr/items" class="hover:text-blue-600 transition">Items</a>
+                <span>/</span>
+                <span class="text-slate-900 font-semibold">Staff Item Requests</span>
+            </nav>
+            <a href="/admin/hr/items" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+                ← Back to Item Hub
+            </a>
+        </div>
+    }
+  @*   else if (canAccessAdmin)
+    {
+        <div class="flex items-center justify-between rounded-xl border border-blue-200 bg-blue-50/70 px-3.5 py-2 text-xs text-blue-900">
+            <span>You have administrator access. Manage organization assignments and all staff items in the HR Portal.</span>
+            <a href="@($"/admin/hr/items/staff-items{(RequestId.HasValue ? $"?requestId={RequestId}" : "")}")"
+               class="font-semibold text-blue-700 hover:text-blue-900 underline flex items-center gap-1">
+                <span>Switch to HR Admin View</span>
+                <span>→</span>
+            </a>
+        </div>
+    } *@
+
+    <StaffItemRequestPanel RequestId="RequestId" />
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "requestId")]
+    public int? RequestId { get; set; }
+
+    private bool canAccessAdmin;
+
+    private bool IsAdminRoute =>
+        Navigation.Uri.Contains("/admin/", StringComparison.OrdinalIgnoreCase);
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var ctx = await AccessService.GetContextAsync();
+            canAccessAdmin = ctx != null && (ctx.IsSuperAdministrator || await AccessService.HasPermissionAsync("Admin"));
+        }
+        catch
+        {
+            canAccessAdmin = false;
+        }
+    }
+}

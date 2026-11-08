@@ -1,0 +1,416 @@
+@rendermode RenderMode.InteractiveServer
+@using HRM.DTOs
+@using HRM.DTOs.AttendanceDeductions
+@using HRM.Models.AttendanceDeductions
+@using HRM.UI.Services.AttendanceDeductions
+@using HRM.Services.Interfaces
+@inject AttendanceDeductionClient Client
+@inject IUserContextService UserContext
+@inject HRM.Services.ToastService Toasts
+
+<div class="attendance-deductions-panel flex flex-col gap-3 w-full">
+
+    <!-- KPI Summary Row -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Deductions</div>
+            <div class="mt-1 text-lg font-extrabold text-rose-600">
+                MVR @totalDeductionsAmount.ToString("N2")
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                Across @adjustments.Count evaluated records
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Pending Review</div>
+            <div class="mt-1 text-lg font-extrabold text-amber-600">
+                @adjustments.Count(a => a.VerificationStatus == AttendanceAdjustmentVerificationStatuses.PendingVerification)
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                Requires HR / Payroll verification
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Verified for Payroll</div>
+            <div class="mt-1 text-lg font-extrabold text-emerald-600">
+                @adjustments.Count(a => a.VerificationStatus == AttendanceAdjustmentVerificationStatuses.Verified)
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                Ready to ingest into Payroll snapshots
+            </div>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs">
+            <div class="text-xs font-semibold uppercase tracking-wider text-slate-500">Excused / Waived</div>
+            <div class="mt-1 text-lg font-extrabold text-slate-700">
+                @adjustments.Count(a => a.VerificationStatus == AttendanceAdjustmentVerificationStatuses.Excused)
+            </div>
+            <div class="mt-0.5 text-xs text-slate-500">
+                Approved exemptions / verified buffer make-ups
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter & Action Bar -->
+    <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+            <div class="flex items-center gap-1.5">
+                <span class="font-medium text-slate-600">From:</span>
+                <input type="date"
+                       class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                       @bind="startDate" />
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <span class="font-medium text-slate-600">To:</span>
+                <input type="date"
+                       class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                       @bind="endDate" />
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <span class="font-medium text-slate-600">Status:</span>
+                <select class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                        @bind="selectedStatus">
+                    <option value="">All Statuses</option>
+                    <option value="PendingVerification">Pending Verification</option>
+                    <option value="Verified">Verified</option>
+                    <option value="Excused">Excused</option>
+                    <option value="Rejected">Rejected</option>
+                </select>
+            </div>
+
+            <div class="flex items-center gap-1.5">
+                <input type="text"
+                       placeholder="Search staff or EMP ID..."
+                       class="rounded-lg border border-slate-300 px-2.5 py-1 text-xs text-slate-700 focus:border-blue-500 focus:outline-none"
+                       @bind="searchTerm"
+                       @bind:event="oninput" />
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                    @onclick="LoadAdjustmentsAsync">
+                <svg class="h-3.5 w-3.5 text-slate-600 @(isLoading ? "animate-spin" : "")" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>Filter</span>
+            </button>
+
+            <button type="button"
+                    class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                    @onclick="RunEvaluationAsync">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <span>Evaluate Period</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Active Policy Banner -->
+    @if (currentPolicy != null)
+    {
+        <div class="rounded-xl border border-blue-200 bg-blue-50/50 p-3 shadow-xs flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div class="flex items-center gap-2">
+                <span class="rounded-full bg-blue-600 text-white font-bold px-2 py-0.5 text-[10px]">
+                    @currentPolicy.PolicyCode
+                </span>
+                <span class="font-semibold text-slate-800">@currentPolicy.PolicyName</span>
+                <span class="text-slate-500">(@currentPolicy.LegalReference)</span>
+            </div>
+            <div class="flex items-center gap-4 text-slate-600">
+                <span>Basis: <strong>@currentPolicy.SalaryDivisor days</strong></span>
+                <span>Buffer: <strong>@currentPolicy.ArrivalBufferMinutes mins</strong></span>
+                <span>Buffer Rule: <strong>@currentPolicy.BufferExceededRule</strong></span>
+                <span>Make-up Req: <strong>@(currentPolicy.BufferMakeUpRequired ? "Yes" : "No")</strong></span>
+                <span>Pension Adj: <strong>@(currentPolicy.DeductFromPensionableSalary ? "Reg 2021/R-27 Active" : "No")</strong></span>
+            </div>
+        </div>
+    }
+
+    <!-- Itemized Adjustments Table -->
+    <div class="rounded-xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                    <tr class="border-b border-slate-200 bg-slate-50 text-slate-600 font-semibold">
+                        <th class="px-3 py-2.5">Date</th>
+                        <th class="px-3 py-2.5">Staff</th>
+                        <th class="px-3 py-2.5">Classification</th>
+                        <th class="px-3 py-2.5 text-right">Sched/Act</th>
+                        <th class="px-3 py-2.5 text-right">Deductible</th>
+                        <th class="px-3 py-2.5 text-right">Basic Ded</th>
+                        <th class="px-3 py-2.5 text-right">Service Ded</th>
+                        <th class="px-3 py-2.5 text-right font-bold">Total Ded</th>
+                        <th class="px-3 py-2.5">Verification</th>
+                        <th class="px-3 py-2.5">Payroll Status</th>
+                        <th class="px-3 py-2.5 text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-100 text-slate-700">
+                    @if (filteredAdjustments.Count == 0)
+                    {
+                        <tr>
+                            <td colspan="11" class="px-3 py-8 text-center text-slate-400">
+                                @(isLoading ? "Loading adjustments..." : "No attendance deductions found for the selected filter.")
+                            </td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var row in filteredAdjustments)
+                        {
+                            <tr class="hover:bg-slate-50 transition-colors">
+                                <td class="px-3 py-2 font-medium text-slate-900 whitespace-nowrap">
+                                    @row.WorkDate.ToString("dd MMM yyyy")
+                                </td>
+                                <td class="px-3 py-2 whitespace-nowrap">
+                                    <div class="font-semibold text-slate-900">@row.EmployeeName</div>
+                                    <div class="text-[11px] text-slate-400">@row.EmployeeNumber</div>
+                                </td>
+                                <td class="px-3 py-2 whitespace-nowrap">
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @GetClassificationClass(row.AdjustmentType)">
+                                        @row.AdjustmentType
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap text-slate-500">
+                                    @row.ScheduledMinutes m / @row.ActualMinutes m
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap font-semibold text-slate-800">
+                                    @row.DeductibleMinutes mins
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap text-slate-700">
+                                    @row.BasicSalaryDeductionAmount.ToString("N2")
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap text-slate-700">
+                                    @row.ServiceAllowanceDeductionAmount.ToString("N2")
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap font-extrabold text-rose-600">
+                                    @row.EstimatedDeductionAmount.ToString("N2")
+                                </td>
+                                <td class="px-3 py-2 whitespace-nowrap">
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @GetVerificationBadgeClass(row.VerificationStatus)">
+                                        @row.VerificationStatus
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2 whitespace-nowrap">
+                                    <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold @GetPayrollBadgeClass(row.PayrollProcessingStatus)">
+                                        @row.PayrollProcessingStatus
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2 text-center whitespace-nowrap">
+                                    @if (row.VerificationStatus == AttendanceAdjustmentVerificationStatuses.PendingVerification)
+                                    {
+                                        <div class="inline-flex items-center gap-1">
+                                            <button type="button"
+                                                    class="rounded px-2 py-1 text-[11px] font-semibold bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors"
+                                                    title="Verify deduction for payroll calculation"
+                                                    @onclick="() => VerifyAdjustment(row.AttendanceAdjustmentId)">
+                                                Verify
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded px-2 py-1 text-[11px] font-semibold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                                                    title="Excuse lateness or approved buffer make-up"
+                                                    @onclick="() => ExcuseAdjustment(row.AttendanceAdjustmentId)">
+                                                Excuse
+                                            </button>
+                                            <button type="button"
+                                                    class="rounded px-2 py-1 text-[11px] font-semibold bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors"
+                                                    title="Reject exception"
+                                                    @onclick="() => RejectAdjustment(row.AttendanceAdjustmentId)">
+                                                Reject
+                                            </button>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-[11px] text-slate-400">Locked / Processed</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int OrganisationId { get; set; } = 1;
+
+    private bool isLoading = false;
+    private DateOnly startDate = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+    private DateOnly endDate = new DateOnly(DateTime.UtcNow.Year, DateTime.UtcNow.Month, DateTime.DaysInMonth(DateTime.UtcNow.Year, DateTime.UtcNow.Month));
+    private string selectedStatus = "";
+    private string searchTerm = "";
+
+    private AttendanceDeductionPolicy? currentPolicy;
+    private List<AttendanceAdjustmentDto> adjustments = new();
+
+    private decimal totalDeductionsAmount => adjustments.Sum(a => a.EstimatedDeductionAmount);
+
+    private List<AttendanceAdjustmentDto> filteredAdjustments
+    {
+        get
+        {
+            var list = adjustments.AsEnumerable();
+            if (!string.IsNullOrWhiteSpace(selectedStatus))
+                list = list.Where(a => a.VerificationStatus == selectedStatus);
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+                list = list.Where(a => a.EmployeeName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                                       a.EmployeeNumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+            return list.OrderByDescending(a => a.WorkDate).ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var user = await UserContext.GetCurrentAsync();
+            int orgId = user?.Organisation?.OrganisationBusinessEntityId
+                ?? user?.ActiveJob?.OrganisationId
+                ?? 0;
+            if (orgId > 0)
+            {
+                OrganisationId = orgId;
+            }
+        }
+        catch { }
+
+        await LoadPolicyAsync();
+        await LoadAdjustmentsAsync();
+    }
+
+    private async Task LoadPolicyAsync()
+    {
+        try
+        {
+            currentPolicy = await Client.GetEffectivePolicyAsync(OrganisationId, DateOnly.FromDateTime(DateTime.UtcNow));
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load deduction policy: {ex.Message}");
+        }
+    }
+
+    private async Task LoadAdjustmentsAsync()
+    {
+        isLoading = true;
+        try
+        {
+            adjustments = await Client.GetAdjustmentsAsync(
+                OrganisationId,
+                startDate,
+                endDate,
+                string.IsNullOrWhiteSpace(selectedStatus) ? null : selectedStatus);
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Failed to load attendance adjustments: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task RunEvaluationAsync()
+    {
+        isLoading = true;
+        try
+        {
+            var results = await Client.EvaluateRangeAsync(OrganisationId, startDate, endDate);
+            Toasts.Success($"Successfully evaluated attendance for {results.Count} items.");
+            await LoadAdjustmentsAsync();
+        }
+        catch (Exception ex)
+        {
+            Toasts.Error($"Evaluation failed: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task VerifyAdjustment(long adjustmentId)
+    {
+        var user = await UserContext.GetCurrentAsync();
+        int userId = user?.UserId ?? 1;
+        var result = await Client.VerifyAdjustmentAsync(adjustmentId, userId, "Verified by HR Admin for payroll processing.");
+        if (result.Success)
+        {
+            Toasts.Success("Adjustment verified for payroll.");
+            await LoadAdjustmentsAsync();
+        }
+        else
+        {
+            Toasts.Error(result.Message ?? "Verification failed.");
+        }
+    }
+
+    private async Task ExcuseAdjustment(long adjustmentId)
+    {
+        var user = await UserContext.GetCurrentAsync();
+        int userId = user?.UserId ?? 1;
+        var result = await Client.ExcuseAdjustmentAsync(adjustmentId, userId, "Excused / exempt by HR authorization.");
+        if (result.Success)
+        {
+            Toasts.Success("Adjustment excused.");
+            await LoadAdjustmentsAsync();
+        }
+        else
+        {
+            Toasts.Error(result.Message ?? "Action failed.");
+        }
+    }
+
+    private async Task RejectAdjustment(long adjustmentId)
+    {
+        var user = await UserContext.GetCurrentAsync();
+        int userId = user?.UserId ?? 1;
+        var result = await Client.RejectAdjustmentAsync(adjustmentId, userId, "Rejected by HR administrator.");
+        if (result.Success)
+        {
+            Toasts.Success("Adjustment rejected.");
+            await LoadAdjustmentsAsync();
+        }
+        else
+        {
+            Toasts.Error(result.Message ?? "Action failed.");
+        }
+    }
+
+    private string GetClassificationClass(string type) => type switch
+    {
+        AttendanceDeductionTypes.LateArrival => "bg-amber-50 text-amber-800 border border-amber-200",
+        AttendanceDeductionTypes.FullDayAbsence => "bg-rose-50 text-rose-800 border border-rose-200",
+        AttendanceDeductionTypes.EarlyDeparture => "bg-orange-50 text-orange-800 border border-orange-200",
+        AttendanceDeductionTypes.PartialDayAbsence => "bg-purple-50 text-purple-800 border border-purple-200",
+        _ => "bg-slate-100 text-slate-800 border border-slate-200"
+    };
+
+    private string GetVerificationBadgeClass(string status) => status switch
+    {
+        AttendanceAdjustmentVerificationStatuses.Verified => "bg-emerald-50 text-emerald-800 border border-emerald-200",
+        AttendanceAdjustmentVerificationStatuses.PendingVerification => "bg-amber-50 text-amber-800 border border-amber-200",
+        AttendanceAdjustmentVerificationStatuses.Excused => "bg-blue-50 text-blue-800 border border-blue-200",
+        AttendanceAdjustmentVerificationStatuses.Rejected => "bg-rose-50 text-rose-800 border border-rose-200",
+        _ => "bg-slate-100 text-slate-700"
+    };
+
+    private string GetPayrollBadgeClass(string status) => status switch
+    {
+        AttendanceAdjustmentPayrollStatuses.Ingested => "bg-blue-50 text-blue-700",
+        AttendanceAdjustmentPayrollStatuses.Calculated => "bg-purple-50 text-purple-700",
+        AttendanceAdjustmentPayrollStatuses.Locked or AttendanceAdjustmentPayrollStatuses.Paid => "bg-emerald-50 text-emerald-700",
+        _ => "bg-slate-100 text-slate-500"
+    };
+}

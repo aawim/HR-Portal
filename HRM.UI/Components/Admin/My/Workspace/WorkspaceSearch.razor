@@ -1,0 +1,243 @@
+@implements IDisposable
+@using HRM.DTOs
+@using HRM.Enum
+@using HRM.Models
+@using HRM.Services
+@using HRM.Services.Interfaces
+
+@inject IWorkspaceDirectoryService Directory
+@inject IUserAccessService userAccessService;
+
+@rendermode RenderMode.InteractiveServer
+@inject ToastService ToastService
+
+<div class="relative w-full max-w-xl">
+
+    <div class="relative">
+
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+            <svg class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24">
+
+                <path stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+        </span>
+
+
+        <input class="w-full pl-9 pr-9 py-2
+                      border border-slate-300 dark:border-slate-700
+                      rounded-lg text-xs
+                      bg-white dark:bg-slate-900
+                      text-slate-900 dark:text-slate-100
+                      placeholder:text-slate-400 dark:placeholder:text-slate-500
+                      shadow-xs
+                      focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 transition"
+        placeholder="@(StaffOnly ? "Search employee by name or national ID..." : "Search staff or organisation...")"
+        aria-label="@(StaffOnly ? "Search employee" : "Search staff or organisation")"
+        @bind="SearchText"
+        @bind:event="oninput" />
+
+        @if (!string.IsNullOrWhiteSpace(SearchText))
+        {
+            <button type="button"
+                    class="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs font-bold"
+                    @onclick="() => SearchText = string.Empty">
+                ✕
+            </button>
+        }
+
+    </div>
+
+
+    @if (!string.IsNullOrWhiteSpace(SearchText))
+    {
+        <div class="absolute w-full mt-2
+                    bg-white dark:bg-slate-900 rounded-xl
+                    shadow-xl border
+                    border-slate-200 dark:border-slate-700
+                    max-h-96 overflow-auto z-50">
+
+
+            @if (Loading)
+            {
+                <div class="p-4 text-center text-slate-500">
+                    Searching...
+                </div>
+            }
+            else
+            {
+
+                @if (StaffResults.Any())
+                {
+                    <div class="px-4 py-2 text-xs
+                                font-bold uppercase
+                                text-slate-500 border-b">
+
+                        Staff
+                    </div>
+
+                    @foreach (var item in StaffResults)
+                    {
+                        <button class="w-full text-left
+                                       px-4 py-3
+                                       hover:bg-slate-50 dark:hover:bg-slate-800
+                                       border-b border-slate-100 dark:border-slate-800 transition"
+                        @onclick="() => Select(item)">
+
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">
+                                @item.Name  |  <span> @item.NameDv (@item.IDCard) </span>
+                            </div>
+
+
+                            <div class="text-xs text-slate-500">
+                                @item.Description
+                            </div>
+
+                        </button>
+                    }
+                }
+
+                @if (OrganisationResults.Any())
+                {
+                    <div class="px-4 py-2 text-xs
+                                font-bold uppercase
+                                text-slate-500 border-b">
+
+                        Organisations
+                    </div>
+
+                    @foreach (var item in OrganisationResults)
+                    {
+                        <button class="w-full text-left
+                                       px-4 py-3
+                                       hover:bg-slate-50 dark:hover:bg-slate-800
+                                       border-b border-slate-100 dark:border-slate-800 transition"
+                        @onclick="() => Select(item)">
+
+                            <div class="font-semibold text-slate-800 dark:text-slate-100">
+                                @item.Name | <span class="dhivehi-font"> @item.NameDv </span>
+                            </div>
+
+                        </button>
+                    }
+                }
+
+                @if (!StaffResults.Any() &&
+        !OrganisationResults.Any())
+                {
+                    <div class="p-5 text-center text-slate-500">
+                        No results found.
+                    </div>
+                }
+
+            }
+
+        </div>
+    }
+
+</div>
+
+
+
+@code {
+
+    [Parameter]
+    public EventCallback<WorkspaceSearchResult> OnSelected { get; set; }
+    [Parameter] public bool StaffOnly { get; set; }
+    [Parameter] public bool RequireActivePosition { get; set; }
+    [Parameter] public int? OrganisationId { get; set; }
+    [Parameter] public IReadOnlyCollection<int>? AllowedStaffIds { get; set; }
+
+    private string _searchText = "";
+
+    private string SearchText
+    {
+        get => _searchText;
+
+        set
+        {
+            if (_searchText == value)
+                return;
+
+
+            _searchText = value;
+            pendingSearch?.Cancel();pendingSearch?.Dispose();pendingSearch=new();
+            var version=++searchVersion;
+            _ = SearchAsync(version,pendingSearch.Token);
+        }
+    }
+
+    private bool Loading;
+    private int searchVersion;
+    private CancellationTokenSource? pendingSearch;
+    public void Dispose(){searchVersion++;pendingSearch?.Cancel();pendingSearch?.Dispose();}
+
+    private List<WorkspaceSearchResult> StaffResults = new();
+
+    private List<WorkspaceSearchResult> OrganisationResults = new();
+
+    private async Task Select(WorkspaceSearchResult item)
+    {
+        SearchText = "";
+        StaffResults.Clear();
+        OrganisationResults.Clear();
+        await OnSelected.InvokeAsync(item);
+    }
+
+
+    private async Task SearchAsync(int version,CancellationToken token)
+{
+
+     if (string.IsNullOrWhiteSpace(SearchText))
+    {
+        StaffResults = new();
+        OrganisationResults = new();
+        Loading = false;
+        return;
+
+
+
+    }
+    Loading = true;
+        // StaffResults.Clear();
+        // OrganisationResults.Clear();
+    try
+    {
+        await Task.Delay(250,token);
+        var selectedOrganisationId = OrganisationId;
+        var contextOrganisationId = await userAccessService.GetCurrentOrganisationIdAsync();
+        var result = await Directory.SearchAsync(new(SearchText, StaffOnly, RequireActivePosition, OrganisationId, AllowedStaffIds?.ToArray()), token);
+        var foundStaff = result.Staff;
+        var foundOrganisations = result.Organisations;
+        if(version!=searchVersion||token.IsCancellationRequested||OrganisationId!=selectedOrganisationId||
+            await userAccessService.GetCurrentOrganisationIdAsync()!=contextOrganisationId)return;
+        StaffResults=foundStaff;OrganisationResults=foundOrganisations;
+    }
+    catch(OperationCanceledException) { }
+    catch (Exception ex)
+    {
+        if(version!=searchVersion)return;
+        Console.Error.WriteLine(ex);
+        StaffResults = new List<WorkspaceSearchResult>();
+        OrganisationResults = new List<WorkspaceSearchResult>();
+
+        ToastService.Error(
+            "Unable to search the workspace.");
+
+        // Add your logger here
+        // Logger.LogError(ex, "Workspace search failed.");
+    }
+    finally
+    {
+        if(version==searchVersion){Loading = false;await InvokeAsync(StateHasChanged);}
+    }
+}
+
+
+
+}

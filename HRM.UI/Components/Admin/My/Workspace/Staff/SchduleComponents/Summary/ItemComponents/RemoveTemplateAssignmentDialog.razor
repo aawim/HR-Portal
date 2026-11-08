@@ -1,0 +1,58 @@
+@using HRM.DTOs.Job.JobWorkTemplateAssignment
+@using HRM.DTOs.StaffSchedule
+@using HRM.WorkPlanning.Abstractions.JobWorkTemplateAssignment
+@inject IJobWorkTemplateAssignmentService AssignmentService
+@if (IsOpen && Assignment != null)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-950/40" @onclick="CloseAsync"></div>
+        <section role="dialog" aria-modal="true" aria-labelledby="end-schedule-title" class="relative w-full max-w-md space-y-4 rounded-xl border bg-white p-5 shadow-xl">
+            <h2 id="end-schedule-title" class="text-xl font-semibold">End schedule</h2>
+            <p class="text-sm">@Assignment.TemplateName</p>
+            @if (error != null) { <p role="alert" class="text-sm text-red-600">@error</p> }
+            <label class="block text-sm">Last scheduled day<InputDate class="mt-1 w-full rounded-lg border p-2.5" disabled="@saving" @bind-Value="lastDay" /></label>
+            <p class="text-sm text-slate-500">The schedule will remain active through @lastDay.ToString("dd MMM yyyy"). Other schedules are unaffected.</p>
+            <div class="flex flex-wrap justify-end gap-2">
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@saving" @onclick="CloseAsync">Cancel</button>
+                <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(!CanSave)" @onclick="SaveAsync">@(saving ? "Saving..." : "Save end date")</button>
+            </div>
+        </section>
+    </div>
+}
+@code {
+    [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public EventCallback<bool> IsOpenChanged { get; set; }
+    [Parameter] public int JobId { get; set; }
+    [Parameter] public CurrentWorkTemplateAssignmentDto? Assignment { get; set; }
+    [Parameter] public EventCallback OnRemoved { get; set; }
+    private DateTime lastDay = DateTime.UtcNow.AddHours(5).Date;
+    private bool saving, wasOpen;
+    private string? error;
+    private bool CanSave => !saving && Assignment != null && lastDay.Date >= Assignment.EffectiveFrom.Date &&
+        lastDay.Date < DateTime.MaxValue.Date && (!Assignment.EffectiveTo.HasValue || lastDay.Date <= Assignment.EffectiveTo.Value.Date);
+    protected override void OnParametersSet()
+    {
+        if (IsOpen && !wasOpen)
+        {
+            lastDay = DateTime.UtcNow.AddHours(5).Date;
+            if (Assignment != null && lastDay < Assignment.EffectiveFrom.Date) lastDay = Assignment.EffectiveFrom.Date;
+            error = null;
+        }
+        wasOpen = IsOpen;
+    }
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        saving = true; error = null;
+        try
+        {
+            var result = await AssignmentService.RemoveAsync(new() { JobId = JobId,
+                JobWorkTemplateAssignmentId = Assignment!.JobWorkTemplateAssignmentId, EffectiveDate = lastDay.Date.AddDays(1) });
+            if (!result.Success) { error = result.Message; return; }
+            await OnRemoved.InvokeAsync(); await IsOpenChanged.InvokeAsync(false);
+        }
+        catch { error = "The end date could not be saved. Please try again."; }
+        finally { saving = false; }
+    }
+    private Task CloseAsync() => saving ? Task.CompletedTask : IsOpenChanged.InvokeAsync(false);
+}

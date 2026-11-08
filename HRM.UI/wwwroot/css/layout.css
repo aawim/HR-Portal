@@ -1,0 +1,119 @@
+/* Keep the viewport shell fixed in size; only its main content and menu scroll. */
+html, body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+}
+.app-shell {
+    --shell-footer-height: 2.75rem;
+    position: fixed;
+    inset: 0;
+    display: flex;
+    height: 100vh;
+    height: 100dvh;
+    min-width: 0;
+    overflow: hidden;
+}
+.app-shell-content {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+}
+.app-shell-content > header {
+    flex: 0 0 4rem;
+    min-height: 4rem;
+}
+.mobile-menu-button { display:none; place-items:center; width:2.5rem; height:2.5rem; flex:none; border:1px solid var(--app-border-color); border-radius:.625rem; background:#f8fafc; color:#334155; }
+.mobile-menu-button svg { width:1.25rem; height:1.25rem; stroke-width:2; }
+.mobile-menu-button:focus-visible { outline:3px solid #38bdf8; outline-offset:2px; }
+.app-shell-main {
+    flex: 1 1 0%;
+    min-width: 0;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+.welcome-main { display: flex; align-items: center; justify-content: center; }
+.app-shell-footer {
+    box-sizing:border-box; display:flex; align-items:center; justify-content:center;
+    flex: 0 0 var(--shell-footer-height); height:var(--shell-footer-height); padding:0 1rem; border-top: 1px solid var(--app-border-color);
+    background: #fff; color: #64748b; font-size: .7rem; text-align: center;
+}
+.app-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-self: stretch;
+    height: 100%;
+    flex: 0 0 16rem;
+    width: 16rem;
+    min-height: 0;
+    overflow: hidden; background-color: #075985 !important; transition: width .18s ease, flex-basis .18s ease;
+}
+.app-sidebar.is-collapsed { flex-basis: 4.5rem; width: 4.5rem; }
+.sidebar-header { gap: .5rem; padding: 0 .75rem; }
+.sidebar-collapse { display:grid; place-items:center; width:2rem; height:2rem; flex:none; border:1px solid rgba(255,255,255,.2); border-radius:.5rem; color:#fff; background:rgba(255,255,255,.08); }
+.sidebar-collapse:hover,.sidebar-logout:hover,.app-nav-link:hover { background:rgba(255,255,255,.11); }
+.sidebar-collapse:focus-visible { outline:3px solid #bae6fd; outline-offset:2px; }
+.sidebar-collapse svg { width:1rem; height:1rem; stroke-width:2; }
+.app-sidebar.is-collapsed .sidebar-header { justify-content:center; padding:0 .5rem; }
+.app-sidebar.is-collapsed .sidebar-header>div { display:none; }
+.app-sidebar.is-collapsed nav ul { padding-left:.55rem; padding-right:.55rem; }
+.app-nav-link.is-compact { justify-content:center; gap:0; padding-left:.65rem; padding-right:.65rem; }
+.app-nav-active { color:#fff !important; background:rgba(255,255,255,.16) !important; }
+.app-sidebar.is-collapsed .portal-switch-container { display:none; }
+.app-sidebar.is-collapsed .sidebar-logout { justify-content:center; }
+.sidebar-bottom { box-sizing:border-box; display:flex; align-items:center; margin-top:auto; height:var(--shell-footer-height); min-height:var(--shell-footer-height); padding:0 .75rem; }
+.sidebar-bottom .sidebar-logout { height:100%; padding-top:0; padding-bottom:0; border-radius:0; }
+.sidebar-bottom>div { padding-top:0; padding-bottom:0; }
+.portal-public .app-sidebar { background-color:#075985 !important; }
+.portal-public .app-shell-content>header { border-bottom:3px solid #075985; }
+.portal-admin .app-sidebar { background-color:#008080 !important; }
+.portal-admin .app-shell-content>header { border-bottom:3px solid #008080; }
+.portal-online .app-sidebar { background-color:#075985 !important; }
+.portal-online .app-shell-content>header { border-bottom:3px solid #075985; }
+:root[data-theme="dark"] .app-shell-footer { background:#1e293b; color:#b6c4d6; }
+:root[data-theme="dark"] .mobile-menu-button { background:#28364b; color:#e2e8f0; border-color:#52627a; }
+.app-sidebar > nav {
+    flex: 1 1 0%;
+    min-height: 0;
+    overflow-y: auto;
+}
+.app-sidebar > div {
+    flex-shrink: 0;
+}
+.app-sidebar > div:last-child svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    flex-shrink: 0;
+}
+.dashboard-layout {
+    min-width: 0;
+    max-width: 100%;
+}
+@media print {
+    html, body { height: auto; overflow: visible; }
+    .app-shell { position: static; height: auto; overflow: visible; }
+    .app-shell-content, .app-shell-main { height: auto; overflow: visible; }
+}
+@media (max-width: 47.99rem) {
+    .mobile-menu-button { display:grid; }
+    .app-shell-content > header { padding-left:.75rem; padding-right:.75rem; gap:.5rem; }
+    .topbar-actions { min-width:0; margin-left:auto; gap:.5rem; padding-left:0; }
+    .welcome-main { align-items:flex-start; padding:.75rem !important; }
+    .app-shell-footer { padding:0 .75rem; }
+    .app-sidebar { display:none; position:fixed; inset:0 auto 0 0; z-index:80; width:min(18rem,86vw); flex-basis:auto; box-shadow:0 20px 50px rgba(15,23,42,.42); }
+    .app-sidebar.is-mobile-open { display:flex; }
+    .app-sidebar.is-collapsed { width:min(18rem,86vw); }
+    .app-sidebar.is-collapsed .sidebar-header { justify-content:initial; padding:0 .75rem; }
+    .app-sidebar.is-collapsed .sidebar-header>div { display:flex; }
+    .app-sidebar.is-collapsed nav ul { padding-left:.75rem; padding-right:.75rem; }
+    .app-sidebar .app-nav-link.is-compact { justify-content:flex-start; gap:.75rem; padding-left:.75rem; padding-right:.75rem; }
+    .app-sidebar.is-collapsed .portal-switch-container { display:block; }
+    .app-sidebar.is-collapsed .sidebar-logout { justify-content:flex-start; }
+    .sidebar-backdrop { position:fixed; inset:0; z-index:70; border:0; background:rgba(2,6,23,.58); }
+}
+@media (prefers-reduced-motion: reduce) { .app-sidebar { transition:none; } }

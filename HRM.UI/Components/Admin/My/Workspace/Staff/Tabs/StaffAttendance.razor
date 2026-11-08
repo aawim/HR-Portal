@@ -1,0 +1,202 @@
+@using HRM.DTOs.Attendance
+@using HRM.Components.Pages.Online.Dashboard
+@inject HRM.Services.Interfaces.IAttendanceService Attendance
+
+<section class="w-full p-2 flex flex-col gap-2" aria-label="Selected employee attendance">
+    @if(!ReadOnly){<HRM.Components.Shared.WeeklyHoursReview StaffId="StaffId" />}
+    <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
+        <div>
+            <h3 class="text-base font-bold text-slate-800">Attendance Records</h3>
+            <p class="text-xs text-slate-500 mt-0.5">Attendance records, daily hours, shift duty, and raw clock events.</p>
+        </div>
+        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-2xs hover:bg-slate-50 transition-colors" disabled="@loading" @onclick="LoadAsync">
+            <span class="@(loading ? "animate-spin" : "")">↻</span>
+            <span>Refresh</span>
+        </button>
+    </div>
+    @if (!ExternalDateFilters)
+    {
+    <div class="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-slate-50/70 p-3 shadow-2xs">
+        <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">From</label>
+            <InputDate @bind-Value="from" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+        </div>
+        <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">To</label>
+            <InputDate @bind-Value="to" class="block rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" />
+        </div>
+        <button type="button" class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white px-3.5 py-1.5 text-xs font-semibold shadow-2xs transition-colors" disabled="@loading" @onclick="ApplyAsync">
+            Show records
+        </button>
+    </div>
+    }
+    @if(error != null) { <p role="alert" class="rounded-xl border border-red-200 bg-red-50 p-3 text-xs text-red-700 shadow-2xs">@error</p> }
+    @if(loading) { <p role="status" class="text-xs text-slate-500">Loading attendance...</p> }
+    @if (ShowOverview)
+    {
+        <YearlyAttendanceGridCard Days="days" SelectedYear="year" YearChanged="ChangeYearAsync" IsLoading="loading" AllowYearChange="@(!ExternalDateFilters)" ShowExports="false" />
+    }
+    @if(!loading && error == null)
+    {
+        <HRM.Components.Shared.AttendanceExportButtons CreateReport="BuildExport" />
+
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            @foreach(var stat in Stats) { <div class="rounded-xl border border-slate-200 bg-white p-3 shadow-2xs"><p class="text-[11px] font-medium text-slate-500">@stat.Label</p><p class="mt-1 text-lg font-bold text-slate-800">@stat.Value</p></div> }
+        </div>
+
+        <!-- Two-Column Grid: Daily Attendance (Left 7) and Clock Events/Duty (Right 5) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-2 p-2 items-start">
+            <!-- Left Column: Daily Attendance Table (7 cols) -->
+            <div class="lg:col-span-7 min-w-0 space-y-4">
+                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800 flex items-center justify-between">
+                        <span>Daily attendance · @periodFrom.ToString("dd MMM yyyy") – @periodTo.ToString("dd MMM yyyy")</span>
+                        <span class="text-[11px] text-slate-400 font-normal">@PeriodDays.Count() days</span>
+                    </div>
+                    <table class="w-full text-left text-xs">
+                        <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3.5 py-2.5">Date</th><th class="px-3.5 py-2.5">Status</th><th class="px-3.5 py-2.5">Check In</th><th class="px-3.5 py-2.5">Check Out</th><th class="px-3.5 py-2.5">Worked</th><th class="px-3.5 py-2.5">Duty</th><th class="px-3.5 py-2.5">Events</th></tr></thead>
+                        <tbody>@foreach(var day in PeriodDays.OrderByDescending(x => x.Date)) {
+                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                <td class="whitespace-nowrap px-3.5 py-2.5 font-medium text-slate-800">@day.Date.ToString("dd MMM · ddd")</td>
+                                <td class="px-3.5 py-2.5"><span class="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold @GetAttendanceBadgeClass(day)">@Status(day)</span></td>
+                                <td class="px-3.5 py-2.5">@(day.FirstCheckIn?.ToString("HH:mm") ?? "—")</td>
+                                <td class="px-3.5 py-2.5">@(day.LastCheckOut?.ToString("HH:mm") ?? "—")</td>
+                                <td class="px-3.5 py-2.5 font-semibold text-slate-900">@day.WorkedHours.ToString("0.##")h</td>
+                                <td class="px-3.5 py-2.5 text-slate-600">@day.DutyWorkedHours.ToString("0.##")h</td>
+                                <td class="px-3.5 py-2.5 font-mono text-[11px]">@day.ClockEventCount</td>
+                            </tr>
+                        }</tbody>
+                    </table>
+                    @if(!PeriodDays.Any()) { <p class="p-6 text-center text-xs text-slate-500">No attendance days in this employment period.</p> }
+                </div>
+            </div>
+
+            <!-- Right Column: Clock Events & Duty Shifts (5 cols) -->
+            <div class="lg:col-span-5 min-w-0 space-y-4">
+                @if (ShowDutyAttendance)
+                {
+                    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                        <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800">Required shift/duty attendance</div>
+                        <table class="w-full whitespace-nowrap text-left text-xs">
+                            <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3 py-2">Date</th><th class="px-3 py-2">Schedule</th><th class="px-3 py-2">Status</th><th class="px-3 py-2">Credited</th></tr></thead>
+                            <tbody>@foreach (var duty in dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance))
+                            {
+                                <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                    <td class="px-3 py-2 font-medium text-slate-800">@duty.Date.ToString("dd MMM")</td>
+                                    <td class="px-3 py-2 text-slate-600 truncate max-w-[120px]" title="@duty.Purpose · @duty.Name">@duty.Purpose · @duty.Name</td>
+                                    <td class="px-3 py-2">@DutyStatus(duty)</td>
+                                    <td class="px-3 py-2 font-medium">@duty.CreditedMinutes m</td>
+                                </tr>
+                            }</tbody>
+                        </table>
+                        @if (!dutyAttendance.Any(d => d.IsShiftOrDuty && d.RequiresAttendance)) { <p class="p-3 text-xs text-slate-500">No required shift/duty assignments for this period.</p> }
+                    </div>
+                }
+
+                <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-2xs">
+                    <div class="p-3 border-b border-slate-100 font-bold text-xs text-slate-800 flex items-center justify-between">
+                        <span>Clock Events Log</span>
+                        <span class="text-[11px] font-normal text-slate-400">@events.Count events</span>
+                    </div>
+                    <table class="w-full text-left text-xs">
+                        <thead><tr class="bg-slate-50/80 text-slate-600 text-[11px] font-semibold uppercase tracking-wider"><th class="px-3 py-2">Time</th><th class="px-3 py-2">Event</th><th class="px-3 py-2">Schedule / Method</th></tr></thead>
+                        <tbody>@foreach(var entry in events.Take(100)) {
+                            <tr class="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                                <td class="whitespace-nowrap px-3 py-2 font-mono text-[11px] text-slate-800">@entry.Time.ToString("dd MMM HH:mm:ss")</td>
+                                <td class="px-3 py-2">
+                                    <span class="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold @(entry.Event.Contains("In", StringComparison.OrdinalIgnoreCase) ? "bg-emerald-50 text-emerald-800 border border-emerald-200" : "bg-slate-100 text-slate-700 border border-slate-200")">
+                                        @entry.Event
+                                    </span>
+                                </td>
+                                <td class="px-3 py-2 text-xs text-slate-600 truncate max-w-[160px]" title="@(entry.SharedScheduleSummary ?? entry.Schedule)">
+                                    @(entry.SharedScheduleSummary ?? entry.Schedule)
+                                </td>
+                            </tr>
+                        }</tbody>
+                    </table>
+                    @if(events.Count == 0) { <p class="p-4 text-center text-xs text-slate-500">No clock events for this date range.</p> }
+                    @if(events.Count > 100) { <p class="p-2.5 text-center text-[11px] text-slate-400 border-t border-slate-100">Showing first 100 of @events.Count events</p> }
+                </div>
+            </div>
+        </div>
+    }
+</section>
+
+@code {
+    private AttendanceExportReport BuildExport()
+    {
+        var tables = new List<AttendanceExportTable> { AttendanceReportExport.Daily(PeriodDays),
+            new("Clock events", ["Date and time", "Event", "Schedule"], events.Select(e => new object?[] { e.Time.ToString("yyyy-MM-dd HH:mm:ss"), e.Event, e.Schedule }).ToList()) };
+        if (ShowDutyAttendance) tables.Add(new("Required shift duty", ["Date", "Schedule", "Scheduled in", "Scheduled out", "Status", "Check in", "Check out"],
+            dutyAttendance.Where(d => d.IsShiftOrDuty && d.RequiresAttendance).Select(d => new object?[] { d.Date.ToString("yyyy-MM-dd"), $"{d.Purpose} · {d.Name}",
+                d.ScheduledStart.ToString("yyyy-MM-dd HH:mm"), d.ScheduledEnd.ToString("yyyy-MM-dd HH:mm"), DutyStatus(d), d.CheckIn?.ToString("HH:mm"), d.CheckOut?.ToString("HH:mm") }).ToList()));
+        return new("Employee attendance", $"{(StaffName ?? $"Employee ID {StaffId}")} · {periodFrom:dd MMM yyyy} – {periodTo:dd MMM yyyy}" +
+            (events.Count == 1000 ? " · Clock events limited to latest 1,000; narrow the period for other events." : ""), tables);
+    }
+    [Parameter] public bool ReadOnly {get;set;}
+    [Parameter] public string? StaffName { get; set; }
+    [Parameter] public int StaffId { get; set; }
+    [Parameter] public DateTime? InitialFrom { get; set; }
+    [Parameter] public DateTime? InitialTo { get; set; }
+    [Parameter] public bool ExternalDateFilters { get; set; }
+    [Parameter] public bool ShowOverview { get; set; } = true;
+    [Parameter] public bool ShowDutyAttendance { get; set; }
+    private (int Staff, DateTime? From, DateTime? To, bool Duty)? loadedSelection;
+    private List<StaffScheduleAttendanceDto> dutyAttendance = [];
+    static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    int loadedStaff, year = Today.Year, version; bool loading; string? error;
+    DateTime from = new(Today.Year, Today.Month, 1), to = Today, periodFrom, periodTo;
+    List<YearlyAttendanceDayDto> days = []; List<StaffAttendanceClockEventDto> events = [];
+    IEnumerable<YearlyAttendanceDayDto> PeriodDays => days.Where(x => x.Date >= periodFrom && x.Date <= periodTo);
+    IEnumerable<(string Label, string Value)> Stats => new[] { ("Present", PeriodDays.Count(x => x.IsPresent).ToString()), ("Absent", PeriodDays.Count(x => x.IsAbsent).ToString()), ("Leave", PeriodDays.Count(x => x.IsOnLeave).ToString()), ("Rest days", PeriodDays.Count(x => x.IsRestDay).ToString()), ("Worked hours", PeriodDays.Sum(x => x.WorkedHours).ToString("0.##")) };
+    protected override async Task OnParametersSetAsync()
+    {
+        var selection = (StaffId, InitialFrom, InitialTo, ShowDutyAttendance);
+        if (loadedSelection == selection) return;
+        loadedSelection = selection;
+        loadedStaff = StaffId;
+        from = InitialFrom?.Date ?? new(Today.Year, Today.Month, 1);
+        to = InitialTo?.Date ?? Today;
+        year = from.Year;
+        await LoadAsync();
+    }
+    async Task ChangeYearAsync(int value) { year = value; from = new(value, 1, 1); to = value == Today.Year ? Today : new(value, 12, 31); await LoadAsync(); }
+    async Task ApplyAsync() { if(from > to || from.Year != to.Year || from.Year < 2000 || to > Today) { error = "Choose dates in the same year, from 2000 through today."; return; } year = from.Year; await LoadAsync(); }
+    async Task LoadAsync() {
+        var request = ++version; var staff = StaffId; var selectedFrom = from; var selectedTo = to; loading = true; error = null; days = []; events = [];
+        try {
+            if(selectedFrom > selectedTo || selectedFrom.Year != selectedTo.Year || selectedFrom.Year != year || selectedTo > Today) throw new InvalidOperationException("Choose a valid date range within the selected year, through today.");
+            var result = await Attendance.GetStaffYearlyAttendanceAsync(staff, year);
+            var clock = await Attendance.GetStaffClockEventsAsync(staff, selectedFrom, selectedTo);
+            var duties = ShowDutyAttendance ? await Attendance.GetStaffScheduleAttendanceAsync(staff, selectedFrom, selectedTo) : new List<StaffScheduleAttendanceDto>();
+            if(request == version) { days = result; events = clock; dutyAttendance = duties; periodFrom = selectedFrom.Date; periodTo = selectedTo.Date; }
+        }
+        catch(UnauthorizedAccessException) { if(request == version) error = "You do not have access to this employee's attendance in the current organisation."; }
+        catch(InvalidOperationException ex) { if(request == version) error = ex.Message; }
+        catch(Exception) { if(request == version) error = "Attendance could not be loaded. Please try Refresh."; }
+        finally { if(request == version) loading = false; }
+    }
+    static string Status(YearlyAttendanceDayDto day) => HRM.Helpers.AttendancePresentation.Status(day);
+    private string DutyStatus(StaffScheduleAttendanceDto duty)
+    {
+        var day = days.FirstOrDefault(d => d.Date.Date == duty.Date.Date);
+        if (day?.IsOnLeave == true) return $"Leave · {day.LeaveTypeName}";
+        if (day?.HasApprovedPosition != true || !day.HasActiveSchedule) return day?.EligibilityMessage ?? "Attendance not required";
+        if (duty.CheckIn.HasValue)
+        {
+            var minutes = HRM.Helpers.AttendanceTiming.LateMinutes(duty.CheckIn.Value, duty.ScheduledStart);
+            return HRM.Helpers.AttendancePresentation.Attended(minutes > 0, minutes, duty.CheckOut >= duty.CheckIn && duty.CheckOut >= duty.ScheduledEnd);
+        }
+        return DateTime.UtcNow.AddHours(5) > duty.ScheduledStart ? "Missing check in" : "Upcoming";
+    }
+
+    private static string GetAttendanceBadgeClass(YearlyAttendanceDayDto day)
+    {
+        if (day.IsOnLeave) return "bg-emerald-50 text-emerald-800 border border-emerald-200";
+        if (day.IsLate) return "bg-amber-50 text-amber-800 border border-amber-200";
+        if (day.IsPresent) return "bg-teal-50 text-teal-800 border border-teal-200";
+        if (day.IsRestDay) return "bg-slate-100 text-slate-600 border border-slate-200";
+        if (day.IsAbsent) return "bg-rose-50 text-rose-800 border border-rose-200";
+        return "bg-slate-100 text-slate-600 border border-slate-200";
+    }
+}

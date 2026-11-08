@@ -1,0 +1,1411 @@
+@page "/admin/work-planning/templates"
+
+@using HRM.DTOs
+@using HRM.DTOs.WorkPlanning
+@using HRM.Models.WorkPlanning
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Admin.Settings.Workplan.Components.Template
+
+@inject IWorkTemplateService WorkTemplateService
+@inject ToastService ToastService
+
+<PageTitle>Work Templates</PageTitle>
+
+<div class="space-y-6">
+
+    <WorkTemplatePageHeader OnCreateClicked="@StartNewTemplate" />
+
+    @if (isLoading)
+    {
+        <div class="flex min-h-[500px] items-center justify-center
+                    rounded-xl border border-slate-200 bg-white shadow-sm">
+
+            <div class="text-center">
+
+                <div class="mx-auto h-8 w-8 animate-spin rounded-full
+                            border-4 border-slate-200 border-t-blue-600">
+                </div>
+
+                <p class="mt-3 text-sm text-slate-500">
+                    Loading work templates...
+                </p>
+
+            </div>
+
+        </div>
+    }
+    else
+    {
+        <div class="grid grid-cols-1 gap-4 xl:grid-cols-12">
+
+            <div class="xl:col-span-9">
+
+                <WorkTemplateListPanel Templates="@FilteredTemplates"
+                                       SearchText="@templateSearch"
+                                       SearchTextChanged="@OnTemplateSearchChanged"
+                                       ShowInactive="@showInactive"
+                                       ShowInactiveChanged="@OnShowInactiveChanged"
+                                       OnTemplateSelected="@SelectTemplateAsync"
+                                       OnCreateClicked="@StartNewTemplate" />
+
+            </div>
+
+            <div class="xl:col-span-3">
+
+                <WorkTemplatePresetPanel Presets="@FilteredPresets"
+                                         SearchText="@presetSearch"
+                                         SearchTextChanged="@OnPresetSearchChanged"
+                                         OnPresetSelected="@ApplyPreset" />
+
+            </div>
+
+        </div>
+    }
+
+</div>
+
+<WorkTemplateEditorPanel IsOpen="@showTemplatePanel"
+                         IsOpenChanged="@OnTemplatePanelVisibilityChanged"
+                         Model="@editModel"
+                         IsCreating="@isCreating"
+                         IsSaving="@isSaving"
+                         SelectedTemplate="@selectedTemplate"
+                         TemplateTypes="@templateTypes"
+                         Segments="@segments"
+                         IsLoadingSegments="@isLoadingSegments"
+                         OnSave="@SaveTemplateAsync"
+                         OnClose="@CloseTemplatePanelAsync"
+                         OnArchive="@ArchiveTemplateAsync"
+                         OnAddSegment="@OpenAddSegmentPanelAsync"
+                         OnEditSegment="@OpenEditSegmentPanelAsync" />
+
+<WorkTemplateSegmentPanel IsOpen="@showSegmentPanel"
+                          IsOpenChanged="@OnSegmentPanelVisibilityChanged"
+                          Model="@segmentEditModel"
+                          SegmentTypes="@segmentTypes"
+                          TemplateStartTime="@editModel.DefaultStartTime"
+                          IsEditing="@isEditingSegment"
+                          IsSaving="@isSavingSegment"
+                          OnSave="@SaveSegmentAsync"
+                          OnClose="@CloseSegmentPanelAsync" />
+
+@code {
+    private bool isLoading;
+    private bool isSaving;
+    private bool isCreating;
+
+    private bool showInactive = true;
+    private bool showTemplatePanel;
+    private bool showSegmentPanel;
+
+    private bool isLoadingSegments;
+    private bool isEditingSegment;
+    private bool isSavingSegment;
+
+    private string templateSearch = string.Empty;
+    private string presetSearch = string.Empty;
+
+    private List<WorkTemplateDto> templates = [];
+    private List<WorkTemplateTypeDto> templateTypes = [];
+    private List<WorkTemplateSegmentDto> segments = [];
+    private List<WorkSegmentTypeDto> segmentTypes = [];
+
+    private WorkTemplateDto? selectedTemplate;
+
+    private UpdateWorkTemplateDto editModel =
+        CreateEmptyEditModel();
+
+    private WorkTemplateSegmentEditViewModel segmentEditModel =
+        CreateEmptySegmentEditModel();
+
+    private bool CanManageSegments =>
+        editModel.WorkTemplateId > 0 &&
+        !isSaving &&
+        !isSavingSegment;
+
+    private List<WorkTemplateDto> FilteredTemplates =>
+        templates
+            .Where(x => showInactive || x.IsActive)
+            .Where(MatchesTemplateSearch)
+            .OrderByDescending(x => x.IsActive)
+            .ThenBy(x => x.Name)
+            .ToList();
+
+    private List<WorkTemplatePresetDto> FilteredPresets =>
+        presets
+            .Where(MatchesPresetSearch)
+            .OrderBy(x => x.Name)
+            .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        isLoading = true;
+
+        try
+        {
+            await Task.WhenAll(
+                LoadTemplatesAsync(),
+                LoadTemplateTypesAsync(),
+                LoadSegmentTypesAsync());
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task LoadTemplatesAsync()
+    {
+        try
+        {
+            templates =
+                await WorkTemplateService.GetAllAsync(
+                    includeInactive: true);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            templates.Clear();
+
+            ToastService.Error(
+                "Work templates could not be loaded. Please refresh and try again.");
+        }
+    }
+
+    private async Task LoadTemplateTypesAsync()
+    {
+        try
+        {
+            templateTypes =
+                await WorkTemplateService
+                    .GetAllTemplateTypesAsync();
+
+            templateTypes =
+                templateTypes
+                    .OrderBy(x => x.Name)
+                    .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            templateTypes.Clear();
+
+            ToastService.Error(
+                "Template types could not be loaded. Please refresh and try again.");
+        }
+    }
+
+    private async Task LoadSegmentTypesAsync()
+    {
+        try
+        {
+            segmentTypes =
+                await WorkTemplateService
+                    .GetAllSegmentTypesAsync();
+
+            segmentTypes =
+                segmentTypes
+                    .OrderBy(x => x.Name)
+                    .ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            segmentTypes.Clear();
+
+            ToastService.Error(
+                "Segment types could not be loaded. Please refresh and try again.");
+        }
+    }
+
+    private async Task SelectTemplateAsync(
+        WorkTemplateDto template)
+    {
+        if (isSaving || isSavingSegment)
+            return;
+
+        selectedTemplate = template;
+        isCreating = false;
+
+        editModel =
+            MapToEditModel(template);
+
+        segments.Clear();
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+
+        showTemplatePanel = true;
+
+        await LoadSegmentsAsync(
+            template.WorkTemplateId);
+    }
+
+    private void StartNewTemplate()
+    {
+        if (isSaving || isSavingSegment)
+            return;
+
+        selectedTemplate = null;
+        isCreating = true;
+
+        segments.Clear();
+
+        editModel =
+            CreateEmptyEditModel();
+
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+
+        showSegmentPanel = false;
+        showTemplatePanel = true;
+    }
+
+    private void ApplyPreset(
+        WorkTemplatePresetDto preset)
+    {
+        if (isSaving || isSavingSegment)
+            return;
+
+        selectedTemplate = null;
+        isCreating = true;
+
+        segments.Clear();
+
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+
+        editModel =
+            MapPresetToEditModel(preset);
+
+        showSegmentPanel = false;
+        showTemplatePanel = true;
+    }
+
+    private async Task SaveTemplateAsync()
+    {
+        if (isSaving)
+            return;
+
+        if (!ValidateTemplate())
+            return;
+
+        try
+        {
+            isSaving = true;
+
+            if (isCreating)
+            {
+                await CreateTemplateAsync();
+            }
+            else
+            {
+                await UpdateTemplateAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            ToastService.Error(
+                "The template could not be saved. Please refresh and try again.");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task CreateTemplateAsync()
+    {
+        var createDto =
+            MapToCreateDto(editModel);
+
+        var result =
+            await WorkTemplateService.CreateAsync(
+                createDto);
+
+        if (!result.Success)
+        {
+            ToastService.Error(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Unable to create work template."
+                    : result.Message);
+
+            return;
+        }
+
+        await LoadTemplatesAsync();
+
+        WorkTemplateDto? createdTemplate = null;
+
+        // if (result.Data is WorkTemplateDto resultTemplate)
+        // {
+        //     createdTemplate = resultTemplate;
+        // }
+
+        createdTemplate ??=
+            templates
+                .Where(x =>
+                    string.Equals(
+                        x.Name,
+                        editModel.Name,
+                        StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(x => x.WorkTemplateId)
+                .FirstOrDefault();
+
+        if (createdTemplate is null)
+        {
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Work template created successfully."
+                    : result.Message);
+
+            CloseTemplatePanel();
+            return;
+        }
+
+        selectedTemplate = createdTemplate;
+        isCreating = false;
+
+        editModel =
+            MapToEditModel(createdTemplate);
+
+        segments.Clear();
+
+        await LoadSegmentsAsync(
+            createdTemplate.WorkTemplateId);
+
+        ToastService.Success(
+            string.IsNullOrWhiteSpace(result.Message)
+                ? "Work template created successfully. You can now add segments."
+                : result.Message);
+    }
+
+    private async Task UpdateTemplateAsync()
+    {
+        if (editModel.WorkTemplateId <= 0)
+        {
+            ToastService.Error(
+                "A valid work template was not selected.");
+
+            return;
+        }
+
+        var result =
+            await WorkTemplateService.UpdateAsync(
+                editModel);
+
+        if (!result.Success)
+        {
+            ToastService.Error(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Unable to update work template."
+                    : result.Message);
+
+            return;
+        }
+
+        await LoadTemplatesAsync();
+
+        selectedTemplate =
+            templates.FirstOrDefault(
+                x => x.WorkTemplateId ==
+                     editModel.WorkTemplateId);
+
+        if (selectedTemplate is not null)
+        {
+            editModel =
+                MapToEditModel(selectedTemplate);
+        }
+
+        ToastService.Success(
+            string.IsNullOrWhiteSpace(result.Message)
+                ? "Work template updated successfully."
+                : result.Message);
+    }
+
+    private async Task ArchiveTemplateAsync()
+    {
+        var templateId =
+            selectedTemplate?.WorkTemplateId ??
+            editModel.WorkTemplateId;
+
+        if (templateId <= 0 || isSaving)
+            return;
+
+        try
+        {
+            isSaving = true;
+
+            var result =
+                await WorkTemplateService.ArchiveAsync(
+                    templateId);
+
+            if (!result.Success)
+            {
+                ToastService.Error(
+                    string.IsNullOrWhiteSpace(result.Message)
+                        ? "Unable to archive work template."
+                        : result.Message);
+
+                return;
+            }
+
+            await LoadTemplatesAsync();
+
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Work template archived successfully."
+                    : result.Message);
+
+            CloseTemplatePanel();
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            ToastService.Error(
+                "The template could not be archived. Please refresh and try again.");
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+
+    private async Task LoadSegmentsAsync(
+        int workTemplateId)
+    {
+        if (workTemplateId <= 0)
+        {
+            segments.Clear();
+            return;
+        }
+
+        try
+        {
+            isLoadingSegments = true;
+
+            segments =
+                await WorkTemplateService.GetSegmentsAsync(
+                    workTemplateId);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            segments.Clear();
+
+            ToastService.Error(
+                "Segments could not be loaded. Please refresh and try again.");
+        }
+        finally
+        {
+            isLoadingSegments = false;
+        }
+    }
+
+    private Task OpenAddSegmentPanelAsync()
+    {
+        if (!CanManageSegments)
+        {
+            ToastService.Error(
+                "Save the work template before adding segments.");
+
+            return Task.CompletedTask;
+        }
+
+        isEditingSegment = false;
+
+        var nextSequence =
+            segments.Count == 0
+                ? 1
+                : segments.Max(
+                    x => x.SequenceNumber) + 1;
+
+        var nextOffset =
+            segments.Count == 0
+                ? 0
+                : segments.Max(
+                    x => x.OffsetMinutes +
+                         x.DurationMinutes);
+
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+
+        segmentEditModel.WorkTemplateId =
+            editModel.WorkTemplateId;
+
+        segmentEditModel.SequenceNumber =
+            nextSequence;
+
+        segmentEditModel.OffsetHours =
+            nextOffset / 60;
+
+        segmentEditModel.OffsetMinutePart =
+            nextOffset % 60;
+
+        showSegmentPanel = true;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OpenEditSegmentPanelAsync(
+        WorkTemplateSegmentDto segment)
+    {
+        if (segment is null ||
+            isSaving ||
+            isSavingSegment)
+        {
+            return Task.CompletedTask;
+        }
+
+        isEditingSegment = true;
+
+        segmentEditModel =
+            MapToSegmentEditModel(segment);
+
+        showSegmentPanel = true;
+
+        return Task.CompletedTask;
+    }
+
+    private async Task SaveSegmentAsync()
+    {
+        if (isSavingSegment)
+            return;
+
+        if (!ValidateSegment())
+            return;
+
+        try
+        {
+            isSavingSegment = true;
+
+            var dto =
+                MapToSaveSegmentDto(
+                    segmentEditModel);
+
+            ServiceResult result;
+
+            if (segmentEditModel.WorkTemplateSegmentId > 0)
+            {
+                result =
+                    await WorkTemplateService
+                        .UpdateSegmentAsync(dto);
+            }
+            else
+            {
+                result =
+                    await WorkTemplateService
+                        .CreateSegmentAsync(dto);
+            }
+
+            if (!result.Success)
+            {
+                ToastService.Error(
+                    string.IsNullOrWhiteSpace(result.Message)
+                        ? "Unable to save segment."
+                        : result.Message);
+
+                return;
+            }
+
+            ToastService.Success(
+                string.IsNullOrWhiteSpace(result.Message)
+                    ? "Segment saved successfully."
+                    : result.Message);
+
+            showSegmentPanel = false;
+            isEditingSegment = false;
+
+            segmentEditModel =
+                CreateEmptySegmentEditModel();
+
+            await LoadSegmentsAsync(
+                editModel.WorkTemplateId);
+
+            await LoadTemplatesAsync();
+
+            selectedTemplate =
+                templates.FirstOrDefault(
+                    x => x.WorkTemplateId ==
+                         editModel.WorkTemplateId);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine(ex);
+            ToastService.Error(
+                "The segment could not be saved. Please refresh and try again.");
+        }
+        finally
+        {
+            isSavingSegment = false;
+        }
+    }
+
+    private bool ValidateTemplate()
+    {
+        if (string.IsNullOrWhiteSpace(
+            editModel.Name))
+        {
+            ToastService.Error(
+                "Template name is required.");
+
+            return false;
+        }
+
+        if (editModel.WorkTemplateTypeId <= 0)
+        {
+            ToastService.Error(
+                "Please select a template type.");
+
+            return false;
+        }
+
+        var selectedTypeExists =
+            templateTypes.Any(
+                x => x.WorkTemplateTypeId ==
+                     editModel.WorkTemplateTypeId);
+
+        if (!selectedTypeExists)
+        {
+            ToastService.Error(
+                $"Work template type ID {editModel.WorkTemplateTypeId} was not found.");
+
+            return false;
+        }
+
+        var onlyOneTimeProvided =
+            editModel.DefaultStartTime.HasValue !=
+            editModel.DefaultEndTime.HasValue;
+
+        if (onlyOneTimeProvided)
+        {
+            ToastService.Error(
+                "Both the default start time and end time must be provided.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private bool ValidateSegment()
+    {
+        if (editModel.WorkTemplateId <= 0)
+        {
+            ToastService.Error(
+                "Save or select a work template first.");
+
+            return false;
+        }
+
+        segmentEditModel.WorkTemplateId =
+            editModel.WorkTemplateId;
+
+        if (segmentEditModel.WorkSegmentTypeId <= 0)
+        {
+            ToastService.Error(
+                "Please select a segment type.");
+
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(
+            segmentEditModel.Name))
+        {
+            ToastService.Error(
+                "Segment name is required.");
+
+            return false;
+        }
+
+        if (segmentEditModel.SequenceNumber <= 0)
+        {
+            ToastService.Error(
+                "Sequence number must be greater than zero.");
+
+            return false;
+        }
+
+        if (segmentEditModel.OffsetHours < 0 ||
+            segmentEditModel.OffsetMinutePart is < 0 or > 59)
+        {
+            ToastService.Error(
+                "Offset minutes must be between 0 and 59.");
+
+            return false;
+        }
+
+        if (segmentEditModel.DurationHours < 0 ||
+            segmentEditModel.DurationMinutePart is < 0 or > 59)
+        {
+            ToastService.Error(
+                "Duration minutes must be between 0 and 59.");
+
+            return false;
+        }
+
+        if (segmentEditModel.DurationMinutes <= 0)
+        {
+            ToastService.Error(
+                "Segment duration must be greater than zero.");
+
+            return false;
+        }
+
+        if (segmentEditModel.GraceBeforeMinutes < 0 ||
+            segmentEditModel.GraceAfterMinutes < 0)
+        {
+            ToastService.Error(
+                "Grace periods cannot be negative.");
+
+            return false;
+        }
+
+        return true;
+    }
+
+    private Task CloseTemplatePanelAsync()
+    {
+        CloseTemplatePanel();
+
+        return Task.CompletedTask;
+    }
+
+    private void CloseTemplatePanel()
+    {
+        if (isSaving || isSavingSegment)
+            return;
+
+        showSegmentPanel = false;
+        showTemplatePanel = false;
+
+        ResetEditor();
+    }
+
+    private Task CloseSegmentPanelAsync()
+    {
+        if (isSavingSegment)
+            return Task.CompletedTask;
+
+        showSegmentPanel = false;
+        isEditingSegment = false;
+
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnTemplatePanelVisibilityChanged(
+        bool value)
+    {
+        if (isSaving && !value)
+            return Task.CompletedTask;
+
+        showTemplatePanel = value;
+
+        if (!value &&
+            !isSaving &&
+            !isSavingSegment)
+        {
+            ResetEditor();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnSegmentPanelVisibilityChanged(
+        bool value)
+    {
+        if (isSavingSegment && !value)
+            return Task.CompletedTask;
+
+        showSegmentPanel = value;
+
+        if (!value &&
+            !isSavingSegment)
+        {
+            isEditingSegment = false;
+
+            segmentEditModel =
+                CreateEmptySegmentEditModel();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnTemplateSearchChanged(
+        string value)
+    {
+        templateSearch =
+            value ?? string.Empty;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnPresetSearchChanged(
+        string value)
+    {
+        presetSearch =
+            value ?? string.Empty;
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnShowInactiveChanged(
+        bool value)
+    {
+        showInactive = value;
+
+        return Task.CompletedTask;
+    }
+
+    private bool MatchesTemplateSearch(
+        WorkTemplateDto template)
+    {
+        if (string.IsNullOrWhiteSpace(
+            templateSearch))
+        {
+            return true;
+        }
+
+        return ContainsIgnoreCase(
+                   template.Name,
+                   templateSearch) ||
+               ContainsIgnoreCase(
+                   template.Description,
+                   templateSearch) ||
+               ContainsIgnoreCase(
+                   template.TemplateType,
+                   templateSearch) ||
+               ContainsIgnoreCase(
+                   GetTemplateTypeName(
+                       template.WorkTemplateTypeId),
+                   templateSearch);
+    }
+
+    private bool MatchesPresetSearch(
+        WorkTemplatePresetDto preset)
+    {
+        if (string.IsNullOrWhiteSpace(
+            presetSearch))
+        {
+            return true;
+        }
+
+        return ContainsIgnoreCase(
+                   preset.Name,
+                   presetSearch) ||
+               ContainsIgnoreCase(
+                   preset.Description,
+                   presetSearch);
+    }
+
+    private void ResetEditor()
+    {
+        selectedTemplate = null;
+
+        isCreating = false;
+        isLoadingSegments = false;
+        isEditingSegment = false;
+
+        segments.Clear();
+
+        editModel =
+            CreateEmptyEditModel();
+
+        segmentEditModel =
+            CreateEmptySegmentEditModel();
+    }
+
+    private static UpdateWorkTemplateDto MapToEditModel(
+        WorkTemplateDto template)
+    {
+        return new UpdateWorkTemplateDto
+            {
+                WorkTemplateId =
+                    template.WorkTemplateId,
+
+                Name =
+                    template.Name,
+
+                Description =
+                    template.Description,
+
+                WorkTemplateTypeId =
+                    template.WorkTemplateTypeId,
+
+                TemplateType =
+                    template.TemplateType,
+
+                DefaultStartTime =
+                    template.DefaultStartTime,
+
+                DefaultEndTime =
+                    template.DefaultEndTime,
+
+                RequiresAttendance =
+                    template.RequiresAttendance,
+
+                RequiresCheckOut =
+                    template.RequiresCheckOut,
+
+                RequiresLocationValidation =
+                    template.RequiresLocationValidation,
+
+                RequiresDeviceValidation =
+                    template.RequiresDeviceValidation,
+
+                AllowsOverlap =
+                    template.AllowsOverlap,
+
+                IsValid =
+                    template.IsValid,
+
+                IsActive =
+                    template.IsActive,
+                IsGlobal = template.IsGlobal,
+            };
+    }
+
+    private static UpdateWorkTemplateDto MapPresetToEditModel(
+        WorkTemplatePresetDto preset)
+    {
+        return new UpdateWorkTemplateDto
+            {
+                WorkTemplateId = 0,
+
+                Name =
+                    preset.Name,
+
+                Description =
+                    preset.Description,
+
+                TemplateType =
+                    preset.TemplateType,
+
+                WorkTemplateTypeId =
+                    preset.WorkTemplateTypeId,
+
+                DefaultStartTime = preset.DefaultStartTime.HasValue
+                    ? TimeOnly.FromTimeSpan(preset.DefaultStartTime.Value)
+                    : null,
+
+                DefaultEndTime = preset.DefaultEndTime.HasValue
+                    ? TimeOnly.FromTimeSpan(preset.DefaultEndTime.Value)
+                    : null,
+
+                RequiresAttendance =
+                    preset.RequiresAttendance,
+
+                RequiresCheckOut =
+                    preset.RequiresCheckOut,
+
+                RequiresLocationValidation = false,
+                RequiresDeviceValidation = false,
+
+                AllowsOverlap =
+                    preset.AllowsOverlap,
+
+                IsValid = true,
+
+                IsActive =
+                    preset.IsActive,
+
+                IsGlobal = preset.IsGlobal,
+            };
+    }
+
+    private static CreateWorkTemplateDto MapToCreateDto(UpdateWorkTemplateDto model)
+    {
+        return new CreateWorkTemplateDto
+            {
+                Name =
+                    model.Name.Trim(),
+
+                Description =
+                    string.IsNullOrWhiteSpace(
+                        model.Description)
+                        ? null
+                        : model.Description.Trim(),
+
+                WorkTemplateTypeId =
+                    model.WorkTemplateTypeId,
+                OrganisationBusinessEntityId = model.OrganisationBusinessEntityId,
+
+                TemplateType =
+                    model.TemplateType,
+
+                DefaultStartTime =
+                    model.DefaultStartTime,
+
+                DefaultEndTime =
+                    model.DefaultEndTime,
+
+                RequiresAttendance =
+                    model.RequiresAttendance,
+
+                RequiresCheckOut =
+                    model.RequiresCheckOut,
+
+                RequiresLocationValidation =
+                    model.RequiresLocationValidation,
+
+                RequiresDeviceValidation =
+                    model.RequiresDeviceValidation,
+
+                AllowsOverlap =
+                    model.AllowsOverlap,
+
+                IsValid =
+                    model.IsValid,
+
+                IsActive =
+                    model.IsActive,
+
+                IsGlobal = model.IsGlobal
+            };
+    }
+
+    private static WorkTemplateSegmentEditViewModel
+        MapToSegmentEditModel(
+            WorkTemplateSegmentDto segment)
+    {
+        return new WorkTemplateSegmentEditViewModel
+            {
+                WorkTemplateSegmentId =
+                    segment.WorkTemplateSegmentId,
+
+                WorkTemplateId =
+                    segment.WorkTemplateId,
+
+                WorkSegmentTypeId =
+                    segment.WorkSegmentTypeId,
+
+                Name =
+                    segment.Name,
+
+                Description =
+                    segment.Description,
+
+                SequenceNumber =
+                    segment.SequenceNumber,
+
+                OffsetHours =
+                    segment.OffsetMinutes / 60,
+
+                OffsetMinutePart =
+                    segment.OffsetMinutes % 60,
+
+                DurationHours =
+                    segment.DurationMinutes / 60,
+
+                DurationMinutePart =
+                    segment.DurationMinutes % 60,
+
+                GraceBeforeMinutes =
+                    segment.GraceBeforeMinutes,
+
+                GraceAfterMinutes =
+                    segment.GraceAfterMinutes,
+
+                IsMandatory =
+                    segment.IsMandatory,
+
+                RequiresAttendance =
+                    segment.RequiresAttendance,
+
+                RequiresLocationValidation =
+                    segment.RequiresLocationValidation,
+
+                RequiresDeviceValidation =
+                    segment.RequiresDeviceValidation,
+
+                IsActive =
+                    segment.IsActive,
+
+                IsPaid =
+                    segment.IsPaid
+            };
+    }
+
+    private static SaveWorkTemplateSegmentDto MapToSaveSegmentDto(
+            WorkTemplateSegmentEditViewModel model)
+    {
+        return new SaveWorkTemplateSegmentDto
+            {
+                WorkTemplateSegmentId =
+                    model.WorkTemplateSegmentId,
+
+                WorkTemplateId =
+                    model.WorkTemplateId,
+
+                WorkSegmentTypeId =
+                    model.WorkSegmentTypeId,
+
+                Name =
+                    model.Name.Trim(),
+
+                Description =
+                    string.IsNullOrWhiteSpace(
+                        model.Description)
+                        ? null
+                        : model.Description.Trim(),
+
+                SequenceNumber =
+                    model.SequenceNumber,
+
+                OffsetMinutes =
+                    model.OffsetMinutes,
+
+                DurationMinutes =
+                    model.DurationMinutes,
+
+                GraceBeforeMinutes =
+                    model.GraceBeforeMinutes,
+
+                GraceAfterMinutes =
+                    model.GraceAfterMinutes,
+
+                IsMandatory =
+                    model.IsMandatory,
+
+                RequiresAttendance =
+                    model.RequiresAttendance,
+
+                RequiresLocationValidation =
+                    model.RequiresLocationValidation,
+
+                RequiresDeviceValidation =
+                    model.RequiresDeviceValidation,
+
+                IsActive =
+                    model.IsActive,
+
+                IsPaid =
+                    model.IsPaid
+            };
+    }
+
+    private static UpdateWorkTemplateDto CreateEmptyEditModel()
+    {
+        return new UpdateWorkTemplateDto
+            {
+                WorkTemplateId = 0,
+
+                Name = string.Empty,
+                Description = string.Empty,
+
+
+                TemplateType = string.Empty,
+                WorkTemplateTypeId = 0,
+
+                DefaultStartTime = null,
+                DefaultEndTime = null,
+
+                RequiresAttendance = true,
+                RequiresCheckOut = true,
+
+                RequiresLocationValidation = false,
+                RequiresDeviceValidation = false,
+
+                AllowsOverlap = false,
+
+                IsActive = true,
+                IsValid = true
+            };
+    }
+
+    private static WorkTemplateSegmentEditViewModel
+        CreateEmptySegmentEditModel()
+    {
+        return new WorkTemplateSegmentEditViewModel
+            {
+                WorkTemplateSegmentId = 0,
+                WorkTemplateId = 0,
+                WorkSegmentTypeId = 0,
+
+                Name = string.Empty,
+                Description = string.Empty,
+
+                SequenceNumber = 1,
+
+                OffsetHours = 0,
+                OffsetMinutePart = 0,
+
+                DurationHours = 1,
+                DurationMinutePart = 0,
+
+                GraceBeforeMinutes = 0,
+                GraceAfterMinutes = 0,
+
+                IsMandatory = true,
+                IsPaid = false,
+
+                RequiresAttendance = true,
+                RequiresLocationValidation = false,
+                RequiresDeviceValidation = false,
+
+                IsActive = true
+            };
+    }
+
+    private static bool ContainsIgnoreCase(
+        string? value,
+        string search)
+    {
+        return !string.IsNullOrWhiteSpace(value) &&
+               value.Contains(
+                   search,
+                   StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string GetTemplateTypeName(
+        int workTemplateTypeId)
+    {
+        return templateTypes
+                   .FirstOrDefault(
+                       x => x.WorkTemplateTypeId ==
+                            workTemplateTypeId)
+                   ?.Name
+               ?? "Other";
+    }
+
+    private readonly List<WorkTemplatePresetDto> presets =
+        [
+        new()
+        {
+            Name = "Morning Shift",
+            Description =
+                "Standard daytime shift with attendance and checkout.",
+
+            WorkTemplateTypeId = 11,
+            TemplateType = "Standard Shift",
+
+            DefaultStartTime =
+                new TimeSpan(8, 0, 0),
+
+            DefaultEndTime =
+                new TimeSpan(14, 0, 0),
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+
+            Icon = "☀️",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "Evening Shift",
+            Description =
+                "Standard evening work schedule.",
+
+            WorkTemplateTypeId = 11,
+            TemplateType = "Standard Shift",
+
+            DefaultStartTime =
+                new TimeSpan(14, 0, 0),
+
+            DefaultEndTime =
+                new TimeSpan(20, 0, 0),
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+
+            Icon = "🌆",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "Night Shift",
+            Description =
+                "Overnight shift ending on the following day.",
+
+            WorkTemplateTypeId = 11,
+            TemplateType = "Standard Shift",
+
+            DefaultStartTime =
+                new TimeSpan(20, 0, 0),
+
+            DefaultEndTime =
+                new TimeSpan(8, 0, 0),
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+
+            Icon = "🌙",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "Temporary Duty",
+            Description =
+                "Temporary duty that can overlap a normal shift.",
+
+            WorkTemplateTypeId = 2,
+            TemplateType = "Duty",
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = true,
+
+            Icon = "🛠️",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "Training Session",
+            Description =
+                "Work schedule used for training and development.",
+
+            WorkTemplateTypeId = 3,
+            TemplateType = "Training",
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = false,
+
+            Icon = "🎓",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "On-call Duty",
+            Description =
+                "Flexible availability period activated when required.",
+
+            WorkTemplateTypeId = 5,
+            TemplateType = "On Call",
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = true,
+
+            Icon = "📞",
+            IsActive = true
+        },
+
+        new()
+        {
+            Name = "Remote Work",
+            Description =
+                "Remote work schedule with attendance requirements.",
+
+            WorkTemplateTypeId = 13,
+            TemplateType = "Remote Work",
+
+            RequiresAttendance = true,
+            RequiresCheckOut = true,
+            AllowsOverlap = false,
+
+            Icon = "🏠",
+            IsActive = true
+        }
+    ];
+}

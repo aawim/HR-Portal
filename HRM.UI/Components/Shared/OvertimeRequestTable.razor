@@ -1,0 +1,209 @@
+@using HRM.Services
+
+<section class="min-w-0 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs" aria-labelledby="ot-request-table-heading">
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+        <div class="flex items-center gap-2">
+            <h3 id="ot-request-table-heading" class="text-sm font-bold text-slate-900">All Overtime Requests</h3>
+            <span class="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700">@Filtered.Count request(s)</span>
+        </div>
+        <button type="button"
+                class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                @onclick="Reset">
+            <span>Reset filters</span>
+        </button>
+    </div>
+
+    <!-- Filter Controls Grid -->
+    <div class="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Work from</label>
+            <input type="date" @bind="from" @bind:after="FilterChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Work to</label>
+            <input type="date" @bind="to" @bind:after="FilterChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Status</label>
+            <select @bind="state" @bind:after="FilterChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="0">All statuses</option>
+                @foreach(var option in Entries.GroupBy(x=>x.State).OrderBy(g=>g.Key))
+                {
+                    <option value="@option.Key">@option.First().Status.Replace("Processing · ","")</option>
+                }
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Request type</label>
+            <select @bind="kind" @bind:after="FilterChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">All request types</option>
+                <option>OT preapproval</option>
+                <option>Planned OT claim</option>
+                <option>Unplanned OT claim</option>
+                <option>Legacy OT claim</option>
+                <option>OT clock events</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Payroll status</label>
+            <select @bind="payroll" @bind:after="FilterChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+                <option value="">All</option>
+                <option value="Ready">Awaiting payroll</option>
+                <option value="Processed">Payroll processed</option>
+            </select>
+        </div>
+        <div>
+            <label class="block text-xs font-medium text-slate-700 p-1">Staff / reference</label>
+            <input type="search" placeholder="Search reference or staff..." value="@search" @oninput="SearchChanged" class="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" />
+        </div>
+    </div>
+
+    @if(from.HasValue && to.HasValue && from > to)
+    {
+        <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-2.5 text-xs text-rose-800">
+            <span>Work to must be on or after Work from.</span>
+        </div>
+    }
+
+    <!-- Table Container -->
+    <div class="overflow-x-auto rounded-xl border border-slate-200" aria-busy="@Busy">
+        <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                <tr>
+                    <th scope="col" class="p-2.5">Reference / Staff</th>
+                    <th scope="col" class="p-2.5">Type</th>
+                    <th scope="col" class="p-2.5">Work Dates / Hours</th>
+                    <th scope="col" class="p-2.5">Status</th>
+                    <th scope="col" class="p-2.5">Payroll</th>
+                    <th scope="col" class="p-2.5 text-right">Action</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+            @foreach(var row in Filtered.Skip((page-1)*pageSize).Take(pageSize))
+            {
+                <tr @key="row.Id" class="hover:bg-slate-50/60 transition-colors @(SelectedId == row.Id ? "bg-blue-50/50" : "")">
+                    <td class="p-2.5 align-top">
+                        <span class="font-mono text-xs font-bold text-slate-900">@row.Reference</span>
+                        <div class="text-[11px] text-slate-500">@row.Staff</div>
+                    </td>
+                    <td class="p-2.5 align-top">
+                        <span class="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-700">@row.Kind</span>
+                    </td>
+                    <td class="whitespace-nowrap p-2.5 align-top">
+                        <div class="font-medium text-slate-800">@row.From.ToString("dd MMM yyyy")</div>
+                        @if(row.To.Date != row.From.Date)
+                        {
+                            <div class="text-[11px] text-slate-500">– @row.To.ToString("dd MMM yyyy")</div>
+                        }
+                        @if(row.Minutes.HasValue)
+                        {
+                            <span class="inline-flex items-center rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200 mt-0.5">
+                                @((row.Minutes.Value/60m).ToString("0.##")) hrs
+                            </span>
+                        }
+                    </td>
+                    <td class="p-2.5 align-top">
+                        <span class="rounded-full px-2.5 py-0.5 font-semibold text-[11px] @GetStatusBadge(row.Status)">
+                            @row.Status
+                        </span>
+                    </td>
+                    <td class="p-2.5 align-top text-[11px]">
+                        @if (row.Payroll == "Payroll processed")
+                        {
+                            <span class="inline-flex items-center rounded-md bg-emerald-50 px-1.5 py-0.5 font-medium text-emerald-700 border border-emerald-200">
+                                Processed @row.PayrollMonth?.ToString("MMM yyyy")
+                            </span>
+                        }
+                        else if (row.Payroll == "Awaiting payroll")
+                        {
+                            <span class="inline-flex items-center rounded-md bg-amber-50 px-1.5 py-0.5 font-medium text-amber-700 border border-amber-200">
+                                Awaiting payroll
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="text-slate-400">@row.Payroll</span>
+                        }
+                    </td>
+                    <td class="p-2.5 align-top text-right">
+                        <button type="button"
+                                class="inline-flex items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors @(SelectedId == row.Id ? "ring-1 ring-blue-500 bg-blue-50 text-blue-700" : "")"
+                                aria-label="View request @row.Reference"
+                                aria-pressed="@(SelectedId==row.Id)"
+                                disabled="@Busy"
+                                @onclick="()=>OnSelected.InvokeAsync(row.Id)">
+                            <span>View</span>
+                            <span>→</span>
+                        </button>
+                    </td>
+                </tr>
+            }
+            @if(Filtered.Count == 0)
+            {
+                <tr>
+                    <td colspan="6" class="p-6 text-center text-xs text-slate-500">
+                        @(Busy ? "Loading requests…" : "No overtime requests match these filters.")
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination Footer -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-2 text-xs">
+        <label class="flex items-center gap-1.5 text-slate-600">
+            <span>Rows per page:</span>
+            <select @bind="pageSize" @bind:after="FilterChanged" class="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs">
+                <option>10</option>
+                <option>25</option>
+                <option>50</option>
+            </select>
+        </label>
+        <div class="flex items-center gap-2">
+            <button type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-40 transition"
+                    disabled="@(page<=1)"
+                    @onclick="()=>page--">
+                Previous
+            </button>
+            <span class="text-slate-600">Page <strong class="text-slate-900">@(page)</strong> of <strong class="text-slate-900">@(Pages)</strong></span>
+            <button type="button"
+                    class="inline-flex items-center justify-center rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-40 transition"
+                    disabled="@(page>=Pages)"
+                    @onclick="()=>page++">
+                Next
+            </button>
+        </div>
+    </div>
+</section>
+
+@code {
+    [Parameter]public List<OvertimeRow> Claims {get;set;}=[];
+    [Parameter]public List<OvertimeWorkRow> WorkRequests {get;set;}=[];
+    [Parameter]public bool Busy {get;set;}
+    [Parameter]public int? SelectedId {get;set;}
+    [Parameter]public EventCallback<int> OnSelected {get;set;}
+    [Parameter]public EventCallback OnFiltersChanged {get;set;}
+    private DateTime? from,to;
+    private int state,page=1,pageSize=10;
+    private string kind="",payroll="",search="";
+    private sealed record Entry(int Id,int State,string Reference,string Staff,string Kind,DateTime From,DateTime To,int? Minutes,string Status,string Payroll,DateTime? PayrollMonth);
+    private IEnumerable<Entry> Entries=>WorkRequests.Select(w=>new Entry(w.Id,w.StateId,w.Reference,w.Staff,w.Kind=="Preapproval"?"OT preapproval":"OT clock events",w.From,w.To,null,w.Status,"—",null))
+        .Concat(Claims.Select(r=>new Entry(r.Id,r.StateId,r.Reference,r.Staff,r.Source=="Planned"?"Planned OT claim":r.Source=="Unplanned"?"Unplanned OT claim":"Legacy OT claim",r.Date,r.End?.Date??r.Date,r.Minutes,r.Status,r.StateId==4?(r.PayrollProcessed?"Payroll processed":"Awaiting payroll"):"—",r.PayrollMonth)));
+    private List<Entry> Filtered=>Entries.Where(r=>(!from.HasValue||r.To.Date>=from.Value.Date)&&(!to.HasValue||r.From.Date<=to.Value.Date)&&(state==0||r.State==state)&&(kind==""||r.Kind==kind)&&(payroll==""||r.Payroll==(payroll=="Processed"?"Payroll processed":"Awaiting payroll"))&&(string.IsNullOrWhiteSpace(search)||(r.Reference+" "+r.Staff).Contains(search.Trim(),StringComparison.OrdinalIgnoreCase))).OrderByDescending(r=>r.Id).ToList();
+    private int Pages=>Math.Max(1,(Filtered.Count+pageSize-1)/pageSize);
+    protected override void OnParametersSet(){page=Math.Min(page,Pages);}
+    private async Task FilterChanged(){page=1;await OnFiltersChanged.InvokeAsync();}
+    private async Task SearchChanged(ChangeEventArgs e){search=e.Value?.ToString()??"";await FilterChanged();}
+    private async Task Reset(){from=to=null;state=0;kind=payroll=search="";await FilterChanged();}
+
+    private static string GetStatusBadge(string status)
+    {
+        var s = status.ToLowerInvariant();
+        if (s.Contains("approved") || s.Contains("complete")) return "bg-emerald-100 text-emerald-800";
+        if (s.Contains("reject") || s.Contains("cancel") || s.Contains("decline")) return "bg-rose-100 text-rose-800";
+        if (s.Contains("pending") || s.Contains("processing") || s.Contains("review") || s.Contains("submitted")) return "bg-amber-100 text-amber-800";
+        return "bg-slate-100 text-slate-700";
+    }
+}

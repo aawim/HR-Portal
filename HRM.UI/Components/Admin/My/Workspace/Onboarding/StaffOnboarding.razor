@@ -1,0 +1,50 @@
+@using HRM.Components.Admin.Hr.Individual
+@using HRM.Components.Admin.Hr.Staff
+<PageTitle>Staff onboarding</PageTitle>
+
+<section class="min-w-0 p-2 flex flex-col gap-2 rounded-2xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-xs">
+    <div class="border-b border-slate-100 dark:border-slate-800 pb-2">
+        <h1 class="text-base font-bold text-slate-900 dark:text-slate-100">Staff Onboarding</h1>
+        <p class="text-xs text-slate-500 dark:text-slate-400">Search unattached registry individuals, process appointment requests, and manage former staff rehiring.</p>
+    </div>
+    <nav class="flex flex-wrap gap-1 border-b border-slate-100 dark:border-slate-800 pb-2" aria-label="Staff onboarding">
+        @foreach(var item in Sections)
+        {
+            <a class="@(CurrentSection==item.Key?"inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white bg-blue-600 shadow-xs hover:bg-blue-700 transition":"inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition")" aria-current="@(CurrentSection==item.Key?"page":null)" href="@Url(item.Key)">@item.Label</a>
+        }
+    </nav>
+    @if(IndividualId.HasValue || RequestId.HasValue || CurrentSection=="requests")
+    {
+        <StaffOnboardingPage IndividualId="IndividualId" RequestId="RequestId" />
+    }
+    else if(FormerStaffId.HasValue)
+    {
+        <div class="flex flex-wrap gap-2">
+            <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@Url("former-staff")">Back to former staff</a>
+            <a class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" href="@($"/admin/my/workspace/onboarding?individualId={FormerStaffId}")">Start new appointment</a>
+        </div>
+        <FormerStaffRecord StaffId="FormerStaffId.Value" />
+    }
+    else if(CurrentSection=="former-staff")
+    {
+        <FormerStaff ForOnboarding="true" />
+    }
+    else if(CurrentSection=="add-individual")
+    {
+        <AddNewIndividualGrid />
+    }
+    else
+    {
+        <IndividualSearchGrid />
+    }
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name="tab")] public string? Tab {get;set;}
+    [SupplyParameterFromQuery(Name="individualId")] public int? IndividualId {get;set;}
+    [SupplyParameterFromQuery(Name="requestId")] public int? RequestId {get;set;}
+    [SupplyParameterFromQuery(Name="formerStaffId")] public int? FormerStaffId {get;set;}
+    private static readonly (string Key,string Label)[] Sections = [("individuals","Search individuals"),("former-staff","Former staff"),("add-individual","Add individual"),("requests","Appointment requests")];
+    private string CurrentSection => IndividualId.HasValue || RequestId.HasValue ? "requests" : FormerStaffId.HasValue ? "former-staff" : Sections.Any(x=>x.Key==Tab) ? Tab! : "individuals";
+    private static string Url(string tab)=>$"/admin/my/workspace/onboarding?tab={tab}";
+}

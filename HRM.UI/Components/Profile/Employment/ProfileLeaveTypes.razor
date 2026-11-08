@@ -1,0 +1,89 @@
+@using HRM.DTOs.Leave
+@using HRM.Services.Interfaces.JobLeaveTypes
+@using Services.Interfaces
+@inject IJobService JobService
+@inject IJobLeaveTypeService JobLeaveTypeService
+
+<section class="w-full overflow-hidden rounded-2xl border bg-white shadow-sm" aria-label="Leave Entitlements">
+    <header class="flex flex-wrap items-center justify-between gap-3 border-b p-4 sm:px-5">
+        <div><h2 class="text-sm font-semibold">Leave Entitlements</h2><p class="mt-1 text-xs text-slate-500">Assigned leave types, balances and effective periods.</p></div>
+        <div class="flex flex-wrap items-center gap-2">
+            @if (!EffectiveLoading && error == null) { <span class="text-xs">@items.Count(IsActive) active</span> }
+            <button type="button" class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" disabled="@(EffectiveLoading || StaffId <= 0)" @onclick="LoadAsync">Refresh</button>
+        </div>
+    </header>
+    <div class="p-4 sm:p-5">
+        @if (EffectiveLoading) { <p role="status" class="text-sm">Loading leave entitlements...</p> }
+        else if (error != null) { <p role="alert" class="text-sm">@error</p> }
+        else if (items.Count == 0) { <p class="text-sm">No leave types assigned to this job.</p> }
+        else
+        {
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+                @foreach (var item in items.OrderByDescending(IsActive).ThenBy(x => x.LeaveTypeName).ThenBy(x => x.EffectiveFromDate))
+                {
+                    <article class="min-w-0 space-y-3 rounded-xl border p-4" @key="item.JobLeaveTypeId">
+                        <div class="flex flex-wrap items-start justify-between gap-2"><h3 class="break-words text-sm font-semibold">@item.LeaveTypeName</h3><span class="text-xs">@Status(item)</span></div>
+                        <div><p class="text-xs text-slate-500">Remaining balance</p><p class="mt-1 text-xl font-semibold">@item.RemainingDays.ToString("0.##") <span class="text-sm font-normal">days</span></p></div>
+                        @if (!item.IsLeaveInfoUpdated) { <p class="text-xs">Balance awaiting confirmation.</p> }
+                        <p class="text-xs text-slate-500">Effective period: @Period(item)</p>
+                        @if (item.RenewedDate.HasValue) { <p class="text-xs text-slate-500">Last renewed / credited: @item.RenewedDate.Value.ToString("dd MMM yyyy")</p> }
+                        @if (item.LastLeaveTakenDate.HasValue) { <p class="text-xs text-slate-500">Last leave taken: @item.LastLeaveTakenDate.Value.ToString("dd MMM yyyy")</p> }
+                        @if (OnViewHistory.HasDelegate || (ShowAdjustButton && OnAdjust.HasDelegate))
+                        {
+                            <div class="flex flex-wrap gap-2">
+                                @if (OnViewHistory.HasDelegate) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" type="button" disabled="@IsDisabled" @onclick="() => OnViewHistory.InvokeAsync(item)">History</button> }
+                                @if (ShowAdjustButton && OnAdjust.HasDelegate) { <button class="inline-flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors" type="button" disabled="@IsDisabled" @onclick="() => OnAdjust.InvokeAsync(item)">Adjust</button> }
+                            </div>
+                        }
+                    </article>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+@code {
+    [Parameter] public int StaffId { get; set; }
+    [Parameter] public int JobId { get; set; }
+    [Parameter] public bool IsLoading { get; set; }
+    [Parameter] public bool IsDisabled { get; set; }
+    [Parameter] public bool ShowAdjustButton { get; set; } = true;
+    [Parameter] public EventCallback<JobLeaveTypeDto> OnViewHistory { get; set; }
+    [Parameter] public EventCallback<JobLeaveTypeDto> OnAdjust { get; set; }
+    List<JobLeaveTypeDto> items = [];
+    bool loading; string? error; int loadedStaff = -1, loadedJob = -1, loadVersion;
+    bool EffectiveLoading => IsLoading || loading;
+    protected override async Task OnParametersSetAsync()
+    {
+        if (loadedStaff == StaffId && loadedJob == JobId) return;
+        loadedStaff = StaffId; loadedJob = JobId;
+        await LoadAsync();
+    }
+    async Task LoadAsync()
+    {
+        var version = ++loadVersion; var staff = StaffId; var job = JobId;
+        loading = true; error = null; items = [];
+        try
+        {
+            if (staff <= 0) throw new InvalidOperationException("A valid staff ID is required.");
+            if (job <= 0)
+            {
+                var active = await JobService.GetActiveJobAsync(staff);
+                if (active == null || !active.IsActive) throw new InvalidOperationException("This staff member does not have an active approved job.");
+                job = active.JobId;
+            }
+            var result = await JobLeaveTypeService.GetEntitlementsAsync(job);
+            if (version == loadVersion) items = result.Where(x => x.IsValid && x.JobId == job).ToList();
+        }
+        catch (UnauthorizedAccessException) { if (version == loadVersion) error = "You do not have access to these leave entitlements in the current organisation."; }
+        catch (InvalidOperationException ex) { if (version == loadVersion) error = ex.Message; }
+        catch (Exception) { if (version == loadVersion) error = "Leave entitlements could not be loaded. Please try Refresh."; }
+        finally { if (version == loadVersion) loading = false; }
+    }
+    static DateTime Today => DateTime.UtcNow.AddHours(5).Date;
+    static bool IsActive(JobLeaveTypeDto item) => item.IsValid && (!item.EffectiveFromDate.HasValue || item.EffectiveFromDate.Value.Date <= Today) && (!item.EffectiveToDate.HasValue || item.EffectiveToDate.Value.Date >= Today);
+    static string Status(JobLeaveTypeDto item) => IsActive(item) ? "Active" : item.EffectiveFromDate?.Date > Today ? "Upcoming" : "Expired";
+    static string Period(JobLeaveTypeDto item) => (item.EffectiveFromDate, item.EffectiveToDate) switch {
+        ({ } from, { } to) => $"{from:dd MMM yyyy} – {to:dd MMM yyyy}",
+        ({ } from, null) => $"From {from:dd MMM yyyy}", (null, { } to) => $"Until {to:dd MMM yyyy}", _ => "Not specified" };
+}
