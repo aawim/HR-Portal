@@ -5,6 +5,7 @@
 
 
 @inject NavigationManager Navigation
+@inject IUserAccessService UserAccess
 
 
 
@@ -42,8 +43,13 @@
                             <NavItem Compact="collapsed" Href="/admin" Icon="home" Text="Dashboard" />
                             <NavItem Compact="collapsed" Href="admin/hr" Icon="users" Text="HR" />
                             <NavItem Compact="collapsed" Href="admin/settings" Icon="cog" Text="Settings" />
+                            <NavItem Compact="collapsed" Href="/admin/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
                             <hr class="my-2 border-white/15" />
                             <NavItem Compact="collapsed" Href="admin/recruitment" Icon="user-plus" Text="Recruitment" />
+                            @if (isDeveloper)
+                            {
+                                <NavItem Compact="collapsed" Href="/admin/developer" Icon="code" Text="Developer" />
+                            }
                         }
                         else
                         {
@@ -57,13 +63,13 @@
 
                             <NavItem Compact="collapsed" Href="/online/ot" Icon="trending-up" Text="Overtime" />
                             <NavItem Compact="collapsed" Href="/online/item-requests" Icon="briefcase" Text="Item requests" />
+                            <NavItem Compact="collapsed" Href="/online/goods-loans" Icon="currency-dollar" Text="Goods Loans" />
                             <NavItem Compact="collapsed" Href="/online/my-assets" Icon="briefcase" Text="My assets" />
                             <NavItem Compact="collapsed" Href="/online/staff-transfers" Icon="briefcase" Text="Staff transfers" />
                             <NavItem Compact="collapsed" Href="/online/certificates" Icon="document" Text="Certificates" />
                             <NavItem Compact="collapsed" Href="/online/documents" Icon="document" Text="Documents" />
 
                             <NavItem Compact="collapsed" Href="/online/leaves" Icon="calendar" Text="Leaves" />
-                            <NavItem Compact="collapsed" Href="/online/allowances-deductions" Icon="currency-dollar" Text="Allowances & deductions" />
                             <NavItem Compact="collapsed" Href="/online/leave-handovers" Icon="briefcase" Text="Work handovers" />
                             <NavItem Compact="collapsed" Href="/online/chat" Icon="chat" Text="Chat" />
                         }
@@ -120,10 +126,21 @@
     [Parameter] public bool MobileOpen { get; set; }
     [Parameter] public EventCallback OnMobileClose { get; set; }
     private bool collapsed;
-    protected override void OnParametersSet()
+    private bool isDeveloper;
+
+    protected override async Task OnParametersSetAsync()
     {
         if (MobileOpen) collapsed = false;
+        try
+        {
+            isDeveloper = CanAccessDeveloperPortal || (HasSystemAccess && (await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer")));
+        }
+        catch
+        {
+            isDeveloper = CanAccessDeveloperPortal;
+        }
     }
+
     private void ToggleCollapsed() => collapsed = !collapsed;
     private Task CloseMobileAsync() => OnMobileClose.InvokeAsync();
     private async Task HandleNavigationButton()

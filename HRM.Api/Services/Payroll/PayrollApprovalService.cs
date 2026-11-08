@@ -2,6 +2,7 @@ using System;
 using System.Threading.Tasks;
 using HRM.Application.Features.Payroll;
 using HRM.Models;
+using HRM.Models.GoodsLoans;
 using HRM.Models.Payroll;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -124,6 +125,92 @@ public sealed class PayrollApprovalService : IPayrollApprovalService
             adjustment.UpdatedAtUtc = DateTime.UtcNow;
         }
 
+        // Confirm Goods Loan Deductions
+        var glLines = await db.PayrollLines
+            .Where(l => l.PayrollRunId == payrollRunId && l.ComponentCode == "GL_DED")
+            .ToListAsync();
+
+        if (glLines.Count > 0)
+        {
+            var lineInstMap = new List<(PayrollLine Line, int InstallmentId)>();
+            foreach (var line in glLines)
+            {
+                if (!string.IsNullOrWhiteSpace(line.SourceReference) &&
+                    line.SourceReference.StartsWith("InstalmentId: ", StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(line.SourceReference.Substring("InstalmentId: ".Length).Trim(), out var instId))
+                {
+                    lineInstMap.Add((line, instId));
+                }
+            }
+
+            if (lineInstMap.Count > 0)
+            {
+                var installmentIds = lineInstMap.Select(x => x.InstallmentId).Distinct().ToList();
+                var affectedInstallments = await db.GoodsLoanInstallments
+                    .Where(i => installmentIds.Contains(i.InstallmentID))
+                    .ToListAsync();
+                var affectedLoanIds = affectedInstallments.Select(i => i.LoanID).Distinct().ToList();
+                var affectedLoans = await db.GoodsLoans
+                    .Where(l => affectedLoanIds.Contains(l.LoanID))
+                    .ToListAsync();
+
+                foreach (var (line, instId) in lineInstMap)
+                {
+                    var inst = affectedInstallments.FirstOrDefault(i => i.InstallmentID == instId);
+                    if (inst == null) continue;
+
+                    var deduction = new GoodsLoanPayrollDeduction
+                    {
+                        InstallmentID = inst.InstallmentID,
+                        PayrollRunID = payrollRunId,
+                        PayrollItemID = line.PayrollLineId,
+                        TransactionType = GoodsLoanDeductionTransactionType.Deduction,
+                        Amount = line.CalculatedAmount,
+                        Status = GoodsLoanDeductionStatus.Confirmed,
+                        DeductionDate = DateTime.UtcNow,
+                        CreatedDate = DateTime.UtcNow
+                    };
+                    db.GoodsLoanPayrollDeductions.Add(deduction);
+
+                    inst.PaidAmount += line.CalculatedAmount;
+                    inst.LastPaymentDate = DateTime.UtcNow;
+                    if (inst.PaidAmount >= inst.ScheduledAmount)
+                    {
+                        inst.Status = GoodsLoanInstallmentStatus.Paid;
+                    }
+                    else if (inst.PaidAmount > 0)
+                    {
+                        inst.Status = GoodsLoanInstallmentStatus.PartiallyPaid;
+                    }
+                }
+
+                // Check loan completion status
+                var allLoanInstallments = await db.GoodsLoanInstallments
+                    .Where(i => affectedLoanIds.Contains(i.LoanID))
+                    .ToListAsync();
+
+                foreach (var loan in affectedLoans)
+                {
+                    var loanInsts = allLoanInstallments.Where(i => i.LoanID == loan.LoanID).ToList();
+                    if (loanInsts.Count > 0 && loanInsts.All(i => i.Status == GoodsLoanInstallmentStatus.Paid))
+                    {
+                        loan.Status = GoodsLoanStatus.Completed;
+                        loan.ClosedDate = DateTime.UtcNow;
+                        loan.ModifiedDate = DateTime.UtcNow;
+                        db.GoodsLoanStatusHistories.Add(new GoodsLoanStatusHistory
+                        {
+                            LoanID = loan.LoanID,
+                            PreviousStatus = GoodsLoanStatus.Active,
+                            NewStatus = GoodsLoanStatus.Completed,
+                            Reason = $"Loan fully repaid upon finalisation of PayrollRun #{payrollRunId}",
+                            ChangedByUserID = userId,
+                            ChangedDate = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+        }
+
         db.PayrollAuditEvents.Add(new PayrollAuditEvent
         {
             OrganisationId = organisationId,
@@ -165,6 +252,75 @@ public sealed class PayrollApprovalService : IPayrollApprovalService
             adjustment.PayrollProcessingStatus = "Pending";
             adjustment.PayrollRunId = null;
             adjustment.UpdatedAtUtc = DateTime.UtcNow;
+        }
+
+        // Revert any Goods Loan Deductions if run had recorded deductions
+        var existingDeductions = await db.GoodsLoanPayrollDeductions
+            .Where(d => d.PayrollRunID == payrollRunId && d.Status == GoodsLoanDeductionStatus.Confirmed && d.TransactionType == GoodsLoanDeductionTransactionType.Deduction)
+            .ToListAsync();
+
+        if (existingDeductions.Count > 0)
+        {
+            var installmentIds = existingDeductions.Select(d => d.InstallmentID).Distinct().ToList();
+            var installments = await db.GoodsLoanInstallments
+                .Where(i => installmentIds.Contains(i.InstallmentID))
+                .ToListAsync();
+            var affectedLoanIds = installments.Select(i => i.LoanID).Distinct().ToList();
+            var affectedLoans = await db.GoodsLoans
+                .Where(l => affectedLoanIds.Contains(l.LoanID))
+                .ToListAsync();
+
+            foreach (var ded in existingDeductions)
+            {
+                ded.Status = GoodsLoanDeductionStatus.Voided;
+
+                var reversal = new GoodsLoanPayrollDeduction
+                {
+                    InstallmentID = ded.InstallmentID,
+                    PayrollRunID = payrollRunId,
+                    PayrollItemID = ded.PayrollItemID,
+                    TransactionType = GoodsLoanDeductionTransactionType.Reversal,
+                    Amount = ded.Amount,
+                    Status = GoodsLoanDeductionStatus.Confirmed,
+                    DeductionDate = DateTime.UtcNow,
+                    ReversesDeductionID = ded.DeductionID,
+                    CreatedDate = DateTime.UtcNow
+                };
+                db.GoodsLoanPayrollDeductions.Add(reversal);
+
+                var inst = installments.FirstOrDefault(i => i.InstallmentID == ded.InstallmentID);
+                if (inst != null)
+                {
+                    inst.PaidAmount = Math.Max(0m, inst.PaidAmount - ded.Amount);
+                    if (inst.PaidAmount <= 0)
+                    {
+                        inst.Status = GoodsLoanInstallmentStatus.Pending;
+                    }
+                    else
+                    {
+                        inst.Status = GoodsLoanInstallmentStatus.PartiallyPaid;
+                    }
+                }
+            }
+
+            foreach (var loan in affectedLoans)
+            {
+                if (loan.Status == GoodsLoanStatus.Completed)
+                {
+                    loan.Status = GoodsLoanStatus.Active;
+                    loan.ClosedDate = null;
+                    loan.ModifiedDate = DateTime.UtcNow;
+                    db.GoodsLoanStatusHistories.Add(new GoodsLoanStatusHistory
+                    {
+                        LoanID = loan.LoanID,
+                        PreviousStatus = GoodsLoanStatus.Completed,
+                        NewStatus = GoodsLoanStatus.Active,
+                        Reason = $"Loan reopened due to rejection of PayrollRun #{payrollRunId}",
+                        ChangedByUserID = userId,
+                        ChangedDate = DateTime.UtcNow
+                    });
+                }
+            }
         }
 
         db.PayrollAuditEvents.Add(new PayrollAuditEvent

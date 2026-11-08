@@ -1,0 +1,158 @@
+@page "/admin/developer"
+@page "/developer"
+@using HRM.Components.Admin.Settings
+@using HRM.Services.Interfaces
+@using Microsoft.AspNetCore.Components.Authorization
+@attribute [Authorize]
+@rendermode InteractiveServer
+
+@inject IUserAccessService UserAccess
+@inject NavigationManager Navigation
+@inject HRM.Services.ToastService ToastService
+
+<PageTitle>Developer Workspace - HR Portal</PageTitle>
+
+<AuthorizeView>
+    <Authorized>
+        @if (checking)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600 shadow-xs">
+                    Verifying developer access...
+                </div>
+            </div>
+        }
+        else if (!isDeveloper)
+        {
+            <div class="mx-auto max-w-7xl p-4">
+                <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900 shadow-sm space-y-2">
+                    <h2 class="font-bold text-base">Developer Access Required</h2>
+                    <p>Your account does not currently hold Developer permissions or group membership.</p>
+                    <a href="/admin" class="inline-block font-semibold text-blue-700 underline mt-2">Return to Admin Dashboard</a>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+                <section class="developer-page w-full min-w-0 p-2 space-y-4">
+                    <!-- Sticky Header Bar -->
+                    <div class="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-white/95 backdrop-blur-xs px-3 py-3 shadow-xs rounded-xl">
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <h1 class="text-lg font-bold text-slate-900">Developer Workspace</h1>
+                                <span class="rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 px-2.5 py-0.5 text-xs font-semibold">
+                                    Developer Portal
+                                </span>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-0.5">
+                                Advanced developer controls, request state transitions, and system diagnostic configurations.
+                            </p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                                    @onclick="() => StateHasChanged()">
+                                <span>↻</span>
+                                <span>Refresh</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Navigation Tabs -->
+                    <div class="border-b border-slate-200">
+                        <nav class="flex gap-2 -mb-px" aria-label="Developer Tabs">
+                            <button type="button"
+                                    class="px-4 py-2 text-xs font-semibold border-b-2 transition-colors @(activeTab == "transitions" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")"
+                                    @onclick='() => activeTab = "transitions"'>
+                                🔄 Request State Transitions
+                            </button>
+                            <button type="button"
+                                    class="px-4 py-2 text-xs font-semibold border-b-2 transition-colors @(activeTab == "diagnostics" ? "border-indigo-600 text-indigo-600" : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300")"
+                                    @onclick='() => activeTab = "diagnostics"'>
+                                🛠 System & Diagnostics
+                            </button>
+                        </nav>
+                    </div>
+
+                    <!-- Tab Contents -->
+                    @if (activeTab == "transitions")
+                    {
+                        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+                            <RequestStateTransitionSettings />
+                        </div>
+                    }
+                    else if (activeTab == "diagnostics")
+                    {
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                                <h3 class="font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">Developer Environment</h3>
+                                <dl class="divide-y divide-slate-100 text-xs">
+                                    <div class="py-2 flex justify-between">
+                                        <dt class="text-slate-500">Framework</dt>
+                                        <dd class="font-semibold text-slate-800">.NET 9 / ASP.NET Core Blazor</dd>
+                                    </div>
+                                    <div class="py-2 flex justify-between">
+                                        <dt class="text-slate-500">Rendering Mode</dt>
+                                        <dd class="font-semibold text-slate-800">InteractiveServer</dd>
+                                    </div>
+                                    <div class="py-2 flex justify-between">
+                                        <dt class="text-slate-500">Developer Role</dt>
+                                        <dd class="font-semibold text-emerald-600">Active (Verified)</dd>
+                                    </div>
+                                    <div class="py-2 flex justify-between">
+                                        <dt class="text-slate-500">Current URL</dt>
+                                        <dd class="font-semibold text-slate-800 font-mono text-[11px]">@Navigation.Uri</dd>
+                                    </div>
+                                </dl>
+                            </div>
+
+                            <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs space-y-3">
+                                <h3 class="font-bold text-sm text-slate-900 border-b border-slate-100 pb-2">Quick Navigation</h3>
+                                <ul class="space-y-2 text-xs">
+                                    <li>
+                                        <a href="/admin/settings/config" class="text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1.5">
+                                            <span>⚙️ Admin Configuration Settings</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="/admin/settings/admin-access" class="text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1.5">
+                                            <span>🔑 Admin Portal Access Grants</span>
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a href="/admin/my/workspace" class="text-blue-600 hover:text-blue-800 font-medium underline flex items-center gap-1.5">
+                                            <span>🏢 Staff & Team Workspace</span>
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    }
+                </section>
+            </div>
+        }
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool checking = true;
+    private bool isDeveloper;
+    private string activeTab = "transitions";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            isDeveloper = await UserAccess.HasUserGroupAsync("Developer") || await UserAccess.HasPermissionAsync("Developer");
+        }
+        catch
+        {
+            isDeveloper = false;
+        }
+        finally
+        {
+            checking = false;
+        }
+    }
+}

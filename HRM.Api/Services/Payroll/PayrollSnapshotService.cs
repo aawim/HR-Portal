@@ -140,6 +140,22 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                 .Select(g => new { InstalmentId = g.Key, Amount = g.Sum(x => x.Amount) })
                 .ToDictionaryAsync(x => x.InstalmentId, x => x.Amount);
 
+        // 7b. Staff Goods Loan Installments
+        var goodsLoanInstallments = await (from inst in db.GoodsLoanInstallments.AsNoTracking()
+                                           join loan in db.GoodsLoans.AsNoTracking() on inst.LoanID equals loan.LoanID
+                                           join store in db.GoodsLoanStores.AsNoTracking() on loan.StoreID equals store.StoreID
+                                           where loan.OrganisationBusinessEntityID == organisationId
+                                                 && jobIds.Contains(loan.JobID)
+                                                 && (loan.Status == "ACTIVE" || loan.Status == "APPROVED")
+                                                 && inst.DueMonth <= periodEndDt
+                                                 && inst.Status != "PAID" && inst.Status != "CANCELLED"
+                                           select new
+                                           {
+                                               Installment = inst,
+                                               Loan = loan,
+                                               Store = store
+                                           }).ToListAsync();
+
         // 8. Adjustments
         var adjustments = await db.PayrollAdjustments
             .AsNoTracking()
@@ -242,6 +258,20 @@ public sealed class PayrollSnapshotService : IPayrollSnapshotService
                     AgreementId: inst.Agreement.Id,
                     Reference: inst.Agreement.Reference,
                     Category: inst.Agreement.Category,
+                    DueAmount: outstanding
+                ));
+            }
+
+            // Staff Goods Loan deductions
+            foreach (var glInst in goodsLoanInstallments.Where(x => x.Loan.JobID == job.JobId))
+            {
+                var outstanding = glInst.Installment.ScheduledAmount - glInst.Installment.PaidAmount;
+                if (outstanding <= 0) continue;
+                empDeductions.Add(new InputDeductionAgreementItem(
+                    InstalmentId: glInst.Installment.InstallmentID,
+                    AgreementId: glInst.Loan.LoanID,
+                    Reference: $"{glInst.Loan.LoanNumber} ({glInst.Store.StoreName})",
+                    Category: "GoodsLoan",
                     DueAmount: outstanding
                 ));
             }

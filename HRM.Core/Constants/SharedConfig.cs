@@ -506,6 +506,7 @@ namespace HRM.Components.Shared
             public const int JOB_TERMINATION_DUE_TO_OTHER_REASON = 94;
             public const int EMPLOYMENT_CERTIFICATE_REQUEST = 120;
             public const int DOCUMENT_MANAGEMENT_REQUEST = 121;
+            public const int GOODS_LOAN_REQUEST = 130;
 
 
         }

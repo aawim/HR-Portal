@@ -311,11 +311,15 @@ public sealed class PayrollCalculationEngine : IPayrollCalculationEngine
         decimal totalAgreementDeductions = 0m;
         foreach (var ded in input.Deductions)
         {
+            var isGoodsLoan = string.Equals(ded.Category, "GoodsLoan", StringComparison.OrdinalIgnoreCase);
+            var compCode = isGoodsLoan ? "GL_DED" : "AGREEMENT_DED";
+            var compName = isGoodsLoan ? $"Goods Loan ({ded.Reference})" : $"{ded.Category} ({ded.Reference})";
+
             lines.Add(new PayrollLineDto(
                 0,
                 0,
-                "AGREEMENT_DED",
-                $"{ded.Category} ({ded.Reference})",
+                compCode,
+                compName,
                 SalaryComponentType.LoanDeduction,
                 ded.DueAmount,
                 1.0m,

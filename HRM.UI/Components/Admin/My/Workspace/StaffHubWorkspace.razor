@@ -20,6 +20,7 @@
 @using static HRM.Services.Contracts.StaffPositionManagementServiceContracts
 @using HRM.DTOs.Items
 @using HRM.DTOs.Certificates
+@using HRM.DTOs.Profile
 @using HRM.Application.Contracts.Pages
 @inject ITeam TeamService
 @inject HRM.Application.Contracts.Pages.IAttendanceRequestQueries AttendanceQueries
@@ -32,6 +33,7 @@
 @inject HRM.Services.Contracts.CertificateServiceContracts.IOperations CertificateService
 @inject IWebHostEnvironment Environment
 @inject IWorkspaceDirectoryService Directory
+@inject HRM.Services.Interfaces.Profile.IProfileService ProfileService
 @inject HRM.Services.Contracts.WorkspaceRecentSearchServiceContracts.IOperations RecentSearches
 @inject IUserTodoService Todos
 @inject NavigationManager Navigation
@@ -162,29 +164,73 @@
     {
         <div class="flex flex-col gap-2 p-2">
             <!-- Staff Workspace Header Bar -->
-            <div class="staff-workspace-header staff-overview-no-print rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex items-center justify-between flex-wrap gap-3">
-                <div class="flex items-center gap-3 min-w-0">
-                    <div class="w-10 h-10 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-sm shadow-xs shrink-0">
-                        @GetInitials(inspectedStaffName)
-                    </div>
-                    <div class="min-w-0">
+            <div class="staff-workspace-header staff-overview-no-print rounded-2xl border border-teal-200 dark:border-teal-800 bg-white dark:bg-slate-900 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div class="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                    @if (!string.IsNullOrWhiteSpace(inspectedStaffProfile?.ImageUrl))
+                    {
+                        <img src="@inspectedStaffProfile.ImageUrl"
+                             alt="@(inspectedStaffProfile?.FullName ?? inspectedStaffName)"
+                             class="w-16 h-16 rounded-full object-cover border-2 border-teal-500/40 shrink-0 shadow-xs" />
+                    }
+                    else
+                    {
+                        <div class="w-16 h-16 rounded-full bg-teal-100 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-bold flex items-center justify-center text-lg shadow-xs shrink-0 border-2 border-teal-300 dark:border-teal-700">
+                            @GetInitials(inspectedStaffProfile?.FullName ?? inspectedStaffName)
+                        </div>
+                    }
+                    <div class="min-w-0 flex-1">
                         <div class="flex items-center gap-2 flex-wrap">
-                            <h2 class="text-base font-bold text-slate-900 dark:text-slate-100 truncate">@inspectedStaffName</h2>
-                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.5 text-[10px] font-semibold">
+                            <h2 class="text-base md:text-lg font-bold text-slate-900 dark:text-slate-100 truncate">
+                                @(inspectedStaffProfile?.FullName ?? inspectedStaffName)
+                            </h2>
+                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2.5 py-0.5 text-[10px] font-semibold">
                                 Staff Workspace
                             </span>
                         </div>
-                        <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                            ID: #@inspectedStaffId · Complete Employee Records, Attendance, Leaves, Positions &amp; Performance
-                        </p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-x-4 gap-y-1.5 mt-2 text-xs">
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Department</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block" title="@(inspectedStaffProfile?.ActiveJob?.DepartmentName ?? inspectedStaffProfile?.ActiveJob?.OrganisationStructureName ?? "Not Assigned")">
+                                    @(inspectedStaffProfile?.ActiveJob?.DepartmentName ?? inspectedStaffProfile?.ActiveJob?.OrganisationStructureName ?? "Not Assigned")
+                                </span>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Position</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block" title="@(inspectedStaffProfile?.ActiveJob?.PositionName ?? inspectedStaffProfile?.ActivePositions?.FirstOrDefault(p => p.IsCurrent)?.PositionName ?? "Not Assigned")">
+                                    @(inspectedStaffProfile?.ActiveJob?.PositionName ?? inspectedStaffProfile?.ActivePositions?.FirstOrDefault(p => p.IsCurrent)?.PositionName ?? "Not Assigned")
+                                </span>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Employee ID</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block">
+                                    @(!string.IsNullOrWhiteSpace(inspectedStaffProfile?.ActiveJob?.EmployeeNumber) ? inspectedStaffProfile.ActiveJob.EmployeeNumber : (!string.IsNullOrWhiteSpace(inspectedStaffProfile?.StaffNo) ? inspectedStaffProfile.StaffNo : $"#{inspectedStaffId}"))
+                                </span>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Supervisor</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block" title="@(inspectedStaffProfile?.ActiveJob?.SupervisorName ?? "Not Assigned")">
+                                    @(string.IsNullOrWhiteSpace(inspectedStaffProfile?.ActiveJob?.SupervisorName) ? "Not Assigned" : inspectedStaffProfile.ActiveJob.SupervisorName)
+                                </span>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Joined Date</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block">
+                                    @(inspectedStaffProfile?.ActiveJob != null && inspectedStaffProfile.ActiveJob.JoinedDate != default ? inspectedStaffProfile.ActiveJob.JoinedDate.ToString("dd MMM yyyy") : "N/A")
+                                </span>
+                            </div>
+                            <div class="min-w-0">
+                                <span class="text-slate-400 dark:text-slate-500 font-medium block text-[10px]">Position Date</span>
+                                <span class="font-semibold text-slate-800 dark:text-slate-200 truncate block">
+                                    @{
+                                        var pDate = inspectedStaffProfile?.ActivePositions?.FirstOrDefault(p => p.IsCurrent)?.FromDate ?? inspectedStaffProfile?.ActivePositions?.FirstOrDefault()?.FromDate ?? inspectedStaffProfile?.ActiveJob?.JoinedDate;
+                                    }
+                                    @(pDate.HasValue && pDate.Value != default ? pDate.Value.ToString("dd MMM yyyy") : "N/A")
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div class="flex items-center gap-2">
-                    <button type="button"
-                            class="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition"
-                            @onclick="() => OpenPositionChangeModal(inspectedStaffId.Value, inspectedStaffName)">
-                        ⚡ Change Position
-                    </button>
+                <div class="flex items-center gap-2 self-start md:self-center shrink-0">
                     <button type="button"
                             class="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
                             @onclick="CloseStaffWorkspace">
@@ -236,7 +282,7 @@
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Finance ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.Finance)">
-                        Finance
+                        Allowances & deductions
                     </button>
                     <button type="button"
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.OT ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
@@ -295,6 +341,11 @@
                                 @GetStaffPendingCertificatesCount(inspectedStaffId.Value)
                             </span>
                         }
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.GoodsLoans ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.GoodsLoans)">
+                        Goods loans
                     </button>
                 </nav>
             </div>
@@ -3058,7 +3109,39 @@
     private WorkspaceSearchResult? selectedEntityItem;
     private int? inspectedStaffId;
     private string inspectedStaffName = "";
+    private ProfileOverviewDto? inspectedStaffProfile;
+    private int? loadedProfileStaffId;
     private WorkspaceTab inspectedStaffTab = WorkspaceTab.Overview;
+
+    private async Task EnsureInspectedStaffProfileLoadedAsync()
+    {
+        if (!inspectedStaffId.HasValue)
+        {
+            inspectedStaffProfile = null;
+            loadedProfileStaffId = null;
+            return;
+        }
+
+        if (loadedProfileStaffId == inspectedStaffId.Value && inspectedStaffProfile != null)
+        {
+            return;
+        }
+
+        try
+        {
+            loadedProfileStaffId = inspectedStaffId.Value;
+            inspectedStaffProfile = await ProfileService.GetProfileAsync(inspectedStaffId.Value);
+            if (inspectedStaffProfile != null && !string.IsNullOrWhiteSpace(inspectedStaffProfile.FullName))
+            {
+                inspectedStaffName = inspectedStaffProfile.FullName;
+            }
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load profile for staff {StaffId}", inspectedStaffId.Value);
+        }
+    }
     private int? inspectedOrgId;
     private string inspectedOrgName = "";
     private WorkspaceTab inspectedOrgTab = WorkspaceTab.Overview;
@@ -3185,6 +3268,7 @@
                 }
                 catch { }
             }
+            await EnsureInspectedStaffProfileLoadedAsync();
         }
         if (NotificationRequestId.HasValue && selectedLeave == null && selectedItemRequest == null && selectedCertificateRequest == null)
         {
@@ -3253,6 +3337,7 @@
                 }
                 catch { }
             }
+            await EnsureInspectedStaffProfileLoadedAsync();
         }
         if (selectedEntityItem != null && (selectedEntityItem.Name?.StartsWith(selectedEntityItem.EntityType.ToString()) ?? true))
         {
@@ -3305,7 +3390,7 @@
                     "leave" => WorkspaceTab.Leave,
                     "attendance" => WorkspaceTab.Attendance,
                     "position" => WorkspaceTab.Position,
-                    "finance" => WorkspaceTab.Finance,
+                    "finance" or "allowances-deductions" or "allowance-deduction" or "allowance-deductions" or "allowances" or "deductions" => WorkspaceTab.Finance,
                     "performance" => WorkspaceTab.Performance,
                     "ot" or "overtime" => WorkspaceTab.OT,
                     "job-related" or "job-related-items" or "jobrelateditems" or "job-items" or "jobitems" or "jobitem" => WorkspaceTab.JobRelatedItems,
@@ -3316,6 +3401,7 @@
                     "work-types" or "worktypes" => WorkspaceTab.WorkTypes,
                     "staff-transfer" or "stafftransfer" => WorkspaceTab.StaffTransfer,
                     "certificates" or "certificate" => WorkspaceTab.Certificates,
+                    "goods-loans" or "goodsloans" or "goods-loan" or "loans" => WorkspaceTab.GoodsLoans,
                     _ => WorkspaceTab.Overview
                 };
                 activeWorkspaceTab = "Staff";
@@ -3847,6 +3933,7 @@
         inspectedStaffTab = tab;
         activeWorkspaceTab = "Staff";
         UpdateUrl();
+        _ = EnsureInspectedStaffProfileLoadedAsync();
     }
 
     private async Task ActItemRequest(string action)
@@ -3907,11 +3994,14 @@
         inspectedStaffTab = WorkspaceTab.Overview;
         activeWorkspaceTab = "Staff";
         UpdateUrl();
+        _ = EnsureInspectedStaffProfileLoadedAsync();
     }
 
     private void CloseStaffWorkspace()
     {
         inspectedStaffId = null;
+        inspectedStaffProfile = null;
+        loadedProfileStaffId = null;
         activeWorkspaceTab = previousTabBeforeStaff ?? "MyTeam";
         UpdateUrl();
     }

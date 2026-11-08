@@ -262,6 +262,10 @@ public static class BackendServiceRegistration
         // Attendance Deduction Service (Maldives Civil Service Regulation & Payroll Integration)
         services.AddScoped<HRM.Services.Interfaces.IAttendanceDeductionService, HRM.Services.Attendance.Deductions.AttendanceDeductionService>();
 
+        // Staff Goods Loan Management Services
+        services.AddSingleton<HRM.Application.Features.GoodsLoans.IGoodsLoanScheduleCalculator, HRM.Application.Features.GoodsLoans.GoodsLoanScheduleCalculator>();
+        services.AddScoped<HRM.Application.Contracts.Pages.IGoodsLoanService, HRM.Services.GoodsLoans.GoodsLoanService>();
+
         services.AddHrmApiEndpoints();
         services.AddAuthorization();
 

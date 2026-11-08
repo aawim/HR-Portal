@@ -56,6 +56,8 @@ namespace HRM.Enum
         [Display(Name = "Staff Transfer")]
         StaffTransfer,
         Onboarding,
-        Certificates
+        Certificates,
+        [Display(Name = "Goods Loans")]
+        GoodsLoans
     }
 }
