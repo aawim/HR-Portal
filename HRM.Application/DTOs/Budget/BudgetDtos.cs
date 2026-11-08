@@ -156,3 +156,12 @@ public record PayrollBudgetLineCheck
     public bool IsSufficient => AvailableBalance >= RequiredAmount;
     public decimal Deficit => IsSufficient ? 0 : RequiredAmount - AvailableBalance;
 }
+
+public record BudgetItemDto
+{
+    public int BudgetItemId { get; init; }
+    public string EconomicCode { get; init; } = string.Empty;
+    public string DhivehiName { get; init; } = string.Empty;
+    public string EnglishName { get; init; } = string.Empty;
+    public string ChapterCode { get; init; } = "21";
+}

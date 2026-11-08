@@ -27,6 +27,13 @@ public class BudgetController(IBudgetService budgetService) : ControllerBase
         return Ok(allocations);
     }
 
+    [HttpGet("items")]
+    public async Task<ActionResult<List<BudgetItemDto>>> GetItems(CancellationToken ct = default)
+    {
+        var items = await budgetService.GetBudgetItemsAsync(ct);
+        return Ok(items);
+    }
+
     [HttpPost("allocations")]
     public async Task<ActionResult<BudgetAllocationDto>> SaveAllocation([FromBody] CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {

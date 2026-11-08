@@ -40,6 +40,20 @@ public sealed class BudgetApiClient(HttpClient client) : IBudgetService
         }
     }
 
+    public async Task<List<BudgetItemDto>> GetBudgetItemsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var result = await client.GetFromJsonAsync<List<BudgetItemDto>>("/api/budget/items", ct);
+            return result ?? new List<BudgetItemDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[BudgetApiClient] Error fetching budget items: {ex.Message}");
+            return new List<BudgetItemDto>();
+        }
+    }
+
     public async Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {
         var response = await client.PostAsJsonAsync("/api/budget/allocations", request, ct);

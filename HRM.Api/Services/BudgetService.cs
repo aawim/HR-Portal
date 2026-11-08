@@ -88,6 +88,25 @@ public sealed class BudgetService(IDbContextFactory<HrmTeContext> factory) : IBu
         }).OrderBy(x => x.EconomicCode).ToList();
     }
 
+    public async Task<List<BudgetItemDto>> GetBudgetItemsAsync(CancellationToken ct = default)
+    {
+        await using var db = await factory.CreateDbContextAsync(ct);
+        var raw = await db.BudgetItems
+            .AsNoTracking()
+            .Where(x => x.IsActive)
+            .OrderBy(x => x.Code)
+            .ToListAsync(ct);
+
+        return raw.Select(x => new BudgetItemDto
+        {
+            BudgetItemId = x.BudgetItemID,
+            EconomicCode = x.EconomicCode ?? (x.Code?.ToString() ?? string.Empty),
+            DhivehiName = x.DhivehiName,
+            EnglishName = x.EnglishName ?? string.Empty,
+            ChapterCode = x.ChapterCode
+        }).ToList();
+    }
+
     public async Task<BudgetAllocationDto> SaveAllocationAsync(CreateBudgetAllocationRequest request, CancellationToken ct = default)
     {
         await using var db = await factory.CreateDbContextAsync(ct);
