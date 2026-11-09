@@ -7,6 +7,7 @@
 @using HRM.DTOs.UserContext
 @using HRM.Enum
 @using Services.Interfaces.Profile
+@using HRM.Components.Admin.Hr.Individual
 
 @inject NavigationManager NavigationManager
 @inject IProfileService ProfileService
@@ -212,19 +213,26 @@
             <!-- ---------------------------------------------------- -->
             <section class="border border-black p-4 mb-5 flex flex-col sm:flex-row items-start gap-5 print-break-avoid bg-slate-50/30">
                 <!-- Formal Passport-Sized Photo Placeholder (Left) -->
-                <div class="w-28 h-36 border-2 border-black bg-slate-100 flex flex-col items-center justify-center shrink-0 rounded-none overflow-hidden">
-                    @if (!string.IsNullOrWhiteSpace(_profile.ImageUrl))
-                    {
-                        <img src="@_profile.ImageUrl" alt="@_profile.FullName" class="w-full h-full object-cover rounded-none" />
-                    }
-                    else
-                    {
-                        <div class="flex flex-col items-center justify-center text-center p-2 text-slate-500 font-mono text-[10px]">
-                            <span class="text-2xl mb-1 text-slate-400">👤</span>
-                            <span class="font-bold uppercase tracking-wider text-[9px]">PASSPORT</span>
-                            <span class="font-bold uppercase tracking-wider text-[9px]">PHOTO</span>
-                        </div>
-                    }
+                <div class="flex flex-col items-center shrink-0">
+                    <div class="w-28 h-36 border-2 border-black bg-slate-100 flex flex-col items-center justify-center shrink-0 rounded-none overflow-hidden">
+                        @if (!string.IsNullOrWhiteSpace(_profile.ImageUrl))
+                        {
+                            <img src="@_profile.ImageUrl" alt="@_profile.FullName" class="w-full h-full object-cover rounded-none" />
+                        }
+                        else
+                        {
+                            <div class="flex flex-col items-center justify-center text-center p-2 text-slate-500 font-mono text-[10px]">
+                                <span class="text-2xl mb-1 text-slate-400">👤</span>
+                                <span class="font-bold uppercase tracking-wider text-[9px]">PASSPORT</span>
+                                <span class="font-bold uppercase tracking-wider text-[9px]">PHOTO</span>
+                            </div>
+                        }
+                    </div>
+                    <button type="button"
+                            @onclick="() => isPhotoModalOpen = true"
+                            class="staff-overview-no-print mt-1.5 text-[11px] font-semibold text-blue-600 hover:text-blue-800 underline transition">
+                        @(string.IsNullOrWhiteSpace(_profile.ImageUrl) ? "Add photo" : "Change photo")
+                    </button>
                 </div>
 
                 <!-- Identity Details (Right) -->
@@ -706,7 +714,18 @@
 
 </div>
 
+    @if (isPhotoModalOpen && _profile != null)
+    {
+        <IndividualPhotoModal IndividualId="_profile.IndividualId"
+                              IndividualName="@_profile.FullName"
+                              CurrentImageUrl="@_profile.ImageUrl"
+                              OnPhotoUpdated="HandlePhotoUpdated"
+                              OnClose="() => isPhotoModalOpen = false" />
+    }
+
 @code {
+    private bool isPhotoModalOpen;
+    private void HandlePhotoUpdated(string? newUrl) { if (_profile != null) _profile.ImageUrl = newUrl; }
     [Parameter] public int IndividualId { get; set; }
     [Parameter] public int StaffId { get; set; }
 
