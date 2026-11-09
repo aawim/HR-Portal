@@ -1,0 +1,1369 @@
+@page "/admin/hr/staff/manage"
+@page "/admin/hr/staff"
+@page "/admin/hr/staff-manage"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize]
+@rendermode RenderMode.InteractiveServer
+
+@using HRM.DTOs.Organisation
+@using HRM.Services
+@using HRM.Services.Interfaces
+@using HRM.Components.Admin.Hr.Individual
+@using HRM.Application.Contracts.Pages
+@using Microsoft.JSInterop
+
+@inject HRM.Services.Contracts.OrganisationSettingsServiceContracts.IOperations Settings
+@inject HRM.Services.Contracts.GroupsManagementServiceContracts.IOperations Groups
+@inject HRM.Application.Contracts.Pages.IOrganisationDirectoryQueries Directory
+@inject HRM.Services.Interfaces.IIndividualRegistryService Registry
+@inject HRM.Services.Interfaces.IUserAccessService Access
+@inject HRM.Services.ToastService Toasts
+@inject IJSRuntime JS
+@inject ILogger<StaffManagementPage> Logger
+@inject NavigationManager Navigation
+@inject IWebHostEnvironment Environment
+
+<PageTitle>Staff Management - HR Portal</PageTitle>
+
+<div class="mx-auto min-w-7xl max-w-full p-2 flex flex-col gap-2">
+    <!-- Breadcrumb Navigation -->
+    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2 no-print">
+        <nav class="flex items-center gap-1.5 text-xs text-slate-500" aria-label="Breadcrumb">
+            <a href="/admin/hr" class="hover:text-blue-600 transition">HR</a>
+            <span>/</span>
+            <span class="text-slate-400">Staff</span>
+            <span>/</span>
+            <span class="text-slate-900 font-semibold">Staff Management</span>
+        </nav>
+        <a href="/admin/hr" class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+            ← Back to HR Hub
+        </a>
+    </div>
+
+    <section class="staff-manage-page w-full min-w-0 p-2 space-y-4">
+        <!-- Sticky Header conforming to UI Design Standard -->
+        <header class="staff-manage-header sticky top-0 z-30 m-0 flex w-full min-w-0 flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/95 backdrop-blur-xs p-3 shadow-xs no-print">
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="text-lg font-bold text-slate-900">Staff Management</h1>
+                    @if (!string.IsNullOrWhiteSpace(organisationName))
+                    {
+                        <span class="rounded-full bg-blue-100 px-2.5 py-0.5 text-xs font-semibold text-blue-800">@organisationName</span>
+                    }
+                    <span class="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-semibold text-slate-700">@allStaff.Count Total Staff</span>
+                </div>
+                <p class="text-xs text-slate-500 mt-0.5">Comprehensive workforce roster, department allocations, operational groups, and staff profiles.</p>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+                <!-- Full Width / Shrink View Toggle Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition-colors"
+                        title="@(isFullWidth ? "Shrink to standard layout" : "Expand to full page width")"
+                        @onclick="ToggleFullWidth">
+                    @if (isFullWidth)
+                    {
+                        <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9L4 4m0 0l5 0m-5 0l0 5m11 11l5 5m0 0l-5 0m5 0l0-5M9 15l-5 5m0 0l5 0m-5 0l0-5m11-11l5-5m0 0l-5 0m5 0l0 5" />
+                        </svg>
+                        <span>Shrink View</span>
+                    }
+                    else
+                    {
+                        <svg class="h-4 w-4 text-slate-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+                        </svg>
+                        <span>Full Width</span>
+                    }
+                </button>
+
+                <!-- Export CSV Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        disabled="@(exporting || !FilteredStaff.Any())"
+                        @onclick="ExportCsvAsync"
+                        title="Export current staff list to CSV spreadsheet">
+                    <svg class="h-4 w-4 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span>@(exportingCsv ? "Exporting..." : "Export CSV")</span>
+                </button>
+
+                <!-- Export PDF Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        disabled="@(exporting || !FilteredStaff.Any())"
+                        @onclick="ExportPdfAsync"
+                        title="Export current staff list to PDF report">
+                    <svg class="h-4 w-4 text-rose-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    <span>@(exportingPdf ? "Generating..." : "Export PDF")</span>
+                </button>
+
+                <!-- Refresh Button -->
+                <button type="button"
+                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 disabled:opacity-50 transition-colors"
+                        disabled="@busy"
+                        @onclick="LoadAsync"
+                        title="Reload staff records and group assignments">
+                    <span class="@(busy ? "animate-spin" : "")">↻</span>
+                    <span>Refresh</span>
+                </button>
+
+                <!-- Add / Onboard Staff Action Button -->
+                <a class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition-colors"
+                   href="/admin/my/workspace/onboarding?tab=add-individual">
+                    <span>+</span>
+                    <span>Onboard Staff</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- Error Banner -->
+        @if (!string.IsNullOrEmpty(error))
+        {
+            <div role="alert" class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-800 no-print">
+                <div class="flex items-center gap-2">
+                    <span class="text-base">⚠️</span>
+                    <span>@error</span>
+                </div>
+                <button type="button" @onclick="() => error = null" class="font-bold text-rose-600 hover:text-rose-800">✕</button>
+            </div>
+        }
+
+        <!-- KPI Metric Summary Strip -->
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 no-print">
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Total Staff</span>
+                    <span class="text-xl font-bold text-slate-900">@allStaff.Count</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <span class="text-lg">💼</span>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Active Staff</span>
+                    <span class="text-xl font-bold text-slate-900">@allStaff.Count(s => s.IsActive)</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <span class="text-lg">✅</span>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Departments</span>
+                    <span class="text-xl font-bold text-slate-900">@DepartmentCount</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <span class="text-lg">🏢</span>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-slate-200 bg-white p-3.5 shadow-xs flex items-center justify-between">
+                <div>
+                    <span class="block text-xs font-medium text-slate-500">Groups & Teams</span>
+                    <span class="text-xl font-bold text-slate-900">@GroupCount</span>
+                </div>
+                <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-50 text-purple-600">
+                    <span class="text-lg">🏷️</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- View Segmented Tabs & Filters Toolbar -->
+        <div class="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3 no-print">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <!-- View Tabs Switcher -->
+                <div class="flex rounded-lg border border-slate-300 p-0.5 bg-slate-50">
+                    <button type="button"
+                            class="px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 @(activeTab == "all" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => SetTab("all")'>
+                        <span>👥</span>
+                        <span>All Staff</span>
+                        <span class="ml-1 rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] text-slate-700">@allStaff.Count</span>
+                    </button>
+                    <button type="button"
+                            class="px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 @(activeTab == "department" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => SetTab("department")'>
+                        <span>🏢</span>
+                        <span>Staff by Department</span>
+                        <span class="ml-1 rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] text-slate-700">@DepartmentCount</span>
+                    </button>
+                    <button type="button"
+                            class="px-3.5 py-1.5 text-xs font-semibold rounded-md transition-all flex items-center gap-1.5 @(activeTab == "groups" ? "bg-white text-blue-700 shadow-xs" : "text-slate-600 hover:text-slate-900")"
+                            @onclick='() => SetTab("groups")'>
+                        <span>🏷️</span>
+                        <span>Staff by Groups</span>
+                        <span class="ml-1 rounded-full bg-slate-200/70 px-1.5 py-0.2 text-[10px] text-slate-700">@GroupCount</span>
+                    </button>
+                </div>
+
+                <!-- Active Filter Counter & Reset Button -->
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-500">
+                        Showing <strong class="text-slate-800">@FilteredStaff.Count()</strong> of <strong class="text-slate-800">@allStaff.Count</strong> staff
+                    </span>
+                    @if (HasActiveFilters)
+                    {
+                        <button type="button"
+                                class="text-xs font-medium text-blue-600 hover:text-blue-800 underline ml-1"
+                                @onclick="ResetFilters">
+                            Reset filters
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <!-- Filter Controls Bar -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+                <!-- Search Text Filter -->
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 text-xs">🔍</span>
+                    <input type="text"
+                           class="w-full rounded-lg border border-slate-300 bg-white pl-8 pr-7 py-1.5 text-xs text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                           placeholder="Search name, employee #, position..."
+                           @bind="searchTerm"
+                           @bind:event="oninput" />
+                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <button type="button"
+                                class="absolute inset-y-0 right-0 pr-2.5 flex items-center text-slate-400 hover:text-slate-600 text-xs font-bold"
+                                @onclick="() => searchTerm = string.Empty">✕</button>
+                    }
+                </div>
+
+                <!-- Department Filter Dropdown -->
+                <div>
+                    <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedDepartment">
+                        <option value="">All Departments</option>
+                        @foreach (var dept in DepartmentsList)
+                        {
+                            <option value="@dept">@dept</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Group / Team Filter Dropdown -->
+                <div>
+                    <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedGroup">
+                        <option value="">All Groups & Teams</option>
+                        @foreach (var grp in GroupsList)
+                        {
+                            <option value="@grp">@grp</option>
+                        }
+                    </select>
+                </div>
+
+                <!-- Status Filter Dropdown -->
+                <div>
+                    <select class="w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                            @bind="selectedStatus">
+                        <option value="all">All Employment Statuses</option>
+                        <option value="active">Active Employees Only</option>
+                        <option value="inactive">Inactive / Former Only</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        @if (busy)
+        {
+            <div role="status" class="flex flex-col items-center justify-center p-16 text-slate-500 rounded-2xl border border-slate-200 bg-white shadow-xs">
+                <div class="h-8 w-8 animate-spin rounded-full border-2 border-blue-600 border-t-transparent mb-3"></div>
+                <span class="text-xs font-semibold text-slate-700">Loading staff directory and assignments…</span>
+            </div>
+        }
+        else if (activeTab == "all")
+        {
+            <!-- ========================================== -->
+            <!-- TAB 1: ALL STAFF ROSTER VIEW               -->
+            <!-- ========================================== -->
+            <div class="rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs border-collapse">
+                        <thead class="bg-slate-50 text-slate-700 font-semibold border-b border-slate-200">
+                            <tr>
+                                <th class="p-3 w-12 text-center">Photo</th>
+                                <th class="p-3">Staff Name</th>
+                                <th class="p-3">Employee #</th>
+                                <th class="p-3">Department</th>
+                                <th class="p-3">Job Type / Position</th>
+                                <th class="p-3">Assigned Groups</th>
+                                <th class="p-3">Status</th>
+                                <th class="p-3 text-center no-print w-28">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            @if (!FilteredStaff.Any())
+                            {
+                                <tr>
+                                    <td colspan="8" class="p-10 text-center text-slate-400">
+                                        <div class="flex flex-col items-center justify-center gap-1.5">
+                                            <span class="text-3xl">📭</span>
+                                            <span class="text-sm font-semibold text-slate-700">No staff members found</span>
+                                            <span class="text-xs text-slate-500">Try adjusting your search criteria or resetting filters.</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                            else
+                            {
+                                @foreach (var staff in FilteredStaff)
+                                {
+                                    <tr @key="staff.JobId" class="hover:bg-slate-50/70 transition-colors">
+                                        <!-- Photo Avatar -->
+                                        <td class="p-3 text-center">
+                                            <div class="relative group inline-block">
+                                                @if (staffPhotos.TryGetValue(staff.IndividualId, out var photoUrl) && !string.IsNullOrEmpty(photoUrl))
+                                                {
+                                                    <img src="@photoUrl"
+                                                         alt="@staff.Name"
+                                                         class="h-9 w-9 rounded-full object-cover border border-slate-200 shadow-2xs" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="h-9 w-9 rounded-full @GetAvatarBg(staff.Name) flex items-center justify-center text-xs font-bold shadow-2xs">
+                                                        @GetInitials(staff.Name)
+                                                    </div>
+                                                }
+
+                                                <!-- Photo Edit Quick Button overlay -->
+                                                <button type="button"
+                                                        class="absolute inset-0 rounded-full bg-slate-900/60 text-white opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity text-[11px] shadow-sm no-print"
+                                                        title="Add or change photo for @staff.Name"
+                                                        @onclick="() => OpenPhotoModal(staff)">
+                                                    📷
+                                                </button>
+                                            </div>
+                                        </td>
+
+                                        <!-- Staff Name -->
+                                        <td class="p-3">
+                                            <a href="@($"/admin/my/workspace/staff/{staff.IndividualId}/overview")"
+                                               class="font-semibold text-slate-900 hover:text-blue-600 transition flex items-center gap-1"
+                                               title="Open 360 profile for @staff.Name">
+                                                <span>@staff.Name</span>
+                                            </a>
+                                            <span class="text-[11px] text-slate-400 block font-mono">ID: @staff.IndividualId</span>
+                                        </td>
+
+                                        <!-- Employee Number -->
+                                        <td class="p-3">
+                                            @if (!string.IsNullOrWhiteSpace(staff.EmployeeNumber))
+                                            {
+                                                <span class="font-mono text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md inline-block">
+                                                    @staff.EmployeeNumber
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400 text-[11px] italic">Not assigned</span>
+                                            }
+                                        </td>
+
+                                        <!-- Department -->
+                                        <td class="p-3">
+                                            <div class="flex items-center gap-1.5 text-slate-700">
+                                                <span class="text-slate-400">🏢</span>
+                                                <span>@(string.IsNullOrWhiteSpace(staff.Department) ? "Unassigned" : staff.Department)</span>
+                                            </div>
+                                        </td>
+
+                                        <!-- Job Type / Position -->
+                                        <td class="p-3 text-slate-600">
+                                            <span>@staff.JobType</span>
+                                        </td>
+
+                                        <!-- Assigned Groups / Teams -->
+                                        <td class="p-3">
+                                            @if (staff.Groups.Any())
+                                            {
+                                                <div class="flex flex-wrap gap-1 max-w-xs">
+                                                    @foreach (var g in staff.Groups)
+                                                    {
+                                                        <span class="rounded-full bg-purple-50 border border-purple-200 px-2 py-0.5 text-[10px] font-medium text-purple-700">
+                                                            @g
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                            else
+                                            {
+                                                <span class="text-slate-400 text-[11px] italic">-</span>
+                                            }
+                                        </td>
+
+                                        <!-- Status Badge -->
+                                        <td class="p-3">
+                                            @if (staff.IsActive)
+                                            {
+                                                <span class="bg-emerald-100 text-emerald-800 rounded-full px-2.5 py-0.5 font-semibold text-[11px] inline-flex items-center gap-1">
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-emerald-600"></span>
+                                                    <span>@staff.Status</span>
+                                                </span>
+                                            }
+                                            else
+                                            {
+                                                <span class="bg-slate-100 text-slate-700 rounded-full px-2 py-0.5 text-[11px] font-medium inline-flex items-center gap-1">
+                                                    <span class="h-1.5 w-1.5 rounded-full bg-slate-400"></span>
+                                                    <span>@staff.Status</span>
+                                                </span>
+                                            }
+                                        </td>
+
+                                        <!-- Actions -->
+                                        <td class="p-3 text-center no-print">
+                                            <div class="flex items-center justify-center gap-1.5">
+                                                <a href="@($"/admin/my/workspace/staff/{staff.IndividualId}/overview")"
+                                                   class="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-600 transition shadow-2xs"
+                                                   title="View 360 Workspace Profile">
+                                                    <span>Profile</span>
+                                                    <span>→</span>
+                                                </a>
+                                                <button type="button"
+                                                        class="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-2xs"
+                                                        title="Add or update photo"
+                                                        @onclick="() => OpenPhotoModal(staff)">
+                                                    📷
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        }
+        else if (activeTab == "department")
+        {
+            <!-- ========================================== -->
+            <!-- TAB 2: STAFF BY DEPARTMENT VIEW            -->
+            <!-- ========================================== -->
+            <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+                <!-- Left Panel: Department Directory -->
+                <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Departments Directory</h2>
+                            <p class="text-xs text-slate-500">Select a department to view assigned personnel.</p>
+                        </div>
+                        <span class="text-xs font-semibold rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 border border-blue-200">
+                            @DepartmentGroups.Count() departments
+                        </span>
+                    </div>
+
+                    <!-- Department List -->
+                    <div class="flex flex-col gap-2 max-h-[600px] overflow-y-auto pr-1">
+                        @foreach (var dept in DepartmentGroups)
+                        {
+                            var isSelected = selectedDeptName == dept.Name;
+                            <div class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-2 @(isSelected ? "border-blue-500 bg-blue-50/70 shadow-xs ring-1 ring-blue-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => selectedDeptName = dept.Name">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <div class="h-8 w-8 rounded-lg @(isSelected ? "bg-blue-600 text-white" : "bg-blue-50 text-blue-600") flex items-center justify-center text-sm font-bold shrink-0">
+                                            🏢
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-slate-900 text-xs">@dept.Name</h3>
+                                            @if (!string.IsNullOrEmpty(dept.StructureType))
+                                            {
+                                                <span class="text-[10px] text-slate-500">@dept.StructureType</span>
+                                            }
+                                        </div>
+                                    </div>
+                                    <span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[11px] font-semibold shrink-0">
+                                        @dept.Staff.Count staff
+                                    </span>
+                                </div>
+
+                                @if (dept.Supervisors.Any())
+                                {
+                                    <div class="flex items-center gap-1 text-[11px] text-slate-600 border-t border-slate-100/80 pt-1.5 mt-0.5">
+                                        <span class="text-indigo-600 font-semibold">Lead:</span>
+                                        <span class="truncate">@string.Join(", ", dept.Supervisors)</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Right Panel: Selected Department Roster -->
+                <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    @if (ActiveDepartmentGroup != null)
+                    {
+                        var dept = ActiveDepartmentGroup;
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-base font-bold text-slate-900">@dept.Name</h2>
+                                    @if (!string.IsNullOrEmpty(dept.StructureType))
+                                    {
+                                        <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-[10px] font-semibold">@dept.StructureType</span>
+                                    }
+                                </div>
+                                @if (dept.Supervisors.Any())
+                                {
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        Supervisors: <strong class="text-slate-700">@string.Join(", ", dept.Supervisors)</strong>
+                                    </p>
+                                }
+                            </div>
+                            <span class="rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-0.5 text-xs font-semibold">
+                                @dept.Staff.Count Assigned Staff
+                            </span>
+                        </div>
+
+                        <!-- Department Staff List -->
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                            @if (!dept.Staff.Any())
+                            {
+                                <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                                    No staff currently assigned to this department.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var member in dept.Staff)
+                                {
+                                    <div class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30 transition-all group gap-3">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <!-- Avatar with photo or initials -->
+                                            <div class="relative shrink-0">
+                                                @if (staffPhotos.TryGetValue(member.IndividualId, out var photoUrl) && !string.IsNullOrEmpty(photoUrl))
+                                                {
+                                                    <img src="@photoUrl"
+                                                         alt="@member.Name"
+                                                         class="h-10 w-10 rounded-full object-cover border border-slate-200 shadow-2xs" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="h-10 w-10 rounded-full @GetAvatarBg(member.Name) flex items-center justify-center text-xs font-bold shadow-2xs">
+                                                        @GetInitials(member.Name)
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-bold text-xs text-slate-900 truncate">@member.Name</span>
+                                                    @if (!string.IsNullOrWhiteSpace(member.EmployeeNumber))
+                                                    {
+                                                        <span class="font-mono text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                                                            @member.EmployeeNumber
+                                                        </span>
+                                                    }
+                                                </div>
+                                                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                                                    <span>@member.JobType</span>
+                                                    @if (member.Groups.Any())
+                                                    {
+                                                        <span>·</span>
+                                                        <span class="text-purple-600 truncate">@string.Join(", ", member.Groups)</span>
+                                                    }
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-1.5 shrink-0 no-print">
+                                            <button type="button"
+                                                    class="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-2xs text-xs"
+                                                    title="Add or update photo"
+                                                    @onclick="() => OpenPhotoModal(member)">
+                                                📷
+                                            </button>
+                                            <a href="@($"/admin/my/workspace/staff/{member.IndividualId}/overview")"
+                                               class="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-blue-50/70 px-2.5 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-100 transition shadow-2xs">
+                                                <span>Profile</span>
+                                                <span>→</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                            Select a department from the left panel to view its members.
+                        </div>
+                    }
+                </aside>
+            </div>
+        }
+        else if (activeTab == "groups")
+        {
+            <!-- ========================================== -->
+            <!-- TAB 3: STAFF BY GROUPS & TEAMS VIEW        -->
+            <!-- ========================================== -->
+            <div class="page-panels @(isFullWidth ? "page-panels-full" : "page-panels-standard")">
+                <!-- Left Panel: Groups & Teams Directory -->
+                <div class="page-panel-left min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-900">Groups & Teams Directory</h2>
+                            <p class="text-xs text-slate-500">Operational groups, committees, and teams.</p>
+                        </div>
+                        <span class="text-xs font-semibold rounded-full bg-purple-50 text-purple-700 px-2 py-0.5 border border-purple-200">
+                            @GroupEntries.Count() groups
+                        </span>
+                    </div>
+
+                    <!-- Groups List -->
+                    <div class="flex flex-col gap-2 max-h-[600px] overflow-y-auto pr-1">
+                        @foreach (var grp in GroupEntries)
+                        {
+                            var isSelected = selectedGroupName == grp.Name;
+                            <div class="rounded-xl border p-3 text-xs transition cursor-pointer hover:shadow-xs flex flex-col gap-2 @(isSelected ? "border-purple-500 bg-purple-50/70 shadow-xs ring-1 ring-purple-500" : "border-slate-200 bg-white hover:border-slate-300")"
+                                 @onclick="() => selectedGroupName = grp.Name">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <div class="h-8 w-8 rounded-lg @(isSelected ? "bg-purple-600 text-white" : "bg-purple-50 text-purple-600") flex items-center justify-center text-sm font-bold shrink-0">
+                                            🏷️
+                                        </div>
+                                        <div>
+                                            <h3 class="font-bold text-slate-900 text-xs">@grp.Name</h3>
+                                            <span class="text-[10px] text-slate-500">@grp.Kind</span>
+                                        </div>
+                                    </div>
+                                    <span class="rounded-full bg-slate-100 text-slate-700 px-2 py-0.5 text-[11px] font-semibold shrink-0">
+                                        @grp.Staff.Count members
+                                    </span>
+                                </div>
+
+                                @if (!string.IsNullOrEmpty(grp.ParentStructure))
+                                {
+                                    <div class="text-[11px] text-slate-500 border-t border-slate-100/80 pt-1.5 mt-0.5 truncate">
+                                        Structure: <span class="font-medium text-slate-700">@grp.ParentStructure</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <!-- Right Panel: Selected Group Member Roster -->
+                <aside class="page-panel-right min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-xs flex flex-col gap-3">
+                    @if (ActiveGroupEntry != null)
+                    {
+                        var grp = ActiveGroupEntry;
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-wrap gap-2">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-base font-bold text-slate-900">@grp.Name</h2>
+                                    <span class="rounded-full bg-purple-100 text-purple-800 px-2 py-0.5 text-[10px] font-semibold">@grp.Kind</span>
+                                </div>
+                                @if (!string.IsNullOrEmpty(grp.ParentStructure))
+                                {
+                                    <p class="text-xs text-slate-500 mt-0.5">
+                                        Associated Structure: <strong class="text-slate-700">@grp.ParentStructure</strong>
+                                    </p>
+                                }
+                            </div>
+                            <span class="rounded-full bg-purple-50 text-purple-700 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold">
+                                @grp.Staff.Count Members
+                            </span>
+                        </div>
+
+                        <!-- Group Members List -->
+                        <div class="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+                            @if (!grp.Staff.Any())
+                            {
+                                <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                                    No staff currently assigned to this group.
+                                </div>
+                            }
+                            else
+                            {
+                                @foreach (var member in grp.Staff)
+                                {
+                                    <div class="flex items-center justify-between p-3 rounded-xl border border-slate-200 bg-white hover:border-purple-300 hover:bg-purple-50/30 transition-all group gap-3">
+                                        <div class="flex items-center gap-3 min-w-0">
+                                            <!-- Avatar with photo or initials -->
+                                            <div class="relative shrink-0">
+                                                @if (staffPhotos.TryGetValue(member.IndividualId, out var photoUrl) && !string.IsNullOrEmpty(photoUrl))
+                                                {
+                                                    <img src="@photoUrl"
+                                                         alt="@member.Name"
+                                                         class="h-10 w-10 rounded-full object-cover border border-slate-200 shadow-2xs" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="h-10 w-10 rounded-full @GetAvatarBg(member.Name) flex items-center justify-center text-xs font-bold shadow-2xs">
+                                                        @GetInitials(member.Name)
+                                                    </div>
+                                                }
+                                            </div>
+
+                                            <div class="min-w-0">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="font-bold text-xs text-slate-900 truncate">@member.Name</span>
+                                                    @if (!string.IsNullOrWhiteSpace(member.EmployeeNumber))
+                                                    {
+                                                        <span class="font-mono text-[10px] font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.2 rounded">
+                                                            @member.EmployeeNumber
+                                                        </span>
+                                                    }
+                                                </div>
+                                                <div class="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500">
+                                                    <span>🏢 @(string.IsNullOrEmpty(member.Department) ? "Unassigned" : member.Department)</span>
+                                                    <span>·</span>
+                                                    <span>@member.JobType</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="flex items-center gap-1.5 shrink-0 no-print">
+                                            <button type="button"
+                                                    class="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition shadow-2xs text-xs"
+                                                    title="Add or update photo"
+                                                    @onclick="() => OpenPhotoModal(member)">
+                                                📷
+                                            </button>
+                                            <a href="@($"/admin/my/workspace/staff/{member.IndividualId}/overview")"
+                                               class="inline-flex items-center gap-1 rounded-lg border border-purple-200 bg-purple-50/70 px-2.5 py-1 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs">
+                                                <span>Profile</span>
+                                                <span>→</span>
+                                            </a>
+                                        </div>
+                                    </div>
+                                }
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="rounded-xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                            Select a group from the left panel to view its members.
+                        </div>
+                    }
+                </aside>
+            </div>
+        }
+    </section>
+</div>
+
+<!-- Photo Edit Modal -->
+@if (activePhotoStaff != null)
+{
+    <IndividualPhotoModal IndividualId="@activePhotoStaff.IndividualId"
+                          IndividualName="@activePhotoStaff.Name"
+                          CurrentImageUrl="@(staffPhotos.GetValueOrDefault(activePhotoStaff.IndividualId))"
+                          OnPhotoUpdated="HandlePhotoUpdated"
+                          OnClose="() => activePhotoStaff = null" />
+}
+
+<style>
+    .staff-manage-page {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .page-panels {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        align-items: start;
+        gap: 1rem;
+        width: 100%;
+        min-width: 0;
+        padding: 0;
+        margin-inline: auto;
+        transition: max-width .3s ease;
+        box-sizing: border-box;
+    }
+
+    .page-panels-standard {
+        max-width: 80rem;
+    }
+
+    .page-panels-full {
+        max-width: none;
+    }
+
+    .page-panel-left, .page-panel-right {
+        min-width: 0;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    @@media (min-width: 1024px) {
+        .page-panels {
+            grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+        }
+    }
+
+    @@media print {
+        .no-print {
+            display: none !important;
+        }
+
+        body {
+            background: white !important;
+            color: black !important;
+        }
+
+        .staff-manage-header {
+            position: static !important;
+            box-shadow: none !important;
+            border-bottom: 2px solid #cbd5e1 !important;
+        }
+    }
+</style>
+
+@code {
+    private const string FullWidthSettingKey = "hrm.staff-manage.full-width";
+
+    public sealed class ManagedStaffMember
+    {
+        public int JobId { get; set; }
+        public int IndividualId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? EmployeeNumber { get; set; }
+        public string Department { get; set; } = string.Empty;
+        public string JobType { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public List<string> Groups { get; set; } = [];
+        public bool IsActive => Status.Equals("Active", StringComparison.OrdinalIgnoreCase) ||
+                                Status.Equals("Approved", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public sealed class DepartmentGroupView
+    {
+        public string Name { get; set; } = string.Empty;
+        public string StructureType { get; set; } = string.Empty;
+        public List<string> Supervisors { get; set; } = [];
+        public List<ManagedStaffMember> Staff { get; set; } = [];
+    }
+
+    public sealed class GroupEntryView
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Kind { get; set; } = string.Empty;
+        public string ParentStructure { get; set; } = string.Empty;
+        public List<ManagedStaffMember> Staff { get; set; } = [];
+    }
+
+    private List<ManagedStaffMember> allStaff = [];
+    private readonly Dictionary<int, string?> staffPhotos = new();
+    private OrganisationTeamSettingsData? teamData;
+    private OperationalGroupsData? operationalGroupsData;
+
+    private int orgId;
+    private string organisationName = string.Empty;
+    private string activeTab = "all";
+    private bool busy = true;
+    private bool isFullWidth = false;
+    private string? error;
+
+    // Filters
+    private string searchTerm = string.Empty;
+    private string selectedDepartment = string.Empty;
+    private string selectedGroup = string.Empty;
+    private string selectedStatus = "all";
+
+    // Sub-view selections
+    private string? selectedDeptName;
+    private string? selectedGroupName;
+
+    // Modal state
+    private ManagedStaffMember? activePhotoStaff;
+
+    // Exporting flags
+    private bool exporting => exportingCsv || exportingPdf;
+    private bool exportingCsv = false;
+    private bool exportingPdf = false;
+
+    private bool disposed;
+
+    private int DepartmentCount => teamData?.Rows.Count(r => r.Kind == "Department") ??
+                                   allStaff.Select(s => s.Department).Where(d => !string.IsNullOrEmpty(d)).Distinct().Count();
+
+    private int GroupCount => (operationalGroupsData?.Groups.Count ?? 0) + (teamData?.Rows.Count(r => r.Kind == "Team") ?? 0);
+
+    private IEnumerable<string> DepartmentsList =>
+        allStaff.Select(s => s.Department).Where(d => !string.IsNullOrWhiteSpace(d)).Distinct().OrderBy(d => d);
+
+    private IEnumerable<string> GroupsList =>
+        allStaff.SelectMany(s => s.Groups).Distinct().OrderBy(g => g);
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(searchTerm) ||
+        !string.IsNullOrWhiteSpace(selectedDepartment) ||
+        !string.IsNullOrWhiteSpace(selectedGroup) ||
+        selectedStatus != "all";
+
+    private IEnumerable<ManagedStaffMember> FilteredStaff =>
+        allStaff.Where(s =>
+        {
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                var term = searchTerm.Trim();
+                var match = s.Name.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                            (s.EmployeeNumber != null && s.EmployeeNumber.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
+                            s.Department.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                            s.JobType.Contains(term, StringComparison.OrdinalIgnoreCase) ||
+                            s.Groups.Any(g => g.Contains(term, StringComparison.OrdinalIgnoreCase));
+                if (!match) return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedDepartment) &&
+                !s.Department.Equals(selectedDepartment, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(selectedGroup) &&
+                !s.Groups.Any(g => g.Equals(selectedGroup, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+
+            if (selectedStatus == "active" && !s.IsActive) return false;
+            if (selectedStatus == "inactive" && s.IsActive) return false;
+
+            return true;
+        });
+
+    private IEnumerable<DepartmentGroupView> DepartmentGroups
+    {
+        get
+        {
+            var deptRows = teamData?.Rows.Where(r => r.Kind == "Department").ToList() ?? [];
+            var structureTypeMap = teamData?.StructureTypes.ToDictionary(t => t.Id, t => t.Name) ?? [];
+
+            var list = new List<DepartmentGroupView>();
+            foreach (var r in deptRows)
+            {
+                var typeName = r.StructureTypeId.HasValue && structureTypeMap.TryGetValue(r.StructureTypeId.Value, out var t) ? t : "Department";
+                var members = allStaff.Where(s => s.Department.Equals(r.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+                list.Add(new DepartmentGroupView
+                {
+                    Name = r.Name,
+                    StructureType = typeName,
+                    Supervisors = r.Supervisors.Select(s => s.Name).ToList(),
+                    Staff = members
+                });
+            }
+
+            // Fallback for any departments in staff list not in teamData
+            foreach (var deptName in DepartmentsList)
+            {
+                if (!list.Any(d => d.Name.Equals(deptName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    list.Add(new DepartmentGroupView
+                    {
+                        Name = deptName,
+                        StructureType = "Department",
+                        Supervisors = [],
+                        Staff = allStaff.Where(s => s.Department.Equals(deptName, StringComparison.OrdinalIgnoreCase)).ToList()
+                    });
+                }
+            }
+
+            return list.OrderBy(d => d.Name);
+        }
+    }
+
+    private DepartmentGroupView? ActiveDepartmentGroup =>
+        DepartmentGroups.FirstOrDefault(d => d.Name == selectedDeptName) ?? DepartmentGroups.FirstOrDefault();
+
+    private IEnumerable<GroupEntryView> GroupEntries
+    {
+        get
+        {
+            var list = new List<GroupEntryView>();
+
+            // Operational groups
+            if (operationalGroupsData?.Groups != null)
+            {
+                foreach (var g in operationalGroupsData.Groups)
+                {
+                    var members = allStaff.Where(s => s.Groups.Contains(g.Name)).ToList();
+                    list.Add(new GroupEntryView
+                    {
+                        Name = g.Name,
+                        Kind = string.IsNullOrEmpty(g.Type) ? "Operational Group" : g.Type,
+                        ParentStructure = g.Structure,
+                        Staff = members
+                    });
+                }
+            }
+
+            // Functional teams
+            if (teamData?.Rows != null)
+            {
+                foreach (var t in teamData.Rows.Where(r => r.Kind == "Team"))
+                {
+                    if (!list.Any(g => g.Name.Equals(t.Name, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var members = allStaff.Where(s => s.Groups.Contains(t.Name)).ToList();
+                        list.Add(new GroupEntryView
+                        {
+                            Name = t.Name,
+                            Kind = "Team",
+                            ParentStructure = "",
+                            Staff = members
+                        });
+                    }
+                }
+            }
+
+            return list.OrderBy(g => g.Name);
+        }
+    }
+
+    private GroupEntryView? ActiveGroupEntry =>
+        GroupEntries.FirstOrDefault(g => g.Name == selectedGroupName) ?? GroupEntries.FirstOrDefault();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !disposed)
+        {
+            try
+            {
+                var saved = await JS.InvokeAsync<string?>("localStorage.getItem", FullWidthSettingKey);
+                if (!disposed && bool.TryParse(saved, out var val))
+                {
+                    isFullWidth = val;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ToggleFullWidth()
+    {
+        isFullWidth = !isFullWidth;
+        try
+        {
+            await JS.InvokeVoidAsync("localStorage.setItem", FullWidthSettingKey, isFullWidth.ToString());
+        }
+        catch { }
+    }
+
+    private void SetTab(string tab)
+    {
+        activeTab = tab;
+        if (tab == "department" && selectedDeptName == null)
+        {
+            selectedDeptName = DepartmentGroups.FirstOrDefault()?.Name;
+        }
+        else if (tab == "groups" && selectedGroupName == null)
+        {
+            selectedGroupName = GroupEntries.FirstOrDefault()?.Name;
+        }
+    }
+
+    private void ResetFilters()
+    {
+        searchTerm = string.Empty;
+        selectedDepartment = string.Empty;
+        selectedGroup = string.Empty;
+        selectedStatus = "all";
+    }
+
+    private void OpenPhotoModal(ManagedStaffMember staff)
+    {
+        activePhotoStaff = staff;
+    }
+
+    private void HandlePhotoUpdated(string? newPhoto)
+    {
+        if (activePhotoStaff != null)
+        {
+            lock (staffPhotos)
+            {
+                if (string.IsNullOrEmpty(newPhoto))
+                {
+                    staffPhotos.Remove(activePhotoStaff.IndividualId);
+                }
+                else
+                {
+                    staffPhotos[activePhotoStaff.IndividualId] = newPhoto;
+                }
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (disposed) return;
+        busy = true;
+        error = null;
+        try
+        {
+            orgId = await Access.GetCurrentOrganisationIdAsync();
+            var orgs = await Settings.GetTeamOrganisationsAsync();
+            organisationName = orgs.FirstOrDefault(o => o.Id == orgId)?.Name ?? "Organisation";
+
+            // 1. Load all staff rows
+            var rawStaff = await Settings.GetStaffAsync(orgId);
+
+            // 2. Load department and team structure
+            teamData = await Settings.GetTeamSettingsAsync(orgId);
+
+            // 3. Load operational groups safely
+            try
+            {
+                operationalGroupsData = await Groups.LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Operational groups could not be loaded; continuing with standard staff records");
+            }
+
+            // 4. Fetch group memberships
+            var groupStaffMap = new Dictionary<int, List<int>>();
+            if (operationalGroupsData?.Groups != null)
+            {
+                var groupTasks = operationalGroupsData.Groups.Select(async g =>
+                {
+                    try
+                    {
+                        var details = await Directory.GetDetailsAsync(new OrganisationUnitKey(OrganisationUnitKind.Group, g.Id));
+                        return (g.Id, Members: details?.CurrentStaff?.Select(s => s.StaffId).ToList() ?? []);
+                    }
+                    catch
+                    {
+                        return (g.Id, Members: (List<int>)[]);
+                    }
+                });
+
+                var loadedGroupDetails = await Task.WhenAll(groupTasks);
+                foreach (var gd in loadedGroupDetails)
+                {
+                    groupStaffMap[gd.Id] = gd.Members;
+                }
+            }
+
+            // Build assigned group names per staff member
+            var staffGroupNames = new Dictionary<int, List<string>>();
+
+            if (operationalGroupsData?.Groups != null)
+            {
+                foreach (var g in operationalGroupsData.Groups)
+                {
+                    if (groupStaffMap.TryGetValue(g.Id, out var members))
+                    {
+                        foreach (var staffId in members)
+                        {
+                            if (!staffGroupNames.TryGetValue(staffId, out var list))
+                            {
+                                list = [];
+                                staffGroupNames[staffId] = list;
+                            }
+                            if (!list.Contains(g.Name)) list.Add(g.Name);
+                        }
+                    }
+                }
+            }
+
+            if (teamData?.Rows != null)
+            {
+                foreach (var team in teamData.Rows.Where(r => r.Kind == "Team"))
+                {
+                    foreach (var member in team.Members)
+                    {
+                        if (!staffGroupNames.TryGetValue(member.Id, out var list))
+                        {
+                            list = [];
+                            staffGroupNames[member.Id] = list;
+                        }
+                        if (!list.Contains(team.Name)) list.Add(team.Name);
+                    }
+                }
+            }
+
+            // Build staff view model list
+            allStaff = rawStaff.Select(r => new ManagedStaffMember
+            {
+                JobId = r.JobId,
+                IndividualId = r.IndividualId,
+                Name = r.Name,
+                EmployeeNumber = r.EmployeeNumber,
+                Department = r.Department,
+                JobType = r.JobType,
+                Status = r.Status,
+                Groups = staffGroupNames.TryGetValue(r.IndividualId, out var grps) ? grps : []
+            }).ToList();
+
+            if (selectedDeptName == null)
+            {
+                selectedDeptName = DepartmentGroups.FirstOrDefault()?.Name;
+            }
+            if (selectedGroupName == null)
+            {
+                selectedGroupName = GroupEntries.FirstOrDefault()?.Name;
+            }
+
+            // Trigger non-blocking asynchronous photo loading for all distinct staff individuals
+            var distinctStaffIds = allStaff.Select(s => s.IndividualId).Where(id => id > 0).Distinct().ToList();
+            _ = LoadPhotosAsync(distinctStaffIds);
+        }
+        catch (Exception ex)
+        {
+            if (disposed) return;
+            allStaff = [];
+            Logger.LogError(ex, "Failed loading staff management data");
+            error = ex is UnauthorizedAccessException or InvalidOperationException ? ex.Message : "Staff directory could not be loaded. Please refresh or contact HR.";
+        }
+        finally
+        {
+            if (!disposed) busy = false;
+        }
+    }
+
+    private async Task LoadPhotosAsync(List<int> individualIds)
+    {
+        var throttler = new SemaphoreSlim(6);
+        var tasks = individualIds.Select(async id =>
+        {
+            if (disposed) return;
+            await throttler.WaitAsync();
+            try
+            {
+                var photo = await Registry.GetPhotoAsync(id);
+                if (!string.IsNullOrEmpty(photo))
+                {
+                    lock (staffPhotos)
+                    {
+                        staffPhotos[id] = photo;
+                    }
+                    if (!disposed)
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogDebug(ex, "Photo fetch failed for individual {Id}", id);
+            }
+            finally
+            {
+                throttler.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks);
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        if (exporting) return;
+        exportingCsv = true;
+        try
+        {
+            var exportRows = FilteredStaff.Select(s => new StaffExportRow
+            {
+                IndividualId = s.IndividualId,
+                Name = s.Name,
+                EmployeeNumber = s.EmployeeNumber,
+                Department = s.Department,
+                JobType = s.JobType,
+                Status = s.Status,
+                Groups = string.Join("; ", s.Groups)
+            }).ToList();
+
+            var filterSummary = $"Tab: {activeTab} | Search: {(string.IsNullOrEmpty(searchTerm) ? "All" : searchTerm)} | Dept: {(string.IsNullOrEmpty(selectedDepartment) ? "All" : selectedDepartment)} | Group: {(string.IsNullOrEmpty(selectedGroup) ? "All" : selectedGroup)} | Status: {selectedStatus}";
+            var bytes = StaffManagementExport.ToCsv(organisationName, filterSummary, exportRows);
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(bytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"staff-roster-{DateTime.Now:yyyyMMdd-HHmmss}.csv", "text/csv;charset=utf-8", reference);
+            Toasts.Success("Staff roster CSV exported successfully.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to export staff CSV");
+            Toasts.Error("Staff CSV export failed. Please try again.");
+        }
+        finally
+        {
+            exportingCsv = false;
+        }
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        if (exporting) return;
+        exportingPdf = true;
+        try
+        {
+            var exportRows = FilteredStaff.Select(s => new StaffExportRow
+            {
+                IndividualId = s.IndividualId,
+                Name = s.Name,
+                EmployeeNumber = s.EmployeeNumber,
+                Department = s.Department,
+                JobType = s.JobType,
+                Status = s.Status,
+                Groups = string.Join("; ", s.Groups)
+            }).ToList();
+
+            var filterSummary = $"Tab: {activeTab} | Search: {(string.IsNullOrEmpty(searchTerm) ? "All" : searchTerm)} | Dept: {(string.IsNullOrEmpty(selectedDepartment) ? "All" : selectedDepartment)} | Group: {(string.IsNullOrEmpty(selectedGroup) ? "All" : selectedGroup)} | Status: {selectedStatus}";
+            var fontPath = Path.Combine(Environment.WebRootPath, "fonts", "Faruma.ttf");
+            var bytes = StaffManagementExport.ToPdf(organisationName, filterSummary, exportRows, fontPath);
+
+            await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./organisationStaffExport.js");
+            using var stream = new MemoryStream(bytes);
+            using var reference = new DotNetStreamReference(stream);
+            await module.InvokeVoidAsync("download", $"staff-roster-{DateTime.Now:yyyyMMdd-HHmmss}.pdf", "application/pdf", reference);
+            Toasts.Success("Staff roster PDF exported successfully.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to export staff PDF");
+            Toasts.Error("Staff PDF export failed. Please try again.");
+        }
+        finally
+        {
+            exportingPdf = false;
+        }
+    }
+
+    private static string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "?";
+        var parts = name.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length == 1) return parts[0][0].ToString().ToUpper();
+        return $"{parts[0][0]}{parts[^1][0]}".ToUpper();
+    }
+
+    private static string GetAvatarBg(string? name)
+    {
+        var colors = new[]
+        {
+            "bg-blue-100 text-blue-700",
+            "bg-emerald-100 text-emerald-700",
+            "bg-purple-100 text-purple-700",
+            "bg-indigo-100 text-indigo-700",
+            "bg-amber-100 text-amber-800",
+            "bg-teal-100 text-teal-700",
+            "bg-rose-100 text-rose-700"
+        };
+        if (string.IsNullOrEmpty(name)) return colors[0];
+        var hash = Math.Abs(name.GetHashCode());
+        return colors[hash % colors.Length];
+    }
+
+    public void Dispose()
+    {
+        disposed = true;
+    }
+}
