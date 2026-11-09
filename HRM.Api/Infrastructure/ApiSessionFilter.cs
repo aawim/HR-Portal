@@ -31,7 +31,18 @@ public sealed class ApiSessionFilter(IUserAccessService access) : IAsyncActionFi
         if (requirement is not null)
         {
             var actor = await access.GetContextAsync();
-            var allowed = actor?.IsSuperAdministrator == true || await access.HasPermissionAsync("Admin");
+            var allowed = actor?.IsSuperAdministrator == true ||
+                          actor?.IsOrganisationAdmin == true ||
+                          actor?.IsHRHead == true ||
+                          actor?.IsHRManager == true ||
+                          actor?.IsHRStaff == true ||
+                          await access.HasPermissionAsync("Admin");
+
+            if (!allowed && actor?.IsSupervisor == true && requirement.Keys.Any(k => k is "Employee.View" or "Staff.Details" or "Attendance.View" or "Leave.View" or "Individual.View"))
+            {
+                allowed = true;
+            }
+
             foreach (var permission in requirement.Keys) allowed |= await access.HasPermissionAsync(permission);
             if (!allowed)
             {

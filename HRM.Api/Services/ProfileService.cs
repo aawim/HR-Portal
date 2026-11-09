@@ -47,7 +47,15 @@ namespace HRM.Services
         
             await using var db = await _dbFactory.CreateDbContextAsync(cancellationToken);
             var actor = await _userAccessService.RequireContextAsync();
-            if (individualId != actor.IndividualId && !actor.IsSuperAdministrator && !await _userAccessService.HasPermissionAsync("Employee.View") && !await _userAccessService.HasPermissionAsync("Admin"))
+            if (individualId != actor.IndividualId &&
+                !actor.IsSuperAdministrator &&
+                !actor.IsOrganisationAdmin &&
+                !actor.IsHRHead &&
+                !actor.IsHRManager &&
+                !actor.IsHRStaff &&
+                !actor.IsSupervisor &&
+                !await _userAccessService.HasPermissionAsync("Employee.View") &&
+                !await _userAccessService.HasPermissionAsync("Admin"))
                 throw new UnauthorizedAccessException("Staff profile information requires permission.");
             await HRM.Helpers.StaffDataAccess.RequireIndividualAsync(db, _userAccessService, individualId);
 

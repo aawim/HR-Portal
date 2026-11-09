@@ -127,11 +127,24 @@
         var staffId = StaffId;
         loadedStaffId = staffId;
         Loading = true;
-        var staff = await Directory.GetStaffIdentityAsync(staffId);
-        if (loadedStaffId != staffId || loadedOrganisationId!=org) return;
-        Staff = staff;
-        former = staff?.IsFormer == true;
-        Loading = false;
+        try
+        {
+            var staff = await Directory.GetStaffIdentityAsync(staffId);
+            if (loadedStaffId != staffId || loadedOrganisationId != org) return;
+            Staff = staff;
+            former = staff?.IsFormer == true;
+        }
+        catch (Exception)
+        {
+            Staff = null;
+        }
+        finally
+        {
+            if (loadedStaffId == staffId && loadedOrganisationId == org)
+            {
+                Loading = false;
+            }
+        }
     }
 
 }

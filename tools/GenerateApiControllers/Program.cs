@@ -57,7 +57,7 @@ foreach(var contract in ApplicationContractCatalog.All)
    "IndividualRegistry" => ["Individual.View","Employee.Create"],
    "IndividualRegistration" => ["Individual.Create"],
    "FormerStaff" => ["Employee.View","Staff.Details"],
-   "WorkspaceDirectory" or "WorkspaceRecentSearch" => ["Employee.View"],
+   "WorkspaceDirectory" or "WorkspaceRecentSearch" => ["Employee.View","Staff.Details","Individual.View"],
    "StaffOnboarding" when method.Name=="SubmitAsync" => ["Employee.Create"],
    "StaffOnboarding" when method.Name=="LoadAsync" => ["Employee.View","Employee.Create"],
    _=>[]

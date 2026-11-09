@@ -8,14 +8,16 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
 {
     public async Task<StaffWorkspaceIdentity?> GetStaffIdentityAsync(int staffId, CancellationToken ct = default)
     {
-        await access.RequireContextAsync();
+        var actor = await access.RequireContextAsync();
         var org = await access.GetCurrentOrganisationIdAsync();
-        if (org <= 0 || !await access.HasOrganisationAccessAsync(org)) throw new UnauthorizedAccessException("Use your current organisation.");
+        if (!actor.IsSuperAdministrator && (org <= 0 || !await access.HasOrganisationAccessAsync(org)))
+            throw new UnauthorizedAccessException("Use your current organisation.");
         await using var db = await factory.CreateDbContextAsync(ct);
-        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && j.OrganisationID == org, ct)) return null;
+        if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && (actor.IsSuperAdministrator || j.OrganisationID == org), ct))
+            return null;
         var name = await db.Individuals.AsNoTracking().Where(x => x.BusinessEntityId == staffId)
             .Select(x => (x.FirstNameEnglish ?? "") + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).FirstOrDefaultAsync(ct);
-        return name is null ? null : new(name.Replace("  ", " ").Trim(), await FormerStaffPolicy.IsFormerAsync(db, staffId, org));
+        return name is null ? null : new(name.Replace("  ", " ").Trim(), await FormerStaffPolicy.IsFormerAsync(db, staffId, org > 0 ? org : 0));
     }
 
     public async Task<WorkspaceSearchPage> SearchAsync(WorkspaceSearchFilter filter, CancellationToken token = default)
