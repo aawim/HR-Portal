@@ -20,7 +20,7 @@ public sealed class SubTeamHierarchyAndControls : Migration
         migrationBuilder.CreateIndex(name: "IX_Teams_ParentTeamID", table: "Teams", column: "ParentTeamID");
         migrationBuilder.CreateIndex(name: "IX_Teams_OrganisationStructureID", table: "Teams", column: "OrganisationStructureID");
         migrationBuilder.AddForeignKey(name: "FK_Teams_ParentTeam", table: "Teams", column: "ParentTeamID", principalTable: "Teams", principalColumn: "TeamID", onDelete: ReferentialAction.Restrict);
-        migrationBuilder.AddForeignKey(name: "FK_Teams_OrganisationStructures", table: "Teams", column: "OrganisationStructureID", principalTable: "OrganisationStructures", principalColumn: "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
+        migrationBuilder.AddForeignKey(name: "FK_Teams_OrganisationStructures", table: "Teams", column: "OrganisationStructureID", principalTable: "OrganisationStructure", principalColumn: "OrganisationStructureID", onDelete: ReferentialAction.Restrict);
         migrationBuilder.CreateTable(name: "TM_TeamScheduleAdjustments", columns: table => new
         {
             Id = table.Column<int>(nullable: false).Annotation("SqlServer:Identity", "1, 1"),

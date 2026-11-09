@@ -118,7 +118,7 @@ namespace HRM.Migrations
                         RowVersion ROWVERSION NOT NULL,
                         CONSTRAINT PK_GL_Loans PRIMARY KEY CLUSTERED (LoanID),
                         CONSTRAINT FK_GL_Loans_Organisations FOREIGN KEY (OrganisationBusinessEntityID) REFERENCES dbo.Organisations (BusinessEntityID),
-                        CONSTRAINT FK_GL_Loans_Individuals FOREIGN KEY (IndividualID) REFERENCES dbo.Individuals (BusinessEntityID),
+                        CONSTRAINT FK_GL_Loans_Individuals FOREIGN KEY (IndividualID) REFERENCES dbo.BE_Individuals (BusinessEntityID),
                         CONSTRAINT FK_GL_Loans_Jobs FOREIGN KEY (JobID) REFERENCES dbo.Jobs (JobID),
                         CONSTRAINT FK_GL_Loans_Stores FOREIGN KEY (StoreID) REFERENCES dbo.GL_Stores (StoreID),
                         CONSTRAINT FK_GL_Loans_StoreAgreements FOREIGN KEY (AgreementID) REFERENCES dbo.GL_StoreAgreements (AgreementID),
