@@ -45,6 +45,7 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
     {
         return Ok(await service.SaveStaffAccessPolicyAsync(request.model));
     }
+
     public sealed class PermissionSettingsSaveStaffAccessPolicyRequest
     {
         public global::HRM.DTOs.Roles.StaffAccessPolicyDto model { get; set; } = default!;
@@ -55,6 +56,7 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
     {
         return Ok(await service.SaveStaffAccessScopeAsync(request.model));
     }
+
     public sealed class PermissionSettingsSaveStaffAccessScopeRequest
     {
         public global::HRM.DTOs.Roles.StaffAccessScopeDto model { get; set; } = default!;
@@ -65,6 +67,7 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
     {
         return Ok(await service.SaveStaffAccessGrantAsync(request.model));
     }
+
     public sealed class PermissionSettingsSaveStaffAccessGrantRequest
     {
         public global::HRM.DTOs.Roles.StaffAccessGrantDto model { get; set; } = default!;

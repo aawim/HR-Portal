@@ -244,4 +244,31 @@ namespace HRM.DTOs
         public string PerformedByName { get; set; } = string.Empty;
         public DateTime PerformedAt { get; set; }
     }
+
+    public class CreateProjectInputDto
+    {
+        public int? TeamId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string? Reference { get; set; }
+        public string? Description { get; set; }
+        public int? ProjectManagerStaffId { get; set; }
+        public string? ProjectManagerName { get; set; }
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public DateTime? PlannedEndDate { get; set; }
+        public string Status { get; set; } = "Active";
+    }
+
+    public class CreateTaskInputDto
+    {
+        public int ProjectId { get; set; }
+        public string? TaskReference { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string? Description { get; set; }
+        public string Priority { get; set; } = "Medium";
+        public DateTime? StartDate { get; set; }
+        public DateTime? ExpectedEndDate { get; set; }
+        public int? AssignedStaffId { get; set; }
+        public string Status { get; set; } = "Ongoing";
+        public string? Remarks { get; set; }
+    }
 }

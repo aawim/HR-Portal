@@ -1,0 +1,268 @@
+@using HRM.DTOs
+@using HRM.Services.Interfaces
+@inject ITeam TeamService
+@inject ILogger<CreateProjectModal> Logger
+@inject HRM.Services.ToastService ToastService
+
+@if (Visible)
+{
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4 overflow-y-auto"
+         role="dialog" aria-modal="true" aria-labelledby="create-project-title"
+         @onkeydown="HandleKeyDown" tabindex="0">
+        <div class="fixed inset-0" @onclick="CloseAsync" aria-hidden="true"></div>
+
+        <div class="relative w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto z-10"
+             @onclick:stopPropagation>
+            <!-- Header -->
+            <div class="flex items-start justify-between border-b border-slate-100 dark:border-slate-800 pb-3 gap-3">
+                <div>
+                    <h3 id="create-project-title" class="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                        <span class="p-1 rounded-lg bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400">📁</span>
+                        Create New Project
+                    </h3>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        Define project details, schedule, and manager to begin assigning team members and tasks.
+                    </p>
+                </div>
+                <button type="button" class="rounded-lg p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                        @onclick="CloseAsync" aria-label="Close dialog">✕</button>
+            </div>
+
+            @if (!string.IsNullOrEmpty(error))
+            {
+                <div class="rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-xs font-medium text-red-700 dark:text-red-300" role="alert">
+                    @error
+                </div>
+            }
+
+            <div class="space-y-3">
+                <!-- Project Name -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Project Name <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text"
+                           maxlength="200"
+                           placeholder="e.g. Annual Audit & Compliance Automation"
+                           class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                           @bind="model.Name" />
+                </div>
+
+                <!-- Reference & Team -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Reference / Code <span class="text-slate-400 text-[10px] font-normal">(Optional, auto-generated if blank)</span>
+                        </label>
+                        <input type="text"
+                               maxlength="50"
+                               placeholder="e.g. PRJ-2026-005"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-mono text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                               @bind="model.Reference" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Assigned Team
+                        </label>
+                        @if (Teams != null && Teams.Count > 0)
+                        {
+                            <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                    @bind="model.TeamId">
+                                <option value="0">General (No Specific Team)</option>
+                                @foreach (var t in Teams)
+                                {
+                                    <option value="@t.TeamId">@t.Name</option>
+                                }
+                            </select>
+                        }
+                        else if (TeamId.HasValue && TeamId.Value > 0)
+                        {
+                            <input type="text" readonly value="@(TeamName ?? $"Team #{TeamId.Value}")"
+                                   class="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-xs text-slate-600 dark:text-slate-400" />
+                        }
+                        else
+                        {
+                            <input type="text" readonly value="General Project"
+                                   class="w-full rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/60 px-3 py-2 text-xs text-slate-600 dark:text-slate-400" />
+                        }
+                    </div>
+                </div>
+
+                <!-- Project Manager & Status -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Project Manager / Lead
+                        </label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                @bind="model.ProjectManagerStaffId">
+                            <option value="0">Unassigned</option>
+                            @if (StaffOptions != null)
+                            {
+                                @foreach (var s in StaffOptions)
+                                {
+                                    <option value="@s.StaffId">@s.FullName</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Status
+                        </label>
+                        <select class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                                @bind="model.Status">
+                            <option value="Active">Active</option>
+                            <option value="Planning">Planning</option>
+                            <option value="On Hold">On Hold</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Start Date & Planned End Date -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Start Date <span class="text-red-500">*</span>
+                        </label>
+                        <input type="date"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                               @bind="model.StartDate" />
+                    </div>
+
+                    <div>
+                        <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Planned End Date
+                        </label>
+                        <input type="date"
+                               class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                               @bind="model.PlannedEndDate" />
+                    </div>
+                </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Description / Objectives
+                    </label>
+                    <textarea rows="3"
+                              maxlength="1000"
+                              placeholder="Describe project scope, deliverables, or objectives…"
+                              class="w-full rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:border-teal-500 focus:ring-1 focus:ring-teal-500"
+                              @bind="model.Description"></textarea>
+                </div>
+            </div>
+
+            <!-- Footer Buttons -->
+            <div class="flex items-center justify-end gap-2 border-t border-slate-100 dark:border-slate-800 pt-3">
+                <button type="button"
+                        class="rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
+                        @onclick="CloseAsync"
+                        disabled="@busy">
+                    Cancel
+                </button>
+                <button type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 dark:bg-teal-600 px-4 py-2 text-xs font-semibold text-white hover:bg-teal-800 dark:hover:bg-teal-700 transition disabled:opacity-50"
+                        @onclick="SaveAsync"
+                        disabled="@busy">
+                    @if (busy)
+                    {
+                        <span class="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                        <span>Creating…</span>
+                    }
+                    else
+                    {
+                        <span>Create Project</span>
+                    }
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public int? TeamId { get; set; }
+    [Parameter] public string? TeamName { get; set; }
+    [Parameter] public List<TeamDto>? Teams { get; set; }
+    [Parameter] public List<StaffOptionDto>? StaffOptions { get; set; }
+    [Parameter] public EventCallback<int> OnSaved { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    public class StaffOptionDto
+    {
+        public int StaffId { get; set; }
+        public string FullName { get; set; } = string.Empty;
+    }
+
+    private CreateProjectInputDto model = new();
+    private bool busy;
+    private string? error;
+
+    protected override void OnParametersSet()
+    {
+        if (Visible)
+        {
+            error = null;
+            model = new CreateProjectInputDto
+            {
+                TeamId = TeamId,
+                StartDate = DateTime.Today,
+                Status = "Active"
+            };
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(model.Name))
+        {
+            error = "Project name is required.";
+            return;
+        }
+
+        if (model.PlannedEndDate.HasValue && model.PlannedEndDate.Value.Date < model.StartDate.Date)
+        {
+            error = "Planned end date cannot be earlier than start date.";
+            return;
+        }
+
+        try
+        {
+            busy = true;
+            error = null;
+
+            if (model.ProjectManagerStaffId.HasValue && model.ProjectManagerStaffId.Value > 0)
+            {
+                var mgr = StaffOptions?.FirstOrDefault(s => s.StaffId == model.ProjectManagerStaffId.Value);
+                if (mgr != null) model.ProjectManagerName = mgr.FullName;
+            }
+
+            var newId = await TeamService.CreateProjectAsync(model);
+            ToastService.Success("Project created successfully.");
+            await OnSaved.InvokeAsync(newId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to create project");
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        error = null;
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") await CloseAsync();
+    }
+}

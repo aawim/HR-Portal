@@ -191,6 +191,28 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
         public global::HRM.DTOs.AssignTaskRequestDto request { get; set; } = default!;
     }
 
+    [HttpPost("create-project")]
+    public async Task<ActionResult<global::System.Int32>> CreateProject([FromBody] TeamCreateProjectRequest request)
+    {
+        return Ok(await service.CreateProjectAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamCreateProjectRequest
+    {
+        public global::HRM.DTOs.CreateProjectInputDto input { get; set; } = default!;
+    }
+
+    [HttpPost("create-task")]
+    public async Task<ActionResult<global::System.Int32>> CreateTask([FromBody] TeamCreateTaskRequest request)
+    {
+        return Ok(await service.CreateTaskAsync(request.input, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamCreateTaskRequest
+    {
+        public global::HRM.DTOs.CreateTaskInputDto input { get; set; } = default!;
+    }
+
     [HttpGet("get-assignment-history")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AssignmentHistoryDto>>> GetAssignmentHistory([FromQuery] global::System.Int32 projectId, [FromQuery] global::System.Int32? staffId)
     {

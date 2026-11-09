@@ -26,6 +26,8 @@ namespace HRM.Services.Interfaces
         Task<bool> UpdateProjectAssignmentAsync(UpdateProjectAssignmentRequestDto request, CancellationToken ct = default);
         Task<bool> RemoveProjectAssignmentAsync(int projectMemberId, string? remarks, CancellationToken ct = default);
         Task<bool> AssignTaskAsync(AssignTaskRequestDto request, CancellationToken ct = default);
+        Task<int> CreateProjectAsync(CreateProjectInputDto input, CancellationToken ct = default);
+        Task<int> CreateTaskAsync(CreateTaskInputDto input, CancellationToken ct = default);
         Task<List<AssignmentHistoryDto>> GetAssignmentHistoryAsync(int projectId, int? staffId, CancellationToken ct = default);
     }
 }

@@ -86,9 +86,14 @@
                 Home
             </button>
             <button type="button"
-                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "MyTeam" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
-                    @onclick='() => SetActiveTab("MyTeam")'>
+                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "MyTeam" && teamCenterSubTab != "projects" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
+                    @onclick='() => { SetActiveTab("MyTeam"); if (teamCenterSubTab == "projects") teamCenterSubTab = "members"; }'>
                 Teams (@myTeams.Count)
+            </button>
+            <button type="button"
+                    class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "MyTeam" && teamCenterSubTab == "projects" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
+                    @onclick='() => { SetActiveTab("MyTeam"); SetTeamCenterSubTab("projects"); }'>
+                Projects & Tasks
             </button>
             <button type="button"
                     class="rounded-t-xl px-4 py-2 font-bold text-xs md:text-sm transition-all border-t border-l border-r @(activeWorkspaceTab == "Calendar" ? "bg-teal-700 dark:bg-teal-600 text-white border-teal-700 dark:border-teal-600 shadow-sm" : "bg-[#86b0be]/40 text-slate-800 dark:bg-slate-800 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:bg-[#86b0be]/60")"
@@ -346,6 +351,16 @@
                             class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.GoodsLoans ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
                             @onclick="() => SetStaffTab(WorkspaceTab.GoodsLoans)">
                         Goods loans
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.Bank ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.Bank)">
+                        Bank details
+                    </button>
+                    <button type="button"
+                            class="rounded-t-xl px-3.5 py-1.5 font-bold text-xs transition-all border-t border-l border-r @(inspectedStaffTab == WorkspaceTab.EmergencyContact ? "bg-emerald-600 dark:bg-emerald-500 text-white border-emerald-600 dark:border-emerald-500 shadow-sm" : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-950 dark:bg-slate-800 dark:text-slate-300 border-emerald-200/90 dark:border-slate-700")"
+                            @onclick="() => SetStaffTab(WorkspaceTab.EmergencyContact)">
+                        Emergency contacts
                     </button>
                 </nav>
             </div>
@@ -1056,6 +1071,25 @@
                             <!-- SUB-TAB 2: PROJECTS LIST -->
                             @if (teamCenterSubTab == "projects")
                             {
+                                <div class="flex items-center justify-between pb-2 mb-3 border-b border-slate-200 dark:border-slate-800 flex-wrap gap-2">
+                                    <div>
+                                        <h3 class="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                                            <span>📁 Team Projects</span>
+                                            <span class="rounded-full bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 border border-teal-200 dark:border-teal-800/40 px-2 py-0.2 text-[10px] font-semibold">
+                                                @currentTeamProjects.Count active
+                                            </span>
+                                        </h3>
+                                        <p class="text-[11px] text-slate-500 dark:text-slate-400">
+                                            Manage deliverables, milestones, and member assignments.
+                                        </p>
+                                    </div>
+                                    <button type="button"
+                                            class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 dark:hover:bg-teal-500 text-white px-3 py-1.5 text-xs font-semibold shadow-xs transition"
+                                            @onclick="OpenCreateProjectModal">
+                                        <span>+ Add Project</span>
+                                    </button>
+                                </div>
+
                                 @if (loadingProjects)
                                 {
                                     <div class="py-12 text-center text-xs text-slate-500">
@@ -1065,8 +1099,21 @@
                                 }
                                 else if (currentTeamProjects.Count == 0)
                                 {
-                                    <div class="py-10 text-center text-xs text-slate-500">
-                                        No active projects linked to this team.
+                                    <div class="py-12 text-center text-xs text-slate-500 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 p-8 space-y-2">
+                                        <div class="w-12 h-12 rounded-2xl bg-teal-50 dark:bg-teal-950/60 text-teal-700 dark:text-teal-400 flex items-center justify-center mx-auto text-xl font-bold">
+                                            📁
+                                        </div>
+                                        <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200">No active projects linked to this team</h4>
+                                        <p class="text-xs text-slate-500 max-w-md mx-auto">
+                                            Create a project to define deliverables, set milestones, and assign tasks to your team members.
+                                        </p>
+                                        <div class="pt-2">
+                                            <button type="button"
+                                                    class="inline-flex items-center gap-1.5 rounded-lg bg-teal-700 hover:bg-teal-800 dark:bg-teal-600 text-white px-4 py-2 text-xs font-semibold shadow-xs transition"
+                                                    @onclick="OpenCreateProjectModal">
+                                                + Create Project
+                                            </button>
+                                        </div>
                                     </div>
                                 }
                                 else
@@ -2869,6 +2916,15 @@
     <AssignmentModal Visible="showAssignModal" Mode="assignMode" StaffId="assignStaffId" StaffName="@assignStaffName"
                      OnSaved="RefreshAssignmentViewsAsync" OnClose="() => showAssignModal = false" />
 
+    <!-- Create Project Modal -->
+    <CreateProjectModal Visible="showCreateProjectModal"
+                        TeamId="selectedTeamId"
+                        TeamName="@(selectedTeam?.Name)"
+                        Teams="myTeams"
+                        StaffOptions="GetStaffOptionsForProjectModal()"
+                        OnSaved="HandleProjectCreatedAsync"
+                        OnClose="() => showCreateProjectModal = false" />
+
     <!-- 2. Search Teams Modal -->
     <SearchTeamsModal IsOpen="showSearchTeamsModal"
                       OnClose="() => showSearchTeamsModal = false"
@@ -3402,6 +3458,8 @@
                     "staff-transfer" or "stafftransfer" => WorkspaceTab.StaffTransfer,
                     "certificates" or "certificate" => WorkspaceTab.Certificates,
                     "goods-loans" or "goodsloans" or "goods-loan" or "loans" => WorkspaceTab.GoodsLoans,
+                    "bank" or "bank-details" or "banking" => WorkspaceTab.Bank,
+                    "emergency" or "emergency-contact" or "emergency-contacts" or "emergencycontact" => WorkspaceTab.EmergencyContact,
                     _ => WorkspaceTab.Overview
                 };
                 activeWorkspaceTab = "Staff";
@@ -3466,11 +3524,12 @@
                 }
             }
         }
-        else if (!string.IsNullOrWhiteSpace(ActiveSection) && ActiveSection.ToLowerInvariant() is "team" or "teams" or "my-teams" or "calendar" or "calendars" or "request" or "requests" or "onboarding" or "leave" or "leave-log" or "attendance" or "time-change" or "shift" or "org-daily" or "daily")
+        else if (!string.IsNullOrWhiteSpace(ActiveSection) && ActiveSection.ToLowerInvariant() is "team" or "teams" or "my-teams" or "projects" or "project" or "tasks" or "task" or "calendar" or "calendars" or "request" or "requests" or "onboarding" or "leave" or "leave-log" or "attendance" or "time-change" or "shift" or "org-daily" or "daily")
         {
             activeWorkspaceTab = ActiveSection.ToLowerInvariant() switch
             {
                 "team" or "teams" or "my-teams" => "MyTeam",
+                "projects" or "project" or "tasks" or "task" => "MyTeam",
                 "calendar" or "calendars" => "Calendar",
                 "request" or "requests" => "Request",
                 "onboarding" => "Onboarding",
@@ -3480,12 +3539,17 @@
                 "org-daily" or "daily" => "OrgDaily",
                 _ => "Home"
             };
+            if (ActiveSection.ToLowerInvariant() is "projects" or "project" or "tasks" or "task")
+            {
+                teamCenterSubTab = "projects";
+            }
         }
         else if (!string.IsNullOrWhiteSpace(QueryTab))
         {
             activeWorkspaceTab = QueryTab.ToLowerInvariant() switch
             {
                 "my-teams" or "myteam" or "teams" or "team" => "MyTeam",
+                "projects" or "project" or "tasks" or "task" => "MyTeam",
                 "calendar" or "calendars" => "Calendar",
                 "requests" or "request" => "Request",
                 "onboarding" => "Onboarding",
@@ -3495,12 +3559,17 @@
                 "org-daily" or "orgdaily" or "daily" => "OrgDaily",
                 _ => "Home"
             };
+            if (QueryTab.ToLowerInvariant() is "projects" or "project" or "tasks" or "task")
+            {
+                teamCenterSubTab = "projects";
+            }
         }
         else if (!string.IsNullOrWhiteSpace(ActiveSection))
         {
             activeWorkspaceTab = ActiveSection.ToLowerInvariant() switch
             {
                 "team" or "teams" or "my-teams" => "MyTeam",
+                "projects" or "project" or "tasks" or "task" => "MyTeam",
                 "calendar" or "calendars" => "Calendar",
                 "request" or "requests" => "Request",
                 "onboarding" => "Onboarding",
@@ -3510,6 +3579,10 @@
                 "org-daily" or "daily" => "OrgDaily",
                 _ => "Home"
             };
+            if (ActiveSection.ToLowerInvariant() is "projects" or "project" or "tasks" or "task")
+            {
+                teamCenterSubTab = "projects";
+            }
         }
 
         if (QueryTeamId.HasValue && QueryTeamId.Value > 0)
@@ -3558,6 +3631,7 @@
 
         var tabKey = activeWorkspaceTab switch
         {
+            "MyTeam" when teamCenterSubTab == "projects" => "projects",
             "MyTeam" => "my-teams",
             "Calendar" => "calendar",
             "Request" => "requests",
@@ -4099,6 +4173,14 @@
     private void SetTeamCenterSubTab(string subtab)
     {
         teamCenterSubTab = subtab;
+        if (!selectedTeamId.HasValue && myTeams.Count > 0)
+        {
+            selectedTeamId = myTeams[0].TeamId;
+        }
+        if (subtab == "projects" && selectedTeamId.HasValue && currentTeamProjects.Count == 0 && !loadingProjects)
+        {
+            _ = LoadTeamProjectsAsync(selectedTeamId.Value);
+        }
         if (subtab == "schedule" && teamDutyRoster.Count == 0 && !loadingTeamSchedule)
         {
             _ = LoadTeamScheduleAsync();
@@ -4210,10 +4292,48 @@
 
     // Contextual Right Panel actions
     private bool showAssignModal;
+    private bool showCreateProjectModal;
     private AssignmentModal.AssignmentMode assignMode;
     private int? assignStaffId;
     private string assignStaffName = "";
     private int assignmentRefresh;
+
+    private void OpenCreateProjectModal()
+    {
+        if (!selectedTeamId.HasValue && myTeams.Count > 0)
+        {
+            selectedTeamId = myTeams[0].TeamId;
+        }
+        showCreateProjectModal = true;
+    }
+
+    private async Task HandleProjectCreatedAsync(int newProjectId)
+    {
+        showCreateProjectModal = false;
+        if (selectedTeamId.HasValue)
+        {
+            await LoadTeamProjectsAsync(selectedTeamId.Value);
+        }
+        else if (myTeams.Count > 0)
+        {
+            selectedTeamId = myTeams[0].TeamId;
+            await LoadTeamProjectsAsync(selectedTeamId.Value);
+        }
+        OpenProjectDetails(newProjectId);
+    }
+
+    private List<CreateProjectModal.StaffOptionDto> GetStaffOptionsForProjectModal()
+    {
+        var staff = (CurrentTeamStaffList.Count > 0 ? CurrentTeamStaffList : allTeamStaff)
+            .GroupBy(s => s.StaffId)
+            .Select(g => new CreateProjectModal.StaffOptionDto
+            {
+                StaffId = g.Key,
+                FullName = g.First().FullName
+            })
+            .ToList();
+        return staff;
+    }
 
     private void OpenAssignment(AssignmentModal.AssignmentMode mode, int staffId, string staffName)
     {
