@@ -10,6 +10,9 @@ namespace HRM.Models;
 
 public partial class HrmTeContext : DbContext
 {
+    public DbSet<StaffAccessPolicy> StaffAccessPolicies => Set<StaffAccessPolicy>();
+    public DbSet<StaffAccessScope> StaffAccessScopes => Set<StaffAccessScope>();
+    public DbSet<StaffAccessGrant> StaffAccessGrants => Set<StaffAccessGrant>();
     public virtual DbSet<FiscalYear> FiscalYears { get; set; }
     public virtual DbSet<BudgetCategory> BudgetCategories { get; set; }
     public virtual DbSet<BudgetItem> BudgetItems { get; set; }

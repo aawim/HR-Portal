@@ -31,9 +31,11 @@
                                 <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
                                     <PermissionAssignmentColumn @key="(role.Id, true)" Assigned="true"
                                         Permissions="data.Permissions.Where(x => role.PermissionIds.Contains(x.Id)).ToList()"
+                                        Modules="data.Modules"
                                         OnMove="id => TogglePermission(id, false)" OnMoveGroup="ids => MovePermissions(ids, false)" />
                                     <PermissionAssignmentColumn @key="(role.Id, false)" Assigned="false"
                                         Permissions="data.Permissions.Where(x => !role.PermissionIds.Contains(x.Id)).ToList()"
+                                        Modules="data.Modules"
                                         OnMove="id => TogglePermission(id, true)" OnMoveGroup="ids => MovePermissions(ids, true)" />
                                 </div>
                                 @if (role.Id > 0)

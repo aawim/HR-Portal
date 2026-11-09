@@ -124,8 +124,9 @@ public sealed class AdminAccessGrantService(IDbContextFactory<HrmTeContext> fact
     }
     private static async Task ValidateSuperGrant(HrmTeContext db, int[] groups, int[] permissions, bool super)
     {
-        if (!super && (await db.Roles.AnyAsync(p => permissions.Contains(p.RoleID) && p.RoleKey == "Super.Admin.Manage") ||
-            await db.UserGroupRoles.AnyAsync(g => groups.Contains(g.UserGroupId) && g.IsActive && g.Role.RoleKey == "Super.Admin.Manage")))
+        if (await db.UserGroupRoles.AnyAsync(g => groups.Contains(g.UserGroupId) && g.IsActive && g.Role.RoleKey == "Super.Admin.Manage"))
+            throw new UnauthorizedAccessException("Platform administration cannot be granted through a role group.");
+        if (!super && await db.Roles.AnyAsync(p => permissions.Contains(p.RoleID) && p.RoleKey == "Super.Admin.Manage"))
             throw new UnauthorizedAccessException("Only Super Admin can assign Super Admin permissions.");
     }
     public async Task<ServiceResult> SubmitAsync(int organisationId, int userId, IEnumerable<int> groupIds, IEnumerable<int> permissionIds, string reason)

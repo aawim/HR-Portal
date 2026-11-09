@@ -34,4 +34,40 @@ public sealed class PermissionSettingsController(global::HRM.Services.Contracts.
         public global::HRM.DTOs.Roles.AccessRoleDto model { get; set; } = default!;
     }
 
+    [HttpGet("load-staff-access")]
+    public async Task<ActionResult<global::HRM.DTOs.Roles.StaffAccessSettingsData>> LoadStaffAccess()
+    {
+        return Ok(await service.LoadStaffAccessAsync());
+    }
+
+    [HttpPost("save-staff-access-policy")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveStaffAccessPolicy([FromBody] PermissionSettingsSaveStaffAccessPolicyRequest request)
+    {
+        return Ok(await service.SaveStaffAccessPolicyAsync(request.model));
+    }
+    public sealed class PermissionSettingsSaveStaffAccessPolicyRequest
+    {
+        public global::HRM.DTOs.Roles.StaffAccessPolicyDto model { get; set; } = default!;
+    }
+
+    [HttpPost("save-staff-access-scope")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveStaffAccessScope([FromBody] PermissionSettingsSaveStaffAccessScopeRequest request)
+    {
+        return Ok(await service.SaveStaffAccessScopeAsync(request.model));
+    }
+    public sealed class PermissionSettingsSaveStaffAccessScopeRequest
+    {
+        public global::HRM.DTOs.Roles.StaffAccessScopeDto model { get; set; } = default!;
+    }
+
+    [HttpPost("save-staff-access-grant")]
+    public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveStaffAccessGrant([FromBody] PermissionSettingsSaveStaffAccessGrantRequest request)
+    {
+        return Ok(await service.SaveStaffAccessGrantAsync(request.model));
+    }
+    public sealed class PermissionSettingsSaveStaffAccessGrantRequest
+    {
+        public global::HRM.DTOs.Roles.StaffAccessGrantDto model { get; set; } = default!;
+    }
+
 }

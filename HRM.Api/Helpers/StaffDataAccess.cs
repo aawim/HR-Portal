@@ -27,6 +27,7 @@ public static class StaffDataAccess
               await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Employee.View")) ||
             !await db.Jobs.AnyAsync(j => j.IndividualID == individualId && j.OrganisationID == org))
             throw new UnauthorizedAccessException("Staff information is unavailable in the current organisation.");
+        await StaffAttributeAccess.RequireViewAsync(db, access, individualId, org);
         return org;
     }
 }

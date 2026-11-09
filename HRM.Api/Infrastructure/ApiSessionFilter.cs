@@ -31,12 +31,10 @@ public sealed class ApiSessionFilter(IUserAccessService access) : IAsyncActionFi
         if (requirement is not null)
         {
             var actor = await access.GetContextAsync();
-            var allowed = actor?.IsSuperAdministrator == true ||
-                          actor?.IsOrganisationAdmin == true ||
-                          actor?.IsHRHead == true ||
-                          actor?.IsHRManager == true ||
-                          actor?.IsHRStaff == true ||
-                          await access.HasPermissionAsync("Admin");
+            // Attribute flags describe the actor; they are not permission grants. Treating HR
+            // status as a blanket bypass would defeat separation of duties for payroll and
+            // security administration. Only platform administration bypasses an explicit key.
+            var allowed = actor?.IsSuperAdministrator == true;
 
             if (!allowed && actor?.IsSupervisor == true && requirement.Keys.Any(k => k is "Employee.View" or "Staff.Details" or "Attendance.View" or "Leave.View" or "Individual.View"))
             {

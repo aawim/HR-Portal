@@ -15,6 +15,8 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
         await using var db = await factory.CreateDbContextAsync(ct);
         if (!await db.Jobs.AnyAsync(j => j.IndividualID == staffId && (actor.IsSuperAdministrator || j.OrganisationID == org), ct))
             return null;
+        if (!actor.IsSuperAdministrator && !await HRM.Helpers.StaffAttributeAccess.CanViewAsync(db, access, staffId, org, ct))
+            return null;
         var name = await db.Individuals.AsNoTracking().Where(x => x.BusinessEntityId == staffId)
             .Select(x => (x.FirstNameEnglish ?? "") + " " + (x.MiddleNameEnglish ?? "") + " " + (x.LastNameEnglish ?? "")).FirstOrDefaultAsync(ct);
         return name is null ? null : new(name.Replace("  ", " ").Trim(), await FormerStaffPolicy.IsFormerAsync(db, staffId, org > 0 ? org : 0));
@@ -175,8 +177,19 @@ public sealed class WorkspaceDirectoryService(IDbContextFactory<HrmTeContext> fa
         )
         .Distinct()
         .OrderBy(x => x.Name)
-        .Take(10)
+        .Take(50)
         .ToListAsync(token);
+
+        if (!isSuperAdministrator)
+        {
+            var visible = await HRM.Helpers.StaffAttributeAccess.FilterViewableAsync(Db, access, currentOrganisationId,
+                foundStaff.Select(x => x.IndividualId), token);
+            foundStaff = foundStaff.Where(x => visible.Contains(x.IndividualId)).Take(10).ToList();
+        }
+        else
+        {
+            foundStaff = foundStaff.Take(10).ToList();
+        }
 
         // =====================================================
         // ORGANISATION SEARCH

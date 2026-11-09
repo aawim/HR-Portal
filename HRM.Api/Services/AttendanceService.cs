@@ -622,6 +622,7 @@ namespace HRM.Services
             await using var db = await _dbFactory.CreateDbContextAsync(ct);
             var jobs = await db.Jobs.Where(x => x.IndividualID == staffId && x.OrganisationID == org).Select(x => x.JobId).ToListAsync(ct);
             if (jobs.Count == 0) throw new UnauthorizedAccessException("The selected employee is not in the current organisation.");
+            await HRM.Helpers.StaffAttributeAccess.RequireViewAsync(db, _userAccessService, staffId, org, ct);
             if (actor.IndividualId == staffId || await CanViewAllStaffAttendanceAsync(actor)) return org;
             foreach (var job in jobs)
                 if ((await HRM.Services.Leave.LeaveHandoverService.SupervisorsAsync(db, job)).Contains(actor.IndividualId)) return org;

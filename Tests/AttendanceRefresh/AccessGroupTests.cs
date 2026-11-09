@@ -32,7 +32,10 @@ static class AccessGroupTests
         {
             db.Users.Add(new User { UserId = 425, BusinessEntityID = 26, UserOrganisationId = 1, IsActive = true, LocalUserStateId = 1, Username = "Staff" });
             db.UserOrganisations.Add(new UserOrganisation { UserOrganisationID = 1, BusinessEntityID = 10 });
-            db.Roles.AddRange(new Role { RoleID = 2, RoleKey = "Developer", Name = "Developer" }, new Role { RoleID = 1, RoleKey = "Admin", Name = "Admin" });
+            db.Roles.AddRange(new Role { RoleID = 2, RoleKey = "Developer", Name = "Developer" }, new Role { RoleID = 1, RoleKey = "Admin", Name = "Admin" },
+                new Role { RoleID = 3, RoleKey = "Super.Admin.Manage", Name = "Super Admin" });
+            db.UserOrganisationRoles.AddRange(new UserOrganisationRole { UserOrganisationID = 1, RoleID = 2, IsActive = true },
+                new UserOrganisationRole { UserOrganisationID = 1, RoleID = 3, IsActive = true });
             await db.SaveChangesAsync();
         }
         var scopedAccess = Proxy.For<IUserAccessService>((name, args) => name switch
@@ -66,6 +69,8 @@ static class AccessGroupTests
         Check((await settings.SaveRoleAsync(group)).Success && invalidated.Contains(425), "Saving grouped permissions did not invalidate member context");
         group.PermissionIds.Add(1);
         Check(!(await settings.SaveRoleAsync(group)).Success, "Developer could grant an unrelated Admin permission they do not hold");
+        group.PermissionIds.Remove(1); group.PermissionIds.Add(3);
+        Check(!(await settings.SaveRoleAsync(group)).Success, "Super.Admin.Manage was assigned through a role group");
         await using (var db = factory.CreateDbContext())
         {
             db.UserAssignedUserGroups.Remove(await db.UserAssignedUserGroups.SingleAsync());

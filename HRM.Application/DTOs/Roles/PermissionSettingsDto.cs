@@ -8,8 +8,9 @@ public class PermissionDefinitionDto
     public string Description { get; set; } = "";
     public int ContextId { get; set; } = 1;
     public int? ModuleId { get; set; }
+    public string ModuleName { get; set; } = "";
     public bool IsSystem { get; set; }
-    public string Group => PermissionArea(Key);
+    public string Group => string.IsNullOrWhiteSpace(ModuleName) ? PermissionArea(Key) : ModuleName;
     public static string PermissionArea(string key)
     {
         if (key.Contains("Leave", StringComparison.OrdinalIgnoreCase)) return "Leave";
@@ -46,4 +47,49 @@ public class PermissionSettingsData
     public List<AccessRoleDto> Roles { get; set; } = new();
     public List<PermissionSettingOption> Contexts { get; set; } = new();
     public List<PermissionSettingOption> Modules { get; set; } = new();
+}
+
+public sealed record StaffAccessOption(int Id, string Name);
+public sealed class StaffAccessPolicyDto
+{
+    public int Id { get; set; }
+    public int PositionClassificationId { get; set; }
+    public string ClassificationName { get; set; } = "";
+    public bool IsRestricted { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string Description { get; set; } = "";
+}
+public sealed class StaffAccessScopeDto
+{
+    public int Id { get; set; }
+    public string SubjectType { get; set; } = "User";
+    public int SubjectId { get; set; }
+    public string SubjectName { get; set; } = "";
+    public bool RequireExplicitGrant { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+public sealed class StaffAccessGrantDto
+{
+    public int Id { get; set; }
+    public string SubjectType { get; set; } = "User";
+    public int SubjectId { get; set; }
+    public string SubjectName { get; set; } = "";
+    public string ResourceType { get; set; } = "Classification";
+    public int ResourceId { get; set; }
+    public string ResourceName { get; set; } = "";
+    public bool IsAllowed { get; set; } = true;
+    public bool IsActive { get; set; } = true;
+    public DateTime? ExpiresAtUtc { get; set; }
+    public string Reason { get; set; } = "";
+}
+public sealed class StaffAccessSettingsData
+{
+    public int OrganisationId { get; set; }
+    public List<StaffAccessOption> Users { get; set; } = new();
+    public List<StaffAccessOption> Groups { get; set; } = new();
+    public List<StaffAccessOption> Staff { get; set; } = new();
+    public List<StaffAccessOption> Classifications { get; set; } = new();
+    public List<StaffAccessPolicyDto> Policies { get; set; } = new();
+    public List<StaffAccessScopeDto> Scopes { get; set; } = new();
+    public List<StaffAccessGrantDto> Grants { get; set; } = new();
 }

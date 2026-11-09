@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace HRM.Services;
 
-public class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
+public partial class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, IUserAccessService access,
     IOperationLogService logs, IUserContextService contexts)
 :global::HRM.Services.Contracts.PermissionSettingsServiceContracts,global::HRM.Services.Contracts.PermissionSettingsServiceContracts.IOperations{
     private async Task<UserContextDto> RequireAsync(string permission, bool groups)
@@ -43,7 +43,8 @@ public class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, 
         {
             Permissions = await db.Roles.AsNoTracking().OrderBy(x => x.RoleKey).Select(x => new PermissionDefinitionDto
             { Id = x.RoleID, Key = x.RoleKey, Name = x.Name, Description = x.Description ?? "",
-                ContextId = x.ContextId, ModuleId = x.ModuleId, IsSystem = x.IsSystemRole == true }).ToListAsync(),
+                ContextId = x.ContextId, ModuleId = x.ModuleId, ModuleName = x.Module == null ? "Unassigned" : x.Module.Name,
+                IsSystem = x.IsSystemRole == true }).ToListAsync(),
             Contexts = await db.Contexts.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ContextId, x.Name)).ToListAsync(),
             Modules = await db.Modules.AsNoTracking().OrderBy(x => x.Name).Select(x => new PermissionSettingOption(x.ModuleId, x.Name)).ToListAsync()
         };
@@ -68,7 +69,9 @@ public class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, 
 
     public async Task<ServiceResult> SavePermissionAsync(PermissionDefinitionDto model)
     {
-        await RequireAsync(model.Id == 0 ? "Roles.Add" : "Roles.Edit", false);
+        var actor = await RequireAsync(model.Id == 0 ? "Roles.Add" : "Roles.Edit", false);
+        if (!actor.IsSuperAdministrator)
+            throw new UnauthorizedAccessException("Only Super Admin can create or change permission definitions.");
         if (string.IsNullOrWhiteSpace(model.Key) || model.Key.Length > 100 || model.Key.Any(char.IsWhiteSpace) ||
             string.IsNullOrWhiteSpace(model.Name) || model.Name.Length > 250 || model.Description.Length > 1000)
             return ServiceResult.Fail("Enter a key without spaces (up to 100 characters), a name (up to 250) and description (up to 1000).");
@@ -107,7 +110,13 @@ public class PermissionSettingsService(IDbContextFactory<HrmTeContext> factory, 
         var ids = model.PermissionIds.Distinct().ToList();
         if (await db.Roles.CountAsync(x => ids.Contains(x.RoleID)) != ids.Count) return ServiceResult.Fail("A selected permission no longer exists.");
         var added = ids.Except(entity.UserGroupRoles.Where(x => x.IsActive).Select(x => x.RoleId)).ToList();
-        if (!user.IsSuperAdministrator && !await access.HasPermissionAsync("Admin") && added.Any(id => !user.Permissions.Any(p => p.RoleID == id)))
+        if (await db.Roles.AnyAsync(x => ids.Contains(x.RoleID) && x.RoleKey == "Super.Admin.Manage"))
+            return ServiceResult.Fail("Platform administration is a direct, audited grant and cannot be assigned to a role group.");
+        var allowedIds = await db.UserOrganisationRoles.Where(x => x.UserOrganisationID == orgId && x.IsActive)
+            .Select(x => x.RoleID).ToListAsync();
+        if (!user.IsSuperAdministrator && ids.Except(allowedIds).Any())
+            return ServiceResult.Fail("A role can only contain permissions enabled for this organisation.");
+        if (!user.IsSuperAdministrator && added.Any(id => !user.Permissions.Any(p => p.RoleID == id)))
             return ServiceResult.Fail("You can only grant permissions that you hold.");
         var log = await logs.CreateAsync(db, model.Id == 0 ? SharedConfig.OperationLogActionTypes.USERS_GROUP_CREATE : SharedConfig.OperationLogActionTypes.USERS_GROUP_UPDATE, $"Saved role {model.Name}");
         if (model.Id == 0) db.UserGroups.Add(entity);
