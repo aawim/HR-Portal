@@ -132,6 +132,11 @@
             Navigation.NavigateTo(Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(target,"tab",tab)+uri.Fragment,replace:true);return;
         }
         if(CategoryName.Equals("leave-sets",StringComparison.OrdinalIgnoreCase)){Navigation.NavigateTo("/admin/settings/leaves/manage-leave-sets",replace:true);return;}
+        if(CategoryName.Equals("staff",StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(Section))
+        {
+            var current=new Uri(Navigation.Uri);
+            Navigation.NavigateTo("/admin/hr/staff/manage"+current.Query+current.Fragment,replace:true);return;
+        }
         if(CategoryName.Equals("groups",StringComparison.OrdinalIgnoreCase) && Section is not ("management" or "group-type"))
         {
             var current=new Uri(Navigation.Uri);
