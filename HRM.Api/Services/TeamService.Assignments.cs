@@ -11,7 +11,7 @@ public partial class TeamService
     private static readonly string[] ClosedProjectStatuses = ["Completed", "Archived", "Cancelled", "Closed"];
     private static readonly string[] TaskPriorities = ["Low", "Medium", "High", "Critical"];
 
-    public async Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string query, CancellationToken ct = default)
+    public async Task<List<ProjectLookupDto>> SearchAssignableProjectsAsync(string? query, CancellationToken ct = default)
     {
         var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();

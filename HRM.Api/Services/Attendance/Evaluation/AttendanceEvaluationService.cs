@@ -135,6 +135,8 @@ namespace HRM.Services.Attendance
             await HRM.Helpers.TemporaryWorkingHours.ApplyAsync(db, workPlan, cancellationToken);
             HRM.Helpers.OfficialScheduleAmendments.Apply(workPlan,
                 await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, workPlan.OrganisationBusinessEntityId, date, date, cancellationToken));
+            HRM.Helpers.TeamScheduleAdjustments.Apply(workPlan,
+                await HRM.Helpers.TeamScheduleAdjustments.FindAsync(db, workPlan.IndividualId, workPlan.OrganisationBusinessEntityId, date, cancellationToken));
 
             var segments =
                 workPlan.WorkPlanSegments

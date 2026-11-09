@@ -94,6 +94,8 @@ namespace HRM.Services
 
             var amendmentRows = await HRM.Helpers.OfficialScheduleAmendments.LoadAsync(db, organisationBusinessEntityId,
                 clockTime.Date.AddDays(-1), clockTime.Date, cancellationToken);
+            var teamAdjustment = await HRM.Helpers.TeamScheduleAdjustments.FindAsync(db, individualId, organisationBusinessEntityId,
+                (await db.WorkPlans.Where(x => x.WorkPlanId == workPlanId).Select(x => x.WorkDate).SingleAsync(cancellationToken)), cancellationToken);
             var segmentEntities = await db.WorkPlanSegments.AsNoTracking().Include(x => x.WorkSegmentType)
                 .Where(x => x.WorkPlanId == workPlanId && x.IsValid).OrderBy(x => x.SequenceNumber)
                 .Select(x => new { x.WorkPlanSegmentId, x.Name, x.StartDateTime, x.EndDateTime, x.SequenceNumber,
@@ -109,6 +111,8 @@ namespace HRM.Services
                 if (matches.Count == 1) adjusted = HRM.Helpers.TemporaryWorkingHours.Segment(matches[0], x.WorkSegmentTypeCode, adjusted.Start, adjusted.End);
                 var timing = HRM.Helpers.OfficialScheduleAmendments.Segment(amendmentRows, organisationBusinessEntityId,
                     x.SchedulePurpose, x.WorkSegmentTypeCode, adjusted.Start, adjusted.End, x.GraceBeforeMinutes);
+                timing = HRM.Helpers.TeamScheduleAdjustments.Segment(teamAdjustment, x.SchedulePurpose, x.WorkSegmentTypeCode,
+                    timing.Start, timing.End, timing.GraceBefore);
                 return new { x.WorkPlanSegmentId, x.Name, StartDateTime = timing.Start, EndDateTime = timing.End,
                     x.SequenceNumber, x.TemplateId, x.SchedulePurpose, x.WorkSegmentTypeCode, x.RequiresAttendance, x.IsMandatory,
                     GraceBeforeMinutes = timing.GraceBefore, x.GraceAfterMinutes };

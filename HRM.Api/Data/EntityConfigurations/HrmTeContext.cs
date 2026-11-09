@@ -3891,6 +3891,10 @@ public partial class HrmTeContext : DbContext
         modelBuilder.Entity<Team>(entity =>
         {
             entity.Property(e => e.TeamId).HasColumnName("TeamID");
+            entity.Property(e => e.ParentTeamId).HasColumnName("ParentTeamID");
+            entity.Property(e => e.OrganisationStructureId).HasColumnName("OrganisationStructureID");
+            entity.Property(e => e.MaximumDailyOvertimeHours).HasColumnType("decimal(5,2)");
+            entity.Property(e => e.MaximumWeeklyOvertimeHours).HasColumnType("decimal(5,2)");
             entity.Property(e => e.EndDate).HasColumnType("datetime");
             entity.Property(e => e.Name).HasMaxLength(250);
             entity.Property(e => e.NameDhivehi).HasMaxLength(250);
@@ -3907,6 +3911,14 @@ public partial class HrmTeContext : DbContext
                 .HasForeignKey(d => d.OrganisationId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
                 .HasConstraintName("FK_Teams_Organisations");
+
+            entity.HasOne(d => d.ParentTeam).WithMany(p => p.SubTeams)
+                .HasForeignKey(d => d.ParentTeamId).OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Teams_ParentTeam");
+
+            entity.HasOne<OrganisationStructure>().WithMany()
+                .HasForeignKey(d => d.OrganisationStructureId).OnDelete(DeleteBehavior.Restrict)
+                .HasConstraintName("FK_Teams_OrganisationStructures");
         });
 
         modelBuilder.Entity<TeamStaff>(entity =>
@@ -3921,6 +3933,7 @@ public partial class HrmTeContext : DbContext
             entity.Property(e => e.TeamId).HasColumnName("TeamID");
             entity.Property(e => e.IsSuperVisor).HasColumnName("IsSuperVisor");
             entity.Property(e => e.IsValid).HasColumnName("IsValid");
+            entity.Property(e => e.MemberRole).HasMaxLength(20).HasDefaultValue("Member");
 
             entity.HasOne(d => d.Staff).WithMany(p => p.TeamStaffs)
                 .HasForeignKey(d => d.StaffId)

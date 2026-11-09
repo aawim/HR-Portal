@@ -12,13 +12,18 @@ public static class OfficialScheduleAmendments
     {
         await TemporaryWorkingHours.ApplyAsync(db, plan, ct);
         var amendments = await LoadAsync(db, plan.OrganisationId, plan.WorkDate, plan.WorkDate, ct);
-        if (amendments.Count == 0) return plan;
+        if (amendments.Count == 0)
+        {
+            TeamScheduleAdjustments.Apply(plan, await TeamScheduleAdjustments.FindAsync(db, plan.IndividualId, plan.OrganisationId, plan.WorkDate, ct));
+            return plan;
+        }
         var applicable = amendments.Where(a => plan.Assignments.Any(s => s.SchedulePurpose == "Official" && s.StartDateTime.Date == a.WorkDate.Date && s.StartDateTime.TimeOfDay == a.OriginalStart)).ToList();
         plan.ScheduleAmendmentMessage = applicable.Count == 0 ? null : string.Join(" · ", applicable.Select(a =>
             $"Temporary official start {a.RevisedStart:hh\\:mm}; end unchanged. {a.Reason}"));
         var types = await db.WorkSegmentTypes.AsNoTracking().ToDictionaryAsync(x => x.WorkSegmentTypeId, x => x.Code, ct);
         foreach (var s in plan.Segments) s.WorkSegmentTypeCode = types.GetValueOrDefault(s.WorkSegmentTypeId) ?? "";
         Apply(plan, amendments);
+        TeamScheduleAdjustments.Apply(plan, await TeamScheduleAdjustments.FindAsync(db, plan.IndividualId, plan.OrganisationId, plan.WorkDate, ct));
         return plan;
     }
 

@@ -83,7 +83,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
             x.IsValid == true && (x.StartDate == null || x.StartDate <= today) && (x.EndDate == null || x.EndDate >= today))
             .OrderBy(x => x.Name).Select(x => new TeamDto
             {
-                TeamId = x.TeamId, Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
+                TeamId = x.TeamId, ParentTeamId = x.ParentTeamId, OrganisationStructureId = x.OrganisationStructureId,
+                Name = x.Name, NameDhivehi = x.NameDhivehi ?? "",
                 Staffs = x.TeamStaffs.Where(m => m.IsValid && m.StartDate <= today && (m.EndDate == null || m.EndDate >= today) &&
                     db.Jobs.Any(j => j.IndividualID == m.StaffId && j.OrganisationID == organisationId &&
                         j.JobStateId == SharedConfig.JobStates.APPROVED && j.TerminatedDate == null && j.JoinedDate <= today))
@@ -99,7 +100,7 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         return teams;
     }
 
-    public async Task<List<TeamSearchItemDto>> SearchTeamsAsync(string query, CancellationToken ct = default)
+    public async Task<List<TeamSearchItemDto>> SearchTeamsAsync(string? query, CancellationToken ct = default)
     {
         var actor = await access.RequireContextAsync();
         var orgId = await access.GetCurrentOrganisationIdAsync();
@@ -170,6 +171,8 @@ public partial class TeamService(IDbContextFactory<HrmTeContext> factory, IUserA
         return new TeamDto
         {
             TeamId = team.TeamId,
+            ParentTeamId = team.ParentTeamId,
+            OrganisationStructureId = team.OrganisationStructureId,
             Name = team.Name,
             NameDhivehi = team.NameDhivehi ?? "",
             FromDate = team.StartDate,

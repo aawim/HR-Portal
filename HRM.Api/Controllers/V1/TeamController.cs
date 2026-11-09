@@ -59,7 +59,7 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     }
 
     [HttpGet("search-teams")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamSearchItemDto>>> SearchTeams([FromQuery] global::System.String query)
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.TeamSearchItemDto>>> SearchTeams([FromQuery] global::System.String? query = null)
     {
         return Ok(await service.SearchTeamsAsync(query, HttpContext.RequestAborted));
     }
@@ -141,7 +141,7 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     }
 
     [HttpGet("search-assignable-projects")]
-    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.ProjectLookupDto>>> SearchAssignableProjects([FromQuery] global::System.String query)
+    public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.ProjectLookupDto>>> SearchAssignableProjects([FromQuery] global::System.String? query = null)
     {
         return Ok(await service.SearchAssignableProjectsAsync(query, HttpContext.RequestAborted));
     }
@@ -217,6 +217,57 @@ public sealed class TeamController(global::HRM.Services.Interfaces.ITeam service
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.DTOs.AssignmentHistoryDto>>> GetAssignmentHistory([FromQuery] global::System.Int32 projectId, [FromQuery] global::System.Int32? staffId)
     {
         return Ok(await service.GetAssignmentHistoryAsync(projectId, staffId, HttpContext.RequestAborted));
+    }
+
+    [HttpGet("load-sub-teams")]
+    public async Task<ActionResult<global::HRM.DTOs.SubTeamWorkspaceDto>> LoadSubTeams([FromQuery] global::System.Int32 parentTeamId)
+    {
+        return Ok(await service.LoadSubTeamsAsync(parentTeamId, HttpContext.RequestAborted));
+    }
+
+    [HttpPost("save-sub-team")]
+    public async Task<ActionResult<global::System.Int32>> SaveSubTeam([FromBody] TeamSaveSubTeamRequest request)
+    {
+        return Ok(await service.SaveSubTeamAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveSubTeamRequest
+    {
+        public global::HRM.DTOs.SaveSubTeamDto model { get; set; } = default!;
+    }
+
+    [HttpPost("save-sub-team-member")]
+    public async Task<ActionResult<global::System.Int32>> SaveSubTeamMember([FromBody] TeamSaveSubTeamMemberRequest request)
+    {
+        return Ok(await service.SaveSubTeamMemberAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveSubTeamMemberRequest
+    {
+        public global::HRM.DTOs.SaveSubTeamMemberDto model { get; set; } = default!;
+    }
+
+    [HttpPost("remove-sub-team-member")]
+    public async Task<ActionResult<global::System.Boolean>> RemoveSubTeamMember([FromBody] TeamRemoveSubTeamMemberRequest request)
+    {
+        return Ok(await service.RemoveSubTeamMemberAsync(request.teamId, request.staffId, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamRemoveSubTeamMemberRequest
+    {
+        public global::System.Int32 teamId { get; set; }
+        public global::System.Int32 staffId { get; set; }
+    }
+
+    [HttpPost("save-team-schedule-adjustment")]
+    public async Task<ActionResult<global::System.Int32>> SaveTeamScheduleAdjustment([FromBody] TeamSaveTeamScheduleAdjustmentRequest request)
+    {
+        return Ok(await service.SaveTeamScheduleAdjustmentAsync(request.model, HttpContext.RequestAborted));
+    }
+
+    public sealed class TeamSaveTeamScheduleAdjustmentRequest
+    {
+        public global::HRM.DTOs.TeamScheduleAdjustmentDto model { get; set; } = default!;
     }
 
 }

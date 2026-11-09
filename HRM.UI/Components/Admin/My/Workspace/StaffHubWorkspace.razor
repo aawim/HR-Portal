@@ -947,6 +947,14 @@
                                             @onclick='() => SetTeamCenterSubTab("projects")'>
                                         Projects (@currentTeamProjects.Count)
                                     </button>
+                                    @if (!selectedTeam.ParentTeamId.HasValue)
+                                    {
+                                        <button type="button"
+                                                class="rounded-md px-3 py-1 font-semibold transition @(teamCenterSubTab == "subteams" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
+                                                @onclick='() => SetTeamCenterSubTab("subteams")'>
+                                            Sub-teams
+                                        </button>
+                                    }
                                     <button type="button"
                                             class="rounded-md px-3 py-1 font-semibold transition flex items-center gap-1.5 @(teamCenterSubTab is "attendance" or "attendace" ? "bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-2xs" : "text-slate-600 dark:text-slate-400")"
                                             @onclick='() => SetTeamCenterSubTab("attendance")'>
@@ -1066,6 +1074,11 @@
                                         </table>
                                     </div>
                                 }
+                            }
+
+                            @if (teamCenterSubTab == "subteams" && !selectedTeam.ParentTeamId.HasValue)
+                            {
+                                <SubTeamManagement ParentTeamId="selectedTeam.TeamId" />
                             }
 
                             <!-- SUB-TAB 2: PROJECTS LIST -->

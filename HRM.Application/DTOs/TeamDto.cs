@@ -3,6 +3,8 @@ namespace HRM.DTOs
     public class TeamDto
     {
         public int TeamId { get; set; }
+        public int? ParentTeamId { get; set; }
+        public int? OrganisationStructureId { get; set; }
         public string Name { get; set; } = string.Empty;
         public string NameDhivehi { get; set; } = string.Empty;
         public DateTime? FromDate { get; set; }
