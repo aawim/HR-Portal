@@ -310,7 +310,9 @@ namespace HRM.Services
                     ? user.Username
                     : $"{individual.FirstNameEnglish} {individual.MiddleNameEnglish} {individual.LastNameEnglish}"
                         .Replace("  ", " ")
-                        .Trim()
+                        .Trim(),
+
+                ImageUrl = individual != null ? IndividualImage.DataUrl(individual.ImageData, individual.ImageContentType) : null
             };
         }
 

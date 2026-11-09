@@ -18,6 +18,8 @@ namespace HRM.DTOs.UserContext
 
         public string FullName { get; set; } = string.Empty;
 
+        public string? ImageUrl { get; set; }
+
 
         // ==========================
         // Status

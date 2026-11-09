@@ -42,7 +42,16 @@
 
                     <!-- Trigger Button -->
                     <button type="button" @onclick="ToggleProfileMenu" aria-label="Employee menu" aria-expanded="@isProfileMenuOpen.ToString().ToLowerInvariant()" aria-controls="employee-menu" class="flex items-center gap-3 focus:outline-none hover:bg-slate-50 p-1 pr-2 rounded-lg transition-colors relative z-50">
-                        <img src="https://i.pravatar.cc/150?img=32" alt="Profile" class="w-9 h-9 rounded-full border-2 border-blue-100 object-cover" />
+                        @if (!string.IsNullOrWhiteSpace(userPhotoUrl))
+                        {
+                            <img src="@userPhotoUrl" alt="Profile" class="w-9 h-9 rounded-full border-2 border-blue-100 object-cover" />
+                        }
+                        else
+                        {
+                            <div class="w-9 h-9 rounded-full border-2 border-blue-100 bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-sm select-none">
+                                @UserInitial
+                            </div>
+                        }
                         <div class="hidden md:block text-left">
                             <p class="max-w-[16rem] truncate text-sm font-semibold text-slate-700" title="@UserName">Hello, @UserName!</p>
                             <p class="max-w-[16rem] truncate text-xs text-slate-500" title="@UserGroupLabel">@UserGroupLabel</p>
@@ -108,6 +117,8 @@
     private (string Username, bool Access)? loadedIdentity;
     private int groupLoadVersion;
     private bool isProfileMenuOpen = false;
+    private string? userPhotoUrl;
+    private string UserInitial => !string.IsNullOrWhiteSpace(UserName) ? UserName.Trim().Substring(0, 1).ToUpperInvariant() : "U";
 
     protected override async Task OnParametersSetAsync()
     {
@@ -128,7 +139,11 @@
                 {
                     var context = await UserAccess.GetContextAsync();
                     var groups = context?.UserGroups.Select(g => g.GroupName).Distinct().OrderBy(g => g).ToList() ?? [];
-                    if (version == groupLoadVersion) userGroups = groups;
+                    if (version == groupLoadVersion)
+                    {
+                        userGroups = groups;
+                        userPhotoUrl = context?.ImageUrl;
+                    }
                 }
                 catch (Exception ex) { Logger.LogWarning(ex, "Could not load current user's group labels"); }
             }

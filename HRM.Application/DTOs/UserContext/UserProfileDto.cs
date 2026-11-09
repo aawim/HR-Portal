@@ -14,6 +14,8 @@ namespace HRM.DTOs.UserContext
 
         public string FullName { get; set; } = "";
 
+        public string? ImageUrl { get; set; }
+
         public string? OrganisationName { get; set; }
 
         public JobDto? ActiveJob { get; set; }

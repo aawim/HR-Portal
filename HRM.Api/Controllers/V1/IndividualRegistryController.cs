@@ -13,14 +13,12 @@ public sealed class IndividualRegistryController(global::HRM.Services.Interfaces
         return Ok(await service.SearchAsync(searchTerm, searchType, HttpContext.RequestAborted));
     }
 
-    [ApiPermission("Individual.View", "Employee.Create")]
     [HttpGet("get-photo")]
     public async Task<ActionResult<global::System.String?>> GetPhoto([FromQuery] global::System.Int32 individualId)
     {
         return Ok(await service.GetPhotoAsync(individualId, HttpContext.RequestAborted));
     }
 
-    [ApiPermission("Individual.View", "Employee.Create", "Individual.Edit", "Admin")]
     [HttpPost("update-photo")]
     public async Task<ActionResult> UpdatePhoto([FromBody] IndividualRegistryUpdatePhotoRequest request)
     {

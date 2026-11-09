@@ -24,7 +24,14 @@
                 </span>
             </div>
             <p class="text-xs text-slate-500 mt-0.5">
-                Apply for store purchase agreements and track your active repayment schedules & deductions.
+                @if (EffectiveCanEnterLoan)
+                {
+                    <span>Record store purchase agreements and track active repayment schedules & deductions for this employee.</span>
+                }
+                else
+                {
+                    <span>Track your active store purchase agreement statuses, repayment schedules & deductions. Store purchase agreements are registered and managed by HR & Finance Administration.</span>
+                }
             </p>
         </div>
         <div class="flex items-center gap-2">
@@ -56,22 +63,25 @@
                 <span>Refresh</span>
             </button>
 
-            @if (!isApplying)
+            @if (EffectiveCanEnterLoan)
             {
-                <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
-                        @onclick="StartNewApplication">
-                    <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                    <span>+ New Goods Loan</span>
-                </button>
-            }
-            else
-            {
-                <button type="button"
-                        class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
-                        @onclick="CancelApplication">
-                    <span>Back to Details</span>
-                </button>
+                @if (!isApplying)
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                            @onclick="StartNewApplication">
+                        <svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                        <span>+ Enter Goods Loan</span>
+                    </button>
+                }
+                else
+                {
+                    <button type="button"
+                            class="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-xs hover:bg-slate-50 transition"
+                            @onclick="CancelApplication">
+                        <span>Back to Details</span>
+                    </button>
+                }
             }
         </div>
     </header>
@@ -576,14 +586,24 @@
                     <div>
                         <div class="font-bold text-slate-800 text-sm">No Goods Loan Selected</div>
                         <p class="text-xs text-slate-500 mt-1">
-                            Select an existing loan from the list on the right to view details and amortisation schedule, or click "+ New Goods Loan" to apply.
+                            @if (EffectiveCanEnterLoan)
+                            {
+                                <span>Select an existing loan from the list on the right to view details and amortisation schedule, or click "+ Enter Goods Loan" to record an agreement for this staff member.</span>
+                            }
+                            else
+                            {
+                                <span>Select a store purchase agreement from the list on the right to view repayment progress, purchased items, and monthly deduction schedules.</span>
+                            }
                         </p>
                     </div>
-                    <button type="button"
-                            class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
-                            @onclick="StartNewApplication">
-                        + Apply for Goods Loan
-                    </button>
+                    @if (EffectiveCanEnterLoan)
+                    {
+                        <button type="button"
+                                class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-xs hover:bg-blue-700 transition"
+                                @onclick="StartNewApplication">
+                            + Enter Goods Loan
+                        </button>
+                    }
                 </div>
             }
         </div>
@@ -739,6 +759,10 @@
     [Parameter] public int? IndividualId { get; set; }
     [Parameter] public int? OrganisationId { get; set; }
     [Parameter] public bool IsEmbedded { get; set; }
+    [Parameter] public bool? CanEnterLoan { get; set; }
+
+    private bool hasAdminAccess;
+    private bool EffectiveCanEnterLoan => (CanEnterLoan ?? IsEmbedded) && hasAdminAccess;
 
     private bool isFullWidth = false;
     private bool isLoading = true;
@@ -794,13 +818,18 @@
 
     private async Task ResolveContextAsync()
     {
+        var ctx = await AccessService.RequireContextAsync();
+        hasAdminAccess = ctx.IsSuperAdministrator || ctx.IsOrganisationAdmin || ctx.IsHRHead || ctx.IsHRManager || ctx.IsHRStaff
+            || await AccessService.HasPermissionAsync("Admin")
+            || await AccessService.HasPermissionAsync("GoodsLoan.Manage")
+            || await AccessService.HasPermissionAsync("GoodsLoan.Create");
+
         if (IndividualId.HasValue && IndividualId.Value > 0)
         {
             activeIndividualId = IndividualId.Value;
         }
         else
         {
-            var ctx = await AccessService.RequireContextAsync();
             activeIndividualId = ctx.IndividualId > 0 ? ctx.IndividualId : ctx.UserId;
         }
 
@@ -861,6 +890,7 @@
 
     private void StartNewApplication()
     {
+        if (!EffectiveCanEnterLoan) return;
         isApplying = true;
         selectedLoan = null;
         selectedAgreement = null;
@@ -1061,6 +1091,12 @@
 
     private async Task SubmitApplicationAsync()
     {
+        if (!EffectiveCanEnterLoan)
+        {
+            Toast.Error("Goods loans can only be entered by HR or administrative staff through the Admin Portal.");
+            return;
+        }
+
         if (newApp.StoreID <= 0 || newApp.AgreementID <= 0)
         {
             Toast.Error("Please select a store and active store agreement.");

@@ -154,6 +154,7 @@ public sealed class GoodsLoansController(IGoodsLoanService service, IUserAccessS
         return Ok(result);
     }
 
+    [ApiPermission("GoodsLoan.Manage", "GoodsLoan.Create", "Admin")]
     [HttpPost("applications")]
     public async Task<ActionResult<ServiceResult>> ApplyForLoan([FromBody] CreateGoodsLoanApplicationRequest request, CancellationToken ct = default)
     {

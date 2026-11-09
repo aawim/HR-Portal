@@ -124,6 +124,10 @@ namespace HRM.Services
                 Username = context.Username,
 
                 FullName = context.FullName,
+                ImageUrl = !string.IsNullOrWhiteSpace(context.ImageUrl) ? context.ImageUrl :
+                    context.IndividualId > 0 ? IndividualImage.DataUrl(
+                        db.Individuals.AsNoTracking().Where(i => i.BusinessEntityId == context.IndividualId).Select(i => i.ImageData).FirstOrDefault(),
+                        db.Individuals.AsNoTracking().Where(i => i.BusinessEntityId == context.IndividualId).Select(i => i.ImageContentType).FirstOrDefault()) : null,
                 JobHistory = await JobHistoryQuery.LoadAsync(db, context.IndividualId),
 
                 OrganisationName =

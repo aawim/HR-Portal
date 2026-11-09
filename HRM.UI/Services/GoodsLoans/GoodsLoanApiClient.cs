@@ -263,6 +263,13 @@ public sealed class GoodsLoanApiClient(HttpClient client) : IGoodsLoanService
         try
         {
             var resp = await client.PostAsJsonAsync("/api/goods-loans/applications", request, ct);
+            if (!resp.IsSuccessStatusCode)
+            {
+                if (resp.StatusCode == System.Net.HttpStatusCode.Forbidden)
+                    return ServiceResult.Fail("Goods loans can only be entered by HR or administrative staff through the Admin Portal.");
+                var text = await resp.Content.ReadAsStringAsync(ct);
+                return ServiceResult.Fail(string.IsNullOrWhiteSpace(text) ? $"Request failed with status {resp.StatusCode}" : text);
+            }
             return await resp.Content.ReadFromJsonAsync<ServiceResult>(cancellationToken: ct)
                    ?? ServiceResult.Fail("No response from server.");
         }

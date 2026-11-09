@@ -826,6 +826,16 @@ public sealed class GoodsLoanService : IGoodsLoanService
 
     public async Task<ServiceResult> ApplyForLoanAsync(CreateGoodsLoanApplicationRequest request, CancellationToken ct = default)
     {
+        var actor = await _access.RequireContextAsync();
+        bool hasAdminAccess = actor.IsSuperAdministrator || actor.IsOrganisationAdmin || actor.IsHRHead || actor.IsHRManager || actor.IsHRStaff
+            || await _access.HasPermissionAsync("Admin")
+            || await _access.HasPermissionAsync("GoodsLoan.Manage")
+            || await _access.HasPermissionAsync("GoodsLoan.Create");
+
+        if (!hasAdminAccess)
+        {
+            return ServiceResult.Failed("Goods loans can only be entered by HR or administrative staff through the Admin Portal.");
+        }
         if (request.Items == null || request.Items.Count == 0)
         {
             return ServiceResult.Failed("At least one purchased item must be specified.");

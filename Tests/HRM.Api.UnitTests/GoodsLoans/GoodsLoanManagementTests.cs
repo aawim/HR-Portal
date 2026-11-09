@@ -154,4 +154,45 @@ public sealed class GoodsLoanManagementTests
         Assert.True(outcome.TotalDeductions >= 833.33m);
         Assert.True(outcome.NetSalary <= 12000.00m - 833.33m);
     }
+
+    [Fact]
+    public async Task ApplyForLoanAsync_Rejects_NonAdminStaff()
+    {
+        var factory = new QueryFactory();
+        var access = new FakeAccess
+        {
+            Actor = new HRM.DTOs.UserContext.UserContextDto
+            {
+                UserId = 10,
+                IndividualId = 10,
+                IsSuperAdministrator = false,
+                IsHRStaff = false,
+                IsHRHead = false,
+                IsHRManager = false,
+                IsOrganisationAdmin = false
+            }
+        };
+        access.Permissions.Clear();
+
+        var service = new HRM.Services.GoodsLoans.GoodsLoanService(
+            factory,
+            new GoodsLoanScheduleCalculator(),
+            access,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<HRM.Services.GoodsLoans.GoodsLoanService>.Instance);
+
+        var request = new CreateGoodsLoanApplicationRequest
+        {
+            IndividualID = 10,
+            StoreID = 1,
+            AgreementID = 1,
+            InvoiceNumber = "INV-100",
+            RepaymentMonths = 12,
+            Items = [new GoodsLoanItemDto { ItemDescription = "Laptop", Quantity = 1, UnitPrice = 5000m, TotalAmount = 5000m }]
+        };
+
+        var result = await service.ApplyForLoanAsync(request);
+
+        Assert.False(result.Success);
+        Assert.Equal("Goods loans can only be entered by HR or administrative staff through the Admin Portal.", result.Message);
+    }
 }

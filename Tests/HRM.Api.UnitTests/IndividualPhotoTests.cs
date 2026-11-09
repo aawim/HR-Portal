@@ -164,6 +164,33 @@ public sealed class IndividualPhotoTests
     }
 
     [Fact]
+    public async Task UpdatePhotoAsync_Allows_Self_Without_HRPermissions()
+    {
+        var (service, factory, access) = CreateService();
+        access.Permissions.Clear();
+        access.Actor = new HRM.DTOs.UserContext.UserContextDto { UserId = 88, IndividualId = 508, IsSuperAdministrator = false };
+
+        await using (var db = factory.CreateDbContext())
+        {
+            db.Individuals.Add(new Individual
+            {
+                BusinessEntityId = 508,
+                FirstNameEnglish = "SelfUser"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        await service.UpdatePhotoAsync(508, ValidPng);
+
+        await using (var db = factory.CreateDbContext())
+        {
+            var ind = await db.Individuals.SingleAsync(x => x.BusinessEntityId == 508);
+            Assert.NotNull(ind.ImageData);
+            Assert.Equal("image/png", ind.ImageContentType);
+        }
+    }
+
+    [Fact]
     public async Task SearchAsync_IncludesPhotoUrl_WhenIndividualHasPhoto()
     {
         var (service, factory, _) = CreateService();

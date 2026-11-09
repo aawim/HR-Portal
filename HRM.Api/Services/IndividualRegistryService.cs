@@ -81,8 +81,9 @@ public sealed class IndividualRegistryService(
     {
         if (individualId <= 0) return null;
         var actor = await access.RequireContextAsync();
-        if (!(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
-            await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Individual.View")))
+        var isSelf = actor.IndividualId != 0 && actor.IndividualId == individualId;
+        if (!isSelf && !(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin || actor.IsSupervisor ||
+            await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Individual.View") || await access.HasPermissionAsync("Employee.View")))
             throw new UnauthorizedAccessException("Registry access requires HR permission.");
 
         await using var db = await factory.CreateDbContextAsync(ct);
@@ -96,7 +97,8 @@ public sealed class IndividualRegistryService(
     {
         if (individualId <= 0) throw new ArgumentException("A valid individual ID is required.", nameof(individualId));
         var actor = await access.RequireContextAsync();
-        if (!(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
+        var isSelf = actor.IndividualId != 0 && actor.IndividualId == individualId;
+        if (!isSelf && !(actor.IsSuperAdministrator || actor.IsHRStaff || actor.IsHRHead || actor.IsHRManager || actor.IsOrganisationAdmin ||
             await access.HasPermissionAsync("Admin") || await access.HasPermissionAsync("Individual.Edit") || await access.HasPermissionAsync("Individual.Create")))
             throw new UnauthorizedAccessException("Updating an individual photo requires HR permission.");
 
