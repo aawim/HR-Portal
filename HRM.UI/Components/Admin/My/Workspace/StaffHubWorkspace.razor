@@ -3466,6 +3466,21 @@
                 }
             }
         }
+        else if (!string.IsNullOrWhiteSpace(ActiveSection) && ActiveSection.ToLowerInvariant() is "team" or "teams" or "my-teams" or "calendar" or "calendars" or "request" or "requests" or "onboarding" or "leave" or "leave-log" or "attendance" or "time-change" or "shift" or "org-daily" or "daily")
+        {
+            activeWorkspaceTab = ActiveSection.ToLowerInvariant() switch
+            {
+                "team" or "teams" or "my-teams" => "MyTeam",
+                "calendar" or "calendars" => "Calendar",
+                "request" or "requests" => "Request",
+                "onboarding" => "Onboarding",
+                "leave" or "leave-log" => "LeaveLog",
+                "attendance" => "Attendance",
+                "time-change" or "shift" => "TimeChange",
+                "org-daily" or "daily" => "OrgDaily",
+                _ => "Home"
+            };
+        }
         else if (!string.IsNullOrWhiteSpace(QueryTab))
         {
             activeWorkspaceTab = QueryTab.ToLowerInvariant() switch
@@ -3554,7 +3569,7 @@
             _ => "home"
         };
 
-        var uri = $"/admin/my/workspace?tab={tabKey}";
+        var uri = activeWorkspaceTab == "Onboarding" ? "/admin/my/workspace/onboarding" : $"/admin/my/workspace?tab={tabKey}";
         if (activeWorkspaceTab == "MyTeam" && selectedTeamId.HasValue)
         {
             uri += $"&teamId={selectedTeamId.Value}";
