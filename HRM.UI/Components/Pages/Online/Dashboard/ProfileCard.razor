@@ -3,7 +3,7 @@
 @inject IUserAccessService Access
 @inject ILogger<ProfileCard> Logger
 
-<div class="relative flex flex-col items-center overflow-hidden rounded-xl border border-slate-100 bg-white p-6 shadow-sm">
+<div class="relative flex flex-col items-center overflow-hidden rounded-xl border border-slate-100 bg-white p-5 shadow-sm">
     <div class="absolute left-0 top-0 h-24 w-full bg-gradient-to-r from-blue-500 to-blue-600 opacity-10"></div>
     @if (!string.IsNullOrWhiteSpace(user?.ImageUrl))
     {
@@ -13,13 +13,98 @@
     {
         <div aria-hidden="true" class="z-10 flex h-20 w-20 items-center justify-center rounded-full border-4 border-white bg-blue-100 text-2xl font-bold text-blue-700 shadow-md">@Initial</div>
     }
-    <h2 class="mt-3 text-lg font-bold text-slate-800">@DisplayName</h2>
-    @if (!string.IsNullOrWhiteSpace(user?.ActiveJob?.PositionName)) { <p class="mb-4 text-sm font-medium text-blue-600">@user.ActiveJob.PositionName</p> }
-    <dl class="mt-4 w-full space-y-2 text-sm">
-        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1"><dt class="text-slate-500">Emp Number</dt><dd class="font-medium text-slate-700">@Display(user?.ActiveJob?.EmployeeNumber)</dd></div>
-        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1"><dt class="text-slate-500">SAP Number</dt><dd class="font-medium text-slate-700">@Display(user?.ActiveJob?.SAPNumber)</dd></div>
-        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1"><dt class="text-slate-500">Department</dt><dd class="text-right font-medium text-slate-700">@Display(user?.ActiveJob?.OrganisationStructureName)</dd></div>
-        <div class="flex justify-between gap-3 pb-1"><dt class="text-slate-500">Status</dt><dd class="rounded-full bg-slate-50 px-2 py-0.5 text-xs font-medium text-slate-700">@(user?.ActiveJob?.IsActive == true ? "Active" : Display(user?.ActiveJob?.JobStateName))</dd></div>
+    <h2 class="mt-3 text-lg font-bold text-slate-800 text-center">@DisplayName</h2>
+    @if (!string.IsNullOrWhiteSpace(user?.ActiveJob?.PositionName)) { <p class="mb-3 text-sm font-medium text-blue-600 text-center">@user.ActiveJob.PositionName</p> }
+
+    <!-- Urgent Expiry Alert Pill on Profile Card -->
+    @{
+        var alert = GetMostUrgentExpiryAlert();
+    }
+    @if (alert != null)
+    {
+        <div class="w-full mb-3 rounded-lg border p-2 text-xs flex items-center gap-2 @alert.ContainerClass">
+            <span class="text-sm">@alert.Icon</span>
+            <div class="min-w-0 flex-1">
+                <span class="font-bold block leading-tight">@alert.Title</span>
+                <span class="text-[11px] opacity-90 block leading-tight">@alert.Message</span>
+            </div>
+        </div>
+    }
+
+    <dl class="w-full space-y-1.5 text-xs">
+        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1">
+            <dt class="text-slate-500">Emp Number</dt>
+            <dd class="font-medium text-slate-700 font-mono">@Display(user?.ActiveJob?.EmployeeNumber)</dd>
+        </div>
+        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1">
+            <dt class="text-slate-500">SAP Number</dt>
+            <dd class="font-medium text-slate-700 font-mono">@Display(user?.ActiveJob?.SAPNumber)</dd>
+        </div>
+        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1">
+            <dt class="text-slate-500">Department</dt>
+            <dd class="text-right font-medium text-slate-700 truncate max-w-[150px]">@Display(user?.ActiveJob?.OrganisationStructureName)</dd>
+        </div>
+        <div class="flex justify-between gap-3 border-b border-slate-50 pb-1">
+            <dt class="text-slate-500">Status</dt>
+            <dd class="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
+                @(user?.ActiveJob?.IsActive == true ? "Active" : Display(user?.ActiveJob?.JobStateName))
+            </dd>
+        </div>
+
+        <!-- Identity Documents & Expiry Dates -->
+        <div class="pt-2 border-t border-slate-100 space-y-2">
+            <div class="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                <span>Identity Documents</span>
+                <span>Expiry</span>
+            </div>
+
+            <!-- National ID Card -->
+            <div class="flex items-center justify-between gap-2 text-xs">
+                <div>
+                    <span class="text-slate-400 text-[10px] block font-mono">NID CARD</span>
+                    <span class="font-mono font-bold text-slate-800">@Display(user?.IdentityCardNumber)</span>
+                </div>
+                <div class="text-right">
+                    @if (user?.IdentityCardExpiryDate.HasValue == true)
+                    {
+                        var nidStatus = GetExpiryBadge(user.IdentityCardExpiryDate.Value);
+                        <span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold border @nidStatus.BadgeClass"
+                              title="Expiry: @user.IdentityCardExpiryDate.Value.ToString("dd MMM yyyy")">
+                            @nidStatus.Label
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="text-[11px] text-slate-400 italic">No expiry</span>
+                    }
+                </div>
+            </div>
+
+            <!-- Passport (if available) -->
+            @if (!string.IsNullOrWhiteSpace(user?.PassportNumber) || user?.PassportExpiryDate.HasValue == true)
+            {
+                <div class="flex items-center justify-between gap-2 text-xs pt-1 border-t border-slate-50">
+                    <div>
+                        <span class="text-slate-400 text-[10px] block font-mono">PASSPORT</span>
+                        <span class="font-mono font-bold text-slate-800">@Display(user?.PassportNumber)</span>
+                    </div>
+                    <div class="text-right">
+                        @if (user?.PassportExpiryDate.HasValue == true)
+                        {
+                            var passStatus = GetExpiryBadge(user.PassportExpiryDate.Value);
+                            <span class="inline-block rounded px-1.5 py-0.5 text-[10px] font-semibold border @passStatus.BadgeClass"
+                                  title="Expiry: @user.PassportExpiryDate.Value.ToString("dd MMM yyyy")">
+                                @passStatus.Label
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="text-[11px] text-slate-400 italic">No expiry</span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
     </dl>
 </div>
 
@@ -27,11 +112,103 @@
     [Parameter] public string UserName { get; set; } = "";
     private UserContextDto? user;
     private string DisplayName => !string.IsNullOrWhiteSpace(user?.FullName) ? user.FullName.Trim() : !string.IsNullOrWhiteSpace(UserName) ? UserName : "Profile";
-    private string Initial => DisplayName.Substring(0, 1).ToUpperInvariant();
+    private string Initial => DisplayName.Length > 0 ? DisplayName.Substring(0, 1).ToUpperInvariant() : "U";
     private static string Display(string? value) => string.IsNullOrWhiteSpace(value) ? "—" : value;
+
     protected override async Task OnInitializedAsync()
     {
         try { user = await Access.GetContextAsync(); }
         catch (Exception ex) { Logger.LogWarning(ex, "Could not load profile employment details."); }
+    }
+
+    private static (string Label, string BadgeClass) GetExpiryBadge(DateTime expiryDate)
+    {
+        var days = (expiryDate.Date - DateTime.Today).Days;
+        if (days < 0)
+        {
+            return ($"Expired {Math.Abs(days)}d ago", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+        }
+        if (days == 0)
+        {
+            return ("Expires Today", "bg-rose-100 text-rose-800 border-rose-300 font-bold");
+        }
+        if (days <= 30)
+        {
+            return ($"Expires in {days}d", "bg-rose-50 text-rose-700 border-rose-200 font-bold");
+        }
+        if (days <= 60)
+        {
+            return ($"Expires in {days}d", "bg-amber-50 text-amber-800 border-amber-200 font-semibold");
+        }
+        return (expiryDate.ToString("dd MMM yyyy"), "bg-emerald-50 text-emerald-800 border-emerald-200");
+    }
+
+    private class ExpiryAlertInfo
+    {
+        public string Icon { get; set; } = "⚠️";
+        public string Title { get; set; } = "";
+        public string Message { get; set; } = "";
+        public string ContainerClass { get; set; } = "";
+    }
+
+    private ExpiryAlertInfo? GetMostUrgentExpiryAlert()
+    {
+        if (user == null) return null;
+
+        var alerts = new List<(int priority, ExpiryAlertInfo info)>();
+
+        // Check NID
+        if (user.IdentityCardExpiryDate.HasValue)
+        {
+            var days = (user.IdentityCardExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+            {
+                alerts.Add((1, new ExpiryAlertInfo
+                {
+                    Icon = "🚨",
+                    Title = "NID Card Expired",
+                    Message = $"Your ID expired {Math.Abs(days)} days ago ({user.IdentityCardExpiryDate.Value:dd MMM yyyy}).",
+                    ContainerClass = "bg-rose-50 border-rose-200 text-rose-900"
+                }));
+            }
+            else if (days <= 60)
+            {
+                alerts.Add((2, new ExpiryAlertInfo
+                {
+                    Icon = "⚠️",
+                    Title = "NID Card Expiring Soon",
+                    Message = $"Expires in {days} days on {user.IdentityCardExpiryDate.Value:dd MMM yyyy}.",
+                    ContainerClass = "bg-amber-50 border-amber-200 text-amber-900"
+                }));
+            }
+        }
+
+        // Check Passport
+        if (user.PassportExpiryDate.HasValue)
+        {
+            var days = (user.PassportExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+            {
+                alerts.Add((1, new ExpiryAlertInfo
+                {
+                    Icon = "🚨",
+                    Title = "Passport Expired",
+                    Message = $"Your passport expired {Math.Abs(days)} days ago ({user.PassportExpiryDate.Value:dd MMM yyyy}).",
+                    ContainerClass = "bg-rose-50 border-rose-200 text-rose-900"
+                }));
+            }
+            else if (days <= 60)
+            {
+                alerts.Add((2, new ExpiryAlertInfo
+                {
+                    Icon = "⚠️",
+                    Title = "Passport Expiring Soon",
+                    Message = $"Expires in {days} days on {user.PassportExpiryDate.Value:dd MMM yyyy}.",
+                    ContainerClass = "bg-amber-50 border-amber-200 text-amber-900"
+                }));
+            }
+        }
+
+        return alerts.OrderBy(a => a.priority).Select(a => a.info).FirstOrDefault();
     }
 }

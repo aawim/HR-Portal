@@ -58,6 +58,10 @@ namespace HRM.Enum
         Onboarding,
         Certificates,
         [Display(Name = "Goods Loans")]
-        GoodsLoans
+        GoodsLoans,
+        [Display(Name = "Bank Details")]
+        Bank,
+        [Display(Name = "Emergency Contacts")]
+        EmergencyContact
     }
 }

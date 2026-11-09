@@ -91,6 +91,10 @@ public static class ApplicationContractCatalog
         typeof(global::HRM.Application.Contracts.Pages.IEmployeeAddresses),
         typeof(global::HRM.Services.Contracts.CertificateServiceContracts.IOperations),
         typeof(global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations),
-        typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll)
+        typeof(global::HRM.Application.Contracts.Pages.IEnterprisePayroll),
+        typeof(global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations),
+        typeof(global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations),
+        typeof(global::HRM.Services.Interfaces.IAttendanceDeductionService)
     ]);
 }

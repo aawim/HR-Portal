@@ -130,6 +130,22 @@
 
 
 
+                @{
+                    var expiryAlert = GetIdentityExpiryAlert();
+                }
+                @if (expiryAlert != null)
+                {
+                    <div class="rounded-xl border p-3.5 text-xs flex items-center justify-between shadow-2xs @(expiryAlert.Value.IsExpired ? "border-rose-300 bg-rose-50/90 text-rose-900" : "border-amber-300 bg-amber-50/90 text-amber-900")">
+                        <div class="flex items-center gap-2.5">
+                            <span class="text-xl">@(expiryAlert.Value.IsExpired ? "🚨" : "⚠️")</span>
+                            <div>
+                                <strong class="font-bold">@expiryAlert.Value.Title:</strong>
+                                <span>@expiryAlert.Value.Message</span>
+                            </div>
+                        </div>
+                    </div>
+                }
+
                 <!-- GRID -->
 
                 <div class="grid grid-cols-1 items-start xl:grid-cols-12 gap-2">
@@ -270,6 +286,7 @@
 
 
     private string UserName = "";
+    private UserContextDto? userContext;
 
     private List<YearlyAttendanceDayDto> yearlyAttendanceDays = [];
 
@@ -396,15 +413,38 @@
         var context = await _access.GetContextAsync();
         if (context == null) { ClearDashboardContext(); return; }
         contextUnavailable = false;
+        userContext = context;
         UserName = !string.IsNullOrWhiteSpace(context.FullName) ? context.FullName.Trim()
             : !string.IsNullOrWhiteSpace(context.Username) ? context.Username.Trim() : "Employee";
     }
 
     private void ClearDashboardContext()
     {
-        contextUnavailable = true; loading = false; UserName = "";
+        contextUnavailable = true; loading = false; UserName = ""; userContext = null;
         weeklyLogs = []; yearlyAttendanceDays = []; leaveBalances = []; jobHistory = []; leaveRequests = []; unevenLogs = [];
         TodayCheckIn = null; TodayCheckOut = null; activeJob = null;
+    }
+
+    private (bool IsExpired, string Title, string Message)? GetIdentityExpiryAlert()
+    {
+        if (userContext == null) return null;
+        if (userContext.IdentityCardExpiryDate.HasValue)
+        {
+            var days = (userContext.IdentityCardExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+                return (true, "National ID Card Expired", $"Your National ID Card expired {Math.Abs(days)} day(s) ago on {userContext.IdentityCardExpiryDate.Value:dd MMM yyyy}. Please submit renewal information to HR.");
+            if (days <= 60)
+                return (false, "National ID Card Expiring Soon", $"Your National ID Card expires in {days} day(s) on {userContext.IdentityCardExpiryDate.Value:dd MMM yyyy}. Please ensure it is renewed in time.");
+        }
+        if (userContext.PassportExpiryDate.HasValue)
+        {
+            var days = (userContext.PassportExpiryDate.Value.Date - DateTime.Today).Days;
+            if (days < 0)
+                return (true, "Passport Expired", $"Your Passport expired {Math.Abs(days)} day(s) ago on {userContext.PassportExpiryDate.Value:dd MMM yyyy}. Please update your official records.");
+            if (days <= 60)
+                return (false, "Passport Expiring Soon", $"Your Passport expires in {days} day(s) on {userContext.PassportExpiryDate.Value:dd MMM yyyy}.");
+        }
+        return null;
     }
 
     private async Task LoadAttendance()

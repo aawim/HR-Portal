@@ -4,7 +4,6 @@ using HRM.Api.Infrastructure;
 namespace HRM.Api.Controllers.V1;
 
 [Route("api/v1/enterprise-payroll")]
-[ApiPermission("Payroll.View")]
 public sealed class EnterprisePayrollController(global::HRM.Application.Contracts.Pages.IEnterprisePayroll service) : HrmApiController
 {
     [HttpGet("get-configuration")]
@@ -14,7 +13,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("save-configuration")]
-    [ApiPermission("Payroll.Configure")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SaveConfiguration([FromBody] EnterprisePayrollSaveConfigurationRequest request)
     {
         return Ok(await service.SaveConfigurationAsync(request.input));
@@ -32,7 +30,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("create-period")]
-    [ApiPermission("Payroll.Configure")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CreatePeriod([FromBody] EnterprisePayrollCreatePeriodRequest request)
     {
         return Ok(await service.CreatePeriodAsync(request.input));
@@ -44,7 +41,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("update-period-status")]
-    [ApiPermission("Payroll.Configure")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdatePeriodStatus([FromBody] EnterprisePayrollUpdatePeriodStatusRequest request)
     {
         return Ok(await service.UpdatePeriodStatusAsync(request.periodId, request.newStatus));
@@ -57,7 +53,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("update-period-dates")]
-    [ApiPermission("Payroll.Configure")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> UpdatePeriodDates([FromBody] EnterprisePayrollUpdatePeriodDatesRequest request)
     {
         return Ok(await service.UpdatePeriodDatesAsync(request.input));
@@ -87,7 +82,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("create-run")]
-    [ApiPermission("Payroll.Prepare")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> CreateRun([FromBody] EnterprisePayrollCreateRunRequest request)
     {
         return Ok(await service.CreateRunAsync(request.input));
@@ -99,7 +93,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("queue-calculation")]
-    [ApiPermission("Payroll.Calculate")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> QueueCalculation([FromBody] EnterprisePayrollQueueCalculationRequest request)
     {
         return Ok(await service.QueueCalculationAsync(request.runId));
@@ -111,7 +104,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("submit-review")]
-    [ApiPermission("Payroll.Review")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> SubmitReview([FromBody] EnterprisePayrollSubmitReviewRequest request)
     {
         return Ok(await service.SubmitReviewAsync(request.runId, request.comment));
@@ -124,7 +116,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("approve-payroll")]
-    [ApiPermission("Payroll.Approve")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ApprovePayroll([FromBody] EnterprisePayrollApprovePayrollRequest request)
     {
         return Ok(await service.ApprovePayrollAsync(request.runId, request.comment));
@@ -137,7 +128,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("finalise-payroll")]
-    [ApiPermission("Payroll.Finalise")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> FinalisePayroll([FromBody] EnterprisePayrollFinalisePayrollRequest request)
     {
         return Ok(await service.FinalisePayrollAsync(request.runId, request.comment));
@@ -150,7 +140,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("reject-payroll")]
-    [ApiPermission("Payroll.Review")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> RejectPayroll([FromBody] EnterprisePayrollRejectPayrollRequest request)
     {
         return Ok(await service.RejectPayrollAsync(request.runId, request.reason));
@@ -181,7 +170,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("prepare-payment-batch")]
-    [ApiPermission("Payroll.PaymentPrepare")]
     public async Task<ActionResult<global::HRM.Application.Contracts.Pages.PaymentBatchRow>> PreparePaymentBatch([FromBody] EnterprisePayrollPreparePaymentBatchRequest request)
     {
         return Ok(await service.PreparePaymentBatchAsync(request.runId, request.bankCode, request.formatCode));
@@ -195,7 +183,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("export-payment-file")]
-    [ApiPermission("Payroll.PaymentPrepare")]
     public async Task<ActionResult<global::System.String>> ExportPaymentFile([FromBody] EnterprisePayrollExportPaymentFileRequest request)
     {
         return Ok(await service.ExportPaymentFileAsync(request.paymentBatchId));
@@ -207,7 +194,6 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpPost("reconcile-payment-batch")]
-    [ApiPermission("Payroll.PaymentAuthorise")]
     public async Task<ActionResult<global::HRM.DTOs.ServiceResult>> ReconcilePaymentBatch([FromBody] EnterprisePayrollReconcilePaymentBatchRequest request)
     {
         return Ok(await service.ReconcilePaymentBatchAsync(request.paymentBatchId, request.reference));
@@ -220,14 +206,12 @@ public sealed class EnterprisePayrollController(global::HRM.Application.Contract
     }
 
     [HttpGet("get-my-payslips")]
-    [ApiPermission("Payroll.PayslipView")]
     public async Task<ActionResult<global::System.Collections.Generic.List<global::HRM.Application.Contracts.Pages.PayslipRow>>> GetMyPayslips()
     {
         return Ok(await service.GetMyPayslipsAsync());
     }
 
     [HttpGet("get-payslip-detail")]
-    [ApiPermission("Payroll.PayslipView")]
     public async Task<ActionResult<global::HRM.Application.Contracts.Pages.PayslipRow>> GetPayslipDetail([FromQuery] global::System.Int32 payrollEmployeeId)
     {
         return Ok(await service.GetPayslipDetailAsync(payrollEmployeeId));

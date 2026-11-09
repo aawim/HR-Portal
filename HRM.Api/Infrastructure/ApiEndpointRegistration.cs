@@ -120,6 +120,12 @@ public static class ApiEndpointRegistration
         services.TryAddScoped<global::HRM.Services.Contracts.DocumentManagementServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Api.Services.DocumentManagementService>());
         services.TryAddScoped<global::HRM.Services.UserService>();
         services.TryAddScoped<global::HRM.Services.Contracts.UserServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.UserService>());
+        services.TryAddScoped<global::HRM.Services.StaffBankService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffBankServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffBankService>());
+        services.TryAddScoped<global::HRM.Services.StaffEmergencyContactService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffEmergencyContactServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffEmergencyContactService>());
+        services.TryAddScoped<global::HRM.Services.StaffIdentityDocumentService>();
+        services.TryAddScoped<global::HRM.Services.Contracts.StaffIdentityDocumentServiceContracts.IOperations>(provider => provider.GetRequiredService<global::HRM.Services.StaffIdentityDocumentService>());
         services.PostConfigure<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>(
             Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationDefaults.AuthenticationScheme, options =>
             {
